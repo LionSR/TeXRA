@@ -146,8 +146,21 @@ jobs:
 
             ## Step 2: Identify Follow-Ups
 
-            Analyze the gathered context for actionable follow-ups:
+            Analyze the gathered context for actionable follow-ups. **Prioritize human
+            reviewer suggestions** — comments from real people (not bots) carry the most
+            weight. Pay special attention to:
+            - Reviewer suggestions that were acknowledged but deferred
+            - Concerns raised by reviewers that weren't fully addressed
+            - Ideas or improvements suggested during review discussion
 
+            When distinguishing human vs bot comments, bot accounts typically have
+            `[bot]` in their username or are known services (dependabot, renovate,
+            copilot, cursor, codex, etc.).
+
+            Categories of follow-ups to look for:
+
+            - **Human reviewer suggestions**: Actionable feedback from reviewers that was
+              acknowledged but not addressed in this PR (highest priority)
             - **Explicit TODOs**: Items flagged in PR comments, review comments, or code as
               needing follow-up work
             - **Deferred work**: Scope that was explicitly cut or deferred ("out of scope",
@@ -163,6 +176,7 @@ jobs:
             - Pre-existing TODOs not introduced by this PR
             - Nitpick-level review comments (style, naming preferences)
             - Speculative future work not mentioned in the PR
+            - Bot-generated suggestions that were already addressed or dismissed
 
             ## Step 3: Create Follow-Up Issues
 
