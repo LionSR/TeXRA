@@ -425,6 +425,11 @@ export abstract class ModelHandler<
     return this.config.provider === ModelProvider.MOONSHOT;
   }
 
+  /** Checks if the model is from MiniMax provider. */
+  get isMiniMax(): boolean {
+    return this.config.provider === ModelProvider.MINIMAX;
+  }
+
   /** Whether this handler supports manual context compaction. Override in subclasses. */
   get supportsManualCompaction(): boolean {
     return false;
