@@ -797,4 +797,3 @@ Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliograp
     }
   }
 }
-

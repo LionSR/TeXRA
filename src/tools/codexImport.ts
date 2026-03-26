@@ -193,9 +193,7 @@ function resolveCodexBinary(
 ): string | undefined {
   try {
     const req = createRequire(path.join(baseDir, 'package.json'));
-    const platformPkgJson = req.resolve(
-      `${platformInfo.pkg}/package.json`,
-    );
+    const platformPkgJson = req.resolve(`${platformInfo.pkg}/package.json`);
     const binary = path.join(
       path.dirname(platformPkgJson),
       'vendor',
