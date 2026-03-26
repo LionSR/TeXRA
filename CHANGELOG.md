@@ -13,7 +13,6 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - Fixed Codex CLI not being detected for WSL users.
-- Fixed MiniMax and GLM showing as "unknown" providers in relay usage tracking.
 - Fixed tool-use agent errors ending the conversation instead of allowing follow-up messages to retry.
 - Fixed workflow delegation losing extract-figure flags when the LLM omitted them, now inheriting from the parent agent.
 
