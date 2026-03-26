@@ -27,6 +27,7 @@ import type {
 } from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
+import type { CodexInput } from '@tools/codex';
 
 // Local imports - Lit template utilities
 import {
@@ -71,6 +72,7 @@ import '../../components/TerminalOutput';
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
   bash: 120_000, // matches BASH_TIMEOUT_MS in src/tools/bash.ts
   executions: 300_000, // matches code default in ExecutionsTool.ts
+  codex: 300_000, // generous default — Codex turns can be slow
 };
 
 /**
@@ -111,12 +113,24 @@ function getToolTimeoutMs(
     return undefined;
   }
 
+  // Background tools return immediately — timeout timer is misleading
+  if (isPlainObject(input) && input.run_in_background === true) {
+    return undefined;
+  }
+
   if (isPlainObject(input) && typeof input.timeout === 'number') {
     return TIMEOUT_IN_SECONDS.has(toolName)
       ? input.timeout * 1000
       : input.timeout;
   }
   return defaultTimeout;
+}
+
+/** Truncate a prompt string for display in collapsed headers. */
+function truncatePrompt(text: string, maxLength: number): string {
+  const oneLine = text.replace(/\s+/g, ' ').trim();
+  if (oneLine.length <= maxLength) return oneLine;
+  return oneLine.slice(0, maxLength - 1) + '…';
 }
 
 /** Join template sections with horizontal rule separators. */
@@ -248,7 +262,9 @@ export function formatToolUseTemplate(
     normalizedToolLog.headerSummary ||
     (toolName === 'executions' && isPlainObject(input)
       ? `${input.action ?? EXECUTIONS_DEFAULT_ACTION} ${input.path ?? ''}`.trim()
-      : '');
+      : toolName === 'codex' && isPlainObject(input) && typeof input.prompt === 'string'
+        ? truncatePrompt(input.prompt, 60)
+        : '');
   const titleText = headerSummary
     ? `${titleBase} — ${headerSummary}`
     : titleBase;
@@ -502,6 +518,42 @@ export function formatToolUseTemplate(
       sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
     }
   }
+  // Handle codex tool with structured display
+  else if (toolName === 'codex' && isPlainObject(input)) {
+    const codexInput = input as CodexInput;
+
+    // Prompt as readable text
+    if (codexInput.prompt) {
+      sections.push(
+        buildToolUseSection('Prompt:', wrapInPre(codexInput.prompt)),
+      );
+    }
+
+    // Sandbox mode + background as compact badges
+    const badges: TemplateResult[] = [];
+    if (codexInput.sandbox_mode) {
+      // prettier-ignore
+      badges.push(html`<span class="extract-flag"><i class="codicon codicon-shield"></i> ${codexInput.sandbox_mode}</span>`);
+    }
+    if (codexInput.run_in_background) {
+      // prettier-ignore
+      badges.push(html`<span class="extract-flag"><i class="codicon codicon-run-all"></i> background</span>`);
+    }
+    if (badges.length > 0) {
+      // prettier-ignore
+      sections.push(buildToolUseSection('Mode:', html`${badges}`));
+    }
+
+    // Working directory if specified
+    if (codexInput.working_directory) {
+      sections.push(
+        buildToolUseSection(
+          'Directory:',
+          wrapInPre(codexInput.working_directory),
+        ),
+      );
+    }
+  }
   // Default handling for other tools
   else if (input != null) {
     const codeLanguage = TOOL_CODE_LANGUAGES.get(toolName);
@@ -537,7 +589,7 @@ export function formatToolUseTemplate(
     !isTrivialWriteOutput
   ) {
     sections.push(
-      toolName === 'bash'
+      toolName === 'bash' || toolName === 'codex'
         ? buildTerminalSection('', outputText)
         : buildToolSection('', outputText, {
             toolName,
