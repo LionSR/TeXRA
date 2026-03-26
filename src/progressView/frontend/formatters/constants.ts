@@ -201,4 +201,7 @@ export const TOOL_ICON_MAP: Record<string, string> = {
   executions: 'codicon-history',
   runs: 'codicon-history',
   accept_run_files: 'codicon-check',
+
+  // External agents
+  codex: 'codicon-robot',
 };
