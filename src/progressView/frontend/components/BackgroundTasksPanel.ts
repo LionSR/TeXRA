@@ -319,8 +319,8 @@ export class BackgroundTasksPanel extends LitElement {
               codicon: true,
               [icon]: true,
               'task-icon': true,
-              'task-icon--process': kind === 'process' && !AGENT_PROCESS_NAMES.has(child.agentName),
-              'task-icon--subagent': kind === 'subagent' || AGENT_PROCESS_NAMES.has(child.agentName),
+              'task-icon--process': kind === 'process' && !isAgentProcess(child),
+              'task-icon--subagent': kind === 'subagent' || isAgentProcess(child),
             })}
           ></i>
           <span
@@ -394,13 +394,18 @@ export class BackgroundTasksPanel extends LitElement {
   }
 }
 
-/** Agent names that represent external AI agents (distinct from plain shell processes). */
-const AGENT_PROCESS_NAMES = new Set(['codex']);
+/** Tool names that represent external AI agents (distinct from plain shell processes). */
+const AGENT_TOOL_NAMES = new Set(['codex']);
+
+/** Check if a child is an AI agent process (uses stable toolName metadata). */
+function isAgentProcess(child: ActiveChildInfo): boolean {
+  return Boolean(child.toolName && AGENT_TOOL_NAMES.has(child.toolName));
+}
 
 /** Pick the appropriate codicon for a background task item. */
 function getTaskIcon(child: ActiveChildInfo, kind: 'process' | 'subagent'): string {
   if (kind === 'subagent') return 'codicon-server-process';
-  if (AGENT_PROCESS_NAMES.has(child.agentName)) return 'codicon-robot';
+  if (isAgentProcess(child)) return 'codicon-robot';
   return 'codicon-terminal';
 }
 
