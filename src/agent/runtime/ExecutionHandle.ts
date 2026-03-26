@@ -147,6 +147,9 @@ export class ProcessExecutionHandle implements ExecutionHandle {
   /** Ephemeral temp file paths for live output (set after construction, cleared on completion). */
   outputPaths?: { readonly stdout: string; readonly stderr: string };
 
+  /** Stable tool name for UI identification (e.g. "bash", "codex"). */
+  toolName?: string;
+
   constructor(
     readonly executionId: string,
     readonly parentStreamId: StreamTabId,
@@ -228,6 +231,9 @@ export function collectChildSummary(
     };
     if (handle instanceof AgentExecutionHandle) {
       info.childStreamId = handle.childStreamId;
+    }
+    if (handle instanceof ProcessExecutionHandle && handle.toolName) {
+      info.toolName = handle.toolName;
     }
     result.push(info);
   }
