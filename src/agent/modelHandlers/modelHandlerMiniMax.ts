@@ -1,4 +1,5 @@
 // Local file imports
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolDefinition } from '@model';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -6,8 +7,10 @@ import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils'
 
 // Type imports
 import type {
+  ChatCompletionAssistantMessageParam,
   ChatCompletionChunk,
   ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
 
 /** Extracts text from a MiniMax `reasoning_details` value (array or string). */
@@ -98,6 +101,38 @@ export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
       if (extracted) return extracted;
     }
     return super.extractReasoningFromMessage(message);
+  }
+
+  /**
+   * MiniMax expects `reasoning_details` (not `reasoning_content`) in pass-back
+   * assistant messages to maintain reasoning chain continuity.
+   */
+  protected override buildAssistantMessageWithToolCalls(
+    toolCalls: ChatCompletionMessageToolCall[],
+    workspaceState?: AgentWorkspaceState,
+    text?: string,
+  ): ChatCompletionAssistantMessageParam {
+    const callMsg: ChatCompletionAssistantMessageParam & {
+      reasoning_details?: Array<{ type: string; text: string }>;
+    } = {
+      role: 'assistant',
+      tool_calls: toolCalls,
+    };
+
+    if (this.shouldIncludeReasoningInToolCalls() && workspaceState) {
+      const reasoningText =
+        workspaceState.reasoning.thinkingBlocks[0]?.thinking;
+      if (reasoningText) {
+        callMsg.reasoning_details = [{ type: 'thinking', text: reasoningText }];
+        workspaceState.resetReasoning();
+      }
+    }
+
+    if (text) {
+      callMsg.content = this.formatAssistantContent(text);
+    }
+
+    return callMsg;
   }
 
   /**
