@@ -183,11 +183,14 @@ export class ToolUseCycleNode<C> extends Node<
           message: execRes.message,
           retryable: execRes.retryable ?? false,
         };
-        return FlowTransition.FINALIZE;
+        // Continue to WaitNode instead of ending the flow.
+        // Tool-use agents are conversational — the user can send a
+        // follow-up to retry after a failure, unlike workflows.
+        return FlowTransition.DEFAULT;
 
       case 'cancelled':
         shared.userCancelledRetry = true;
-        return FlowTransition.FINALIZE;
+        return FlowTransition.DEFAULT;
     }
   }
 }
