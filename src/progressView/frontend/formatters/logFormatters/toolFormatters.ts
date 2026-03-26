@@ -262,7 +262,9 @@ export function formatToolUseTemplate(
     normalizedToolLog.headerSummary ||
     (toolName === 'executions' && isPlainObject(input)
       ? `${input.action ?? EXECUTIONS_DEFAULT_ACTION} ${input.path ?? ''}`.trim()
-      : toolName === 'codex' && isPlainObject(input) && typeof input.prompt === 'string'
+      : toolName === 'codex' &&
+          isPlainObject(input) &&
+          typeof input.prompt === 'string'
         ? truncatePrompt(input.prompt, 60)
         : '');
   const titleText = headerSummary
@@ -472,7 +474,10 @@ export function formatToolUseTemplate(
     const delegateInput = input as DelegateAgentInput | WorkflowAgentInput;
 
     // Resume mode: show execution ID
-    const execId = 'execution_id' in delegateInput ? (delegateInput as DelegateAgentInput).execution_id : undefined;
+    const execId =
+      'execution_id' in delegateInput
+        ? (delegateInput as DelegateAgentInput).execution_id
+        : undefined;
     if (execId) {
       // prettier-ignore
       sections.push(buildToolUseSection('Resume:', html`<code class="execution-id">${execId}</code>`));

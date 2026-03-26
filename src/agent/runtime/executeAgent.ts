@@ -557,7 +557,10 @@ export interface ExecuteAgentOptions {
   /** Fires with the real streamId before the stream is activated (before UI sync). */
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
-  onBeforeWaiting?: (lastResponse: string | undefined, touchedFiles: string[]) => void | Promise<void>;
+  onBeforeWaiting?: (
+    lastResponse: string | undefined,
+    touchedFiles: string[],
+  ) => void | Promise<void>;
   /** Fires on meaningful progress: todo changes, round completions, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
