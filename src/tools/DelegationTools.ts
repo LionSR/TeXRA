@@ -601,7 +601,6 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
 
     // Extraction flags map to toolConfig, flowing through the proposal UI and
     // into MediaExtractionNode → LatexMediaManager at runtime.
-    // When omitted, flags inherit from the parent agent's toolConfig.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
       agent: input.agent,
@@ -619,10 +618,8 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       useMultipleOutputs: input.useMultipleOutputs,
       toolConfig: {
         ...DEFAULT_TOOL_CONFIG,
-        autoExtractFigure:
-          input.extractFigures ?? ctx.toolConfig?.autoExtractFigure ?? false,
-        autoExtractTikzFigure:
-          input.extractTikz ?? ctx.toolConfig?.autoExtractTikzFigure ?? false,
+        autoExtractFigure: input.extractFigures ?? false,
+        autoExtractTikzFigure: input.extractTikz ?? false,
       },
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
