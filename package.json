@@ -1324,7 +1324,7 @@
     "@types/shell-quote": "^1.7.5",
     "@types/sortablejs": "^1.15.9",
     "@types/turndown": "^5.0.6",
-    "@types/vscode": "^1.105.0",
+    "@types/vscode": "^1.99.0",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
     "@vscode/test-cli": "^0.0.12",
