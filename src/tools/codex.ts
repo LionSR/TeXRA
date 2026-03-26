@@ -341,6 +341,7 @@ export class CodexTool extends defineTool({
       preview,
       () => false, // Codex SDK doesn't expose PID for kill — AbortController would be future work
     );
+    handle.toolName = 'codex';
     handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
 
     try {

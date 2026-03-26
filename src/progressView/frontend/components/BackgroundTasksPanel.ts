@@ -302,8 +302,7 @@ export class BackgroundTasksPanel extends LitElement {
     child: ActiveChildInfo,
     kind: 'process' | 'subagent',
   ): TemplateResult {
-    const icon =
-      kind === 'process' ? 'codicon-terminal' : 'codicon-server-process';
+    const icon = getTaskIcon(child, kind);
     const entry = this.processOutputs.get(child.executionId);
     const hasStdout = Boolean(entry?.stdout);
     const hasStderr = Boolean(entry?.stderr);
@@ -320,8 +319,8 @@ export class BackgroundTasksPanel extends LitElement {
               codicon: true,
               [icon]: true,
               'task-icon': true,
-              'task-icon--process': kind === 'process',
-              'task-icon--subagent': kind === 'subagent',
+              'task-icon--process': kind === 'process' && !isAgentProcess(child),
+              'task-icon--subagent': kind === 'subagent' || isAgentProcess(child),
             })}
           ></i>
           <span
@@ -393,6 +392,21 @@ export class BackgroundTasksPanel extends LitElement {
   private navigateToStream(streamId: string): void {
     this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
   }
+}
+
+/** Tool names that represent external AI agents (distinct from plain shell processes). */
+const AGENT_TOOL_NAMES = new Set(['codex']);
+
+/** Check if a child is an AI agent process (uses stable toolName metadata). */
+function isAgentProcess(child: ActiveChildInfo): boolean {
+  return Boolean(child.toolName && AGENT_TOOL_NAMES.has(child.toolName));
+}
+
+/** Pick the appropriate codicon for a background task item. */
+function getTaskIcon(child: ActiveChildInfo, kind: 'process' | 'subagent'): string {
+  if (kind === 'subagent') return 'codicon-server-process';
+  if (isAgentProcess(child)) return 'codicon-robot';
+  return 'codicon-terminal';
 }
 
 /** Check if a child is in a waiting/idle state rather than actively processing. */
