@@ -39,6 +39,8 @@ export const ActiveChildInfoSchema = z.object({
   status: z.string().optional(),
   /** Formatted elapsed time (e.g. "1m 23s"). */
   elapsed: z.string().nullable().optional(),
+  /** Tool name that spawned this process (e.g. "bash", "codex"). Absent for subagents. */
+  toolName: z.string().optional(),
 });
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
