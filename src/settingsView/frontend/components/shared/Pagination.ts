@@ -166,7 +166,7 @@ export class Pagination extends LitElement {
     return html`
       <div class="pagination-bar">
         <span class="pagination-status">
-          ${this.rangeStart}\u2013${this.rangeEnd} of ${this.totalItems}
+          ${this.rangeStart}–${this.rangeEnd} of ${this.totalItems}
         </span>
         <div class="pagination-controls">
           <button
@@ -175,7 +175,7 @@ export class Pagination extends LitElement {
             ?disabled=${atFirst}
             @click=${this.goFirst}
           >
-            \u00AB
+            «
           </button>
           <button
             class="page-btn"
@@ -183,7 +183,7 @@ export class Pagination extends LitElement {
             ?disabled=${atFirst}
             @click=${this.goPrev}
           >
-            \u2039
+            ‹
           </button>
           <span class="pagination-status">
             ${this.page + 1}/${this.totalPages}
@@ -194,7 +194,7 @@ export class Pagination extends LitElement {
             ?disabled=${atLast}
             @click=${this.goNext}
           >
-            \u203A
+            ›
           </button>
           <button
             class="page-btn"
@@ -202,7 +202,7 @@ export class Pagination extends LitElement {
             ?disabled=${atLast}
             @click=${this.goLast}
           >
-            \u00BB
+            »
           </button>
         </div>
       </div>
