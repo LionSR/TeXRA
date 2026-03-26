@@ -4,18 +4,20 @@ on:
   issues:
     types: [closed]
   pull_request:
-    types: [closed]
+    types: [closed, opened, edited, labeled, review_requested]
+  pull_request_review:
+    types: [submitted]
 
 concurrency:
-  group: update-tracking-issues
+  group: update-tracking-issues-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
   update-tracking:
-    # Run when an issue is closed or a PR is merged (not just closed)
+    # Run when an issue is closed as completed or a PR is merged
     if: |
       (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+      (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,7 +37,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model claude-opus-4-6
-            --allowedTools "Bash(gh issue:*)" "Bash(gh pr:*)" "Bash(gh search:*)"
+            --allowedTools "mcp__github__*"
 
           prompt: |
             A GitHub event just occurred in this repository. Analyze it and update any
@@ -59,16 +61,12 @@ jobs:
 
             ## Instructions
 
+            Use the GitHub MCP tools (not gh CLI) for all GitHub operations.
+
             1. **Find tracking issues**: Search for open issues in this repository that have
                a "tracking" label, or contain task lists (checkboxes like `- [ ]` or `- [x]`)
                that reference the resolved issue/merged PR. Also look for issues with titles
                starting with "Tracking:", "Epic:", or "Meta:".
-
-               Use these commands to search:
-               ```
-               gh issue list --label "tracking" --state open --json number,title,body
-               gh issue list --search "is:open is:issue" --json number,title,body --limit 50
-               ```
 
             2. **Check for references**: For each tracking issue found, check if its body
                contains references to the closed issue or merged PR. References could be:
@@ -86,8 +84,6 @@ jobs:
                - If ALL task list items in a tracking issue are now checked, add a comment
                  suggesting the tracking issue may be ready to close
 
-               Use `gh issue edit` to update the body and `gh issue comment` to add comments.
-
             4. **Report**: Provide a summary of what tracking issues were found and updated.
                If no tracking issues reference this item, simply note that no updates were needed.
 
@@ -96,7 +92,9 @@ jobs:
 
   pr-followups:
     # Only run on merged PRs
-    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    if: |
+      github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -116,7 +114,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model claude-opus-4-6
-            --allowedTools "Bash(gh issue:*)" "Bash(gh pr:*)" "Bash(gh search:*)" "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"
+            --allowedTools "mcp__github__*" "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"
 
           prompt: |
             A pull request was just merged. Analyze it for leftover work, follow-ups, and
@@ -134,12 +132,14 @@ jobs:
 
             ## Step 1: Gather Context
 
+            Use the GitHub MCP tools (not gh CLI) for all GitHub operations.
             Collect ALL available information about this PR:
 
-            1. **PR body and comments**: Use `gh pr view ${{ github.event.pull_request.number }} --json body,comments`
-            2. **Review comments**: Use `gh pr view ${{ github.event.pull_request.number }} --json reviews,reviewDecision`
+            1. **PR body and comments**: Use the GitHub MCP tools to get the PR details,
+               comments, and review comments for PR #${{ github.event.pull_request.number }}
+            2. **Review comments**: Get all reviews and their decisions
             3. **Code diff**: Use `git diff ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}`
-            4. **Linked issues**: Use `gh pr view ${{ github.event.pull_request.number }} --json closingIssuesReferences`
+            4. **Linked issues**: Get closing issues references for this PR
                - For each linked issue, read its body and comments for unresolved discussion
             5. **Code markers**: Search the diff for TODO, FIXME, HACK, XXX, WORKAROUND comments
                that were added (not removed) in this PR
@@ -166,11 +166,7 @@ jobs:
 
             ## Step 3: Create Follow-Up Issues
 
-            For each follow-up identified, create a GitHub issue using:
-
-            ```
-            gh issue create --title "<title>" --body "<body>" --label "follow-up"
-            ```
+            For each follow-up identified, create a GitHub issue using the GitHub MCP tools.
 
             **Issue format:**
             - **Title**: Short, actionable description (imperative mood, e.g. "Add error
@@ -189,7 +185,7 @@ jobs:
               - PR: #<PR-number>
               - <Any related issues, discussions, or review comments>
               ```
-            - Add appropriate labels alongside "follow-up" (e.g. "bug", "enhancement",
+            - Add the "follow-up" label, plus appropriate labels (e.g. "bug", "enhancement",
               "tech-debt", "documentation")
 
             ## Step 4: Update Tracking Issues
@@ -197,10 +193,7 @@ jobs:
             After creating follow-up issues:
 
             1. Find open tracking issues (label "tracking", or titles starting with
-               "Tracking:", "Epic:", "Meta:"):
-               ```
-               gh issue list --label "tracking" --state open --json number,title,body
-               ```
+               "Tracking:", "Epic:", "Meta:")
             2. For each tracking issue whose scope relates to the created follow-ups,
                add the new issue references to the checklist:
                - Append `- [ ] #<new-issue-number> - <title>` to the relevant section
@@ -215,3 +208,77 @@ jobs:
 
             **Be conservative** — only create issues for genuine, actionable follow-ups.
             When in doubt, skip it. False positives create noise.
+
+  pr-activity:
+    # Run on PR activity (opened, edited, labeled, review requested, review submitted)
+    # but NOT on close/merge (handled by update-tracking and pr-followups)
+    if: |
+      (github.event_name == 'pull_request' && github.event.action != 'closed') ||
+      github.event_name == 'pull_request_review'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model claude-opus-4-6
+            --allowedTools "mcp__github__*"
+
+          prompt: |
+            A pull request activity event just occurred. Check if any tracking issues
+            need to be updated to reflect the current state of this PR.
+
+            ## Event Details
+
+            - **Event**: ${{ github.event_name }} / ${{ github.event.action }}
+            - **Repository**: ${{ github.repository }}
+            - **PR number**: #${{ github.event.pull_request.number }}
+            - **PR title**: ${{ github.event.pull_request.title }}
+            - **PR labels**: ${{ join(github.event.pull_request.labels.*.name, ', ') }}
+            - **PR state**: ${{ github.event.pull_request.state }}
+            - **PR draft**: ${{ github.event.pull_request.draft }}
+            - **Author**: ${{ github.event.pull_request.user.login }}
+            - **Triggered by**: ${{ github.event.sender.login }}
+            ${{ github.event_name == 'pull_request_review' && format('- **Review state**: {0}', github.event.review.state) || '' }}
+            ${{ github.event_name == 'pull_request_review' && format('- **Reviewer**: {0}', github.event.review.user.login) || '' }}
+
+            ## Instructions
+
+            Use the GitHub MCP tools (not gh CLI) for all GitHub operations.
+
+            1. **Find related tracking issues**: Search for open tracking issues (label
+               "tracking", or titles starting with "Tracking:", "Epic:", "Meta:") that
+               reference this PR (#${{ github.event.pull_request.number }}) or related
+               issues in their task lists.
+
+            2. **Assess relevance**: Only take action if this event is meaningful for
+               tracking. Relevant events include:
+               - PR opened that addresses a tracked task
+               - PR labeled with a tracking-relevant label
+               - Review submitted (especially approvals or change requests)
+               - PR marked ready for review (draft → ready)
+
+            3. **Update tracking issues** if appropriate:
+               - If a PR was just opened for a tracked task, add a comment noting the PR
+                 is in progress: "🔄 #<PR> opened to address this item"
+               - If a review was submitted with changes requested, note it
+               - If a PR was approved, note it's ready to merge
+               - Do NOT add noise — skip if the event isn't meaningful for tracking
+
+            4. **Report**: Briefly summarize what was done, or note that no updates
+               were needed.
+
+            **Be very selective** — most PR activity events won't need tracking updates.
+            Only comment when the event genuinely changes the status of tracked work.
