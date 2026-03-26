@@ -410,7 +410,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     timeout: number,
     ids?: readonly string[] | null,
   ): Promise<void> {
-    const candidateIds = ids?.length ? [...ids] : getActiveExecutionIds();
+    const candidateIds = ids?.length ? [...new Set(ids)] : getActiveExecutionIds();
     if (candidateIds.length === 0) return;
 
     // Exclude executions that are already effectively done
