@@ -204,7 +204,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   /** Return early result if the file hasn't been viewed yet. */
   private requireViewBeforeModify(
     inputPath: string,
-    operation: string = 'editing',
+    operation = 'editing',
   ): ToolResult | undefined {
     return (
       requireFileReadForEdit(
@@ -219,18 +219,15 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     resolvedPath: string,
     inputPath: string,
   ): Promise<void> {
+    const errorMsg = `The path ${inputPath} does not exist or is a directory.`;
+    let stats;
     try {
-      const stats = await StorageFS.stat(resolvedPath);
-      if (isDirectory(stats.type)) {
-        throw new ToolError(
-          `The path ${inputPath} does not exist or is a directory.`,
-        );
-      }
-    } catch (err) {
-      if (err instanceof ToolError) throw err;
-      throw new ToolError(
-        `The path ${inputPath} does not exist or is a directory.`,
-      );
+      stats = await StorageFS.stat(resolvedPath);
+    } catch {
+      throw new ToolError(errorMsg);
+    }
+    if (isDirectory(stats.type)) {
+      throw new ToolError(errorMsg);
     }
   }
 

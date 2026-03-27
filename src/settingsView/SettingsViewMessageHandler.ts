@@ -64,6 +64,7 @@ import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
   type SettingsViewInboundMessage,
+  type SettingsMessageFor,
   SETTINGS_VIEW_CMD,
   ReasoningLevelSchema,
   type ModelSelectionItem,
@@ -121,11 +122,9 @@ import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
-// Type helper for extracting specific message types
-type MessageFor<C extends SettingsViewInboundMessage['command']> = Extract<
-  SettingsViewInboundMessage,
-  { command: C }
->;
+// Re-use the shared type helper for extracting specific message types.
+type MessageFor<C extends SettingsViewInboundMessage['command']> =
+  SettingsMessageFor<C>;
 
 /** Reliability settings surfaced in the Multi-Agent tab. */
 const RELIABILITY_SETTINGS: (Omit<NumberVscodeSetting, 'value'> & {
@@ -193,14 +192,11 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
       );
       const envValue = process.env[`${provider.toUpperCase()}_API_KEY`];
 
-      let status: ProviderKeyStatus['status'];
-      if (secretValue) {
-        status = 'set';
-      } else if (envValue) {
-        status = 'env';
-      } else {
-        status = 'not-set';
-      }
+      const status: ProviderKeyStatus['status'] = secretValue
+        ? 'set'
+        : envValue
+          ? 'env'
+          : 'not-set';
 
       return {
         provider,
@@ -373,8 +369,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetGlobalStreaming(data),
       [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING]: (data) =>
         this.handleSetProviderVscodeSetting(data),
-      [SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL]: (data) =>
-        this.handleOpenExternalUrl(data),
+      [SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL]: async (data) => {
+        await vscode.env.openExternal(vscode.Uri.parse(data.url));
+      },
 
       // Model selection handlers
       [SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION]: () =>
@@ -451,11 +448,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS]: () =>
         this.withActiveWebview((w) => this.sendGitAuthorSettings(w)),
       [SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS]: (data) =>
-        this.handleSetGitMarkCommits(data),
+        this.updateGitAuthorSetting(
+          WorkspaceStateKey.GIT_MARK_COMMITS,
+          data.enabled,
+        ),
       [SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME]: (data) =>
-        this.handleSetGitAuthorName(data),
+        this.updateGitAuthorSetting(
+          WorkspaceStateKey.GIT_AUTHOR_NAME,
+          data.name,
+        ),
       [SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL]: (data) =>
-        this.handleSetGitAuthorEmail(data),
+        this.updateGitAuthorSetting(
+          WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+          data.email,
+        ),
 
       // ── Delegated to LatexSettingsHandlers ──
 
@@ -472,13 +478,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
-        this.handleGetToolDashboardData(),
-      [SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL]: (data) =>
-        this.handleOpenToolInstallUrl(data),
+        this.withActiveWebview((w) => this.sendToolDashboardData(w)),
+      [SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL]: async (data) => {
+        await vscode.env.openExternal(vscode.Uri.parse(data.url));
+      },
       [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (data) =>
         this.handleInstallToolExtension(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
-        this.handleRecheckToolStatus(),
+        this.withActiveWebview((w) => this.sendToolDashboardData(w)),
     };
   }
 
@@ -572,22 +579,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       )
       .map((entry): HistoryItem => {
         const cfg = entry.agentConfig!;
+        const base = {
+          agent: cfg.agent,
+          model: cfg.model,
+          instruction: cfg.instruction,
+        };
         return {
           id: entry.id,
           timestamp: entry.timestamp,
           agentConfig:
             cfg.agentCategory === 'toolUse'
-              ? {
-                  agentCategory: 'toolUse',
-                  agent: cfg.agent,
-                  model: cfg.model,
-                  instruction: cfg.instruction,
-                }
+              ? { agentCategory: 'toolUse' as const, ...base }
               : {
-                  agentCategory: 'workflow',
-                  agent: cfg.agent,
-                  model: cfg.model,
-                  instruction: cfg.instruction,
+                  agentCategory: 'workflow' as const,
+                  ...base,
                   inputFile: cfg.inputFile,
                   inputFiles: cfg.inputFiles,
                   mediaFile: cfg.mediaFile,
@@ -775,33 +780,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const settings = applyGitAuthorConfig();
     await this.withActiveWebview((w) =>
       this.sendGitAuthorSettings(w, settings),
-    );
-  }
-
-  private async handleSetGitMarkCommits(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GIT_MARK_COMMITS>,
-  ): Promise<void> {
-    await this.updateGitAuthorSetting(
-      WorkspaceStateKey.GIT_MARK_COMMITS,
-      data.enabled,
-    );
-  }
-
-  private async handleSetGitAuthorName(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GIT_AUTHOR_NAME>,
-  ): Promise<void> {
-    await this.updateGitAuthorSetting(
-      WorkspaceStateKey.GIT_AUTHOR_NAME,
-      data.name,
-    );
-  }
-
-  private async handleSetGitAuthorEmail(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GIT_AUTHOR_EMAIL>,
-  ): Promise<void> {
-    await this.updateGitAuthorSetting(
-      WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-      data.email,
     );
   }
 
@@ -1283,12 +1261,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
-  private async handleOpenExternalUrl(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_EXTERNAL_URL>,
-  ): Promise<void> {
-    await vscode.env.openExternal(vscode.Uri.parse(data.url));
-  }
-
   private async handleSetProviderVscodeSetting(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_VSCODE_SETTING>,
   ): Promise<void> {
@@ -1409,25 +1381,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private async handleGetToolDashboardData(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendToolDashboardData(w));
-  }
-
-  private async handleOpenToolInstallUrl(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_TOOL_INSTALL_URL>,
-  ): Promise<void> {
-    await vscode.env.openExternal(vscode.Uri.parse(data.url));
-  }
-
   private async handleInstallToolExtension(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.INSTALL_TOOL_EXTENSION>,
   ): Promise<void> {
     await this.latexHandlers.installExtension(data.extensionId, (w) =>
       this.sendToolDashboardData(w),
     );
-  }
-
-  private async handleRecheckToolStatus(): Promise<void> {
-    await this.withActiveWebview((w) => this.sendToolDashboardData(w));
   }
 }

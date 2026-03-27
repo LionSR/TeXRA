@@ -23,11 +23,10 @@ export class ToolUseFollowUpQueue {
 
   static acquire(streamId: StreamTabId): FollowUpQueue {
     this.released.delete(streamId);
-    let queue = this.queues.get(streamId);
-    if (!queue) {
-      queue = new FollowUpQueue();
-      this.queues.set(streamId, queue);
-    }
+    const existing = this.queues.get(streamId);
+    if (existing) return existing;
+    const queue = new FollowUpQueue();
+    this.queues.set(streamId, queue);
     return queue;
   }
 
@@ -73,19 +72,10 @@ export class ToolUseFollowUpQueue {
   }
 
   static drain(streamId: StreamTabId): string[] {
-    const queue = this.queues.get(streamId);
-    if (!queue) return [];
-    const drained = queue.drain();
-    logger.debug(
-      `Drained ${drained.length} queued follow-ups for stream ${streamId}.`,
-    );
-    return drained;
+    return this.queues.get(streamId)?.drain() ?? [];
   }
 
-  /**
-   * Get all queued follow-up messages for a stream without consuming them.
-   * Used for UI display purposes.
-   */
+  /** Get all queued follow-up messages for a stream without consuming them. */
   static getAll(streamId: StreamTabId): string[] {
     return this.queues.get(streamId)?.getAll() ?? [];
   }

@@ -82,12 +82,12 @@ export class OutputFileProcessor {
     }
   }
 
-  private async handleEmptyOutput(
+  private handleEmptyOutput(
     round: number,
     rawLocation: FileLocation,
   ): Promise<void> {
     this.ctx.setRoundOutputs(round, []);
-    await this.captureXmlSummary(round, rawLocation, []);
+    return this.captureXmlSummary(round, rawLocation, []);
   }
 
   async processSingleOutput(
@@ -119,8 +119,7 @@ export class OutputFileProcessor {
         logger.debug(
           `No processed file was generated from ${outputLocation.absolutePath}`,
         );
-        this.ctx.setRoundOutputs(currRound, []);
-        await this.captureXmlSummary(currRound, rawLocation, []);
+        await this.handleEmptyOutput(currRound, rawLocation);
         return;
       }
 
@@ -154,8 +153,7 @@ export class OutputFileProcessor {
         storageKey,
         filesByRound: { [currRound]: [] },
       });
-      this.ctx.setRoundOutputs(currRound, []);
-      await this.captureXmlSummary(currRound, rawLocation, []);
+      await this.handleEmptyOutput(currRound, rawLocation);
     }
   }
 
@@ -168,15 +166,15 @@ export class OutputFileProcessor {
     const singleFile =
       processed.length === 1 ? processed[0].location.absolutePath : null;
 
-    const createEmptySummary = () => ({
+    const emptySummary = {
       tagContents: {},
       documents: [] as string[],
       singleOutputFile: singleFile,
       sourceLocation: rawOutput,
-    });
+    };
 
     if (!rawOutput?.absolutePath) {
-      data.xmlSummary = createEmptySummary();
+      data.xmlSummary = emptySummary;
       return;
     }
 
@@ -234,21 +232,20 @@ export class OutputFileProcessor {
         `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
-      data.xmlSummary = createEmptySummary();
+      data.xmlSummary = { ...emptySummary };
     }
   }
 
   private shouldProcessXml(agentSetting: AgentWorkflowSetting): boolean {
-    const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
-
-    switch (xmlMode) {
+    switch (agentSetting.xmlStructureMode ?? 'scratchpadOnly') {
       case 'always':
         return true;
       case 'scratchpadOnly':
         return (
           Boolean(agentSetting.documentTag) ||
-          (agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
-            false)
+          Boolean(
+            agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)),
+          )
         );
       default:
         return false;

@@ -31,15 +31,11 @@ const logger = new AgentLogger('ToolUseFollowUp');
  * Send a follow-up message to a tool-use session.
  *
  * Routes based on session state:
- * 1. Active agent: direct append → returns { status: 'sent' }
- * 2. Resuming/Waiting session: queue for later → returns { status: 'queued' }
- * 3. Error during send → returns { status: 'error' }
- * 4. No session found → returns { status: 'no_session' }
+ * 1. Active agent: direct append → { status: 'sent' }
+ * 2. Resuming/Waiting session: queue for later → { status: 'queued' }
+ * 3. No session found → { status: 'no_session' }
  *
- * Note: Items queued for WAITING sessions are picked up when user resumes.
- * PersistedFlow handles state persistence.
- *
- * @returns Result indicating what happened - callers handle UI notifications
+ * Items queued for WAITING sessions are picked up when user resumes.
  */
 export async function sendFollowUp(
   streamId: StreamTabId,
@@ -48,15 +44,8 @@ export async function sendFollowUp(
   // Try active flow context first
   const flowContext = getToolUseFlowContext(streamId);
   if (flowContext) {
-    try {
-      flowContext.session.appendFollowUp(text);
-      return { status: 'sent' };
-    } catch (error) {
-      logger.error('Failed to send follow-up to active session.', {
-        data: error,
-      });
-      return { status: 'error', message: (error as Error).message };
-    }
+    flowContext.session.appendFollowUp(text);
+    return { status: 'sent' };
   }
 
   // Queue if session is resuming

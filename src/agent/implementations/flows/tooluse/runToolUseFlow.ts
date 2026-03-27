@@ -77,7 +77,7 @@ function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
-  options?: { isSubagent?: boolean },
+  isSubagent?: boolean,
 ): ToolDefinition[] {
   const unavailable = getUnavailableToolNamesCached();
   const excluded: string[] = [];
@@ -86,7 +86,7 @@ function resolveTools(
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
-      if (options?.isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
+      if (isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
       if (unavailable.has(def.name)) {
         logger.warn(
           `Tool "${def.name}" excluded: external dependency not installed`,
@@ -127,9 +127,12 @@ export async function runToolUseFlow<C = unknown>(
   const { logger, streamId, executionId, setting, onInterrupt } = input;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
-  const resolvedTools = resolveTools(setting.tools, registry, logger, {
-    isSubagent: input.isSubagent,
-  });
+  const resolvedTools = resolveTools(
+    setting.tools,
+    registry,
+    logger,
+    input.isSubagent,
+  );
 
   const kv = getExecutionStore(executionId);
 
@@ -242,12 +245,11 @@ export async function runToolUseFlow<C = unknown>(
   const lastResponse = findLastAssistantText(shared.messages, (m) =>
     input.modelHandler.extractAssistantText(m),
   );
-
   const touchedFiles = extractTouchedFiles(shared.stateSlices);
 
   return {
     status,
     lastResponse,
-    touchedFiles: touchedFiles.length > 0 ? touchedFiles : undefined,
+    touchedFiles: touchedFiles.length ? touchedFiles : undefined,
   };
 }
