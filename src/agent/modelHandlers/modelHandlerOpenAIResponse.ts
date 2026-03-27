@@ -28,7 +28,10 @@ import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
 import { K_SLICE, getConfig } from '@utils/config';
-import { getWebSocketEnabled } from '@utils/config/providerConfig';
+import {
+  getWebSocketEnabled,
+  getUseOpenRouter,
+} from '@utils/config/providerConfig';
 import { delay } from '@utils/core';
 import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
@@ -167,10 +170,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private compactionRequested = false;
 
   private isOpenRouterRoutingEnabled(): boolean {
-    return (
-      this.config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false)
-    );
+    return this.config.openRouterOnly || getUseOpenRouter();
   }
 
   /**
