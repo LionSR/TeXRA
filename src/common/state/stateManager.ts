@@ -84,6 +84,9 @@ export enum GlobalStateKey {
   // Coding plan settings
   GLM_CODING_PLAN = 'texra.glm.codingPlan',
 
+  // Routing settings
+  USE_OPENROUTER = 'texra.useOpenRouter',
+
   // Transport settings
   WEBSOCKET_OPENAI = 'texra.websocket.openai',
 }
