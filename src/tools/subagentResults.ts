@@ -72,9 +72,10 @@ function computeReadableDiff(
   // Check if there are any actual changes.
   if (diffs.every(([op]) => op === 0)) return null;
 
+  const PREFIX: Record<number, string> = { 1: '+', [-1]: '-', 0: ' ' };
   const lines: string[] = [];
   for (const [op, text] of diffs) {
-    const prefix = op === 1 ? '+' : op === -1 ? '-' : ' ';
+    const prefix = PREFIX[op] ?? ' ';
     // Each chunk is one or more complete lines (with trailing \n).
     // Split and prefix each line, dropping the trailing empty entry from split.
     const chunkLines = text.split('\n');
@@ -194,9 +195,9 @@ function formatOutputFile(
   const attrs = [
     `path="${escapeAttr(o.relativePath)}"`,
     `location="${escapeAttr(o.location)}"`,
-    o.originalPath !== null ? `original="${escapeAttr(o.originalPath)}"` : '',
-    o.added !== null ? `added="${o.added}"` : '',
-    o.removed !== null ? `removed="${o.removed}"` : '',
+    o.originalPath !== null && `original="${escapeAttr(o.originalPath)}"`,
+    o.added !== null && `added="${o.added}"`,
+    o.removed !== null && `removed="${o.removed}"`,
   ]
     .filter(Boolean)
     .join(' ');

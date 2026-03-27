@@ -23,8 +23,6 @@ const AgentFlowMetaSchema = z.object({
   streamId: StreamTabIdSchema,
 });
 
-export type AgentFlowMeta = z.infer<typeof AgentFlowMetaSchema>;
-
 export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('workflow'),
   status: EndGroupStatusSchema,

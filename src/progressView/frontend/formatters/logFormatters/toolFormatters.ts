@@ -26,8 +26,8 @@ import type {
   WorkflowAgentInput,
 } from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
-import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import type { CodexInput } from '@tools/codex';
+import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 
 // Local imports - Lit template utilities
 import {
@@ -102,23 +102,16 @@ function getToolTimeoutMs(
 ): number | undefined {
   const defaultTimeout = TOOL_DEFAULT_TIMEOUTS[toolName];
   if (defaultTimeout === undefined) return undefined;
+  if (!isPlainObject(input)) return defaultTimeout;
 
   // Some tools only have a meaningful timeout for a specific action
   const requiredAction = TIMEOUT_GATED_BY_ACTION[toolName];
-  if (
-    requiredAction &&
-    isPlainObject(input) &&
-    input.action !== requiredAction
-  ) {
-    return undefined;
-  }
+  if (requiredAction && input.action !== requiredAction) return undefined;
 
   // Background tools return immediately — timeout timer is misleading
-  if (isPlainObject(input) && input.run_in_background === true) {
-    return undefined;
-  }
+  if (input.run_in_background === true) return undefined;
 
-  if (isPlainObject(input) && typeof input.timeout === 'number') {
+  if (typeof input.timeout === 'number') {
     return TIMEOUT_IN_SECONDS.has(toolName)
       ? input.timeout * 1000
       : input.timeout;
@@ -128,7 +121,7 @@ function getToolTimeoutMs(
 
 /** Truncate a prompt string for display in collapsed headers. */
 function truncatePrompt(text: string, maxLength: number): string {
-  const oneLine = text.replace(/\s+/g, ' ').trim();
+  const oneLine = text.replaceAll(/\s+/g, ' ').trim();
   if (oneLine.length <= maxLength) return oneLine;
   return oneLine.slice(0, maxLength - 1) + '…';
 }
@@ -173,10 +166,7 @@ function buildBannerContent(
 
 /** Extract typed edits array from parsed tool output, if present. */
 function getOutputEdits<T>(output: unknown): T[] | undefined {
-  if (output && typeof output === 'object' && 'edits' in output) {
-    return (output as { edits?: T[] }).edits;
-  }
-  return undefined;
+  return isPlainObject(output) ? (output.edits as T[] | undefined) : undefined;
 }
 
 type ToolSectionOptions = {
@@ -258,15 +248,19 @@ export function formatToolUseTemplate(
   const titleBase = toolName || 'tool';
 
   // Surface action + path for executions tool so it's visible without expanding
-  const headerSummary =
-    normalizedToolLog.headerSummary ||
-    (toolName === 'executions' && isPlainObject(input)
-      ? `${input.action ?? EXECUTIONS_DEFAULT_ACTION} ${input.path ?? ''}`.trim()
-      : toolName === 'codex' &&
-          isPlainObject(input) &&
-          typeof input.prompt === 'string'
-        ? truncatePrompt(input.prompt, 60)
-        : '');
+  let headerSummary = normalizedToolLog.headerSummary || '';
+  if (!headerSummary) {
+    if (toolName === 'executions' && isPlainObject(input)) {
+      headerSummary =
+        `${input.action ?? EXECUTIONS_DEFAULT_ACTION} ${input.path ?? ''}`.trim();
+    } else if (
+      toolName === 'codex' &&
+      isPlainObject(input) &&
+      typeof input.prompt === 'string'
+    ) {
+      headerSummary = truncatePrompt(input.prompt, 60);
+    }
+  }
   const titleText = headerSummary
     ? `${titleBase} — ${headerSummary}`
     : titleBase;
@@ -275,9 +269,7 @@ export function formatToolUseTemplate(
   const sections: TemplateResult[] = [];
 
   const filePath =
-    isPlainObject(input) && 'path' in input
-      ? String((input as { path?: string }).path ?? '')
-      : '';
+    isPlainObject(input) && typeof input.path === 'string' ? input.path : '';
 
   // Handle edit tools with diff display
   if (TOOLS_WITH_DIFF_INPUT.has(toolName) && isPlainObject(input)) {

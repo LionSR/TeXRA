@@ -75,21 +75,10 @@ export class ArxivSourceProcessor {
     return this.isValidId(normalized) ? normalized : null;
   }
 
-  /**
-   * Validate input that may be a URL or plain arXiv ID.
-   * @returns Error message if invalid, null if valid
-   */
+  /** @returns Error message if invalid, null if valid */
   public validateId(input: string): string | null {
-    if (!input) {
-      return 'arXiv ID or URL is required';
-    }
-
-    const normalized = this.normalizeInput(input);
-    if (!normalized) {
-      return INVALID_ARXIV_INPUT_ERROR;
-    }
-
-    return null;
+    if (!input) return 'arXiv ID or URL is required';
+    return this.normalizeInput(input) ? null : INVALID_ARXIV_INPUT_ERROR;
   }
 
   public async downloadFile(
@@ -250,8 +239,6 @@ export class ArxivSourceProcessor {
         downloadedPath.endsWith('.tar') ||
         downloadedPath.endsWith('.tar.gz') ||
         downloadedPath.endsWith('.tgz');
-
-      // Detect gzip-compressed single files (.gz but not .tar.gz/.tgz)
       const isGzipOnly = !isArchive && downloadedPath.endsWith('.gz');
 
       if (isArchive) {

@@ -196,10 +196,10 @@ export class ServerSideKeyService {
       return false;
     }
 
-    const tierConfigAvailable =
-      this.hasFullAccess() || this.tierService.getConfigSync() !== null;
-
-    if (this.isAccessCacheValid() && tierConfigAvailable) {
+    if (
+      this.isAccessCacheValid() &&
+      (this.hasFullAccess() || this.tierService.getConfigSync() !== null)
+    ) {
       return this.accessFetchPromise!;
     }
 
@@ -252,25 +252,20 @@ export class ServerSideKeyService {
   }
 
   shouldUseServerSideKeysSync(provider: string, modelName?: string): boolean {
-    const settingEnabled = this.getUseIncludedModelAccess();
-    const providerAvailable = this.isProviderOnServer(provider.toLowerCase());
-    const hasAccess = this.accessResult === true;
-
-    if (!settingEnabled || !providerAvailable || !hasAccess) {
+    if (
+      !this.getUseIncludedModelAccess() ||
+      !this.isProviderOnServer(provider.toLowerCase()) ||
+      !this.accessResult
+    ) {
       return false;
     }
-
     return modelName ? this.canUseModelSync(modelName) : this.hasFullAccess();
   }
 
   /** Returns null if all models allowed (Ultra), empty array if no access. */
   getAllowedModelsForCurrentUser(): string[] | null {
-    if (!this.userTier) {
-      return [];
-    }
-    if (this.hasFullAccess()) {
-      return null;
-    }
+    if (!this.userTier) return [];
+    if (this.hasFullAccess()) return null;
     return this.tierService.getAllowedModels(this.userTier);
   }
 
