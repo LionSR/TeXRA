@@ -10,7 +10,6 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- Removed deprecated `resume_agent` references from orchestrator YAML configs.
 - Updated dependencies (KaTeX, Codex SDK, OpenRouter SDK).
 
 ## [0.36.9] - 2026-03-26
