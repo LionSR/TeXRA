@@ -37,16 +37,16 @@ export function applyGitAuthorConfig(): ReturnType<
   typeof readGitAuthorSettings
 > {
   const settings = readGitAuthorSettings();
-  const { markCommits, authorName, authorEmail } = settings;
-  if (!markCommits) {
+  if (!settings.markCommits) {
     setGitAuthorEnv({});
-    return settings;
+  } else {
+    const { authorName, authorEmail } = settings;
+    setGitAuthorEnv({
+      GIT_AUTHOR_NAME: authorName,
+      GIT_AUTHOR_EMAIL: authorEmail,
+      GIT_COMMITTER_NAME: authorName,
+      GIT_COMMITTER_EMAIL: authorEmail,
+    });
   }
-  setGitAuthorEnv({
-    GIT_AUTHOR_NAME: authorName,
-    GIT_AUTHOR_EMAIL: authorEmail,
-    GIT_COMMITTER_NAME: authorName,
-    GIT_COMMITTER_EMAIL: authorEmail,
-  });
   return settings;
 }

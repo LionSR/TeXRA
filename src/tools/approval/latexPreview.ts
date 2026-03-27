@@ -47,17 +47,12 @@ async function silentUnlink(filePath: string): Promise<void> {
 async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
   const ext = path.extname(filePath);
   const basePathNoExt = filePath.slice(0, -ext.length);
-  for (const tempExt of TEMP_EXTENSIONS) {
-    if (tempExt.includes('*')) {
-      // Glob pattern (e.g. '.bak*') — expand and delete all matches
-      const matches = globSync(`${basePathNoExt}${tempExt}`, { nodir: true });
-      for (const match of matches) {
-        await silentUnlink(match);
-      }
-    } else {
-      await silentUnlink(basePathNoExt + tempExt);
-    }
-  }
+  const unlinkTargets = TEMP_EXTENSIONS.flatMap((tempExt) =>
+    tempExt.includes('*')
+      ? globSync(`${basePathNoExt}${tempExt}`, { nodir: true })
+      : [basePathNoExt + tempExt],
+  );
+  await Promise.all(unlinkTargets.map(silentUnlink));
 }
 
 /** Register cleanup function with entry, or run immediately if already settled */

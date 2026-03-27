@@ -179,11 +179,7 @@ export class PlanView extends LitElement {
       return;
     }
     if (changed.has('plan')) {
-      if (this.plan) {
-        this.open = true;
-      } else {
-        this.open = false;
-      }
+      this.open = Boolean(this.plan);
     }
   }
 

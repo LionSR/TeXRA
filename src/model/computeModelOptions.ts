@@ -89,14 +89,14 @@ async function hasPersonalKeyForModel(
   hasOpenRouter: boolean,
 ): Promise<boolean> {
   if (config.openRouterOnly) return hasOpenRouter;
-  if (!SecretManager.API_PROVIDERS.includes(config.provider as ApiProvider)) {
-    return true;
-  }
+
+  const provider = config.provider as ApiProvider;
+  if (!SecretManager.API_PROVIDERS.includes(provider)) return true;
 
   try {
     return (
-      (await SecretManager.apiKeyExists(config.provider as ApiProvider)) ||
-      Boolean(config.openrouterFullName && hasOpenRouter)
+      (await SecretManager.apiKeyExists(provider)) ||
+      !!(config.openrouterFullName && hasOpenRouter)
     );
   } catch {
     return false;
@@ -243,32 +243,21 @@ export function invalidateModelOptionsCache(): void {
 
 /** Compute typed model options data for Lit-native rendering. */
 export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
-  // Return cached result if still valid.
-  if (_resolved && Date.now() < _resolved.expiry) {
-    return _resolved.data;
-  }
+  if (_resolved && Date.now() < _resolved.expiry) return _resolved.data;
+  if (_pending) return _pending;
 
-  // Dedup concurrent callers — share the same in-flight promise.
-  if (_pending) {
-    return _pending;
-  }
-
-  const thisRequest = computeModelOptionsDataUncached();
-  _pending = thisRequest;
+  const request = computeModelOptionsDataUncached();
+  _pending = request;
 
   try {
-    const data = await thisRequest;
+    const data = await request;
     // Only populate cache if no invalidation occurred while we were awaiting.
-    // invalidateModelOptionsCache() sets _pending = null, so comparing against
-    // thisRequest detects concurrent invalidation.
-    if (_pending === thisRequest) {
+    if (_pending === request) {
       _resolved = { data, expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS };
     }
     return data;
   } finally {
-    if (_pending === thisRequest) {
-      _pending = null;
-    }
+    if (_pending === request) _pending = null;
   }
 }
 

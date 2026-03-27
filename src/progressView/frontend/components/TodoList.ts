@@ -117,11 +117,7 @@ export class TodoList extends LitElement {
       return;
     }
     if (changed.has('todos')) {
-      if (this.todos.length > 0) {
-        this.open = true;
-      } else {
-        this.open = false;
-      }
+      this.open = this.todos.length > 0;
     }
   }
 

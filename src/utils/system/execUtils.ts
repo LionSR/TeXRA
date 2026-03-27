@@ -236,16 +236,9 @@ export async function executeCommand(
       `Error executing command: ${toErrorMessage(err)}`,
     );
 
-    // Handle stderr from ExecaError
-    let stderr = null;
-    if (err instanceof ExecaError) {
-      stderr = err.stderr ? `${err.stderr}`.trim() : null;
-    }
-
-    // With reject: false, this catch block only handles actual execution errors
-    // (e.g., command not found), not timeouts or non-zero exit codes
-    const fallbackOutput = stderr || toErrorMessage(err);
-    const normalizedError = normalizeOutput(fallbackOutput);
+    const stderr =
+      err instanceof ExecaError && err.stderr ? `${err.stderr}`.trim() : null;
+    const normalizedError = normalizeOutput(stderr || toErrorMessage(err));
     return {
       success: false,
       stdout: null,

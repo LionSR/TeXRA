@@ -416,21 +416,19 @@ async function proposeAndExecute(
   if (nonApproveResult) return nonApproveResult;
 
   // At this point result.action === 'approve' (all other cases returned above)
-  const modelOverridden =
-    result.action === 'approve' && result.model ? result.model : undefined;
-  const effective = modelOverridden
-    ? { ...proposal, model: modelOverridden }
+  const modelOverride = result.action === 'approve' ? result.model : undefined;
+  const effective = modelOverride
+    ? { ...proposal, model: modelOverride }
     : proposal;
-  const approvalMeta: ApprovalMeta = {
-    autoApproved: false,
-    ...(modelOverridden && {
-      modelOverride: modelOverridden,
-      requestedModel: proposal.model,
-    }),
-  };
   return executeSubagent(toConfigPayload(effective), agentName, streamId, {
     enableYoloOnChild: isApprovalBypassedForStream(streamId),
-    approvalMeta,
+    approvalMeta: {
+      autoApproved: false,
+      ...(modelOverride && {
+        modelOverride,
+        requestedModel: proposal.model,
+      }),
+    },
   });
 }
 

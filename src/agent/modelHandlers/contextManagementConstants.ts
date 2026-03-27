@@ -45,7 +45,6 @@ export function computeReducedMaxTokens(
   tokenBuffer: number = TOKEN_SAFETY_BUFFER,
 ): number {
   if (availableTokens <= 0) return 1;
-
   const buffered = availableTokens - tokenBuffer;
-  return buffered < MIN_COMPLETION_TOKENS ? availableTokens : buffered;
+  return buffered >= MIN_COMPLETION_TOKENS ? buffered : availableTokens;
 }
