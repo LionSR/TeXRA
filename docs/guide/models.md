@@ -131,7 +131,7 @@ To access additional models or alternative pricing:
 
 1. Get an [OpenRouter](https://openrouter.ai/) API key
 2. Add via `TeXRA: Set API Key` command
-3. Enable `texra.model.useOpenRouter` in settings
+3. In the Dashboard → Models tab → API Configuration, expand the OpenRouter row and enable **"Use OpenRouter for All Models"**
 
 ## Streaming
 
