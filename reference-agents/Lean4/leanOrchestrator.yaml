@@ -7,7 +7,6 @@ settings:
     # Delegation
     - delegate_workflow
     - delegate_agent
-    - resume_agent
     - executions
     - accept_run_files
     # Project management
