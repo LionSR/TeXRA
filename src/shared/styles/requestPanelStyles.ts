@@ -38,6 +38,8 @@ const LISTS = selectorGroup(CONTAINER_NAMES, '__list');
 const ITEMS = selectorGroup(ITEM_NAMES);
 const DETAILS = selectorGroup(ITEM_NAMES, '__details');
 const ACTIONS = selectorGroup(ITEM_NAMES, '__actions');
+const FEEDBACKS = selectorGroup(ITEM_NAMES, '__feedback');
+const FEEDBACK_INPUTS = selectorGroup(ITEM_NAMES, '__feedback-input');
 
 export const requestPanelStyles: CSSResult = css`
   /* ================================================================
@@ -542,17 +544,11 @@ export const requestPanelStyles: CSSResult = css`
    * Rejection feedback (shared across panels with feedback support)
    * ================================================================ */
 
-  .approval-request__feedback,
-  .bash-approval-request__feedback,
-  .workflow-proposal__feedback,
-  .plan-approval-request__feedback {
+  :is(${FEEDBACKS}) {
     margin-top: var(--spacing-small);
   }
 
-  .approval-request__feedback-input,
-  .bash-approval-request__feedback-input,
-  .workflow-proposal__feedback-input,
-  .plan-approval-request__feedback-input {
+  :is(${FEEDBACK_INPUTS}) {
     width: 100%;
   }
 

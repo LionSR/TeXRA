@@ -272,13 +272,13 @@ export class ProgressEventHandler {
     this.state.streamLogs.ensureStream(streamId);
     // Only pass defined hint fields — spreading {key: undefined} over existing
     // hints would clear previously-set values (isRemote, hasMultipleOutputs).
-    const hints = Object.fromEntries(
-      Object.entries({
+    const hints = {
+      ...(payload.agentCategory !== undefined && {
         agentCategory: payload.agentCategory,
-        isRemote,
-        hasMultipleOutputs,
-      }).filter(([, v]) => v !== undefined),
-    );
+      }),
+      ...(isRemote !== undefined && { isRemote }),
+      ...(hasMultipleOutputs !== undefined && { hasMultipleOutputs }),
+    };
     if (Object.keys(hints).length > 0) {
       this.state.updateStreamHints(streamId, hints);
     }
@@ -405,19 +405,12 @@ export class ProgressEventHandler {
 
   private flushProgressUpdates(): void {
     this.progressThrottleTimer = null;
-    if (
-      this.pendingProgressUpdates.size === 0 ||
-      !this.webviewUpdater.isAvailable()
-    ) {
-      this.pendingProgressUpdates.clear();
-      return;
-    }
 
     const { activeStream } = this.state;
     const progress = activeStream
       ? this.pendingProgressUpdates.get(activeStream)
       : undefined;
-    if (activeStream && progress) {
+    if (progress && this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateConversationProgress(activeStream, progress);
     }
     this.pendingProgressUpdates.clear();
@@ -659,20 +652,16 @@ export class ProgressEventHandler {
       StreamStatusService.set(streamId, status, { emit: false });
     }
 
-    if (!this.webviewUpdater.isAvailable()) {
-      return;
-    }
+    if (!this.webviewUpdater.isAvailable()) return;
 
-    const streamExists = this.state.streamLogs.has(streamId);
-    if (!streamExists) {
-      this.state.streamLogs.ensureStream(streamId);
-    }
+    const isNewStream = !this.state.streamLogs.has(streamId);
+    this.state.streamLogs.ensureStream(streamId);
     // Persisted streams may be in stream logs but missing from _streamStates;
     // getOrCreateStreamState is idempotent so safe to call unconditionally.
     const category = this.getStreamCategory(streamId) ?? AgentCategory.Workflow;
     this.state.getOrCreateStreamState(streamId, category);
 
-    if (!streamExists) {
+    if (isNewStream) {
       this.maybeUpdateFilterForCategory(this.getStreamCategory(streamId));
       const statusesForRefresh = StreamStatusService.getAll();
       statusesForRefresh.set(streamId, status);
@@ -697,12 +686,11 @@ export class ProgressEventHandler {
 
   resetRunningTasksToError(waitingStreams: Set<StreamTabId>): StreamTabId[] {
     const affectedStreams: StreamTabId[] = [];
-    const waitingSet = waitingStreams;
 
     for (const [streamId, status] of StreamStatusService.entries()) {
       if (status !== STREAM_STATUS.RUNNING) continue;
 
-      if (waitingSet.has(streamId)) {
+      if (waitingStreams.has(streamId)) {
         StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
           emit: false,
         });

@@ -271,8 +271,7 @@ function formatTodoSection(todos: TodoEntry[]): string[] {
 function formatTodoHeader(executionId: string, todos: TodoEntry[]): string {
   const completed = todos.filter((t) => t.status === 'completed').length;
   const inProgress = todos.filter((t) => t.status === 'in_progress').length;
-  const pending = todos.length - completed - inProgress;
-  return `Tasks for ${executionId} (${completed} done, ${inProgress} active, ${pending} pending):`;
+  return `Tasks for ${executionId} (${completed} done, ${inProgress} active, ${todos.length - completed - inProgress} pending):`;
 }
 
 export class ExecutionsTool extends defineTool({
@@ -329,47 +328,35 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       return this.showSummary(executionId);
     }
 
-    // /executions/{id}/config - agent configuration
-    if (resource === 'config') {
-      return this.showConfig(executionId);
-    }
-
-    // /executions/{id}/conversation - message history
-    if (resource === 'conversation') {
-      return this.showConversation(executionId, input.view_range ?? undefined);
-    }
-
-    // /executions/{id}/todos - subagent task list
-    if (resource === 'todos') {
-      return this.showTodos(executionId);
-    }
-
-    // /executions/{id}/report - persisted result report
-    if (resource === 'report') {
-      return this.showReport(executionId);
-    }
-
-    // /executions/{id}/children - child executions
-    if (resource === 'children') {
-      return this.showChildren(executionId);
-    }
-
-    // /executions/{id}/output - background process output
-    if (resource === 'output') {
-      return this.readProcessOutput(executionId, input.view_range ?? undefined);
-    }
-
-    // /executions/{id}/files or /executions/{id}/files/{path}
-    if (resource === 'files') {
-      if (rest.length === 0) {
-        return this.listFiles(executionId);
-      }
-      return this.readFile(
-        executionId,
-        rest.join('/'),
-        // Schema enforces length 2; cast since Zod infers number[]
-        input.view_range as [number, number] | undefined,
-      );
+    switch (resource) {
+      case 'config':
+        return this.showConfig(executionId);
+      case 'conversation':
+        return this.showConversation(
+          executionId,
+          input.view_range ?? undefined,
+        );
+      case 'todos':
+        return this.showTodos(executionId);
+      case 'report':
+        return this.showReport(executionId);
+      case 'children':
+        return this.showChildren(executionId);
+      case 'output':
+        return this.readProcessOutput(
+          executionId,
+          input.view_range ?? undefined,
+        );
+      case 'files':
+        if (rest.length === 0) {
+          return this.listFiles(executionId);
+        }
+        return this.readFile(
+          executionId,
+          rest.join('/'),
+          // Schema enforces length 2; cast since Zod infers number[]
+          input.view_range as [number, number] | undefined,
+        );
     }
 
     throw new ToolError(

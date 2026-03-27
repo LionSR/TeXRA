@@ -140,13 +140,9 @@ export class ReadFileTool extends defineTool({
     requestedStartLine: number,
     totalLines: number,
   ): number {
-    if (range?.end != null) {
-      return range.end;
-    }
-
-    if (range?.start != null) {
+    if (range?.end != null) return range.end;
+    if (range?.start != null)
       return Math.min(requestedStartLine + READ_FILE_MAX_LINES - 1, totalLines);
-    }
     return totalLines;
   }
 

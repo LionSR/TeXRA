@@ -45,6 +45,7 @@ import {
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
+import { parseToolArguments } from './utils/parseArguments';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
@@ -2538,19 +2539,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   private parseArguments(raw: unknown): unknown {
-    if (typeof raw !== 'string') {
-      return raw;
-    }
-
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      this.logger.warn(
-        'OpenAI Responses tool call arguments could not be parsed as JSON; using raw string.',
-        { data: error },
-      );
-      return raw;
-    }
+    return parseToolArguments(raw, this.logger);
   }
 
   extractToolUse(response: Response): OpenAIResponseToolCall[] {
@@ -2961,21 +2950,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private isMessageItem(
     item?: ResponseInputItem,
   ): item is EasyInputMessage | ResponseInputItem.Message {
-    if (!item || typeof item !== 'object') {
-      return false;
-    }
-
-    const role = (item as { role?: unknown }).role;
-    if (typeof role !== 'string') {
-      return false;
-    }
-
-    const type = (item as { type?: unknown }).type;
-    if (typeof type === 'string' && type !== 'message') {
-      return false;
-    }
-
-    const content = (item as { content?: unknown }).content;
+    if (!item || typeof item !== 'object') return false;
+    const { role, type, content } = item as unknown as Record<string, unknown>;
+    if (typeof role !== 'string') return false;
+    if (typeof type === 'string' && type !== 'message') return false;
     return typeof content === 'string' || Array.isArray(content);
   }
 

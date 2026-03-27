@@ -243,17 +243,13 @@ class ToolUsePrepNode<C> extends BaseNode<
   ): Promise<{ interrupted: boolean; queuedFollowUp: string | null }> {
     const interrupted = this.services.checkInterruption();
 
-    // Check for queued follow-ups to inject before the model call
-    let queuedFollowUp: string | null = null;
-    if (this.services.session?.hasQueuedFollowUp()) {
-      // Drain without waiting (we know there's something)
-      const items = await this.services.session.waitForFollowUp(() => false);
-      if (items) {
-        queuedFollowUp = items.join('\n\n');
-      }
+    if (!this.services.session?.hasQueuedFollowUp()) {
+      return { interrupted, queuedFollowUp: null };
     }
 
-    return { interrupted, queuedFollowUp };
+    // Drain without waiting (we know there's something queued)
+    const items = await this.services.session.waitForFollowUp(() => false);
+    return { interrupted, queuedFollowUp: items?.join('\n\n') ?? null };
   }
 
   async post(
@@ -753,24 +749,23 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
   private async logAndProcessMediaFiles(
     execResult: ToolExecutionResult,
-    options: ToolUseCycleServices<C>,
-    workspace: ToolUseCycleServices<C>['workspace'],
   ): Promise<void> {
     const { call, result, parsedInput, extracted, editedFiles, logRef } =
       execResult;
+    const options = this.services;
+    const { workspace } = options;
 
     // Spread sanitizedResult so editedFiles in the log don't leak into
     // extracted.sanitizedResult (which is reused for model messages in post).
-    const logOutput =
-      editedFiles.length > 0
-        ? { ...extracted.sanitizedResult, editedFiles }
-        : extracted.sanitizedResult;
+    const logOutput = editedFiles.length
+      ? { ...extracted.sanitizedResult, editedFiles }
+      : extracted.sanitizedResult;
 
     const toolUseLog = {
       toolName: call.name,
       input: parsedInput ?? call.raw,
       output: logOutput,
-      ...(editedFiles.length > 0 && { files: editedFiles }),
+      ...(editedFiles.length && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
 
@@ -803,7 +798,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
           );
         }
       }
-      if (validLocations.length > 0) {
+      if (validLocations.length) {
         workspace.media.addMediaFiles(validLocations);
       }
     }
@@ -815,8 +810,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     _toolCalls: SdkToolCall[],
     execResults: (ToolExecutionResult | null)[],
   ): Promise<string | undefined> {
-    const services = this.services;
-    const { workspace } = services;
+    const { workspace } = this.services;
 
     const completedResults = execResults.filter(
       (r): r is ToolExecutionResult => r !== null,
@@ -825,16 +819,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
     if (completedResults.length < execResults.length) {
       shared.shouldStop = true;
     }
-
-    if (completedResults.length === 0) {
+    if (!completedResults.length) {
       return FlowTransition.COMPLETE;
     }
 
     const assistantText = shared.text ?? '';
 
-    // Log and process media files for each result
     for (const execResult of completedResults) {
-      await this.logAndProcessMediaFiles(execResult, services, workspace);
+      await this.logAndProcessMediaFiles(execResult);
     }
 
     const extracted = completedResults.map((er) => er.extracted);
@@ -842,36 +834,36 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
     // For Google/DeepSeek/Kimi handlers with multiple parallel calls, batch all tool calls
     // into a single message to preserve thought signatures / reasoning_content.
+    const { modelHandler } = this.services;
     const shouldBatch =
       calls.length > 1 &&
-      (services.modelHandler.isGoogle ||
-        services.modelHandler.isDeepSeek ||
-        services.modelHandler.isKimi ||
-        services.modelHandler.isMiniMax) &&
-      !!services.modelHandler.createBatchedToolUseFollowUpMessages;
+      (modelHandler.isGoogle ||
+        modelHandler.isDeepSeek ||
+        modelHandler.isKimi ||
+        modelHandler.isMiniMax) &&
+      !!modelHandler.createBatchedToolUseFollowUpMessages;
 
     if (shouldBatch) {
-      const followUpMsgs = await services.modelHandler
-        .createBatchedToolUseFollowUpMessages!(
-        calls,
-        extracted.map((e) => e.sanitizedResult),
-        extracted.map((e) => e.attachments),
-        workspace,
-        assistantText || undefined,
-      );
+      const followUpMsgs =
+        await modelHandler.createBatchedToolUseFollowUpMessages!(
+          calls,
+          extracted.map((e) => e.sanitizedResult),
+          extracted.map((e) => e.attachments),
+          workspace,
+          assistantText || undefined,
+        );
       shared.messages.push(...followUpMsgs);
     } else {
       for (const [index, execResult] of completedResults.entries()) {
         const { sanitizedResult, attachments } = extracted[index];
-        const followUpMsgs =
-          await services.modelHandler.createToolUseFollowUpMessages(
-            services.client,
-            execResult.call,
-            sanitizedResult,
-            attachments,
-            workspace,
-            index === 0 ? assistantText || undefined : undefined,
-          );
+        const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
+          this.services.client,
+          execResult.call,
+          sanitizedResult,
+          attachments,
+          workspace,
+          index === 0 ? assistantText || undefined : undefined,
+        );
         shared.messages.push(...followUpMsgs);
       }
     }
