@@ -1,26 +1,7 @@
 // Third-party imports
 import OpenAI from 'openai';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
-
-/**
- * OpenRouter reasoning_details item type.
- *
- * Note: This type is intentionally defined locally rather than imported from
- * `@openrouter/sdk/models` (Schema2 type) because:
- * - The SDK uses ESM subpath exports which require `moduleResolution: "node16"` or higher
- * - This project uses `moduleResolution: "node"` in tsconfig.json
- * - Changing moduleResolution would have broader implications across the codebase
- *
- * The SDK's Schema2 type is equivalent but includes additional optional fields
- * (signature, id, format, index) that we don't need for our use case.
- *
- * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
- * @see Schema2 in @openrouter/sdk/esm/models/schema2.d.ts for SDK equivalent
- */
-type ReasoningDetailItem =
-  | { type: 'reasoning.text'; text?: string | null }
-  | { type: 'reasoning.encrypted'; data: string }
-  | { type: 'reasoning.summary'; summary: string };
+import type { ReasoningDetailUnion } from '@openrouter/sdk/models';
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -41,7 +22,7 @@ import type {
 } from 'openai/resources/chat/completions';
 
 /** Extract text content from a reasoning detail item by type */
-function getReasoningItemText(item: ReasoningDetailItem): string | undefined {
+function getReasoningItemText(item: ReasoningDetailUnion): string | undefined {
   if (item.type === 'reasoning.text') return item.text ?? undefined;
   if (item.type === 'reasoning.summary') return item.summary;
   // 'reasoning.encrypted' - encrypted content is not useful for display
@@ -54,7 +35,7 @@ function getReasoningItemText(item: ReasoningDetailItem): string | undefined {
  * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
  */
 const extractTextFromReasoningDetails = (
-  details: ReasoningDetailItem[] | unknown,
+  details: ReasoningDetailUnion[] | unknown,
 ): string => {
   if (!Array.isArray(details)) {
     // Fallback: if it's a string, return it directly
@@ -63,7 +44,7 @@ const extractTextFromReasoningDetails = (
 
   return details
     .filter(
-      (item): item is ReasoningDetailItem => !!item && typeof item === 'object',
+      (item): item is ReasoningDetailUnion => !!item && typeof item === 'object',
     )
     .map(getReasoningItemText)
     .filter((text): text is string => !!text)
@@ -83,7 +64,7 @@ const extractOpenRouterReasoningDelta = (
   if (!choice) return '';
 
   const delta = choice.delta as {
-    reasoning_details?: ReasoningDetailItem[] | string;
+    reasoning_details?: ReasoningDetailUnion[] | string;
     reasoning_content?: string;
   };
 
@@ -199,7 +180,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
 
   /**
    * OpenRouter returns reasoning in different formats:
-   * - reasoning_details: array of objects (normalized format, see ReasoningDetailItem)
+   * - reasoning_details: array of objects (normalized format, see ReasoningDetailUnion)
    * - reasoning: string (simple format)
    *
    * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
