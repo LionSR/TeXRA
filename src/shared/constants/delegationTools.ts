@@ -9,7 +9,6 @@
 export const DELEGATION_TOOLS: ReadonlySet<string> = new Set([
   'delegate_workflow',
   'delegate_agent',
-  'resume_agent',
   'propose_workflow',
   'propose_agent',
 ]);
