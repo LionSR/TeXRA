@@ -42,9 +42,7 @@ export type HelperModelResult =
  */
 export function getHelperModelName(): string {
   const configuredModel = globalSM.get<string>(GlobalStateKey.HELPER_MODEL);
-  const userExplicitlySet = isNonEmptyString(configuredModel);
-
-  if (!userExplicitlySet) {
+  if (!isNonEmptyString(configuredModel)) {
     return DEFAULT_HELPER_MODEL;
   }
 
@@ -58,8 +56,9 @@ export function getHelperModelName(): string {
     GlobalStateKey.ENABLED_MODELS,
     [],
   );
-  if (enabledModels.length === 0) return resolved;
-  if (enabledModels.includes(resolved)) return resolved;
+  if (enabledModels.length === 0 || enabledModels.includes(resolved)) {
+    return resolved;
+  }
   return enabledModels[0];
 }
 

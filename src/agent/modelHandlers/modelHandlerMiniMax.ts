@@ -17,10 +17,9 @@ import type {
 function extractTextFromReasoningDetails(details: unknown): string | undefined {
   if (typeof details === 'string') return details || undefined;
   if (!Array.isArray(details)) return undefined;
-  const text = (details as Array<{ text?: string | null }>).reduce(
-    (acc, item) => acc + (item?.text ?? ''),
-    '',
-  );
+  const text = (details as Array<{ text?: string | null }>)
+    .map((item) => item?.text ?? '')
+    .join('');
   return text || undefined;
 }
 
@@ -79,24 +78,20 @@ export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
    * MiniMax returns reasoning in `reasoning_details` (array), not `reasoning_content`.
    */
   protected override extractReasoningDelta(chunk: ChatCompletionChunk): string {
-    const delta = chunk.choices[0]?.delta as
-      | { reasoning_details?: unknown }
-      | undefined;
-    if (delta && 'reasoning_details' in delta && delta.reasoning_details) {
-      return extractTextFromReasoningDetails(delta.reasoning_details) ?? '';
-    }
+    const details = (
+      chunk.choices[0]?.delta as { reasoning_details?: unknown } | undefined
+    )?.reasoning_details;
+    if (details) return extractTextFromReasoningDetails(details) ?? '';
     return super.extractReasoningDelta(chunk);
   }
 
   protected override extractReasoningFromMessage(
     message: Record<string, unknown> | undefined,
   ): string | null {
-    const details = message?.reasoning_details;
-    if (details) {
-      const extracted = extractTextFromReasoningDetails(details);
-      if (extracted) return extracted;
-    }
-    return super.extractReasoningFromMessage(message);
+    const extracted = extractTextFromReasoningDetails(
+      message?.reasoning_details,
+    );
+    return extracted ?? super.extractReasoningFromMessage(message);
   }
 
   /**

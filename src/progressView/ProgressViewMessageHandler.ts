@@ -405,15 +405,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
 
     // Stop all running agents before clearing coordinator state
-    const stopPromises: Promise<void>[] = [];
-    for (const streamId of this.provider.state.streamLogs.keys()) {
-      stopPromises.push(
-        Promise.resolve(
+    await Promise.allSettled(
+      this.provider.state.streamLogs
+        .keys()
+        .map((streamId) =>
           vscode.commands.executeCommand<void>('texra.stopAgent', streamId),
         ),
-      );
-    }
-    await Promise.allSettled(stopPromises);
+    );
 
     // Clear approvals, retry requests, queued follow-ups, and YOLO state
     cleanupAllApprovals();

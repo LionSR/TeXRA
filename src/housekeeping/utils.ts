@@ -13,8 +13,6 @@ const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
 export function getAgentFirstNameChunk(agent: string): string {
-  // Extract clean agent name (strip source: prefix if present)
-  // Handles all agent sources: custom, local, remote, builtIn, builtInToolUse
   const cleanAgent = getCleanAgentName(agent);
 
   if (cleanAgent.startsWith('write-')) {
@@ -33,22 +31,23 @@ export function getFilePatterns(
   numRounds: number = 3,
 ): string[] {
   const patterns: string[] = [];
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+  const chunk = getAgentFirstNameChunk(agent);
 
   for (let round = 0; round < numRounds; round++) {
+    const prefix = `${base}_${chunk}_r${round}`;
     patterns.push(
-      `${base}_${agentFirstNameChunk}_r${round}_${model}`,
-      `${base}_${agentFirstNameChunk}_r${round}_${model}_diff`,
-      `${base}_${agentFirstNameChunk}_r${round}_full_${model}`,
-      `${base}_${agentFirstNameChunk}_r${round}_full_${model}_diff`,
-      `${base}_${agentFirstNameChunk}_r${round}_${model}_thinking`,
+      `${prefix}_${model}`,
+      `${prefix}_${model}_diff`,
+      `${prefix}_full_${model}`,
+      `${prefix}_full_${model}_diff`,
+      `${prefix}_${model}_thinking`,
     );
 
-    // Only add diff patterns for rounds > 0 to avoid negative references
     if (round > 0) {
+      const diffSuffix = `_diffr${round}r${round - 1}`;
       patterns.push(
-        `${base}_${agentFirstNameChunk}_r${round}_${model}_diffr${round}r${round - 1}`,
-        `${base}_${agentFirstNameChunk}_r${round}_full_${model}_diffr${round}r${round - 1}`,
+        `${prefix}_${model}${diffSuffix}`,
+        `${prefix}_full_${model}${diffSuffix}`,
       );
     }
   }
@@ -79,26 +78,26 @@ export function findFilesFromPatterns(
 
   for (const pattern of patterns) {
     for (const ext of extensions) {
-      const bracePattern = `${pattern}${ext}`;
       const isGlob = ext.includes('*');
       for (const dir of searchDirs) {
-        const matches = globSync(path.join(dir, bracePattern), {
+        const matches = globSync(path.join(dir, `${pattern}${ext}`), {
           nodir: true,
         });
-        if (matches.length > 0) {
-          if (isGlob) {
-            for (const match of matches) {
-              results.add(WorkspaceFS.relativePath(match));
-            }
-          } else {
-            results.add(WorkspaceFS.relativePath(matches[0]));
-            break;
+        if (matches.length === 0) continue;
+
+        if (isGlob) {
+          for (const match of matches) {
+            results.add(WorkspaceFS.relativePath(match));
           }
+        } else {
+          results.add(WorkspaceFS.relativePath(matches[0]));
+          break;
         }
       }
     }
   }
 
-  logger.debug(CHANNEL, `Found files: ${[...results].join(', ')}`);
-  return [...results];
+  const found = [...results];
+  logger.debug(CHANNEL, `Found files: ${found.join(', ')}`);
+  return found;
 }

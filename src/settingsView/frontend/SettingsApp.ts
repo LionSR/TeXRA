@@ -416,9 +416,10 @@ export class SettingsApp extends SettingsAppBase {
   private handleMemoryDeleteItem(
     event: CustomEvent<{ storagePath: string; displayPath?: string }>,
   ): void {
+    const { storagePath, displayPath = storagePath } = event.detail;
     postMessage(SETTINGS_VIEW_COMMANDS.DELETE_MEMORY, {
-      storagePath: event.detail.storagePath,
-      displayPath: event.detail.displayPath ?? event.detail.storagePath,
+      storagePath,
+      displayPath,
     });
   }
 

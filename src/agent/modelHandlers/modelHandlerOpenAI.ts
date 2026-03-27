@@ -57,6 +57,7 @@ import {
   formatToolResultAsText,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
+import { parseToolArguments } from './utils/parseArguments';
 import { ModelHandler } from './ModelHandler';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
@@ -902,29 +903,15 @@ export class ModelHandlerOpenAI<
             format: typedAudioFormat,
           },
         };
-        // actually, currently only mp3 and wav are supported
-        // openai.BadRequestError: Error code: 400 - [{'error': {'code': 400, 'message': 'Invalid audio format "m4a" for audio generation. Valid formats are: [wav, mp3]', 'status': 'INVALID_ARGUMENT'}}]
-
-        // For the size:
-        // You can use the File API to upload an audio file of any size.
-        // Always use the File API when the total request size (including the files, text prompt, system instructions, etc.) is larger than 20 MB.
-        // The maximum request size is 20 MB, which includes text prompts, system instructions, and files provided inline. If your file's size will make the total request size exceed 20 MB, then use the File API to upload files for use in requests.
-        // If you're using an audio sample multiple times, it is more efficient to use the File API.
-        // https://ai.google.dev/gemini-api/docs/audio?hl=en&lang=python
-
-        // The structure below might need adjustment based on exact API requirements
-        // Using a structure closer to the message format from documentation
-        // It seems this needs to be part of the user message content directly.
-        // Let's adapt this to return the structured object expected within the message content array.
         return [
-          { type: 'text', text: `Audio: ${media.file_name}` }, // Text description goes separately
+          { type: 'text', text: `Audio: ${media.file_name}` },
           audioContent,
         ];
       } else if (media.media_category === 'audio') {
         this.logger.warn(
           `Audio input received (${media.file_name}) but native audio is not supported by this specific model/provider (${this.config.provider}). Skipping.`,
         );
-        return []; // Return empty array if audio not supported
+        return [];
       } else {
         this.logger.warn(`Unknown media category: ${media.media_category}`);
         return [];
@@ -949,7 +936,6 @@ export class ModelHandlerOpenAI<
         const stopReason =
           responseObject.choices?.[0]?.finish_reason ?? OPENAI_CHAT_FINISH.STOP;
 
-        // For usage, we'll use empty values since they're not provided; TODO needs to test at some points
         const usage = responseObject.usage ?? {
           prompt_tokens: 0,
           completion_tokens: 0,
@@ -1053,7 +1039,7 @@ export class ModelHandlerOpenAI<
 
   /** Initializes output file and handles prefill content. */
   async initializeOutputAndPrefill(
-    agentConfig: AgentConfig,
+    _agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: any[],
     workspaceState: AgentWorkspaceState,
@@ -1418,19 +1404,7 @@ export class ModelHandlerOpenAI<
   }
 
   protected parseArguments(raw: unknown): unknown {
-    if (typeof raw !== 'string') {
-      return raw;
-    }
-
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      this.logger.warn(
-        'Tool call arguments could not be parsed as JSON; using raw string.',
-        { data: error },
-      );
-      return raw;
-    }
+    return parseToolArguments(raw, this.logger);
   }
 
   extractToolUse(responseObject: ChatCompletion): TCall[] {

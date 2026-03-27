@@ -74,19 +74,14 @@ export async function indentLatexFilesInDirectory(
   }
 
   try {
-    // Format .tex files (runLatexFormatter handles backup cleanup internally)
     await walkDirectory(directory, async (fullPath, name) => {
-      if (!hasExtension(name, '.tex')) {
-        return;
-      }
-      if (progressCallback) {
-        progressCallback(`Indenting ${path.basename(fullPath)}...`, 0);
-      }
+      if (!hasExtension(name, '.tex')) return;
 
+      progressCallback?.(`Indenting ${path.basename(fullPath)}...`, 0);
       logger.debug(CHANNEL, `Processing file: ${fullPath}`);
+
       try {
-        const success = await runLatexFormatter(fullPath);
-        if (success) {
+        if (await runLatexFormatter(fullPath)) {
           logger.info(CHANNEL, `Successfully formatted: ${fullPath}`);
           indentedCount++;
         } else {

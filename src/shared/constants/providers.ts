@@ -124,7 +124,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
 /** URLs for obtaining API keys from each provider. */
 export const PROVIDER_URLS: Record<string, string> = {
   ...Object.fromEntries(
-    PROVIDER_REGISTRY.filter((p) => p.keyUrl).map((p) => [p.id, p.keyUrl!]),
+    PROVIDER_REGISTRY.flatMap((p) => (p.keyUrl ? [[p.id, p.keyUrl]] : [])),
   ),
   openRouter: 'https://openrouter.ai/keys',
 };

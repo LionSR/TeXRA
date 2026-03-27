@@ -1,17 +1,12 @@
 /**
  * Unified usage statistics - the ONLY type used after API response extraction.
  * All model handlers normalize their provider-specific usage to this format.
- *
- * This provides a single source of truth for usage tracking across all providers.
  */
 import { z } from 'zod';
 
-// Local imports - single source of truth for base usage stats
 import { TokenUsageStatsSchema } from '@shared/schemas';
 
-/**
- * Provider identifiers for usage tracking - single source of truth.
- */
+/** Provider identifiers for usage tracking. */
 export const UsageProviderSchema = z.enum([
   'anthropic',
   'openai',
@@ -29,11 +24,7 @@ export const UsageProviderSchema = z.enum([
 
 export type UsageProvider = z.infer<typeof UsageProviderSchema>;
 
-/**
- * Normalized usage statistics from any model provider.
- * Extends TokenUsageStatsSchema (single source of truth) with provider-specific fields.
- * Cost is computed once during normalization and never recomputed.
- */
+/** Normalized usage statistics from any model provider. */
 export const NormalizedUsageSchema = TokenUsageStatsSchema.extend({
   /** Response time in milliseconds */
   responseTimeMs: z.number(),
