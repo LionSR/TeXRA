@@ -99,10 +99,9 @@ export class TextEditorTool extends defineTool({
   }
 
   private getAllowedCommands(): string {
-    if (this.apiType === 'text_editor_20250429') {
-      return 'view, create, str_replace, insert';
-    }
-    return 'view, create, str_replace, insert, undo_edit';
+    return this.apiType === 'text_editor_20250429'
+      ? 'view, create, str_replace, insert'
+      : 'view, create, str_replace, insert, undo_edit';
   }
 
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
@@ -155,30 +154,31 @@ export class TextEditorTool extends defineTool({
   ): Promise<void> {
     const exists = await WorkspaceFS.exists(filePath);
 
-    if (!exists && command !== 'create') {
-      throw new ToolError(
-        `The path ${filePath} does not exist. Please provide a valid path.`,
-      );
+    if (!exists) {
+      if (command !== 'create') {
+        throw new ToolError(
+          `The path ${filePath} does not exist. Please provide a valid path.`,
+        );
+      }
+      return; // 'create' on non-existent path is valid — nothing more to check
     }
 
-    if (exists && command === 'create') {
+    if (command === 'create') {
       throw new ToolError(
         `File already exists at: ${filePath}. Cannot overwrite files using command 'create'.`,
       );
     }
 
     // Check if the path is a directory (only view command can be used on directories)
-    if (exists) {
-      try {
-        const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
-        if (isDirectory(stats.type) && command !== 'view') {
-          throw new ToolError(
-            `The path ${filePath} is a directory and only the 'view' command can be used on directories`,
-          );
-        }
-      } catch (error) {
-        rethrowWithContext(error, `Error validating path`);
+    try {
+      const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
+      if (isDirectory(stats.type) && command !== 'view') {
+        throw new ToolError(
+          `The path ${filePath} is a directory and only the 'view' command can be used on directories`,
+        );
       }
+    } catch (error) {
+      rethrowWithContext(error, `Error validating path`);
     }
   }
 
@@ -413,23 +413,18 @@ export class TextEditorTool extends defineTool({
       const newFileLines = appliedContent.split('\n');
       const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
 
-      const userDiffNote = formatUnifiedApprovalUserDiff(
+      const output = this.formatEditOutput(
         filePath,
+        snippet,
+        startLine,
         newFileContent,
         appliedContent,
+        'Review the changes and make sure they are as expected. Edit the file again if necessary.',
       );
-      const successIntro = `The file ${filePath} has been edited.`;
-      const snippetOutput = this.makeOutput(snippet, startLine);
-      const reviewMessage =
-        'Review the changes and make sure they are as expected. Edit the file again if necessary.';
-      const baseMsg = `${successIntro} ${snippetOutput}${reviewMessage}`;
-      const successMsg = userDiffNote
-        ? `${baseMsg}\n\n${userDiffNote}`
-        : baseMsg;
 
       return {
         summary: `Updated ${filePath}`,
-        output: successMsg,
+        output,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       };
@@ -510,24 +505,19 @@ export class TextEditorTool extends defineTool({
         .slice(snippetStart, snippetEnd)
         .join('\n');
       const startLine = snippetStart + 1;
-      const userDiffNote = formatUnifiedApprovalUserDiff(
+
+      const output = this.formatEditOutput(
         filePath,
+        snippetText,
+        startLine,
         newFileContent,
         appliedContent,
+        'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.',
       );
-
-      const successIntro = `The file ${filePath} has been edited.`;
-      const snippetOutput = this.makeOutput(snippetText, startLine);
-      const reviewNote =
-        'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.';
-      const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
-      const successMsg = userDiffNote
-        ? `${baseMsg}\n\n${userDiffNote}`
-        : baseMsg;
 
       return {
         summary: `Inserted text into ${filePath}`,
-        output: successMsg,
+        output,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       };
@@ -602,11 +592,33 @@ export class TextEditorTool extends defineTool({
     }
   }
 
+  /** Build the output message for str_replace/insert commands. */
+  private formatEditOutput(
+    filePath: string,
+    snippetText: string,
+    startLine: number,
+    proposedContent: string,
+    appliedContent: string,
+    reviewNote: string,
+  ): string {
+    const successIntro = `The file ${filePath} has been edited.`;
+    const snippetOutput = this.makeOutput(snippetText, startLine);
+    const userDiffNote = formatUnifiedApprovalUserDiff(
+      filePath,
+      proposedContent,
+      appliedContent,
+    );
+    const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
+    return userDiffNote ? `${baseMsg}\n\n${userDiffNote}` : baseMsg;
+  }
+
   private addToHistory(filePath: string, content: string): void {
-    if (!this.fileHistory.has(filePath)) {
-      this.fileHistory.set(filePath, []);
+    const history = this.fileHistory.get(filePath);
+    if (history) {
+      history.push(content);
+    } else {
+      this.fileHistory.set(filePath, [content]);
     }
-    this.fileHistory.get(filePath)!.push(content);
   }
 
   private makeOutput(content: string, initLine: number = 1): string {

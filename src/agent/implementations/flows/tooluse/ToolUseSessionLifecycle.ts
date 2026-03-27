@@ -28,8 +28,7 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   }
 
   interrupt(): void {
-    this.followUps.cancelWait();
-    this.followUps.clear();
+    this.followUps.dispose();
   }
 
   dispose(): void {

@@ -1,10 +1,7 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
 import {
   getIncludedExtensions,
   ExtensionCategory,
@@ -13,7 +10,6 @@ import * as logger from '@logger/logUtils';
 import { getConfig, watchConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
-// Local file imports
 import { getFilesRecursively } from './listing';
 
 const CHANNEL = 'FileLister';

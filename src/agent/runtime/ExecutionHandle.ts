@@ -182,6 +182,20 @@ export class ProcessExecutionHandle implements ExecutionHandle {
 // Subagent lineage helpers
 // ============================================================================
 
+/** True when the handle is a child of parentStreamId (not the parent itself). */
+function isChildOf(
+  handle: ExecutionHandle,
+  parentStreamId: StreamTabId,
+): boolean {
+  if (handle.parentStreamId !== parentStreamId) return false;
+  // AgentExecutionHandles where childStreamId === parentStreamId represent
+  // the parent itself, not a child.
+  if (handle instanceof AgentExecutionHandle) {
+    return handle.childStreamId !== parentStreamId;
+  }
+  return true;
+}
+
 /**
  * Interrupt all active subagents of a parent stream.
  * Called before interrupting the parent so subagents stop
@@ -192,15 +206,9 @@ export function interruptActiveChildren(
   handles: Iterable<ExecutionHandle>,
 ): void {
   for (const handle of handles) {
-    if (handle.parentStreamId !== parentStreamId) continue;
-    // Skip the parent itself — only terminate its children
-    if (
-      handle instanceof AgentExecutionHandle &&
-      handle.childStreamId === parentStreamId
-    ) {
-      continue;
+    if (isChildOf(handle, parentStreamId)) {
+      handle.terminate();
     }
-    handle.terminate();
   }
 }
 
@@ -208,31 +216,23 @@ export function interruptActiveChildren(
 export function collectChildSummary(
   parentStreamId: StreamTabId,
   handles: Iterable<ExecutionHandle>,
-  ctor: new (...args: any[]) => ExecutionHandle,
+  ctor: typeof AgentExecutionHandle | typeof ProcessExecutionHandle,
 ): ActiveChildInfo[] {
   const result: ActiveChildInfo[] = [];
   for (const handle of handles) {
-    if (handle.parentStreamId !== parentStreamId || !(handle instanceof ctor)) {
+    if (!(handle instanceof ctor) || !isChildOf(handle, parentStreamId)) {
       continue;
     }
-    // Exclude the parent itself (parentStreamId === childStreamId)
-    if (
-      handle instanceof AgentExecutionHandle &&
-      handle.childStreamId === parentStreamId
-    ) {
-      continue;
-    }
-    const statusInfo = handle.getStatus();
+    const { status, elapsed } = handle.getStatus();
     const info: ActiveChildInfo = {
       executionId: handle.executionId,
       agentName: handle.agentName,
-      status: statusInfo.status,
-      elapsed: statusInfo.elapsed ?? null,
+      status,
+      elapsed: elapsed ?? null,
     };
     if (handle instanceof AgentExecutionHandle) {
       info.childStreamId = handle.childStreamId;
-    }
-    if (handle instanceof ProcessExecutionHandle && handle.toolName) {
+    } else if (handle instanceof ProcessExecutionHandle && handle.toolName) {
       info.toolName = handle.toolName;
     }
     result.push(info);

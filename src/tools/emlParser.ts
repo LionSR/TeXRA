@@ -134,13 +134,15 @@ function toUint8Array(content: ArrayBuffer | Uint8Array | string): Uint8Array {
   return new Uint8Array(Buffer.from(content, 'base64'));
 }
 
+const MIME_SUBTYPE_TO_EXT: Record<string, string> = {
+  jpeg: 'jpg',
+  'svg+xml': 'svg',
+  tiff: 'tif',
+};
+
 function extensionFromMime(mimeType: string): string {
   const sub = mimeType.split('/')[1] ?? 'bin';
-  // Normalize common MIME subtypes to file extensions
-  if (sub === 'jpeg') return 'jpg';
-  if (sub === 'svg+xml') return 'svg';
-  if (sub === 'tiff') return 'tif';
-  return sub;
+  return MIME_SUBTYPE_TO_EXT[sub] ?? sub;
 }
 
 function formatAddress(addr: Address): string {

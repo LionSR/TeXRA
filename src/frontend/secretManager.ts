@@ -74,15 +74,13 @@ export class SecretManager {
   }
 
   public static async anyApiKeyExists(): Promise<boolean> {
-    // Check all local API keys in parallel
     const keyChecks = await Promise.all(
       this.API_PROVIDERS.map((provider) => this.apiKeyExists(provider)),
     );
-    if (keyChecks.some(Boolean)) {
-      return true;
-    }
-    // Fall back to server-side keys (Ultra tier + enabled providers)
-    return getServerSideKeyService().canUseServerSideKeys();
+    return (
+      keyChecks.some(Boolean) ||
+      getServerSideKeyService().canUseServerSideKeys()
+    );
   }
 
   public static async apiKeyExists(provider: ApiProvider): Promise<boolean> {
