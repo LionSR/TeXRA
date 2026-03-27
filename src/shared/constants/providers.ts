@@ -241,4 +241,12 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       globalStateKey: GlobalStateKey.GLM_CODING_PLAN,
     },
   ],
+  openrouter: [
+    {
+      key: 'texra.model.useOpenRouter',
+      label: 'Use OpenRouter for All Models',
+      description:
+        'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key.',
+    },
+  ],
 };
