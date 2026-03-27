@@ -19,6 +19,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import { GlobalStateKey, globalSM } from '@common/state';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
@@ -122,7 +123,7 @@ function withShortModelName(config: ModelConfig): ModelConfig {
  */
 export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
   const config = withShortModelName(originalConfig);
-  const useOpenRouter = getConfig<boolean>('texra.model.useOpenRouter', false);
+  const useOpenRouter = getUseOpenRouter();
 
   // OpenAI Responses API (required or optional)
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
