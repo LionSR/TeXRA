@@ -31,7 +31,13 @@
       "@tools/*": ["src/tools/*"],
       "@types/*": ["src/types/*"],
       "@eventBus/*": ["src/eventBus/*"],
-      "@auth/*": ["src/auth/*"]
+      "@auth/*": ["src/auth/*"],
+      "@openrouter/sdk": [
+        "node_modules/@openrouter/sdk/esm/index.d.ts"
+      ],
+      "@openrouter/sdk/models": [
+        "node_modules/@openrouter/sdk/esm/models/index.d.ts"
+      ]
     },
     "moduleResolution": "node",
     "strict": true /* enable all strict type-checking options */,
