@@ -7,6 +7,7 @@
  */
 
 import { globalSM, GlobalStateKey } from '@common/state/stateManager';
+import { getConfig } from '@utils/config';
 
 /** Map from provider string to GlobalStateKey for per-provider streaming. */
 const STREAMING_KEY: Record<string, GlobalStateKey> = {
@@ -183,10 +184,15 @@ export function getGLMCodingPlan(): boolean {
 // OpenRouter routing setting (globalSM-backed)
 // ---------------------------------------------------------------------------
 
-/** Whether to route all API calls through OpenRouter. */
+/**
+ * Whether to route all API calls through OpenRouter.
+ * Falls back to the legacy VS Code config key for users upgrading
+ * from before the globalSM migration.
+ */
 export function getUseOpenRouter(): boolean {
   return (
-    globalSM?.get<boolean>(GlobalStateKey.USE_OPENROUTER, false) ?? false
+    globalSM?.get<boolean>(GlobalStateKey.USE_OPENROUTER, false) ??
+    getConfig<boolean>('texra.model.useOpenRouter', false)
   );
 }
 
