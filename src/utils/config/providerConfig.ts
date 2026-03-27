@@ -180,6 +180,17 @@ export function getGLMCodingPlan(): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// OpenRouter routing setting (globalSM-backed)
+// ---------------------------------------------------------------------------
+
+/** Whether to route all API calls through OpenRouter. */
+export function getUseOpenRouter(): boolean {
+  return (
+    globalSM?.get<boolean>(GlobalStateKey.USE_OPENROUTER, false) ?? false
+  );
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket transport setting (globalSM-backed)
 // ---------------------------------------------------------------------------
 
