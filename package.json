@@ -77,12 +77,6 @@
       {
         "title": "Model Settings",
         "properties": {
-          "texra.model.useOpenRouter": {
-            "type": "boolean",
-            "default": false,
-            "description": "Whether to use OpenRouter for API calls when possible",
-            "scope": "resource"
-          },
           "texra.model.useImprovedConnection": {
             "type": "boolean",
             "default": false,

@@ -54,7 +54,6 @@ See the [Models Guide](./models.md) for the full list of supported models.
 Configure how TeXRA connects to AI model providers:
 
 ```json
-"texra.model.useOpenRouter": false,
 "texra.model.useImprovedConnection": false,
 "texra.model.improvedConnectionDomain": "",
 "texra.model.useOpenAIResponsesAPI": true,
@@ -62,7 +61,7 @@ Configure how TeXRA connects to AI model providers:
 "texra.model.useCopilot": false
 ```
 
-- `useOpenRouter`: Access models through OpenRouter instead of direct APIs
+- **OpenRouter**: To route all API calls through OpenRouter, expand the OpenRouter row in the Dashboard → Models tab → API Configuration and enable **"Use OpenRouter for All Models"**
 - `useImprovedConnection`: Route all API requests through a proxy server
 - `improvedConnectionDomain`: Custom proxy domain when `useImprovedConnection` is enabled. Defaults to the built-in proxy when unset.
   - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
