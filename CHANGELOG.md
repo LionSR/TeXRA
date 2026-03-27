@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.36.10] - 2026-03-27
+
+### Features
+
+- **OpenRouter provider** — new toggle in model settings to route all API calls through OpenRouter, letting you use a single API key for any supported model.
+
+### Improvements
+
+- Updated dependencies (KaTeX, Codex SDK, OpenRouter SDK).
+
 ## [0.36.9] - 2026-03-26
 
 ### Features
