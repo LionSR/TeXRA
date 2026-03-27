@@ -7,6 +7,7 @@ import {
   getMiniMaxUseChina,
   getGLMUseChina,
   getGLMCodingPlan,
+  getUseOpenRouter,
 } from '@utils/config/providerConfig';
 
 // NOTE: getProviderEndpoint reads from globalSM (VS Code global state), which is
@@ -74,10 +75,7 @@ export function shouldUseOpenRouter(config: {
   // Models requiring direct API access bypass OpenRouter
   if (config.requiresResponsesAPI) return false;
 
-  return (
-    config.openRouterOnly ||
-    getConfig<boolean>('texra.model.useOpenRouter', false)
-  );
+  return config.openRouterOnly || getUseOpenRouter();
 }
 
 /**

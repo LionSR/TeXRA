@@ -130,7 +130,7 @@ Even the best research assistants (human or AI) have off days. This guide helps 
 
 1. **OpenRouter configuration**:
    - Verify your OpenRouter API key is correctly set
-   - Check that `texra.model.useOpenRouter` is set to `true`
+   - Check that "Use OpenRouter for All Models" is enabled in the Dashboard → Models tab → OpenRouter settings
 
 2. **Model availability**:
    - Ensure the requested model is available via OpenRouter
