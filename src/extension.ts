@@ -334,11 +334,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
   disposeStatusListener?.();
-  await UsageLogService.dispose();
-  await progressViewProviderInstance?.flushState();
-
   killBackgroundProcesses();
   killActiveRecording();
+
+  await UsageLogService.dispose();
+  await progressViewProviderInstance?.flushState();
 
   clearStoreCache();
   bus.emit('extensionDeactivating', undefined);

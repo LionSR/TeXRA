@@ -75,15 +75,9 @@ function buildTree(collections: BbtCollection[]): CollectionNode[] {
   return roots;
 }
 
-/**
- * Count all nodes in a collection tree (including nested children).
- */
+/** Count all nodes in a collection tree (including nested children). */
 function countNodes(nodes: CollectionNode[]): number {
-  let count = 0;
-  for (const node of nodes) {
-    count += 1 + countNodes(node.children);
-  }
-  return count;
+  return nodes.reduce((sum, node) => sum + 1 + countNodes(node.children), 0);
 }
 
 /**
@@ -96,7 +90,6 @@ function formatTree(
   parentPrefix: string = '',
 ): string[] {
   const lines: string[] = [];
-  const basePrefix = indent > 0 ? parentPrefix : '  '.repeat(indent);
 
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
@@ -104,13 +97,13 @@ function formatTree(
     const connector = indent === 0 ? '' : isLast ? '└── ' : '├── ';
     const childContinuation = indent === 0 ? '' : isLast ? '    ' : '│   ';
 
-    lines.push(`${basePrefix}${connector}${node.name}/ [${node.key}]`);
+    lines.push(`${parentPrefix}${connector}${node.name}/ [${node.key}]`);
 
     if (node.children.length > 0) {
       const childLines = formatTree(
         node.children,
         1,
-        `${basePrefix}${childContinuation}`,
+        `${parentPrefix}${childContinuation}`,
       );
       lines.push(...childLines);
     }
@@ -208,22 +201,14 @@ export class ZoteroCollectionsTool extends defineTool({
 
       const fullTree = buildTree(collections);
 
-      if (query) {
-        const { tree, matchCount } = filterTree(fullTree, query);
-        if (tree.length === 0) continue;
+      const displayTree = query ? filterTree(fullTree, query) : null;
+      const tree = displayTree?.tree ?? fullTree;
+      if (tree.length === 0) continue;
 
-        totalCollections += matchCount;
-        librariesWithResults++;
-        outputParts.push(`Library: ${lib.name}`);
-        outputParts.push(...formatTree(tree, 1));
-      } else {
-        if (fullTree.length === 0) continue;
-
-        totalCollections += countNodes(fullTree);
-        librariesWithResults++;
-        outputParts.push(`Library: ${lib.name}`);
-        outputParts.push(...formatTree(fullTree, 1));
-      }
+      totalCollections += displayTree?.matchCount ?? countNodes(fullTree);
+      librariesWithResults++;
+      outputParts.push(`Library: ${lib.name}`);
+      outputParts.push(...formatTree(tree, 1));
     }
 
     if (outputParts.length === 0) {

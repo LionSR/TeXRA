@@ -44,15 +44,14 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    // Skip subagent delivery after a failed/cancelled cycle — the
-    // orchestrator must not see a failure as a successful completion.
-    // In subagent mode, stop immediately: no orchestrator will send a
-    // follow-up since it was never notified, so waiting would hang.
-    if (prepRes.afterError) {
-      if (this.services.isSubagent) {
-        return { kind: 'stop' };
-      }
-    } else {
+    // After a failed/cancelled cycle, skip notifying the orchestrator —
+    // it must not see a failure as a successful completion.
+    // In subagent mode, stop immediately: the orchestrator was never
+    // notified, so waiting for a follow-up would hang forever.
+    if (prepRes.afterError && this.services.isSubagent) {
+      return { kind: 'stop' };
+    }
+    if (!prepRes.afterError) {
       await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
     }
 
@@ -72,8 +71,7 @@ export class ToolUseWaitNode<C> extends Node<
     _prepRes: WaitPrepResult,
     error: Error,
   ): Promise<WaitExecResult> {
-    const { logger } = this.services;
-    logger.error(`ToolUseWaitNode error: ${error.message}`);
+    this.services.logger.error(`ToolUseWaitNode error: ${error.message}`);
     return { kind: 'stop' };
   }
 

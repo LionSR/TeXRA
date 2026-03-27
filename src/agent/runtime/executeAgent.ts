@@ -446,12 +446,12 @@ function buildFallbackNotification(config: AgentConfig) {
     ? path.basename(config.inputFile)
     : 'selected input';
   const { outputFiles = [], useMultipleOutputs } = config;
-  let outputInfo: string;
-  if (useMultipleOutputs && outputFiles.length > 1) {
-    outputInfo = `to ${outputFiles.length} files`;
-  } else {
-    outputInfo = outputFiles[0] ? `to ${path.basename(outputFiles[0])}` : '';
-  }
+  const outputInfo =
+    useMultipleOutputs && outputFiles.length > 1
+      ? `to ${outputFiles.length} files`
+      : outputFiles[0]
+        ? `to ${path.basename(outputFiles[0])}`
+        : '';
   return {
     agentName: config.agent,
     modelName: config.model,
@@ -484,8 +484,8 @@ async function resolveAndAcquireStream(
     // Direct resolution with known stream ID (e.g., resume from snapshot)
     return resolveAgentBase(configPayload, executionId, {
       streamTabIdOverride: options.streamTabIdOverride,
-      onBeforeActivation: options?.onBeforeActivation,
-      enforceCategory: options?.enforceCategory,
+      onBeforeActivation: options.onBeforeActivation,
+      enforceCategory: options.enforceCategory,
     });
   }
 
@@ -577,19 +577,14 @@ export async function executeAgent(
     enforceCategory: options?.enforceCategory,
   });
   const { setting, streamId, config } = ctx;
-  const agentName = config.agent;
-
-  const isSubagent = options?.isSubagent;
+  const { agent: agentName } = config;
+  const { isSubagent } = options ?? {};
 
   // Fire-and-forget: generate AI session description from the user's instruction.
   // Triggered at the start so cancelled/errored sessions still get descriptions.
   // Applies to all agents including subagents so their progress tabs show
   // meaningful descriptions in multi-agent pipelines.
   generateSessionDescription(ctx.executionId, streamId, config).catch(() => {});
-  const category =
-    setting.agentCategory === AgentCategory.ToolUse
-      ? ('toolUse' as const)
-      : ('workflow' as const);
   return runFlowWithLifecycle(
     ctx,
     streamId,
@@ -694,7 +689,10 @@ export async function executeAgent(
     },
     {
       isSubagent,
-      category,
+      category:
+        setting.agentCategory === AgentCategory.ToolUse
+          ? 'toolUse'
+          : 'workflow',
       parentStreamId: options?.parentStreamId,
       onCompleted: options?.onCompleted,
     },

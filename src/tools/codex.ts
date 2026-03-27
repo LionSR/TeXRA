@@ -102,13 +102,7 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
  * streamed to the UI via onToolOutput and don't need to be in the result.
  */
 function formatTurnResult(turn: RunResult): string {
-  const parts: string[] = [];
-
-  if (turn.finalResponse) {
-    parts.push(turn.finalResponse);
-  } else {
-    parts.push('(no response)');
-  }
+  const parts: string[] = [turn.finalResponse || '(no response)'];
 
   if (turn.usage) {
     parts.push(
@@ -162,12 +156,14 @@ function formatCodexError(
 function formatItemForLog(item: ThreadItem): string {
   switch (item.type) {
     case 'command_execution': {
-      const status =
-        item.exit_code === undefined
-          ? item.status
-          : item.exit_code === 0
-            ? 'ok'
-            : `exit ${item.exit_code}`;
+      let status: string;
+      if (item.exit_code === undefined) {
+        status = item.status;
+      } else if (item.exit_code === 0) {
+        status = 'ok';
+      } else {
+        status = `exit ${item.exit_code}`;
+      }
       return `$ ${item.command} (${status})\n`;
     }
     case 'file_change': {

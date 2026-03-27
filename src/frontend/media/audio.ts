@@ -1,7 +1,5 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import * as vscode from 'vscode';
 import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
@@ -53,15 +51,14 @@ export async function startRecording(
     }
 
     const soxPath = resolveSoxPath();
-    const soxInstalled = await checkToolInstalled('sox', false);
-
-    if (!soxInstalled && !soxPath) {
-      return {
-        success: false,
-        error: 'Sox is required for audio recording. Please install it first.',
-      };
-    }
-    if (!soxInstalled && soxPath) {
+    if (!(await checkToolInstalled('sox', false))) {
+      if (!soxPath) {
+        return {
+          success: false,
+          error:
+            'Sox is required for audio recording. Please install it first.',
+        };
+      }
       logger.warn(CHANNEL, `Sox check failed but found at: ${soxPath}`);
     }
 

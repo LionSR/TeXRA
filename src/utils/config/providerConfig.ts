@@ -38,7 +38,7 @@ const ENDPOINT_KEY: Record<string, GlobalStateKey> = {
 
 /** Read the global streaming default. */
 export function getGlobalStreaming(): boolean {
-  return globalSM?.get<boolean>(GlobalStateKey.STREAMING_GLOBAL, true) ?? true;
+  return globalSM?.get(GlobalStateKey.STREAMING_GLOBAL, true) ?? true;
 }
 
 /** Set the global streaming default. */
@@ -50,8 +50,8 @@ export async function setGlobalStreaming(enabled: boolean): Promise<void> {
 export function getProviderStreaming(provider: string): boolean {
   const key = STREAMING_KEY[provider.toLowerCase()];
   if (!key) return getGlobalStreaming();
-  const global = getGlobalStreaming();
-  return globalSM?.get<boolean>(key, global) ?? global;
+  const fallback = getGlobalStreaming();
+  return globalSM?.get(key, fallback) ?? fallback;
 }
 
 /** Set per-provider streaming setting. */
@@ -69,7 +69,7 @@ export async function setProviderStreaming(
 export function getProviderEndpoint(provider: string): string {
   const key = ENDPOINT_KEY[provider.toLowerCase()];
   if (!key) return '';
-  return globalSM?.get<string>(key, '') ?? '';
+  return globalSM?.get(key, '') ?? '';
 }
 
 /** Set per-provider custom endpoint. */
@@ -97,8 +97,7 @@ export function supportsCustomEndpoint(provider: string): boolean {
  */
 export function getAnthropicDynamicFiltering(): boolean {
   return (
-    globalSM?.get<boolean>(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, false) ??
-    false
+    globalSM?.get(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, false) ?? false
   );
 }
 
@@ -115,9 +114,7 @@ export async function setAnthropicDynamicFiltering(
 
 /** Whether DashScope is set to use the China (Bailian) region. */
 export function getDashScopeUseChina(): boolean {
-  return (
-    globalSM?.get<boolean>(GlobalStateKey.DASHSCOPE_USE_CHINA, false) ?? false
-  );
+  return globalSM?.get(GlobalStateKey.DASHSCOPE_USE_CHINA, false) ?? false;
 }
 
 const BAILIAN_DISPLAY_NAME = 'Bailian';
@@ -139,16 +136,18 @@ export function getProviderKeyUrl(
   provider: string,
   defaultUrl: string,
 ): string {
-  if (provider === 'dashscope' && getDashScopeUseChina()) {
-    return BAILIAN_KEY_URL;
+  switch (provider) {
+    case 'dashscope':
+      return getDashScopeUseChina() ? BAILIAN_KEY_URL : defaultUrl;
+    case 'minimax':
+      return getMiniMaxUseChina()
+        ? 'https://platform.minimaxi.com/'
+        : defaultUrl;
+    case 'glm':
+      return getGLMUseChina() ? defaultUrl : 'https://z.ai/';
+    default:
+      return defaultUrl;
   }
-  if (provider === 'minimax' && getMiniMaxUseChina()) {
-    return 'https://platform.minimaxi.com/';
-  }
-  if (provider === 'glm' && !getGLMUseChina()) {
-    return 'https://z.ai/';
-  }
-  return defaultUrl;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,9 +156,7 @@ export function getProviderKeyUrl(
 
 /** Whether MiniMax is set to use the China region (minimaxi.com). */
 export function getMiniMaxUseChina(): boolean {
-  return (
-    globalSM?.get<boolean>(GlobalStateKey.MINIMAX_USE_CHINA, false) ?? false
-  );
+  return globalSM?.get(GlobalStateKey.MINIMAX_USE_CHINA, false) ?? false;
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +165,7 @@ export function getMiniMaxUseChina(): boolean {
 
 /** Whether GLM is set to use the China region (bigmodel.cn). Defaults to true since bigmodel.cn is the primary platform. */
 export function getGLMUseChina(): boolean {
-  return globalSM?.get<boolean>(GlobalStateKey.GLM_USE_CHINA, true) ?? true;
+  return globalSM?.get(GlobalStateKey.GLM_USE_CHINA, true) ?? true;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +174,7 @@ export function getGLMUseChina(): boolean {
 
 /** Whether GLM is set to use Coding Plan (subscription-based API access). */
 export function getGLMCodingPlan(): boolean {
-  return globalSM?.get<boolean>(GlobalStateKey.GLM_CODING_PLAN, false) ?? false;
+  return globalSM?.get(GlobalStateKey.GLM_CODING_PLAN, false) ?? false;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,7 +188,7 @@ export function getGLMCodingPlan(): boolean {
  */
 export function getUseOpenRouter(): boolean {
   return (
-    globalSM?.get<boolean>(GlobalStateKey.USE_OPENROUTER, false) ??
+    globalSM?.get(GlobalStateKey.USE_OPENROUTER, false) ??
     getConfig<boolean>('texra.model.useOpenRouter', false)
   );
 }
@@ -202,7 +199,5 @@ export function getUseOpenRouter(): boolean {
 
 /** Read the WebSocket transport setting for OpenAI. */
 export function getWebSocketEnabled(): boolean {
-  return (
-    globalSM?.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false) ?? false
-  );
+  return globalSM?.get(GlobalStateKey.WEBSOCKET_OPENAI, false) ?? false;
 }

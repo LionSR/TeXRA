@@ -68,12 +68,18 @@ function formatFileContext(ctx: FileContext): string {
   const lines: string[] = ['Current context:'];
   if (ctx.agent) lines.push(`Agent: ${ctx.agent}`);
 
+  const fileEntries: string[] = [];
+
   const singles: Array<[string, string | undefined]> = [
     ['Input File', ctx.inputFile],
     ['Reference File', ctx.referenceFile],
     ['Auxiliary File', ctx.auxiliaryFile],
     ['Figure File', ctx.mediaFile],
   ];
+  for (const [label, value] of singles) {
+    if (value) fileEntries.push(`${label}: ${value}`);
+  }
+
   const arrays: Array<[string, string[] | undefined]> = [
     ['Input Files', ctx.inputFiles],
     ['Reference Files', ctx.referenceFiles],
@@ -81,22 +87,12 @@ function formatFileContext(ctx: FileContext): string {
     ['Media Files', ctx.mediaFiles],
     ['Output Files', ctx.outputFiles],
   ];
-
-  const entries: Array<{ label: string; value: string }> = [];
-  for (const [label, value] of singles) {
-    if (value) entries.push({ label, value });
-  }
   for (const [label, files] of arrays) {
-    if (files && files.length > 0) {
-      entries.push({ label, value: files.join(', ') });
-    }
+    if (files?.length) fileEntries.push(`${label}: ${files.join(', ')}`);
   }
 
-  if (entries.length > 0) {
-    lines.push('', 'Files in the task:');
-    for (const { label, value } of entries) {
-      lines.push(`${label}: ${value}`);
-    }
+  if (fileEntries.length > 0) {
+    lines.push('', 'Files in the task:', ...fileEntries);
   }
 
   return lines.join('\n') + '\n';

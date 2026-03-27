@@ -3,7 +3,13 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -45,9 +51,7 @@ export class MemoryList extends LitElement {
 
   @state() private page = 0;
 
-  protected override willUpdate(
-    changedProperties: Map<string | number | symbol, unknown>,
-  ): void {
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
     // Reset to first page when items change (e.g. refresh, delete, pin/unpin)
     if (changedProperties.has('items')) {
       this.page = 0;

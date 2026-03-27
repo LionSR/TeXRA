@@ -59,14 +59,11 @@ export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
 function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   if (!handler.capabilities.supportsReasoningEffort) return handler;
 
-  const overrides = globalSM.get<Record<string, string>>(
+  const level = globalSM.get<Record<string, string>>(
     GlobalStateKey.REASONING_LEVELS,
     {},
-  );
-  const level = overrides[handler.config.name];
-  if (!level) return handler;
-
-  const effort = LEVEL_TO_EFFORT[level];
+  )[handler.config.name];
+  const effort = level ? LEVEL_TO_EFFORT[level] : undefined;
   if (effort === undefined) return handler;
 
   logger.debug(
@@ -85,15 +82,11 @@ function shouldUseResponsesAPI(
   if (config.provider !== ModelProvider.OPENAI || config.openRouterOnly) {
     return false;
   }
-  if (config.requiresResponsesAPI) {
-    return true;
-  }
-  if (useOpenRouter) {
-    return false;
-  }
   return (
-    getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
-    config.fullName.startsWith('gpt-oss')
+    config.requiresResponsesAPI ||
+    (!useOpenRouter &&
+      (getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
+        config.fullName.startsWith('gpt-oss')))
   );
 }
 

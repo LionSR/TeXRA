@@ -72,20 +72,18 @@ export class HistoryList extends LitElement {
       changedProperties.has('clearSearchTrigger') &&
       this.clearSearchTrigger
     ) {
-      this.performClearSearch();
+      this.clearSearch();
       this.dispatchEvent(HistoryViewEvents.searchClearComplete());
     }
 
     if (changedProperties.has('searchTerm')) {
-      // Reset page when entering or leaving search mode
       if (this.searchTerm) {
+        // Reset page when entering search mode
         this.page = 0;
-      }
-      // Clear marks immediately when search is cleared, but defer
-      // applying a new search term to updated() so the DOM has
-      // re-rendered all items (pagination is disabled during search).
-      if (!this.searchTerm) {
-        this.performSearch('');
+      } else {
+        // Clear marks immediately when search is cleared; new search
+        // terms are deferred to updated() so the full DOM is available.
+        this.clearSearch();
       }
     }
 
@@ -118,21 +116,13 @@ export class HistoryList extends LitElement {
     }
   }
 
-  private performClearSearch(): void {
+  private clearSearch(): void {
     this.matchCounts = new Map();
-    this.performSearch('');
-  }
-
-  private performSearch(term: string): void {
-    const version = ++this.searchVersion;
-    if (!term) {
-      this.state?.setSearchIndex(-1);
-      this.state?.setTotalMatches(0);
-      this.clearItemMarks();
-      this.updateMatchCount();
-      return;
-    }
-    void this.applySearchToItems(term, version);
+    ++this.searchVersion;
+    this.state?.setSearchIndex(-1);
+    this.state?.setTotalMatches(0);
+    this.clearItemMarks();
+    this.updateMatchCount();
   }
 
   private performNavigate(direction: 'next' | 'prev'): void {
@@ -180,7 +170,7 @@ export class HistoryList extends LitElement {
     term: string,
     version: number,
   ): Promise<void> {
-    const historyItems = this.getHistoryItems();
+    const historyItems = [...(this.historyItemElements ?? [])];
     const counts = await Promise.all(
       historyItems.map(
         (item) => item.applySearch?.(term) ?? Promise.resolve(0),
@@ -190,11 +180,9 @@ export class HistoryList extends LitElement {
       return;
     }
 
-    const newMatchCounts = new Map<string, number>();
-    this.items.forEach((item, index) => {
-      newMatchCounts.set(item.id, counts[index] ?? 0);
-    });
-    this.matchCounts = newMatchCounts;
+    this.matchCounts = new Map(
+      this.items.map((item, i) => [item.id, counts[i] ?? 0]),
+    );
 
     const total = counts.reduce((sum, count) => sum + count, 0);
     this.state?.setTotalMatches(total);
@@ -209,19 +197,10 @@ export class HistoryList extends LitElement {
   }
 
   private clearItemMarks(): void {
-    const items = this.getHistoryItems();
+    const items = [...(this.historyItemElements ?? [])];
     void Promise.all(
       items.map((item) => item.applySearch?.('') ?? Promise.resolve(0)),
     );
-  }
-
-  private getHistoryItems(): Array<
-    HTMLElement & {
-      applySearch: (term: string) => Promise<number>;
-      getMarks: () => HTMLElement[];
-    }
-  > {
-    return [...(this.historyItemElements ?? [])];
   }
 
   private handleToggle(
