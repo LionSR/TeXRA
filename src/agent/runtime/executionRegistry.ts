@@ -16,7 +16,7 @@ import {
   collectChildSummary,
   emitActiveSubagentsUpdate,
   emitActiveProcessesUpdate,
-  interruptActiveChildren as interruptActiveChildrenImpl,
+  interruptActiveChildren as interruptChildren,
 } from './ExecutionHandle';
 
 export type { ExecutionHandle } from './ExecutionHandle';
@@ -236,7 +236,7 @@ export function waitForAnyExecutionChange(
  * promptly instead of running to completion.
  */
 export function interruptActiveChildren(parentStreamId: StreamTabId): void {
-  interruptActiveChildrenImpl(parentStreamId, registry.values());
+  interruptChildren(parentStreamId, registry.values());
 }
 
 /**

@@ -1,10 +1,7 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import { sync as globSync } from 'glob';
 
-// Local imports - log
 import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
@@ -33,24 +30,25 @@ async function cleanupBackupFiles(
   fileBaseName: string,
   fileDir: string,
 ): Promise<void> {
-  const backupPatterns = [
+  const backupFiles = [
     `${fileBaseName}.tex.bak*`,
     `${fileBaseName}.bak*`,
-  ].map((pattern) => path.join(fileDir, pattern).replaceAll('\\', '/'));
+  ].flatMap((pattern) =>
+    globSync(path.join(fileDir, pattern).replaceAll('\\', '/'), {
+      nodir: true,
+    }),
+  );
 
-  for (const pattern of backupPatterns) {
-    const backupFiles = globSync(pattern, { nodir: true });
-    for (const backupFile of backupFiles) {
-      try {
-        await AbsoluteFS.delete(backupFile);
-        logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
-      } catch (err) {
-        if (!isFileNotFoundError(err)) {
-          logger.warn(
-            CHANNEL,
-            `Error removing backup file ${backupFile}: ${err}`,
-          );
-        }
+  for (const backupFile of backupFiles) {
+    try {
+      await AbsoluteFS.delete(backupFile);
+      logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
+    } catch (err) {
+      if (!isFileNotFoundError(err)) {
+        logger.warn(
+          CHANNEL,
+          `Error removing backup file ${backupFile}: ${err}`,
+        );
       }
     }
   }
@@ -85,7 +83,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       channel: CHANNEL,
       showError: showWarning,
     });
-    const success = result !== false && result?.success;
+    const success = Boolean(result && result.success);
 
     if (success) {
       // Wait a moment for the file system to stabilize after a successful write

@@ -304,12 +304,11 @@ export class BackgroundTasksPanel extends LitElement {
   ): TemplateResult {
     const icon = getTaskIcon(child, kind);
     const entry = this.processOutputs.get(child.executionId);
-    const hasStdout = Boolean(entry?.stdout);
-    const hasStderr = Boolean(entry?.stderr);
     const isClickable = kind === 'subagent' && Boolean(child.childStreamId);
     const description = child.childStreamId
       ? this.descriptions.get(child.childStreamId)
       : undefined;
+    const waiting = isWaiting(child);
 
     return html`
       <div class="task-item">
@@ -357,17 +356,17 @@ export class BackgroundTasksPanel extends LitElement {
           <span
             class=${classMap({
               'tinted-badge': true,
-              'tinted-badge--running': !isWaiting(child),
-              'tinted-badge--waiting': isWaiting(child),
+              'tinted-badge--running': !waiting,
+              'tinted-badge--waiting': waiting,
             })}
-            >${isWaiting(child) ? 'waiting' : 'running'}</span
+            >${waiting ? 'waiting' : 'running'}</span
           >
         </div>
-        ${hasStdout
-          ? this.renderOutputStream('stdout', entry!.stdout)
+        ${entry?.stdout
+          ? this.renderOutputStream('stdout', entry.stdout)
           : nothing}
-        ${hasStderr
-          ? this.renderOutputStream('stderr', entry!.stderr)
+        ${entry?.stderr
+          ? this.renderOutputStream('stderr', entry.stderr)
           : nothing}
       </div>
     `;

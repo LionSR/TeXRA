@@ -140,24 +140,15 @@ export abstract class ModelHandler<
     });
   }
 
-  /**
-   * Updates the logger instance.
-   */
   public setLogger(logger: AgentLogger): void {
     this.logger = logger;
     this.mediaProcessor.setLogger(logger);
   }
 
-  /**
-   * Records the active agent category so provider handlers can adjust behaviour per session.
-   */
   public setAgentCategory(agentCategory?: AgentCategory | null): void {
     this.agentCategory = agentCategory ?? undefined;
   }
 
-  /**
-   * Returns the agent category that is currently driving the handler, if any.
-   */
   public getAgentCategory(): AgentCategory | undefined {
     return this.agentCategory;
   }
@@ -191,23 +182,15 @@ export abstract class ModelHandler<
    * Tool-use agents use a reduced value to leave headroom for context growth.
    */
   protected getEffectiveMaxOutputTokens(): number {
-    const base = this.config.maxOutputTokens;
-    if (!this.isToolUseMode()) {
-      return base;
-    }
-    return Math.floor(base * TOOL_USE_MAX_OUTPUT_FACTOR);
+    return this.isToolUseMode()
+      ? Math.floor(this.config.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR)
+      : this.config.maxOutputTokens;
   }
 
-  /**
-   * Enables or disables streaming of model output text.
-   */
   public setOutputStreaming(enabled: boolean): void {
     this.outputStreaming = enabled;
   }
 
-  /**
-   * Indicates whether model output streaming is enabled.
-   */
   public isOutputStreamingEnabled(): boolean {
     return this.outputStreaming;
   }
@@ -221,9 +204,6 @@ export abstract class ModelHandler<
     return false;
   }
 
-  /**
-   * Enables or disables Progress view updates.
-   */
   public setProgressViewEnabled(enabled: boolean): void {
     this.progressViewEnabled = enabled;
   }
@@ -300,6 +280,18 @@ export abstract class ModelHandler<
     );
   }
 
+  /** Fetch an API key for the given provider, throwing `errorMessage` on failure. */
+  private async fetchApiKeyOrThrow(
+    provider: ApiProvider,
+    errorMessage: string,
+  ): Promise<string> {
+    try {
+      return await SecretManager.getApiKey(provider);
+    } catch {
+      throw new Error(errorMessage);
+    }
+  }
+
   /**
    * Retrieves API key from environment variables based on provider and OpenRouter configuration.
    * When server-side keys are enabled (experimental), returns the user's JWT token instead,
@@ -340,13 +332,10 @@ export abstract class ModelHandler<
     // openRouterOnly models can NEVER use server-side relay - they always need OpenRouter key.
     // Allow these even in "Use Included Access" mode since included access is never possible.
     if (this.config.openRouterOnly) {
-      try {
-        return await SecretManager.getApiKey('openRouter');
-      } catch (err) {
-        throw new Error(
-          `Model "${this.config.name}" requires an OpenRouter API key. Please set it using the "Set API Key" command.`,
-        );
-      }
+      return this.fetchApiKeyOrThrow(
+        'openRouter',
+        `Model "${this.config.name}" requires an OpenRouter API key. Please set it using the "Set API Key" command.`,
+      );
     }
 
     if (useIncludedAccess && hasServerAccess) {
@@ -364,23 +353,16 @@ export abstract class ModelHandler<
     }
 
     if (shouldUseOpenRouter(this.config)) {
-      try {
-        return await SecretManager.getApiKey('openRouter');
-      } catch (err) {
-        throw new Error(
-          'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
-        );
-      }
-    }
-
-    const provider = this.config.provider.toLowerCase() as ApiProvider;
-    try {
-      return await SecretManager.getApiKey(provider);
-    } catch (err) {
-      throw new Error(
-        `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
+      return this.fetchApiKeyOrThrow(
+        'openRouter',
+        'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
       );
     }
+
+    return this.fetchApiKeyOrThrow(
+      this.config.provider.toLowerCase() as ApiProvider,
+      `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
+    );
   }
 
   /**
@@ -442,18 +424,12 @@ export abstract class ModelHandler<
 
   /**
    * Gets streaming configuration for the current model provider.
-   * @returns Boolean indicating if streaming should be enabled
    */
   public getStreamingConfig(): boolean {
-    if (shouldUseOpenRouter(this.config)) {
+    if (shouldUseOpenRouter(this.config))
       return getProviderStreaming('openrouter');
-    }
-
-    // ModelProvider.OTHERS has no provider-specific streaming config
-    if (this.config.provider === ModelProvider.OTHERS) {
+    if (this.config.provider === ModelProvider.OTHERS)
       return getGlobalStreaming();
-    }
-
     return getProviderStreaming(this.config.provider);
   }
 
@@ -590,10 +566,9 @@ export abstract class ModelHandler<
   public containCutOffMessage(
     content: Array<{ type: string; text?: string }> | string,
   ): boolean {
-    if (typeof content === 'string') {
-      return content.includes('Your response got cut off');
-    }
-    return content.some((c) => c.text?.includes('Your response got cut off'));
+    const marker = 'Your response got cut off';
+    if (typeof content === 'string') return content.includes(marker);
+    return content.some((c) => c.text?.includes(marker));
   }
 
   /**

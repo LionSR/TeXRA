@@ -97,11 +97,11 @@ export class StreamMetaManager {
 
   /** Return stream IDs with active tool-use sessions. */
   getActiveToolUseStreams(): Set<StreamTabId> {
-    const result = new Set<StreamTabId>();
-    for (const [stream, state] of this.taskStates) {
-      if (isToolUseTaskState(state)) result.add(stream);
-    }
-    return result;
+    return new Set(
+      [...this.taskStates]
+        .filter(([, state]) => isToolUseTaskState(state))
+        .map(([stream]) => stream),
+    );
   }
 
   // -- Lifecycle --------------------------------------------------------------
@@ -156,22 +156,13 @@ export class StreamMetaManager {
           skippedTasks++;
         }
       }
-
-      if (meta.executionId) {
+      if (meta.executionId)
         this.executionIds.set(streamId, meta.executionId as ExecutionId);
-      }
-
-      if (meta.activeRunId) {
+      if (meta.activeRunId)
         this.activeRunIds.set(streamId, normalizeRunId(meta.activeRunId));
-      }
-
-      if (meta.parentStreamId) {
+      if (meta.parentStreamId)
         this.parentStreamIds.set(streamId, meta.parentStreamId as StreamTabId);
-      }
-
-      if (meta.description) {
-        this.descriptions.set(streamId, meta.description);
-      }
+      if (meta.description) this.descriptions.set(streamId, meta.description);
     }
 
     // Backfill: streams with an executionId but no description in StreamTabMeta
@@ -261,23 +252,18 @@ export class StreamMetaManager {
   }
 
   private buildMeta(stream: StreamTabId): StreamTabMeta {
-    const meta: StreamTabMeta = {};
-
     const taskState = this.taskStates.get(stream);
-    if (taskState) meta.taskState = taskState;
-
     const executionId = this.executionIds.get(stream);
-    if (executionId) meta.executionId = executionId;
-
     const activeRunId = this.activeRunIds.get(stream);
-    if (activeRunId != null) meta.activeRunId = activeRunId;
-
     const parentStreamId = this.parentStreamIds.get(stream);
-    if (parentStreamId) meta.parentStreamId = parentStreamId;
-
     const description = this.descriptions.get(stream);
-    if (description) meta.description = description;
 
-    return meta;
+    return {
+      ...(taskState && { taskState }),
+      ...(executionId && { executionId }),
+      ...(activeRunId != null && { activeRunId }),
+      ...(parentStreamId && { parentStreamId }),
+      ...(description && { description }),
+    };
   }
 }

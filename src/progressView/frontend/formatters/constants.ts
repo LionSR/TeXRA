@@ -6,8 +6,6 @@
 import type { LogLevel } from '@shared/schemas';
 import { getBasename } from '@shared/utils/path';
 
-// Local imports - shared utilities
-
 export const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
   error: '🔴',
   warn: '🟡',
