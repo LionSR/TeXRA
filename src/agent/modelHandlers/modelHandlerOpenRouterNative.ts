@@ -1,0 +1,1043 @@
+// Third-party imports
+import { OpenRouter } from '@openrouter/sdk';
+import type {
+  ChatResponse,
+  ChatStreamingResponseChunk,
+  ChatGenerationTokenUsage,
+  Message,
+  AssistantMessage,
+  ChatMessageToolCall,
+  ChatMessageContentItem,
+  ReasoningDetailUnion,
+} from '@openrouter/sdk/models';
+
+// Local imports - agent
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { MediaEntry } from '@agent/utils/mediaTypes';
+import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+
+// Local imports - tools and utils
+import type { ToolFileAttachment } from '@tools/result';
+import { isNonEmptyString } from '@utils/core';
+import type { FileLocation } from '@utils/files';
+import { K_SLICE } from '@utils/config';
+import { flexibleFS } from '@utils/files';
+import { computeCachePercentage } from './utils/usageNormalization';
+import { prepareExistingOutputContent } from './utils/fileContentUtils';
+
+// Local file imports
+import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import { toOpenRouterTools } from './toolConversion';
+import {
+  formatAttachmentSummary,
+  formatToolResultAsText,
+  type ToolResultPayload,
+} from './utils/toolAttachmentUtils';
+import { parseToolArguments } from './utils/parseArguments';
+import { ModelHandler } from './ModelHandler';
+import type {
+  CreateResponseOptions,
+  CreateResponseResult,
+  ExtractResponseResult,
+  OpenRouterToolCall,
+} from './types/IModelHandler';
+import type { ProviderStopReason } from './types/StopReasonTypes';
+
+// ============================================================================
+// Reasoning helpers (shared with legacy handler)
+// ============================================================================
+
+/** Extract text content from a reasoning detail item by type. */
+function getReasoningItemText(item: ReasoningDetailUnion): string | undefined {
+  if (item.type === 'reasoning.text') return item.text ?? undefined;
+  if (item.type === 'reasoning.summary') return item.summary;
+  return undefined;
+}
+
+/**
+ * Extracts text content from OpenRouter reasoning_details array.
+ * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+ */
+function extractTextFromReasoningDetails(
+  details: ReasoningDetailUnion[] | unknown,
+): string {
+  if (!Array.isArray(details)) {
+    return typeof details === 'string' ? details : '';
+  }
+  return details
+    .filter(
+      (item): item is ReasoningDetailUnion => !!item && typeof item === 'object',
+    )
+    .map(getReasoningItemText)
+    .filter((text): text is string => !!text)
+    .join('');
+}
+
+// ============================================================================
+// Streaming aggregator
+// ============================================================================
+
+/**
+ * Accumulates streaming chunks into a final ChatResponse since the OpenRouter SDK
+ * does not provide a `finalChatCompletion()` helper.
+ */
+class OpenRouterStreamAggregator {
+  private content = '';
+  private reasoning = '';
+  private reasoningDetails: ReasoningDetailUnion[] = [];
+  private toolCallMap = new Map<
+    number,
+    { id: string; type: 'function'; function: { name: string; arguments: string } }
+  >();
+  private finishReason: string | null = null;
+  private usage: ChatGenerationTokenUsage | null = null;
+  private model = '';
+  private id = '';
+  private created = 0;
+
+  consumeChunk(chunk: ChatStreamingResponseChunk): {
+    contentDelta: string;
+    reasoningDelta: string;
+  } {
+    if (!this.id && chunk.id) this.id = chunk.id;
+    if (!this.model && chunk.model) this.model = chunk.model;
+    if (!this.created && chunk.created) this.created = chunk.created;
+    if (chunk.usage) this.usage = chunk.usage;
+
+    const choice = chunk.choices[0];
+    if (!choice) return { contentDelta: '', reasoningDelta: '' };
+
+    if (choice.finishReason != null) {
+      this.finishReason = String(choice.finishReason);
+    }
+
+    const delta = choice.delta;
+    const contentDelta = delta.content ?? '';
+    if (contentDelta) this.content += contentDelta;
+
+    // Reasoning - try reasoningDetails first, then reasoning string
+    let reasoningDelta = '';
+    if (delta.reasoningDetails?.length) {
+      for (const detail of delta.reasoningDetails) {
+        this.reasoningDetails.push(detail);
+      }
+      reasoningDelta = extractTextFromReasoningDetails(delta.reasoningDetails);
+    } else if (delta.reasoning) {
+      reasoningDelta = delta.reasoning;
+    }
+    if (reasoningDelta) this.reasoning += reasoningDelta;
+
+    // Accumulate tool calls by index
+    if (delta.toolCalls) {
+      for (const tc of delta.toolCalls) {
+        const existing = this.toolCallMap.get(tc.index);
+        if (existing) {
+          if (tc.function?.arguments) {
+            existing.function.arguments += tc.function.arguments;
+          }
+          if (tc.function?.name) {
+            existing.function.name = tc.function.name;
+          }
+        } else {
+          this.toolCallMap.set(tc.index, {
+            id: tc.id ?? '',
+            type: 'function',
+            function: {
+              name: tc.function?.name ?? '',
+              arguments: tc.function?.arguments ?? '',
+            },
+          });
+        }
+      }
+    }
+
+    return { contentDelta, reasoningDelta };
+  }
+
+  buildResponse(): ChatResponse {
+    const toolCalls: ChatMessageToolCall[] = [];
+    // Sort by index to maintain order
+    const sorted = [...this.toolCallMap.entries()].sort(
+      ([a], [b]) => a - b,
+    );
+    for (const [, tc] of sorted) {
+      toolCalls.push({
+        id: tc.id,
+        type: 'function',
+        function: { name: tc.function.name, arguments: tc.function.arguments },
+      });
+    }
+
+    const message: AssistantMessage & { role: 'assistant' } = {
+      role: 'assistant',
+      content: this.content || undefined,
+    };
+    if (toolCalls.length > 0) {
+      message.toolCalls = toolCalls;
+    }
+    if (this.reasoning) {
+      message.reasoning = this.reasoning;
+    }
+    if (this.reasoningDetails.length > 0) {
+      message.reasoningDetails = this.reasoningDetails;
+    }
+
+    return {
+      id: this.id,
+      choices: [
+        {
+          index: 0,
+          message,
+          finishReason: this.finishReason as any,
+        },
+      ],
+      created: this.created || Math.floor(Date.now() / 1000),
+      model: this.model,
+      object: 'chat.completion',
+      systemFingerprint: null,
+      usage: this.usage ?? undefined,
+    };
+  }
+}
+
+// ============================================================================
+// Handler
+// ============================================================================
+
+/**
+ * Native OpenRouter model handler using @openrouter/sdk directly.
+ * Decoupled from the OpenAI SDK — uses OpenRouter-native types and client.
+ */
+export class ModelHandlerOpenRouterNative extends ModelHandler<
+  Message,
+  ChatGenerationTokenUsage | null,
+  ChatGenerationTokenUsage,
+  OpenRouterToolCall,
+  OpenRouter,
+  ChatResponse
+> {
+  protected get usageProvider(): NormalizedUsage['provider'] {
+    return 'openrouter';
+  }
+
+  async getClient(): Promise<OpenRouter> {
+    const apiKey = await this.getApiKey();
+    const baseUrl = this.getBaseUrl();
+    return new OpenRouter({
+      apiKey,
+      appTitle: 'TeXRA.ai',
+      ...(baseUrl ? { serverURL: baseUrl } : {}),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // createResponse
+  // ---------------------------------------------------------------------------
+
+  async createResponse(
+    options: CreateResponseOptions<Message, OpenRouter>,
+  ): Promise<CreateResponseResult<ChatResponse, Message>> {
+    const { client, messages, temperature, endTag, signal, tools } = options;
+    const useStreaming = this.getStreamingConfig();
+
+    // Build params
+    const params: Record<string, unknown> = {
+      model: this.config.openrouterFullName,
+      messages,
+      maxTokens: this.getEffectiveMaxOutputTokens(),
+      temperature,
+    };
+
+    // Reasoning configuration
+    if (this.capabilities.supportsReasoning) {
+      if (
+        this.capabilities.supportsReasoningEffort &&
+        this.capabilities.reasoningEffort
+      ) {
+        const effort =
+          this.capabilities.reasoningEffort === 'none'
+            ? 'low'
+            : this.capabilities.reasoningEffort;
+        params.reasoning = {
+          effort: this.validateReasoningEffort(effort),
+        };
+      }
+    }
+
+    if (tools && tools.length > 0) {
+      params.tools = toOpenRouterTools(tools);
+      params.toolChoice = 'auto';
+    }
+
+    if (endTag) {
+      params.stop = [endTag];
+    }
+
+    if (useStreaming) {
+      params.stream = true;
+      params.streamOptions = { includeUsage: true };
+
+      const result = await client.chat.send(
+        { chatGenerationParams: params as any },
+        { signal },
+      );
+
+      // Streaming returns EventStream (AsyncIterable)
+      const stream = result as unknown as AsyncIterable<ChatStreamingResponseChunk>;
+      const aggregator = new OpenRouterStreamAggregator();
+      const thinking = this.createThinkingStream();
+      const output = this.isOutputStreamingEnabled()
+        ? this.createOutputStream()
+        : undefined;
+
+      for await (const chunk of stream) {
+        const { contentDelta, reasoningDelta } = aggregator.consumeChunk(chunk);
+        if (reasoningDelta) thinking.append(reasoningDelta);
+        if (contentDelta) output?.append(contentDelta);
+      }
+
+      const response = aggregator.buildResponse();
+      const finalReasoning = this.processThinkingBlock(response);
+      thinking.finalize(finalReasoning ?? undefined);
+      const finalOutput = response.choices?.[0]?.message?.content ?? '';
+      if (output)
+        output.finalize(typeof finalOutput === 'string' ? finalOutput : '');
+      return { response };
+    }
+
+    // Non-streaming
+    const response = (await client.chat.send(
+      { chatGenerationParams: params as any },
+      { signal },
+    )) as ChatResponse;
+    return { response };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Message creation
+  // ---------------------------------------------------------------------------
+
+  async initializeMessages(
+    userPrefix: string,
+    userRequest: string,
+    mediaFiles?: FileLocation[],
+    systemPrompt?: string,
+  ): Promise<Message[]> {
+    const messages: Message[] = [];
+
+    if (systemPrompt) {
+      const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
+      if (role === 'system') {
+        messages.push({
+          role: 'system',
+          content: [{ type: 'text', text: systemPrompt }],
+        });
+      } else {
+        messages.push({
+          role: 'user',
+          content: [{ type: 'text', text: systemPrompt }],
+        });
+      }
+    }
+
+    const userContent: ChatMessageContentItem[] = [];
+    if (userPrefix) {
+      userContent.push({ type: 'text', text: userPrefix });
+    }
+
+    if (
+      mediaFiles?.length &&
+      (this.capabilities.supportsVision ||
+        this.capabilities.supportsNativeAudio)
+    ) {
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      userContent.push(...formattedMedia);
+    }
+
+    // Append to existing user message or create new
+    const lastMsg = messages.at(-1);
+    if (lastMsg?.role === 'user' && Array.isArray(lastMsg.content)) {
+      (lastMsg.content as ChatMessageContentItem[]).push(...userContent);
+    } else {
+      messages.push({ role: 'user', content: userContent });
+    }
+
+    // Add user request
+    const requestRole = this.capabilities.supportsIntermDevMsgs
+      ? 'system'
+      : 'user';
+    const lastMessage = messages.at(-1);
+
+    if (
+      requestRole === 'user' &&
+      lastMessage?.role === 'user' &&
+      Array.isArray(lastMessage.content)
+    ) {
+      (lastMessage.content as ChatMessageContentItem[]).push({
+        type: 'text',
+        text: userRequest,
+      });
+    } else if (requestRole === 'system') {
+      messages.push({
+        role: 'system',
+        content: [{ type: 'text', text: userRequest }],
+      });
+    } else {
+      messages.push({
+        role: 'user',
+        content: [{ type: 'text', text: userRequest }],
+      });
+    }
+
+    return messages;
+  }
+
+  async createRoundMessages(
+    messages: Message[],
+    userMessage: string,
+    mediaFiles?: FileLocation[],
+  ): Promise<Message[]> {
+    const roundContent: ChatMessageContentItem[] = [];
+
+    if (
+      mediaFiles?.length &&
+      (this.capabilities.supportsVision ||
+        this.capabilities.supportsNativeAudio)
+    ) {
+      try {
+        const formattedMedia = await this.createMediaMessage(mediaFiles);
+        roundContent.push(...formattedMedia);
+      } catch (err) {
+        this.logger.error(
+          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
+          { data: err },
+        );
+      }
+    }
+
+    if (userMessage) {
+      roundContent.push({ type: 'text', text: userMessage });
+    }
+
+    if (roundContent.length > 0) {
+      messages.push({ role: 'user', content: roundContent });
+    }
+    return messages;
+  }
+
+  async createUserFollowUpMessages(
+    messages: Message[],
+    userMessage: string,
+  ): Promise<Message[]> {
+    messages.push({
+      role: 'user',
+      content: [{ type: 'text', text: userMessage }],
+    });
+    return messages;
+  }
+
+  createAssistantMessage(text: string): Message {
+    return { role: 'assistant', content: text } as Message;
+  }
+
+  extractAssistantText(message: Message): string | undefined {
+    if (message.role !== 'assistant') return undefined;
+    const msg = message as AssistantMessage;
+    if (typeof msg.content === 'string') return msg.content;
+    if (!Array.isArray(msg.content)) return undefined;
+    const texts = (msg.content as ChatMessageContentItem[])
+      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+      .map((p) => p.text)
+      .filter(Boolean);
+    return texts.length > 0 ? texts.join('\n') : undefined;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Media
+  // ---------------------------------------------------------------------------
+
+  createMediaContent(mediaMessage: MediaEntry[]): ChatMessageContentItem[] {
+    return mediaMessage.flatMap((media): ChatMessageContentItem[] => {
+      if (media.media_category === 'image') {
+        return [
+          { type: 'text', text: `Image: ${media.file_name}` },
+          {
+            type: 'image_url',
+            imageUrl: {
+              url: `data:${media.media_type};base64,${media.data}`,
+              detail: 'high',
+            },
+          } as ChatMessageContentItem,
+        ];
+      } else if (media.media_category === 'audio') {
+        this.logger.warn(
+          `Audio input (${media.file_name}) not yet supported for native OpenRouter handler. Skipping.`,
+        );
+        return [];
+      }
+      this.logger.warn(`Unknown media category: ${media.media_category}`);
+      return [];
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Response extraction
+  // ---------------------------------------------------------------------------
+
+  extractResponse(
+    responseObject: ChatResponse,
+    endTag: string,
+  ): ExtractResponseResult {
+    if (!responseObject.choices?.length) {
+      const errorMsg = 'Invalid response from OpenRouter API: missing choices';
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    const choice = responseObject.choices[0];
+    const stopReason = String(choice.finishReason ?? OPENAI_CHAT_FINISH.STOP);
+    this.logger.debug(`Stop reason: ${stopReason}`);
+
+    let newResponse = '';
+    const msg = choice.message;
+    if (typeof msg.content === 'string') {
+      newResponse = msg.content.trim();
+    } else if (Array.isArray(msg.content)) {
+      newResponse = (msg.content as ChatMessageContentItem[])
+        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map((p) => p.text)
+        .join('')
+        .trim();
+    } else if (
+      stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
+      (msg.toolCalls && msg.toolCalls.length > 0)
+    ) {
+      this.logger.debug('Received tool call without message content');
+    } else if (!msg.content) {
+      this.logger.error('content is empty');
+    }
+
+    if (
+      stopReason === OPENAI_CHAT_FINISH.STOP &&
+      endTag &&
+      !newResponse.includes(endTag)
+    ) {
+      this.logger.debug(`Adding end tag to response: ${endTag}`);
+      newResponse = `${newResponse}\n${endTag}`;
+    }
+
+    // Map SDK camelCase usage to snake_case for ProviderUsage compatibility
+    const rawUsage = responseObject.usage;
+    const usage = rawUsage
+      ? {
+          prompt_tokens: rawUsage.promptTokens,
+          completion_tokens: rawUsage.completionTokens,
+          total_tokens: rawUsage.totalTokens,
+          prompt_tokens_details: rawUsage.promptTokensDetails
+            ? {
+                cached_tokens: rawUsage.promptTokensDetails.cachedTokens,
+              }
+            : undefined,
+          completion_tokens_details: rawUsage.completionTokensDetails
+            ? {
+                reasoning_tokens:
+                  rawUsage.completionTokensDetails.reasoningTokens ?? undefined,
+              }
+            : undefined,
+        }
+      : null;
+
+    return { text: newResponse, usage, stopReason };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pricing & usage
+  // ---------------------------------------------------------------------------
+
+  computePrice(responseUsage: ChatGenerationTokenUsage | null): number {
+    if (!responseUsage) return 0;
+
+    const promptTokens = responseUsage.promptTokens ?? 0;
+    const completionTokens = responseUsage.completionTokens ?? 0;
+
+    let basePrice = calculateTokenPrice(
+      promptTokens,
+      completionTokens,
+      this.config.inputPrice,
+      this.config.outputPrice,
+    );
+
+    const reasoningTokens =
+      responseUsage.completionTokensDetails?.reasoningTokens ?? 0;
+    const cachedTokens =
+      responseUsage.promptTokensDetails?.cachedTokens ?? 0;
+
+    if (reasoningTokens) {
+      basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
+    }
+    if (cachedTokens) {
+      basePrice -=
+        (cachedTokens *
+          this.config.inputPrice *
+          (1 - this.capabilities.cacheDiscountFactor)) /
+        1e6;
+    }
+
+    return basePrice;
+  }
+
+  normalizeUsage(
+    rawUsage: ChatGenerationTokenUsage | null,
+    responseTimeMs: number,
+  ): NormalizedUsage {
+    if (!rawUsage) {
+      return {
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0,
+        responseTimeMs,
+        provider: this.usageProvider,
+      };
+    }
+
+    const inputTokens = rawUsage.promptTokens ?? 0;
+    const cachedTokens = rawUsage.promptTokensDetails?.cachedTokens ?? 0;
+
+    return {
+      inputTokens,
+      outputTokens: rawUsage.completionTokens ?? 0,
+      cost: this.computePrice(rawUsage),
+      responseTimeMs,
+      provider: this.usageProvider,
+      cachedInputTokens: cachedTokens || undefined,
+      percentageCached: computeCachePercentage(cachedTokens, inputTokens),
+      reasoningTokens:
+        rawUsage.completionTokensDetails?.reasoningTokens || undefined,
+      _native: rawUsage,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Thinking / reasoning
+  // ---------------------------------------------------------------------------
+
+  processThinkingBlock(
+    responseObject: ChatResponse,
+    workspaceState?: AgentWorkspaceState,
+  ): string | null {
+    const message = responseObject?.choices?.[0]?.message;
+    if (!message) return null;
+
+    // Try reasoningDetails first (OpenRouter normalized format)
+    const reasoningDetails = (message as AssistantMessage).reasoningDetails;
+    if (reasoningDetails) {
+      const extracted = extractTextFromReasoningDetails(reasoningDetails);
+      if (extracted) {
+        this.setThinkingState(extracted, workspaceState);
+        return extracted;
+      }
+    }
+
+    // Fall back to reasoning string
+    const reasoning = (message as AssistantMessage).reasoning;
+    if (isNonEmptyString(reasoning)) {
+      this.setThinkingState(reasoning, workspaceState);
+      return reasoning;
+    }
+
+    return null;
+  }
+
+  private setThinkingState(
+    reasoning: string,
+    workspaceState?: AgentWorkspaceState,
+  ): void {
+    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+      workspaceState.reasoning.thinkingBlocks = [
+        { type: 'thinking', thinking: reasoning },
+      ];
+      workspaceState.reasoning.thinkingAdded = true;
+    }
+    this.logger.debug(
+      `Reasoning content preview: ${reasoning.substring(0, K_SLICE)}...`,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tool use
+  // ---------------------------------------------------------------------------
+
+  extractToolUse(responseObject: ChatResponse): OpenRouterToolCall[] {
+    const toolCalls = responseObject?.choices?.[0]?.message?.toolCalls;
+    if (!Array.isArray(toolCalls) || toolCalls.length === 0) return [];
+
+    return toolCalls
+      .filter(
+        (call): call is ChatMessageToolCall =>
+          Boolean(call && call.function?.name && call.id),
+      )
+      .map((call) => ({
+        provider: 'openrouter' as const,
+        callId: call.id,
+        name: call.function.name,
+        input: parseToolArguments(call.function.arguments, this.logger),
+        raw: call,
+      }));
+  }
+
+  async createToolUseFollowUpMessages(
+    _client: OpenRouter | undefined,
+    call: OpenRouterToolCall,
+    result: ToolResultPayload,
+    attachments: ToolFileAttachment[],
+    _workspaceState?: AgentWorkspaceState,
+    text?: string,
+  ): Promise<Message[]> {
+    const callMsg: Message = {
+      role: 'assistant',
+      toolCalls: [call.raw],
+      ...(text ? { content: text } : {}),
+    } as Message;
+
+    const attachmentSummary =
+      this.canProcessToolResultAttachments && attachments.length > 0
+        ? formatAttachmentSummary(attachments)
+        : undefined;
+
+    const resultMsg: Message = {
+      role: 'tool',
+      toolCallId: call.callId,
+      content: formatToolResultAsText(result, attachmentSummary),
+    } as Message;
+
+    return [callMsg, resultMsg];
+  }
+
+  async createBatchedToolUseFollowUpMessages(
+    calls: OpenRouterToolCall[],
+    results: ToolResultPayload[],
+    _attachmentsPerCall: ToolFileAttachment[][],
+    _workspaceState?: AgentWorkspaceState,
+    text?: string,
+  ): Promise<Message[]> {
+    if (calls.length !== results.length) {
+      throw new Error(
+        `Batched tool calls mismatch: ${calls.length} calls vs ${results.length} results`,
+      );
+    }
+    if (calls.length === 0) return [];
+
+    const callMsg: Message = {
+      role: 'assistant',
+      toolCalls: calls.map((c) => c.raw),
+      ...(text ? { content: text } : {}),
+    } as Message;
+
+    const resultMsgs: Message[] = calls.map(
+      (call, i) =>
+        ({
+          role: 'tool',
+          toolCallId: call.callId,
+          content: formatToolResultAsText(results[i]),
+        }) as Message,
+    );
+
+    return [callMsg, ...resultMsgs];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Stop / continue logic
+  // ---------------------------------------------------------------------------
+
+  shouldContinue(
+    stopReason: ProviderStopReason,
+    newResponse: string,
+    agentSetting: AgentSetting,
+  ): boolean {
+    return (
+      stopReason === OPENAI_CHAT_FINISH.LENGTH &&
+      !hasEndTag(agentSetting, newResponse)
+    );
+  }
+
+  addContinueMessageWithPrefill(
+    _messages: Message[],
+    _workspaceState: AgentWorkspaceState,
+    _agentSetting: AgentSetting,
+  ): void {
+    this.defaultAddContinueWithPrefill();
+  }
+
+  addContinueMessageWithoutPrefill(
+    messages: Message[],
+    workspaceState: AgentWorkspaceState,
+    agentSetting: AgentSetting,
+  ): void {
+    const userMessageContinuation = this.createContinuationPrompt(
+      workspaceState,
+      agentSetting,
+    );
+    this.logger.debug(
+      `Adding continuation message. Continuation:\n ${userMessageContinuation}`,
+    );
+
+    const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
+    if (role === 'system') {
+      messages.push({
+        role: 'system',
+        content: [{ type: 'text', text: userMessageContinuation }],
+      });
+    } else {
+      messages.push({
+        role: 'user',
+        content: [{ type: 'text', text: userMessageContinuation }],
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Prefill / output initialization
+  // ---------------------------------------------------------------------------
+
+  async initializeOutputAndPrefill(
+    _agentConfig: AgentConfig,
+    agentSetting: AgentSetting,
+    messages: Message[],
+    workspaceState: AgentWorkspaceState,
+    outputLocation: FileLocation,
+    prefill: string,
+  ): Promise<[boolean, Message[]]> {
+    const endTurn = false;
+
+    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
+      const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
+      const lastMessage = messages.at(-1);
+      if (lastMessage && Array.isArray(lastMessage.content)) {
+        (lastMessage.content as ChatMessageContentItem[]).push({
+          type: 'text',
+          text: pseudoPrefillMsg,
+        });
+      }
+      this.logger.debug(`Added pseudo prefill: "${pseudoPrefillMsg}"`);
+      return [endTurn, messages];
+    }
+
+    const { fileContent } = await prepareExistingOutputContent(
+      outputLocation,
+      workspaceState,
+      this.logger,
+    );
+
+    if (fileContent) {
+      this.updateMessageContentWithoutPrefill(
+        messages,
+        '',
+        '',
+        workspaceState,
+      );
+    }
+    this.addContinueMessageWithoutPrefill(
+      messages,
+      workspaceState,
+      agentSetting,
+    );
+
+    return [endTurn, messages];
+  }
+
+  updateMessageContentWithPrefill(
+    messages: Message[],
+    bestConnector: string,
+    newResponse: string,
+    workspaceState: AgentWorkspaceState,
+  ): void {
+    const lastMessage = messages.at(-1);
+    if (lastMessage?.role === 'assistant') {
+      const msg = lastMessage as AssistantMessage;
+      if (Array.isArray(msg.content)) {
+        (msg.content as ChatMessageContentItem[]).push({
+          type: 'text',
+          text: bestConnector + newResponse,
+        });
+      } else {
+        (lastMessage as any).content = [
+          {
+            type: 'text',
+            text: workspaceState.assembly.accumulatedOutput,
+          },
+        ];
+      }
+    } else if (
+      lastMessage?.role === 'user' ||
+      lastMessage?.role === 'system'
+    ) {
+      messages.push({
+        role: 'assistant',
+        content: bestConnector + newResponse,
+      } as Message);
+    }
+  }
+
+  updateMessageContentWithoutPrefill(
+    messages: Message[],
+    bestConnector: string,
+    newResponse: string,
+    workspaceState: AgentWorkspaceState,
+  ): void {
+    const lastMessage = messages.at(-1);
+    const secondLastMessage = messages.at(-2);
+
+    if (
+      !lastMessage ||
+      (lastMessage.role !== 'user' && lastMessage.role !== 'system')
+    ) {
+      this.logger.error(
+        'Last message is not a user or system message - unexpected format',
+      );
+      return;
+    }
+
+    if (this.containCutOffMessage(lastMessage.content)) {
+      if (secondLastMessage?.role === 'assistant') {
+        const msg = secondLastMessage as AssistantMessage;
+        if (Array.isArray(msg.content)) {
+          (msg.content as ChatMessageContentItem[]).push({
+            type: 'text',
+            text: bestConnector + newResponse,
+          });
+        } else {
+          (secondLastMessage as any).content = [
+            {
+              type: 'text',
+              text: workspaceState.assembly.accumulatedOutput,
+            },
+          ];
+        }
+        if (messages.at(-1)?.role === 'user') {
+          messages.pop();
+        }
+      }
+    } else {
+      messages.push({
+        role: 'assistant',
+        content: [
+          { type: 'text', text: workspaceState.assembly.accumulatedOutput },
+        ],
+      } as Message);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Message modification
+  // ---------------------------------------------------------------------------
+
+  prependTextToUserMessage(messages: Message[], text: string): void {
+    if (!text.trim()) return;
+    const lastUserMsg = messages.findLast((m) => m.role === 'user');
+    if (!lastUserMsg || !('content' in lastUserMsg)) return;
+
+    if (typeof lastUserMsg.content === 'string') {
+      (lastUserMsg as any).content = text + lastUserMsg.content;
+    } else if (Array.isArray(lastUserMsg.content)) {
+      const firstTextPart = (
+        lastUserMsg.content as ChatMessageContentItem[]
+      ).find((p) => p.type === 'text');
+      if (firstTextPart && 'text' in firstTextPart) {
+        (firstTextPart as any).text = text + (firstTextPart as any).text;
+      } else {
+        (lastUserMsg.content as ChatMessageContentItem[]).unshift({
+          type: 'text',
+          text,
+        });
+      }
+    }
+  }
+
+  async addMediaToUserMessage(
+    messages: Message[],
+    mediaFiles: FileLocation[],
+  ): Promise<void> {
+    if (!mediaFiles.length || !this.capabilities.supportsVision) return;
+    const lastUserMsg = messages.findLast((m) => m.role === 'user');
+    if (!lastUserMsg || !('content' in lastUserMsg)) return;
+
+    try {
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      if (typeof lastUserMsg.content === 'string') {
+        (lastUserMsg as any).content = [
+          ...formattedMedia,
+          { type: 'text', text: lastUserMsg.content },
+        ];
+      } else if (Array.isArray(lastUserMsg.content)) {
+        (lastUserMsg.content as ChatMessageContentItem[]).unshift(
+          ...formattedMedia,
+        );
+      }
+    } catch (err) {
+      this.logger.logError(
+        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'add media to user message' },
+      );
+    }
+  }
+}
+
+// ============================================================================
+// Anthropic via OpenRouter subclass
+// ============================================================================
+
+/**
+ * Handler for Anthropic models accessed through OpenRouter using the native SDK.
+ * Adds prefill support for compatible models.
+ */
+export class ModelHandlerAnthropicViaOpenRouterNative extends ModelHandlerOpenRouterNative {
+  override updateMessageContentWithPrefill(
+    messages: Message[],
+    bestConnector: string,
+    newResponse: string,
+    workspaceState: AgentWorkspaceState,
+  ): void {
+    const lastMessage = messages.at(-1);
+    if (lastMessage?.role === 'assistant') {
+      const msg = lastMessage as AssistantMessage;
+      if (Array.isArray(msg.content)) {
+        const lastPart = (msg.content as ChatMessageContentItem[]).at(-1);
+        if (lastPart && 'text' in lastPart) {
+          (lastPart as any).text = bestConnector + newResponse;
+        }
+      } else if (typeof msg.content === 'string') {
+        (lastMessage as any).content = [
+          {
+            type: 'text',
+            text: workspaceState.assembly.accumulatedOutput,
+          },
+        ];
+      }
+    }
+  }
+
+  override updateMessageContentWithoutPrefill(
+    messages: Message[],
+    _bestConnector: string,
+    _newResponse: string,
+    workspaceState: AgentWorkspaceState,
+  ): void {
+    const lastMessage = messages.at(-1);
+    if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
+      messages.push({
+        role: 'assistant',
+        content: [
+          {
+            type: 'text',
+            text: workspaceState.assembly.accumulatedOutput,
+          },
+        ],
+      } as Message);
+    }
+  }
+}

@@ -24,6 +24,7 @@ import type {
 import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
+import type { ChatMessageToolCall as ORChatMessageToolCall } from '@openrouter/sdk/models';
 import type { ServerToolExtractionResult } from './ServerToolTypes';
 
 /**
@@ -160,12 +161,21 @@ export type AnthropicToolCall = {
   raw: ToolUseBlock;
 };
 
+export type OpenRouterToolCall = {
+  provider: 'openrouter';
+  callId: string;
+  name: string;
+  input: unknown;
+  raw: ORChatMessageToolCall;
+};
+
 export type SdkToolCall =
   | OpenAIToolCall
   | DeepSeekToolCall
   | OpenAIResponseToolCall
   | GoogleToolCall
-  | AnthropicToolCall;
+  | AnthropicToolCall
+  | OpenRouterToolCall;
 
 // Note: SdkToolCall is a discriminated union on 'provider'.
 // Use `call.provider === 'openai'` directly for type narrowing instead of

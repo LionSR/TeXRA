@@ -215,3 +215,20 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
 
   return [{ functionDeclarations: declarations }];
 }
+
+/**
+ * Convert generic ToolDefinition objects to OpenRouter SDK ToolDefinitionJson format.
+ * Uses the native @openrouter/sdk types for function tool definitions.
+ */
+export function toOpenRouterTools(
+  defs: ToolDefinition[],
+): { type: 'function'; function: { name: string; description?: string; parameters?: Record<string, unknown> } }[] {
+  return defs.map((d) => ({
+    type: 'function' as const,
+    function: {
+      name: d.name,
+      description: d.description,
+      parameters: convertToolSchema(d) ?? undefined,
+    },
+  }));
+}
