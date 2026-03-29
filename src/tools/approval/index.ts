@@ -11,20 +11,24 @@
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import type { StreamTabId } from '@shared/schemas';
 import {
+  _rejectAllPendingInquiries,
+  _rejectPendingInquiriesForStream,
+} from '@tools/inquiry';
+import {
   _rejectAllPendingBashApprovals,
   _rejectPendingBashApprovalsForStream,
 } from './bashApproval';
+import {
+  _clearAllProposalBypass,
+  _clearProposalBypassForStream,
+  _disableAllProposalBypasses,
+} from './proposalApproval';
 import {
   _clearAllApprovalBypass,
   _clearApprovalBypassForStream,
   _rejectAllPendingToolEditApprovals,
   _rejectPendingToolEditApprovalsForStream,
 } from './toolEditApproval';
-import {
-  _clearAllProposalBypass,
-  _clearProposalBypassForStream,
-  _disableAllProposalBypasses,
-} from './proposalApproval';
 
 /**
  * Clean up all approval state for a deleted stream.
@@ -33,6 +37,7 @@ import {
 export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   _rejectPendingToolEditApprovalsForStream(streamId);
   _rejectPendingBashApprovalsForStream(streamId);
+  _rejectPendingInquiriesForStream(streamId);
   _clearApprovalBypassForStream(streamId);
   _clearProposalBypassForStream(streamId);
   planApprovalCoordinator.clearForStream(streamId);
@@ -45,6 +50,7 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
 export function cleanupAllApprovals(): void {
   _rejectAllPendingToolEditApprovals();
   _rejectAllPendingBashApprovals();
+  _rejectAllPendingInquiries();
   _clearAllApprovalBypass();
   _clearAllProposalBypass();
   planApprovalCoordinator.clearAll();
