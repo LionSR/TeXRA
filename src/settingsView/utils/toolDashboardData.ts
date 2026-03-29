@@ -12,11 +12,12 @@ import type {
   ToolInfo,
 } from '@shared/schemas/settingsViewMessages';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
-import { runExternalToolChecks } from '@tools/toolAvailability';
 import {
   getDefaultToolRegistry,
   type RegisteredToolName,
 } from '@tools/registry';
+import { runExternalToolChecks } from '@tools/toolAvailability';
+import { getDisabledToolIds } from '@utils/config/constants';
 
 // ============================================================
 // Tool description enrichment
@@ -168,6 +169,7 @@ export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
   );
 
   // Merge check results with UI metadata from EXTERNAL_TOOL_DEFS
+  const disabledIds = getDisabledToolIds();
   const externalItems: ToolDashboardItem[] = [];
   for (let i = 0; i < results.length; i++) {
     const { id, tools, status } = results[i];
@@ -179,13 +181,16 @@ export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
       category: def.category,
       description: def.description,
       tools: enrichTools(tools),
-      status,
+      status: disabledIds.has(def.id) ? 'not-found' : status,
       requiresSetup: true,
       installGuide: def.installGuide,
       installUrl: def.installUrl,
       installExtensionId: def.installExtensionId,
       configNotes: def.configNotes,
       statusDetail: detailResults[i],
+      authNote: def.authNote,
+      toggleable: def.toggleable,
+      enabled: !disabledIds.has(def.id),
     });
   }
 

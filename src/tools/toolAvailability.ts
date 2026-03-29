@@ -13,6 +13,7 @@
 // Local imports
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
+import { getDisabledToolIds } from '@utils/config/constants';
 
 // ============================================================
 // Result type
@@ -63,13 +64,18 @@ export async function runExternalToolChecks(): Promise<
     ),
   );
 
-  // Update cache — only exclude tools whose check definitively failed.
-  // 'unknown' (check threw) is not treated as missing: the tool may still
-  // work fine and will produce a clear error at call time if it doesn't.
+  // Update cache — exclude tools whose check failed AND user-disabled tools.
   const unavailable = new Set<string>();
+  const disabledIds = getDisabledToolIds();
   for (const r of results) {
     if (r.status === 'not-found') {
       for (const t of r.tools) unavailable.add(t);
+    }
+  }
+  // User-disabled tool groups: look up their tool names from definitions
+  for (const def of EXTERNAL_TOOL_DEFS) {
+    if (disabledIds.has(def.id)) {
+      for (const t of def.tools) unavailable.add(t);
     }
   }
   cached = unavailable;

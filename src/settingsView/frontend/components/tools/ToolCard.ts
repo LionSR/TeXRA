@@ -205,6 +205,74 @@ export class ToolCard extends LitElement {
         );
       }
 
+      .tool-auth-note {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        padding: var(--border-thin) var(--spacing-small);
+        font-size: var(--font-size-xs, 11px);
+        border-radius: var(--border-radius);
+        white-space: nowrap;
+        font-weight: var(--font-weight-medium);
+        color: var(--vscode-charts-blue, #3794ff);
+        background: color-mix(
+          in srgb,
+          var(--vscode-charts-blue, #3794ff) 12%,
+          transparent
+        );
+      }
+
+      .tool-toggle {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 20px;
+        flex-shrink: 0;
+      }
+
+      .tool-toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .tool-toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--vscode-input-background, rgba(128, 128, 128, 0.3));
+        border-radius: 10px;
+        transition: background var(--transition-fast);
+      }
+
+      .tool-toggle-slider::before {
+        content: '';
+        position: absolute;
+        height: 14px;
+        width: 14px;
+        left: 3px;
+        bottom: 3px;
+        background: var(--vscode-foreground);
+        border-radius: 50%;
+        transition: transform var(--transition-fast);
+      }
+
+      .tool-toggle input:checked + .tool-toggle-slider {
+        background: var(--vscode-button-background, #0e639c);
+      }
+
+      .tool-toggle input:checked + .tool-toggle-slider::before {
+        transform: translateX(16px);
+      }
+
+      .tool-toggle input:focus-visible + .tool-toggle-slider {
+        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+      }
+
       .tool-config-note {
         margin-top: var(--spacing-small);
         font-size: var(--font-size-xs, 11px);
@@ -238,6 +306,16 @@ export class ToolCard extends LitElement {
         }),
       );
     }
+  }
+
+  private handleToggle(e: Event): void {
+    const checked = (e.target as HTMLInputElement).checked;
+    this.dispatchEvent(
+      createEvent('tool-toggle', {
+        toolId: this.item.id,
+        enabled: checked,
+      }),
+    );
   }
 
   private static readonly STATUS_CONFIG: Record<
@@ -316,6 +394,30 @@ export class ToolCard extends LitElement {
     `;
   }
 
+  private renderToggle(): TemplateResult | typeof nothing {
+    if (!this.item.toggleable) return nothing;
+    return html`
+      <label class="tool-toggle" title="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this.item.name}">
+        <input
+          type="checkbox"
+          .checked=${this.item.enabled !== false}
+          @change=${this.handleToggle}
+        />
+        <span class="tool-toggle-slider"></span>
+      </label>
+    `;
+  }
+
+  private renderAuthNote(): TemplateResult | typeof nothing {
+    if (!this.item.authNote) return nothing;
+    return html`
+      <span class="tool-auth-note">
+        <span class="codicon codicon-key"></span>
+        ${this.item.authNote}
+      </span>
+    `;
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="tool-card">
@@ -323,7 +425,9 @@ export class ToolCard extends LitElement {
           <div class="tool-title-group">
             <span class="tool-name">${this.item.name}</span>
             ${this.renderBadge()}
+            ${this.renderAuthNote()}
           </div>
+          ${this.renderToggle()}
         </div>
         <div class="tool-description">${this.item.description}</div>
         ${this.item.statusDetail

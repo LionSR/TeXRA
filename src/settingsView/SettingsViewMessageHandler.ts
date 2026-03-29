@@ -116,6 +116,7 @@ import {
   getProviderKeyUrl,
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
+import { setToolEnabled } from '@utils/config/constants';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
@@ -486,6 +487,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleInstallToolExtension(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
         this.withActiveWebview((w) => this.sendToolDashboardData(w)),
+      [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: async (data) => {
+        await setToolEnabled(data.toolId, data.enabled);
+        await this.withActiveWebview((w) => this.sendToolDashboardData(w));
+      },
     };
   }
 
