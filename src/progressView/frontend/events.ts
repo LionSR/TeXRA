@@ -48,6 +48,10 @@ export interface PermissionActionDetail {
   action: string;
   feedback?: string;
   modelOverride?: string;
+  /** Answer text from external inquiry panel (submit action only). */
+  answer?: string;
+  /** Files attached by user from external model (submit action only). */
+  attachedFiles?: string[];
 }
 
 /**

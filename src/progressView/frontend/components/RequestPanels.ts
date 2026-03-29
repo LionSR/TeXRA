@@ -39,10 +39,11 @@ import './BashRequestPanel';
 import './RetryRequestPanel';
 import './ProposalRequestPanel';
 import './PlanApprovalRequestPanel';
+import './ExternalInquiryPanel';
 
 /** Selector to find any sub-panel in shadow DOM */
 const PANEL_SELECTOR =
-  'tool-edit-request-panel, bash-request-panel, retry-request-panel, proposal-request-panel, plan-approval-request-panel';
+  'tool-edit-request-panel, bash-request-panel, retry-request-panel, proposal-request-panel, plan-approval-request-panel, external-inquiry-panel';
 
 /** Section configuration for rendering permission groups */
 interface SectionConfig {
@@ -92,6 +93,15 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
         .permission=${p}
       ></plan-approval-request-panel>`,
   },
+  externalInquiry: {
+    cssClass: 'external-inquiry-requests',
+    icon: 'globe',
+    title: 'External inquiry',
+    renderPanel: (p) =>
+      html`<external-inquiry-panel
+        .permission=${p}
+      ></external-inquiry-panel>`,
+  },
 };
 
 /**
@@ -133,6 +143,7 @@ export class RequestPanels extends LitElement {
   private retryPermissions: PermissionState[] = [];
   private proposalPermissions: PermissionState[] = [];
   private planApprovalPermissions: PermissionState[] = [];
+  private externalInquiryPermissions: PermissionState[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('permissions')) return;
@@ -151,6 +162,9 @@ export class RequestPanels extends LitElement {
     );
     this.planApprovalPermissions = this.permissions.filter(
       (p) => p.kind === PERMISSION_KIND.PLAN_APPROVAL,
+    );
+    this.externalInquiryPermissions = this.permissions.filter(
+      (p) => p.kind === PERMISSION_KIND.EXTERNAL_INQUIRY,
     );
   }
 
@@ -175,6 +189,10 @@ export class RequestPanels extends LitElement {
       ${this.renderSection(
         SECTION_CONFIGS.planApproval,
         this.planApprovalPermissions,
+      )}
+      ${this.renderSection(
+        SECTION_CONFIGS.externalInquiry,
+        this.externalInquiryPermissions,
       )}
     `;
   }
