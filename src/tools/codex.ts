@@ -1,9 +1,13 @@
 /**
  * Codex tool — spin off an OpenAI Codex agent via the @openai/codex-sdk.
  *
- * Supports foreground (blocking) and background (async follow-up) modes,
- * mirroring the BashTool pattern. The Codex CLI handles its own auth
- * (~/.codex/auth.json from `codex login`, OPENAI_API_KEY, config files).
+ * Supports foreground (blocking) and background (async follow-up) modes.
+ * Threads are multi-turn: after the first turn, the child stream enters
+ * WAITING state and accepts follow-ups from the user (via the stream tab's
+ * follow-up input) or from the orchestrator (via the `thread_id` parameter).
+ *
+ * The Codex CLI handles its own auth (~/.codex/auth.json from `codex login`,
+ * OPENAI_API_KEY, config files).
  *
  * Requires the Codex CLI binary — gated by the availability check in
  * externalToolDefs.ts.
@@ -27,7 +31,13 @@ import {
 } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import {
+  registerInterruptible,
+  unregisterInterruptible,
+  type IInterruptible,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
@@ -82,9 +92,79 @@ const CodexInputSchema = z.strictObject({
     .describe(
       'Run asynchronously. Returns immediately with execution ID. Result delivered as follow-up when complete.',
     ),
+  thread_id: z
+    .string()
+    .optional()
+    .describe(
+      'Resume an existing Codex thread by its ID. ' +
+        'When provided, continues the conversation from where it left off instead of starting a new one. ' +
+        'Get the thread_id from the result of a previous codex call.',
+    ),
 });
 
 export type CodexInput = z.infer<typeof CodexInputSchema>;
+
+// ============================================================================
+// Thread registry — keeps threads alive between turns for follow-ups
+// ============================================================================
+
+interface ActiveThread {
+  thread: Thread;
+  childStreamId: StreamTabId;
+  logger: AgentLogger;
+  executionId: string;
+}
+
+const threadRegistry = new Map<string, ActiveThread>();
+
+function storeThread(threadId: string, entry: ActiveThread): void {
+  threadRegistry.set(threadId, entry);
+}
+
+function getStoredThread(threadId: string): ActiveThread | undefined {
+  return threadRegistry.get(threadId);
+}
+
+function removeThread(threadId: string): void {
+  threadRegistry.delete(threadId);
+}
+
+// ============================================================================
+// Codex follow-up session — duck-types as IInterruptible with a session
+// ============================================================================
+
+/**
+ * Lightweight session that registers with the ToolUseAgentRegistry so
+ * the follow-up input in the child stream tab can deliver messages.
+ * Uses duck typing: `sendFollowUp()` checks for `session.appendFollowUp()`.
+ */
+class CodexFollowUpSession implements IInterruptible {
+  private readonly queue = new FollowUpQueue();
+  private interrupted = false;
+
+  /** Duck-typed session interface expected by `isToolUseFlowContext()`. */
+  readonly session = {
+    appendFollowUp: (text: string): void => this.queue.enqueue(text),
+    hasQueuedFollowUp: (): boolean => !this.queue.isEmpty(),
+  };
+
+  interrupt(): void {
+    this.interrupted = true;
+    this.queue.cancelWait();
+  }
+
+  isInterrupted(): boolean {
+    return this.interrupted;
+  }
+
+  async waitForFollowUp(): Promise<string[] | null> {
+    return this.queue.waitAndDrainAll(() => this.interrupted);
+  }
+
+  dispose(): void {
+    this.queue.dispose();
+  }
+}
 
 // ============================================================================
 // Result formatting
@@ -97,13 +177,17 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
  * a compact usage note. Intermediate details (commands run, files changed) are
  * streamed to the child stream tab and don't need to be in the result.
  */
-function formatTurnResult(turn: RunResult): string {
+function formatTurnResult(turn: RunResult, threadId?: string | null): string {
   const parts: string[] = [turn.finalResponse || '(no response)'];
 
   if (turn.usage) {
     parts.push(
       `[Tokens: ${turn.usage.input_tokens} in / ${turn.usage.output_tokens} out]`,
     );
+  }
+
+  if (threadId) {
+    parts.push(`[Thread ID: ${threadId} — use thread_id to continue this session]`);
   }
 
   return parts.join('\n\n');
@@ -115,11 +199,12 @@ function formatCodexDelivery(
   prompt: string,
   wallTimeMs: number,
   turn: RunResult,
+  threadId?: string | null,
 ): string {
   const durationSec = (wallTimeMs / 1000).toFixed(1);
   const response = turn.finalResponse || '(no response)';
   const lines = [
-    `<codex-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
+    `<codex-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}"${threadId ? ` thread-id="${escapeAttr(threadId)}"` : ''}>`,
     `<wall-time>${durationSec}s</wall-time>`,
     `<response>${escapeText(response)}</response>`,
   ];
@@ -217,9 +302,56 @@ function logCodexItem(
     case 'reasoning':
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
+    case 'mcp_tool_call': {
+      const mcpItem = item as {
+        server: string;
+        tool: string;
+        arguments: unknown;
+        result?: { content: unknown[] };
+        error?: { message: string };
+        status: string;
+      };
+      const output = mcpItem.error
+        ? `Error: ${mcpItem.error.message}`
+        : `(${mcpItem.status})`;
+      logger.logToolUse({
+        toolName: `mcp:${mcpItem.server}/${mcpItem.tool}`,
+        input: mcpItem.arguments,
+        output,
+        status: 'completed',
+      });
+      break;
+    }
+    case 'web_search': {
+      const searchItem = item as { query: string };
+      logger.logWebSearch({ query: searchItem.query });
+      break;
+    }
+    case 'todo_list': {
+      const todoItem = item as { items: { text: string; completed: boolean }[] };
+      const lines = todoItem.items.map(
+        (t) => `${t.completed ? '✓' : '○'} ${t.text}`,
+      );
+      logger.info(lines.join('\n'), { messageType: MESSAGE_TYPES.DEFAULT });
+      break;
+    }
     case 'error':
       logger.error(item.message);
       break;
+  }
+}
+
+/** Log a turn summary to the child stream. */
+function logTurnSummary(
+  logger: AgentLogger,
+  wallTimeMs: number,
+  usage: RunResult['usage'],
+): void {
+  logger.info(`Turn completed in ${formatDuration(wallTimeMs)}`);
+  if (usage) {
+    logger.info(
+      `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`,
+    );
   }
 }
 
@@ -253,6 +385,103 @@ function finalizeCodexStream(
 }
 
 // ============================================================================
+// Follow-up loop — runs additional turns when user sends follow-ups
+// ============================================================================
+
+/**
+ * After the initial turn, enter a loop that waits for user follow-ups
+ * in the child stream tab and runs them on the same Codex thread.
+ * The loop runs until interrupted or the session is disposed.
+ */
+function startFollowUpLoop(
+  thread: Thread,
+  childStreamId: StreamTabId,
+  logger: AgentLogger,
+): void {
+  const followUpSession = new CodexFollowUpSession();
+  registerInterruptible(childStreamId, followUpSession);
+
+  StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
+
+  void (async () => {
+    try {
+      while (!followUpSession.isInterrupted()) {
+        const messages = await followUpSession.waitForFollowUp();
+        if (!messages || followUpSession.isInterrupted()) break;
+
+        const userMessage = messages.join('\n\n');
+        logger.info(userMessage, { messageType: MESSAGE_TYPES.USER_MESSAGE });
+
+        StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
+        const startedAt = Date.now();
+
+        try {
+          const turn = await runStreamedTurn(thread, userMessage, logger);
+          logTurnSummary(logger, Date.now() - startedAt, turn.usage);
+          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
+        } catch (err) {
+          logger.error(err instanceof Error ? err.message : String(err));
+          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
+        }
+      }
+    } finally {
+      followUpSession.dispose();
+      unregisterInterruptible(childStreamId);
+
+      // Clean up thread from registry
+      const threadId = thread.id;
+      if (threadId) removeThread(threadId);
+
+      // If still in WAITING, mark as READY (session ended)
+      if (StreamStatusService.get(childStreamId) === STREAM_STATUS.WAITING) {
+        StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
+      }
+    }
+  })();
+}
+
+// ============================================================================
+// Streaming helpers
+// ============================================================================
+
+/** Run a single streamed turn, logging events to the child stream. */
+async function runStreamedTurn(
+  thread: Thread,
+  prompt: string,
+  logger: AgentLogger,
+): Promise<RunResult> {
+  const { events } = await thread.runStreamed(prompt);
+  const responseParts: string[] = [];
+  let usage: RunResult['usage'] = null;
+
+  for await (const event of events) {
+    switch (event.type) {
+      case 'item.completed': {
+        const { item } = event;
+        logCodexItem(item, logger);
+        if (item.type === 'agent_message') {
+          responseParts.push(item.text);
+        }
+        break;
+      }
+      case 'turn.completed':
+        usage = event.usage ?? null;
+        break;
+      case 'turn.failed':
+        throw new ToolError(event.error.message ?? 'Codex turn failed');
+      case 'error':
+        throw new ToolError(event.message ?? 'Codex stream error');
+    }
+  }
+
+  return {
+    items: [],
+    finalResponse: responseParts.join('\n\n'),
+    usage,
+  };
+}
+
+// ============================================================================
 // Tool
 // ============================================================================
 
@@ -262,7 +491,8 @@ export class CodexTool extends defineTool({
     'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
     'The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox. ' +
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
-    'Auth is handled by the CLI itself — use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var.',
+    'Auth is handled by the CLI itself — use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
+    'Returns a thread_id that can be passed back to continue the conversation in subsequent calls.',
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
@@ -280,19 +510,7 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-    // Dynamic import — resolved at runtime, not bundled (see webpack externals)
-    const Codex = await importCodexClass();
-
-    // The SDK resolves the native binary relative to itself, but we don't
-    // ship the 130 MB platform binaries in the VSIX. Find the binary from
-    // the user's global npm install and pass it via codexPathOverride.
-    const codexPathOverride = findCodexBinaryPath();
-    const codex = new Codex({ codexPathOverride });
-    const thread = codex.startThread({
-      workingDirectory: input.working_directory,
-      sandboxMode: input.sandbox_mode,
-      skipGitRepoCheck: true,
-    });
+    const thread = await this.resolveThread(input);
 
     if (input.run_in_background) {
       return this.executeBackground(
@@ -304,6 +522,34 @@ export class CodexTool extends defineTool({
     }
 
     return this.executeForeground(thread, input, ctx?.streamId);
+  }
+
+  /** Resolve thread — resume existing or start new. */
+  private async resolveThread(input: CodexInput): Promise<Thread> {
+    // If thread_id provided, try to reuse the in-memory thread first
+    if (input.thread_id) {
+      const stored = getStoredThread(input.thread_id);
+      if (stored) return stored.thread;
+    }
+
+    const CodexClass = await importCodexClass();
+    const codexPathOverride = findCodexBinaryPath();
+    const codex = new CodexClass({ codexPathOverride });
+
+    if (input.thread_id) {
+      // Resume from disk (~/.codex/sessions)
+      return codex.resumeThread(input.thread_id, {
+        workingDirectory: input.working_directory,
+        sandboxMode: input.sandbox_mode,
+        skipGitRepoCheck: true,
+      });
+    }
+
+    return codex.startThread({
+      workingDirectory: input.working_directory,
+      sandboxMode: input.sandbox_mode,
+      skipGitRepoCheck: true,
+    });
   }
 
   private async executeForeground(
@@ -320,22 +566,38 @@ export class CodexTool extends defineTool({
       : undefined;
 
     try {
-      const turn = await this.runStreamedForeground(
+      const turn = await runStreamedTurn(
         thread,
-        input,
-        stream?.logger,
+        input.prompt,
+        stream?.logger ?? new AgentLogger('codex-fg'),
       );
 
+      const threadId = thread.id;
+      const wallTimeMs = Date.now() - startedAt;
+
       if (stream) {
-        finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
-          wallTimeMs: Date.now() - startedAt,
-          usage: turn.usage,
-        });
+        logTurnSummary(stream.logger, wallTimeMs, turn.usage);
+
+        // Store thread and start follow-up loop for user interaction
+        if (threadId) {
+          storeThread(threadId, {
+            thread,
+            childStreamId: stream.childStreamId,
+            logger: stream.logger,
+            executionId,
+          });
+          startFollowUpLoop(thread, stream.childStreamId, stream.logger);
+        } else {
+          finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
+            wallTimeMs,
+            usage: turn.usage,
+          });
+        }
       }
 
       return {
         summary: `Codex: ${preview}`,
-        output: formatTurnResult(turn),
+        output: formatTurnResult(turn, threadId),
       };
     } catch (err) {
       if (stream) {
@@ -345,45 +607,6 @@ export class CodexTool extends defineTool({
       }
       throw err;
     }
-  }
-
-  /** Run a foreground turn via the streaming API, logging events to the child stream. */
-  private async runStreamedForeground(
-    thread: Thread,
-    input: CodexInput,
-    logger?: AgentLogger,
-  ): Promise<RunResult> {
-    const { events } = await thread.runStreamed(input.prompt);
-    const responseParts: string[] = [];
-    let usage: RunResult['usage'] = null;
-
-    for await (const event of events) {
-      switch (event.type) {
-        case 'item.completed': {
-          const { item } = event;
-          if (logger) {
-            logCodexItem(item, logger);
-          }
-          if (item.type === 'agent_message') {
-            responseParts.push(item.text);
-          }
-          break;
-        }
-        case 'turn.completed':
-          usage = event.usage ?? null;
-          break;
-        case 'turn.failed':
-          throw new ToolError(event.error.message ?? 'Codex turn failed');
-        case 'error':
-          throw new ToolError(event.message ?? 'Codex stream error');
-      }
-    }
-
-    return {
-      items: [],
-      finalResponse: responseParts.join('\n\n'),
-      usage,
-    };
   }
 
   private async executeBackground(
@@ -427,68 +650,45 @@ export class CodexTool extends defineTool({
 
     const startedAt = Date.now();
 
-    const promise = (async (): Promise<RunResult> => {
-      const { events } = await thread.runStreamed(input.prompt);
-      const responseParts: string[] = [];
-      let usage: RunResult['usage'] = null;
-
-      for await (const event of events) {
-        switch (event.type) {
-          case 'item.completed': {
-            const { item } = event;
-            logCodexItem(item, logger);
-            if (item.type === 'agent_message') {
-              responseParts.push(item.text);
-            }
-            break;
-          }
-          case 'turn.completed':
-            usage = event.usage ?? null;
-            break;
-          case 'turn.failed':
-            throw new Error(event.error.message ?? 'Codex turn failed');
-          case 'error':
-            throw new Error(event.message ?? 'Codex stream error');
-        }
-      }
-
-      return {
-        items: [],
-        finalResponse: responseParts.join('\n\n'),
-        usage,
-      };
-    })();
-
-    void promise
-      .then(async (turn) => {
+    void (async () => {
+      try {
+        const turn = await runStreamedTurn(thread, input.prompt, logger);
         const wallTimeMs = Date.now() - startedAt;
+        const threadId = thread.id;
         const store = getExecutionStore(executionId);
 
         await writeTerminalStatus(executionId, 'completed').catch(() => {});
-
-        finalizeCodexStream(childStreamId, executionId, logger, {
-          wallTimeMs,
-          usage: turn.usage,
-        });
+        logTurnSummary(logger, wallTimeMs, turn.usage);
 
         const msg = formatCodexDelivery(
           executionId,
           input.prompt,
           wallTimeMs,
           turn,
+          threadId,
         );
         await store.writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
-      })
-      .catch(async (err: unknown) => {
-        await writeTerminalStatus(executionId, 'error').catch(() => {});
 
+        // Keep thread alive for follow-ups
+        if (threadId) {
+          storeThread(threadId, { thread, childStreamId, logger, executionId });
+          startFollowUpLoop(thread, childStreamId, logger);
+        } else {
+          finalizeCodexStream(childStreamId, executionId, logger, {
+            wallTimeMs,
+            usage: turn.usage,
+          });
+        }
+      } catch (err: unknown) {
+        await writeTerminalStatus(executionId, 'error').catch(() => {});
         finalizeCodexStream(childStreamId, executionId, logger, { error: err });
 
         const msg = formatCodexError(executionId, input.prompt, err);
         await getExecutionStore(executionId).writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
-      });
+      }
+    })();
 
     return {
       summary: `Launched Codex: ${preview}`,
