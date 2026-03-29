@@ -404,6 +404,7 @@ function finalizeCodexStream(
 function startFollowUpLoop(
   thread: Thread,
   childStreamId: StreamTabId,
+  executionId: string,
   logger: AgentLogger,
 ): void {
   const followUpSession = new CodexFollowUpSession();
@@ -435,12 +436,11 @@ function startFollowUpLoop(
     } finally {
       followUpSession.dispose();
       unregisterInterruptible(childStreamId);
+      untrackExecution(executionId);
 
-      // Clean up thread from registry
       const threadId = thread.id;
       if (threadId) removeThread(threadId);
 
-      // If still in WAITING, mark as READY (session ended)
       if (StreamStatusService.get(childStreamId) === STREAM_STATUS.WAITING) {
         StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
       }
@@ -586,17 +586,15 @@ export class CodexTool extends defineTool({
       const wallTimeMs = Date.now() - startedAt;
 
       if (stream) {
-        logTurnSummary(stream.logger, wallTimeMs, turn.usage);
-
-        // Store thread and start follow-up loop for user interaction
         if (threadId) {
+          logTurnSummary(stream.logger, wallTimeMs, turn.usage);
           storeThread(threadId, {
             thread,
             childStreamId: stream.childStreamId,
             logger: stream.logger,
             executionId,
           });
-          startFollowUpLoop(thread, stream.childStreamId, stream.logger);
+          startFollowUpLoop(thread, stream.childStreamId, executionId, stream.logger);
         } else {
           finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
             wallTimeMs,
@@ -668,7 +666,6 @@ export class CodexTool extends defineTool({
         const store = getExecutionStore(executionId);
 
         await writeTerminalStatus(executionId, 'completed').catch(() => {});
-        logTurnSummary(logger, wallTimeMs, turn.usage);
 
         const msg = formatCodexDelivery(
           executionId,
@@ -680,10 +677,10 @@ export class CodexTool extends defineTool({
         await store.writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
 
-        // Keep thread alive for follow-ups
         if (threadId) {
+          logTurnSummary(logger, wallTimeMs, turn.usage);
           storeThread(threadId, { thread, childStreamId, logger, executionId });
-          startFollowUpLoop(thread, childStreamId, logger);
+          startFollowUpLoop(thread, childStreamId, executionId, logger);
         } else {
           finalizeCodexStream(childStreamId, executionId, logger, {
             wallTimeMs,
