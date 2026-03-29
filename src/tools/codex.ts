@@ -121,9 +121,26 @@ interface ActiveThread {
 
 const threadRegistry = new Map<string, ActiveThread>();
 
-/** Store a thread for multi-turn reuse. Called from both execution paths. */
+/** Store a thread for multi-turn reuse and persist thread ID to disk. */
 function storeThread(threadId: string, entry: ActiveThread): void {
   threadRegistry.set(threadId, entry);
+  // Persist thread ID so the orchestrator can resume after extension reload.
+  // The SDK stores conversation history in ~/.codex/sessions — this ID is
+  // the key needed by codex.resumeThread() to reconstruct the thread.
+  void getExecutionStore(entry.executionId as ExecutionId)
+    .write('codex_thread_id', threadId)
+    .catch(() => {});
+}
+
+/**
+ * Interrupt all active codex follow-up sessions.
+ * Called during extension deactivation to clean up in-memory state
+ * so streams don't remain in stale WAITING state.
+ */
+export function interruptAllCodexSessions(): void {
+  for (const { childStreamId } of threadRegistry.values()) {
+    getInterruptible(childStreamId)?.interrupt();
+  }
 }
 
 // ============================================================================
@@ -385,6 +402,11 @@ function startFollowUpLoop(
   registerInterruptible(childStreamId, session);
 
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
+
+  // Start a log group so endRunningGroups() marks it as errored on reload,
+  // giving the user a visual cue that the session was interrupted.
+  const groupId = logger.startGroup('Codex session');
+
   StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
 
   void (async () => {
@@ -409,6 +431,7 @@ function startFollowUpLoop(
         StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
       }
     } finally {
+      logger.endGroup(groupId, 'stopped');
       unregisterInterruptible(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       untrackExecution(executionId);
