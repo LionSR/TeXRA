@@ -667,8 +667,6 @@ export class CodexTool extends defineTool({
         const threadId = thread.id;
         const store = getExecutionStore(executionId);
 
-        await writeTerminalStatus(executionId, 'completed').catch(() => {});
-
         const msg = formatCodexDelivery(
           executionId,
           input.prompt,
@@ -680,6 +678,12 @@ export class CodexTool extends defineTool({
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
 
         handleTurnSuccess(thread, turn, childStreamId, executionId, logger, wallTimeMs);
+
+        // Only mark terminal status if no follow-up loop started — the
+        // loop manages its own lifecycle and may end in error later.
+        if (!threadId) {
+          await writeTerminalStatus(executionId, 'completed').catch(() => {});
+        }
       } catch (err: unknown) {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         finalizeCodexStream(childStreamId, executionId, logger, { error: err });
