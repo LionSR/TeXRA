@@ -3,6 +3,7 @@ import { create } from 'mutative';
 // Local imports - shared webview
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { postMessage } from '@shared/vscode';
+import { EXTERNAL_INQUIRY_ACTIONS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
@@ -32,7 +33,7 @@ import type {
   ToolbarCommandDetail,
 } from './events';
 import type { MessageHandlerContext } from './messageDispatcher';
-import { ExternalInquiryPanel } from './components/ExternalInquiryPanel';
+import { clearInquiryDraft } from './components/ExternalInquiryPanel';
 
 /**
  * Context passed to frontend event handlers providing access to state and refs.
@@ -377,8 +378,7 @@ export function handlePermissionAction(
         'requestId',
         requestId,
       );
-      // Clear persisted draft on skip (submit path clears in the panel)
-      ExternalInquiryPanel.clearDraft(requestId);
+      clearInquiryDraft(requestId);
       break;
     }
   }
@@ -395,7 +395,7 @@ export function handleExternalInquirySubmit(
   const { permission, answer, attachedFiles } = event.detail;
   postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
     requestId: permission.data.requestId,
-    action: 'submit',
+    action: EXTERNAL_INQUIRY_ACTIONS[0],
     answer,
     attachedFiles,
   });
@@ -405,4 +405,5 @@ export function handleExternalInquirySubmit(
     'requestId',
     permission.data.requestId,
   );
+  clearInquiryDraft(permission.data.requestId);
 }

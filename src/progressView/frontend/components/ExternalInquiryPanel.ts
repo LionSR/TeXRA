@@ -6,13 +6,13 @@
  * Provides a textarea for the user to paste the answer back, and an optional
  * file attachment drop zone for files downloaded from the external model.
  *
- * User input (answer text, dropped files) is persisted in a static cache keyed
- * by requestId so it survives component recreation during webview hide/show
- * cycles — the permission is replayed via ApprovalRequestHandler.replay() but
- * the component is re-mounted with fresh @state. The cache restores prior input.
+ * User input (answer text, dropped files) is persisted in a module-level cache
+ * keyed by requestId so it survives component recreation during webview
+ * hide/show cycles — the permission is replayed via ApprovalRequestHandler
+ * but the component is re-mounted with fresh @state.
  */
 
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult, type PropertyValues } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
@@ -24,24 +24,44 @@ import {
   requestPanelStyles,
 } from '@shared/styles';
 import type { ExternalInquiryPermission } from '@shared/schemas';
+import { EXTERNAL_INQUIRY_ACTIONS } from '@shared/schemas';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 
 import { BaseRequestPanel } from './BaseRequestPanel';
 
-// ── Persistence across component recreation ──
-// Permissions are replayed on webview show, but local @state is lost.
-// Cache user input so a long pasted answer isn't destroyed by hide/show.
+// ── Draft persistence ──
+
 interface InquiryDraft {
   answerText: string;
   droppedFiles: string[];
 }
+
+const DRAFT_CACHE_CAP = 50;
 const draftCache = new Map<string, InquiryDraft>();
-/** Tracks resolved request IDs so disconnectedCallback doesn't re-save after clearDraft. */
 const resolvedIds = new Set<string>();
+
+function evictOldestDraft(): void {
+  if (draftCache.size <= DRAFT_CACHE_CAP) return;
+  const oldest = draftCache.keys().next().value;
+  if (oldest !== undefined) draftCache.delete(oldest);
+}
 
 function getRequestId(permission: { data: unknown }): string {
   return (permission.data as ExternalInquiryPermission).requestId;
 }
+
+/** Clear draft for a resolved inquiry. Called from eventHandlers on submit/skip. */
+export function clearInquiryDraft(requestId: string): void {
+  draftCache.delete(requestId);
+  resolvedIds.add(requestId);
+  // Bound resolvedIds like draftCache
+  if (resolvedIds.size > DRAFT_CACHE_CAP) {
+    const oldest = resolvedIds.values().next().value;
+    if (oldest !== undefined) resolvedIds.delete(oldest);
+  }
+}
+
+// ── Component ──
 
 @customElement('external-inquiry-panel')
 export class ExternalInquiryPanel extends BaseRequestPanel {
@@ -57,42 +77,40 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   @state() private dropActive = false;
 
   private copyController = new CopyButtonController(this);
+  private draftRestored = false;
 
   // ── Lifecycle ──
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    const id = getRequestId(this.permission);
-    const draft = draftCache.get(id);
-    if (draft) {
-      this.answerText = draft.answerText;
-      this.droppedFiles = draft.droppedFiles;
-    }
-  }
 
   override disconnectedCallback(): void {
     this.saveDraft();
     super.disconnectedCallback();
   }
 
+  protected override willUpdate(changed: PropertyValues): void {
+    super.willUpdate(changed);
+    // Restore draft once on first update (avoids the extra render from connectedCallback).
+    if (!this.draftRestored) {
+      this.draftRestored = true;
+      const draft = draftCache.get(getRequestId(this.permission));
+      if (draft) {
+        this.answerText = draft.answerText;
+        this.droppedFiles = draft.droppedFiles;
+      }
+    }
+  }
+
   private saveDraft(): void {
     const id = getRequestId(this.permission);
-    // Don't re-save after the inquiry was resolved (submit/skip already cleared).
     if (resolvedIds.has(id)) return;
     if (this.answerText || this.droppedFiles.length > 0) {
       draftCache.set(id, {
         answerText: this.answerText,
         droppedFiles: this.droppedFiles,
       });
+      evictOldestDraft();
     } else {
       draftCache.delete(id);
     }
-  }
-
-  /** Clean up cache entry when this inquiry is resolved. */
-  static clearDraft(requestId: string): void {
-    draftCache.delete(requestId);
-    resolvedIds.add(requestId);
   }
 
   override handleKeyboardShortcut(_key: string): boolean {
@@ -100,6 +118,10 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   }
 
   // ── Render ──
+
+  private get hasAnswer(): boolean {
+    return this.answerText.trim().length > 0;
+  }
 
   override render(): TemplateResult {
     const data = this.permission.data as ExternalInquiryPermission;
@@ -250,16 +272,16 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           icon="check"
           label="Submit Answer"
           title="Submit the answer from the external model"
-          data-action="submit"
-          ?disabled=${!this.answerText.trim()}
+          data-action=${EXTERNAL_INQUIRY_ACTIONS[0]}
+          ?disabled=${!this.hasAnswer}
           @click=${this.handleSubmit}
         >Submit Answer</vscode-toolbar-button>
         <vscode-toolbar-button
           icon="close"
           label="Skip"
           title="Skip this external inquiry"
-          data-action="skip"
-          @click=${() => this.emitAction('skip')}
+          data-action=${EXTERNAL_INQUIRY_ACTIONS[1]}
+          @click=${() => this.emitAction(EXTERNAL_INQUIRY_ACTIONS[1])}
         >Skip</vscode-toolbar-button>
       </vscode-toolbar-container>
     `;
@@ -282,8 +304,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
     const answer = this.answerText.trim();
     if (!answer) return;
 
-    // Clear cache — this inquiry is done.
-    ExternalInquiryPanel.clearDraft(getRequestId(this.permission));
+    clearInquiryDraft(getRequestId(this.permission));
 
     // Custom event: submit carries answer + files, which doesn't fit
     // the standard permissionAction shape (action + optional feedback).
@@ -293,7 +314,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
         composed: true,
         detail: {
           permission: this.permission,
-          action: 'submit',
+          action: EXTERNAL_INQUIRY_ACTIONS[0],
           answer,
           attachedFiles: this.droppedFiles,
         },
