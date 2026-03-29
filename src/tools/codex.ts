@@ -556,14 +556,13 @@ export class CodexTool extends defineTool({
   private async resolveThread(input: CodexInput): Promise<Thread> {
     if (input.thread_id) {
       const stored = threadRegistry.get(input.thread_id);
-      // Only reuse the in-memory thread if the follow-up loop is idle (WAITING).
-      // If RUNNING, a turn is in progress — fall through to disk resume to
-      // avoid concurrent streaming turns on the same Thread object.
-      if (
-        stored &&
-        StreamStatusService.get(stored.childStreamId) === STREAM_STATUS.WAITING
-      ) {
+      if (stored) {
+        // Always interrupt the old follow-up loop. If it's WAITING, the
+        // interrupt is clean. If RUNNING, the in-progress turn will error
+        // out — but this prevents orphaned loops and concurrent turns on
+        // the same Thread object.
         getInterruptible(stored.childStreamId)?.interrupt();
+        threadRegistry.delete(input.thread_id);
         return stored.thread;
       }
     }
