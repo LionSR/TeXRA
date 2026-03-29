@@ -160,13 +160,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
         >
           ${this.droppedFiles.length > 0
             ? this.renderDroppedFiles()
-            : html`<span>Drop files here or use the browse button</span>`}
-          <vscode-toolbar-button
-            icon="folder-opened"
-            label="Browse..."
-            title="Browse for files downloaded from the external model"
-            @click=${this.handleBrowse}
-          >Browse...</vscode-toolbar-button>
+            : html`<span>Drop files here from your file explorer</span>`}
         </div>
       </div>
     `;
@@ -273,18 +267,6 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
         this.droppedFiles = [...this.droppedFiles, file.name];
       }
     }
-  }
-
-  private handleBrowse(): void {
-    // In VS Code webview, file browsing requires posting a message to the extension host.
-    // For now, emit an event that the parent can handle.
-    this.dispatchEvent(
-      new CustomEvent('inquiry-browse-files', {
-        bubbles: true,
-        composed: true,
-        detail: { permission: this.permission },
-      }),
-    );
   }
 
   private removeFile(index: number): void {

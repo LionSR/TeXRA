@@ -41,19 +41,19 @@ const ExternalInquiryInputSchema = z.strictObject({
     ),
   context: z
     .string()
-    .optional()
+    .nullish()
     .describe(
       'Brief note shown to the user explaining why this question is being asked.',
     ),
   suggestSearch: z
     .boolean()
-    .optional()
+    .nullish()
     .describe(
       'Set to true to suggest the user enable web search mode in the external tool.',
     ),
   attachFiles: z
     .array(z.string())
-    .optional()
+    .nullish()
     .describe(
       'Workspace-relative file paths the user should upload to the external model.',
     ),
@@ -106,7 +106,7 @@ export function _rejectPendingInquiriesForStream(
   streamId: StreamTabId,
 ): void {
   for (const entry of pendingInquiries.values()) {
-    const matches = !entry.streamId || entry.streamId === streamId;
+    const matches = entry.streamId === streamId;
     if (matches && !entry.isSettled()) {
       entry.settle({ submitted: false });
     }
@@ -182,9 +182,9 @@ Use attachFiles to list workspace files the user should upload to the external m
           requestId,
           question: input.question,
           mode: input.mode,
-          context: input.context,
-          suggestSearch: input.suggestSearch,
-          attachFiles: input.attachFiles,
+          context: input.context ?? undefined,
+          suggestSearch: input.suggestSearch ?? undefined,
+          attachFiles: input.attachFiles ?? undefined,
           allowBypass: false,
           streamId: streamId ?? '',
         });
