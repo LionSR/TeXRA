@@ -36,6 +36,8 @@ interface InquiryDraft {
   droppedFiles: string[];
 }
 const draftCache = new Map<string, InquiryDraft>();
+/** Tracks resolved request IDs so disconnectedCallback doesn't re-save after clearDraft. */
+const resolvedIds = new Set<string>();
 
 function getRequestId(permission: { data: unknown }): string {
   return (permission.data as ExternalInquiryPermission).requestId;
@@ -75,6 +77,8 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
 
   private saveDraft(): void {
     const id = getRequestId(this.permission);
+    // Don't re-save after the inquiry was resolved (submit/skip already cleared).
+    if (resolvedIds.has(id)) return;
     if (this.answerText || this.droppedFiles.length > 0) {
       draftCache.set(id, {
         answerText: this.answerText,
@@ -88,6 +92,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   /** Clean up cache entry when this inquiry is resolved. */
   static clearDraft(requestId: string): void {
     draftCache.delete(requestId);
+    resolvedIds.add(requestId);
   }
 
   override handleKeyboardShortcut(_key: string): boolean {
