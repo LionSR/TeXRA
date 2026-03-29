@@ -417,7 +417,6 @@ function startFollowUpLoop(
         if (!messages || session.isInterrupted()) break;
 
         const userMessage = messages.join('\n\n');
-        logger.info(userMessage, { messageType: MESSAGE_TYPES.USER_MESSAGE });
 
         StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
         const startedAt = Date.now();
@@ -486,6 +485,7 @@ async function runStreamedTurn(
   childStreamId: StreamTabId,
   logger: AgentLogger,
 ): Promise<RunResult> {
+  logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
   const { events } = await thread.runStreamed(prompt);
   const responseParts: string[] = [];
   let usage: RunResult['usage'] = null;
