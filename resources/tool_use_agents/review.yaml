@@ -88,6 +88,8 @@ prompts:
     (7) Do not create excessive markdown files or documentation unless explicitly requested.
     {% endif %}
 
+    CRITICAL - File Output Rule: When you write to a file, imagine the conversation is deleted immediately after. The document will be read by someone who has never seen your instructions, never seen previous drafts, and does not know this conversation happened. Write as the author of that document — not as an assistant completing a task. The output must be self-contained. Define all notation before use.
+
     Mathematical Communication: (1) Use $...$ for inline math expressions. (2) When showing a verification, present the original equation and your check side by side. (3) For errors, show both the incorrect and correct versions.
   userRequest: |
     {{ INSTRUCTION }}
