@@ -116,7 +116,7 @@ interface ActiveThread {
   thread: Thread;
   childStreamId: StreamTabId;
   logger: AgentLogger;
-  executionId: string;
+  executionId: ExecutionId;
 }
 
 const threadRegistry = new Map<string, ActiveThread>();
@@ -124,21 +124,16 @@ const threadRegistry = new Map<string, ActiveThread>();
 /** Store a thread for multi-turn reuse and persist thread ID to disk. */
 function storeThread(threadId: string, entry: ActiveThread): void {
   threadRegistry.set(threadId, entry);
-  // Persist thread ID so the orchestrator can resume after extension reload.
-  // The SDK stores conversation history in ~/.codex/sessions — this ID is
-  // the key needed by codex.resumeThread() to reconstruct the thread.
-  void getExecutionStore(entry.executionId as ExecutionId)
+  // Extension reload clears memory but SDK stores sessions on disk —
+  // persist the ID so resumeThread() can reconstruct the conversation.
+  void getExecutionStore(entry.executionId)
     .write('codex_thread_id', threadId)
     .catch(() => {});
 }
 
-/**
- * Interrupt all active codex follow-up sessions.
- * Called during extension deactivation to clean up in-memory state
- * so streams don't remain in stale WAITING state.
- */
+/** Prevents codex streams from remaining in stale WAITING state during reload. */
 export function interruptAllCodexSessions(): void {
-  for (const { childStreamId } of threadRegistry.values()) {
+  for (const { childStreamId } of [...threadRegistry.values()]) {
     getInterruptible(childStreamId)?.interrupt();
   }
 }
