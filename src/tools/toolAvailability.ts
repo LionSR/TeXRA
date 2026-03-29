@@ -34,6 +34,9 @@ export interface ExternalToolCheckResult {
 /** Cached set of unavailable tool names. */
 let cached: ReadonlySet<string> | null = null;
 
+/** Last check results — kept for rebuilding the cache without re-probing. */
+let lastResults: ExternalToolCheckResult[] | null = null;
+
 /**
  * Run all external tool checks in parallel.
  * Always performs fresh checks and updates the availability cache.
@@ -67,20 +70,47 @@ export async function runExternalToolChecks(): Promise<
   // Update cache — exclude tools whose check failed AND user-disabled tools.
   const unavailable = new Set<string>();
   const disabledIds = getDisabledToolIds();
-  for (const r of results) {
-    if (r.status === 'not-found') {
-      for (const t of r.tools) unavailable.add(t);
-    }
-  }
-  // User-disabled tool groups: look up their tool names from definitions
-  for (const def of EXTERNAL_TOOL_DEFS) {
-    if (disabledIds.has(def.id)) {
-      for (const t of def.tools) unavailable.add(t);
+  for (let i = 0; i < results.length; i++) {
+    const { id, tools, status } = results[i];
+    if (status === 'not-found' || disabledIds.has(id)) {
+      for (const t of tools) unavailable.add(t);
     }
   }
   cached = unavailable;
+  lastResults = results;
 
   return results;
+}
+
+/**
+ * Rebuild the availability cache from the last check results without
+ * re-probing external tools. Used after toggling a tool on/off so the
+ * cache reflects the new disabled state immediately.
+ */
+/**
+ * Return the last check results without re-probing. Returns null if
+ * checks haven't been run yet. Used by the toggle handler to rebuild
+ * the dashboard without network I/O.
+ */
+export function getLastCheckResults(): ExternalToolCheckResult[] | null {
+  return lastResults;
+}
+
+/**
+ * Rebuild the availability cache from the last check results without
+ * re-probing external tools. Called after toggling a tool on/off.
+ */
+export function refreshDisabledToolCache(): void {
+  if (!lastResults) return;
+  const unavailable = new Set<string>();
+  const disabledIds = getDisabledToolIds();
+  for (let i = 0; i < lastResults.length; i++) {
+    const { id, tools, status } = lastResults[i];
+    if (status === 'not-found' || disabledIds.has(id)) {
+      for (const t of tools) unavailable.add(t);
+    }
+  }
+  cached = unavailable;
 }
 
 /**

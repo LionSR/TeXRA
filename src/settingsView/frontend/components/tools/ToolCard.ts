@@ -97,6 +97,11 @@ export class ToolCard extends LitElement {
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
       }
 
+      .tool-badge--disabled {
+        color: var(--color-text-secondary);
+        background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
+      }
+
       .tool-description {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
@@ -330,7 +335,7 @@ export class ToolCard extends LitElement {
   private renderBadge(): TemplateResult {
     if (this.item.toggleable && this.item.enabled === false) {
       return html`
-        <span class="tool-badge tool-badge--unknown">
+        <span class="tool-badge tool-badge--disabled">
           <span class="codicon codicon-circle-slash"></span>
           Disabled
         </span>
