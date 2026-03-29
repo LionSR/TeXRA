@@ -32,12 +32,12 @@ import {
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
+  getInterruptible,
   registerInterruptible,
   unregisterInterruptible,
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
@@ -130,39 +130,32 @@ function removeThread(threadId: string): void {
 }
 
 // ============================================================================
-// Codex follow-up session — duck-types as IInterruptible with a session
+// Codex follow-up session — IInterruptible only (no ToolUseFlowContext)
 // ============================================================================
 
 /**
- * Lightweight session that registers with the ToolUseAgentRegistry so
- * the follow-up input in the child stream tab can deliver messages.
- * Uses duck typing: `sendFollowUp()` checks for `session.appendFollowUp()`.
+ * Lightweight interruptible registered with the ToolUseAgentRegistry so the
+ * stop button works on codex child streams.
+ *
+ * Does NOT implement the session duck-type (no `session.appendFollowUp`),
+ * which prevents `getToolUseFlowContext()` from matching it — commands like
+ * `compactResponse` that access `flowContext.modelHandler` won't crash.
+ *
+ * Follow-ups route through the WAITING state queue path instead:
+ * `sendFollowUp()` → stream is WAITING → `ToolUseFollowUpQueue.enqueue()`.
  */
 class CodexFollowUpSession implements IInterruptible {
-  private readonly queue = new FollowUpQueue();
   private interrupted = false;
-
-  /** Duck-typed session interface expected by `isToolUseFlowContext()`. */
-  readonly session = {
-    appendFollowUp: (text: string): void => this.queue.enqueue(text),
-    hasQueuedFollowUp: (): boolean => !this.queue.isEmpty(),
-  };
 
   interrupt(): void {
     this.interrupted = true;
-    this.queue.cancelWait();
+    ToolUseFollowUpQueue.release(this.streamId);
   }
+
+  constructor(private readonly streamId: StreamTabId) {}
 
   isInterrupted(): boolean {
     return this.interrupted;
-  }
-
-  async waitForFollowUp(): Promise<string[] | null> {
-    return this.queue.waitAndDrainAll(() => this.interrupted);
-  }
-
-  dispose(): void {
-    this.queue.dispose();
   }
 }
 
@@ -407,16 +400,18 @@ function startFollowUpLoop(
   executionId: string,
   logger: AgentLogger,
 ): void {
-  const followUpSession = new CodexFollowUpSession();
-  registerInterruptible(childStreamId, followUpSession);
+  const session = new CodexFollowUpSession(childStreamId);
+  registerInterruptible(childStreamId, session);
 
+  // Acquire a queue so sendFollowUp() → WAITING path → enqueue works
+  const queue = ToolUseFollowUpQueue.acquire(childStreamId);
   StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
 
   void (async () => {
     try {
-      while (!followUpSession.isInterrupted()) {
-        const messages = await followUpSession.waitForFollowUp();
-        if (!messages || followUpSession.isInterrupted()) break;
+      while (!session.isInterrupted()) {
+        const messages = await queue.waitAndDrainAll(() => session.isInterrupted());
+        if (!messages || session.isInterrupted()) break;
 
         const userMessage = messages.join('\n\n');
         logger.info(userMessage, { messageType: MESSAGE_TYPES.USER_MESSAGE });
@@ -427,15 +422,15 @@ function startFollowUpLoop(
         try {
           const turn = await runStreamedTurn(thread, userMessage, childStreamId, logger);
           logTurnSummary(logger, Date.now() - startedAt, turn.usage);
-          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
         } catch (err) {
           logger.error(err instanceof Error ? err.message : String(err));
-          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
         }
+
+        StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
       }
     } finally {
-      followUpSession.dispose();
       unregisterInterruptible(childStreamId);
+      ToolUseFollowUpQueue.release(childStreamId);
       untrackExecution(executionId);
 
       const threadId = thread.id;
@@ -535,10 +530,14 @@ export class CodexTool extends defineTool({
 
   /** Resolve thread — resume existing or start new. */
   private async resolveThread(input: CodexInput): Promise<Thread> {
-    // If thread_id provided, try to reuse the in-memory thread first
     if (input.thread_id) {
       const stored = getStoredThread(input.thread_id);
-      if (stored) return stored.thread;
+      if (stored) {
+        // Interrupt the old follow-up loop so it doesn't compete or
+        // corrupt the registry when its finally block runs.
+        getInterruptible(stored.childStreamId)?.interrupt();
+        return stored.thread;
+      }
     }
 
     const CodexClass = await importCodexClass();
