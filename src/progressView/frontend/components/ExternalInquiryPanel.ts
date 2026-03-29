@@ -5,10 +5,17 @@
  * for the user to paste into an external AI model (ChatGPT, Gemini, Claude, etc.).
  * Provides a textarea for the user to paste the answer back, and an optional
  * file attachment drop zone for files downloaded from the external model.
+ *
+ * User input (answer text, dropped files) is persisted in a static cache keyed
+ * by requestId so it survives component recreation during webview hide/show
+ * cycles — the permission is replayed via ApprovalRequestHandler.replay() but
+ * the component is re-mounted with fresh @state. The cache restores prior input.
  */
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
+import { live } from 'lit/directives/live.js';
 
 import {
   codiconIconClasses,
@@ -20,6 +27,19 @@ import type { ExternalInquiryPermission } from '@shared/schemas';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 
 import { BaseRequestPanel } from './BaseRequestPanel';
+
+// ── Persistence across component recreation ──
+// Permissions are replayed on webview show, but local @state is lost.
+// Cache user input so a long pasted answer isn't destroyed by hide/show.
+interface InquiryDraft {
+  answerText: string;
+  droppedFiles: string[];
+}
+const draftCache = new Map<string, InquiryDraft>();
+
+function getRequestId(permission: { data: unknown }): string {
+  return (permission.data as ExternalInquiryPermission).requestId;
+}
 
 @customElement('external-inquiry-panel')
 export class ExternalInquiryPanel extends BaseRequestPanel {
@@ -36,9 +56,45 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
 
   private copyController = new CopyButtonController(this);
 
+  // ── Lifecycle ──
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    const id = getRequestId(this.permission);
+    const draft = draftCache.get(id);
+    if (draft) {
+      this.answerText = draft.answerText;
+      this.droppedFiles = draft.droppedFiles;
+    }
+  }
+
+  override disconnectedCallback(): void {
+    this.saveDraft();
+    super.disconnectedCallback();
+  }
+
+  private saveDraft(): void {
+    const id = getRequestId(this.permission);
+    if (this.answerText || this.droppedFiles.length > 0) {
+      draftCache.set(id, {
+        answerText: this.answerText,
+        droppedFiles: this.droppedFiles,
+      });
+    } else {
+      draftCache.delete(id);
+    }
+  }
+
+  /** Clean up cache entry when this inquiry is resolved. */
+  static clearDraft(requestId: string): void {
+    draftCache.delete(requestId);
+  }
+
   override handleKeyboardShortcut(_key: string): boolean {
     return false;
   }
+
+  // ── Render ──
 
   override render(): TemplateResult {
     const data = this.permission.data as ExternalInquiryPermission;
@@ -61,10 +117,8 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
 
   private renderHeader(data: ExternalInquiryPermission): TemplateResult {
     return html`
-      <div style="display: flex; align-items: center; gap: var(--spacing-small); flex-wrap: wrap;">
-        <span class="external-inquiry-request__mode-badge">
-          ${data.mode === 'followup' ? 'follow-up' : 'new question'}
-        </span>
+      <div class="external-inquiry-request__mode-badge">
+        ${data.mode === 'followup' ? 'follow-up' : 'new question'}
       </div>
     `;
   }
@@ -77,19 +131,17 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
 
   private renderQuestion(question: string): TemplateResult {
     const { copied } = this.copyController.state;
-    const copyIcon = copied ? 'check' : 'copy';
-    const copyLabel = copied ? 'Copied!' : 'Copy Question';
 
     return html`
       <div class="external-inquiry-request__question">
         <div class="external-inquiry-request__question-text">${question}</div>
         <div class="external-inquiry-request__question-actions">
           <vscode-toolbar-button
-            icon=${copyIcon}
-            label=${copyLabel}
+            icon=${copied ? 'check' : 'copy'}
+            label=${copied ? 'Copied!' : 'Copy Question'}
             title="Copy question to clipboard for pasting into an external AI model"
             @click=${() => this.copyController.copy(question)}
-          >${copyLabel}</vscode-toolbar-button>
+          >${copied ? 'Copied!' : 'Copy Question'}</vscode-toolbar-button>
         </div>
       </div>
     `;
@@ -134,7 +186,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
         <textarea
           class="external-inquiry-request__answer-input"
           placeholder="Paste the answer here..."
-          .value=${this.answerText}
+          .value=${live(this.answerText)}
           @input=${this.handleAnswerInput}
           @keydown=${this.handleKeyDown}
         ></textarea>
@@ -150,7 +202,10 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           Attach files from external model (optional):
         </div>
         <div
-          class="external-inquiry-request__drop-zone ${this.dropActive ? 'external-inquiry-request__drop-zone--active' : ''}"
+          class=${classMap({
+            'external-inquiry-request__drop-zone': true,
+            'external-inquiry-request__drop-zone--active': this.dropActive,
+          })}
           @dragover=${this.handleDragOver}
           @dragleave=${this.handleDragLeave}
           @drop=${this.handleDrop}
@@ -192,7 +247,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           title="Submit the answer from the external model"
           data-action="submit"
           ?disabled=${!this.answerText.trim()}
-          @click=${() => this.handleSubmit()}
+          @click=${this.handleSubmit}
         >Submit Answer</vscode-toolbar-button>
         <vscode-toolbar-button
           icon="close"
@@ -208,8 +263,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   // ── Event Handlers ──
 
   private handleAnswerInput(e: Event): void {
-    const target = e.target as HTMLTextAreaElement;
-    this.answerText = target.value;
+    this.answerText = (e.target as HTMLTextAreaElement).value;
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
@@ -220,9 +274,14 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   }
 
   private handleSubmit(): void {
-    if (!this.answerText.trim()) return;
-    // Custom event because submit carries answer data that doesn't fit
-    // the standard permissionAction shape (which only has action + feedback).
+    const answer = this.answerText.trim();
+    if (!answer) return;
+
+    // Clear cache — this inquiry is done.
+    ExternalInquiryPanel.clearDraft(getRequestId(this.permission));
+
+    // Custom event: submit carries answer + files, which doesn't fit
+    // the standard permissionAction shape (action + optional feedback).
     this.dispatchEvent(
       new CustomEvent('inquiry-submit', {
         bubbles: true,
@@ -230,7 +289,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
         detail: {
           permission: this.permission,
           action: 'submit',
-          answer: this.answerText,
+          answer,
           attachedFiles: this.droppedFiles,
         },
       }),

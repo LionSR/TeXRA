@@ -32,6 +32,7 @@ import type {
   ToolbarCommandDetail,
 } from './events';
 import type { MessageHandlerContext } from './messageDispatcher';
+import { ExternalInquiryPanel } from './components/ExternalInquiryPanel';
 
 /**
  * Context passed to frontend event handlers providing access to state and refs.
@@ -364,18 +365,22 @@ export function handlePermissionAction(
         permission.data.approvalId,
       );
       break;
-    case PERMISSION_KIND.EXTERNAL_INQUIRY:
+    case PERMISSION_KIND.EXTERNAL_INQUIRY: {
+      const { requestId } = permission.data;
       postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
-        requestId: permission.data.requestId,
+        requestId,
         action,
       });
       removePrompt(
         ctx,
         PERMISSION_KIND.EXTERNAL_INQUIRY,
         'requestId',
-        permission.data.requestId,
+        requestId,
       );
+      // Clear persisted draft on skip (submit path clears in the panel)
+      ExternalInquiryPanel.clearDraft(requestId);
       break;
+    }
   }
 }
 

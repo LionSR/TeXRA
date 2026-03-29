@@ -151,6 +151,9 @@ export const permissionHandlers: HandlerRegistry = {
       case PERMISSION_KIND.PLAN_APPROVAL:
         removePrompt(ctx, kind, 'approvalId', id);
         break;
+      case PERMISSION_KIND.EXTERNAL_INQUIRY:
+        removePrompt(ctx, kind, 'requestId', id);
+        break;
       default: {
         const removed = removePrompt(
           ctx,
