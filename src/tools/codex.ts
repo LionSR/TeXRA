@@ -430,6 +430,7 @@ function startFollowUpLoop(
       unregisterInterruptible(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       untrackExecution(executionId);
+      void writeTerminalStatus(executionId, 'completed').catch(() => {});
 
       const threadId = thread.id;
       if (threadId) threadRegistry.delete(threadId);
