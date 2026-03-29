@@ -31,13 +31,14 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
-import { STREAM_STATUS } from '@shared/schemas';
+import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { escapeAttr, escapeText } from '@tools/subagentResults';
 import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
+import { formatDuration } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -159,26 +160,17 @@ function createCodexStream(
 ): { childStreamId: StreamTabId; logger: AgentLogger } {
   const childStreamId = `codex@codex-sdk#${executionId}` as StreamTabId;
 
-  // Acquire stream lock and activate the tab
-  StreamStatusService.tryAcquire(childStreamId);
   StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
-
-  // Activate the stream tab with proper category so the UI creates execution state
   bus.emit('setActiveStream', {
     streamId: childStreamId,
     agentCategory: AgentCategory.ToolUse,
   });
-
-  // Set a human-readable description for the stream tab
   bus.emit('updateStreamDescription', {
     streamId: childStreamId,
     description: truncateWithEllipsis(prompt, 80),
   });
 
-  // Create agent logger for the child stream
   const logger = new AgentLogger(childStreamId, true);
-
-  // Register parent-child linkage via AgentExecutionHandle
   const handle = new AgentExecutionHandle(
     executionId,
     parentStreamId,
@@ -220,10 +212,10 @@ function logCodexItem(
       break;
     }
     case 'agent_message':
-      logger.info(item.text, { messageType: 'modelResponse' });
+      logger.info(item.text, { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
       break;
     case 'reasoning':
-      logger.info(item.text, { messageType: 'thinking' });
+      logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
     case 'error':
       logger.error(item.message);
@@ -236,14 +228,21 @@ function finalizeCodexStream(
   childStreamId: StreamTabId,
   executionId: string,
   logger: AgentLogger,
-  wallTimeMs: number,
-  usage: RunResult['usage'],
+  options?: { wallTimeMs?: number; usage?: RunResult['usage']; error?: unknown },
 ): void {
-  const durationSec = (wallTimeMs / 1000).toFixed(1);
-  logger.info(`Completed in ${durationSec}s`);
-  if (usage) {
+  if (options?.error) {
+    const msg =
+      options.error instanceof Error
+        ? options.error.message
+        : String(options.error);
+    logger.error(msg);
+  }
+  if (options?.wallTimeMs != null) {
+    logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
+  }
+  if (options?.usage) {
     logger.info(
-      `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`,
+      `Tokens: ${options.usage.input_tokens} in / ${options.usage.output_tokens} out`,
     );
   }
   StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
@@ -313,9 +312,7 @@ export class CodexTool extends defineTool({
     const preview = truncateWithEllipsis(input.prompt, 60);
     const startedAt = Date.now();
 
-    // Create a child stream tab for the codex execution
-    const hasParent = !!parentStreamId;
-    const stream = hasParent
+    const stream = parentStreamId
       ? createCodexStream(executionId, parentStreamId, input.prompt)
       : undefined;
 
@@ -327,13 +324,10 @@ export class CodexTool extends defineTool({
       );
 
       if (stream) {
-        finalizeCodexStream(
-          stream.childStreamId,
-          executionId,
-          stream.logger,
-          Date.now() - startedAt,
-          turn.usage,
-        );
+        finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
+          wallTimeMs: Date.now() - startedAt,
+          usage: turn.usage,
+        });
       }
 
       return {
@@ -342,14 +336,9 @@ export class CodexTool extends defineTool({
       };
     } catch (err) {
       if (stream) {
-        stream.logger.error(
-          err instanceof Error ? err.message : String(err),
-        );
-        StreamStatusService.set(
-          stream.childStreamId,
-          STREAM_STATUS.READY,
-        );
-        untrackExecution(executionId);
+        finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
+          error: err,
+        });
       }
       throw err;
     }
@@ -362,7 +351,6 @@ export class CodexTool extends defineTool({
     logger?: AgentLogger,
   ): Promise<RunResult> {
     const { events } = await thread.runStreamed(input.prompt);
-    const items: ThreadItem[] = [];
     const responseParts: string[] = [];
     let usage: RunResult['usage'] = null;
 
@@ -370,7 +358,6 @@ export class CodexTool extends defineTool({
       switch (event.type) {
         case 'item.completed': {
           const { item } = event;
-          items.push(item);
           if (logger) {
             logCodexItem(item, logger);
           }
@@ -390,7 +377,7 @@ export class CodexTool extends defineTool({
     }
 
     return {
-      items,
+      items: [],
       finalResponse: responseParts.join('\n\n'),
       usage,
     };
@@ -429,7 +416,6 @@ export class CodexTool extends defineTool({
       throw new ToolError('Failed to register background Codex execution.');
     }
 
-    // Create a child stream tab — codex events stream here in real time
     const { childStreamId, logger } = createCodexStream(
       executionId,
       parentStreamId,
@@ -483,13 +469,10 @@ export class CodexTool extends defineTool({
 
         await writeTerminalStatus(executionId, 'completed').catch(() => {});
 
-        finalizeCodexStream(
-          childStreamId,
-          executionId,
-          logger,
+        finalizeCodexStream(childStreamId, executionId, logger, {
           wallTimeMs,
-          turn.usage,
-        );
+          usage: turn.usage,
+        });
 
         const msg = formatCodexDelivery(
           executionId,
@@ -503,9 +486,7 @@ export class CodexTool extends defineTool({
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
 
-        logger.error(err instanceof Error ? err.message : String(err));
-        StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
-        untrackExecution(executionId);
+        finalizeCodexStream(childStreamId, executionId, logger, { error: err });
 
         const msg = formatCodexError(executionId, input.prompt, err);
         await getExecutionStore(executionId).writeReport(msg);
