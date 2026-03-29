@@ -38,6 +38,7 @@ import {
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { toErrorMessage } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
@@ -59,10 +60,13 @@ import { importCodexClass, findCodexBinaryPath } from './codexImport';
 
 // Type-only imports (kept separate for bundler efficiency)
 import type {
+  McpToolCallItem,
   RunResult,
   SandboxMode,
   Thread,
   ThreadItem,
+  TodoListItem,
+  WebSearchItem,
 } from '@openai/codex-sdk';
 
 // ============================================================================
@@ -117,16 +121,9 @@ interface ActiveThread {
 
 const threadRegistry = new Map<string, ActiveThread>();
 
+/** Store a thread for multi-turn reuse. Called from both execution paths. */
 function storeThread(threadId: string, entry: ActiveThread): void {
   threadRegistry.set(threadId, entry);
-}
-
-function getStoredThread(threadId: string): ActiveThread | undefined {
-  return threadRegistry.get(threadId);
-}
-
-function removeThread(threadId: string): void {
-  threadRegistry.delete(threadId);
 }
 
 // ============================================================================
@@ -218,10 +215,9 @@ function formatCodexError(
   prompt: string,
   err: unknown,
 ): string {
-  const message = err instanceof Error ? err.message : String(err);
   return [
     `<codex-error id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
-    `<message>${escapeText(message)}</message>`,
+    `<message>${escapeText(toErrorMessage(err))}</message>`,
     '</codex-error>',
   ].join('\n');
 }
@@ -297,36 +293,25 @@ function logCodexItem(
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
     case 'mcp_tool_call': {
-      const mcpItem = item as {
-        server: string;
-        tool: string;
-        arguments: unknown;
-        result?: { content: unknown[]; structured_content: unknown };
-        error?: { message: string };
-        status: string;
-      };
-      const output = mcpItem.error
-        ? `Error: ${mcpItem.error.message}`
-        : mcpItem.result?.structured_content
-          ? JSON.stringify(mcpItem.result.structured_content, null, 2)
-          : `(${mcpItem.status})`;
+      const mcp = item as McpToolCallItem;
+      const output = mcp.error
+        ? `Error: ${mcp.error.message}`
+        : mcp.result?.structured_content
+          ? JSON.stringify(mcp.result.structured_content)
+          : `(${mcp.status})`;
       logger.logToolUse({
-        toolName: `mcp:${mcpItem.server}/${mcpItem.tool}`,
-        input: mcpItem.arguments,
+        toolName: `mcp:${mcp.server}/${mcp.tool}`,
+        input: mcp.arguments,
         output,
         status: 'completed',
       });
       break;
     }
-    case 'web_search': {
-      const searchItem = item as { query: string };
-      logger.logWebSearch({ query: searchItem.query });
+    case 'web_search':
+      logger.logWebSearch({ query: (item as WebSearchItem).query });
       break;
-    }
     case 'todo_list': {
-      const todoItem = item as { items: { text: string; completed: boolean }[] };
-      // Map SDK todo items to TeXRA's native todo format and emit to the UI
-      const todos = todoItem.items.map((t) => ({
+      const todos = (item as TodoListItem).items.map((t) => ({
         content: t.text,
         status: t.completed
           ? ('completed' as const)
@@ -364,11 +349,7 @@ function finalizeCodexStream(
   options?: { wallTimeMs?: number; usage?: RunResult['usage']; error?: unknown },
 ): void {
   if (options?.error) {
-    const msg =
-      options.error instanceof Error
-        ? options.error.message
-        : String(options.error);
-    logger.error(msg);
+    logger.error(toErrorMessage(options.error));
   }
   if (options?.wallTimeMs != null) {
     logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
@@ -403,7 +384,6 @@ function startFollowUpLoop(
   const session = new CodexFollowUpSession(childStreamId);
   registerInterruptible(childStreamId, session);
 
-  // Acquire a queue so sendFollowUp() → WAITING path → enqueue works
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
   StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
 
@@ -423,7 +403,7 @@ function startFollowUpLoop(
           const turn = await runStreamedTurn(thread, userMessage, childStreamId, logger);
           logTurnSummary(logger, Date.now() - startedAt, turn.usage);
         } catch (err) {
-          logger.error(err instanceof Error ? err.message : String(err));
+          logger.error(toErrorMessage(err));
         }
 
         StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
@@ -434,7 +414,7 @@ function startFollowUpLoop(
       untrackExecution(executionId);
 
       const threadId = thread.id;
-      if (threadId) removeThread(threadId);
+      if (threadId) threadRegistry.delete(threadId);
 
       if (StreamStatusService.get(childStreamId) === STREAM_STATUS.WAITING) {
         StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
@@ -531,7 +511,7 @@ export class CodexTool extends defineTool({
   /** Resolve thread — resume existing or start new. */
   private async resolveThread(input: CodexInput): Promise<Thread> {
     if (input.thread_id) {
-      const stored = getStoredThread(input.thread_id);
+      const stored = threadRegistry.get(input.thread_id);
       if (stored) {
         // Interrupt the old follow-up loop so it doesn't compete or
         // corrupt the registry when its finally block runs.
@@ -541,23 +521,16 @@ export class CodexTool extends defineTool({
     }
 
     const CodexClass = await importCodexClass();
-    const codexPathOverride = findCodexBinaryPath();
-    const codex = new CodexClass({ codexPathOverride });
-
-    if (input.thread_id) {
-      // Resume from disk (~/.codex/sessions)
-      return codex.resumeThread(input.thread_id, {
-        workingDirectory: input.working_directory,
-        sandboxMode: input.sandbox_mode,
-        skipGitRepoCheck: true,
-      });
-    }
-
-    return codex.startThread({
+    const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
+    const threadOptions = {
       workingDirectory: input.working_directory,
       sandboxMode: input.sandbox_mode,
-      skipGitRepoCheck: true,
-    });
+      skipGitRepoCheck: true as const,
+    };
+
+    return input.thread_id
+      ? codex.resumeThread(input.thread_id, threadOptions)
+      : codex.startThread(threadOptions);
   }
 
   private async executeForeground(
@@ -574,12 +547,9 @@ export class CodexTool extends defineTool({
       : undefined;
 
     try {
-      const turn = await runStreamedTurn(
-        thread,
-        input.prompt,
-        stream?.childStreamId ?? ('' as StreamTabId),
-        stream?.logger ?? new AgentLogger('codex-fg'),
-      );
+      const turn = stream
+        ? await runStreamedTurn(thread, input.prompt, stream.childStreamId, stream.logger)
+        : await thread.run(input.prompt);
 
       const threadId = thread.id;
       const wallTimeMs = Date.now() - startedAt;
