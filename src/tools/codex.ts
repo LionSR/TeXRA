@@ -594,6 +594,7 @@ export class CodexTool extends defineTool({
     parentStreamId?: StreamTabId,
   ): Promise<ToolResult> {
     const executionId = generateExecutionId();
+    await ensureRunDir(executionId);
     const preview = truncateWithEllipsis(input.prompt, 60);
     const startedAt = Date.now();
 
