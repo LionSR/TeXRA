@@ -12,6 +12,7 @@ export const PERMISSION_KIND = {
   RETRY: 'retry',
   PROPOSAL: 'proposal',
   PLAN_APPROVAL: 'planApproval',
+  EXTERNAL_INQUIRY: 'externalInquiry',
 } as const;
 
 export type PermissionKind =

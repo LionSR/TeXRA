@@ -44,6 +44,10 @@ export interface UICallbacks {
     payload: ProgressEventPayloads['showPlanApproval'],
   ) => void;
   resolvePlanApproval: (approvalId: string) => void;
+  showExternalInquiry: (
+    payload: ProgressEventPayloads['showExternalInquiry'],
+  ) => void;
+  resolveExternalInquiry: (requestId: string) => void;
 }
 
 /** Helper to register an event with error handling wrapper. */
@@ -165,6 +169,22 @@ export function registerUIEvents(
     'resolvePlanApproval',
     (p) => callbacks.resolvePlanApproval(p.approvalId),
     'failed to resolve plan approval',
+    signal,
+  );
+
+  // External inquiry events
+  registerEvent(
+    bus,
+    'showExternalInquiry',
+    callbacks.showExternalInquiry,
+    'failed to show external inquiry',
+    signal,
+  );
+  registerEvent(
+    bus,
+    'resolveExternalInquiry',
+    (p) => callbacks.resolveExternalInquiry(p.requestId),
+    'failed to resolve external inquiry',
     signal,
   );
 }

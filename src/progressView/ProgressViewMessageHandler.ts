@@ -40,6 +40,7 @@ import {
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
+import { handleExternalInquiryAction } from '@tools/inquiry';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
@@ -257,6 +258,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         handleProgressViewBashApprovalAction(data),
       [PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION]: (data) =>
         this.handlePlanApprovalAction(data),
+      [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: (data) =>
+        handleExternalInquiryAction(data),
 
       // Profile & Memory - direct command execution
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: async () => {

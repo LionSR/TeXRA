@@ -364,5 +364,40 @@ export function handlePermissionAction(
         permission.data.approvalId,
       );
       break;
+    case PERMISSION_KIND.EXTERNAL_INQUIRY:
+      postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
+        requestId: permission.data.requestId,
+        action,
+      });
+      removePrompt(
+        ctx,
+        PERMISSION_KIND.EXTERNAL_INQUIRY,
+        'requestId',
+        permission.data.requestId,
+      );
+      break;
   }
+}
+
+/**
+ * Handle external inquiry submit with answer text and attached files.
+ * This is emitted by the ExternalInquiryPanel's custom 'inquiry-submit' event.
+ */
+export function handleExternalInquirySubmit(
+  event: CustomEvent,
+  ctx: MessageHandlerContext,
+): void {
+  const { permission, answer, attachedFiles } = event.detail;
+  postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
+    requestId: permission.data.requestId,
+    action: 'submit',
+    answer,
+    attachedFiles,
+  });
+  removePrompt(
+    ctx,
+    PERMISSION_KIND.EXTERNAL_INQUIRY,
+    'requestId',
+    permission.data.requestId,
+  );
 }

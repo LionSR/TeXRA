@@ -21,6 +21,7 @@ import {
   AgentProposalSchema,
   AgentProposalPermissionSchema,
   BashPermissionSchema,
+  ExternalInquiryPermissionSchema,
   PLAN_APPROVAL_ACTIONS,
   PlanApprovalPermissionSchema,
   RetryPermissionSchema,
@@ -237,6 +238,7 @@ const PermissionKindSchema = z.enum([
   'retry',
   'proposal',
   'planApproval',
+  'externalInquiry',
 ]);
 export type ProgressPermissionKind = z.infer<typeof PermissionKindSchema>;
 
@@ -261,6 +263,10 @@ const PermissionPayloadSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('planApproval'),
     data: PlanApprovalPermissionSchema,
+  }),
+  z.object({
+    kind: z.literal('externalInquiry'),
+    data: ExternalInquiryPermissionSchema,
   }),
 ]);
 export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
@@ -621,6 +627,14 @@ const PlanApprovalActionMessageSchema = z.object({
   feedback: z.string().optional(),
 });
 
+const ExternalInquiryActionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
+  requestId: z.string().min(1),
+  action: z.enum(['submit', 'skip']),
+  answer: z.string().optional(),
+  attachedFiles: z.array(z.string()).optional(),
+});
+
 const RestoreProposalConfigMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG),
   proposal: AgentProposalSchema,
@@ -726,6 +740,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     PlanApprovalActionMessageSchema,
+    ExternalInquiryActionMessageSchema,
     RestoreProposalConfigMessageSchema,
     ShowInformationMessageSchema,
     OpenProfileMessageSchema,

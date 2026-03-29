@@ -70,6 +70,7 @@ import {
   handleFollowupModeChange,
   handleFollowupRequestOptions,
   handlePermissionAction,
+  handleExternalInquirySubmit,
   handleRunSelected,
   handleSortChange,
   handleStreamDelete,
@@ -574,6 +575,7 @@ export class ProgressApp extends ProgressAppBase {
         <tool-use-stream-content
           @toolbar-command=${this.onToolbarCommand}
           @permission-action=${this.onPermissionAction}
+          @inquiry-submit=${this.onInquirySubmit}
           @followup-change=${this.onFollowUpChange}
           @followup-send=${this.onFollowUpSend}
           @followup-polish=${this.onFollowUpPolish}
@@ -588,6 +590,7 @@ export class ProgressApp extends ProgressAppBase {
       <workflow-stream-content
         @toolbar-command=${this.onToolbarCommand}
         @permission-action=${this.onPermissionAction}
+        @inquiry-submit=${this.onInquirySubmit}
         @run-selected=${this.onRunSelected}
         @file-action=${this.onFileAction}
         @followup-request-options=${this.onFollowupRequestOptions}
@@ -725,6 +728,8 @@ export class ProgressApp extends ProgressAppBase {
   private onFileAction = (e: CustomEvent): void => handleFileAction(e);
   private onPermissionAction = (e: CustomEvent): void =>
     handlePermissionAction(e, this.createMessageHandlerContext());
+  private onInquirySubmit = (e: CustomEvent): void =>
+    handleExternalInquirySubmit(e, this.createMessageHandlerContext());
 
   // Event handlers requiring context
   private onFilterChange = (e: CustomEvent): void =>
