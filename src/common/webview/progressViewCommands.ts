@@ -55,6 +55,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   AGENT_PROPOSAL_ACTION: 'agentProposalAction',
   BASH_APPROVAL_ACTION: 'bashApprovalAction',
   PLAN_APPROVAL_ACTION: 'planApprovalAction',
+  EXTERNAL_INQUIRY_ACTION: 'externalInquiryAction',
   RESTORE_PROPOSAL_CONFIG: 'restoreProposalConfig',
   TOGGLE_SUPER_YOLO_BYPASS: 'toggleSuperYoloBypass',
 
