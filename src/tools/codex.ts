@@ -441,6 +441,31 @@ function startFollowUpLoop(
   })();
 }
 
+/**
+ * After a successful turn, either start a follow-up loop (if the SDK
+ * assigned a thread ID) or finalize the stream.
+ */
+function handleTurnSuccess(
+  thread: Thread,
+  turn: RunResult,
+  childStreamId: StreamTabId,
+  executionId: ExecutionId,
+  logger: AgentLogger,
+  wallTimeMs: number,
+): void {
+  const threadId = thread.id;
+  if (threadId) {
+    logTurnSummary(logger, wallTimeMs, turn.usage);
+    storeThread(threadId, { thread, childStreamId, logger, executionId });
+    startFollowUpLoop(thread, childStreamId, executionId, logger);
+  } else {
+    finalizeCodexStream(childStreamId, executionId, logger, {
+      wallTimeMs,
+      usage: turn.usage,
+    });
+  }
+}
+
 // ============================================================================
 // Streaming helpers
 // ============================================================================
@@ -530,9 +555,13 @@ export class CodexTool extends defineTool({
   private async resolveThread(input: CodexInput): Promise<Thread> {
     if (input.thread_id) {
       const stored = threadRegistry.get(input.thread_id);
-      if (stored) {
-        // Interrupt the old follow-up loop so it doesn't compete or
-        // corrupt the registry when its finally block runs.
+      // Only reuse the in-memory thread if the follow-up loop is idle (WAITING).
+      // If RUNNING, a turn is in progress — fall through to disk resume to
+      // avoid concurrent streaming turns on the same Thread object.
+      if (
+        stored &&
+        StreamStatusService.get(stored.childStreamId) === STREAM_STATUS.WAITING
+      ) {
         getInterruptible(stored.childStreamId)?.interrupt();
         return stored.thread;
       }
@@ -573,21 +602,7 @@ export class CodexTool extends defineTool({
       const wallTimeMs = Date.now() - startedAt;
 
       if (stream) {
-        if (threadId) {
-          logTurnSummary(stream.logger, wallTimeMs, turn.usage);
-          storeThread(threadId, {
-            thread,
-            childStreamId: stream.childStreamId,
-            logger: stream.logger,
-            executionId,
-          });
-          startFollowUpLoop(thread, stream.childStreamId, executionId, stream.logger);
-        } else {
-          finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
-            wallTimeMs,
-            usage: turn.usage,
-          });
-        }
+        handleTurnSuccess(thread, turn, stream.childStreamId, executionId, stream.logger, wallTimeMs);
       }
 
       return {
@@ -664,16 +679,7 @@ export class CodexTool extends defineTool({
         await store.writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
 
-        if (threadId) {
-          logTurnSummary(logger, wallTimeMs, turn.usage);
-          storeThread(threadId, { thread, childStreamId, logger, executionId });
-          startFollowUpLoop(thread, childStreamId, executionId, logger);
-        } else {
-          finalizeCodexStream(childStreamId, executionId, logger, {
-            wallTimeMs,
-            usage: turn.usage,
-          });
-        }
+        handleTurnSuccess(thread, turn, childStreamId, executionId, logger, wallTimeMs);
       } catch (err: unknown) {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         finalizeCodexStream(childStreamId, executionId, logger, { error: err });
