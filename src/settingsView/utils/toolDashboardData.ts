@@ -181,7 +181,7 @@ export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
       category: def.category,
       description: def.description,
       tools: enrichTools(tools),
-      status: disabledIds.has(def.id) ? 'not-found' : status,
+      status,
       requiresSetup: true,
       installGuide: def.installGuide,
       installUrl: def.installUrl,

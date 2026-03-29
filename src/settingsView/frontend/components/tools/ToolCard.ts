@@ -328,6 +328,14 @@ export class ToolCard extends LitElement {
   };
 
   private renderBadge(): TemplateResult {
+    if (this.item.toggleable && this.item.enabled === false) {
+      return html`
+        <span class="tool-badge tool-badge--unknown">
+          <span class="codicon codicon-circle-slash"></span>
+          Disabled
+        </span>
+      `;
+    }
     const { status } = this.item;
     const config =
       ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
