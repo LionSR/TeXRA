@@ -105,6 +105,24 @@ export type AgentProposalPermission = z.infer<
 >;
 
 // ============================================================================
+// External Inquiry
+// ============================================================================
+
+export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'skip'] as const;
+export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
+
+export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({
+  question: z.string(),
+  mode: z.enum(['new', 'followup']),
+  context: z.string().optional(),
+  suggestSearch: z.boolean().optional(),
+  attachFiles: z.array(z.string()).optional(),
+});
+export type ExternalInquiryPermission = z.infer<
+  typeof ExternalInquiryPermissionSchema
+>;
+
+// ============================================================================
 // Plan Approval
 // ============================================================================
 

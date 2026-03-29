@@ -13,6 +13,7 @@ const CONTAINER_NAMES = [
   'retry-requests',
   'workflow-proposals',
   'plan-approval-requests',
+  'external-inquiry-requests',
 ] as const;
 
 /** Item class names (singular, used for individual cards and BEM children). */
@@ -22,6 +23,7 @@ const ITEM_NAMES = [
   'retry-request',
   'workflow-proposal',
   'plan-approval-request',
+  'external-inquiry-request',
 ] as const;
 
 /** Build a :is()-ready selector group from class names with an optional BEM suffix. */
@@ -93,7 +95,8 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request__details,
   .bash-approval-request__details,
   .retry-request__details,
-  .plan-approval-request__details {
+  .plan-approval-request__details,
+  .external-inquiry-request__details {
     max-height: 50vh;
     overflow-y: auto;
   }
@@ -565,5 +568,200 @@ export const requestPanelStyles: CSSResult = css`
     .plan-approval-request__actions
     vscode-toolbar-button[data-action='reject']::part(control) {
     color: var(--vscode-inputValidation-warningBorder);
+  }
+
+  /* ================================================================
+   * External inquiry requests
+   * ================================================================ */
+
+  .external-inquiry-requests {
+    border: var(--border-thin) solid var(--vscode-focusBorder);
+    background: var(--vscode-editor-background);
+  }
+
+  .external-inquiry-requests__header .codicon {
+    color: var(--vscode-focusBorder);
+  }
+
+  .external-inquiry-request {
+    border-left: var(--border-thick) solid var(--vscode-focusBorder);
+  }
+
+  .external-inquiry-request__mode-badge {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: var(--spacing-tiny) var(--border-radius-large);
+    border-radius: var(--border-radius);
+    white-space: nowrap;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+  }
+
+  .external-inquiry-request__context {
+    font-size: var(--font-size-sm);
+    color: var(--vscode-descriptionForeground);
+    padding: var(--spacing-small) var(--spacing-medium);
+    background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    border-radius: var(--border-radius-small);
+    border-left: var(--border-thick) solid var(--vscode-textBlockQuote-border, var(--vscode-focusBorder));
+    line-height: var(--line-height-normal);
+  }
+
+  .external-inquiry-request__question {
+    background: var(--vscode-textCodeBlock-background, rgba(0, 0, 0, 0.05));
+    border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-medium);
+    position: relative;
+  }
+
+  .external-inquiry-request__question-text {
+    font-size: var(--font-size);
+    line-height: var(--line-height-relaxed, 1.6);
+    color: var(--vscode-editor-foreground);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+
+  .external-inquiry-request__question-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--spacing-small);
+    padding-top: var(--spacing-small);
+    border-top: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
+  }
+
+  .external-inquiry-request__search-hint {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    font-size: var(--font-size-sm);
+    color: var(--vscode-editorInfo-foreground, var(--vscode-focusBorder));
+    padding: var(--spacing-small) 0;
+  }
+
+  .external-inquiry-request__attach-files {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-small);
+  }
+
+  .external-inquiry-request__attach-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--vscode-descriptionForeground);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+  }
+
+  .external-inquiry-request__file-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-tiny);
+    padding: var(--spacing-small);
+    background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    border-radius: var(--border-radius-small);
+  }
+
+  .external-inquiry-request__file-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    font-size: var(--font-size-sm);
+    font-family: var(--vscode-editor-font-family);
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .external-inquiry-request__answer-area {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-small);
+  }
+
+  .external-inquiry-request__answer-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--vscode-editor-foreground);
+  }
+
+  .external-inquiry-request__answer-input {
+    width: 100%;
+    min-height: 150px;
+    resize: vertical;
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--font-size);
+    line-height: var(--line-height-normal);
+    padding: var(--spacing-medium);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: var(--border-thin) solid var(--vscode-input-border);
+    border-radius: var(--border-radius);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .external-inquiry-request__answer-input:focus {
+    border-color: var(--vscode-focusBorder);
+  }
+
+  .external-inquiry-request__answer-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+  }
+
+  .external-inquiry-request__drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-small);
+    padding: var(--spacing-medium);
+    border: 2px dashed var(--vscode-input-border);
+    border-radius: var(--border-radius);
+    color: var(--vscode-descriptionForeground);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .external-inquiry-request__drop-zone--active {
+    border-color: var(--vscode-focusBorder);
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .external-inquiry-request__dropped-files {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-tiny);
+  }
+
+  .external-inquiry-request__dropped-file {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    font-size: var(--font-size-sm);
+    font-family: var(--vscode-editor-font-family);
+    color: var(--vscode-editor-foreground);
+  }
+
+  .external-inquiry-request__dropped-file .codicon-check {
+    color: var(--color-added);
+  }
+
+  .external-inquiry-request__actions vscode-toolbar-button {
+    flex: 1 1 8rem;
+  }
+
+  .external-inquiry-request__actions
+    vscode-toolbar-button[data-action='submit']::part(control) {
+    color: var(--vscode-testing-iconPassed);
+  }
+
+  .external-inquiry-request__actions
+    vscode-toolbar-button[data-action='skip']::part(control) {
+    color: var(--vscode-descriptionForeground);
   }
 `;
