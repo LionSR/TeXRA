@@ -271,6 +271,7 @@ function createCodexStream(
 /** Log a completed codex thread item to the child stream's logger. */
 function logCodexItem(
   item: ThreadItem,
+  childStreamId: StreamTabId,
   logger: AgentLogger,
 ): void {
   switch (item.type) {
@@ -307,13 +308,15 @@ function logCodexItem(
         server: string;
         tool: string;
         arguments: unknown;
-        result?: { content: unknown[] };
+        result?: { content: unknown[]; structured_content: unknown };
         error?: { message: string };
         status: string;
       };
       const output = mcpItem.error
         ? `Error: ${mcpItem.error.message}`
-        : `(${mcpItem.status})`;
+        : mcpItem.result?.structured_content
+          ? JSON.stringify(mcpItem.result.structured_content, null, 2)
+          : `(${mcpItem.status})`;
       logger.logToolUse({
         toolName: `mcp:${mcpItem.server}/${mcpItem.tool}`,
         input: mcpItem.arguments,
@@ -329,10 +332,15 @@ function logCodexItem(
     }
     case 'todo_list': {
       const todoItem = item as { items: { text: string; completed: boolean }[] };
-      const lines = todoItem.items.map(
-        (t) => `${t.completed ? '✓' : '○'} ${t.text}`,
-      );
-      logger.info(lines.join('\n'), { messageType: MESSAGE_TYPES.DEFAULT });
+      // Map SDK todo items to TeXRA's native todo format and emit to the UI
+      const todos = todoItem.items.map((t) => ({
+        content: t.text,
+        status: t.completed
+          ? ('completed' as const)
+          : ('pending' as const),
+        activeForm: t.text,
+      }));
+      bus.emit('updateTodos', { streamId: childStreamId, todos });
       break;
     }
     case 'error':
@@ -416,7 +424,7 @@ function startFollowUpLoop(
         const startedAt = Date.now();
 
         try {
-          const turn = await runStreamedTurn(thread, userMessage, logger);
+          const turn = await runStreamedTurn(thread, userMessage, childStreamId, logger);
           logTurnSummary(logger, Date.now() - startedAt, turn.usage);
           StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
         } catch (err) {
@@ -448,6 +456,7 @@ function startFollowUpLoop(
 async function runStreamedTurn(
   thread: Thread,
   prompt: string,
+  childStreamId: StreamTabId,
   logger: AgentLogger,
 ): Promise<RunResult> {
   const { events } = await thread.runStreamed(prompt);
@@ -458,7 +467,7 @@ async function runStreamedTurn(
     switch (event.type) {
       case 'item.completed': {
         const { item } = event;
-        logCodexItem(item, logger);
+        logCodexItem(item, childStreamId, logger);
         if (item.type === 'agent_message') {
           responseParts.push(item.text);
         }
@@ -569,6 +578,7 @@ export class CodexTool extends defineTool({
       const turn = await runStreamedTurn(
         thread,
         input.prompt,
+        stream?.childStreamId ?? ('' as StreamTabId),
         stream?.logger ?? new AgentLogger('codex-fg'),
       );
 
@@ -652,7 +662,7 @@ export class CodexTool extends defineTool({
 
     void (async () => {
       try {
-        const turn = await runStreamedTurn(thread, input.prompt, logger);
+        const turn = await runStreamedTurn(thread, input.prompt, childStreamId, logger);
         const wallTimeMs = Date.now() - startedAt;
         const threadId = thread.id;
         const store = getExecutionStore(executionId);
