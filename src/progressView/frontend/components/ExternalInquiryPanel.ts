@@ -28,6 +28,7 @@ import { EXTERNAL_INQUIRY_ACTIONS } from '@shared/schemas';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 
 import { BaseRequestPanel } from './BaseRequestPanel';
+import { ProgressEvents } from '../events';
 
 // ── Draft persistence ──
 
@@ -306,18 +307,12 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
 
     clearInquiryDraft(getRequestId(this.permission));
 
-    // Custom event: submit carries answer + files, which doesn't fit
-    // the standard permissionAction shape (action + optional feedback).
     this.dispatchEvent(
-      new CustomEvent('inquiry-submit', {
-        bubbles: true,
-        composed: true,
-        detail: {
-          permission: this.permission,
-          action: EXTERNAL_INQUIRY_ACTIONS[0],
-          answer,
-          attachedFiles: this.droppedFiles,
-        },
+      ProgressEvents.permissionAction({
+        permission: this.permission,
+        action: EXTERNAL_INQUIRY_ACTIONS[0],
+        answer,
+        attachedFiles: this.droppedFiles,
       }),
     );
   }

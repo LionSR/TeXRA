@@ -3,7 +3,6 @@ import { create } from 'mutative';
 // Local imports - shared webview
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { postMessage } from '@shared/vscode';
-import { EXTERNAL_INQUIRY_ACTIONS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
@@ -289,7 +288,8 @@ export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
   ctx: MessageHandlerContext,
 ): void {
-  const { permission, action, feedback, modelOverride } = event.detail;
+  const { permission, action, feedback, modelOverride, answer, attachedFiles } =
+    event.detail;
 
   switch (permission.kind) {
     case PERMISSION_KIND.TOOL_EDIT:
@@ -371,6 +371,8 @@ export function handlePermissionAction(
       postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
         requestId,
         action,
+        answer,
+        attachedFiles,
       });
       removePrompt(
         ctx,
@@ -382,28 +384,4 @@ export function handlePermissionAction(
       break;
     }
   }
-}
-
-/**
- * Handle external inquiry submit with answer text and attached files.
- * This is emitted by the ExternalInquiryPanel's custom 'inquiry-submit' event.
- */
-export function handleExternalInquirySubmit(
-  event: CustomEvent,
-  ctx: MessageHandlerContext,
-): void {
-  const { permission, answer, attachedFiles } = event.detail;
-  postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
-    requestId: permission.data.requestId,
-    action: EXTERNAL_INQUIRY_ACTIONS[0],
-    answer,
-    attachedFiles,
-  });
-  removePrompt(
-    ctx,
-    PERMISSION_KIND.EXTERNAL_INQUIRY,
-    'requestId',
-    permission.data.requestId,
-  );
-  clearInquiryDraft(permission.data.requestId);
 }

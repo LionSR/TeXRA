@@ -10,6 +10,7 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
+import { clearInquiryDraft } from '../components/ExternalInquiryPanel';
 import { updateToolUseState } from '../stateUtils';
 import type { PermissionState } from '../components/PermissionCard';
 import type {
@@ -153,6 +154,7 @@ export const permissionHandlers: HandlerRegistry = {
         break;
       case PERMISSION_KIND.EXTERNAL_INQUIRY:
         removePrompt(ctx, kind, 'requestId', id);
+        clearInquiryDraft(id);
         break;
       default: {
         const removed = removePrompt(
