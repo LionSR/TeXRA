@@ -140,6 +140,9 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
 // Public API
 // ============================================================
 
+/** Cached detail check results from the last full probe. */
+let lastDetailResults: (string | undefined)[] | null = null;
+
 /**
  * Build the complete tool dashboard items list.
  *
@@ -159,18 +162,21 @@ export async function buildToolDashboardItems(
 
   const results = cachedResults ?? (await runExternalToolChecks());
 
-  // Resolve optional detail checks in parallel
-  const detailResults = await Promise.all(
-    results.map(async ({ id }) => {
-      const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);
-      if (!def?.detailCheck) return undefined;
-      try {
-        return await def.detailCheck();
-      } catch {
-        return undefined;
-      }
-    }),
-  );
+  // Skip detail checks when using cached results (toggle path)
+  const detailResults = cachedResults
+    ? lastDetailResults ?? results.map(() => undefined)
+    : await Promise.all(
+        results.map(async ({ id }) => {
+          const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);
+          if (!def?.detailCheck) return undefined;
+          try {
+            return await def.detailCheck();
+          } catch {
+            return undefined;
+          }
+        }),
+      );
+  lastDetailResults = detailResults;
 
   // Merge check results with UI metadata from EXTERNAL_TOOL_DEFS
   const disabledIds = getDisabledToolIds();
