@@ -354,12 +354,12 @@ function logTurnSummary(
 }
 
 /** Finalize a codex child stream (mark completed/error, log summary). */
-function finalizeCodexStream(
+async function finalizeCodexStream(
   childStreamId: StreamTabId,
   executionId: string,
   logger: AgentLogger,
   options?: { wallTimeMs?: number; usage?: RunResult['usage']; error?: unknown },
-): void {
+): Promise<void> {
   if (options?.error) {
     logger.error(toErrorMessage(options.error));
   }
@@ -375,6 +375,10 @@ function finalizeCodexStream(
     childStreamId,
     options?.error ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
   );
+  // Persist terminal status before untracking — untrackExecution fires
+  // notifyWaiters, so consumers must see the final status on disk.
+  const status = options?.error ? 'error' : 'completed';
+  await writeTerminalStatus(executionId, status).catch(() => {});
   untrackExecution(executionId);
 }
 
@@ -429,8 +433,10 @@ function startFollowUpLoop(
       logger.endGroup(groupId, 'stopped');
       unregisterInterruptible(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
+      // Persist terminal status before untracking — untrackExecution fires
+      // notifyWaiters, so consumers must see the final status on disk.
+      await writeTerminalStatus(executionId, 'completed').catch(() => {});
       untrackExecution(executionId);
-      void writeTerminalStatus(executionId, 'completed').catch(() => {});
 
       const threadId = thread.id;
       if (threadId) threadRegistry.delete(threadId);
@@ -446,21 +452,21 @@ function startFollowUpLoop(
  * After a successful turn, either start a follow-up loop (if the SDK
  * assigned a thread ID) or finalize the stream.
  */
-function handleTurnSuccess(
+async function handleTurnSuccess(
   thread: Thread,
   turn: RunResult,
   childStreamId: StreamTabId,
   executionId: ExecutionId,
   logger: AgentLogger,
   wallTimeMs: number,
-): void {
+): Promise<void> {
   const threadId = thread.id;
   if (threadId) {
     logTurnSummary(logger, wallTimeMs, turn.usage);
     storeThread(threadId, { thread, childStreamId, logger, executionId });
     startFollowUpLoop(thread, childStreamId, executionId, logger);
   } else {
-    finalizeCodexStream(childStreamId, executionId, logger, {
+    await finalizeCodexStream(childStreamId, executionId, logger, {
       wallTimeMs,
       usage: turn.usage,
     });
@@ -602,7 +608,7 @@ export class CodexTool extends defineTool({
       const wallTimeMs = Date.now() - startedAt;
 
       if (stream) {
-        handleTurnSuccess(thread, turn, stream.childStreamId, executionId, stream.logger, wallTimeMs);
+        await handleTurnSuccess(thread, turn, stream.childStreamId, executionId, stream.logger, wallTimeMs);
       }
 
       return {
@@ -611,7 +617,7 @@ export class CodexTool extends defineTool({
       };
     } catch (err) {
       if (stream) {
-        finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
+        await finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
           error: err,
         });
       }
@@ -677,16 +683,9 @@ export class CodexTool extends defineTool({
         await store.writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
 
-        handleTurnSuccess(thread, turn, childStreamId, executionId, logger, wallTimeMs);
-
-        // Only mark terminal status if no follow-up loop started — the
-        // loop manages its own lifecycle and may end in error later.
-        if (!threadId) {
-          await writeTerminalStatus(executionId, 'completed').catch(() => {});
-        }
+        await handleTurnSuccess(thread, turn, childStreamId, executionId, logger, wallTimeMs);
       } catch (err: unknown) {
-        await writeTerminalStatus(executionId, 'error').catch(() => {});
-        finalizeCodexStream(childStreamId, executionId, logger, { error: err });
+        await finalizeCodexStream(childStreamId, executionId, logger, { error: err });
 
         const msg = formatCodexError(executionId, input.prompt, err);
         await getExecutionStore(executionId).writeReport(msg);
