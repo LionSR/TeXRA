@@ -223,7 +223,7 @@ function logCodexItem(
   }
 }
 
-/** Finalize a codex child stream (mark ready, log summary). */
+/** Finalize a codex child stream (mark completed/error, log summary). */
 function finalizeCodexStream(
   childStreamId: StreamTabId,
   executionId: string,
@@ -245,7 +245,10 @@ function finalizeCodexStream(
       `Tokens: ${options.usage.input_tokens} in / ${options.usage.output_tokens} out`,
     );
   }
-  StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
+  StreamStatusService.set(
+    childStreamId,
+    options?.error ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+  );
   untrackExecution(executionId);
 }
 
@@ -442,16 +445,10 @@ export class CodexTool extends defineTool({
           case 'turn.completed':
             usage = event.usage ?? null;
             break;
-          case 'turn.failed': {
-            const msg = event.error.message ?? 'Codex turn failed';
-            logger.error(msg);
-            throw new Error(msg);
-          }
-          case 'error': {
-            const msg = event.message ?? 'Codex stream error';
-            logger.error(msg);
-            throw new Error(msg);
-          }
+          case 'turn.failed':
+            throw new Error(event.error.message ?? 'Codex turn failed');
+          case 'error':
+            throw new Error(event.message ?? 'Codex stream error');
         }
       }
 
