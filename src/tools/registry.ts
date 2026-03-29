@@ -50,6 +50,7 @@ import {
 import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
+import { ExternalInquiryTool } from './inquiry';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -106,6 +107,7 @@ function createDefaultTools() {
     delegate_agent: new DelegateAgentTool(),
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
+    external_inquiry: new ExternalInquiryTool(),
   } satisfies Record<string, ITool>;
 }
 

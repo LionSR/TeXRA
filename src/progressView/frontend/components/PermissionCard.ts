@@ -12,6 +12,7 @@ import { postMessage } from '@shared/vscode';
 import type {
   AgentProposalPermission,
   BashPermission,
+  ExternalInquiryPermission,
   ModelOptionData,
   PlanApprovalPermission,
   RetryPermission,
@@ -48,6 +49,10 @@ export type PermissionState =
   | {
       kind: typeof PERMISSION_KIND.PLAN_APPROVAL;
       data: PlanApprovalPermission;
+    }
+  | {
+      kind: typeof PERMISSION_KIND.EXTERNAL_INQUIRY;
+      data: ExternalInquiryPermission;
     };
 
 /** Action button configuration */
@@ -69,6 +74,7 @@ const PERMISSION_ICONS: Record<PermissionState['kind'], string> = {
   [PERMISSION_KIND.RETRY]: 'codicon-refresh',
   [PERMISSION_KIND.PROPOSAL]: 'codicon-rocket',
   [PERMISSION_KIND.PLAN_APPROVAL]: 'codicon-tasklist',
+  [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'codicon-globe',
 };
 
 /** Title for each permission type */
@@ -78,6 +84,7 @@ const PERMISSION_TITLES: Record<PermissionState['kind'], string> = {
   [PERMISSION_KIND.RETRY]: 'Retry request',
   [PERMISSION_KIND.PROPOSAL]: 'Agent proposal',
   [PERMISSION_KIND.PLAN_APPROVAL]: 'Plan approval',
+  [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'External inquiry',
 };
 
 /** Primary actions (approve/reject) for each permission type */
@@ -127,6 +134,10 @@ const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
     },
     { action: 'reject', label: 'Reject', icon: 'codicon-x', variant: 'reject' },
   ],
+  // External inquiry uses its own panel with answer textarea; only skip here as fallback.
+  [PERMISSION_KIND.EXTERNAL_INQUIRY]: [
+    { action: 'skip', label: 'Skip', icon: 'codicon-x', variant: 'reject' },
+  ],
 };
 
 /** Secondary actions for each permission type */
@@ -162,6 +173,7 @@ const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
     },
   ],
   [PERMISSION_KIND.PLAN_APPROVAL]: [],
+  [PERMISSION_KIND.EXTERNAL_INQUIRY]: [],
 };
 
 // =============================================================================

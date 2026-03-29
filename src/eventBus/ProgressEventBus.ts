@@ -8,6 +8,7 @@ import type {
   BashPermission,
   ConversationProgress,
   ExecutionId,
+  ExternalInquiryPermission,
   FileLocation,
   OutputFileInfo,
   PlanApprovalPermission,
@@ -86,6 +87,8 @@ export interface ProgressEventPayloads {
   resolveAgentProposal: { proposalId: string };
   showPlanApproval: PlanApprovalPermission;
   resolvePlanApproval: { approvalId: string };
+  showExternalInquiry: ExternalInquiryPermission;
+  resolveExternalInquiry: { requestId: string };
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
   updateConversationProgress: {

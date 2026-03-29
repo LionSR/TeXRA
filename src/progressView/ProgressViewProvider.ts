@@ -21,6 +21,7 @@ import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import type {
   AgentProposalPermission,
   BashPermission,
+  ExternalInquiryPermission,
   ModelOptionData,
   PlanApprovalPermission,
   ProgressViewPlacement,
@@ -94,6 +95,10 @@ export class ProgressViewProvider
     PlanApprovalPermission,
     'approvalId'
   >;
+  private readonly externalInquiryHandler: ApprovalRequestHandler<
+    ExternalInquiryPermission,
+    'requestId'
+  >;
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
@@ -148,6 +153,16 @@ export class ProgressViewProvider
       (id) => u.resolvePermission(PERMISSION_KIND.PLAN_APPROVAL, id),
       canSend,
     );
+    this.externalInquiryHandler = new ApprovalRequestHandler(
+      'requestId',
+      (p) =>
+        u.showPermission({
+          kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
+          data: p,
+        }),
+      (id) => u.resolvePermission(PERMISSION_KIND.EXTERNAL_INQUIRY, id),
+      canSend,
+    );
 
     this.eventHandler = new ProgressEventHandler(
       this.state,
@@ -172,6 +187,8 @@ export class ProgressViewProvider
         resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
         showPlanApproval: (p) => this.planApprovalHandler.show(p),
         resolvePlanApproval: (id) => this.planApprovalHandler.resolve(id),
+        showExternalInquiry: (p) => this.externalInquiryHandler.show(p),
+        resolveExternalInquiry: (id) => this.externalInquiryHandler.resolve(id),
       },
       (streamId) => this.hasPendingPermissionsForStream(streamId),
     );
@@ -334,6 +351,7 @@ export class ProgressViewProvider
 
     this.toolEditHandler.replay();
     this.bashApprovalHandler.replay();
+    this.externalInquiryHandler.replay();
     // YOLO / Super YOLO state is already sent by syncFullView() which is
     // always called before replayPendingPrompts() in markWebviewReady().
 
@@ -358,7 +376,8 @@ export class ProgressViewProvider
       this.toolEditHandler.hasPendingForStream(streamId) ||
       this.bashApprovalHandler.hasPendingForStream(streamId) ||
       this.agentProposalHandler.hasPendingForStream(streamId) ||
-      this.planApprovalHandler.hasPendingForStream(streamId)
+      this.planApprovalHandler.hasPendingForStream(streamId) ||
+      this.externalInquiryHandler.hasPendingForStream(streamId)
     );
   }
 
