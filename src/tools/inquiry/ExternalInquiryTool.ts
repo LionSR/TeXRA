@@ -17,7 +17,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { ExternalInquiryAction, StreamTabId } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
-import type { RejectablePendingEntry } from '@tools/approval/bashApproval';
 
 const logger = new AgentLogger('ExternalInquiryTool');
 
@@ -199,19 +198,16 @@ Use attachFiles to list workspace files the user should upload to the external m
         };
       }
 
-      const parts: string[] = [];
-      parts.push(`Answer from external model:\n\n${result.answer ?? ''}`);
+      let output = `Answer from external model:\n\n${result.answer ?? ''}`;
 
-      if (result.attachedFiles && result.attachedFiles.length > 0) {
-        parts.push(
-          `\nFiles attached by user from the external model:\n` +
-            result.attachedFiles.map((f) => `- ${f}`).join('\n'),
-        );
+      if (result.attachedFiles?.length) {
+        const fileList = result.attachedFiles.map((f) => `- ${f}`).join('\n');
+        output += `\n\nFiles attached by user from the external model:\n${fileList}`;
       }
 
       return {
         summary: `Received answer from external model (${input.mode})`,
-        output: parts.join('\n'),
+        output,
       };
     } finally {
       pendingInquiries.delete(requestId);

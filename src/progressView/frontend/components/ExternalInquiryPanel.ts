@@ -8,7 +8,7 @@
  */
 
 import { html, nothing, type TemplateResult } from 'lit';
-import { customElement, query, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 
 import {
   codiconIconClasses,
@@ -34,13 +34,9 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   @state() private droppedFiles: string[] = [];
   @state() private dropActive = false;
 
-  @query('.external-inquiry-request__answer-input')
-  private answerInput?: HTMLTextAreaElement;
-
   private copyController = new CopyButtonController(this);
 
   override handleKeyboardShortcut(_key: string): boolean {
-    // No single-key shortcuts — the textarea needs all keys
     return false;
   }
 
@@ -80,8 +76,9 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   }
 
   private renderQuestion(question: string): TemplateResult {
-    const copyIcon = this.copyController.state.copied ? 'check' : 'copy';
-    const copyLabel = this.copyController.state.copied ? 'Copied!' : 'Copy Question';
+    const { copied } = this.copyController.state;
+    const copyIcon = copied ? 'check' : 'copy';
+    const copyLabel = copied ? 'Copied!' : 'Copy Question';
 
     return html`
       <div class="external-inquiry-request__question">
@@ -91,7 +88,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
             icon=${copyIcon}
             label=${copyLabel}
             title="Copy question to clipboard for pasting into an external AI model"
-            @click=${() => this.handleCopy(question)}
+            @click=${() => this.copyController.copy(question)}
           >${copyLabel}</vscode-toolbar-button>
         </div>
       </div>
@@ -187,8 +184,6 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   }
 
   private renderActions(): TemplateResult {
-    const hasAnswer = this.answerText.trim().length > 0;
-
     return html`
       <vscode-toolbar-container class="external-inquiry-request__actions">
         <vscode-toolbar-button
@@ -196,7 +191,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           label="Submit Answer"
           title="Submit the answer from the external model"
           data-action="submit"
-          ?disabled=${!hasAnswer}
+          ?disabled=${!this.answerText.trim()}
           @click=${() => this.handleSubmit()}
         >Submit Answer</vscode-toolbar-button>
         <vscode-toolbar-button
@@ -212,30 +207,22 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
 
   // ── Event Handlers ──
 
-  private handleCopy(text: string): void {
-    void this.copyController.copy(text);
-  }
-
   private handleAnswerInput(e: Event): void {
     const target = e.target as HTMLTextAreaElement;
     this.answerText = target.value;
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    // Ctrl/Cmd+Enter to submit
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      if (this.answerText.trim()) {
-        this.handleSubmit();
-      }
+      this.handleSubmit();
     }
   }
 
   private handleSubmit(): void {
     if (!this.answerText.trim()) return;
-    // Emit a custom action with the answer text and attached files
-    // The action is 'submit' and we pass answer data via the feedback field
-    // and files via modelOverride (repurposed for this panel type)
+    // Custom event because submit carries answer data that doesn't fit
+    // the standard permissionAction shape (which only has action + feedback).
     this.dispatchEvent(
       new CustomEvent('inquiry-submit', {
         bubbles: true,
@@ -252,20 +239,19 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
 
   private handleDragOver(e: DragEvent): void {
     e.preventDefault();
-    this.dropActive = true;
+    if (!this.dropActive) this.dropActive = true;
   }
 
   private handleDragLeave(): void {
-    this.dropActive = false;
+    if (this.dropActive) this.dropActive = false;
   }
 
   private handleDrop(e: DragEvent): void {
     e.preventDefault();
     this.dropActive = false;
     if (e.dataTransfer?.files) {
-      for (const file of Array.from(e.dataTransfer.files)) {
-        this.droppedFiles = [...this.droppedFiles, file.name];
-      }
+      const newFiles = Array.from(e.dataTransfer.files).map((f) => f.name);
+      this.droppedFiles = [...this.droppedFiles, ...newFiles];
     }
   }
 
