@@ -38,6 +38,7 @@ import {
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -155,13 +156,18 @@ export function interruptAllCodexSessions(): void {
  */
 class CodexFollowUpSession implements IInterruptible {
   private interrupted = false;
+  private queue: FollowUpQueue | null = null;
 
   interrupt(): void {
     this.interrupted = true;
-    ToolUseFollowUpQueue.release(this.streamId);
+    this.queue?.cancelWait();
   }
 
   constructor(private readonly streamId: StreamTabId) {}
+
+  setQueue(q: FollowUpQueue): void {
+    this.queue = q;
+  }
 
   isInterrupted(): boolean {
     return this.interrupted;
@@ -354,12 +360,12 @@ function logTurnSummary(
 }
 
 /** Finalize a codex child stream (mark completed/error, log summary). */
-async function finalizeCodexStream(
+function finalizeCodexStream(
   childStreamId: StreamTabId,
   executionId: string,
   logger: AgentLogger,
   options?: { wallTimeMs?: number; usage?: RunResult['usage']; error?: unknown },
-): Promise<void> {
+): void {
   if (options?.error) {
     logger.error(toErrorMessage(options.error));
   }
@@ -375,10 +381,6 @@ async function finalizeCodexStream(
     childStreamId,
     options?.error ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
   );
-  // Persist terminal status before untracking — untrackExecution fires
-  // notifyWaiters, so consumers must see the final status on disk.
-  const status = options?.error ? 'error' : 'completed';
-  await writeTerminalStatus(executionId, status).catch(() => {});
   untrackExecution(executionId);
 }
 
@@ -398,9 +400,9 @@ function startFollowUpLoop(
   logger: AgentLogger,
 ): void {
   const session = new CodexFollowUpSession(childStreamId);
-  registerInterruptible(childStreamId, session);
-
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
+  session.setQueue(queue);
+  registerInterruptible(childStreamId, session);
 
   // Start a log group so endRunningGroups() marks it as errored on reload,
   // giving the user a visual cue that the session was interrupted.
@@ -452,21 +454,21 @@ function startFollowUpLoop(
  * After a successful turn, either start a follow-up loop (if the SDK
  * assigned a thread ID) or finalize the stream.
  */
-async function handleTurnSuccess(
+function handleTurnSuccess(
   thread: Thread,
   turn: RunResult,
   childStreamId: StreamTabId,
   executionId: ExecutionId,
   logger: AgentLogger,
   wallTimeMs: number,
-): Promise<void> {
+): void {
   const threadId = thread.id;
   if (threadId) {
     logTurnSummary(logger, wallTimeMs, turn.usage);
     storeThread(threadId, { thread, childStreamId, logger, executionId });
     startFollowUpLoop(thread, childStreamId, executionId, logger);
   } else {
-    await finalizeCodexStream(childStreamId, executionId, logger, {
+    finalizeCodexStream(childStreamId, executionId, logger, {
       wallTimeMs,
       usage: turn.usage,
     });
@@ -608,7 +610,7 @@ export class CodexTool extends defineTool({
       const wallTimeMs = Date.now() - startedAt;
 
       if (stream) {
-        await handleTurnSuccess(thread, turn, stream.childStreamId, executionId, stream.logger, wallTimeMs);
+        handleTurnSuccess(thread, turn, stream.childStreamId, executionId, stream.logger, wallTimeMs);
       }
 
       return {
@@ -617,7 +619,7 @@ export class CodexTool extends defineTool({
       };
     } catch (err) {
       if (stream) {
-        await finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
+        finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
           error: err,
         });
       }
@@ -683,9 +685,16 @@ export class CodexTool extends defineTool({
         await store.writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
 
-        await handleTurnSuccess(thread, turn, childStreamId, executionId, logger, wallTimeMs);
+        // Write terminal status before handleTurnSuccess, which may call
+        // finalizeCodexStream → untrackExecution → notifyWaiters.
+        // When a follow-up loop starts, the loop's finally writes its own status.
+        if (!threadId) {
+          await writeTerminalStatus(executionId, 'completed').catch(() => {});
+        }
+        handleTurnSuccess(thread, turn, childStreamId, executionId, logger, wallTimeMs);
       } catch (err: unknown) {
-        await finalizeCodexStream(childStreamId, executionId, logger, { error: err });
+        await writeTerminalStatus(executionId, 'error').catch(() => {});
+        finalizeCodexStream(childStreamId, executionId, logger, { error: err });
 
         const msg = formatCodexError(executionId, input.prompt, err);
         await getExecutionStore(executionId).writeReport(msg);
