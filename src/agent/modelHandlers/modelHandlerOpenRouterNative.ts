@@ -336,6 +336,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
       if (response.usage?.promptTokens) {
         this.lastKnownInputTokens = response.usage.promptTokens;
+      } else {
+        this.logger.warn(
+          'No usage data in streaming response — token tracking and compaction may be affected',
+        );
       }
       return { response, updatedMessages };
     }
@@ -348,6 +352,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
     if (response.usage?.promptTokens) {
       this.lastKnownInputTokens = response.usage.promptTokens;
+    } else {
+      this.logger.warn(
+        'No usage data in response — token tracking and compaction may be affected',
+      );
     }
     return { response, updatedMessages };
   }
@@ -959,6 +967,11 @@ Format the summary as a structured narrative that allows the conversation to con
           type: 'text',
           text: pseudoPrefillMsg,
         });
+      } else if (lastMessage && typeof lastMessage.content === 'string') {
+        (lastMessage as any).content = [
+          { type: 'text', text: lastMessage.content },
+          { type: 'text', text: pseudoPrefillMsg },
+        ];
       }
       this.logger.debug(`Added pseudo prefill: "${pseudoPrefillMsg}"`);
       return [false, messages];
