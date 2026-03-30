@@ -44,7 +44,8 @@ const extractTextFromReasoningDetails = (
 
   return details
     .filter(
-      (item): item is ReasoningDetailUnion => !!item && typeof item === 'object',
+      (item): item is ReasoningDetailUnion =>
+        !!item && typeof item === 'object',
     )
     .map(getReasoningItemText)
     .filter((text): text is string => !!text)
