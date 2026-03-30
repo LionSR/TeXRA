@@ -444,7 +444,10 @@ function startFollowUpLoop(
           logger.error(toErrorMessage(err));
         }
 
-        StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
+        // Don't override STOPPED — the user pressed the stop button
+        if (!session.isInterrupted()) {
+          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
+        }
       }
     } finally {
       logger.endGroup(groupId, 'stopped');
