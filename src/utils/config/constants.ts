@@ -83,6 +83,28 @@ export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
   await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
 }
 
+/** Get the set of tool group IDs disabled by the user. */
+export function getDisabledToolIds(): ReadonlySet<string> {
+  const raw = globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+  return new Set(raw);
+}
+
+/** Toggle a tool group's enabled/disabled state. */
+export async function setToolEnabled(
+  toolId: string,
+  enabled: boolean,
+): Promise<void> {
+  const current =
+    globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+  const set = new Set(current);
+  if (enabled) {
+    set.delete(toolId);
+  } else {
+    set.add(toolId);
+  }
+  await globalSM?.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
+}
+
 /** Get the maximum number of automatic retry attempts for model calls. */
 export function getModelRetryMaxAttempts(): number {
   return getConfig<number>('texra.model.retry.maxAttempts', 1);

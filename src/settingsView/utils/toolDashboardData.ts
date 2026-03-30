@@ -12,11 +12,16 @@ import type {
   ToolInfo,
 } from '@shared/schemas/settingsViewMessages';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
-import { runExternalToolChecks } from '@tools/toolAvailability';
 import {
   getDefaultToolRegistry,
   type RegisteredToolName,
 } from '@tools/registry';
+import {
+  getLastCheckResults,
+  runExternalToolChecks,
+  type ExternalToolCheckResult,
+} from '@tools/toolAvailability';
+import { getDisabledToolIds } from '@utils/config/constants';
 
 // ============================================================
 // Tool description enrichment
@@ -135,14 +140,18 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
 // Public API
 // ============================================================
 
+/** Cached detail check results from the last full probe. */
+let lastDetailResults: (string | undefined)[] | null = null;
+
 /**
- * Build the complete tool dashboard items list with runtime availability checks.
+ * Build the complete tool dashboard items list.
  *
- * Always runs fresh external checks (and updates the availability cache
- * in {@link @tools/toolAvailability} as a side effect).
+ * @param cachedResults — when provided, skips network probes and uses
+ *   these results. Used by the toggle handler for instant UI updates.
  */
-export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
-  // Built-in tools are always available
+export async function buildToolDashboardItems(
+  cachedResults?: ExternalToolCheckResult[],
+): Promise<ToolDashboardItem[]> {
   const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.map(
     ({ toolNames, ...rest }) => ({
       ...rest,
@@ -151,23 +160,26 @@ export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
     }),
   );
 
-  // Run fresh checks — also updates the availability cache
-  const results = await runExternalToolChecks();
+  const results = cachedResults ?? (await runExternalToolChecks());
 
-  // Resolve optional detail checks in parallel
-  const detailResults = await Promise.all(
-    results.map(async ({ id }) => {
-      const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);
-      if (!def?.detailCheck) return undefined;
-      try {
-        return await def.detailCheck();
-      } catch {
-        return undefined;
-      }
-    }),
-  );
+  // Skip detail checks when using cached results (toggle path)
+  const detailResults = cachedResults
+    ? lastDetailResults ?? results.map(() => undefined)
+    : await Promise.all(
+        results.map(async ({ id }) => {
+          const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);
+          if (!def?.detailCheck) return undefined;
+          try {
+            return await def.detailCheck();
+          } catch {
+            return undefined;
+          }
+        }),
+      );
+  lastDetailResults = detailResults;
 
   // Merge check results with UI metadata from EXTERNAL_TOOL_DEFS
+  const disabledIds = getDisabledToolIds();
   const externalItems: ToolDashboardItem[] = [];
   for (let i = 0; i < results.length; i++) {
     const { id, tools, status } = results[i];
@@ -186,6 +198,9 @@ export async function buildToolDashboardItems(): Promise<ToolDashboardItem[]> {
       installExtensionId: def.installExtensionId,
       configNotes: def.configNotes,
       statusDetail: detailResults[i],
+      authNote: def.authNote,
+      toggleable: def.toggleable,
+      enabled: !disabledIds.has(def.id),
     });
   }
 

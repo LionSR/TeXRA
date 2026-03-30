@@ -1,56 +1,57 @@
 /**
  * Codex tool — spin off an OpenAI Codex agent via the @openai/codex-sdk.
  *
- * Supports foreground (blocking) and background (async follow-up) modes,
- * mirroring the BashTool pattern. The Codex CLI handles its own auth
- * (~/.codex/auth.json from `codex login`, OPENAI_API_KEY, config files).
+ * Supports foreground (blocking) and background (async follow-up) modes.
+ * Threads are multi-turn: after the first turn, the child stream enters
+ * WAITING state and accepts follow-ups from the user (via the stream tab's
+ * follow-up input) or from the orchestrator (via the `thread_id` parameter).
+ *
+ * The Codex CLI handles its own auth (~/.codex/auth.json from `codex login`,
+ * OPENAI_API_KEY, config files).
  *
  * Requires the Codex CLI binary — gated by the availability check in
  * externalToolDefs.ts.
  */
 
-// Node builtins
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-
 // Third-party imports
 import { z } from 'zod';
-import type {
-  CommandExecutionItem,
-  FileChangeItem,
-  RunResult,
-  SandboxMode,
-  Thread,
-  ThreadEvent,
-  ThreadItem,
-} from '@openai/codex-sdk';
 
-// Local imports - agent
+// Local imports
 import {
   getExecutionStore,
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   trackExecution,
   untrackExecution,
-  ProcessExecutionHandle,
+  AgentExecutionHandle,
 } from '@agent/runtime/executionRegistry';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import {
+  getInterruptible,
+  registerInterruptible,
+  unregisterInterruptible,
+  type IInterruptible,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-
-// Local imports - tools
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
+import { toErrorMessage } from '@common/errors';
+import { bus } from '@eventBus/ProgressEventBus';
+import { AgentLogger } from '@logger/AgentLogger';
+import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
+import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
+import { escapeAttr, escapeText } from '@tools/subagentResults';
 import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
-import { escapeAttr, escapeText } from '@tools/subagentResults';
-
-// Local imports - utils
+import { formatDuration } from '@utils/core';
+import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -58,6 +59,17 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
+
+// Type-only imports (kept separate for bundler efficiency)
+import type {
+  McpToolCallItem,
+  RunResult,
+  SandboxMode,
+  Thread,
+  ThreadItem,
+  TodoListItem,
+  WebSearchItem,
+} from '@openai/codex-sdk';
 
 // ============================================================================
 // Schema
@@ -86,9 +98,82 @@ const CodexInputSchema = z.strictObject({
     .describe(
       'Run asynchronously. Returns immediately with execution ID. Result delivered as follow-up when complete.',
     ),
+  thread_id: z
+    .string()
+    .optional()
+    .describe(
+      'Resume an existing Codex thread by its ID. ' +
+        'When provided, continues the conversation from where it left off instead of starting a new one. ' +
+        'Get the thread_id from the result of a previous codex call.',
+    ),
 });
 
 export type CodexInput = z.infer<typeof CodexInputSchema>;
+
+// ============================================================================
+// Thread registry — keeps threads alive between turns for follow-ups
+// ============================================================================
+
+interface ActiveThread {
+  thread: Thread;
+  childStreamId: StreamTabId;
+  logger: AgentLogger;
+  executionId: ExecutionId;
+}
+
+const threadRegistry = new Map<string, ActiveThread>();
+
+/** Store a thread for multi-turn reuse and persist thread ID to disk. */
+function storeThread(threadId: string, entry: ActiveThread): void {
+  threadRegistry.set(threadId, entry);
+  // Extension reload clears memory but SDK stores sessions on disk —
+  // persist the ID so resumeThread() can reconstruct the conversation.
+  void getExecutionStore(entry.executionId)
+    .write('codex_thread_id', threadId)
+    .catch(() => {});
+}
+
+/** Prevents codex streams from remaining in stale WAITING state during reload. */
+export function interruptAllCodexSessions(): void {
+  for (const { childStreamId } of [...threadRegistry.values()]) {
+    getInterruptible(childStreamId)?.interrupt();
+  }
+}
+
+// ============================================================================
+// Codex follow-up session — IInterruptible only (no ToolUseFlowContext)
+// ============================================================================
+
+/**
+ * Lightweight interruptible registered with the ToolUseAgentRegistry so the
+ * stop button works on codex child streams.
+ *
+ * Does NOT implement the session duck-type (no `session.appendFollowUp`),
+ * which prevents `getToolUseFlowContext()` from matching it — commands like
+ * `compactResponse` that access `flowContext.modelHandler` won't crash.
+ *
+ * Follow-ups route through the WAITING state queue path instead:
+ * `sendFollowUp()` → stream is WAITING → `ToolUseFollowUpQueue.enqueue()`.
+ */
+class CodexFollowUpSession implements IInterruptible {
+  private interrupted = false;
+  private queue: FollowUpQueue | null = null;
+
+  interrupt(): void {
+    this.interrupted = true;
+    this.queue?.cancelWait();
+  }
+
+  constructor() {}
+
+  setQueue(q: FollowUpQueue): void {
+    this.queue = q;
+  }
+
+  isInterrupted(): boolean {
+    return this.interrupted;
+  }
+}
 
 // ============================================================================
 // Result formatting
@@ -99,15 +184,19 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
  *
  * Only includes the final model response (what the LLM needs to act on) plus
  * a compact usage note. Intermediate details (commands run, files changed) are
- * streamed to the UI via onToolOutput and don't need to be in the result.
+ * streamed to the child stream tab and don't need to be in the result.
  */
-function formatTurnResult(turn: RunResult): string {
+function formatTurnResult(turn: RunResult, threadId?: string | null): string {
   const parts: string[] = [turn.finalResponse || '(no response)'];
 
   if (turn.usage) {
     parts.push(
       `[Tokens: ${turn.usage.input_tokens} in / ${turn.usage.output_tokens} out]`,
     );
+  }
+
+  if (threadId) {
+    parts.push(`[Thread ID: ${threadId} — use thread_id to continue this session]`);
   }
 
   return parts.join('\n\n');
@@ -119,11 +208,12 @@ function formatCodexDelivery(
   prompt: string,
   wallTimeMs: number,
   turn: RunResult,
+  threadId?: string | null,
 ): string {
   const durationSec = (wallTimeMs / 1000).toFixed(1);
   const response = turn.finalResponse || '(no response)';
   const lines = [
-    `<codex-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
+    `<codex-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}"${threadId ? ` thread-id="${escapeAttr(threadId)}"` : ''}>`,
     `<wall-time>${durationSec}s</wall-time>`,
     `<response>${escapeText(response)}</response>`,
   ];
@@ -144,41 +234,306 @@ function formatCodexError(
   prompt: string,
   err: unknown,
 ): string {
-  const message = err instanceof Error ? err.message : String(err);
   return [
     `<codex-error id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
-    `<message>${escapeText(message)}</message>`,
+    `<message>${escapeText(toErrorMessage(err))}</message>`,
     '</codex-error>',
   ].join('\n');
 }
 
-/** Format a completed thread item as a human-readable log line for the process view. */
-function formatItemForLog(item: ThreadItem): string {
+// ============================================================================
+// Stream tab helpers
+// ============================================================================
+
+/** Build a synthetic AgentConfig for codex (used for TaskState and execution registration). */
+function buildCodexConfig(prompt: string): AgentConfig {
+  return AgentConfigSchema.parse({
+    agent: 'codex',
+    instruction: prompt,
+  });
+}
+
+/** Create a child stream tab for a codex execution and return its logger. */
+function createCodexStream(
+  executionId: string,
+  parentStreamId: StreamTabId,
+  prompt: string,
+  config: AgentConfig,
+): { childStreamId: StreamTabId; logger: AgentLogger } {
+  const childStreamId = `codex@codex-sdk#${executionId}` as StreamTabId;
+
+  StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
+  bus.emit('setActiveStream', {
+    streamId: childStreamId,
+    agentCategory: AgentCategory.ToolUse,
+  });
+  bus.emit('setTaskState', {
+    streamId: childStreamId,
+    executionId,
+    taskState: agentConfigToTaskState(config),
+    storageKey: executionId as StorageKey,
+  });
+  bus.emit('updateStreamDescription', {
+    streamId: childStreamId,
+    description: truncateWithEllipsis(prompt, 80),
+  });
+
+  const logger = new AgentLogger(childStreamId, true);
+  const handle = new AgentExecutionHandle(
+    executionId,
+    parentStreamId,
+    childStreamId,
+    'codex',
+    'toolUse',
+  );
+  trackExecution(handle);
+
+  return { childStreamId, logger };
+}
+
+/** Log a completed codex thread item to the child stream's logger. */
+function logCodexItem(
+  item: ThreadItem,
+  childStreamId: StreamTabId,
+  logger: AgentLogger,
+): void {
   switch (item.type) {
     case 'command_execution': {
-      let status: string;
-      if (item.exit_code === undefined) {
-        status = item.status;
-      } else if (item.exit_code === 0) {
-        status = 'ok';
-      } else {
-        status = `exit ${item.exit_code}`;
-      }
-      return `$ ${item.command} (${status})\n`;
+      const exitInfo =
+        item.exit_code === undefined
+          ? item.status
+          : item.exit_code === 0
+            ? 'ok'
+            : `exit ${item.exit_code}`;
+      logger.logToolUse({
+        toolName: 'bash',
+        input: { command: item.command },
+        output: `(${exitInfo})`,
+        status: 'completed',
+      });
+      break;
     }
     case 'file_change': {
-      const changed = item.changes.map((c) => `${c.kind} ${c.path}`).join(', ');
-      return changed ? `Files: ${changed}\n` : '';
+      const changes = item.changes.map((c: { kind: string; path: string }) => `${c.kind} ${c.path}`);
+      if (changes.length > 0) {
+        logger.info(`Files: ${changes.join(', ')}`);
+      }
+      break;
     }
     case 'agent_message':
-      return `${item.text}\n`;
+      logger.info(item.text, { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+      break;
     case 'reasoning':
-      return `[reasoning] ${item.text}\n`;
+      logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
+      break;
+    case 'mcp_tool_call': {
+      const mcp = item as McpToolCallItem;
+      const output = mcp.error
+        ? `Error: ${mcp.error.message}`
+        : mcp.result?.structured_content
+          ? JSON.stringify(mcp.result.structured_content)
+          : `(${mcp.status})`;
+      logger.logToolUse({
+        toolName: `mcp:${mcp.server}/${mcp.tool}`,
+        input: mcp.arguments,
+        output,
+        status: 'completed',
+      });
+      break;
+    }
+    case 'web_search':
+      logger.logWebSearch({ query: (item as WebSearchItem).query });
+      break;
+    case 'todo_list': {
+      const todos = (item as TodoListItem).items.map((t) => ({
+        content: t.text,
+        status: t.completed
+          ? ('completed' as const)
+          : ('pending' as const),
+        activeForm: t.text,
+      }));
+      bus.emit('updateTodos', { streamId: childStreamId, todos });
+      break;
+    }
     case 'error':
-      return `Error: ${item.message}\n`;
-    default:
-      return '';
+      logger.error(item.message);
+      break;
   }
+}
+
+/** Log a turn summary to the child stream. */
+function logTurnSummary(
+  logger: AgentLogger,
+  wallTimeMs: number,
+  usage: RunResult['usage'],
+): void {
+  logger.info(`Turn completed in ${formatDuration(wallTimeMs)}`);
+  if (usage) {
+    logger.info(
+      `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`,
+    );
+  }
+}
+
+/** Finalize a codex child stream (mark completed/error, log summary). */
+function finalizeCodexStream(
+  childStreamId: StreamTabId,
+  executionId: string,
+  logger: AgentLogger,
+  options?: { wallTimeMs?: number; usage?: RunResult['usage']; error?: unknown },
+): void {
+  if (options?.error) {
+    logger.error(toErrorMessage(options.error));
+  }
+  if (options?.wallTimeMs != null) {
+    logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
+  }
+  if (options?.usage) {
+    logger.info(
+      `Tokens: ${options.usage.input_tokens} in / ${options.usage.output_tokens} out`,
+    );
+  }
+  StreamStatusService.set(
+    childStreamId,
+    options?.error ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+  );
+  untrackExecution(executionId);
+}
+
+// ============================================================================
+// Follow-up loop — runs additional turns when user sends follow-ups
+// ============================================================================
+
+/**
+ * After the initial turn, enter a loop that waits for user follow-ups
+ * in the child stream tab and runs them on the same Codex thread.
+ * The loop runs until interrupted or the session is disposed.
+ */
+function startFollowUpLoop(
+  thread: Thread,
+  childStreamId: StreamTabId,
+  executionId: string,
+  logger: AgentLogger,
+): void {
+  const session = new CodexFollowUpSession();
+  const queue = ToolUseFollowUpQueue.acquire(childStreamId);
+  session.setQueue(queue);
+  registerInterruptible(childStreamId, session);
+
+  // Start a log group so endRunningGroups() marks it as errored on reload,
+  // giving the user a visual cue that the session was interrupted.
+  const groupId = logger.startGroup('Codex session');
+
+  StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
+
+  void (async () => {
+    try {
+      while (!session.isInterrupted()) {
+        const messages = await queue.waitAndDrainAll(() => session.isInterrupted());
+        if (!messages || session.isInterrupted()) break;
+
+        const userMessage = messages.join('\n\n');
+
+        StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
+        const startedAt = Date.now();
+
+        try {
+          const turn = await runStreamedTurn(thread, userMessage, childStreamId, logger);
+          logTurnSummary(logger, Date.now() - startedAt, turn.usage);
+        } catch (err) {
+          logger.error(toErrorMessage(err));
+        }
+
+        // Don't override STOPPED — the user pressed the stop button
+        if (!session.isInterrupted()) {
+          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
+        }
+      }
+    } finally {
+      logger.endGroup(groupId, 'stopped');
+      unregisterInterruptible(childStreamId);
+      ToolUseFollowUpQueue.release(childStreamId);
+      // Persist terminal status before untracking — untrackExecution fires
+      // notifyWaiters, so consumers must see the final status on disk.
+      await writeTerminalStatus(executionId, 'completed').catch(() => {});
+      untrackExecution(executionId);
+
+      const threadId = thread.id;
+      if (threadId) threadRegistry.delete(threadId);
+
+      if (StreamStatusService.get(childStreamId) === STREAM_STATUS.WAITING) {
+        StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
+      }
+    }
+  })();
+}
+
+/**
+ * After a successful turn, either start a follow-up loop (if the SDK
+ * assigned a thread ID) or finalize the stream.
+ */
+function handleTurnSuccess(
+  thread: Thread,
+  turn: RunResult,
+  childStreamId: StreamTabId,
+  executionId: ExecutionId,
+  logger: AgentLogger,
+  wallTimeMs: number,
+): void {
+  const threadId = thread.id;
+  if (threadId) {
+    logTurnSummary(logger, wallTimeMs, turn.usage);
+    storeThread(threadId, { thread, childStreamId, logger, executionId });
+    startFollowUpLoop(thread, childStreamId, executionId, logger);
+  } else {
+    finalizeCodexStream(childStreamId, executionId, logger, {
+      wallTimeMs,
+      usage: turn.usage,
+    });
+  }
+}
+
+// ============================================================================
+// Streaming helpers
+// ============================================================================
+
+/** Run a single streamed turn, logging events to the child stream. */
+async function runStreamedTurn(
+  thread: Thread,
+  prompt: string,
+  childStreamId: StreamTabId,
+  logger: AgentLogger,
+): Promise<RunResult> {
+  logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
+  const { events } = await thread.runStreamed(prompt);
+  const responseParts: string[] = [];
+  let usage: RunResult['usage'] = null;
+
+  for await (const event of events) {
+    switch (event.type) {
+      case 'item.completed': {
+        const { item } = event;
+        logCodexItem(item, childStreamId, logger);
+        if (item.type === 'agent_message') {
+          responseParts.push(item.text);
+        }
+        break;
+      }
+      case 'turn.completed':
+        usage = event.usage ?? null;
+        break;
+      case 'turn.failed':
+        throw new ToolError(event.error.message ?? 'Codex turn failed');
+      case 'error':
+        throw new ToolError(event.message ?? 'Codex stream error');
+    }
+  }
+
+  return {
+    items: [],
+    finalResponse: responseParts.join('\n\n'),
+    usage,
+  };
 }
 
 // ============================================================================
@@ -191,7 +546,8 @@ export class CodexTool extends defineTool({
     'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
     'The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox. ' +
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
-    'Auth is handled by the CLI itself — use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var.',
+    'Auth is handled by the CLI itself — use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
+    'Returns a thread_id that can be passed back to continue the conversation in subsequent calls.',
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
@@ -209,19 +565,7 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-    // Dynamic import — resolved at runtime, not bundled (see webpack externals)
-    const Codex = await importCodexClass();
-
-    // The SDK resolves the native binary relative to itself, but we don't
-    // ship the 130 MB platform binaries in the VSIX. Find the binary from
-    // the user's global npm install and pass it via codexPathOverride.
-    const codexPathOverride = findCodexBinaryPath();
-    const codex = new Codex({ codexPathOverride });
-    const thread = codex.startThread({
-      workingDirectory: input.working_directory,
-      sandboxMode: input.sandbox_mode,
-      skipGitRepoCheck: true,
-    });
+    const thread = await this.resolveThread(input);
 
     if (input.run_in_background) {
       return this.executeBackground(
@@ -232,66 +576,82 @@ export class CodexTool extends defineTool({
       );
     }
 
-    return this.executeForeground(thread, input, ctx?.onToolOutput);
+    return this.executeForeground(thread, input, ctx?.streamId);
+  }
+
+  /** Resolve thread — resume existing or start new. */
+  private async resolveThread(input: CodexInput): Promise<Thread> {
+    if (input.thread_id) {
+      const stored = threadRegistry.get(input.thread_id);
+      if (stored) {
+        // Always interrupt the old follow-up loop. If it's WAITING, the
+        // interrupt is clean. If RUNNING, the in-progress turn will error
+        // out — but this prevents orphaned loops and concurrent turns on
+        // the same Thread object.
+        getInterruptible(stored.childStreamId)?.interrupt();
+        threadRegistry.delete(input.thread_id);
+        return stored.thread;
+      }
+    }
+
+    const CodexClass = await importCodexClass();
+    const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
+    const threadOptions = {
+      workingDirectory: input.working_directory,
+      sandboxMode: input.sandbox_mode,
+      skipGitRepoCheck: true as const,
+    };
+
+    return input.thread_id
+      ? codex.resumeThread(input.thread_id, threadOptions)
+      : codex.startThread(threadOptions);
   }
 
   private async executeForeground(
     thread: Thread,
     input: CodexInput,
-    onToolOutput?: (chunk: string) => void,
+    parentStreamId?: StreamTabId,
   ): Promise<ToolResult> {
-    // Use streaming path when the framework provides a live-output callback,
-    // so partial results appear in the UI as they arrive (like slow bash).
-    const turn = onToolOutput
-      ? await this.runStreamedForeground(thread, input, onToolOutput)
-      : await thread.run(input.prompt);
-
+    const executionId = generateExecutionId();
     const preview = truncateWithEllipsis(input.prompt, 60);
+    const startedAt = Date.now();
+    const config = buildCodexConfig(input.prompt);
 
-    return {
-      summary: `Codex: ${preview}`,
-      output: formatTurnResult(turn),
-    };
-  }
-
-  /** Run a foreground turn via the streaming API, pushing chunks to the UI. */
-  private async runStreamedForeground(
-    thread: Thread,
-    input: CodexInput,
-    onToolOutput: (chunk: string) => void,
-  ): Promise<RunResult> {
-    const { events } = await thread.runStreamed(input.prompt);
-    const items: ThreadItem[] = [];
-    const responseParts: string[] = [];
-    let usage: RunResult['usage'] = null;
-
-    for await (const event of events) {
-      switch (event.type) {
-        case 'item.completed': {
-          const { item } = event;
-          items.push(item);
-          const line = formatItemForLog(item);
-          if (line) onToolOutput(line);
-          if (item.type === 'agent_message') {
-            responseParts.push(item.text);
-          }
-          break;
-        }
-        case 'turn.completed':
-          usage = event.usage ?? null;
-          break;
-        case 'turn.failed':
-          throw new ToolError(event.error.message ?? 'Codex turn failed');
-        case 'error':
-          throw new ToolError(event.message ?? 'Codex stream error');
-      }
+    if (parentStreamId) {
+      await ensureRunDir(executionId);
+      const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
+      await registerExecution(executionId, config, 'codex', parentExecutionId)
+        .catch(() => {});
     }
 
-    return {
-      items,
-      finalResponse: responseParts.join('\n\n'),
-      usage,
-    };
+    const stream = parentStreamId
+      ? createCodexStream(executionId, parentStreamId, input.prompt, config)
+      : undefined;
+
+    try {
+      const turn = stream
+        ? await runStreamedTurn(thread, input.prompt, stream.childStreamId, stream.logger)
+        : await thread.run(input.prompt);
+
+      const threadId = thread.id;
+      const wallTimeMs = Date.now() - startedAt;
+
+      if (stream) {
+        handleTurnSuccess(thread, turn, stream.childStreamId, executionId, stream.logger, wallTimeMs);
+      }
+
+      return {
+        summary: `Codex: ${preview}`,
+        output: formatTurnResult(turn, threadId),
+      };
+    } catch (err) {
+      if (stream) {
+        finalizeCodexStream(stream.childStreamId, executionId, stream.logger, {
+          error: err,
+        });
+      }
+      throw err;
+    }
   }
 
   private async executeBackground(
@@ -310,138 +670,63 @@ export class CodexTool extends defineTool({
     await ensureRunDir(executionId);
 
     const preview = truncateWithEllipsis(input.prompt, 60);
-
-    const syntheticConfig = AgentConfigSchema.parse({
-      agent: 'codex',
-      instruction: input.prompt,
-    });
-
-    // Temp file for live output — the execution registry poller reads this
-    // incrementally and surfaces it in the clickable process view.
-    const stdoutPath = path.join(
-      os.tmpdir(),
-      `texra-bg-${executionId}-stdout.log`,
-    );
-    const stderrPath = path.join(
-      os.tmpdir(),
-      `texra-bg-${executionId}-stderr.log`,
-    );
-    const stdoutStream = fs.createWriteStream(stdoutPath, { flags: 'a' });
-    const stderrStream = fs.createWriteStream(stderrPath, { flags: 'a' });
-    stdoutStream.on('error', () => {}); // prevent unhandled emitter crash
-    stderrStream.on('error', () => {});
-
-    const handle = new ProcessExecutionHandle(
-      executionId,
-      parentStreamId,
-      preview,
-      () => false, // Codex SDK doesn't expose PID for kill — AbortController would be future work
-    );
-    handle.toolName = 'codex';
-    handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
+    const config = buildCodexConfig(input.prompt);
 
     try {
-      await registerExecution(
-        executionId,
-        syntheticConfig,
-        'codex',
-        parentExecutionId,
-        'process',
-      );
+      await registerExecution(executionId, config, 'codex', parentExecutionId);
     } catch {
-      stdoutStream.end();
-      stderrStream.end();
-      void fs.promises.unlink(stdoutPath).catch(() => {});
-      void fs.promises.unlink(stderrPath).catch(() => {});
       throw new ToolError('Failed to register background Codex execution.');
     }
 
-    trackExecution(handle);
+    const { childStreamId, logger } = createCodexStream(
+      executionId,
+      parentStreamId,
+      input.prompt,
+      config,
+    );
 
     const startedAt = Date.now();
 
-    const cleanupTempFiles = (): void => {
-      stdoutStream.end();
-      stderrStream.end();
-      handle.outputPaths = undefined;
-      void fs.promises.unlink(stdoutPath).catch(() => {});
-      void fs.promises.unlink(stderrPath).catch(() => {});
-    };
-
-    const promise = (async (): Promise<RunResult> => {
-      const { events } = await thread.runStreamed(input.prompt);
-      const responseParts: string[] = [];
-      let usage: RunResult['usage'] = null;
-
-      for await (const event of events) {
-        switch (event.type) {
-          case 'item.completed': {
-            const { item } = event;
-            const line = formatItemForLog(item);
-            if (line) stdoutStream.write(line);
-            if (item.type === 'agent_message') {
-              responseParts.push(item.text);
-            }
-            break;
-          }
-          case 'turn.completed':
-            usage = event.usage ?? null;
-            break;
-          case 'turn.failed': {
-            const msg = event.error.message ?? 'Codex turn failed';
-            stderrStream.write(`Error: ${msg}\n`);
-            throw new Error(msg);
-          }
-          case 'error': {
-            const msg = event.message ?? 'Codex stream error';
-            stderrStream.write(`Error: ${msg}\n`);
-            throw new Error(msg);
-          }
-        }
-      }
-
-      return {
-        items: [],
-        finalResponse: responseParts.join('\n\n'),
-        usage,
-      };
-    })();
-
-    void promise
-      .then(async (turn) => {
+    void (async () => {
+      try {
+        const turn = await runStreamedTurn(thread, input.prompt, childStreamId, logger);
         const wallTimeMs = Date.now() - startedAt;
+        const threadId = thread.id;
         const store = getExecutionStore(executionId);
-
-        await writeTerminalStatus(executionId, 'completed').catch(() => {});
 
         const msg = formatCodexDelivery(
           executionId,
           input.prompt,
           wallTimeMs,
           turn,
+          threadId,
         );
         await store.writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
-      })
-      .catch(async (err: unknown) => {
+
+        // Write terminal status before handleTurnSuccess, which may call
+        // finalizeCodexStream → untrackExecution → notifyWaiters.
+        // When a follow-up loop starts, the loop's finally writes its own status.
+        if (!threadId) {
+          await writeTerminalStatus(executionId, 'completed').catch(() => {});
+        }
+        handleTurnSuccess(thread, turn, childStreamId, executionId, logger, wallTimeMs);
+      } catch (err: unknown) {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
+        finalizeCodexStream(childStreamId, executionId, logger, { error: err });
 
         const msg = formatCodexError(executionId, input.prompt, err);
         await getExecutionStore(executionId).writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
-      })
-      .finally(() => {
-        untrackExecution(executionId);
-        cleanupTempFiles();
-      });
+      }
+    })();
 
     return {
       summary: `Launched Codex: ${preview}`,
       output: [
         `Codex agent launched in background (${input.sandbox_mode}).`,
         `Execution ID: ${executionId}`,
-        `To read output: executions tool with path=/executions/${executionId}/output`,
-        `To wait for completion: executions tool with path=/executions/${executionId} action=wait`,
+        `Stream tab: ${childStreamId}`,
         'Result will be delivered as a follow-up message when complete.',
       ].join('\n'),
     };
