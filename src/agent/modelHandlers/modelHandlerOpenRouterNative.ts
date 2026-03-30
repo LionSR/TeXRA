@@ -112,6 +112,9 @@ class OpenRouterStreamAggregator {
       for (const tc of delta.toolCalls) {
         const existing = this.toolCallMap.get(tc.index);
         if (existing) {
+          if (tc.id && !existing.id) {
+            existing.id = tc.id;
+          }
           if (tc.function?.arguments) {
             existing.function.arguments += tc.function.arguments;
           }
@@ -960,8 +963,6 @@ Format the summary as a structured narrative that allows the conversation to con
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, Message[]]> {
-    const endTurn = false;
-
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
@@ -972,7 +973,7 @@ Format the summary as a structured narrative that allows the conversation to con
         });
       }
       this.logger.debug(`Added pseudo prefill: "${pseudoPrefillMsg}"`);
-      return [endTurn, messages];
+      return [false, messages];
     }
 
     const { fileContent } = await prepareExistingOutputContent(
@@ -981,12 +982,29 @@ Format the summary as a structured narrative that allows the conversation to con
       this.logger,
     );
 
-    if (fileContent) {
-      this.updateMessageContentWithoutPrefill(
-        messages,
-        '',
-        '',
-        workspaceState,
+    // Push assistant message with file content
+    messages.push({
+      role: 'assistant',
+      content: [{ type: 'text', text: fileContent }],
+    } as Message);
+
+    // If the file already contains the end tag, the prior run finished — no model call needed
+    if (hasEndTag(agentSetting, fileContent)) {
+      this.logger.debug(
+        'End tag detected - skipping model call (response already added above)',
+      );
+      return [true, messages];
+    }
+
+    this.logger.warn(
+      'Output file exists but no end tag found - continuing from file',
+    );
+
+    if (!fileContent.includes(prefill)) {
+      workspaceState.assembly.accumulatedOutput = prefill + fileContent;
+      await flexibleFS.write(
+        outputLocation,
+        workspaceState.assembly.accumulatedOutput,
       );
     }
     this.addContinueMessageWithoutPrefill(
@@ -995,7 +1013,7 @@ Format the summary as a structured narrative that allows the conversation to con
       agentSetting,
     );
 
-    return [endTurn, messages];
+    return [false, messages];
   }
 
   updateMessageContentWithPrefill(
