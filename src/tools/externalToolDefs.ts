@@ -62,6 +62,10 @@ export interface ExternalToolDef {
   readonly configNotes?: string;
   /** When true, the tool is checked for availability but not shown in the Tools tab dashboard. */
   readonly hideFromDashboard?: boolean;
+  /** Short auth/billing note shown as a badge (e.g. "Uses ChatGPT subscription"). */
+  readonly authNote?: string;
+  /** When true, the dashboard shows an enable/disable toggle for this tool group. */
+  readonly toggleable?: boolean;
 }
 
 // ============================================================
@@ -229,6 +233,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes:
       'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk. ' +
       'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
+    authNote: 'Uses ChatGPT subscription (free with Plus/Pro)',
+    toggleable: true,
     check: async () => {
       try {
         await importCodexClass();

@@ -395,12 +395,9 @@ export class BackgroundTasksPanel extends LitElement {
   }
 }
 
-/** Tool names that represent external AI agents (distinct from plain shell processes). */
-const AGENT_TOOL_NAMES = new Set(['codex']);
-
-/** Check if a child is an AI agent process (uses stable toolName metadata). */
+/** Check if a child process represents an AI agent (distinct from plain shell). */
 function isAgentProcess(child: ActiveChildInfo): boolean {
-  return Boolean(child.toolName && AGENT_TOOL_NAMES.has(child.toolName));
+  return child.toolName === 'codex';
 }
 
 /** Pick the appropriate codicon for a background task item. */
