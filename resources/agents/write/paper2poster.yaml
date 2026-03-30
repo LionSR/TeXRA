@@ -28,6 +28,7 @@ prompts:
     - Cite relevant key papers using biblatex
     - Ensure the poster is visually appealing and readable at A5 size, despite the increased detail
     - Use the provided color scheme and design elements from the template
+    - The poster must be self-contained: write as if the reader is a third party who has never read and will never read our conversations --- they should be able to understand and follow the poster on its own. Define all notations, abbreviations, and terminology before first use.
 
   userPrefix: |
     You are tasked with creating a detailed LaTeX Beamer poster based on the following research paper:
