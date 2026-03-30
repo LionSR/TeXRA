@@ -288,6 +288,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         params.reasoning = {
           effort: this.validateReasoningEffort(effort),
         };
+        // OpenRouter requires explicit opt-in for reasoning traces
+        params.includeReasoning = true;
       } else {
         params.reasoning = { enabled: true };
       }
