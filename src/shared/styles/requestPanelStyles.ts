@@ -605,7 +605,8 @@ export const requestPanelStyles: CSSResult = css`
     padding: var(--spacing-small) var(--spacing-medium);
     background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
-    border-left: var(--border-thick) solid var(--vscode-textBlockQuote-border, var(--vscode-focusBorder));
+    border-left: var(--border-thick) solid
+      var(--vscode-textBlockQuote-border, var(--vscode-focusBorder));
     line-height: var(--line-height-normal);
   }
 
@@ -724,7 +725,9 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-descriptionForeground);
     font-size: var(--font-size-sm);
     text-align: center;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
   }
 
   .external-inquiry-request__drop-zone--active {

@@ -410,7 +410,11 @@ export class ToolCard extends LitElement {
   private renderToggle(): TemplateResult | typeof nothing {
     if (!this.item.toggleable) return nothing;
     return html`
-      <label class="tool-toggle" title="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this.item.name}">
+      <label
+        class="tool-toggle"
+        title="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this.item
+          .name}"
+      >
         <input
           type="checkbox"
           .checked=${this.item.enabled !== false}
@@ -437,8 +441,7 @@ export class ToolCard extends LitElement {
         <div class="tool-header">
           <div class="tool-title-group">
             <span class="tool-name">${this.item.name}</span>
-            ${this.renderBadge()}
-            ${this.renderAuthNote()}
+            ${this.renderBadge()} ${this.renderAuthNote()}
           </div>
           ${this.renderToggle()}
         </div>
