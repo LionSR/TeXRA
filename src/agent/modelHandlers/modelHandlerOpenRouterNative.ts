@@ -288,8 +288,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         params.reasoning = {
           effort: this.validateReasoningEffort(effort),
         };
-        // OpenRouter requires explicit opt-in for reasoning traces
-        params.includeReasoning = true;
       } else {
         params.reasoning = { enabled: true };
       }
@@ -646,9 +644,26 @@ Format the summary as a structured narrative that allows the conversation to con
             },
           } as ChatMessageContentItem,
         ];
+      } else if (
+        media.media_category === 'audio' &&
+        this.capabilities.supportsNativeAudio
+      ) {
+        const audioFormat = (
+          media.media_type.split('/').pop() ?? media.media_type
+        ).toLowerCase();
+        return [
+          { type: 'text', text: `Audio: ${media.file_name}` },
+          {
+            type: 'input_audio',
+            inputAudio: {
+              data: media.data,
+              format: audioFormat,
+            },
+          } as ChatMessageContentItem,
+        ];
       } else if (media.media_category === 'audio') {
         this.logger.warn(
-          `Audio input (${media.file_name}) not yet supported for native OpenRouter handler. Skipping.`,
+          `Audio input received (${media.file_name}) but native audio is not supported by this model. Skipping.`,
         );
         return [];
       }
