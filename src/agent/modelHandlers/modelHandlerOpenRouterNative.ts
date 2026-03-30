@@ -84,6 +84,13 @@ class OpenRouterStreamAggregator {
     if (!this.created && chunk.created) this.created = chunk.created;
     if (chunk.usage) this.usage = chunk.usage;
 
+    // Surface streaming errors instead of silently ignoring them
+    if (chunk.error) {
+      throw new Error(
+        `OpenRouter streaming error (${chunk.error.code}): ${chunk.error.message}`,
+      );
+    }
+
     const choice = chunk.choices[0];
     if (!choice) return { contentDelta: '', reasoningDelta: '' };
 
@@ -682,28 +689,7 @@ Format the summary as a structured narrative that allows the conversation to con
       newResponse = `${newResponse}\n${endTag}`;
     }
 
-    // Map SDK camelCase usage to snake_case for ProviderUsage compatibility
-    const rawUsage = responseObject.usage;
-    const usage = rawUsage
-      ? {
-          prompt_tokens: rawUsage.promptTokens,
-          completion_tokens: rawUsage.completionTokens,
-          total_tokens: rawUsage.totalTokens,
-          prompt_tokens_details: rawUsage.promptTokensDetails
-            ? {
-                cached_tokens: rawUsage.promptTokensDetails.cachedTokens,
-              }
-            : undefined,
-          completion_tokens_details: rawUsage.completionTokensDetails
-            ? {
-                reasoning_tokens:
-                  rawUsage.completionTokensDetails.reasoningTokens ?? undefined,
-              }
-            : undefined,
-        }
-      : null;
-
-    return { text: newResponse, usage, stopReason };
+    return { text: newResponse, usage: responseObject.usage ?? null, stopReason };
   }
 
   // ---------------------------------------------------------------------------
