@@ -32,7 +32,7 @@ import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
-import { toOpenRouterTools } from './toolConversion';
+import { toOpenAITools } from './toolConversion';
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
@@ -296,7 +296,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     if (tools && tools.length > 0) {
-      params.tools = toOpenRouterTools(tools);
+      params.tools = toOpenAITools(tools);
       params.toolChoice = 'auto';
     }
 
@@ -432,6 +432,10 @@ Format the summary as a structured narrative that allows the conversation to con
             maxTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
             temperature: 0,
             stream: false,
+            // Disable reasoning for summarization — no need to think
+            ...(this.capabilities.supportsReasoning
+              ? { reasoning: { effort: 'none' } }
+              : {}),
           } as any,
         },
         { signal },
