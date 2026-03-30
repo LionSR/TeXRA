@@ -74,7 +74,9 @@ export async function runExternalToolChecks(): Promise<
 }
 
 /** Build the set of unavailable tool names from check results + disabled IDs. */
-function buildUnavailableSet(results: ExternalToolCheckResult[]): ReadonlySet<string> {
+function buildUnavailableSet(
+  results: ExternalToolCheckResult[],
+): ReadonlySet<string> {
   const unavailable = new Set<string>();
   const disabledIds = getDisabledToolIds();
   for (const { id, tools, status } of results) {
