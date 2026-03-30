@@ -41,6 +41,7 @@ import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
@@ -335,6 +336,7 @@ export async function activate(context: vscode.ExtensionContext) {
 export async function deactivate() {
   disposeStatusListener?.();
   killBackgroundProcesses();
+  interruptAllCodexSessions();
   killActiveRecording();
 
   await UsageLogService.dispose();

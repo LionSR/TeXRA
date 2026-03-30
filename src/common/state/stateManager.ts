@@ -89,6 +89,9 @@ export enum GlobalStateKey {
 
   // Transport settings
   WEBSOCKET_OPENAI = 'texra.websocket.openai',
+
+  // Tool settings
+  DISABLED_TOOLS = 'texra.tools.disabled',
 }
 
 /** Prefix used for per-instruction suppression flags */
