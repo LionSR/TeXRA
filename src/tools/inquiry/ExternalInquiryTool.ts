@@ -96,14 +96,13 @@ export async function handleExternalInquiryAction(payload: {
   entry.settle({
     submitted: payload.action === 'submit',
     answer: payload.action === 'submit' ? payload.answer : undefined,
-    attachedFiles: payload.action === 'submit' ? payload.attachedFiles : undefined,
+    attachedFiles:
+      payload.action === 'submit' ? payload.attachedFiles : undefined,
   });
 }
 
 /** @internal Called by unified cleanup. */
-export function _rejectPendingInquiriesForStream(
-  streamId: StreamTabId,
-): void {
+export function _rejectPendingInquiriesForStream(streamId: StreamTabId): void {
   for (const entry of pendingInquiries.values()) {
     const matches = entry.streamId === streamId;
     if (matches && !entry.isSettled()) {

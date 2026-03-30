@@ -164,7 +164,7 @@ export async function buildToolDashboardItems(
 
   // Skip detail checks when using cached results (toggle path)
   const detailResults = cachedResults
-    ? lastDetailResults ?? results.map(() => undefined)
+    ? (lastDetailResults ?? results.map(() => undefined))
     : await Promise.all(
         results.map(async ({ id }) => {
           const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);

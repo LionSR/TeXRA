@@ -98,9 +98,7 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
     icon: 'globe',
     title: 'External inquiry',
     renderPanel: (p) =>
-      html`<external-inquiry-panel
-        .permission=${p}
-      ></external-inquiry-panel>`,
+      html`<external-inquiry-panel .permission=${p}></external-inquiry-panel>`,
   },
 };
 
