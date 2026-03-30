@@ -42,7 +42,7 @@ import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { escapeAttr, escapeText } from '@tools/subagentResults';
@@ -271,7 +271,7 @@ function createCodexStream(
     streamId: childStreamId,
     executionId,
     taskState: agentConfigToTaskState(config),
-    storageKey: executionId,
+    storageKey: executionId as string as StorageKey,
   });
   bus.emit('updateStreamDescription', {
     streamId: childStreamId,
