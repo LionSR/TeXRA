@@ -164,7 +164,7 @@ class CodexFollowUpSession implements IInterruptible {
     this.queue?.cancelWait();
   }
 
-  constructor(private readonly streamId: StreamTabId) {}
+  constructor() {}
 
   setQueue(q: FollowUpQueue): void {
     this.queue = q;
@@ -415,7 +415,7 @@ function startFollowUpLoop(
   executionId: string,
   logger: AgentLogger,
 ): void {
-  const session = new CodexFollowUpSession(childStreamId);
+  const session = new CodexFollowUpSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
   session.setQueue(queue);
   registerInterruptible(childStreamId, session);
