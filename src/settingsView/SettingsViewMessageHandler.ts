@@ -88,6 +88,10 @@ import {
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import {
+  getLastCheckResults,
+  refreshDisabledToolCache,
+} from '@tools/toolAvailability';
+import {
   MEMORY_STORAGE_ROOT,
   MAX_PINNED_MEMORIES,
 } from '@tools/memory/constants';
@@ -116,6 +120,7 @@ import {
   getProviderKeyUrl,
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
+import { setToolEnabled } from '@utils/config/constants';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
@@ -486,6 +491,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleInstallToolExtension(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
         this.withActiveWebview((w) => this.sendToolDashboardData(w)),
+      [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: async (data) => {
+        await setToolEnabled(data.toolId, data.enabled);
+        refreshDisabledToolCache();
+        // Re-render with cached check results — no network re-probe needed
+        await this.withActiveWebview((w) =>
+          this.sendToolDashboardData(w, { skipChecks: true }),
+        );
+      },
     };
   }
 
@@ -1373,8 +1386,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Tool dashboard handler implementations
   // ============================================================
 
-  public async sendToolDashboardData(webview: vscode.Webview): Promise<void> {
-    const items = await buildToolDashboardItems();
+  public async sendToolDashboardData(
+    webview: vscode.Webview,
+    options?: { skipChecks?: boolean },
+  ): Promise<void> {
+    const cachedResults =
+      options?.skipChecks ? (getLastCheckResults() ?? undefined) : undefined;
+    const items = await buildToolDashboardItems(cachedResults);
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       items,
