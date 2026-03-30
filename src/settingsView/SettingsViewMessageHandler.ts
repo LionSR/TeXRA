@@ -1390,8 +1390,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     webview: vscode.Webview,
     options?: { skipChecks?: boolean },
   ): Promise<void> {
-    const cachedResults =
-      options?.skipChecks ? (getLastCheckResults() ?? undefined) : undefined;
+    const cachedResults = options?.skipChecks
+      ? (getLastCheckResults() ?? undefined)
+      : undefined;
     const items = await buildToolDashboardItems(cachedResults);
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,

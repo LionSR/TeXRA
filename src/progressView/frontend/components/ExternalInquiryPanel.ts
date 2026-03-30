@@ -134,9 +134,10 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           ${data.context ? this.renderContext(data.context) : nothing}
           ${this.renderQuestion(data.question)}
           ${data.suggestSearch ? this.renderSearchHint() : nothing}
-          ${data.attachFiles?.length ? this.renderAttachFiles(data.attachFiles) : nothing}
-          ${this.renderAnswerArea()}
-          ${this.renderDropZone()}
+          ${data.attachFiles?.length
+            ? this.renderAttachFiles(data.attachFiles)
+            : nothing}
+          ${this.renderAnswerArea()} ${this.renderDropZone()}
         </div>
         ${this.renderActions()}
       </div>
@@ -169,7 +170,8 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
             label=${copied ? 'Copied!' : 'Copy Question'}
             title="Copy question to clipboard for pasting into an external AI model"
             @click=${() => this.copyController.copy(question)}
-          >${copied ? 'Copied!' : 'Copy Question'}</vscode-toolbar-button>
+            >${copied ? 'Copied!' : 'Copy Question'}</vscode-toolbar-button
+          >
         </div>
       </div>
     `;
@@ -179,7 +181,8 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
     return html`
       <div class="external-inquiry-request__search-hint">
         <i class="codicon codicon-lightbulb"></i>
-        Consider enabling <strong>Search</strong> mode in the external tool for this question
+        Consider enabling <strong>Search</strong> mode in the external tool for
+        this question
       </div>
     `;
   }
@@ -276,14 +279,16 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           data-action=${EXTERNAL_INQUIRY_ACTIONS[0]}
           ?disabled=${!this.hasAnswer}
           @click=${this.handleSubmit}
-        >Submit Answer</vscode-toolbar-button>
+          >Submit Answer</vscode-toolbar-button
+        >
         <vscode-toolbar-button
           icon="close"
           label="Skip"
           title="Skip this external inquiry"
           data-action=${EXTERNAL_INQUIRY_ACTIONS[1]}
           @click=${() => this.emitAction(EXTERNAL_INQUIRY_ACTIONS[1])}
-        >Skip</vscode-toolbar-button>
+          >Skip</vscode-toolbar-button
+        >
       </vscode-toolbar-container>
     `;
   }

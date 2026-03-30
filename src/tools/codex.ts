@@ -196,7 +196,9 @@ function formatTurnResult(turn: RunResult, threadId?: string | null): string {
   }
 
   if (threadId) {
-    parts.push(`[Thread ID: ${threadId} — use thread_id to continue this session]`);
+    parts.push(
+      `[Thread ID: ${threadId} — use thread_id to continue this session]`,
+    );
   }
 
   return parts.join('\n\n');
@@ -314,7 +316,9 @@ function logCodexItem(
       break;
     }
     case 'file_change': {
-      const changes = item.changes.map((c: { kind: string; path: string }) => `${c.kind} ${c.path}`);
+      const changes = item.changes.map(
+        (c: { kind: string; path: string }) => `${c.kind} ${c.path}`,
+      );
       if (changes.length > 0) {
         logger.info(`Files: ${changes.join(', ')}`);
       }
@@ -347,9 +351,7 @@ function logCodexItem(
     case 'todo_list': {
       const todos = (item as TodoListItem).items.map((t) => ({
         content: t.text,
-        status: t.completed
-          ? ('completed' as const)
-          : ('pending' as const),
+        status: t.completed ? ('completed' as const) : ('pending' as const),
         activeForm: t.text,
       }));
       bus.emit('updateTodos', { streamId: childStreamId, todos });
@@ -380,7 +382,11 @@ function finalizeCodexStream(
   childStreamId: StreamTabId,
   executionId: string,
   logger: AgentLogger,
-  options?: { wallTimeMs?: number; usage?: RunResult['usage']; error?: unknown },
+  options?: {
+    wallTimeMs?: number;
+    usage?: RunResult['usage'];
+    error?: unknown;
+  },
 ): void {
   if (options?.error) {
     logger.error(toErrorMessage(options.error));
@@ -429,7 +435,9 @@ function startFollowUpLoop(
   void (async () => {
     try {
       while (!session.isInterrupted()) {
-        const messages = await queue.waitAndDrainAll(() => session.isInterrupted());
+        const messages = await queue.waitAndDrainAll(() =>
+          session.isInterrupted(),
+        );
         if (!messages || session.isInterrupted()) break;
 
         const userMessage = messages.join('\n\n');
@@ -438,7 +446,12 @@ function startFollowUpLoop(
         const startedAt = Date.now();
 
         try {
-          const turn = await runStreamedTurn(thread, userMessage, childStreamId, logger);
+          const turn = await runStreamedTurn(
+            thread,
+            userMessage,
+            childStreamId,
+            logger,
+          );
           logTurnSummary(logger, Date.now() - startedAt, turn.usage);
         } catch (err) {
           logger.error(toErrorMessage(err));
@@ -619,9 +632,14 @@ export class CodexTool extends defineTool({
 
     if (parentStreamId) {
       await ensureRunDir(executionId);
-      const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
-      await registerExecution(executionId, config, 'codex', parentExecutionId)
-        .catch(() => {});
+      const parentExecutionId =
+        getCurrentToolFileInteractionContext()?.executionId;
+      await registerExecution(
+        executionId,
+        config,
+        'codex',
+        parentExecutionId,
+      ).catch(() => {});
     }
 
     const stream = parentStreamId
@@ -630,14 +648,26 @@ export class CodexTool extends defineTool({
 
     try {
       const turn = stream
-        ? await runStreamedTurn(thread, input.prompt, stream.childStreamId, stream.logger)
+        ? await runStreamedTurn(
+            thread,
+            input.prompt,
+            stream.childStreamId,
+            stream.logger,
+          )
         : await thread.run(input.prompt);
 
       const threadId = thread.id;
       const wallTimeMs = Date.now() - startedAt;
 
       if (stream) {
-        handleTurnSuccess(thread, turn, stream.childStreamId, executionId, stream.logger, wallTimeMs);
+        handleTurnSuccess(
+          thread,
+          turn,
+          stream.childStreamId,
+          executionId,
+          stream.logger,
+          wallTimeMs,
+        );
       }
 
       return {
@@ -689,7 +719,12 @@ export class CodexTool extends defineTool({
 
     void (async () => {
       try {
-        const turn = await runStreamedTurn(thread, input.prompt, childStreamId, logger);
+        const turn = await runStreamedTurn(
+          thread,
+          input.prompt,
+          childStreamId,
+          logger,
+        );
         const wallTimeMs = Date.now() - startedAt;
         const threadId = thread.id;
         const store = getExecutionStore(executionId);
@@ -710,7 +745,14 @@ export class CodexTool extends defineTool({
         if (!threadId) {
           await writeTerminalStatus(executionId, 'completed').catch(() => {});
         }
-        handleTurnSuccess(thread, turn, childStreamId, executionId, logger, wallTimeMs);
+        handleTurnSuccess(
+          thread,
+          turn,
+          childStreamId,
+          executionId,
+          logger,
+          wallTimeMs,
+        );
       } catch (err: unknown) {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         finalizeCodexStream(childStreamId, executionId, logger, { error: err });

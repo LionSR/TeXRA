@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.36.9",
+  "version": "0.36.10",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.105.0"
@@ -1378,7 +1378,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
     "@cantoo/pdf-lib": "^2.6.5",
-    "@google/genai": "^1.46.0",
+    "@google/genai": "^1.47.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/signals": "^0.2.0",
     "@lit-labs/virtualizer": "^2.1.1",
