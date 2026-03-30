@@ -1,8 +1,3 @@
-// Standard library imports
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-
 // Third-party imports
 import { z } from 'zod';
 
@@ -14,10 +9,11 @@ import {
 } from '@agent/storage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
-  trackExecution,
-  untrackExecution,
-  ProcessExecutionHandle,
-} from '@agent/runtime/executionRegistry';
+  registerInterruptible,
+  unregisterInterruptible,
+  type IInterruptible,
+} from '@agent/toolUse/ToolUseAgentRegistry';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
@@ -29,16 +25,17 @@ import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
-import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 
 // Local imports - utils
+import { formatDuration } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
-import { formatDuration } from '@utils/core';
+import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { createChildStream, finalizeChildStream } from './childStream';
 
 const BASH_TIMEOUT_MS = 120_000; // 120 s
 
@@ -56,11 +53,24 @@ const BashInputSchema = z.strictObject({
     .boolean()
     .prefault(false)
     .describe(
-      'Run command in background. Returns immediately with execution ID. Output captured to executions/{id}/output. Result delivered as follow-up when complete.',
+      'Run command in background. Returns immediately with execution ID and child stream tab. Result delivered as follow-up when complete.',
     ),
 });
 
 export type BashInput = z.infer<typeof BashInputSchema>;
+
+class BashBackgroundSession implements IInterruptible {
+  private pid: number | undefined;
+
+  setPid(pid: number): void {
+    this.pid = pid;
+  }
+
+  interrupt(): void {
+    if (!this.pid) return;
+    signalProcessGroup(this.pid, 'SIGTERM');
+  }
+}
 
 export class BashTool extends defineTool({
   name: 'bash',
@@ -154,55 +164,41 @@ export class BashTool extends defineTool({
 
     const executionId = generateExecutionId();
 
-    // Ephemeral temp files for live output (cleaned up on completion)
-    const stdoutPath = path.join(
-      os.tmpdir(),
-      `texra-bg-${executionId}-stdout.log`,
-    );
-    const stderrPath = path.join(
-      os.tmpdir(),
-      `texra-bg-${executionId}-stderr.log`,
-    );
-    const stdoutStream = fs.createWriteStream(stdoutPath, { flags: 'a' });
-    const stderrStream = fs.createWriteStream(stderrPath, { flags: 'a' });
-    stdoutStream.on('error', () => {}); // prevent unhandled emitter crash
-    stderrStream.on('error', () => {});
-
     await ensureRunDir(executionId);
 
     const preview = truncateWithEllipsis(command, 60);
-
-    let pid: number | undefined;
-    const startedAt = Date.now();
-    const promise = executeCommand(command, {
-      timeout: timeoutMs,
-      buffer: false, // Output is streamed to disk; don't buffer in memory
-      onPid: (p) => {
-        pid = p;
-      },
-      onStdout: (chunk) => stdoutStream.write(chunk),
-      onStderr: (chunk) => stderrStream.write(chunk),
-    });
-
-    const kill = (): boolean => {
-      if (!pid) return false;
-      return signalProcessGroup(pid, 'SIGTERM');
-    };
 
     const syntheticConfig = AgentConfigSchema.parse({
       agent: 'bash',
       instruction: command,
     });
 
-    // Attach lifecycle handlers BEFORE registerExecution so they're
-    // always wired, even if registration throws.
-    const handle = new ProcessExecutionHandle(
+    const { childStreamId, logger } = createChildStream(
       executionId,
       parentStreamId,
-      preview,
-      kill,
+      {
+        streamPrefix: 'bash@tool',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'bash',
+        description: command,
+        config: syntheticConfig,
+      },
     );
-    handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
+    const stdoutLog = logger.createStream('default');
+    const stderrLog = logger.createStream('default', { level: 'warn' });
+    const session = new BashBackgroundSession();
+    registerInterruptible(childStreamId, session);
+
+    const startedAt = Date.now();
+    const promise = executeCommand(command, {
+      timeout: timeoutMs,
+      buffer: false,
+      onPid: (p) => {
+        session.setPid(p);
+      },
+      onStdout: (chunk) => stdoutLog.append(chunk),
+      onStderr: (chunk) => stderrLog.append(chunk),
+    });
 
     try {
       await registerExecution(
@@ -210,27 +206,15 @@ export class BashTool extends defineTool({
         syntheticConfig,
         'bash',
         parentExecutionId,
-        'process',
+        'toolUse',
       );
     } catch {
-      // Registration failed — still attach cleanup but don't track
       void promise.finally(() => {
-        stdoutStream.end();
-        stderrStream.end();
+        stdoutLog.finalize();
+        stderrLog.finalize();
       });
       throw new ToolError('Failed to register background execution.');
     }
-
-    trackExecution(handle);
-
-    const cleanupTempFiles = (): void => {
-      stdoutStream.end();
-      stderrStream.end();
-      handle.outputPaths = undefined;
-      // Fire-and-forget unlink
-      void fs.promises.unlink(stdoutPath).catch(() => {});
-      void fs.promises.unlink(stderrPath).catch(() => {});
-    };
 
     void promise
       .then(async (result) => {
@@ -243,17 +227,15 @@ export class BashTool extends defineTool({
           timedOut: result.timedOut,
           command,
         });
-
-        // Read tail of temp files before cleanup (fixes blank preview bug
-        // caused by buffer:false leaving result.stdout empty)
-        const [outputTail, stderrTail] = await Promise.all([
-          fs.promises.readFile(stdoutPath, 'utf-8').catch(() => ''),
-          fs.promises.readFile(stderrPath, 'utf-8').catch(() => ''),
-        ]);
+        const outputTail = stdoutLog.finalize();
+        const stderrTail = stderrLog.finalize();
 
         const terminalStatus = result.success ? 'completed' : 'error';
         await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
-        untrackExecution(executionId);
+        finalizeChildStream(childStreamId, executionId, logger, {
+          wallTimeMs,
+        });
+        unregisterInterruptible(childStreamId);
 
         const msg = formatBashDelivery(
           executionId,
@@ -267,21 +249,25 @@ export class BashTool extends defineTool({
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
       .catch(async (err: unknown) => {
+        stdoutLog.finalize();
+        stderrLog.finalize();
         await writeTerminalStatus(executionId, 'error').catch(() => {});
-        untrackExecution(executionId);
+        finalizeChildStream(childStreamId, executionId, logger, {
+          error: err,
+        });
+        unregisterInterruptible(childStreamId);
 
         const msg = formatBashError(executionId, command, err);
         await getExecutionStore(executionId).writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
-      })
-      .finally(cleanupTempFiles);
+      });
 
     return {
       summary: `Launched background: ${preview}`,
       output: [
         `Command launched in background.`,
         `Execution ID: ${executionId}`,
-        `To read output: executions tool with path=/executions/${executionId}/output`,
+        `Stream tab: ${childStreamId}`,
         `To wait for completion: executions tool with path=/executions/${executionId} action=wait`,
         'Result will be delivered as a follow-up message when complete.',
       ].join('\n'),
