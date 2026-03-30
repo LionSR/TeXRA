@@ -13,6 +13,7 @@
 // Local imports
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
+import { getDisabledToolIds } from '@utils/config/constants';
 
 // ============================================================
 // Result type
@@ -32,6 +33,9 @@ export interface ExternalToolCheckResult {
 
 /** Cached set of unavailable tool names. */
 let cached: ReadonlySet<string> | null = null;
+
+/** Last check results — kept for rebuilding the cache without re-probing. */
+let lastResults: ExternalToolCheckResult[] | null = null;
 
 /**
  * Run all external tool checks in parallel.
@@ -63,18 +67,39 @@ export async function runExternalToolChecks(): Promise<
     ),
   );
 
-  // Update cache — only exclude tools whose check definitively failed.
-  // 'unknown' (check threw) is not treated as missing: the tool may still
-  // work fine and will produce a clear error at call time if it doesn't.
-  const unavailable = new Set<string>();
-  for (const r of results) {
-    if (r.status === 'not-found') {
-      for (const t of r.tools) unavailable.add(t);
-    }
-  }
-  cached = unavailable;
+  cached = buildUnavailableSet(results);
+  lastResults = results;
 
   return results;
+}
+
+/** Build the set of unavailable tool names from check results + disabled IDs. */
+function buildUnavailableSet(results: ExternalToolCheckResult[]): ReadonlySet<string> {
+  const unavailable = new Set<string>();
+  const disabledIds = getDisabledToolIds();
+  for (const { id, tools, status } of results) {
+    if (status === 'not-found' || disabledIds.has(id)) {
+      for (const t of tools) unavailable.add(t);
+    }
+  }
+  return unavailable;
+}
+
+/**
+ * Return the last check results without re-probing. Returns null if
+ * checks haven't been run yet.
+ */
+export function getLastCheckResults(): ExternalToolCheckResult[] | null {
+  return lastResults;
+}
+
+/**
+ * Rebuild the availability cache from the last check results without
+ * re-probing external tools. Called after toggling a tool on/off.
+ */
+export function refreshDisabledToolCache(): void {
+  if (!lastResults) return;
+  cached = buildUnavailableSet(lastResults);
 }
 
 /**
