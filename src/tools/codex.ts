@@ -22,7 +22,7 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   trackExecution,
@@ -51,6 +51,7 @@ import {
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { formatDuration } from '@utils/core';
+import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -244,11 +245,20 @@ function formatCodexError(
 // Stream tab helpers
 // ============================================================================
 
+/** Build a synthetic AgentConfig for codex (used for TaskState and execution registration). */
+function buildCodexConfig(prompt: string): AgentConfig {
+  return AgentConfigSchema.parse({
+    agent: 'codex',
+    instruction: prompt,
+  });
+}
+
 /** Create a child stream tab for a codex execution and return its logger. */
 function createCodexStream(
   executionId: string,
   parentStreamId: StreamTabId,
   prompt: string,
+  config: AgentConfig,
 ): { childStreamId: StreamTabId; logger: AgentLogger } {
   const childStreamId = `codex@codex-sdk#${executionId}` as StreamTabId;
 
@@ -256,6 +266,12 @@ function createCodexStream(
   bus.emit('setActiveStream', {
     streamId: childStreamId,
     agentCategory: AgentCategory.ToolUse,
+  });
+  bus.emit('setTaskState', {
+    streamId: childStreamId,
+    executionId,
+    taskState: agentConfigToTaskState(config),
+    storageKey: executionId,
   });
   bus.emit('updateStreamDescription', {
     streamId: childStreamId,
@@ -597,9 +613,16 @@ export class CodexTool extends defineTool({
     await ensureRunDir(executionId);
     const preview = truncateWithEllipsis(input.prompt, 60);
     const startedAt = Date.now();
+    const config = buildCodexConfig(input.prompt);
+
+    if (parentStreamId) {
+      const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
+      await registerExecution(executionId, config, 'codex', parentExecutionId)
+        .catch(() => {});
+    }
 
     const stream = parentStreamId
-      ? createCodexStream(executionId, parentStreamId, input.prompt)
+      ? createCodexStream(executionId, parentStreamId, input.prompt, config)
       : undefined;
 
     try {
@@ -644,19 +667,10 @@ export class CodexTool extends defineTool({
     await ensureRunDir(executionId);
 
     const preview = truncateWithEllipsis(input.prompt, 60);
-
-    const syntheticConfig = AgentConfigSchema.parse({
-      agent: 'codex',
-      instruction: input.prompt,
-    });
+    const config = buildCodexConfig(input.prompt);
 
     try {
-      await registerExecution(
-        executionId,
-        syntheticConfig,
-        'codex',
-        parentExecutionId,
-      );
+      await registerExecution(executionId, config, 'codex', parentExecutionId);
     } catch {
       throw new ToolError('Failed to register background Codex execution.');
     }
@@ -665,6 +679,7 @@ export class CodexTool extends defineTool({
       executionId,
       parentStreamId,
       input.prompt,
+      config,
     );
 
     const startedAt = Date.now();
