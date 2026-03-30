@@ -271,7 +271,7 @@ function createCodexStream(
     streamId: childStreamId,
     executionId,
     taskState: agentConfigToTaskState(config),
-    storageKey: executionId as string as StorageKey,
+    storageKey: executionId as StorageKey,
   });
   bus.emit('updateStreamDescription', {
     streamId: childStreamId,
@@ -613,12 +613,12 @@ export class CodexTool extends defineTool({
     parentStreamId?: StreamTabId,
   ): Promise<ToolResult> {
     const executionId = generateExecutionId();
-    await ensureRunDir(executionId);
     const preview = truncateWithEllipsis(input.prompt, 60);
     const startedAt = Date.now();
     const config = buildCodexConfig(input.prompt);
 
     if (parentStreamId) {
+      await ensureRunDir(executionId);
       const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
       await registerExecution(executionId, config, 'codex', parentExecutionId)
         .catch(() => {});
