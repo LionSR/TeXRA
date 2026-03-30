@@ -580,6 +580,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
   );
 
+  private handleToolToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
+  );
+
   // Git settings event handlers
   private handleGitMarkCommitsToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS,
@@ -800,6 +804,7 @@ export class SettingsApp extends SettingsAppBase {
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-recheck=${this.handleToolRecheck}
+              @tool-toggle=${this.handleToolToggle}
             ></tools-tab>
           </vscode-tab-panel>
 
