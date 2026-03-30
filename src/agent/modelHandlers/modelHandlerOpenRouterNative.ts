@@ -10,6 +10,7 @@ import type {
   ChatMessageContentItem,
   ReasoningDetailUnion,
 } from '@openrouter/sdk/models';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -24,7 +25,7 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
-import { K_SLICE } from '@utils/config';
+import { K_SLICE, getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
@@ -38,7 +39,12 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { parseToolArguments } from './utils/parseArguments';
+import { extractTextFromReasoningDetails } from './utils/openRouterReasoning';
 import { ModelHandler } from './ModelHandler';
+import {
+  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+} from './contextManagementConstants';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -46,36 +52,6 @@ import type {
   OpenRouterToolCall,
 } from './types/IModelHandler';
 import type { ProviderStopReason } from './types/StopReasonTypes';
-
-// ============================================================================
-// Reasoning helpers (shared with legacy handler)
-// ============================================================================
-
-/** Extract text content from a reasoning detail item by type. */
-function getReasoningItemText(item: ReasoningDetailUnion): string | undefined {
-  if (item.type === 'reasoning.text') return item.text ?? undefined;
-  if (item.type === 'reasoning.summary') return item.summary;
-  return undefined;
-}
-
-/**
- * Extracts text content from OpenRouter reasoning_details array.
- * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
- */
-function extractTextFromReasoningDetails(
-  details: ReasoningDetailUnion[] | unknown,
-): string {
-  if (!Array.isArray(details)) {
-    return typeof details === 'string' ? details : '';
-  }
-  return details
-    .filter(
-      (item): item is ReasoningDetailUnion => !!item && typeof item === 'object',
-    )
-    .map(getReasoningItemText)
-    .filter((text): text is string => !!text)
-    .join('');
-}
 
 // ============================================================================
 // Streaming aggregator
@@ -220,8 +196,25 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   OpenRouter,
   ChatResponse
 > {
+  // ── Client-side compaction state ──────────────────────────────────────
+  private lastKnownInputTokens = 0;
+  private compactionRequested = false;
+
+  override get supportsManualCompaction(): boolean {
+    return this.isToolUseMode();
+  }
+
+  override requestCompaction(): void {
+    this.compactionRequested = true;
+  }
+
   protected get usageProvider(): NormalizedUsage['provider'] {
     return 'openrouter';
+  }
+
+  /** Whether this is an Anthropic model routed through OpenRouter. */
+  private get isAnthropicViaOpenRouter(): boolean {
+    return this.config.provider === ModelProvider.ANTHROPIC;
   }
 
   async getClient(): Promise<OpenRouter> {
@@ -241,18 +234,38 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   async createResponse(
     options: CreateResponseOptions<Message, OpenRouter>,
   ): Promise<CreateResponseResult<ChatResponse, Message>> {
-    const { client, messages, temperature, endTag, signal, tools } = options;
+    const { client, messages: rawMessages, temperature, endTag, signal, tools } =
+      options;
+
+    // Phase 0: COMPACT - Check if conversation should be compacted
+    let updatedMessages: Message[] | undefined;
+    let messagesToUse = rawMessages;
+
+    if (this.shouldCompact()) {
+      this.compactionRequested = false;
+      const { compactedMessages, didCompact } = await this.compactConversation(
+        client,
+        rawMessages,
+        signal,
+      );
+      if (didCompact) {
+        messagesToUse = compactedMessages;
+        updatedMessages = compactedMessages;
+      }
+    }
+
     const useStreaming = this.getStreamingConfig();
 
-    // Build params
     const params: Record<string, unknown> = {
       model: this.config.openrouterFullName,
-      messages,
+      messages: messagesToUse,
       maxTokens: this.getEffectiveMaxOutputTokens(),
       temperature,
     };
 
-    // Reasoning configuration
+    // Reasoning configuration:
+    // - O1-style models: use reasoning.effort
+    // - DeepSeek V3.2 and similar: use reasoning.enabled
     if (this.capabilities.supportsReasoning) {
       if (
         this.capabilities.supportsReasoningEffort &&
@@ -265,6 +278,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         params.reasoning = {
           effort: this.validateReasoningEffort(effort),
         };
+      } else {
+        params.reasoning = { enabled: true };
       }
     }
 
@@ -306,7 +321,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       const finalOutput = response.choices?.[0]?.message?.content ?? '';
       if (output)
         output.finalize(typeof finalOutput === 'string' ? finalOutput : '');
-      return { response };
+
+      if (response.usage?.promptTokens) {
+        this.lastKnownInputTokens = response.usage.promptTokens;
+      }
+      return { response, updatedMessages };
     }
 
     // Non-streaming
@@ -314,7 +333,137 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       { chatGenerationParams: params as any },
       { signal },
     )) as ChatResponse;
-    return { response };
+
+    if (response.usage?.promptTokens) {
+      this.lastKnownInputTokens = response.usage.promptTokens;
+    }
+    return { response, updatedMessages };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Compaction
+  // ---------------------------------------------------------------------------
+
+  private shouldCompact(): boolean {
+    if (!this.isToolUseMode()) return false;
+    if (this.compactionRequested) return true;
+
+    const thresholdPercent = getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+    if (thresholdPercent <= 0) return false;
+
+    const threshold = Math.floor(
+      (thresholdPercent / 100) * this.config.contextWindow,
+    );
+    return this.lastKnownInputTokens > threshold;
+  }
+
+  private async compactConversation(
+    client: OpenRouter,
+    messages: Message[],
+    signal?: AbortSignal,
+  ): Promise<{ compactedMessages: Message[]; didCompact: boolean }> {
+    const tokensBefore = this.lastKnownInputTokens;
+    const contextWindow = this.config.contextWindow;
+
+    // Separate system messages from conversation
+    const systemMessages: Message[] = [];
+    const conversationMessages: Message[] = [];
+    for (const msg of messages) {
+      if (
+        (msg.role === 'system' || msg.role === 'developer') &&
+        conversationMessages.length === 0
+      ) {
+        systemMessages.push(msg);
+      } else {
+        conversationMessages.push(msg);
+      }
+    }
+
+    if (conversationMessages.length <= 2) {
+      this.logger.debug('Conversation too short for compaction, skipping');
+      return { compactedMessages: messages, didCompact: false };
+    }
+
+    const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Create a concise but complete summary of the conversation below. Preserve:
+- The original user request and goals
+- All key decisions made
+- File paths and code changes discussed or made
+- Tool call results and their outcomes
+- Current state of the task (what is done, what is pending)
+- Any errors encountered and how they were resolved
+
+Format the summary as a structured narrative that allows the conversation to continue seamlessly. Do NOT add any preamble or explanation — output only the summary.`;
+
+    try {
+      const summaryResponse = (await client.chat.send(
+        {
+          chatGenerationParams: {
+            model: this.config.openrouterFullName,
+            messages: [
+              {
+                role: 'system',
+                content: COMPACTION_SYSTEM_PROMPT,
+              },
+              ...conversationMessages,
+            ],
+            maxTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+            temperature: 0,
+            stream: false,
+          } as any,
+        },
+        { signal },
+      )) as ChatResponse;
+
+      const summaryText = summaryResponse.choices[0]?.message?.content;
+      const summary =
+        typeof summaryText === 'string' ? summaryText.trim() : '';
+      if (!summary) {
+        this.logger.warn('Compaction returned empty summary, skipping');
+        return { compactedMessages: messages, didCompact: false };
+      }
+
+      const compactedMessages: Message[] = [
+        ...systemMessages,
+        {
+          role: 'user',
+          content: `[Previous conversation summary]\n\n${summary}`,
+        },
+      ];
+
+      const summaryOutputTokens =
+        summaryResponse.usage?.completionTokens ?? 0;
+      const estimatedTokensAfter = Math.max(1, summaryOutputTokens);
+      const reduction = tokensBefore - estimatedTokensAfter;
+      const reductionPercent =
+        tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
+
+      this.logger.logContextManagement(
+        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        {
+          action: 'compaction',
+          tokensBefore,
+          tokensAfter: estimatedTokensAfter,
+          contextWindow,
+          utilizationBefore: Number(
+            ((tokensBefore / contextWindow) * 100).toFixed(1),
+          ),
+          utilizationAfter: Number(
+            ((estimatedTokensAfter / contextWindow) * 100).toFixed(1),
+          ),
+          details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
+        },
+      );
+
+      return { compactedMessages, didCompact: true };
+    } catch (err) {
+      this.logger.warn(
+        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
+      );
+      return { compactedMessages: messages, didCompact: false };
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -856,13 +1005,22 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     workspaceState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
+
     if (lastMessage?.role === 'assistant') {
       const msg = lastMessage as AssistantMessage;
       if (Array.isArray(msg.content)) {
-        (msg.content as ChatMessageContentItem[]).push({
-          type: 'text',
-          text: bestConnector + newResponse,
-        });
+        if (this.isAnthropicViaOpenRouter) {
+          // Anthropic prefill: replace the last text part
+          const lastPart = (msg.content as ChatMessageContentItem[]).at(-1);
+          if (lastPart && 'text' in lastPart) {
+            (lastPart as any).text = bestConnector + newResponse;
+          }
+        } else {
+          (msg.content as ChatMessageContentItem[]).push({
+            type: 'text',
+            text: bestConnector + newResponse,
+          });
+        }
       } else {
         (lastMessage as any).content = [
           {
@@ -888,6 +1046,23 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     newResponse: string,
     workspaceState: AgentWorkspaceState,
   ): void {
+    // Anthropic via OpenRouter: always push assistant message with accumulated output
+    if (this.isAnthropicViaOpenRouter) {
+      const lastMessage = messages.at(-1);
+      if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
+        messages.push({
+          role: 'assistant',
+          content: [
+            {
+              type: 'text',
+              text: workspaceState.assembly.accumulatedOutput,
+            },
+          ],
+        } as Message);
+      }
+      return;
+    }
+
     const lastMessage = messages.at(-1);
     const secondLastMessage = messages.at(-2);
 
@@ -987,57 +1162,3 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 }
 
-// ============================================================================
-// Anthropic via OpenRouter subclass
-// ============================================================================
-
-/**
- * Handler for Anthropic models accessed through OpenRouter using the native SDK.
- * Adds prefill support for compatible models.
- */
-export class ModelHandlerAnthropicViaOpenRouterNative extends ModelHandlerOpenRouterNative {
-  override updateMessageContentWithPrefill(
-    messages: Message[],
-    bestConnector: string,
-    newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    const lastMessage = messages.at(-1);
-    if (lastMessage?.role === 'assistant') {
-      const msg = lastMessage as AssistantMessage;
-      if (Array.isArray(msg.content)) {
-        const lastPart = (msg.content as ChatMessageContentItem[]).at(-1);
-        if (lastPart && 'text' in lastPart) {
-          (lastPart as any).text = bestConnector + newResponse;
-        }
-      } else if (typeof msg.content === 'string') {
-        (lastMessage as any).content = [
-          {
-            type: 'text',
-            text: workspaceState.assembly.accumulatedOutput,
-          },
-        ];
-      }
-    }
-  }
-
-  override updateMessageContentWithoutPrefill(
-    messages: Message[],
-    _bestConnector: string,
-    _newResponse: string,
-    workspaceState: AgentWorkspaceState,
-  ): void {
-    const lastMessage = messages.at(-1);
-    if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
-      messages.push({
-        role: 'assistant',
-        content: [
-          {
-            type: 'text',
-            text: workspaceState.assembly.accumulatedOutput,
-          },
-        ],
-      } as Message);
-    }
-  }
-}

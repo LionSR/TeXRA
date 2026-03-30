@@ -11,6 +11,7 @@ import { isNonEmptyString } from '@utils/core';
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
+import { extractTextFromReasoningDetails } from './utils/openRouterReasoning';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -21,36 +22,7 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 
-/** Extract text content from a reasoning detail item by type */
-function getReasoningItemText(item: ReasoningDetailUnion): string | undefined {
-  if (item.type === 'reasoning.text') return item.text ?? undefined;
-  if (item.type === 'reasoning.summary') return item.summary;
-  // 'reasoning.encrypted' - encrypted content is not useful for display
-  return undefined;
-}
-
-/**
- * Extracts text content from OpenRouter reasoning_details array.
- * Handles the structured format with type-specific fields.
- * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
- */
-const extractTextFromReasoningDetails = (
-  details: ReasoningDetailUnion[] | unknown,
-): string => {
-  if (!Array.isArray(details)) {
-    // Fallback: if it's a string, return it directly
-    return typeof details === 'string' ? details : '';
-  }
-
-  return details
-    .filter(
-      (item): item is ReasoningDetailUnion =>
-        !!item && typeof item === 'object',
-    )
-    .map(getReasoningItemText)
-    .filter((text): text is string => !!text)
-    .join('');
-};
+// extractTextFromReasoningDetails is imported from ./utils/openRouterReasoning
 
 /**
  * Extracts reasoning delta from streaming chunks for OpenRouter.
