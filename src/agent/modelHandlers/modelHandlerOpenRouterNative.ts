@@ -420,9 +420,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             maxTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
             temperature: 0,
             stream: false,
-            // Disable reasoning for summarization — no need to think
-            ...(this.capabilities.supportsReasoning
-              ? { reasoning: { effort: 'none' } }
+            // Minimize reasoning for summarization — use lowest valid effort
+            ...(this.capabilities.supportsReasoningEffort
+              ? { reasoning: { effort: 'low' } }
               : {}),
           } as any,
         },
