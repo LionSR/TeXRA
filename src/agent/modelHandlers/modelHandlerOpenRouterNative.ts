@@ -275,23 +275,22 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     };
 
     // Reasoning configuration:
-    // - O1-style models: use reasoning.effort
-    // - DeepSeek V3.2 and similar: use reasoning.enabled
-    if (this.capabilities.supportsReasoning) {
-      if (
-        this.capabilities.supportsReasoningEffort &&
-        this.capabilities.reasoningEffort
-      ) {
-        const effort =
-          this.capabilities.reasoningEffort === 'none'
-            ? 'low'
-            : this.capabilities.reasoningEffort;
-        params.reasoning = {
-          effort: this.validateReasoningEffort(effort),
-        };
-      } else {
-        params.reasoning = { enabled: true };
-      }
+    // - O1-style models: use reasoning.effort (SDK-supported field)
+    // - DeepSeek V3.2 and similar: no explicit config needed — these models
+    //   return reasoning_details natively. The SDK's Reasoning schema only
+    //   supports effort/summary, so { enabled: true } would be stripped.
+    if (
+      this.capabilities.supportsReasoning &&
+      this.capabilities.supportsReasoningEffort &&
+      this.capabilities.reasoningEffort
+    ) {
+      const effort =
+        this.capabilities.reasoningEffort === 'none'
+          ? 'low'
+          : this.capabilities.reasoningEffort;
+      params.reasoning = {
+        effort: this.validateReasoningEffort(effort),
+      };
     }
 
     if (tools && tools.length > 0) {
