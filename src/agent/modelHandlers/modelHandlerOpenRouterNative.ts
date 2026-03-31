@@ -127,7 +127,7 @@ class OpenRouterStreamAggregator {
             existing.function.arguments += tc.function.arguments;
           }
           if (tc.function?.name) {
-            existing.function.name = tc.function.name;
+            existing.function.name += tc.function.name;
           }
         } else {
           this.toolCallMap.set(tc.index, {
