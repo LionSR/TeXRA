@@ -1,17 +1,13 @@
-// Standard library imports
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - common
 import { isDirectory, isFile } from '@common/files/fsEntryType';
-
-// Local imports - shared schemas
 import type { ExecutionId } from '@shared/schemas';
 import {
-  EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES,
+  EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS,
+  EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES,
   EXTERNAL_INQUIRY_MAX_UPLOAD_FILES,
   ExternalInquiryModeSchema,
   ExternalInquiryThreadIdSchema,
@@ -19,62 +15,12 @@ import {
   type ExternalInquiryThreadId,
   type ExternalInquiryUploadedFile,
 } from '@shared/schemas';
-
-// Local imports - tools
 import { ToolError } from '@tools/result';
-
-// Local imports - filesystem
-import {
-  GlobalStorageFS,
-  OFFICE_EXTENSIONS,
-  OFFICE_MIME_TYPES,
-  StorageFS,
-} from '@utils/files';
+import { GlobalStorageFS, StorageFS } from '@utils/files';
 
 const EXTERNAL_INQUIRY_THREADS_DIR = 'external_inquiry_threads';
 const EXTERNAL_INQUIRY_EXECUTION_DIR = 'external_inquiry';
 const EXTERNAL_INQUIRY_MANIFEST_FILE = 'manifest.json';
-
-const ALLOWED_FILE_EXTENSIONS = new Set([
-  '.txt',
-  '.md',
-  '.markdown',
-  '.json',
-  '.csv',
-  '.tsv',
-  '.yaml',
-  '.yml',
-  '.xml',
-  '.toml',
-  '.log',
-  '.tex',
-  '.bib',
-  '.py',
-  '.js',
-  '.mjs',
-  '.cjs',
-  '.ts',
-  '.tsx',
-  '.jsx',
-  '.html',
-  '.css',
-  '.scss',
-  '.sh',
-  '.bash',
-  '.zsh',
-  '.diff',
-  '.patch',
-]);
-
-const EXTRA_BLOCKED_MIME_TYPES = new Set([
-  'application/zip',
-  'application/x-zip-compressed',
-  'application/x-tar',
-  'application/gzip',
-  'application/x-gzip',
-  'application/x-7z-compressed',
-  'application/vnd.rar',
-]);
 
 const ExternalInquiryStoredFileSchema = z.strictObject({
   fileName: z.string().min(1),
@@ -206,22 +152,12 @@ function ensureUniqueStoredFileName(
   return candidate;
 }
 
-function normalizeUploadedMediaType(mediaType: string): string {
-  return mediaType.trim().toLowerCase();
-}
-
-function isAllowedUploadExtension(extension: string): boolean {
-  return ALLOWED_FILE_EXTENSIONS.has(extension);
-}
-
 function isBlockedUploadMimeType(mediaType: string): boolean {
   return (
-    mediaType === 'application/pdf' ||
     mediaType.startsWith('image/') ||
     mediaType.startsWith('audio/') ||
     mediaType.startsWith('video/') ||
-    OFFICE_MIME_TYPES.has(mediaType) ||
-    EXTRA_BLOCKED_MIME_TYPES.has(mediaType)
+    EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES.has(mediaType)
   );
 }
 
@@ -266,6 +202,15 @@ async function writeThreadManifest(
   );
 }
 
+async function copyGlobalFileToExecution(
+  sourcePath: string,
+  targetPath: string,
+): Promise<void> {
+  await StorageFS.ensureDir(path.dirname(targetPath));
+  const bytes = await GlobalStorageFS.readBytes(sourcePath);
+  await StorageFS.write(targetPath, bytes);
+}
+
 async function copyGlobalDirectoryToExecution(
   sourceDir: string,
   targetDir: string,
@@ -300,11 +245,25 @@ async function mirrorThreadToExecution(params: {
     params.threadId,
   );
 
-  if (await StorageFS.exists(targetRoot)) {
-    await StorageFS.delete(targetRoot, { recursive: true });
-  }
+  // Copy only the updated manifest and the new turn directory (not the entire thread).
+  const sourceTurnDir = path.join(
+    sourceRoot,
+    'turns',
+    formatTurnDirName(params.turn.turnIndex),
+  );
+  const targetTurnDir = path.join(
+    targetRoot,
+    'turns',
+    formatTurnDirName(params.turn.turnIndex),
+  );
 
-  await copyGlobalDirectoryToExecution(sourceRoot, targetRoot);
+  await Promise.all([
+    copyGlobalFileToExecution(
+      threadManifestPath(params.threadId),
+      path.join(targetRoot, EXTERNAL_INQUIRY_MANIFEST_FILE),
+    ),
+    copyGlobalDirectoryToExecution(sourceTurnDir, targetTurnDir),
+  ]);
 
   const rootRelativePath = normalizeSlashes(
     path.join(EXTERNAL_INQUIRY_EXECUTION_DIR, params.threadId),
@@ -373,8 +332,6 @@ async function persistUploadedFiles(params: {
   turnIndex: number;
   uploadedFiles: readonly ExternalInquiryUploadedFile[];
 }): Promise<ExternalInquiryStoredFile[]> {
-  validateUploadCount(params.uploadedFiles);
-
   const uploadsDir = path.join(
     threadTurnDir(params.threadId, params.turnIndex),
     'uploads',
@@ -394,16 +351,10 @@ async function persistUploadedFiles(params: {
       );
     }
 
-    if (bytes.length > EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES) {
-      throw new ToolError(
-        `Uploaded file ${uploadedFile.fileName} exceeds the ${EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES / (1024 * 1024)} MiB limit.`,
-      );
-    }
-
     const extension = getExtension(uploadedFile.fileName);
-    const mediaType = normalizeUploadedMediaType(uploadedFile.mediaType);
+    const mediaType = uploadedFile.mediaType.trim().toLowerCase();
 
-    if (!isAllowedUploadExtension(extension)) {
+    if (!EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS.has(extension)) {
       throw new ToolError(
         `Uploaded file ${uploadedFile.fileName} is not an allowed text/code file.`,
       );
@@ -488,18 +439,19 @@ export async function persistExternalInquiryTurn(params: {
       )
     : undefined;
 
-  await GlobalStorageFS.write(
-    path.join(turnDir, 'question.txt'),
-    params.question,
-  );
-  await GlobalStorageFS.write(path.join(turnDir, 'answer.txt'), params.answer);
-
+  const writeOps: Promise<void>[] = [
+    GlobalStorageFS.write(path.join(turnDir, 'question.txt'), params.question),
+    GlobalStorageFS.write(path.join(turnDir, 'answer.txt'), params.answer),
+  ];
   if (contextRelativePath) {
-    await GlobalStorageFS.write(
-      path.join(turnDir, 'context.txt'),
-      params.context!.trim(),
+    writeOps.push(
+      GlobalStorageFS.write(
+        path.join(turnDir, 'context.txt'),
+        params.context!.trim(),
+      ),
     );
   }
+  await Promise.all(writeOps);
 
   const storedFiles = await persistUploadedFiles({
     threadId,
@@ -551,8 +503,4 @@ export async function readExternalInquiryThread(
   return readThreadManifest(parsed.data);
 }
 
-export {
-  createStoredThreadId as generateExternalInquiryThreadId,
-  executionFilePath as buildExternalInquiryExecutionFilePath,
-  looksLikeUtf8Text,
-};
+export { looksLikeUtf8Text };

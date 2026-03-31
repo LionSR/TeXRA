@@ -13,7 +13,7 @@
  */
 
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 
@@ -29,9 +29,11 @@ import type {
 } from '@shared/schemas';
 import {
   EXTERNAL_INQUIRY_ACTIONS,
-  EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES,
+  EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS,
+  EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES,
   EXTERNAL_INQUIRY_MAX_UPLOAD_FILES,
 } from '@shared/schemas';
+import { formatBytes } from '@shared/utils/string';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -47,63 +49,9 @@ interface InquiryDraft {
 const DRAFT_CACHE_CAP = 50;
 const draftCache = new Map<string, InquiryDraft>();
 const resolvedIds = new Set<string>();
-
-const ALLOWED_FILE_EXTENSIONS = new Set([
-  '.txt',
-  '.md',
-  '.markdown',
-  '.json',
-  '.csv',
-  '.tsv',
-  '.yaml',
-  '.yml',
-  '.xml',
-  '.toml',
-  '.log',
-  '.tex',
-  '.bib',
-  '.py',
-  '.js',
-  '.mjs',
-  '.cjs',
-  '.ts',
-  '.tsx',
-  '.jsx',
-  '.html',
-  '.css',
-  '.scss',
-  '.sh',
-  '.bash',
-  '.zsh',
-  '.diff',
-  '.patch',
-]);
-
-const BLOCKED_MIME_TYPES = new Set([
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.oasis.opendocument.text',
-  'application/rtf',
-  'text/rtf',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.oasis.opendocument.spreadsheet',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.oasis.opendocument.presentation',
-  'application/vnd.apple.pages',
-  'application/vnd.apple.numbers',
-  'application/vnd.apple.keynote',
-  'application/zip',
-  'application/x-zip-compressed',
-  'application/x-tar',
-  'application/gzip',
-  'application/x-gzip',
-  'application/x-7z-compressed',
-  'application/vnd.rar',
-  'application/octet-stream',
-]);
+const FILE_INPUT_ACCEPT = [...EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS].join(
+  ',',
+);
 
 function getExtension(fileName: string): string {
   const dot = fileName.lastIndexOf('.');
@@ -155,11 +103,6 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-function formatUploadSize(sizeBytes: number): string {
-  if (sizeBytes < 1024) return `${sizeBytes} B`;
-  return `${(sizeBytes / 1024).toFixed(1)} KB`;
-}
-
 function evictOldestDraft(): void {
   if (draftCache.size <= DRAFT_CACHE_CAP) return;
   const oldest = draftCache.keys().next().value;
@@ -197,6 +140,9 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   @state() private dropActive = false;
   @state() private fileMessage = '';
   @state() private isReadingFiles = false;
+
+  @query('.external-inquiry-request__file-input')
+  private fileInputEl!: HTMLInputElement;
 
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
@@ -358,6 +304,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
             'external-inquiry-request__drop-zone': true,
             'external-inquiry-request__drop-zone--active': this.dropActive,
           })}
+          @dragenter=${this.handleDragEnter}
           @dragover=${this.handleDragOver}
           @dragleave=${this.handleDragLeave}
           @drop=${this.handleDrop}
@@ -366,10 +313,22 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
             ? this.renderDroppedFiles()
             : html`<span>Drop files here from your file explorer</span>`}
         </div>
+        <input
+          class="external-inquiry-request__file-input"
+          type="file"
+          multiple
+          accept=${FILE_INPUT_ACCEPT}
+          @change=${this.handleFileInputChange}
+        />
+        <div class="external-inquiry-request__upload-actions">
+          <vscode-button appearance="secondary" @click=${this.openFilePicker}
+            >Choose Files</vscode-button
+          >
+        </div>
         <div class="external-inquiry-request__upload-help">
-          Text files only, up to ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} files and
-          ${(EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES / (1024 * 1024)).toFixed(0)} MiB
-          per file.
+          Text files only, up to ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} files. If
+          drag-and-drop does not work in this webview, use
+          <strong>Choose Files</strong>.
         </div>
         ${this.fileMessage
           ? html`
@@ -397,9 +356,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           (file, idx) => html`
             <div class="external-inquiry-request__dropped-file">
               <i class="codicon codicon-check"></i>
-              <span>
-                ${file.fileName} (${formatUploadSize(file.sizeBytes)})
-              </span>
+              <span> ${file.fileName} (${formatBytes(file.sizeBytes)}) </span>
               <vscode-toolbar-button
                 icon="close"
                 title="Remove"
@@ -450,8 +407,8 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   }
 
   private handleSubmit(): void {
+    if (!this.hasAnswer) return;
     const answer = this.answerText.trim();
-    if (!answer) return;
 
     clearInquiryDraft(getRequestId(this.permission));
 
@@ -465,23 +422,61 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
     );
   }
 
-  private handleDragOver(e: DragEvent): void {
+  private handleDragEnter(e: DragEvent): void {
     e.preventDefault();
+    e.stopPropagation();
     if (!this.dropActive) this.dropActive = true;
   }
 
-  private handleDragLeave(): void {
+  private handleDragOver(e: DragEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    if (!this.dropActive) this.dropActive = true;
+  }
+
+  private handleDragLeave(e: DragEvent): void {
+    const currentTarget = e.currentTarget;
+    const relatedTarget = e.relatedTarget;
+    if (
+      currentTarget instanceof HTMLElement &&
+      relatedTarget instanceof Node &&
+      currentTarget.contains(relatedTarget)
+    ) {
+      return;
+    }
     if (this.dropActive) this.dropActive = false;
   }
 
   private async handleDrop(e: DragEvent): Promise<void> {
     e.preventDefault();
+    e.stopPropagation();
     this.dropActive = false;
     this.fileMessage = '';
 
     const files = e.dataTransfer?.files ? [...e.dataTransfer.files] : [];
     if (files.length === 0) return;
 
+    await this.processIncomingFiles(files);
+  }
+
+  private openFilePicker(): void {
+    this.fileInputEl.click();
+  }
+
+  private async handleFileInputChange(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const files = input.files ? [...input.files] : [];
+    if (files.length === 0) return;
+
+    try {
+      await this.processIncomingFiles(files);
+    } finally {
+      input.value = '';
+    }
+  }
+
+  private async processIncomingFiles(files: File[]): Promise<void> {
     if (
       this.uploadedFiles.length + files.length >
       EXTERNAL_INQUIRY_MAX_UPLOAD_FILES
@@ -490,30 +485,34 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
       return;
     }
 
+    this.fileMessage = '';
     this.isReadingFiles = true;
-    const nextUploads: ExternalInquiryUploadedFile[] = [];
-    const failures: string[] = [];
 
-    for (const file of files) {
-      try {
-        nextUploads.push(await this.readUploadedFile(file));
-      } catch (error) {
-        failures.push(
-          error instanceof Error
-            ? error.message
-            : `Failed to read ${file.name}.`,
-        );
+    try {
+      const nextUploads: ExternalInquiryUploadedFile[] = [];
+      const failures: string[] = [];
+
+      for (const file of files) {
+        try {
+          nextUploads.push(await this.readUploadedFile(file));
+        } catch (error) {
+          failures.push(
+            error instanceof Error
+              ? error.message
+              : `Failed to read ${file.name}.`,
+          );
+        }
       }
-    }
 
-    this.isReadingFiles = false;
+      if (nextUploads.length > 0) {
+        this.uploadedFiles = [...this.uploadedFiles, ...nextUploads];
+      }
 
-    if (nextUploads.length > 0) {
-      this.uploadedFiles = [...this.uploadedFiles, ...nextUploads];
-    }
-
-    if (failures.length > 0) {
-      this.fileMessage = failures.join(' ');
+      if (failures.length > 0) {
+        this.fileMessage = failures.join(' ');
+      }
+    } finally {
+      this.isReadingFiles = false;
     }
   }
 
@@ -527,21 +526,15 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   private async readUploadedFile(
     file: File,
   ): Promise<ExternalInquiryUploadedFile> {
-    if (file.size > EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES) {
-      throw new Error(
-        `${file.name} exceeds ${(EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES / (1024 * 1024)).toFixed(0)} MiB.`,
-      );
-    }
-
     const extension = getExtension(file.name);
     const mediaType = normalizeMediaType(file).toLowerCase();
     const isBlockedMime =
       mediaType.startsWith('image/') ||
       mediaType.startsWith('audio/') ||
       mediaType.startsWith('video/') ||
-      BLOCKED_MIME_TYPES.has(mediaType);
+      EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES.has(mediaType);
 
-    if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
+    if (!EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS.has(extension)) {
       throw new Error(
         `${file.name} is not an allowed text/code file for external inquiry uploads.`,
       );

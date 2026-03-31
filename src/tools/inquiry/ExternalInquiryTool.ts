@@ -8,18 +8,12 @@
  * execution so the agent can inspect them through `executions`.
  */
 
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent
 import { getExecutionStore } from '@agent/storage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-
-// Local imports - event bus and logging
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - shared schemas
 import type {
   ExternalInquiryAction,
   ExternalInquiryUploadedFile,
@@ -29,12 +23,9 @@ import {
   ExternalInquiryModeSchema,
   ExternalInquiryThreadIdSchema,
 } from '@shared/schemas';
-
-// Local imports - tools
 import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
-// Local imports - inquiry storage
 import {
   persistExternalInquiryTurn,
   type PersistedExternalInquiryTurn,

@@ -37,6 +37,24 @@ let cached: ReadonlySet<string> | null = null;
 /** Last check results — kept for rebuilding the cache without re-probing. */
 let lastResults: ExternalToolCheckResult[] | null = null;
 
+/** Current disabled tool names derived from persisted Settings state. */
+function buildDisabledToolNameSet(): ReadonlySet<string> {
+  const disabledIds = getDisabledToolIds();
+  const disabled = new Set<string>();
+
+  for (const def of EXTERNAL_TOOL_DEFS) {
+    if (!disabledIds.has(def.id)) continue;
+    for (const toolName of def.tools) disabled.add(toolName);
+  }
+
+  return disabled;
+}
+
+/** Read the current set of disabled tool names from persisted Settings state. */
+export function getDisabledToolNamesCached(): ReadonlySet<string> {
+  return buildDisabledToolNameSet();
+}
+
 /**
  * Run all external tool checks in parallel.
  * Always performs fresh checks and updates the availability cache.
@@ -77,10 +95,9 @@ export async function runExternalToolChecks(): Promise<
 function buildUnavailableSet(
   results: ExternalToolCheckResult[],
 ): ReadonlySet<string> {
-  const unavailable = new Set<string>();
-  const disabledIds = getDisabledToolIds();
+  const unavailable = new Set<string>(buildDisabledToolNameSet());
   for (const { id, tools, status } of results) {
-    if (status === 'not-found' || disabledIds.has(id)) {
+    if (status === 'not-found') {
       for (const t of tools) unavailable.add(t);
     }
   }
@@ -100,7 +117,10 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * re-probing external tools. Called after toggling a tool on/off.
  */
 export function refreshDisabledToolCache(): void {
-  if (!lastResults) return;
+  if (!lastResults) {
+    cached = buildDisabledToolNameSet();
+    return;
+  }
   cached = buildUnavailableSet(lastResults);
 }
 
@@ -114,7 +134,13 @@ export function refreshDisabledToolCache(): void {
  * fail at call time with a clear error — same as pre-dashboard behavior.
  */
 export function getUnavailableToolNamesCached(): ReadonlySet<string> {
-  return cached ?? new Set();
+  const disabled = buildDisabledToolNameSet();
+  if (!cached) return disabled;
+  if (disabled.size === 0) return cached;
+
+  const unavailable = new Set(cached);
+  for (const toolName of disabled) unavailable.add(toolName);
+  return unavailable;
 }
 
 /** Info about an unavailable tool group, used by the notification layer. */

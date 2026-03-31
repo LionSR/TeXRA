@@ -740,6 +740,15 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-descriptionForeground);
   }
 
+  .external-inquiry-request__file-input {
+    display: none;
+  }
+
+  .external-inquiry-request__upload-actions {
+    display: flex;
+    justify-content: flex-start;
+  }
+
   .external-inquiry-request__upload-message {
     display: flex;
     align-items: center;
