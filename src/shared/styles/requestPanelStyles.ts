@@ -735,6 +735,19 @@ export const requestPanelStyles: CSSResult = css`
     background: var(--vscode-list-hoverBackground);
   }
 
+  .external-inquiry-request__upload-help {
+    font-size: var(--font-size-sm);
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .external-inquiry-request__upload-message {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    font-size: var(--font-size-sm);
+    color: var(--color-warning);
+  }
+
   .external-inquiry-request__dropped-files {
     display: flex;
     flex-direction: column;

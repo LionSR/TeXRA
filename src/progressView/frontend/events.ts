@@ -3,7 +3,10 @@
  * Both dispatch and handler sides use these types.
  */
 
-import type { StringValueDetail } from '@shared/schemas';
+import type {
+  ExternalInquiryUploadedFile,
+  StringValueDetail,
+} from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 
 import type { FollowupFormData } from './components/FollowupSection';
@@ -51,7 +54,7 @@ export interface PermissionActionDetail {
   /** Answer text from external inquiry panel (submit action only). */
   answer?: string;
   /** Files attached by user from external model (submit action only). */
-  attachedFiles?: string[];
+  uploadedFiles?: ExternalInquiryUploadedFile[];
 }
 
 /**

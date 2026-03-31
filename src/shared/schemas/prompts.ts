@@ -111,12 +111,35 @@ export type AgentProposalPermission = z.infer<
 export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'skip'] as const;
 export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
 
+export const EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES = 1024 * 1024;
+export const EXTERNAL_INQUIRY_MAX_UPLOAD_FILES = 5;
+
+export const ExternalInquiryModeSchema = z.enum(['new', 'followup']);
+export type ExternalInquiryMode = z.infer<typeof ExternalInquiryModeSchema>;
+
+export const ExternalInquiryThreadIdSchema = z
+  .string()
+  .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID');
+export type ExternalInquiryThreadId = z.infer<
+  typeof ExternalInquiryThreadIdSchema
+>;
+
+export const ExternalInquiryUploadedFileSchema = z.strictObject({
+  fileName: z.string().min(1),
+  mediaType: z.string(),
+  sizeBytes: z.int().nonnegative(),
+  base64: z.string().min(1),
+});
+export type ExternalInquiryUploadedFile = z.infer<
+  typeof ExternalInquiryUploadedFileSchema
+>;
+
 export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({
   question: z.string(),
-  mode: z.enum(['new', 'followup']),
-  context: z.string().optional(),
-  suggestSearch: z.boolean().optional(),
-  attachFiles: z.array(z.string()).optional(),
+  mode: ExternalInquiryModeSchema,
+  context: z.string().nullish(),
+  suggestSearch: z.boolean().nullish(),
+  attachFiles: z.array(z.string()).nullish(),
 });
 export type ExternalInquiryPermission = z.infer<
   typeof ExternalInquiryPermissionSchema

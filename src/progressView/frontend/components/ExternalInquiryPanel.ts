@@ -12,7 +12,7 @@
  * but the component is re-mounted with fresh @state.
  */
 
-import { html, nothing, type TemplateResult, type PropertyValues } from 'lit';
+import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
@@ -23,8 +23,15 @@ import {
   designTokens,
   requestPanelStyles,
 } from '@shared/styles';
-import type { ExternalInquiryPermission } from '@shared/schemas';
-import { EXTERNAL_INQUIRY_ACTIONS } from '@shared/schemas';
+import type {
+  ExternalInquiryPermission,
+  ExternalInquiryUploadedFile,
+} from '@shared/schemas';
+import {
+  EXTERNAL_INQUIRY_ACTIONS,
+  EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES,
+  EXTERNAL_INQUIRY_MAX_UPLOAD_FILES,
+} from '@shared/schemas';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -34,12 +41,124 @@ import { ProgressEvents } from '../events';
 
 interface InquiryDraft {
   answerText: string;
-  droppedFiles: string[];
+  uploadedFiles: ExternalInquiryUploadedFile[];
 }
 
 const DRAFT_CACHE_CAP = 50;
 const draftCache = new Map<string, InquiryDraft>();
 const resolvedIds = new Set<string>();
+
+const ALLOWED_FILE_EXTENSIONS = new Set([
+  '.txt',
+  '.md',
+  '.markdown',
+  '.json',
+  '.csv',
+  '.tsv',
+  '.yaml',
+  '.yml',
+  '.xml',
+  '.toml',
+  '.log',
+  '.tex',
+  '.bib',
+  '.py',
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.ts',
+  '.tsx',
+  '.jsx',
+  '.html',
+  '.css',
+  '.scss',
+  '.sh',
+  '.bash',
+  '.zsh',
+  '.diff',
+  '.patch',
+]);
+
+const BLOCKED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text',
+  'application/rtf',
+  'text/rtf',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/vnd.apple.pages',
+  'application/vnd.apple.numbers',
+  'application/vnd.apple.keynote',
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/x-tar',
+  'application/gzip',
+  'application/x-gzip',
+  'application/x-7z-compressed',
+  'application/vnd.rar',
+  'application/octet-stream',
+]);
+
+function getExtension(fileName: string): string {
+  const dot = fileName.lastIndexOf('.');
+  return dot >= 0 ? fileName.slice(dot).toLowerCase() : '';
+}
+
+function normalizeMediaType(file: File): string {
+  return file.type.trim().toLowerCase();
+}
+
+function isProbablyTextContent(bytes: Uint8Array): boolean {
+  if (bytes.length === 0) return true;
+
+  let suspiciousControlBytes = 0;
+
+  for (const byte of bytes) {
+    if (byte === 0) return false;
+    const isControl =
+      byte < 32 && byte !== 9 && byte !== 10 && byte !== 12 && byte !== 13;
+    if (isControl) suspiciousControlBytes += 1;
+  }
+
+  return suspiciousControlBytes / bytes.length < 0.05;
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error(`Failed to read ${file.name}.`));
+        return;
+      }
+      const base64 = result.split(',')[1];
+      if (!base64) {
+        reject(new Error(`Failed to encode ${file.name}.`));
+        return;
+      }
+      resolve(base64);
+    };
+
+    reader.onerror = () => {
+      reject(new Error(`Failed to read ${file.name}.`));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatUploadSize(sizeBytes: number): string {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  return `${(sizeBytes / 1024).toFixed(1)} KB`;
+}
 
 function evictOldestDraft(): void {
   if (draftCache.size <= DRAFT_CACHE_CAP) return;
@@ -74,8 +193,10 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   ];
 
   @state() private answerText = '';
-  @state() private droppedFiles: string[] = [];
+  @state() private uploadedFiles: ExternalInquiryUploadedFile[] = [];
   @state() private dropActive = false;
+  @state() private fileMessage = '';
+  @state() private isReadingFiles = false;
 
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
@@ -95,7 +216,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
       const draft = draftCache.get(getRequestId(this.permission));
       if (draft) {
         this.answerText = draft.answerText;
-        this.droppedFiles = draft.droppedFiles;
+        this.uploadedFiles = draft.uploadedFiles;
       }
     }
   }
@@ -103,10 +224,10 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   private saveDraft(): void {
     const id = getRequestId(this.permission);
     if (resolvedIds.has(id)) return;
-    if (this.answerText || this.droppedFiles.length > 0) {
+    if (this.answerText || this.uploadedFiles.length > 0) {
       draftCache.set(id, {
         answerText: this.answerText,
-        droppedFiles: this.droppedFiles,
+        uploadedFiles: this.uploadedFiles,
       });
       evictOldestDraft();
     } else {
@@ -121,7 +242,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   // ── Render ──
 
   private get hasAnswer(): boolean {
-    return this.answerText.trim().length > 0;
+    return this.answerText.trim().length > 0 && !this.isReadingFiles;
   }
 
   override render(): TemplateResult {
@@ -241,10 +362,30 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           @dragleave=${this.handleDragLeave}
           @drop=${this.handleDrop}
         >
-          ${this.droppedFiles.length > 0
+          ${this.uploadedFiles.length > 0
             ? this.renderDroppedFiles()
             : html`<span>Drop files here from your file explorer</span>`}
         </div>
+        <div class="external-inquiry-request__upload-help">
+          Text files only, up to ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} files and
+          ${(EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES / (1024 * 1024)).toFixed(0)} MiB
+          per file.
+        </div>
+        ${this.fileMessage
+          ? html`
+              <div class="external-inquiry-request__upload-message">
+                <i class="codicon codicon-warning"></i>
+                <span>${this.fileMessage}</span>
+              </div>
+            `
+          : nothing}
+        ${this.isReadingFiles
+          ? html`
+              <div class="external-inquiry-request__upload-help">
+                Processing files...
+              </div>
+            `
+          : nothing}
       </div>
     `;
   }
@@ -252,11 +393,13 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   private renderDroppedFiles(): TemplateResult {
     return html`
       <div class="external-inquiry-request__dropped-files">
-        ${this.droppedFiles.map(
+        ${this.uploadedFiles.map(
           (file, idx) => html`
             <div class="external-inquiry-request__dropped-file">
               <i class="codicon codicon-check"></i>
-              <span>${file}</span>
+              <span>
+                ${file.fileName} (${formatUploadSize(file.sizeBytes)})
+              </span>
               <vscode-toolbar-button
                 icon="close"
                 title="Remove"
@@ -317,7 +460,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
         permission: this.permission,
         action: EXTERNAL_INQUIRY_ACTIONS[0],
         answer,
-        attachedFiles: this.droppedFiles,
+        uploadedFiles: this.uploadedFiles,
       }),
     );
   }
@@ -331,17 +474,96 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
     if (this.dropActive) this.dropActive = false;
   }
 
-  private handleDrop(e: DragEvent): void {
+  private async handleDrop(e: DragEvent): Promise<void> {
     e.preventDefault();
     this.dropActive = false;
-    if (e.dataTransfer?.files) {
-      const newFiles = Array.from(e.dataTransfer.files).map((f) => f.name);
-      this.droppedFiles = [...this.droppedFiles, ...newFiles];
+    this.fileMessage = '';
+
+    const files = e.dataTransfer?.files ? [...e.dataTransfer.files] : [];
+    if (files.length === 0) return;
+
+    if (
+      this.uploadedFiles.length + files.length >
+      EXTERNAL_INQUIRY_MAX_UPLOAD_FILES
+    ) {
+      this.fileMessage = `You can attach at most ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} files per inquiry.`;
+      return;
+    }
+
+    this.isReadingFiles = true;
+    const nextUploads: ExternalInquiryUploadedFile[] = [];
+    const failures: string[] = [];
+
+    for (const file of files) {
+      try {
+        nextUploads.push(await this.readUploadedFile(file));
+      } catch (error) {
+        failures.push(
+          error instanceof Error
+            ? error.message
+            : `Failed to read ${file.name}.`,
+        );
+      }
+    }
+
+    this.isReadingFiles = false;
+
+    if (nextUploads.length > 0) {
+      this.uploadedFiles = [...this.uploadedFiles, ...nextUploads];
+    }
+
+    if (failures.length > 0) {
+      this.fileMessage = failures.join(' ');
     }
   }
 
   private removeFile(index: number): void {
-    this.droppedFiles = this.droppedFiles.filter((_, i) => i !== index);
+    this.uploadedFiles = this.uploadedFiles.filter((_, i) => i !== index);
+    if (this.uploadedFiles.length === 0) {
+      this.fileMessage = '';
+    }
+  }
+
+  private async readUploadedFile(
+    file: File,
+  ): Promise<ExternalInquiryUploadedFile> {
+    if (file.size > EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES) {
+      throw new Error(
+        `${file.name} exceeds ${(EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES / (1024 * 1024)).toFixed(0)} MiB.`,
+      );
+    }
+
+    const extension = getExtension(file.name);
+    const mediaType = normalizeMediaType(file).toLowerCase();
+    const isBlockedMime =
+      mediaType.startsWith('image/') ||
+      mediaType.startsWith('audio/') ||
+      mediaType.startsWith('video/') ||
+      BLOCKED_MIME_TYPES.has(mediaType);
+
+    if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
+      throw new Error(
+        `${file.name} is not an allowed text/code file for external inquiry uploads.`,
+      );
+    }
+
+    if (isBlockedMime) {
+      throw new Error(`${file.name} is not a supported text file.`);
+    }
+
+    const previewBytes = new Uint8Array(
+      await file.slice(0, 4096).arrayBuffer(),
+    );
+    if (!isProbablyTextContent(previewBytes)) {
+      throw new Error(`${file.name} looks binary and cannot be uploaded here.`);
+    }
+
+    return {
+      fileName: file.name,
+      mediaType,
+      sizeBytes: file.size,
+      base64: await readFileAsBase64(file),
+    };
   }
 }
 

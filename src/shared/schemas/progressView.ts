@@ -22,6 +22,7 @@ import {
   AgentProposalPermissionSchema,
   BashPermissionSchema,
   EXTERNAL_INQUIRY_ACTIONS,
+  ExternalInquiryUploadedFileSchema,
   ExternalInquiryPermissionSchema,
   PLAN_APPROVAL_ACTIONS,
   PlanApprovalPermissionSchema,
@@ -633,7 +634,7 @@ const ExternalInquiryActionMessageSchema = z.object({
   requestId: z.string().min(1),
   action: z.enum(EXTERNAL_INQUIRY_ACTIONS),
   answer: z.string().optional(),
-  attachedFiles: z.array(z.string()).optional(),
+  uploadedFiles: z.array(ExternalInquiryUploadedFileSchema).optional(),
 });
 
 const RestoreProposalConfigMessageSchema = z.object({

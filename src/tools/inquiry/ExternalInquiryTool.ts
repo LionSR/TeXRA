@@ -3,60 +3,103 @@
  *
  * The agent formulates a self-contained question. The user copies it to
  * an external model (ChatGPT, Gemini, Claude, etc.), gets an answer,
- * and pastes it back. The answer (plus any attached files) is returned
- * to the agent as the tool result.
- *
- * Follows the same async promise pattern as bashApproval.ts.
+ * and pastes it back. The answer and uploaded text files are persisted
+ * into a durable external-inquiry thread and mirrored into the current
+ * execution so the agent can inspect them through `executions`.
  */
 
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports - agent
+import { getExecutionStore } from '@agent/storage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+
+// Local imports - event bus and logging
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import type { ExternalInquiryAction, StreamTabId } from '@shared/schemas';
-import { type ToolResult } from '@tools/result';
+
+// Local imports - shared schemas
+import type {
+  ExternalInquiryAction,
+  ExternalInquiryUploadedFile,
+  StreamTabId,
+} from '@shared/schemas';
+import {
+  ExternalInquiryModeSchema,
+  ExternalInquiryThreadIdSchema,
+} from '@shared/schemas';
+
+// Local imports - tools
+import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
+// Local imports - inquiry storage
+import {
+  persistExternalInquiryTurn,
+  type PersistedExternalInquiryTurn,
+} from './externalInquiryStorage';
+
 const logger = new AgentLogger('ExternalInquiryTool');
+const EXTERNAL_INQUIRY_REPORT_THRESHOLD = 20_000;
+const EXTERNAL_INQUIRY_PREVIEW_LENGTH = 2_000;
 
 // ============================================================================
 // Tool Schema
 // ============================================================================
 
-const ExternalInquiryInputSchema = z.strictObject({
-  question: z
-    .string()
-    .describe(
-      'The complete, self-contained question to ask the external model. ' +
-        'MUST include all necessary background, definitions, notation, and problem setup ' +
-        'because the external model has NO context from this conversation.',
+const ExternalInquiryInputSchema = z
+  .strictObject({
+    question: z
+      .string()
+      .describe(
+        'The complete, self-contained question to ask the external model. ' +
+          'MUST include all necessary background, definitions, notation, and problem setup ' +
+          'because the external model has NO context from this conversation.',
+      ),
+    mode: ExternalInquiryModeSchema.describe(
+      "'new' to start a fresh external-inquiry thread, 'followup' to continue a prior external-inquiry thread.",
     ),
-  mode: z
-    .enum(['new', 'followup'])
-    .describe(
-      "'new' to start a fresh topic in the external model, " +
-        "'followup' to continue a prior external conversation thread.",
+    thread_id: ExternalInquiryThreadIdSchema.nullish().describe(
+      'Durable external inquiry thread ID from a previous external_inquiry result. ' +
+        "Required for mode='followup'. Must be omitted for mode='new'.",
     ),
-  context: z
-    .string()
-    .nullish()
-    .describe(
-      'Brief note shown to the user explaining why this question is being asked.',
-    ),
-  suggestSearch: z
-    .boolean()
-    .nullish()
-    .describe(
-      'Set to true to suggest the user enable web search mode in the external tool.',
-    ),
-  attachFiles: z
-    .array(z.string())
-    .nullish()
-    .describe(
-      'Workspace-relative file paths the user should upload to the external model.',
-    ),
-});
+    context: z
+      .string()
+      .nullish()
+      .describe(
+        'Brief note shown to the user explaining why this question is being asked.',
+      ),
+    suggestSearch: z
+      .boolean()
+      .nullish()
+      .describe(
+        'Set to true to suggest the user enable web search mode in the external tool.',
+      ),
+    attachFiles: z
+      .array(z.string())
+      .nullish()
+      .describe(
+        'Workspace-relative file paths the user should upload to the external model.',
+      ),
+  })
+  .superRefine((value, ctx) => {
+    if (value.mode === 'new' && value.thread_id != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['thread_id'],
+        message: "thread_id must be omitted when mode='new'.",
+      });
+    }
+
+    if (value.mode === 'followup' && value.thread_id == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['thread_id'],
+        message: "thread_id is required when mode='followup'.",
+      });
+    }
+  });
 
 export type ExternalInquiryInput = z.infer<typeof ExternalInquiryInputSchema>;
 
@@ -67,7 +110,7 @@ export type ExternalInquiryInput = z.infer<typeof ExternalInquiryInputSchema>;
 export interface ExternalInquiryResult {
   submitted: boolean;
   answer?: string;
-  attachedFiles?: string[];
+  uploadedFiles?: ExternalInquiryUploadedFile[];
 }
 
 let inquiryCounter = 0;
@@ -80,6 +123,171 @@ const pendingInquiries = new Map<
   }
 >();
 
+function toCurrentExecutionPath(path: string, executionId?: string): string {
+  if (!executionId) return path;
+  const prefix = `/executions/${executionId}/`;
+  return path.startsWith(prefix)
+    ? `/executions/current/${path.slice(prefix.length)}`
+    : path;
+}
+
+function buildCurrentMirrorPaths(persisted: PersistedExternalInquiryTurn): {
+  manifestPath?: string;
+  questionPath?: string;
+  answerPath?: string;
+  uploadPaths: string[];
+} {
+  const mirror = persisted.executionMirrorPaths;
+  if (!mirror) {
+    return { uploadPaths: [] };
+  }
+
+  return {
+    manifestPath: toCurrentExecutionPath(
+      mirror.manifestPath,
+      mirror.executionId,
+    ),
+    questionPath: toCurrentExecutionPath(
+      mirror.questionPath,
+      mirror.executionId,
+    ),
+    answerPath: toCurrentExecutionPath(mirror.answerPath, mirror.executionId),
+    uploadPaths: mirror.uploadPaths.map((filePath) =>
+      toCurrentExecutionPath(filePath, mirror.executionId),
+    ),
+  };
+}
+
+function buildExternalInquiryOutput(
+  persisted: PersistedExternalInquiryTurn,
+  answer: string,
+): string {
+  const currentPaths = buildCurrentMirrorPaths(persisted);
+  const lines = [
+    `Thread ID: ${persisted.threadId}`,
+    `Turn: ${persisted.turn.turnIndex}`,
+    'Answer from external model:',
+    '',
+    answer,
+  ];
+
+  lines.push(
+    '',
+    `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
+  );
+
+  if (currentPaths.manifestPath) {
+    lines.push('', `Thread mirror: ${currentPaths.manifestPath}`);
+  }
+
+  if (currentPaths.answerPath) {
+    lines.push(`Answer file: ${currentPaths.answerPath}`);
+  }
+
+  if (currentPaths.uploadPaths.length > 0) {
+    lines.push(
+      '',
+      'Uploaded files mirrored into execution:',
+      ...currentPaths.uploadPaths.map((filePath) => `- ${filePath}`),
+    );
+  }
+
+  return lines.join('\n');
+}
+
+function buildExternalInquiryReport(
+  persisted: PersistedExternalInquiryTurn,
+  answer: string,
+): string {
+  const lines = [
+    'External inquiry result',
+    `Thread ID: ${persisted.threadId}`,
+    `Turn: ${persisted.turn.turnIndex}`,
+    `Mode: ${persisted.turn.mode}`,
+    `Timestamp: ${persisted.turn.timestamp}`,
+    ...(persisted.turn.context ? [`Context: ${persisted.turn.context}`] : []),
+    '',
+    'Question:',
+    persisted.turn.question,
+    '',
+    'Answer:',
+    answer,
+  ];
+
+  const mirror = persisted.executionMirrorPaths;
+  if (mirror) {
+    lines.push(
+      '',
+      'Mirrored execution files:',
+      `- Manifest: ${mirror.manifestPath}`,
+      `- Question: ${mirror.questionPath}`,
+      ...(mirror.contextPath ? [`- Context: ${mirror.contextPath}`] : []),
+      `- Answer: ${mirror.answerPath}`,
+    );
+
+    if (mirror.uploadPaths.length > 0) {
+      lines.push(
+        'Uploaded files:',
+        ...mirror.uploadPaths.map((filePath) => `- ${filePath}`),
+      );
+    }
+  }
+
+  return lines.join('\n');
+}
+
+async function appendExternalInquiryReport(params: {
+  executionId: string;
+  persisted: PersistedExternalInquiryTurn;
+  answer: string;
+}): Promise<void> {
+  const store = getExecutionStore(params.executionId);
+  const existing = await store.readReport();
+  const nextSection = buildExternalInquiryReport(
+    params.persisted,
+    params.answer,
+  );
+  const separator = '\n\n' + '='.repeat(80) + '\n\n';
+  await store.writeReport(
+    existing?.trim() ? `${existing}${separator}${nextSection}` : nextSection,
+  );
+}
+
+function buildLongAnswerResult(
+  persisted: PersistedExternalInquiryTurn,
+  answer: string,
+): ToolResult {
+  const preview = answer.slice(0, EXTERNAL_INQUIRY_PREVIEW_LENGTH);
+  const currentPaths = buildCurrentMirrorPaths(persisted);
+  const lines = [
+    'The external model returned a long answer.',
+    `Thread ID: ${persisted.threadId}`,
+    'The full answer has been saved to /executions/current/report.',
+    'Use the executions tool with path=/executions/current/report to inspect it.',
+    `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
+  ];
+
+  if (currentPaths.manifestPath) {
+    lines.push('', `Thread mirror: ${currentPaths.manifestPath}`);
+  }
+
+  if (currentPaths.uploadPaths.length > 0) {
+    lines.push(
+      'Uploaded files mirrored into execution:',
+      ...currentPaths.uploadPaths.map((filePath) => `- ${filePath}`),
+    );
+  }
+
+  if (preview) {
+    lines.push('', `Preview:\n\n${preview}`);
+  }
+
+  return {
+    summary: 'Received long answer from external model',
+    output: lines.join('\n'),
+  };
+}
+
 // ============================================================================
 // Public API (called from progress view message handler)
 // ============================================================================
@@ -88,7 +296,7 @@ export async function handleExternalInquiryAction(payload: {
   requestId: string;
   action: ExternalInquiryAction;
   answer?: string;
-  attachedFiles?: string[];
+  uploadedFiles?: ExternalInquiryUploadedFile[];
 }): Promise<void> {
   const entry = pendingInquiries.get(payload.requestId);
   if (!entry || entry.isSettled()) return;
@@ -96,8 +304,8 @@ export async function handleExternalInquiryAction(payload: {
   entry.settle({
     submitted: payload.action === 'submit',
     answer: payload.action === 'submit' ? payload.answer : undefined,
-    attachedFiles:
-      payload.action === 'submit' ? payload.attachedFiles : undefined,
+    uploadedFiles:
+      payload.action === 'submit' ? payload.uploadedFiles : undefined,
   });
 }
 
@@ -138,7 +346,7 @@ Tips for effective questions:
 - Specify what kind of answer you need (proof sketch, calculation, reference, etc.)
 - If this is a follow-up, summarize what was established before
 
-Use mode='followup' when continuing a thread in the same external session (the user keeps that session open). Use mode='new' when starting a fresh topic.
+Every successful call returns a durable thread_id. Pass that thread_id back with mode='followup' to continue the same external-inquiry thread in later calls, even from a future run.
 
 Set suggestSearch=true when the question could benefit from the external model using web search (e.g., looking up recent papers, checking specific results).
 
@@ -148,20 +356,21 @@ Use attachFiles to list workspace files the user should upload to the external m
   protected async execute(input: ExternalInquiryInput): Promise<ToolResult> {
     const context = getCurrentToolFileInteractionContext();
     const streamId = context?.streamId;
+    const executionId = context?.executionId;
 
     const requestId = `inquiry-${Date.now().toString(36)}-${++inquiryCounter}`;
 
     logger.info(
-      `External inquiry [${input.mode}]: ${input.question.substring(0, 100)}...`,
+      `External inquiry [${input.mode}${input.thread_id ? ` ${input.thread_id}` : ''}]: ${input.question.substring(0, 100)}...`,
     );
 
     try {
       const result = await new Promise<ExternalInquiryResult>((resolve) => {
         let settled = false;
-        const settle = (r: ExternalInquiryResult) => {
+        const settle = (settledResult: ExternalInquiryResult) => {
           if (settled) return;
           settled = true;
-          resolve(r);
+          resolve(settledResult);
         };
 
         pendingInquiries.set(requestId, {
@@ -197,16 +406,36 @@ Use attachFiles to list workspace files the user should upload to the external m
         };
       }
 
-      let output = `Answer from external model:\n\n${result.answer ?? ''}`;
+      const answer = result.answer?.trim();
+      if (!answer) {
+        throw new ToolError('External inquiry answer cannot be empty.');
+      }
 
-      if (result.attachedFiles?.length) {
-        const fileList = result.attachedFiles.map((f) => `- ${f}`).join('\n');
-        output += `\n\nFiles attached by user from the external model:\n${fileList}`;
+      const persisted = await persistExternalInquiryTurn({
+        mode: input.mode,
+        threadId: input.thread_id ?? undefined,
+        question: input.question,
+        context: input.context ?? undefined,
+        answer,
+        uploadedFiles: result.uploadedFiles ?? [],
+        executionId,
+      });
+
+      if (executionId) {
+        await appendExternalInquiryReport({
+          executionId,
+          persisted,
+          answer,
+        });
+      }
+
+      if (executionId && answer.length > EXTERNAL_INQUIRY_REPORT_THRESHOLD) {
+        return buildLongAnswerResult(persisted, answer);
       }
 
       return {
         summary: `Received answer from external model (${input.mode})`,
-        output,
+        output: buildExternalInquiryOutput(persisted, answer),
       };
     } finally {
       pendingInquiries.delete(requestId);
