@@ -133,6 +133,16 @@ export const DIFF_MARKER_THRESHOLD = 2;
 export const TRIVIAL_WRITE_OUTPUT = 'written';
 
 /**
+ * Friendly display labels for tool names that shouldn't be shown verbatim.
+ */
+export const TOOL_LABEL_MAP: Record<string, string> = {
+  codex_patch: 'Codex Files',
+  codex_thread: 'Codex Thread',
+  codex_todo: 'Codex Plan',
+  codex_turn: 'Codex Turn',
+};
+
+/**
  * Tool icon mapping for different tool types.
  * Maps tool names to VS Code codicon classes.
  */
@@ -202,4 +212,8 @@ export const TOOL_ICON_MAP: Record<string, string> = {
 
   // External agents
   codex: 'codicon-robot',
+  codex_patch: 'codicon-diff',
+  codex_thread: 'codicon-comment-discussion',
+  codex_todo: 'codicon-checklist',
+  codex_turn: 'codicon-check-all',
 };
