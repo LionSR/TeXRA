@@ -35,6 +35,7 @@ import {
   EXTERNAL_INQUIRY_MAX_UPLOAD_FILES,
 } from '@shared/schemas';
 import { formatBytes } from '@shared/utils/string';
+import { looksLikeUtf8Text } from '@shared/utils/textDetection';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
@@ -62,24 +63,6 @@ function getExtension(fileName: string): string {
 
 function normalizeMediaType(file: File): string {
   return file.type.trim().toLowerCase();
-}
-
-function isProbablyTextContent(bytes: Uint8Array): boolean {
-  if (bytes.length === 0) return true;
-
-  let suspiciousControlBytes = 0;
-
-  for (const byte of bytes) {
-    if (byte === 0) return false;
-    const isControl =
-      byte < 32 && byte !== 9 && byte !== 10 && byte !== 12 && byte !== 13;
-    if (isControl) suspiciousControlBytes += 1;
-  }
-
-  const text = new TextDecoder('utf-8').decode(bytes);
-  if (text.includes('\uFFFD')) return false;
-
-  return suspiciousControlBytes / bytes.length < 0.05;
 }
 
 function readFileAsBase64(file: File): Promise<string> {
@@ -584,10 +567,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
       );
     }
 
-    const previewBytes = new Uint8Array(
-      await file.slice(0, 4096).arrayBuffer(),
-    );
-    if (!isProbablyTextContent(previewBytes)) {
+    const fileBytes = new Uint8Array(await file.arrayBuffer());
+    if (!looksLikeUtf8Text(fileBytes)) {
       throw new Error(`${file.name} looks binary and cannot be uploaded here.`);
     }
 

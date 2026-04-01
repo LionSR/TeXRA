@@ -17,6 +17,7 @@ import {
   type ExternalInquiryThreadId,
   type ExternalInquiryUploadedFile,
 } from '@shared/schemas';
+import { looksLikeUtf8Text } from '@shared/utils/textDetection';
 import { ToolError } from '@tools/result';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 
@@ -76,6 +77,31 @@ export interface PersistedExternalInquiryTurn {
   manifest: ExternalInquiryThreadManifest;
   turn: ExternalInquiryTurnRecord;
   executionMirrorPaths?: ExternalInquiryExecutionMirrorPaths;
+}
+
+// Per-thread write lock to prevent concurrent manifest corruption.
+const threadLocks = new Map<string, Promise<void>>();
+
+async function withThreadLock<T>(
+  threadId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const prev = threadLocks.get(threadId) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  threadLocks.set(threadId, next);
+
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (threadLocks.get(threadId) === next) {
+      threadLocks.delete(threadId);
+    }
+  }
 }
 
 function normalizeSlashes(value: string): string {
@@ -161,23 +187,6 @@ function isBlockedUploadMimeType(mediaType: string): boolean {
     mediaType.startsWith('video/') ||
     EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES.has(mediaType)
   );
-}
-
-function looksLikeUtf8Text(bytes: Uint8Array): boolean {
-  if (bytes.length === 0) return true;
-
-  let suspiciousControlBytes = 0;
-  for (const byte of bytes) {
-    if (byte === 0) return false;
-    const isControl =
-      byte < 32 && byte !== 9 && byte !== 10 && byte !== 12 && byte !== 13;
-    if (isControl) suspiciousControlBytes += 1;
-  }
-
-  const text = Buffer.from(bytes).toString('utf8');
-  if (text.includes('\uFFFD')) return false;
-
-  return suspiciousControlBytes / bytes.length < 0.05;
 }
 
 async function readThreadManifest(
@@ -442,86 +451,92 @@ export async function persistExternalInquiryTurn(params: {
   validateUploadSizes(uploadedFiles);
 
   const threadId = params.threadId ?? createStoredThreadId();
-  const existingManifest = await readThreadManifest(threadId);
 
-  if (params.threadId && !existingManifest) {
-    throw new ToolError(`External inquiry thread not found: ${threadId}`);
-  }
+  return withThreadLock(threadId, async () => {
+    const existingManifest = await readThreadManifest(threadId);
 
-  const timestamp = new Date().toISOString();
-  const manifest =
-    existingManifest ?? buildNewThreadManifest(threadId, timestamp);
-  const turnIndex = manifest.turns.length + 1;
-  const turnDir = threadTurnDir(threadId, turnIndex);
+    if (params.threadId && !existingManifest) {
+      throw new ToolError(`External inquiry thread not found: ${threadId}`);
+    }
 
-  await GlobalStorageFS.ensureDir(turnDir);
+    const timestamp = new Date().toISOString();
+    const manifest =
+      existingManifest ?? buildNewThreadManifest(threadId, timestamp);
+    const turnIndex = manifest.turns.length + 1;
+    const turnDir = threadTurnDir(threadId, turnIndex);
 
-  const questionRelativePath = normalizeSlashes(
-    path.join('turns', formatTurnDirName(turnIndex), 'question.txt'),
-  );
-  const answerRelativePath = normalizeSlashes(
-    path.join('turns', formatTurnDirName(turnIndex), 'answer.txt'),
-  );
-  const contextRelativePath = params.context?.trim()
-    ? normalizeSlashes(
-        path.join('turns', formatTurnDirName(turnIndex), 'context.txt'),
-      )
-    : undefined;
+    await GlobalStorageFS.ensureDir(turnDir);
 
-  const writeOps: Promise<void>[] = [
-    GlobalStorageFS.write(path.join(turnDir, 'question.txt'), params.question),
-    GlobalStorageFS.write(path.join(turnDir, 'answer.txt'), params.answer),
-  ];
-  if (contextRelativePath) {
-    writeOps.push(
-      GlobalStorageFS.write(
-        path.join(turnDir, 'context.txt'),
-        params.context!.trim(),
-      ),
+    const questionRelativePath = normalizeSlashes(
+      path.join('turns', formatTurnDirName(turnIndex), 'question.txt'),
     );
-  }
-  await Promise.all(writeOps);
+    const answerRelativePath = normalizeSlashes(
+      path.join('turns', formatTurnDirName(turnIndex), 'answer.txt'),
+    );
+    const contextRelativePath = params.context?.trim()
+      ? normalizeSlashes(
+          path.join('turns', formatTurnDirName(turnIndex), 'context.txt'),
+        )
+      : undefined;
 
-  const storedFiles = await persistUploadedFiles({
-    threadId,
-    turnIndex,
-    uploadedFiles,
+    const writeOps: Promise<void>[] = [
+      GlobalStorageFS.write(
+        path.join(turnDir, 'question.txt'),
+        params.question,
+      ),
+      GlobalStorageFS.write(path.join(turnDir, 'answer.txt'), params.answer),
+    ];
+    if (contextRelativePath) {
+      writeOps.push(
+        GlobalStorageFS.write(
+          path.join(turnDir, 'context.txt'),
+          params.context!.trim(),
+        ),
+      );
+    }
+    await Promise.all(writeOps);
+
+    const storedFiles = await persistUploadedFiles({
+      threadId,
+      turnIndex,
+      uploadedFiles,
+    });
+
+    const turn: ExternalInquiryTurnRecord = {
+      turnIndex,
+      mode: params.mode,
+      timestamp,
+      question: params.question,
+      context: params.context?.trim() || undefined,
+      questionRelativePath,
+      contextRelativePath,
+      answerRelativePath,
+      uploadedFiles: storedFiles,
+    };
+
+    const nextManifest: ExternalInquiryThreadManifest = {
+      ...manifest,
+      updatedAt: timestamp,
+      turns: [...manifest.turns, turn],
+    };
+
+    await writeThreadManifest(nextManifest);
+
+    const executionMirrorPaths = params.executionId
+      ? await mirrorThreadToExecution({
+          executionId: params.executionId,
+          threadId,
+          turn,
+        })
+      : undefined;
+
+    return {
+      threadId,
+      manifest: nextManifest,
+      turn,
+      executionMirrorPaths,
+    };
   });
-
-  const turn: ExternalInquiryTurnRecord = {
-    turnIndex,
-    mode: params.mode,
-    timestamp,
-    question: params.question,
-    context: params.context?.trim() || undefined,
-    questionRelativePath,
-    contextRelativePath,
-    answerRelativePath,
-    uploadedFiles: storedFiles,
-  };
-
-  const nextManifest: ExternalInquiryThreadManifest = {
-    ...manifest,
-    updatedAt: timestamp,
-    turns: [...manifest.turns, turn],
-  };
-
-  await writeThreadManifest(nextManifest);
-
-  const executionMirrorPaths = params.executionId
-    ? await mirrorThreadToExecution({
-        executionId: params.executionId,
-        threadId,
-        turn,
-      })
-    : undefined;
-
-  return {
-    threadId,
-    manifest: nextManifest,
-    turn,
-    executionMirrorPaths,
-  };
 }
 
 export async function readExternalInquiryThread(
@@ -532,4 +547,4 @@ export async function readExternalInquiryThread(
   return readThreadManifest(parsed.data);
 }
 
-export { looksLikeUtf8Text };
+export { looksLikeUtf8Text } from '@shared/utils/textDetection';
