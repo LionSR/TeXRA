@@ -111,61 +111,6 @@ export type AgentProposalPermission = z.infer<
 export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'reject'] as const;
 export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
 
-export const EXTERNAL_INQUIRY_MAX_UPLOAD_FILES = 5;
-export const EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES = 1024 * 1024;
-export const EXTERNAL_INQUIRY_MAX_TOTAL_UPLOAD_BYTES =
-  EXTERNAL_INQUIRY_MAX_UPLOAD_FILES * EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES;
-
-export const EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS: ReadonlySet<string> =
-  new Set([
-    '.txt',
-    '.md',
-    '.markdown',
-    '.json',
-    '.csv',
-    '.tsv',
-    '.yaml',
-    '.yml',
-    '.xml',
-    '.toml',
-    '.log',
-    '.tex',
-    '.bib',
-    '.py',
-    '.diff',
-    '.patch',
-  ]);
-
-export const EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES: ReadonlySet<string> = new Set(
-  [
-    'application/pdf',
-    'application/octet-stream',
-    // Office document formats
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.oasis.opendocument.text',
-    'application/rtf',
-    'text/rtf',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.oasis.opendocument.spreadsheet',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'application/vnd.oasis.opendocument.presentation',
-    'application/vnd.apple.pages',
-    'application/vnd.apple.numbers',
-    'application/vnd.apple.keynote',
-    // Archives
-    'application/zip',
-    'application/x-zip-compressed',
-    'application/x-tar',
-    'application/gzip',
-    'application/x-gzip',
-    'application/x-7z-compressed',
-    'application/vnd.rar',
-  ],
-);
-
 export const ExternalInquiryModeSchema = z.enum(['new', 'followup']);
 export type ExternalInquiryMode = z.infer<typeof ExternalInquiryModeSchema>;
 
@@ -175,16 +120,6 @@ export const ExternalInquiryThreadIdSchema = z
   .transform((value) => value.toLowerCase());
 export type ExternalInquiryThreadId = z.infer<
   typeof ExternalInquiryThreadIdSchema
->;
-
-export const ExternalInquiryUploadedFileSchema = z.strictObject({
-  fileName: z.string().min(1),
-  mediaType: z.string(),
-  sizeBytes: z.int().nonnegative(),
-  base64: z.string().min(1),
-});
-export type ExternalInquiryUploadedFile = z.infer<
-  typeof ExternalInquiryUploadedFileSchema
 >;
 
 export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({

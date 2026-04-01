@@ -3,9 +3,9 @@
  *
  * The agent formulates a self-contained question. The user copies it to
  * an external model (ChatGPT, Gemini, Claude, etc.), gets an answer,
- * and pastes it back. The answer and uploaded text files are persisted
- * into a durable external-inquiry thread and mirrored into the current
- * execution so the agent can inspect them through `executions`.
+ * and pastes it back. The answer is persisted into a durable
+ * external-inquiry thread and mirrored into the current execution so
+ * the agent can inspect it through `executions`.
  */
 
 import { z } from 'zod';
@@ -14,12 +14,9 @@ import { getExecutionStore } from '@agent/storage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import type {
-  ExternalInquiryAction,
-  ExternalInquiryUploadedFile,
-  StreamTabId,
-} from '@shared/schemas';
+import type { ExternalInquiryAction, StreamTabId } from '@shared/schemas';
 import {
+  EXTERNAL_INQUIRY_ACTIONS,
   ExternalInquiryModeSchema,
   ExternalInquiryThreadIdSchema,
 } from '@shared/schemas';
@@ -102,7 +99,6 @@ export interface ExternalInquiryResult {
   submitted: boolean;
   answer?: string;
   feedback?: string;
-  uploadedFiles?: ExternalInquiryUploadedFile[];
 }
 
 let inquiryCounter = 0;
@@ -123,66 +119,38 @@ function toCurrentExecutionPath(path: string, executionId?: string): string {
     : path;
 }
 
-function buildCurrentMirrorPaths(persisted: PersistedExternalInquiryTurn): {
-  manifestPath?: string;
-  questionPath?: string;
-  answerPath?: string;
-  uploadPaths: string[];
-} {
+function currentManifestPath(
+  persisted: PersistedExternalInquiryTurn,
+): string | undefined {
   const mirror = persisted.executionMirrorPaths;
-  if (!mirror) {
-    return { uploadPaths: [] };
-  }
+  if (!mirror) return undefined;
+  return toCurrentExecutionPath(mirror.manifestPath, mirror.executionId);
+}
 
-  return {
-    manifestPath: toCurrentExecutionPath(
-      mirror.manifestPath,
-      mirror.executionId,
-    ),
-    questionPath: toCurrentExecutionPath(
-      mirror.questionPath,
-      mirror.executionId,
-    ),
-    answerPath: toCurrentExecutionPath(mirror.answerPath, mirror.executionId),
-    uploadPaths: mirror.uploadPaths.map((filePath) =>
-      toCurrentExecutionPath(filePath, mirror.executionId),
-    ),
-  };
+function appendManifestHint(lines: string[], manifestPath?: string): void {
+  if (!manifestPath) return;
+  lines.push(
+    '',
+    `Thread manifest: ${manifestPath}`,
+    `Use the executions tool with path=${manifestPath} to inspect mirrored files.`,
+  );
 }
 
 function buildExternalInquiryOutput(
   persisted: PersistedExternalInquiryTurn,
   answer: string,
 ): string {
-  const currentPaths = buildCurrentMirrorPaths(persisted);
   const lines = [
     `Thread ID: ${persisted.threadId}`,
     `Turn: ${persisted.turn.turnIndex}`,
     'Answer from external model:',
     '',
     answer,
-  ];
-
-  lines.push(
     '',
     `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
-  );
+  ];
 
-  if (currentPaths.manifestPath) {
-    lines.push(
-      '',
-      `Thread manifest: ${currentPaths.manifestPath}`,
-      `Use the executions tool with path=${currentPaths.manifestPath} to inspect mirrored files.`,
-    );
-  }
-
-  if (currentPaths.uploadPaths.length > 0) {
-    lines.push(
-      '',
-      'Uploaded files mirrored into execution:',
-      ...currentPaths.uploadPaths.map((filePath) => `- ${filePath}`),
-    );
-  }
+  appendManifestHint(lines, currentManifestPath(persisted));
 
   return lines.join('\n');
 }
@@ -216,13 +184,6 @@ function buildExternalInquiryReport(
       ...(mirror.contextPath ? [`- Context: ${mirror.contextPath}`] : []),
       `- Answer: ${mirror.answerPath}`,
     );
-
-    if (mirror.uploadPaths.length > 0) {
-      lines.push(
-        'Uploaded files:',
-        ...mirror.uploadPaths.map((filePath) => `- ${filePath}`),
-      );
-    }
   }
 
   return lines.join('\n');
@@ -250,7 +211,6 @@ function buildLongAnswerResult(
   answer: string,
 ): ToolResult {
   const preview = answer.slice(0, EXTERNAL_INQUIRY_PREVIEW_LENGTH);
-  const currentPaths = buildCurrentMirrorPaths(persisted);
   const lines = [
     'The external model returned a long answer.',
     `Thread ID: ${persisted.threadId}`,
@@ -259,20 +219,7 @@ function buildLongAnswerResult(
     `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
   ];
 
-  if (currentPaths.manifestPath) {
-    lines.push(
-      '',
-      `Thread manifest: ${currentPaths.manifestPath}`,
-      `Use the executions tool with path=${currentPaths.manifestPath} to inspect mirrored files.`,
-    );
-  }
-
-  if (currentPaths.uploadPaths.length > 0) {
-    lines.push(
-      'Uploaded files mirrored into execution:',
-      ...currentPaths.uploadPaths.map((filePath) => `- ${filePath}`),
-    );
-  }
+  appendManifestHint(lines, currentManifestPath(persisted));
 
   if (preview) {
     lines.push('', `Preview:\n\n${preview}`);
@@ -293,18 +240,16 @@ export async function handleExternalInquiryAction(payload: {
   action: ExternalInquiryAction | 'skip';
   answer?: string;
   feedback?: string;
-  uploadedFiles?: ExternalInquiryUploadedFile[];
 }): Promise<void> {
   const entry = pendingInquiries.get(payload.requestId);
   if (!entry || entry.isSettled()) return;
 
-  const isSubmit = payload.action === 'submit';
+  const isSubmit = payload.action === EXTERNAL_INQUIRY_ACTIONS[0];
 
   entry.settle({
     submitted: isSubmit,
     answer: isSubmit ? payload.answer : undefined,
     feedback: isSubmit ? undefined : payload.feedback,
-    uploadedFiles: isSubmit ? payload.uploadedFiles : undefined,
   });
 }
 
@@ -351,9 +296,7 @@ Set suggestSearch=true when the question could benefit from the external model u
 
 Use attachFiles to list workspace files the user should upload to the external model for reference.
 
-If the external model returns files and the user prefers not to attach them through this panel, they may
-save those files into the workspace themselves and tell you the paths. In that case, inspect the workspace
-files directly rather than insisting on a panel upload.
+If the external model returns files, the user should save them into the workspace and tell you the paths.
 
 Do not treat paper-specific claims from the external model as automatically verified. If the answer relies on a nonstandard result from a cited paper, verify it by inspecting the paper directly with tools such as arxiv_search, arxiv_metadata, and download_arxiv_source before building further conclusions on top of it.`,
   schema: ExternalInquiryInputSchema,
@@ -425,7 +368,6 @@ Do not treat paper-specific claims from the external model as automatically veri
         question: input.question,
         context: input.context ?? undefined,
         answer,
-        uploadedFiles: result.uploadedFiles ?? [],
         executionId,
       });
 

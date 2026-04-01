@@ -288,8 +288,7 @@ export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
   ctx: MessageHandlerContext,
 ): void {
-  const { permission, action, feedback, modelOverride, answer, uploadedFiles } =
-    event.detail;
+  const { permission, action, feedback, modelOverride, answer } = event.detail;
 
   switch (permission.kind) {
     case PERMISSION_KIND.TOOL_EDIT:
@@ -373,7 +372,6 @@ export function handlePermissionAction(
         action,
         feedback,
         answer,
-        uploadedFiles,
       });
       removePrompt(
         ctx,

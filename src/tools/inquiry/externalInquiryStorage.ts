@@ -6,32 +6,17 @@ import { z } from 'zod';
 import { isDirectory, isFile } from '@common/files/fsEntryType';
 import type { ExecutionId } from '@shared/schemas';
 import {
-  EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS,
-  EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES,
-  EXTERNAL_INQUIRY_MAX_UPLOAD_FILES,
-  EXTERNAL_INQUIRY_MAX_TOTAL_UPLOAD_BYTES,
-  EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES,
   ExternalInquiryModeSchema,
   ExternalInquiryThreadIdSchema,
   type ExternalInquiryMode,
   type ExternalInquiryThreadId,
-  type ExternalInquiryUploadedFile,
 } from '@shared/schemas';
-import { looksLikeUtf8Text } from '@shared/utils/textDetection';
+import { normalizeFilePath } from '@shared/utils/path';
 import { ToolError } from '@tools/result';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 
-const EXTERNAL_INQUIRY_THREADS_DIR = 'external_inquiry_threads';
-const EXTERNAL_INQUIRY_EXECUTION_DIR = 'external_inquiry';
-const EXTERNAL_INQUIRY_MANIFEST_FILE = 'manifest.json';
-
-const ExternalInquiryStoredFileSchema = z.strictObject({
-  fileName: z.string().min(1),
-  storedFileName: z.string().min(1),
-  mediaType: z.string(),
-  sizeBytes: z.int().nonnegative(),
-  relativePath: z.string().min(1),
-});
+const THREADS_DIR = 'ei_threads';
+const EXEC_DIR = 'ei';
 
 const ExternalInquiryTurnRecordSchema = z.strictObject({
   turnIndex: z.int().positive(),
@@ -42,7 +27,6 @@ const ExternalInquiryTurnRecordSchema = z.strictObject({
   questionRelativePath: z.string().min(1),
   contextRelativePath: z.string().nullish(),
   answerRelativePath: z.string().min(1),
-  uploadedFiles: z.array(ExternalInquiryStoredFileSchema),
 });
 
 const ExternalInquiryThreadManifestSchema = z.strictObject({
@@ -52,9 +36,6 @@ const ExternalInquiryThreadManifestSchema = z.strictObject({
   turns: z.array(ExternalInquiryTurnRecordSchema),
 });
 
-export type ExternalInquiryStoredFile = z.infer<
-  typeof ExternalInquiryStoredFileSchema
->;
 export type ExternalInquiryTurnRecord = z.infer<
   typeof ExternalInquiryTurnRecordSchema
 >;
@@ -64,12 +45,10 @@ export type ExternalInquiryThreadManifest = z.infer<
 
 export interface ExternalInquiryExecutionMirrorPaths {
   executionId: ExecutionId;
-  rootRelativePath: string;
   manifestPath: string;
   questionPath: string;
   contextPath?: string;
   answerPath: string;
-  uploadPaths: string[];
 }
 
 export interface PersistedExternalInquiryTurn {
@@ -104,89 +83,23 @@ async function withThreadLock<T>(
   }
 }
 
-function normalizeSlashes(value: string): string {
-  return value.replaceAll('\\', '/');
+function turnDir(turnIndex: number): string {
+  return `t${turnIndex}`;
 }
 
-function getExtension(fileName: string): string {
-  return path.extname(fileName).toLowerCase();
-}
-
-function formatTurnDirName(turnIndex: number): string {
-  return `turn-${String(turnIndex).padStart(4, '0')}`;
-}
-
-function threadStorageDir(threadId: ExternalInquiryThreadId): string {
-  return path.join(EXTERNAL_INQUIRY_THREADS_DIR, threadId);
+function threadDir(threadId: ExternalInquiryThreadId): string {
+  return path.join(THREADS_DIR, threadId);
 }
 
 function threadManifestPath(threadId: ExternalInquiryThreadId): string {
-  return path.join(threadStorageDir(threadId), EXTERNAL_INQUIRY_MANIFEST_FILE);
+  return path.join(threadDir(threadId), 'manifest.json');
 }
 
 function threadTurnDir(
   threadId: ExternalInquiryThreadId,
   turnIndex: number,
 ): string {
-  return path.join(
-    threadStorageDir(threadId),
-    'turns',
-    formatTurnDirName(turnIndex),
-  );
-}
-
-function executionThreadMirrorDir(
-  executionId: ExecutionId,
-  threadId: ExternalInquiryThreadId,
-): string {
-  return path.join(
-    'executions',
-    executionId,
-    EXTERNAL_INQUIRY_EXECUTION_DIR,
-    threadId,
-  );
-}
-
-function executionFilePath(
-  executionId: ExecutionId,
-  relativePath: string,
-): string {
-  return `/executions/${executionId}/files/${normalizeSlashes(relativePath)}`;
-}
-
-function sanitizeStoredFileName(fileName: string): string {
-  const baseName = path.basename(fileName).replaceAll('\0', '');
-  const sanitized = baseName
-    .replaceAll(/[^A-Za-z0-9._-]+/g, '_')
-    .replaceAll(/^_+|_+$/g, '');
-  return sanitized || 'upload.txt';
-}
-
-function ensureUniqueStoredFileName(
-  fileName: string,
-  usedNames: Set<string>,
-): string {
-  const extension = path.extname(fileName);
-  const stem = extension ? fileName.slice(0, -extension.length) : fileName;
-
-  let candidate = fileName;
-  let counter = 2;
-  while (usedNames.has(candidate.toLowerCase())) {
-    candidate = `${stem}-${counter}${extension}`;
-    counter += 1;
-  }
-
-  usedNames.add(candidate.toLowerCase());
-  return candidate;
-}
-
-function isBlockedUploadMimeType(mediaType: string): boolean {
-  return (
-    mediaType.startsWith('image/') ||
-    mediaType.startsWith('audio/') ||
-    mediaType.startsWith('video/') ||
-    EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES.has(mediaType)
-  );
+  return path.join(threadDir(threadId), turnDir(turnIndex));
 }
 
 async function readThreadManifest(
@@ -206,20 +119,11 @@ async function readThreadManifest(
 async function writeThreadManifest(
   manifest: ExternalInquiryThreadManifest,
 ): Promise<void> {
-  await GlobalStorageFS.ensureDir(threadStorageDir(manifest.threadId));
+  await GlobalStorageFS.ensureDir(threadDir(manifest.threadId));
   await GlobalStorageFS.writeJson(
     threadManifestPath(manifest.threadId),
     manifest,
   );
-}
-
-async function copyGlobalFileToExecution(
-  sourcePath: string,
-  targetPath: string,
-): Promise<void> {
-  await StorageFS.ensureDir(path.dirname(targetPath));
-  const bytes = await GlobalStorageFS.readBytes(sourcePath);
-  await StorageFS.write(targetPath, bytes);
 }
 
 async function copyGlobalDirectoryToExecution(
@@ -250,55 +154,22 @@ async function mirrorThreadToExecution(params: {
   threadId: ExternalInquiryThreadId;
   turn: ExternalInquiryTurnRecord;
 }): Promise<ExternalInquiryExecutionMirrorPaths> {
-  const sourceRoot = threadStorageDir(params.threadId);
-  const targetRoot = executionThreadMirrorDir(
-    params.executionId,
-    params.threadId,
+  await copyGlobalDirectoryToExecution(
+    threadDir(params.threadId),
+    path.join('executions', params.executionId, EXEC_DIR, params.threadId),
   );
-  const sourceTurnsDir = path.join(sourceRoot, 'turns');
-  const targetTurnsDir = path.join(targetRoot, 'turns');
 
-  await Promise.all([
-    copyGlobalFileToExecution(
-      threadManifestPath(params.threadId),
-      path.join(targetRoot, EXTERNAL_INQUIRY_MANIFEST_FILE),
-    ),
-    copyGlobalDirectoryToExecution(sourceTurnsDir, targetTurnsDir),
-  ]);
-
-  const rootRelativePath = normalizeSlashes(
-    path.join(EXTERNAL_INQUIRY_EXECUTION_DIR, params.threadId),
-  );
+  const base = `/executions/${params.executionId}/files/${EXEC_DIR}/${params.threadId}`;
+  const toPath = (rel: string) => `${base}/${normalizeFilePath(rel)}`;
 
   return {
     executionId: params.executionId,
-    rootRelativePath,
-    manifestPath: executionFilePath(
-      params.executionId,
-      path.join(rootRelativePath, EXTERNAL_INQUIRY_MANIFEST_FILE),
-    ),
-    questionPath: executionFilePath(
-      params.executionId,
-      path.join(rootRelativePath, params.turn.questionRelativePath),
-    ),
+    manifestPath: toPath('manifest.json'),
+    questionPath: toPath(params.turn.questionRelativePath),
+    answerPath: toPath(params.turn.answerRelativePath),
     ...(params.turn.contextRelativePath
-      ? {
-          contextPath: executionFilePath(
-            params.executionId,
-            path.join(rootRelativePath, params.turn.contextRelativePath),
-          ),
-        }
+      ? { contextPath: toPath(params.turn.contextRelativePath) }
       : {}),
-    answerPath: executionFilePath(
-      params.executionId,
-      path.join(rootRelativePath, params.turn.answerRelativePath),
-    ),
-    uploadPaths: params.turn.uploadedFiles.map((file) =>
-      executionFilePath(
-        params.executionId,
-        path.join(rootRelativePath, file.relativePath),
-      ),
-    ),
   };
 }
 
@@ -318,138 +189,14 @@ function createStoredThreadId(): ExternalInquiryThreadId {
   return `ei_${randomBytes(6).toString('hex')}` as ExternalInquiryThreadId;
 }
 
-function validateUploadCount(
-  uploadedFiles: readonly ExternalInquiryUploadedFile[],
-): void {
-  if (uploadedFiles.length > EXTERNAL_INQUIRY_MAX_UPLOAD_FILES) {
-    throw new ToolError(
-      `External inquiry accepts at most ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} uploaded files per turn.`,
-    );
-  }
-}
-
-function estimateDecodedBase64Size(base64: string): number {
-  const trimmed = base64.trim();
-  if (trimmed.length === 0) return 0;
-
-  const padding = trimmed.endsWith('==') ? 2 : trimmed.endsWith('=') ? 1 : 0;
-  return Math.max(0, Math.floor((trimmed.length * 3) / 4) - padding);
-}
-
-function validateUploadSizes(
-  uploadedFiles: readonly ExternalInquiryUploadedFile[],
-): void {
-  let totalSize = 0;
-
-  for (const uploadedFile of uploadedFiles) {
-    if (uploadedFile.sizeBytes > EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES) {
-      throw new ToolError(
-        `Uploaded file ${uploadedFile.fileName} exceeds the external inquiry size limit.`,
-      );
-    }
-
-    const estimatedDecodedSize = estimateDecodedBase64Size(uploadedFile.base64);
-    if (estimatedDecodedSize > EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES) {
-      throw new ToolError(
-        `Uploaded file ${uploadedFile.fileName} exceeds the external inquiry size limit.`,
-      );
-    }
-
-    totalSize += estimatedDecodedSize;
-    if (totalSize > EXTERNAL_INQUIRY_MAX_TOTAL_UPLOAD_BYTES) {
-      throw new ToolError(
-        'External inquiry uploads exceed the total size limit.',
-      );
-    }
-  }
-}
-
-async function persistUploadedFiles(params: {
-  threadId: ExternalInquiryThreadId;
-  turnIndex: number;
-  uploadedFiles: readonly ExternalInquiryUploadedFile[];
-}): Promise<ExternalInquiryStoredFile[]> {
-  const uploadsDir = path.join(
-    threadTurnDir(params.threadId, params.turnIndex),
-    'uploads',
-  );
-  if (params.uploadedFiles.length > 0) {
-    await GlobalStorageFS.ensureDir(uploadsDir);
-  }
-
-  const storedFiles: ExternalInquiryStoredFile[] = [];
-  const usedNames = new Set<string>();
-
-  for (const uploadedFile of params.uploadedFiles) {
-    const bytes = Buffer.from(uploadedFile.base64, 'base64');
-    if (bytes.length !== uploadedFile.sizeBytes) {
-      throw new ToolError(
-        `Uploaded file ${uploadedFile.fileName} has inconsistent size metadata.`,
-      );
-    }
-
-    const extension = getExtension(uploadedFile.fileName);
-    const mediaType = uploadedFile.mediaType.trim().toLowerCase();
-
-    if (!EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS.has(extension)) {
-      throw new ToolError(
-        `Uploaded file ${uploadedFile.fileName} is not an allowed text/code file.`,
-      );
-    }
-
-    if (isBlockedUploadMimeType(mediaType)) {
-      throw new ToolError(
-        `Uploaded file ${uploadedFile.fileName} is not a supported text file.`,
-      );
-    }
-
-    const looksText = looksLikeUtf8Text(bytes);
-    if (!looksText) {
-      throw new ToolError(
-        `Uploaded file ${uploadedFile.fileName} appears to be binary.`,
-      );
-    }
-
-    const storedFileName = ensureUniqueStoredFileName(
-      sanitizeStoredFileName(uploadedFile.fileName),
-      usedNames,
-    );
-    const relativePath = normalizeSlashes(
-      path.join(
-        'turns',
-        formatTurnDirName(params.turnIndex),
-        'uploads',
-        storedFileName,
-      ),
-    );
-
-    await GlobalStorageFS.write(path.join(uploadsDir, storedFileName), bytes);
-
-    storedFiles.push({
-      fileName: uploadedFile.fileName,
-      storedFileName,
-      mediaType,
-      sizeBytes: bytes.length,
-      relativePath,
-    });
-  }
-
-  return storedFiles;
-}
-
 export async function persistExternalInquiryTurn(params: {
   mode: ExternalInquiryMode;
   threadId?: ExternalInquiryThreadId;
   question: string;
   context?: string;
   answer: string;
-  uploadedFiles?: readonly ExternalInquiryUploadedFile[];
   executionId?: ExecutionId;
 }): Promise<PersistedExternalInquiryTurn> {
-  const uploadedFiles = params.uploadedFiles ?? [];
-  validateUploadCount(uploadedFiles);
-  validateUploadSizes(uploadedFiles);
-
   const threadId = params.threadId ?? createStoredThreadId();
 
   return withThreadLock(threadId, async () => {
@@ -463,55 +210,51 @@ export async function persistExternalInquiryTurn(params: {
     const manifest =
       existingManifest ?? buildNewThreadManifest(threadId, timestamp);
     const turnIndex = manifest.turns.length + 1;
-    const turnDir = threadTurnDir(threadId, turnIndex);
+    const turnPath = threadTurnDir(threadId, turnIndex);
+    const trimmedContext = params.context?.trim() || undefined;
 
-    await GlobalStorageFS.ensureDir(turnDir);
+    await GlobalStorageFS.ensureDir(turnPath);
 
-    const questionRelativePath = normalizeSlashes(
-      path.join('turns', formatTurnDirName(turnIndex), 'question.txt'),
+    const td = turnDir(turnIndex);
+    const questionRelativePath = normalizeFilePath(
+      path.join(td, 'question.txt'),
     );
-    const answerRelativePath = normalizeSlashes(
-      path.join('turns', formatTurnDirName(turnIndex), 'answer.txt'),
+    const answerRelativePath = normalizeFilePath(
+      path.join(td, 'answer.txt'),
     );
-    const contextRelativePath = params.context?.trim()
-      ? normalizeSlashes(
-          path.join('turns', formatTurnDirName(turnIndex), 'context.txt'),
-        )
+    const contextRelativePath = trimmedContext
+      ? normalizeFilePath(path.join(td, 'context.txt'))
       : undefined;
 
     const writeOps: Promise<void>[] = [
       GlobalStorageFS.write(
-        path.join(turnDir, 'question.txt'),
+        path.join(turnPath, 'question.txt'),
         params.question,
       ),
-      GlobalStorageFS.write(path.join(turnDir, 'answer.txt'), params.answer),
+      GlobalStorageFS.write(
+        path.join(turnPath, 'answer.txt'),
+        params.answer,
+      ),
     ];
-    if (contextRelativePath) {
+    if (trimmedContext) {
       writeOps.push(
         GlobalStorageFS.write(
-          path.join(turnDir, 'context.txt'),
-          params.context!.trim(),
+          path.join(turnPath, 'context.txt'),
+          trimmedContext,
         ),
       );
     }
     await Promise.all(writeOps);
-
-    const storedFiles = await persistUploadedFiles({
-      threadId,
-      turnIndex,
-      uploadedFiles,
-    });
 
     const turn: ExternalInquiryTurnRecord = {
       turnIndex,
       mode: params.mode,
       timestamp,
       question: params.question,
-      context: params.context?.trim() || undefined,
+      context: trimmedContext,
       questionRelativePath,
       contextRelativePath,
       answerRelativePath,
-      uploadedFiles: storedFiles,
     };
 
     const nextManifest: ExternalInquiryThreadManifest = {
@@ -547,4 +290,3 @@ export async function readExternalInquiryThread(
   return readThreadManifest(parsed.data);
 }
 
-export { looksLikeUtf8Text } from '@shared/utils/textDetection';

@@ -720,56 +720,9 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-input-placeholderForeground);
   }
 
-  .external-inquiry-request__drop-zone {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing-small);
-    padding: var(--spacing-small) var(--spacing-medium);
-    border: 2px dashed var(--vscode-input-border);
-    border-radius: var(--border-radius);
-    color: var(--vscode-descriptionForeground);
-    font-size: var(--font-size-sm);
-    text-align: center;
-    transition:
-      border-color 0.15s ease,
-      background 0.15s ease;
-  }
-
-  .external-inquiry-request__drop-zone--active {
-    border-color: var(--vscode-focusBorder);
-    background: var(--vscode-list-hoverBackground);
-  }
-
-  .external-inquiry-request__upload-help {
+  .external-inquiry-request__answer-hint {
     font-size: var(--font-size-sm);
     color: var(--vscode-descriptionForeground);
-  }
-
-  .external-inquiry-request__file-input {
-    display: none;
-  }
-
-  .external-inquiry-request__upload-actions {
-    display: flex;
-    justify-content: flex-start;
-  }
-
-  .external-inquiry-request__upload-message {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    font-size: var(--font-size-sm);
-    color: var(--color-warning);
-  }
-
-  .external-inquiry-request__dropped-files {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-tiny);
-    max-height: 8rem;
-    overflow-y: auto;
-    scrollbar-gutter: stable;
   }
 
   @media (max-height: 900px) {
@@ -789,19 +742,6 @@ export const requestPanelStyles: CSSResult = css`
       min-height: 80px;
       max-height: min(20vh, 10rem);
     }
-  }
-
-  .external-inquiry-request__dropped-file {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    font-size: var(--font-size-sm);
-    font-family: var(--vscode-editor-font-family);
-    color: var(--vscode-editor-foreground);
-  }
-
-  .external-inquiry-request__dropped-file .codicon-check {
-    color: var(--color-added);
   }
 
   .external-inquiry-request__actions vscode-toolbar-button {
