@@ -100,8 +100,10 @@ const CodexInputSchema = z.strictObject({
   prompt: z.string().describe('Instruction for the Codex agent'),
   working_directory: z
     .string()
-    .optional()
-    .describe('Directory to run in (defaults to workspace root)'),
+    .nullish()
+    .describe(
+      'Directory to run in. Defaults to the workspace root. Accepts relative workspace paths or absolute paths such as a separate git worktree.',
+    ),
   sandbox_mode: z
     .enum(SANDBOX_MODES)
     .prefault('read-only')
@@ -114,7 +116,7 @@ const CodexInputSchema = z.strictObject({
     ),
   thread_id: z
     .string()
-    .optional()
+    .nullish()
     .describe(
       'Resume an existing Codex thread by its ID. ' +
         'When provided, continues the conversation from where it left off instead of starting a new one. ' +
@@ -678,6 +680,7 @@ export class CodexTool extends defineTool({
   description:
     'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
     'The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox. ' +
+    'Set working_directory to a workspace subdirectory or an absolute path, including a separate git worktree; an orchestrator can prepare that worktree first when isolated changes help. ' +
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
     'Auth is handled by the CLI itself — use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
     'Returns a thread_id that can be passed back to continue the conversation in subsequent calls.',

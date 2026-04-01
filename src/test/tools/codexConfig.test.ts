@@ -63,6 +63,16 @@ describe('buildCodexWorkspaceOptions', () => {
       additionalDirectories: ['/tmp/workspace'],
     });
   });
+
+  it('does not inject the current workspace into an external worktree path', () => {
+    WorkspaceFS.getPath = () => '/tmp/workspace';
+
+    const options = buildCodexWorkspaceOptions('/tmp/worktrees/feature-a');
+
+    assert.deepEqual(options, {
+      workingDirectory: '/tmp/worktrees/feature-a',
+    });
+  });
 });
 
 describe('buildCodexFileChangeToolLog', () => {

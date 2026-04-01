@@ -32,11 +32,14 @@ export interface CodexWorkspaceOptions {
  * Compute Codex workspace access options.
  *
  * When no directory is provided, Codex runs from the workspace root.
- * When a subdirectory is provided, we still add the workspace root so the
- * agent can inspect sibling files across the project.
+ * When a subdirectory inside the workspace is provided, we still add the
+ * workspace root so the agent can inspect sibling files across the project.
+ * Absolute paths outside the workspace (for example a separate git worktree)
+ * run in that directory without inheriting the current workspace as an
+ * additional root.
  */
 export function buildCodexWorkspaceOptions(
-  workingDirectoryInput?: string,
+  workingDirectoryInput?: string | null,
 ): CodexWorkspaceOptions {
   const workspacePath = WorkspaceFS.getPath();
   const trimmed = workingDirectoryInput?.trim();
@@ -51,10 +54,26 @@ export function buildCodexWorkspaceOptions(
       : path.resolve(workspacePath, trimmed)
     : workspacePath;
 
-  return path.resolve(workingDirectory) === path.resolve(workspacePath)
-    ? { workingDirectory }
-    : {
+  const resolvedWorkspacePath = path.resolve(workspacePath);
+  const resolvedWorkingDirectory = path.resolve(workingDirectory);
+
+  if (resolvedWorkingDirectory === resolvedWorkspacePath) {
+    return { workingDirectory };
+  }
+
+  const relativeToWorkspace = path.relative(
+    resolvedWorkspacePath,
+    resolvedWorkingDirectory,
+  );
+  const isInsideWorkspace =
+    relativeToWorkspace.length > 0 &&
+    !relativeToWorkspace.startsWith('..') &&
+    !path.isAbsolute(relativeToWorkspace);
+
+  return isInsideWorkspace
+    ? {
         workingDirectory,
         additionalDirectories: [workspacePath],
-      };
+      }
+    : { workingDirectory };
 }
