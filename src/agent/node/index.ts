@@ -308,7 +308,13 @@ class GroupedBatchNode<
           group.map((item) => super._exec(item)),
         );
         for (const s of settled) {
-          results.push(s.status === 'fulfilled' ? s.value : null);
+          if (s.status === 'fulfilled') {
+            results.push(s.value);
+            continue;
+          }
+          throw s.reason instanceof Error
+            ? s.reason
+            : new Error(String(s.reason));
         }
       } else {
         // Sequential execution (same as BatchNode)

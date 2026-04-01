@@ -535,8 +535,12 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
   CycleParams,
   ToolUseCycleServices<C>
 > {
+  /** Call IDs that are safe to dispatch concurrently in this batch. */
+  private _concurrentCallIds = new Set<string>();
+
   protected override isConcurrent(item: unknown): boolean {
-    return CONCURRENT_SAFE_TOOLS.has((item as SdkToolCall).name);
+    const call = item as SdkToolCall;
+    return this._concurrentCallIds.has(call.callId);
   }
 
   /**
@@ -546,9 +550,64 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
    */
   private _duplicateCallIds = new Set<string>();
 
+  /** Extract a normalized thread key for external_inquiry followup calls. */
+  private getExternalInquiryFollowupThreadKey(
+    call: SdkToolCall,
+  ): string | null {
+    if (call.name !== 'external_inquiry') return null;
+    const input = parseToolInput(call.input, call.callId, this.services.logger);
+    if (typeof input !== 'object' || input == null) return null;
+    const mode =
+      typeof (input as Record<string, unknown>).mode === 'string'
+        ? (input as Record<string, unknown>).mode
+        : null;
+    if (mode !== 'followup') return null;
+    const threadId = (input as Record<string, unknown>).thread_id;
+    if (typeof threadId !== 'string' || threadId.trim().length === 0) {
+      return null;
+    }
+    return threadId.toLowerCase();
+  }
+
+  /**
+   * Compute which calls are safe to run concurrently.
+   *
+   * external_inquiry calls are parallel-safe only when independent:
+   * - mode='new' is always independent
+   * - mode='followup' is parallel-safe only when the thread_id is unique in
+   *   the current batch
+   */
+  private buildConcurrentCallIds(toolCalls: SdkToolCall[]): Set<string> {
+    const concurrent = new Set<string>();
+    const followupCounts = new Map<string, number>();
+
+    for (const call of toolCalls) {
+      if (!CONCURRENT_SAFE_TOOLS.has(call.name)) continue;
+      const threadKey = this.getExternalInquiryFollowupThreadKey(call);
+      if (!threadKey) continue;
+      followupCounts.set(threadKey, (followupCounts.get(threadKey) ?? 0) + 1);
+    }
+
+    for (const call of toolCalls) {
+      if (!CONCURRENT_SAFE_TOOLS.has(call.name)) continue;
+      const threadKey = this.getExternalInquiryFollowupThreadKey(call);
+      if (!threadKey) {
+        // Non-followup external_inquiry (e.g., mode='new') remains parallel-safe.
+        concurrent.add(call.callId);
+        continue;
+      }
+      if ((followupCounts.get(threadKey) ?? 0) === 1) {
+        concurrent.add(call.callId);
+      }
+    }
+
+    return concurrent;
+  }
+
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
     this._duplicateCallIds.clear();
+    this._concurrentCallIds.clear();
     const toolCalls = shared.toolCalls ?? [];
 
     if (shared.shouldStop || toolCalls.length === 0) {
@@ -559,6 +618,8 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
       shared.shouldStop = true;
       return [];
     }
+
+    this._concurrentCallIds = this.buildConcurrentCallIds(toolCalls);
 
     // Deduplicate parallel calls: when multiple calls have the same tool name
     // and identical arguments, only execute the first one. Later duplicates
@@ -624,6 +685,7 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
   clone(): this {
     const cloned = super.clone();
     cloned._duplicateCallIds = new Set();
+    cloned._concurrentCallIds = new Set();
     return cloned;
   }
 
