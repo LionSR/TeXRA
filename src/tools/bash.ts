@@ -38,6 +38,7 @@ import { defineTool } from './core/define';
 import { createChildStream, finalizeChildStream } from './childStream';
 
 const BASH_TIMEOUT_MS = 120_000; // 120 s
+const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
 
 const BashInputSchema = z.strictObject({
   command: z.string(),
@@ -58,6 +59,14 @@ const BashInputSchema = z.strictObject({
 });
 
 export type BashInput = z.infer<typeof BashInputSchema>;
+
+function appendTail(current: string, chunk: string, maxChars: number): string {
+  if (!chunk) return current;
+  const combined = current + chunk;
+  return combined.length > maxChars
+    ? combined.slice(combined.length - maxChars)
+    : combined;
+}
 
 class BashBackgroundSession implements IInterruptible {
   private pid: number | undefined;
@@ -196,8 +205,8 @@ export class BashTool extends defineTool({
         config: syntheticConfig,
       },
     );
-    const stdoutLog = logger.createStream('default');
-    const stderrLog = logger.createStream('default', { level: 'warn' });
+    let stdoutTail = '';
+    let stderrTail = '';
     const session = new BashBackgroundSession();
     registerInterruptible(childStreamId, session);
 
@@ -208,8 +217,22 @@ export class BashTool extends defineTool({
       onPid: (p) => {
         session.setPid(p);
       },
-      onStdout: (chunk) => stdoutLog.append(chunk),
-      onStderr: (chunk) => stderrLog.append(chunk),
+      onStdout: (chunk) => {
+        stdoutTail = appendTail(
+          stdoutTail,
+          chunk,
+          BACKGROUND_OUTPUT_TAIL_CHARS,
+        );
+        logger.info(chunk);
+      },
+      onStderr: (chunk) => {
+        stderrTail = appendTail(
+          stderrTail,
+          chunk,
+          BACKGROUND_OUTPUT_TAIL_CHARS,
+        );
+        logger.warn(chunk);
+      },
     });
 
     void promise
@@ -223,9 +246,6 @@ export class BashTool extends defineTool({
           timedOut: result.timedOut,
           command,
         });
-        const outputTail = stdoutLog.finalize();
-        const stderrTail = stderrLog.finalize();
-
         const terminalStatus = result.success ? 'completed' : 'error';
         await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
         finalizeChildStream(childStreamId, executionId, logger, {
@@ -243,15 +263,13 @@ export class BashTool extends defineTool({
           command,
           wallTimeMs,
           result,
-          outputTail,
+          stdoutTail,
           stderrTail,
         );
         await store.writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       })
       .catch(async (err: unknown) => {
-        stdoutLog.finalize();
-        stderrLog.finalize();
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         finalizeChildStream(childStreamId, executionId, logger, {
           error: err,

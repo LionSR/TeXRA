@@ -87,6 +87,8 @@ export function finalizeChildStream(
   logger: AgentLogger,
   options?: FinalizeChildStreamOptions,
 ): void {
+  const hasError = options?.error != null || options?.errorMessage != null;
+
   if (options?.errorMessage) {
     logger.error(options.errorMessage);
   } else if (options?.error) {
@@ -103,7 +105,7 @@ export function finalizeChildStream(
 
   StreamStatusService.set(
     childStreamId,
-    options?.error ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+    hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
   );
   untrackExecution(executionId);
 }
