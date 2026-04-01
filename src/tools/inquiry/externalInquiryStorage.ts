@@ -219,9 +219,7 @@ export async function persistExternalInquiryTurn(params: {
     const questionRelativePath = normalizeFilePath(
       path.join(td, 'question.txt'),
     );
-    const answerRelativePath = normalizeFilePath(
-      path.join(td, 'answer.txt'),
-    );
+    const answerRelativePath = normalizeFilePath(path.join(td, 'answer.txt'));
     const contextRelativePath = trimmedContext
       ? normalizeFilePath(path.join(td, 'context.txt'))
       : undefined;
@@ -231,10 +229,7 @@ export async function persistExternalInquiryTurn(params: {
         path.join(turnPath, 'question.txt'),
         params.question,
       ),
-      GlobalStorageFS.write(
-        path.join(turnPath, 'answer.txt'),
-        params.answer,
-      ),
+      GlobalStorageFS.write(path.join(turnPath, 'answer.txt'), params.answer),
     ];
     if (trimmedContext) {
       writeOps.push(
@@ -289,4 +284,3 @@ export async function readExternalInquiryThread(
   if (!parsed.success) return null;
   return readThreadManifest(parsed.data);
 }
-

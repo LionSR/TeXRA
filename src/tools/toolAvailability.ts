@@ -129,19 +129,16 @@ export function refreshDisabledToolCache(): void {
  * checks have already completed, or an empty set if the cache isn't
  * populated yet. Never triggers I/O.
  *
+ * Only includes tools whose external dependency is missing (not-found).
+ * Disabled tools are NOT included — the caller handles those separately
+ * via {@link getDisabledToolNames}.
+ *
  * Used by the agent tool resolver to avoid blocking the first tool-use
  * flow on network probes. External tools that are actually missing will
  * fail at call time with a clear error — same as pre-dashboard behavior.
  */
-export function getUnavailableToolNamesCached(
-  disabled = buildDisabledToolNameSet(),
-): ReadonlySet<string> {
-  if (!cached) return disabled;
-  if (disabled.size === 0) return cached;
-
-  const unavailable = new Set(cached);
-  for (const toolName of disabled) unavailable.add(toolName);
-  return unavailable;
+export function getUnavailableToolNamesCached(): ReadonlySet<string> {
+  return cached ?? new Set();
 }
 
 /** Info about an unavailable tool group, used by the notification layer. */

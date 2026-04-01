@@ -83,7 +83,7 @@ function resolveTools(
   isSubagent?: boolean,
 ): ToolDefinition[] {
   const disabled = getDisabledToolNames();
-  const unavailable = getUnavailableToolNamesCached(disabled);
+  const unavailable = getUnavailableToolNamesCached();
   const missingDependency: string[] = [];
   const excluded: string[] = [];
 

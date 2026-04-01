@@ -25,6 +25,7 @@ import { defineTool } from '@tools/core/define';
 
 import {
   persistExternalInquiryTurn,
+  readExternalInquiryThread,
   type PersistedExternalInquiryTurn,
 } from './externalInquiryStorage';
 
@@ -298,7 +299,9 @@ Use attachFiles to list workspace files the user should upload to the external m
 
 If the external model returns files, the user should save them into the workspace and tell you the paths.
 
-Do not treat paper-specific claims from the external model as automatically verified. If the answer relies on a nonstandard result from a cited paper, verify it by inspecting the paper directly with tools such as arxiv_search, arxiv_metadata, and download_arxiv_source before building further conclusions on top of it.`,
+Do not treat paper-specific claims from the external model as automatically verified. If the answer relies on a nonstandard result from a cited paper, verify it by inspecting the paper directly with tools such as arxiv_search, arxiv_metadata, and download_arxiv_source before building further conclusions on top of it.
+
+When you have multiple independent questions for external models, you can call external_inquiry multiple times in the same response. All inquiries will be dispatched simultaneously, allowing the user to query multiple models in parallel. Only batch truly independent questions — if one answer depends on another, ask them sequentially.`,
   schema: ExternalInquiryInputSchema,
 }) {
   protected async execute(input: ExternalInquiryInput): Promise<ToolResult> {
@@ -311,6 +314,17 @@ Do not treat paper-specific claims from the external model as automatically veri
     logger.info(
       `External inquiry [${input.mode}${input.thread_id ? ` ${input.thread_id}` : ''}]: ${input.question.substring(0, 100)}...`,
     );
+
+    // Fail fast for followup mode: verify thread exists before asking user to
+    // do the external-model roundtrip.
+    if (input.mode === 'followup' && input.thread_id) {
+      const existing = await readExternalInquiryThread(input.thread_id);
+      if (!existing) {
+        throw new ToolError(
+          `External inquiry thread not found: ${input.thread_id}`,
+        );
+      }
+    }
 
     try {
       const result = await new Promise<ExternalInquiryResult>((resolve) => {

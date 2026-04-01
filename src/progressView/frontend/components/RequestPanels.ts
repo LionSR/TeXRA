@@ -15,7 +15,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
@@ -135,6 +135,9 @@ export class RequestPanels extends LitElement {
 
   @property({ attribute: false }) permissions: PermissionState[] = [];
 
+  /** Currently displayed external inquiry index (carousel). */
+  @state() private _eiIndex = 0;
+
   /** Memoized permission groups - recomputed in willUpdate() when permissions change */
   private approvalPermissions: PermissionState[] = [];
   private bashPermissions: PermissionState[] = [];
@@ -164,6 +167,16 @@ export class RequestPanels extends LitElement {
     this.externalInquiryPermissions = this.permissions.filter(
       (p) => p.kind === PERMISSION_KIND.EXTERNAL_INQUIRY,
     );
+
+    // Clamp carousel index when inquiries are resolved
+    if (this.externalInquiryPermissions.length > 0) {
+      this._eiIndex = Math.min(
+        this._eiIndex,
+        this.externalInquiryPermissions.length - 1,
+      );
+    } else {
+      this._eiIndex = 0;
+    }
   }
 
   override connectedCallback(): void {
@@ -188,10 +201,7 @@ export class RequestPanels extends LitElement {
         SECTION_CONFIGS.planApproval,
         this.planApprovalPermissions,
       )}
-      ${this.renderSection(
-        SECTION_CONFIGS.externalInquiry,
-        this.externalInquiryPermissions,
-      )}
+      ${this.renderExternalInquirySection()}
     `;
   }
 
@@ -223,13 +233,82 @@ export class RequestPanels extends LitElement {
   }
 
   // ===========================================================================
+  // External inquiry carousel
+  // ===========================================================================
+
+  /**
+   * Render external inquiries as a carousel when multiple are pending.
+   * Shows one panel at a time with (1/N) counter and prev/next navigation.
+   */
+  private renderExternalInquirySection(): TemplateResult | typeof nothing {
+    const perms = this.externalInquiryPermissions;
+    if (perms.length === 0) return nothing;
+
+    // Single inquiry — render normally, no carousel chrome
+    if (perms.length === 1) {
+      return this.renderSection(
+        SECTION_CONFIGS.externalInquiry,
+        perms,
+      );
+    }
+
+    const config = SECTION_CONFIGS.externalInquiry;
+    const current = perms[this._eiIndex];
+
+    return html`
+      <section class=${config.cssClass}>
+        <div class="${config.cssClass}__header">
+          <i class="codicon codicon-${config.icon}"></i>
+          <span>${config.title}</span>
+          <div class="external-inquiry-requests__nav">
+            <button
+              class="external-inquiry-requests__nav-btn"
+              title="Previous inquiry"
+              ?disabled=${this._eiIndex === 0}
+              @click=${this._eiPrev}
+            >
+              <i class="codicon codicon-chevron-left"></i>
+            </button>
+            <span class="external-inquiry-requests__counter">
+              ${this._eiIndex + 1} / ${perms.length}
+            </span>
+            <button
+              class="external-inquiry-requests__nav-btn"
+              title="Next inquiry"
+              ?disabled=${this._eiIndex === perms.length - 1}
+              @click=${this._eiNext}
+            >
+              <i class="codicon codicon-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+        <div class="${config.cssClass}__list">
+          ${config.renderPanel(current)}
+        </div>
+      </section>
+    `;
+  }
+
+  private _eiPrev(): void {
+    if (this._eiIndex > 0) this._eiIndex--;
+  }
+
+  private _eiNext(): void {
+    if (this._eiIndex < this.externalInquiryPermissions.length - 1)
+      this._eiIndex++;
+  }
+
+  // ===========================================================================
   // Keyboard shortcuts
   // ===========================================================================
 
   /**
    * Handle global keyboard shortcuts for permission actions.
    * Only active when permissions are visible and no text input is focused.
-   * Delegates to the panel matching the newest permission (permissions[0]).
+   * Delegates to the panel matching the newest permission (permissions[0]),
+   * or the currently visible carousel panel for external inquiries.
+   *
+   * Left/right arrow keys navigate the external inquiry carousel.
    */
   private handleGlobalKeydown = (event: KeyboardEvent): void => {
     if (isTextInput(document.activeElement)) return;
@@ -237,7 +316,22 @@ export class RequestPanels extends LitElement {
     if (this.permissions.length === 0) return;
 
     const key = event.key.toLowerCase();
-    const panel = this.getNewestPanel();
+
+    // Arrow keys navigate the external inquiry carousel
+    if (this.externalInquiryPermissions.length > 1) {
+      if (key === 'arrowleft') {
+        this._eiPrev();
+        event.preventDefault();
+        return;
+      }
+      if (key === 'arrowright') {
+        this._eiNext();
+        event.preventDefault();
+        return;
+      }
+    }
+
+    const panel = this.getActivePanel();
     if (!panel) return;
 
     if (panel.handleKeyboardShortcut(key)) {
@@ -246,19 +340,31 @@ export class RequestPanels extends LitElement {
   };
 
   /**
-   * Find the panel for the newest permission (first in the queue).
+   * Find the panel that should receive keyboard shortcuts.
    *
-   * Permissions are prepended so index 0 is always the latest request.
+   * For external inquiry carousel: targets the currently visible panel.
+   * For other permission kinds: targets the newest (first in the queue).
+   *
    * We match by reference rather than querying DOM order, which follows
    * fixed section ordering (approval → bash → retry → proposal) and
    * would target the wrong panel when mixed kinds are pending.
    */
-  private getNewestPanel(): BaseRequestPanel | null {
+  private getActivePanel(): BaseRequestPanel | null {
+    // If the newest permission is an external inquiry and the carousel is active,
+    // target the currently visible carousel panel instead of permissions[0].
     const newest = this.permissions[0];
+    const target =
+      newest?.kind === PERMISSION_KIND.EXTERNAL_INQUIRY &&
+      this.externalInquiryPermissions.length > 1
+        ? this.externalInquiryPermissions[this._eiIndex]
+        : newest;
+
+    if (!target) return null;
+
     const panels =
       this.renderRoot.querySelectorAll<BaseRequestPanel>(PANEL_SELECTOR);
     for (const panel of panels) {
-      if (panel.permission === newest) return panel;
+      if (panel.permission === target) return panel;
     }
     return null;
   }

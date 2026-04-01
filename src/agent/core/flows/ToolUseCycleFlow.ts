@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
-import { BaseNode, BatchNode, Flow } from '@agent/node';
+import { BaseNode, GroupedBatchNode, Flow } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
@@ -492,6 +492,11 @@ const DEFERRED_LOG_TOOLS = new Set(['bash', 'codex']);
 /** Tools that support streaming partial output to the UI. */
 const STREAMABLE_TOOLS = new Set(['bash']);
 
+/** Tools safe to execute concurrently within a batch. These block on external
+ *  input (user interaction, network) and have no side-effect dependencies on
+ *  other tools, making parallel execution beneficial. */
+const CONCURRENT_SAFE_TOOLS = new Set(['external_inquiry']);
+
 /** Maximum size of the streaming output buffer sent to the UI (bytes). */
 const STREAM_BUFFER_MAX = 50_000;
 
@@ -516,20 +521,24 @@ interface ToolExecutionResult {
 }
 
 /**
- * Dispatches tool calls and processes their results using BatchNode pattern.
+ * Dispatches tool calls using GroupedBatchNode for hybrid execution.
  *
- * Uses BatchNode for sequential execution of tool calls. This preserves ordering
- * guarantees when tools may have dependencies (e.g., read file then edit file).
- *
- * To enable parallel execution, change to extend ParallelBatchNode instead.
+ * Sequential by default to preserve ordering guarantees when tools have
+ * dependencies (e.g., read file then edit file). Tools listed in
+ * CONCURRENT_SAFE_TOOLS run in parallel when they appear consecutively,
+ * allowing e.g. multiple external_inquiry calls to dispatch simultaneously.
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-class ToolUseDispatchNode<C> extends BatchNode<
+class ToolUseDispatchNode<C> extends GroupedBatchNode<
   ToolUseCycleShared,
   CycleParams,
   ToolUseCycleServices<C>
 > {
+  protected override isConcurrent(item: unknown): boolean {
+    return CONCURRENT_SAFE_TOOLS.has((item as SdkToolCall).name);
+  }
+
   /**
    * Call IDs of duplicate parallel calls detected during prep().
    * These are skipped during exec() and receive a synthetic error result
