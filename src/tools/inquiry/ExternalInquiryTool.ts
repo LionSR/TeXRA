@@ -190,21 +190,39 @@ function buildExternalInquiryReport(
   return lines.join('\n');
 }
 
+// Per-execution lock to prevent concurrent report appends from overwriting each other.
+const reportLocks = new Map<string, Promise<void>>();
+
 async function appendExternalInquiryReport(params: {
   executionId: string;
   persisted: PersistedExternalInquiryTurn;
   answer: string;
 }): Promise<void> {
-  const store = getExecutionStore(params.executionId);
-  const existing = await store.readReport();
-  const nextSection = buildExternalInquiryReport(
-    params.persisted,
-    params.answer,
-  );
-  const separator = '\n\n' + '='.repeat(80) + '\n\n';
-  await store.writeReport(
-    existing?.trim() ? `${existing}${separator}${nextSection}` : nextSection,
-  );
+  const prev = reportLocks.get(params.executionId) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  reportLocks.set(params.executionId, next);
+
+  await prev;
+  try {
+    const store = getExecutionStore(params.executionId);
+    const existing = await store.readReport();
+    const nextSection = buildExternalInquiryReport(
+      params.persisted,
+      params.answer,
+    );
+    const separator = '\n\n' + '='.repeat(80) + '\n\n';
+    await store.writeReport(
+      existing?.trim() ? `${existing}${separator}${nextSection}` : nextSection,
+    );
+  } finally {
+    release();
+    if (reportLocks.get(params.executionId) === next) {
+      reportLocks.delete(params.executionId);
+    }
+  }
 }
 
 function buildLongAnswerResult(

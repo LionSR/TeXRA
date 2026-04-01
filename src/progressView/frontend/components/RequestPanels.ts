@@ -16,6 +16,7 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
@@ -246,10 +247,7 @@ export class RequestPanels extends LitElement {
 
     // Single inquiry — render normally, no carousel chrome
     if (perms.length === 1) {
-      return this.renderSection(
-        SECTION_CONFIGS.externalInquiry,
-        perms,
-      );
+      return this.renderSection(SECTION_CONFIGS.externalInquiry, perms);
     }
 
     const config = SECTION_CONFIGS.externalInquiry;
@@ -283,7 +281,7 @@ export class RequestPanels extends LitElement {
           </div>
         </div>
         <div class="${config.cssClass}__list">
-          ${config.renderPanel(current)}
+          ${keyed(this.getPermissionKey(current), config.renderPanel(current))}
         </div>
       </section>
     `;
