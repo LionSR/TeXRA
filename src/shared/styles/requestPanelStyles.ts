@@ -55,7 +55,7 @@ export const requestPanelStyles: CSSResult = css`
     box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.12));
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-large);
+    gap: var(--spacing-medium);
   }
 
   :is(${HEADERS}) {
@@ -69,7 +69,7 @@ export const requestPanelStyles: CSSResult = css`
   :is(${LISTS}) {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-large);
+    gap: var(--spacing-medium);
   }
 
   :is(${ITEMS}) {
@@ -78,7 +78,7 @@ export const requestPanelStyles: CSSResult = css`
     border-radius: var(--border-radius);
     border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
     background: var(--vscode-editorHoverWidget-background);
-    padding: var(--spacing-large);
+    padding: var(--spacing-medium);
     gap: var(--spacing-medium);
     position: relative;
   }
@@ -97,8 +97,9 @@ export const requestPanelStyles: CSSResult = css`
   .retry-request__details,
   .plan-approval-request__details,
   .external-inquiry-request__details {
-    max-height: 50vh;
+    max-height: min(34vh, 26rem);
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   .approval-request__meta,
@@ -627,8 +628,9 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-editor-foreground);
     white-space: pre-wrap;
     word-break: break-word;
-    max-height: 40vh;
+    max-height: min(22vh, 14rem);
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   .external-inquiry-request__question-actions {
@@ -695,7 +697,8 @@ export const requestPanelStyles: CSSResult = css`
 
   .external-inquiry-request__answer-input {
     width: 100%;
-    min-height: 150px;
+    min-height: 96px;
+    max-height: min(24vh, 12rem);
     resize: vertical;
     font-family: var(--vscode-editor-font-family);
     font-size: var(--font-size);
@@ -722,7 +725,7 @@ export const requestPanelStyles: CSSResult = css`
     flex-direction: column;
     align-items: center;
     gap: var(--spacing-small);
-    padding: var(--spacing-medium);
+    padding: var(--spacing-small) var(--spacing-medium);
     border: 2px dashed var(--vscode-input-border);
     border-radius: var(--border-radius);
     color: var(--vscode-descriptionForeground);
@@ -764,6 +767,28 @@ export const requestPanelStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: var(--spacing-tiny);
+    max-height: 8rem;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  @media (max-height: 900px) {
+    .approval-request__details,
+    .bash-approval-request__details,
+    .retry-request__details,
+    .plan-approval-request__details,
+    .external-inquiry-request__details {
+      max-height: min(28vh, 20rem);
+    }
+
+    .external-inquiry-request__question-text {
+      max-height: min(18vh, 10rem);
+    }
+
+    .external-inquiry-request__answer-input {
+      min-height: 80px;
+      max-height: min(20vh, 10rem);
+    }
   }
 
   .external-inquiry-request__dropped-file {
