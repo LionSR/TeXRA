@@ -371,6 +371,7 @@ export function handlePermissionAction(
       postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
         requestId,
         action,
+        feedback,
         answer,
         uploadedFiles,
       });

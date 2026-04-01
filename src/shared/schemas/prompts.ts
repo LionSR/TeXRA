@@ -108,7 +108,7 @@ export type AgentProposalPermission = z.infer<
 // External Inquiry
 // ============================================================================
 
-export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'skip'] as const;
+export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'reject'] as const;
 export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
 
 export const EXTERNAL_INQUIRY_MAX_UPLOAD_FILES = 5;

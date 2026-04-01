@@ -566,6 +566,9 @@ export const requestPanelStyles: CSSResult = css`
     vscode-toolbar-button[data-action='reject']::part(control),
   .plan-approval-request--feedback-active
     .plan-approval-request__actions
+    vscode-toolbar-button[data-action='reject']::part(control),
+  .external-inquiry-request--feedback-active
+    .external-inquiry-request__actions
     vscode-toolbar-button[data-action='reject']::part(control) {
     color: var(--vscode-inputValidation-warningBorder);
   }
@@ -786,7 +789,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .external-inquiry-request__actions
-    vscode-toolbar-button[data-action='skip']::part(control) {
+    vscode-toolbar-button[data-action='reject']::part(control) {
     color: var(--vscode-descriptionForeground);
   }
 `;

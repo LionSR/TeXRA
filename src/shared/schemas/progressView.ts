@@ -632,8 +632,9 @@ const PlanApprovalActionMessageSchema = z.object({
 const ExternalInquiryActionMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
   requestId: z.string().min(1),
-  action: z.enum(EXTERNAL_INQUIRY_ACTIONS),
+  action: z.enum(['submit', 'reject', 'skip']),
   answer: z.string().optional(),
+  feedback: z.string().optional(),
   uploadedFiles: z.array(ExternalInquiryUploadedFileSchema).optional(),
 });
 

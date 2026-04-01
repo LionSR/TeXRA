@@ -36,7 +36,7 @@ import {
 import { formatBytes } from '@shared/utils/string';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 
-import { BaseRequestPanel } from './BaseRequestPanel';
+import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { ProgressEvents } from '../events';
 
 // ── Draft persistence ──
@@ -113,7 +113,7 @@ function getRequestId(permission: { data: unknown }): string {
   return (permission.data as ExternalInquiryPermission).requestId;
 }
 
-/** Clear draft for a resolved inquiry. Called from eventHandlers on submit/skip. */
+/** Clear draft for a resolved inquiry. Called from eventHandlers on submit/reject. */
 export function clearInquiryDraft(requestId: string): void {
   draftCache.delete(requestId);
   resolvedIds.add(requestId);
@@ -127,7 +127,7 @@ export function clearInquiryDraft(requestId: string): void {
 // ── Component ──
 
 @customElement('external-inquiry-panel')
-export class ExternalInquiryPanel extends BaseRequestPanel {
+export class ExternalInquiryPanel extends BaseFeedbackPanel {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -181,8 +181,20 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
     }
   }
 
-  override handleKeyboardShortcut(_key: string): boolean {
-    return false;
+  override handleKeyboardShortcut(key: string): boolean {
+    switch (key) {
+      case 'n':
+        this.handleRejectAction();
+        return true;
+      case 'escape':
+        if (this.showFeedback) {
+          this.showFeedback = false;
+          return true;
+        }
+        return false;
+      default:
+        return false;
+    }
   }
 
   // ── Render ──
@@ -195,7 +207,12 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
     const data = this.permission.data as ExternalInquiryPermission;
 
     return html`
-      <div class="external-inquiry-request">
+      <div
+        class=${classMap({
+          'external-inquiry-request': true,
+          'external-inquiry-request--feedback-active': this.showFeedback,
+        })}
+      >
         <div class="external-inquiry-request__details">
           ${this.renderHeader(data)}
           ${data.context ? this.renderContext(data.context) : nothing}
@@ -328,7 +345,8 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
         <div class="external-inquiry-request__upload-help">
           Text files only, up to ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} files. If
           drag-and-drop does not work in this webview, use
-          <strong>Choose Files</strong>.
+          <strong>Choose Files</strong>. You can also save returned files into
+          the workspace yourself and tell the agent the paths.
         </div>
         ${this.fileMessage
           ? html`
@@ -338,6 +356,11 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
               </div>
             `
           : nothing}
+        ${this.renderFeedbackSection(
+          'external-inquiry-request__feedback',
+          'external-inquiry-request__feedback-input',
+          'Why are you rejecting this external inquiry?',
+        )}
         ${this.isReadingFiles
           ? html`
               <div class="external-inquiry-request__upload-help">
@@ -381,14 +404,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           @click=${this.handleSubmit}
           >Submit Answer</vscode-toolbar-button
         >
-        <vscode-toolbar-button
-          icon="close"
-          label="Skip"
-          title="Skip this external inquiry"
-          data-action=${EXTERNAL_INQUIRY_ACTIONS[1]}
-          @click=${() => this.emitAction(EXTERNAL_INQUIRY_ACTIONS[1])}
-          >Skip</vscode-toolbar-button
-        >
+        ${this.renderRejectButton('Reject this external inquiry (n)')}
       </vscode-toolbar-container>
     `;
   }

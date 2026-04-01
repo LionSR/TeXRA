@@ -101,6 +101,7 @@ export type ExternalInquiryInput = z.infer<typeof ExternalInquiryInputSchema>;
 export interface ExternalInquiryResult {
   submitted: boolean;
   answer?: string;
+  feedback?: string;
   uploadedFiles?: ExternalInquiryUploadedFile[];
 }
 
@@ -123,6 +124,7 @@ function toCurrentExecutionPath(path: string, executionId?: string): string {
 }
 
 function buildCurrentMirrorPaths(persisted: PersistedExternalInquiryTurn): {
+  threadRootPath?: string;
   manifestPath?: string;
   questionPath?: string;
   answerPath?: string;
@@ -134,6 +136,10 @@ function buildCurrentMirrorPaths(persisted: PersistedExternalInquiryTurn): {
   }
 
   return {
+    threadRootPath: toCurrentExecutionPath(
+      `/executions/${mirror.executionId}/files/${mirror.rootRelativePath}`,
+      mirror.executionId,
+    ),
     manifestPath: toCurrentExecutionPath(
       mirror.manifestPath,
       mirror.executionId,
@@ -167,12 +173,12 @@ function buildExternalInquiryOutput(
     `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
   );
 
-  if (currentPaths.manifestPath) {
-    lines.push('', `Thread mirror: ${currentPaths.manifestPath}`);
-  }
-
-  if (currentPaths.answerPath) {
-    lines.push(`Answer file: ${currentPaths.answerPath}`);
+  if (currentPaths.threadRootPath) {
+    lines.push(
+      '',
+      `Thread files: ${currentPaths.threadRootPath}`,
+      `Use the executions tool with path=${currentPaths.threadRootPath} to inspect mirrored files.`,
+    );
   }
 
   if (currentPaths.uploadPaths.length > 0) {
@@ -258,8 +264,12 @@ function buildLongAnswerResult(
     `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
   ];
 
-  if (currentPaths.manifestPath) {
-    lines.push('', `Thread mirror: ${currentPaths.manifestPath}`);
+  if (currentPaths.threadRootPath) {
+    lines.push(
+      '',
+      `Thread files: ${currentPaths.threadRootPath}`,
+      `Use the executions tool with path=${currentPaths.threadRootPath} to inspect mirrored files.`,
+    );
   }
 
   if (currentPaths.uploadPaths.length > 0) {
@@ -285,18 +295,21 @@ function buildLongAnswerResult(
 
 export async function handleExternalInquiryAction(payload: {
   requestId: string;
-  action: ExternalInquiryAction;
+  action: ExternalInquiryAction | 'skip';
   answer?: string;
+  feedback?: string;
   uploadedFiles?: ExternalInquiryUploadedFile[];
 }): Promise<void> {
   const entry = pendingInquiries.get(payload.requestId);
   if (!entry || entry.isSettled()) return;
 
+  const isSubmit = payload.action === 'submit';
+
   entry.settle({
-    submitted: payload.action === 'submit',
-    answer: payload.action === 'submit' ? payload.answer : undefined,
-    uploadedFiles:
-      payload.action === 'submit' ? payload.uploadedFiles : undefined,
+    submitted: isSubmit,
+    answer: isSubmit ? payload.answer : undefined,
+    feedback: isSubmit ? undefined : payload.feedback,
+    uploadedFiles: isSubmit ? payload.uploadedFiles : undefined,
   });
 }
 
@@ -341,7 +354,13 @@ Every successful call returns a durable thread_id. Pass that thread_id back with
 
 Set suggestSearch=true when the question could benefit from the external model using web search (e.g., looking up recent papers, checking specific results).
 
-Use attachFiles to list workspace files the user should upload to the external model for reference.`,
+Use attachFiles to list workspace files the user should upload to the external model for reference.
+
+If the external model returns files and the user prefers not to attach them through this panel, they may
+save those files into the workspace themselves and tell you the paths. In that case, inspect the workspace
+files directly rather than insisting on a panel upload.
+
+Do not treat paper-specific claims from the external model as automatically verified. If the answer relies on a nonstandard result from a cited paper, verify it by inspecting the paper directly with tools such as arxiv_search, arxiv_metadata, and download_arxiv_source before building further conclusions on top of it.`,
   schema: ExternalInquiryInputSchema,
 }) {
   protected async execute(input: ExternalInquiryInput): Promise<ToolResult> {
@@ -389,11 +408,14 @@ Use attachFiles to list workspace files the user should upload to the external m
       });
 
       if (!result.submitted) {
+        const feedback = result.feedback?.trim();
         return {
-          summary: 'User skipped external inquiry',
-          output:
-            'The user chose to skip this external inquiry. ' +
-            'Proceed without the external answer, or try a different approach.',
+          summary: feedback
+            ? 'User rejected external inquiry with feedback'
+            : 'User rejected external inquiry',
+          output: feedback
+            ? `The user rejected this external inquiry and provided feedback:\n\n${feedback}\n\nRevise the question or try a different approach.`
+            : 'The user rejected this external inquiry. Revise the question or try a different approach.',
         };
       }
 
