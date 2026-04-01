@@ -535,7 +535,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     const lastMsg = messages.at(-1);
     if (lastMsg?.role === 'user' && Array.isArray(lastMsg.content)) {
       (lastMsg.content as ChatMessageContentItem[]).push(...userContent);
-    } else {
+    } else if (userContent.length > 0) {
       messages.push({ role: 'user', content: userContent });
     }
 
