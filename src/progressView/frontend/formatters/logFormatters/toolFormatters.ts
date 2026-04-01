@@ -26,8 +26,9 @@ import type {
   WorkflowAgentInput,
 } from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
-import type { CodexInput } from '@tools/codex';
+import { type CodexMcpToolOutput } from '@tools/codexShared';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - Lit template utilities
 import {
@@ -60,9 +61,11 @@ import {
   TOOLS_WITH_FILE_CONTENT,
   TOOL_OUTPUT_LANGUAGES,
   TOOL_CODE_LANGUAGES,
+  TOOL_LABEL_MAP,
   TRIVIAL_WRITE_OUTPUT,
   getLanguageFromPath,
 } from '../constants';
+import { codexToolRenderers } from './codexToolTemplates';
 
 // Side-effect import to register <tool-timer> custom element
 import '../../components/ToolTimer';
@@ -122,8 +125,7 @@ function getToolTimeoutMs(
 /** Truncate a prompt string for display in collapsed headers. */
 function truncatePrompt(text: string, maxLength: number): string {
   const oneLine = text.replaceAll(/\s+/g, ' ').trim();
-  if (oneLine.length <= maxLength) return oneLine;
-  return oneLine.slice(0, maxLength - 1) + '…';
+  return truncateWithEllipsis(oneLine, maxLength);
 }
 
 /** Join template sections with horizontal rule separators. */
@@ -135,6 +137,14 @@ function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
         : ''}`,
   )}`;
 }
+
+type SpecializedToolRenderer = (
+  input: unknown,
+) => TemplateResult | typeof nothing;
+
+const SPECIALIZED_TOOL_SECTION_RENDERERS = {
+  ...codexToolRenderers,
+} satisfies Record<string, SpecializedToolRenderer>;
 
 // Web search provider display names
 const PROVIDER_LABELS: Record<string, string> = {
@@ -213,6 +223,16 @@ function buildTerminalSection(label: string, text: string): TemplateResult {
   );
 }
 
+function isMcpTextBlock(
+  block: unknown,
+): block is { type: 'text'; text: string } {
+  return (
+    isPlainObject(block) &&
+    block.type === 'text' &&
+    typeof block.text === 'string'
+  );
+}
+
 /** Format tool use log entry as TemplateResult. */
 export function formatToolUseTemplate(
   message: LogMessageData,
@@ -245,7 +265,9 @@ export function formatToolUseTemplate(
     iconClass = getToolIconClass(toolName, showAsError);
   }
 
-  const titleBase = toolName || 'tool';
+  const titleBase = toolName.startsWith('mcp:')
+    ? `MCP ${toolName.slice(4)}`
+    : (TOOL_LABEL_MAP[toolName] ?? toolName) || 'tool';
 
   // Surface action + path for executions tool so it's visible without expanding
   let headerSummary = normalizedToolLog.headerSummary || '';
@@ -515,39 +537,95 @@ export function formatToolUseTemplate(
       sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
     }
   }
-  // Handle codex tool with structured display
-  else if (toolName === 'codex' && isPlainObject(input)) {
-    const codexInput = input as CodexInput;
+  // Handle specialized structured tool cards via renderer registry
+  else if (Object.hasOwn(SPECIALIZED_TOOL_SECTION_RENDERERS, toolName)) {
+    const content =
+      SPECIALIZED_TOOL_SECTION_RENDERERS[
+        toolName as keyof typeof SPECIALIZED_TOOL_SECTION_RENDERERS
+      ](input);
+    if (content !== nothing) {
+      sections.push(content);
+    }
+  }
+  // Handle MCP tool calls with richer result rendering
+  else if (toolName.startsWith('mcp:')) {
+    let renderedMcpOutput = false;
 
-    // Prompt as readable text
-    if (codexInput.prompt) {
+    if (input != null) {
+      const { text: inputValue, language: inputLanguage } =
+        stringifyWithLanguage(input);
+      if (inputValue) {
+        sections.push(
+          buildToolSection('Arguments:', inputValue, {
+            toolName,
+            language: inputLanguage,
+          }),
+        );
+      }
+    }
+
+    const mcpOutput = isPlainObject(parsed.output)
+      ? (parsed.output as Partial<CodexMcpToolOutput>)
+      : null;
+    const contentBlocks = Array.isArray(mcpOutput?.contentBlocks)
+      ? mcpOutput.contentBlocks
+      : [];
+    const textBlocks = contentBlocks
+      .filter(isMcpTextBlock)
+      .map((block) => block.text);
+    const otherBlocks = contentBlocks.filter((block) => !isMcpTextBlock(block));
+
+    if (typeof mcpOutput?.status === 'string') {
+      const statusIcon =
+        mcpOutput.status === 'failed'
+          ? 'codicon-error'
+          : mcpOutput.status === 'in_progress'
+            ? 'codicon-sync spin'
+            : 'codicon-check';
+      // prettier-ignore
+      sections.push(buildToolUseSection('Status:', html`<span class="extract-flag"><i class="codicon ${statusIcon}"></i> ${mcpOutput.status}</span>`));
+      renderedMcpOutput = true;
+    }
+
+    if (textBlocks.length > 0) {
+      sections.push(buildToolSection('Response:', textBlocks.join('\n\n')));
+      renderedMcpOutput = true;
+    }
+
+    if (mcpOutput && 'structuredContent' in mcpOutput) {
+      const { text: structuredText, language: structuredLanguage } =
+        stringifyWithLanguage(mcpOutput.structuredContent);
+      if (structuredText) {
+        sections.push(
+          buildToolSection('Structured:', structuredText, {
+            toolName,
+            language: structuredLanguage,
+          }),
+        );
+        renderedMcpOutput = true;
+      }
+    }
+
+    if (otherBlocks.length > 0) {
+      const { text: contentText, language: contentLanguage } =
+        stringifyWithLanguage(otherBlocks);
+      if (contentText) {
+        sections.push(
+          buildToolSection('Content:', contentText, {
+            toolName,
+            language: contentLanguage,
+          }),
+        );
+        renderedMcpOutput = true;
+      }
+    }
+
+    if (!renderedMcpOutput && outputText) {
       sections.push(
-        buildToolUseSection('Prompt:', wrapInPre(codexInput.prompt)),
-      );
-    }
-
-    // Sandbox mode + background as compact badges
-    const badges: TemplateResult[] = [];
-    if (codexInput.sandbox_mode) {
-      // prettier-ignore
-      badges.push(html`<span class="extract-flag"><i class="codicon codicon-shield"></i> ${codexInput.sandbox_mode}</span>`);
-    }
-    if (codexInput.run_in_background) {
-      // prettier-ignore
-      badges.push(html`<span class="extract-flag"><i class="codicon codicon-run-all"></i> background</span>`);
-    }
-    if (badges.length > 0) {
-      // prettier-ignore
-      sections.push(buildToolUseSection('Mode:', html`${badges}`));
-    }
-
-    // Working directory if specified
-    if (codexInput.working_directory) {
-      sections.push(
-        buildToolUseSection(
-          'Directory:',
-          wrapInPre(codexInput.working_directory),
-        ),
+        buildToolSection('Result:', outputText, {
+          toolName,
+          extraClass: 'tool-output-full',
+        }),
       );
     }
   }
@@ -582,6 +660,7 @@ export function formatToolUseTemplate(
     isWriteTool && outputText.trim() === TRIVIAL_WRITE_OUTPUT;
   if (
     outputText &&
+    !toolName.startsWith('mcp:') &&
     !TOOLS_WITH_FILE_LINK.has(toolName) &&
     !isTrivialWriteOutput
   ) {
