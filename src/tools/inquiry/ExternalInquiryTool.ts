@@ -124,7 +124,6 @@ function toCurrentExecutionPath(path: string, executionId?: string): string {
 }
 
 function buildCurrentMirrorPaths(persisted: PersistedExternalInquiryTurn): {
-  threadRootPath?: string;
   manifestPath?: string;
   questionPath?: string;
   answerPath?: string;
@@ -136,10 +135,6 @@ function buildCurrentMirrorPaths(persisted: PersistedExternalInquiryTurn): {
   }
 
   return {
-    threadRootPath: toCurrentExecutionPath(
-      `/executions/${mirror.executionId}/files/${mirror.rootRelativePath}`,
-      mirror.executionId,
-    ),
     manifestPath: toCurrentExecutionPath(
       mirror.manifestPath,
       mirror.executionId,
@@ -173,11 +168,11 @@ function buildExternalInquiryOutput(
     `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
   );
 
-  if (currentPaths.threadRootPath) {
+  if (currentPaths.manifestPath) {
     lines.push(
       '',
-      `Thread files: ${currentPaths.threadRootPath}`,
-      `Use the executions tool with path=${currentPaths.threadRootPath} to inspect mirrored files.`,
+      `Thread manifest: ${currentPaths.manifestPath}`,
+      `Use the executions tool with path=${currentPaths.manifestPath} to inspect mirrored files.`,
     );
   }
 
@@ -264,11 +259,11 @@ function buildLongAnswerResult(
     `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
   ];
 
-  if (currentPaths.threadRootPath) {
+  if (currentPaths.manifestPath) {
     lines.push(
       '',
-      `Thread files: ${currentPaths.threadRootPath}`,
-      `Use the executions tool with path=${currentPaths.threadRootPath} to inspect mirrored files.`,
+      `Thread manifest: ${currentPaths.manifestPath}`,
+      `Use the executions tool with path=${currentPaths.manifestPath} to inspect mirrored files.`,
     );
   }
 

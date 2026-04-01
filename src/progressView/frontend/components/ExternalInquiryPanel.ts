@@ -146,6 +146,9 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   @state() private fileMessage = '';
   @state() private isReadingFiles = false;
 
+  private fileProcessingQueue: Promise<void> = Promise.resolve();
+  private pendingFileBatches = 0;
+
   @query('.external-inquiry-request__file-input')
   private fileInputEl!: HTMLInputElement;
 
@@ -499,43 +502,52 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   }
 
   private async processIncomingFiles(files: File[]): Promise<void> {
-    if (
-      this.uploadedFiles.length + files.length >
-      EXTERNAL_INQUIRY_MAX_UPLOAD_FILES
-    ) {
-      this.fileMessage = `You can attach at most ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} files per inquiry.`;
-      return;
-    }
-
-    this.fileMessage = '';
+    this.pendingFileBatches += 1;
     this.isReadingFiles = true;
 
-    try {
-      const nextUploads: ExternalInquiryUploadedFile[] = [];
-      const failures: string[] = [];
-
-      for (const file of files) {
+    this.fileProcessingQueue = this.fileProcessingQueue
+      .catch(() => undefined)
+      .then(async () => {
         try {
-          nextUploads.push(await this.readUploadedFile(file));
-        } catch (error) {
-          failures.push(
-            error instanceof Error
-              ? error.message
-              : `Failed to read ${file.name}.`,
-          );
+          if (
+            this.uploadedFiles.length + files.length >
+            EXTERNAL_INQUIRY_MAX_UPLOAD_FILES
+          ) {
+            this.fileMessage = `You can attach at most ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} files per inquiry.`;
+            return;
+          }
+
+          this.fileMessage = '';
+
+          const nextUploads: ExternalInquiryUploadedFile[] = [];
+          const failures: string[] = [];
+
+          for (const file of files) {
+            try {
+              nextUploads.push(await this.readUploadedFile(file));
+            } catch (error) {
+              failures.push(
+                error instanceof Error
+                  ? error.message
+                  : `Failed to read ${file.name}.`,
+              );
+            }
+          }
+
+          if (nextUploads.length > 0) {
+            this.uploadedFiles = [...this.uploadedFiles, ...nextUploads];
+          }
+
+          if (failures.length > 0) {
+            this.fileMessage = failures.join(' ');
+          }
+        } finally {
+          this.pendingFileBatches = Math.max(0, this.pendingFileBatches - 1);
+          this.isReadingFiles = this.pendingFileBatches > 0;
         }
-      }
+      });
 
-      if (nextUploads.length > 0) {
-        this.uploadedFiles = [...this.uploadedFiles, ...nextUploads];
-      }
-
-      if (failures.length > 0) {
-        this.fileMessage = failures.join(' ');
-      }
-    } finally {
-      this.isReadingFiles = false;
-    }
+    await this.fileProcessingQueue;
   }
 
   private removeFile(index: number): void {
