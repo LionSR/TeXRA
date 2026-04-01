@@ -68,7 +68,11 @@ class OpenRouterStreamAggregator {
   private reasoningDetails: ReasoningDetailUnion[] = [];
   private toolCallMap = new Map<
     number,
-    { id: string; type: 'function'; function: { name: string; arguments: string } }
+    {
+      id: string;
+      type: 'function';
+      function: { name: string; arguments: string };
+    }
   >();
   private finishReason: string | null = null;
   private usage: ChatGenerationTokenUsage | null = null;
@@ -148,9 +152,7 @@ class OpenRouterStreamAggregator {
   buildResponse(): ChatResponse {
     const toolCalls: ChatMessageToolCall[] = [];
     // Sort by index to maintain order
-    const sorted = [...this.toolCallMap.entries()].sort(
-      ([a], [b]) => a - b,
-    );
+    const sorted = [...this.toolCallMap.entries()].sort(([a], [b]) => a - b);
     for (const [, tc] of sorted) {
       toolCalls.push({
         id: tc.id,
@@ -245,8 +247,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   async createResponse(
     options: CreateResponseOptions<Message, OpenRouter>,
   ): Promise<CreateResponseResult<ChatResponse, Message>> {
-    const { client, messages: rawMessages, temperature, endTag, signal, tools } =
-      options;
+    const {
+      client,
+      messages: rawMessages,
+      temperature,
+      endTag,
+      signal,
+      tools,
+    } = options;
 
     // Phase 0: COMPACT - Check if conversation should be compacted
     let updatedMessages: Message[] | undefined;
@@ -275,21 +283,17 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     };
 
     // Reasoning configuration:
-    // - O1-style models: use reasoning.effort (SDK-supported field)
-    // - DeepSeek V3.2 and similar: no explicit config needed — these models
-    //   return reasoning_details natively. The SDK's Reasoning schema only
-    //   supports effort/summary, so { enabled: true } would be stripped.
-    if (
-      this.capabilities.supportsReasoning &&
-      this.capabilities.supportsReasoningEffort &&
-      this.capabilities.reasoningEffort
-    ) {
-      const effort =
-        this.capabilities.reasoningEffort === 'none'
-          ? 'low'
-          : this.capabilities.reasoningEffort;
+    // OpenRouter SDK serializes `reasoning.effort` but not `reasoning.enabled`.
+    // For non-effort reasoning models, send a low effort value as the closest
+    // serializable equivalent to "reasoning enabled".
+    if (this.capabilities.supportsReasoning) {
+      const effort = this.capabilities.supportsReasoningEffort
+        ? (this.capabilities.reasoningEffort ?? 'low')
+        : 'low';
       params.reasoning = {
-        effort: this.validateReasoningEffort(effort),
+        effort: this.validateReasoningEffort(
+          effort === 'none' ? 'low' : effort,
+        ),
       };
     }
 
@@ -312,7 +316,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       );
 
       // Streaming returns EventStream (AsyncIterable)
-      const stream = result as unknown as AsyncIterable<ChatStreamingResponseChunk>;
+      const stream =
+        result as unknown as AsyncIterable<ChatStreamingResponseChunk>;
       const aggregator = new OpenRouterStreamAggregator();
       const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
@@ -430,8 +435,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       )) as ChatResponse;
 
       const summaryText = summaryResponse.choices[0]?.message?.content;
-      const summary =
-        typeof summaryText === 'string' ? summaryText.trim() : '';
+      const summary = typeof summaryText === 'string' ? summaryText.trim() : '';
       if (!summary) {
         this.logger.warn('Compaction returned empty summary, skipping');
         return { compactedMessages: messages, didCompact: false };
@@ -445,8 +449,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         },
       ];
 
-      const summaryOutputTokens =
-        summaryResponse.usage?.completionTokens ?? 0;
+      const summaryOutputTokens = summaryResponse.usage?.completionTokens ?? 0;
       const estimatedTokensAfter = Math.max(1, summaryOutputTokens);
       const reduction = tokensBefore - estimatedTokensAfter;
       const reductionPercent =
@@ -708,7 +711,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       newResponse = `${newResponse}\n${endTag}`;
     }
 
-    return { text: newResponse, usage: responseObject.usage ?? null, stopReason };
+    return {
+      text: newResponse,
+      usage: responseObject.usage ?? null,
+      stopReason,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -728,14 +735,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       this.config.outputPrice,
     );
 
-    const reasoningTokens =
-      responseUsage.completionTokensDetails?.reasoningTokens ?? 0;
-    const cachedTokens =
-      responseUsage.promptTokensDetails?.cachedTokens ?? 0;
+    const cachedTokens = responseUsage.promptTokensDetails?.cachedTokens ?? 0;
 
-    if (reasoningTokens) {
-      basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
-    }
     if (cachedTokens) {
       basePrice -=
         (cachedTokens *
@@ -833,9 +834,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) return [];
 
     return toolCalls
-      .filter(
-        (call): call is ChatMessageToolCall =>
-          Boolean(call && call.function?.name && call.id),
+      .filter((call): call is ChatMessageToolCall =>
+        Boolean(call && call.function?.name && call.id),
       )
       .map((call) => ({
         provider: 'openrouter' as const,
@@ -1057,10 +1057,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           },
         ];
       }
-    } else if (
-      lastMessage?.role === 'user' ||
-      lastMessage?.role === 'system'
-    ) {
+    } else if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
       messages.push({
         role: 'assistant',
         content: bestConnector + newResponse,
@@ -1189,4 +1186,3 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
   }
 }
-
