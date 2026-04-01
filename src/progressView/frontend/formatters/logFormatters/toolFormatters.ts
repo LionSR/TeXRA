@@ -549,6 +549,8 @@ export function formatToolUseTemplate(
   }
   // Handle MCP tool calls with richer result rendering
   else if (toolName.startsWith('mcp:')) {
+    let renderedMcpOutput = false;
+
     if (input != null) {
       const { text: inputValue, language: inputLanguage } =
         stringifyWithLanguage(input);
@@ -582,10 +584,12 @@ export function formatToolUseTemplate(
             : 'codicon-check';
       // prettier-ignore
       sections.push(buildToolUseSection('Status:', html`<span class="extract-flag"><i class="codicon ${statusIcon}"></i> ${mcpOutput.status}</span>`));
+      renderedMcpOutput = true;
     }
 
     if (textBlocks.length > 0) {
       sections.push(buildToolSection('Response:', textBlocks.join('\n\n')));
+      renderedMcpOutput = true;
     }
 
     if (mcpOutput && 'structuredContent' in mcpOutput) {
@@ -598,6 +602,7 @@ export function formatToolUseTemplate(
             language: structuredLanguage,
           }),
         );
+        renderedMcpOutput = true;
       }
     }
 
@@ -611,10 +616,11 @@ export function formatToolUseTemplate(
             language: contentLanguage,
           }),
         );
+        renderedMcpOutput = true;
       }
     }
 
-    if (sections.length === 0 && outputText) {
+    if (!renderedMcpOutput && outputText) {
       sections.push(
         buildToolSection('Result:', outputText, {
           toolName,
