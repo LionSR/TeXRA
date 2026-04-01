@@ -15,53 +15,73 @@ import {
 import { formatDuration } from '@utils/core';
 
 // Local imports - Lit template utilities
-import { html, type TemplateResult } from '../litTemplates';
+import {
+  html,
+  nothing,
+  repeat,
+  when,
+  type TemplateResult,
+} from '../litTemplates';
 
 // Local imports - formatter helpers
 import { buildToolUseSection, wrapInPre } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
 
-type CodexRenderableToolName =
-  | 'codex'
-  | typeof CODEX_FILE_CHANGE_TOOL
-  | typeof CODEX_THREAD_TOOL
-  | typeof CODEX_TODO_TOOL
-  | typeof CODEX_TURN_TOOL;
+type RenderableSection = TemplateResult | typeof nothing;
+type BadgeData = { iconClass: string; label: string };
+type CodexToolRenderer = (input: unknown) => RenderableSection;
 
-function compactSections(
-  sections: Array<TemplateResult | null>,
-): TemplateResult[] {
-  return sections.filter(
-    (section): section is TemplateResult => section !== null,
-  );
-}
-
-function renderBadge(iconClass: string, label: string): TemplateResult {
+function renderBadge({ iconClass, label }: BadgeData): TemplateResult {
   // prettier-ignore
   return html`<span class="extract-flag"><i class="codicon ${iconClass}"></i> ${label}</span>`;
 }
 
 function renderBadgeSection(
   label: string,
-  badges: Array<{ iconClass: string; label: string }>,
-): TemplateResult | null {
+  badges: BadgeData[],
+): RenderableSection {
   if (badges.length === 0) {
-    return null;
+    return nothing;
   }
 
   return buildToolUseSection(
     label,
-    html`${badges.map((badge) => renderBadge(badge.iconClass, badge.label))}`,
+    html`${repeat(
+      badges,
+      (badge) => `${badge.iconClass}:${badge.label}`,
+      renderBadge,
+    )}`,
   );
 }
 
-function renderCodexPromptSection(input: CodexInput): TemplateResult | null {
-  return input.prompt
-    ? buildToolUseSection('Prompt:', wrapInPre(input.prompt))
-    : null;
+function renderSectionGroup(
+  sections: readonly RenderableSection[],
+): RenderableSection {
+  const visibleSections = sections.filter(
+    (section): section is TemplateResult => section !== nothing,
+  );
+  if (visibleSections.length === 0) {
+    return nothing;
+  }
+
+  return html`${repeat(
+    visibleSections,
+    (_section, index) => index,
+    (section, index) =>
+      html`${when(
+        index > 0,
+        () => html`<hr class="tool-use-separator" />`,
+      )}${section}`,
+  )}`;
 }
 
-function renderCodexModeSection(input: CodexInput): TemplateResult | null {
+function renderCodexPromptSection(input: CodexInput): RenderableSection {
+  return when(Boolean(input.prompt), () =>
+    buildToolUseSection('Prompt:', wrapInPre(input.prompt)),
+  );
+}
+
+function renderCodexModeSection(input: CodexInput): RenderableSection {
   const badges = [
     ...(input.sandbox_mode
       ? [{ iconClass: 'codicon-shield', label: input.sandbox_mode }]
@@ -74,28 +94,27 @@ function renderCodexModeSection(input: CodexInput): TemplateResult | null {
   return renderBadgeSection('Mode:', badges);
 }
 
-function renderCodexDirectorySection(input: CodexInput): TemplateResult | null {
-  return input.working_directory
-    ? buildToolUseSection('Directory:', wrapInPre(input.working_directory))
-    : null;
+function renderCodexDirectorySection(input: CodexInput): RenderableSection {
+  const workingDirectory = input.working_directory ?? '';
+  return when(workingDirectory.length > 0, () =>
+    buildToolUseSection('Directory:', wrapInPre(workingDirectory)),
+  );
 }
 
-function renderCodexInputSections(input: unknown): TemplateResult[] | null {
+function renderCodexInputContent(input: unknown): RenderableSection {
   if (!isPlainObject(input)) {
-    return null;
+    return nothing;
   }
 
   const codexInput = input as CodexInput;
-  return compactSections([
+  return renderSectionGroup([
     renderCodexPromptSection(codexInput),
     renderCodexModeSection(codexInput),
     renderCodexDirectorySection(codexInput),
   ]);
 }
 
-function renderCodexFileStatusSection(
-  patchStatus: string,
-): TemplateResult | null {
+function renderCodexFileStatusSection(patchStatus: string): RenderableSection {
   return patchStatus
     ? renderBadgeSection('Status:', [
         {
@@ -104,25 +123,46 @@ function renderCodexFileStatusSection(
           label: patchStatus,
         },
       ])
-    : null;
+    : nothing;
+}
+
+function renderCodexFileChangeItem(change: CodexFileChange): TemplateResult {
+  return html`
+    <li class="detail-item">
+      <i class="codicon codicon-file"></i>
+      <span class="file-link clickable-link" data-file=${change.path}
+        >${change.path}</span
+      >
+      <span class="file-source">(${change.kind})</span>
+    </li>
+  `;
 }
 
 function renderCodexFileListSection(
   changes: CodexFileChange[],
-): TemplateResult | null {
-  if (changes.length === 0) {
-    return null;
-  }
-
-  // prettier-ignore
-  return buildToolUseSection('Files:', html`<ul class="detail-list">${changes.map((change) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${change.path}>${change.path}</span> <span class="file-source">(${change.kind})</span></li>`)}</ul>`);
+): RenderableSection {
+  return when(
+    changes.length > 0,
+    () => html`
+      ${buildToolUseSection(
+        'Files:',
+        html`
+          <ul class="detail-list">
+            ${repeat(
+              changes,
+              (change) => `${change.kind}:${change.path}`,
+              renderCodexFileChangeItem,
+            )}
+          </ul>
+        `,
+      )}
+    `,
+  );
 }
 
-function renderCodexFileChangeSections(
-  input: unknown,
-): TemplateResult[] | null {
+function renderCodexFileChangeContent(input: unknown): RenderableSection {
   if (!isPlainObject(input)) {
-    return null;
+    return nothing;
   }
 
   const patchInput = input as Partial<CodexFileChangeToolInput>;
@@ -135,30 +175,35 @@ function renderCodexFileChangeSections(
   const patchStatus =
     typeof patchInput.patchStatus === 'string' ? patchInput.patchStatus : '';
 
-  return compactSections([
+  return renderSectionGroup([
     renderCodexFileStatusSection(patchStatus),
     renderCodexFileListSection(changes),
   ]);
 }
 
-function renderCodexThreadSections(input: unknown): TemplateResult[] | null {
+function renderCodexThreadContent(input: unknown): RenderableSection {
   if (!isPlainObject(input)) {
-    return null;
+    return nothing;
   }
 
   const threadInput = input as Partial<CodexThreadToolInput>;
-  return compactSections([
-    typeof threadInput.threadId === 'string' && threadInput.threadId
-      ? // prettier-ignore
-        buildToolUseSection('Thread ID:', html`<code class="execution-id">${threadInput.threadId}</code>`)
-      : null,
+  return renderSectionGroup([
+    when(
+      typeof threadInput.threadId === 'string' &&
+        threadInput.threadId.length > 0,
+      () =>
+        buildToolUseSection(
+          'Thread ID:',
+          html`<code class="execution-id">${threadInput.threadId}</code>`,
+        ),
+    ),
   ]);
 }
 
 function renderCodexTodoProgressSection(
   completedCount: number,
   totalCount: number,
-): TemplateResult | null {
+): RenderableSection {
   return totalCount > 0
     ? renderBadgeSection('Progress:', [
         {
@@ -166,23 +211,50 @@ function renderCodexTodoProgressSection(
           label: `${completedCount}/${totalCount} completed`,
         },
       ])
-    : null;
+    : nothing;
+}
+
+function renderCodexTodoItem(item: {
+  text: string;
+  completed: boolean;
+}): TemplateResult {
+  return html`
+    <li class="detail-item">
+      <i
+        class="codicon ${item.completed
+          ? 'codicon-pass-filled'
+          : 'codicon-circle-large-outline'}"
+      ></i>
+      <span>${item.text}</span>
+    </li>
+  `;
 }
 
 function renderCodexTodoListSection(
   items: Array<{ text: string; completed: boolean }>,
-): TemplateResult | null {
-  if (items.length === 0) {
-    return null;
-  }
-
-  // prettier-ignore
-  return buildToolUseSection('Checklist:', html`<ul class="detail-list">${items.map((item) => html`<li class="detail-item"><i class="codicon ${item.completed ? 'codicon-pass-filled' : 'codicon-circle-large-outline'}"></i> <span>${item.text}</span></li>`)}</ul>`);
+): RenderableSection {
+  return when(
+    items.length > 0,
+    () => html`
+      ${buildToolUseSection(
+        'Checklist:',
+        html`
+          <ul class="detail-list">
+            ${repeat(
+              items,
+              (item, index) => `${index}:${item.text}:${item.completed}`,
+              renderCodexTodoItem,
+            )}
+          </ul>
+        `,
+      )}
+    `,
+  );
 }
 
-function renderCodexTodoSections(input: unknown): TemplateResult[] | null {
+function renderCodexTodoContent(input: unknown): RenderableSection {
   if (!isPlainObject(input)) {
-    return null;
+    return nothing;
   }
 
   const todoInput = input as Partial<CodexTodoToolInput>;
@@ -198,7 +270,7 @@ function renderCodexTodoSections(input: unknown): TemplateResult[] | null {
       )
     : [];
 
-  return compactSections([
+  return renderSectionGroup([
     renderCodexTodoProgressSection(completedCount, totalCount),
     renderCodexTodoListSection(items),
   ]);
@@ -212,25 +284,23 @@ function getCodexTurnStateIcon(state: string): string {
       : 'codicon-check';
 }
 
-function renderCodexTurnStateSection(state: string): TemplateResult | null {
+function renderCodexTurnStateSection(state: string): RenderableSection {
   return state
     ? renderBadgeSection('State:', [
         { iconClass: getCodexTurnStateIcon(state), label: state },
       ])
-    : null;
+    : nothing;
 }
 
-function renderCodexTurnDurationSection(
-  wallTimeMs: number,
-): TemplateResult | null {
+function renderCodexTurnDurationSection(wallTimeMs: number): RenderableSection {
   return wallTimeMs > 0
     ? buildToolUseSection('Duration:', wrapInPre(formatDuration(wallTimeMs)))
-    : null;
+    : nothing;
 }
 
 function renderCodexTurnUsageSection(
   turnInput: Partial<CodexTurnToolInput>,
-): TemplateResult | null {
+): RenderableSection {
   const badges = [
     ...(typeof turnInput.inputTokens === 'number'
       ? [
@@ -262,9 +332,9 @@ function renderCodexTurnUsageSection(
   return renderBadgeSection('Usage:', badges);
 }
 
-function renderCodexTurnSections(input: unknown): TemplateResult[] | null {
+function renderCodexTurnContent(input: unknown): RenderableSection {
   if (!isPlainObject(input)) {
-    return null;
+    return nothing;
   }
 
   const turnInput = input as Partial<CodexTurnToolInput>;
@@ -272,29 +342,17 @@ function renderCodexTurnSections(input: unknown): TemplateResult[] | null {
   const wallTimeMs =
     typeof turnInput.wallTimeMs === 'number' ? turnInput.wallTimeMs : 0;
 
-  return compactSections([
+  return renderSectionGroup([
     renderCodexTurnStateSection(state),
     renderCodexTurnDurationSection(wallTimeMs),
     renderCodexTurnUsageSection(turnInput),
   ]);
 }
 
-export function renderCodexToolSections(
-  toolName: string,
-  input: unknown,
-): TemplateResult[] | null {
-  switch (toolName as CodexRenderableToolName) {
-    case 'codex':
-      return renderCodexInputSections(input);
-    case CODEX_FILE_CHANGE_TOOL:
-      return renderCodexFileChangeSections(input);
-    case CODEX_THREAD_TOOL:
-      return renderCodexThreadSections(input);
-    case CODEX_TODO_TOOL:
-      return renderCodexTodoSections(input);
-    case CODEX_TURN_TOOL:
-      return renderCodexTurnSections(input);
-    default:
-      return null;
-  }
-}
+export const codexToolRenderers = {
+  codex: renderCodexInputContent,
+  [CODEX_FILE_CHANGE_TOOL]: renderCodexFileChangeContent,
+  [CODEX_THREAD_TOOL]: renderCodexThreadContent,
+  [CODEX_TODO_TOOL]: renderCodexTodoContent,
+  [CODEX_TURN_TOOL]: renderCodexTurnContent,
+} satisfies Record<string, CodexToolRenderer>;

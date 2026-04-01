@@ -54,7 +54,6 @@ import {
 import { normalizeToolUseData } from '../logDataParsers';
 import { registerProposalInput } from '../proposalInputStore';
 import { stringifyWithLanguage, extractCodeOnlyInput } from '../parseUtils';
-import { renderCodexToolSections } from './codexToolTemplates';
 import {
   TOOLS_WITH_DIFF_INPUT,
   TOOLS_WITH_FILE_LINK,
@@ -65,6 +64,7 @@ import {
   TRIVIAL_WRITE_OUTPUT,
   getLanguageFromPath,
 } from '../constants';
+import { codexToolRenderers } from './codexToolTemplates';
 
 // Side-effect import to register <tool-timer> custom element
 import '../../components/ToolTimer';
@@ -137,6 +137,14 @@ function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
         : ''}`,
   )}`;
 }
+
+type SpecializedToolRenderer = (
+  input: unknown,
+) => TemplateResult | typeof nothing;
+
+const SPECIALIZED_TOOL_SECTION_RENDERERS = {
+  ...codexToolRenderers,
+} satisfies Record<string, SpecializedToolRenderer>;
 
 // Web search provider display names
 const PROVIDER_LABELS: Record<string, string> = {
@@ -529,9 +537,15 @@ export function formatToolUseTemplate(
       sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
     }
   }
-  // Handle Codex cards through dedicated Lit-native helpers
-  else if (toolName === 'codex' || toolName.startsWith('codex_')) {
-    sections.push(...(renderCodexToolSections(toolName, input) ?? []));
+  // Handle specialized structured tool cards via renderer registry
+  else if (Object.hasOwn(SPECIALIZED_TOOL_SECTION_RENDERERS, toolName)) {
+    const content =
+      SPECIALIZED_TOOL_SECTION_RENDERERS[
+        toolName as keyof typeof SPECIALIZED_TOOL_SECTION_RENDERERS
+      ](input);
+    if (content !== nothing) {
+      sections.push(content);
+    }
   }
   // Handle MCP tool calls with richer result rendering
   else if (toolName.startsWith('mcp:')) {
