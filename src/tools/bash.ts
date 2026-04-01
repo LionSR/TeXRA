@@ -173,6 +173,18 @@ export class BashTool extends defineTool({
       instruction: command,
     });
 
+    try {
+      await registerExecution(
+        executionId,
+        syntheticConfig,
+        'bash',
+        parentExecutionId,
+        'toolUse',
+      );
+    } catch {
+      throw new ToolError('Failed to register background execution.');
+    }
+
     const { childStreamId, logger } = createChildStream(
       executionId,
       parentStreamId,
@@ -200,22 +212,6 @@ export class BashTool extends defineTool({
       onStderr: (chunk) => stderrLog.append(chunk),
     });
 
-    try {
-      await registerExecution(
-        executionId,
-        syntheticConfig,
-        'bash',
-        parentExecutionId,
-        'toolUse',
-      );
-    } catch {
-      void promise.finally(() => {
-        stdoutLog.finalize();
-        stderrLog.finalize();
-      });
-      throw new ToolError('Failed to register background execution.');
-    }
-
     void promise
       .then(async (result) => {
         const wallTimeMs = Date.now() - startedAt;
@@ -234,6 +230,11 @@ export class BashTool extends defineTool({
         await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
         finalizeChildStream(childStreamId, executionId, logger, {
           wallTimeMs,
+          error: result.success
+            ? undefined
+            : new ToolError(
+                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
+              ),
         });
         unregisterInterruptible(childStreamId);
 
