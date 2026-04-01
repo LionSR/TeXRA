@@ -244,25 +244,15 @@ async function mirrorThreadToExecution(params: {
     params.executionId,
     params.threadId,
   );
-
-  // Copy only the updated manifest and the new turn directory (not the entire thread).
-  const sourceTurnDir = path.join(
-    sourceRoot,
-    'turns',
-    formatTurnDirName(params.turn.turnIndex),
-  );
-  const targetTurnDir = path.join(
-    targetRoot,
-    'turns',
-    formatTurnDirName(params.turn.turnIndex),
-  );
+  const sourceTurnsDir = path.join(sourceRoot, 'turns');
+  const targetTurnsDir = path.join(targetRoot, 'turns');
 
   await Promise.all([
     copyGlobalFileToExecution(
       threadManifestPath(params.threadId),
       path.join(targetRoot, EXTERNAL_INQUIRY_MANIFEST_FILE),
     ),
-    copyGlobalDirectoryToExecution(sourceTurnDir, targetTurnDir),
+    copyGlobalDirectoryToExecution(sourceTurnsDir, targetTurnsDir),
   ]);
 
   const rootRelativePath = normalizeSlashes(

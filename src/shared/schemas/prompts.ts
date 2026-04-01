@@ -168,7 +168,8 @@ export type ExternalInquiryMode = z.infer<typeof ExternalInquiryModeSchema>;
 
 export const ExternalInquiryThreadIdSchema = z
   .string()
-  .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID');
+  .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID')
+  .transform((value) => value.toLowerCase());
 export type ExternalInquiryThreadId = z.infer<
   typeof ExternalInquiryThreadIdSchema
 >;

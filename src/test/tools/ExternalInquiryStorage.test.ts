@@ -2,6 +2,9 @@
 import * as assert from 'assert';
 import * as path from 'path';
 
+// Local imports - schemas
+import { ExternalInquiryThreadIdSchema } from '@shared/schemas';
+
 // Local imports - inquiry storage
 import {
   looksLikeUtf8Text,
@@ -282,6 +285,31 @@ describe('externalInquiryStorage', () => {
         `executions/${EXECUTION_TWO}/external_inquiry/${firstTurn.threadId}/turns/turn-0002/answer.txt`,
       ),
     );
+  });
+
+  it('normalizes uppercase thread IDs for follow-up turns and thread reads', async () => {
+    const firstTurn = await persistExternalInquiryTurn({
+      mode: 'new',
+      question: 'Question one',
+      answer: 'Answer one',
+      executionId: EXECUTION_ONE,
+    });
+
+    const uppercaseThreadId = firstTurn.threadId.toUpperCase();
+
+    const secondTurn = await persistExternalInquiryTurn({
+      mode: 'followup',
+      threadId: ExternalInquiryThreadIdSchema.parse(uppercaseThreadId),
+      question: 'Question two',
+      answer: 'Answer two',
+      executionId: EXECUTION_TWO,
+    });
+
+    assert.strictEqual(secondTurn.threadId, firstTurn.threadId);
+
+    const manifest = await readExternalInquiryThread(uppercaseThreadId);
+    assert.strictEqual(manifest?.threadId, firstTurn.threadId);
+    assert.strictEqual(manifest?.turns.length, 2);
   });
 
   it('rejects uploaded files that are binary despite text-like metadata', async () => {
