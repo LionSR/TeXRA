@@ -144,6 +144,10 @@ interface TrackedToolUseLog {
   groupId: string | undefined;
 }
 
+interface ActiveTrackedToolUseLog extends TrackedToolUseLog {
+  latestToolLog: ToolUseLog;
+}
+
 interface ActiveCodexTurnLog extends TrackedToolUseLog {
   startedAt: number;
 }
@@ -337,19 +341,62 @@ function updateTrackedToolUseLog(
 }
 
 function upsertTrackedToolUseLog(
-  trackedLogs: Map<string, TrackedToolUseLog>,
+  trackedLogs: Map<string, ActiveTrackedToolUseLog>,
   itemId: string,
   toolLog: ToolUseLog,
   logger: AgentLogger,
 ): void {
   const trackedLog = trackedLogs.get(itemId);
   if (trackedLog) {
+    trackedLog.latestToolLog = toolLog;
     updateTrackedToolUseLog(logger, trackedLog, toolLog);
   } else {
-    trackedLogs.set(itemId, logger.emitToolUse(toolLog));
+    trackedLogs.set(itemId, {
+      ...logger.emitToolUse(toolLog),
+      latestToolLog: toolLog,
+    });
   }
 
   if (toolLog.status !== 'in_progress') {
+    trackedLogs.delete(itemId);
+  }
+}
+
+function finalizeTrackedCodexItemLog(
+  toolLog: ToolUseLog,
+  errorMessage: string,
+): ToolUseLog {
+  const output =
+    toolLog.toolName?.startsWith('mcp:') &&
+    toolLog.output != null &&
+    typeof toolLog.output === 'object' &&
+    !Array.isArray(toolLog.output)
+      ? {
+          ...(toolLog.output as Record<string, unknown>),
+          status: 'failed',
+        }
+      : toolLog.output;
+
+  return {
+    ...toolLog,
+    ...(output !== undefined && { output }),
+    ...(toolLog.error ? {} : { error: errorMessage }),
+    isError: true,
+    status: 'completed',
+  };
+}
+
+function finalizeTrackedCodexItemLogs(
+  trackedLogs: Map<string, ActiveTrackedToolUseLog>,
+  logger: AgentLogger,
+  errorMessage: string,
+): void {
+  for (const [itemId, trackedLog] of trackedLogs) {
+    updateTrackedToolUseLog(
+      logger,
+      trackedLog,
+      finalizeTrackedCodexItemLog(trackedLog.latestToolLog, errorMessage),
+    );
     trackedLogs.delete(itemId);
   }
 }
@@ -364,7 +411,7 @@ function handleTrackedCodexItemEvent(
   phase: 'started' | 'updated' | 'completed',
   childStreamId: StreamTabId,
   logger: AgentLogger,
-  trackedLogs: Map<string, TrackedToolUseLog>,
+  trackedLogs: Map<string, ActiveTrackedToolUseLog>,
 ): void {
   if (item.type === 'todo_list') {
     syncCodexTodoState(item, childStreamId);
@@ -544,7 +591,7 @@ async function runStreamedTurn(
   const { events } = await thread.runStreamed(prompt);
   const responseParts: string[] = [];
   let usage: RunResult['usage'] = null;
-  const trackedLogs = new Map<string, TrackedToolUseLog>();
+  const trackedLogs = new Map<string, ActiveTrackedToolUseLog>();
   let activeTurnLog: ActiveCodexTurnLog | null = null;
   const usageReporter = new AgentUsageReporter(
     logger,
@@ -552,116 +599,106 @@ async function runStreamedTurn(
     AgentCategory.ToolUse,
   );
 
-  for await (const event of events) {
-    switch (event.type) {
-      case 'thread.started':
-        logger.logToolUse(buildCodexThreadToolLog(event));
-        break;
-      case 'turn.started':
-        activeTurnLog = {
-          ...logger.emitToolUse(buildCodexTurnToolLog({ state: 'running' })),
-          startedAt: Date.now(),
-        };
-        break;
-      case 'item.started':
-      case 'item.updated':
-        if (
-          event.item.type === 'command_execution' ||
-          event.item.type === 'mcp_tool_call' ||
-          event.item.type === 'todo_list'
-        ) {
-          handleTrackedCodexItemEvent(
-            event.item,
-            event.type === 'item.started' ? 'started' : 'updated',
-            childStreamId,
-            logger,
-            trackedLogs,
-          );
+  try {
+    for await (const event of events) {
+      switch (event.type) {
+        case 'thread.started':
+          logger.logToolUse(buildCodexThreadToolLog(event));
+          break;
+        case 'turn.started':
+          activeTurnLog = {
+            ...logger.emitToolUse(buildCodexTurnToolLog({ state: 'running' })),
+            startedAt: Date.now(),
+          };
+          break;
+        case 'item.started':
+        case 'item.updated':
+          if (
+            event.item.type === 'command_execution' ||
+            event.item.type === 'mcp_tool_call' ||
+            event.item.type === 'todo_list'
+          ) {
+            handleTrackedCodexItemEvent(
+              event.item,
+              event.type === 'item.started' ? 'started' : 'updated',
+              childStreamId,
+              logger,
+              trackedLogs,
+            );
+          }
+          break;
+        case 'item.completed': {
+          const { item } = event;
+          if (
+            item.type === 'command_execution' ||
+            item.type === 'mcp_tool_call' ||
+            item.type === 'todo_list'
+          ) {
+            handleTrackedCodexItemEvent(
+              item,
+              'completed',
+              childStreamId,
+              logger,
+              trackedLogs,
+            );
+          } else {
+            logCompletedCodexItem(item, logger);
+          }
+          if (item.type === 'agent_message') {
+            responseParts.push(item.text);
+          }
+          break;
         }
-        break;
-      case 'item.completed': {
-        const { item } = event;
-        if (
-          item.type === 'command_execution' ||
-          item.type === 'mcp_tool_call' ||
-          item.type === 'todo_list'
-        ) {
-          handleTrackedCodexItemEvent(
-            item,
-            'completed',
-            childStreamId,
-            logger,
-            trackedLogs,
-          );
-        } else {
-          logCompletedCodexItem(item, logger);
-        }
-        if (item.type === 'agent_message') {
-          responseParts.push(item.text);
-        }
-        break;
-      }
-      case 'turn.completed':
-        usage = event.usage ?? null;
-        if (usage) {
-          usageReporter.report(
-            buildCodexUsageStats(usage),
-            executionId as StorageKey,
-          );
-        }
-        if (activeTurnLog) {
-          updateTrackedToolUseLog(
-            logger,
-            activeTurnLog,
-            buildCodexTurnToolLog({
-              state: 'completed',
-              wallTimeMs: Date.now() - activeTurnLog.startedAt,
-              usage,
-            }),
-          );
-          activeTurnLog = null;
-        } else {
-          logger.logToolUse(
-            buildCodexTurnToolLog({
-              state: 'completed',
-              usage,
-            }),
-          );
-        }
-        break;
-      case 'turn.failed': {
-        const errorMessage = event.error.message ?? 'Codex turn failed';
-        if (activeTurnLog) {
-          updateTrackedToolUseLog(
-            logger,
-            activeTurnLog,
-            buildCodexTurnToolLog({
-              state: 'failed',
-              wallTimeMs: Date.now() - activeTurnLog.startedAt,
-              error: errorMessage,
-            }),
-          );
-          activeTurnLog = null;
-        }
-        throw new ToolError(errorMessage);
-      }
-      case 'error': {
-        const errorMessage = event.message ?? 'Codex stream error';
-        if (activeTurnLog) {
-          updateTrackedToolUseLog(
-            logger,
-            activeTurnLog,
-            buildCodexTurnToolLog({
-              state: 'failed',
-              wallTimeMs: Date.now() - activeTurnLog.startedAt,
-              error: errorMessage,
-            }),
-          );
-          activeTurnLog = null;
-        }
-        throw new ToolError(errorMessage);
+        case 'turn.completed':
+          usage = event.usage ?? null;
+          if (usage) {
+            usageReporter.report(
+              buildCodexUsageStats(usage),
+              executionId as StorageKey,
+            );
+          }
+          if (activeTurnLog) {
+            updateTrackedToolUseLog(
+              logger,
+              activeTurnLog,
+              buildCodexTurnToolLog({
+                state: 'completed',
+                wallTimeMs: Date.now() - activeTurnLog.startedAt,
+                usage,
+              }),
+            );
+            activeTurnLog = null;
+          } else {
+            logger.logToolUse(
+              buildCodexTurnToolLog({
+                state: 'completed',
+                usage,
+              }),
+            );
+          }
+          break;
+        case 'turn.failed':
+          throw new ToolError(event.error.message ?? 'Codex turn failed');
+        case 'error':
+          throw new ToolError(event.message ?? 'Codex stream error');
       }
     }
+  } catch (error) {
+    const errorMessage = toErrorMessage(error);
+    if (activeTurnLog) {
+      updateTrackedToolUseLog(
+        logger,
+        activeTurnLog,
+        buildCodexTurnToolLog({
+          state: 'failed',
+          wallTimeMs: Date.now() - activeTurnLog.startedAt,
+          error: errorMessage,
+        }),
+      );
+      activeTurnLog = null;
+    }
+    finalizeTrackedCodexItemLogs(trackedLogs, logger, errorMessage);
+    throw error;
   }
 
   return {

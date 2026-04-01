@@ -654,6 +654,7 @@ export function formatToolUseTemplate(
     isWriteTool && outputText.trim() === TRIVIAL_WRITE_OUTPUT;
   if (
     outputText &&
+    !toolName.startsWith('mcp:') &&
     !TOOLS_WITH_FILE_LINK.has(toolName) &&
     !isTrivialWriteOutput
   ) {
