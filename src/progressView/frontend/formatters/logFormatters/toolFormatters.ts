@@ -28,6 +28,7 @@ import type {
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
 import { type CodexMcpToolOutput } from '@tools/codexShared';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - Lit template utilities
 import {
@@ -124,8 +125,7 @@ function getToolTimeoutMs(
 /** Truncate a prompt string for display in collapsed headers. */
 function truncatePrompt(text: string, maxLength: number): string {
   const oneLine = text.replaceAll(/\s+/g, ' ').trim();
-  if (oneLine.length <= maxLength) return oneLine;
-  return oneLine.slice(0, maxLength - 1) + '…';
+  return truncateWithEllipsis(oneLine, maxLength);
 }
 
 /** Join template sections with horizontal rule separators. */

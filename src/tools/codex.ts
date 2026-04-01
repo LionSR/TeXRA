@@ -769,10 +769,14 @@ export class CodexTool extends defineTool({
 
     const CodexClass = await importCodexClass();
     const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
+    const workspaceOptions =
+      input.thread_id && input.working_directory == null
+        ? {}
+        : buildCodexWorkspaceOptions(input.working_directory);
     const threadOptions = {
       sandboxMode: input.sandbox_mode,
       skipGitRepoCheck: true as const,
-      ...buildCodexWorkspaceOptions(input.working_directory),
+      ...workspaceOptions,
     };
 
     return input.thread_id

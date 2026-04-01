@@ -1,5 +1,6 @@
 // Local imports - shared schemas
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type {
   CommandExecutionItem,
   FileChangeItem,
@@ -61,8 +62,7 @@ export interface CodexTurnToolInput {
 
 function truncateSummary(text: string, maxLength: number): string {
   const oneLine = text.replaceAll(/\s+/g, ' ').trim();
-  if (oneLine.length <= maxLength) return oneLine;
-  return oneLine.slice(0, maxLength - 1) + '…';
+  return truncateWithEllipsis(oneLine, maxLength);
 }
 
 function getPathBasename(filePath: string): string {
@@ -78,14 +78,14 @@ export function buildCodexCommandToolLog(
     options.status === 'in_progress' ? 'in_progress' : 'completed';
   const command = options.command.trim();
   const exitInfo =
-    options.exit_code === undefined
+    options.exit_code == null
       ? options.status?.trim() || 'completed'
       : `exit ${options.exit_code}`;
   const output =
     options.aggregated_output.trimEnd() ||
     (toolStatus === 'completed' ? `(${exitInfo})` : '');
   const isError =
-    options.exit_code === undefined
+    options.exit_code == null
       ? options.status === 'failed'
       : options.exit_code !== 0;
 
