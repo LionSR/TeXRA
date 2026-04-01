@@ -27,7 +27,7 @@ import {
 import { buildToolUseSection, wrapInPre } from '../htmlBuilders';
 import { formatTokens } from '../timestampUtils';
 
-type RenderableSection = TemplateResult | typeof nothing;
+type RenderableSection = TemplateResult | typeof nothing | undefined | null;
 type BadgeData = { iconClass: string; label: string };
 type CodexToolRenderer = (input: unknown) => RenderableSection;
 
@@ -58,7 +58,8 @@ function renderSectionGroup(
   sections: readonly RenderableSection[],
 ): RenderableSection {
   const visibleSections = sections.filter(
-    (section): section is TemplateResult => section !== nothing,
+    (section): section is TemplateResult =>
+      section !== nothing && section != null,
   );
   if (visibleSections.length === 0) {
     return nothing;
