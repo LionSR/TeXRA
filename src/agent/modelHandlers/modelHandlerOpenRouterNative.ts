@@ -284,16 +284,15 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
     // Reasoning configuration:
     // OpenRouter SDK serializes `reasoning.effort` but not `reasoning.enabled`.
-    // For non-effort reasoning models, send a low effort value as the closest
-    // serializable equivalent to "reasoning enabled".
+    // Use getEffectiveReasoningEffort() for tier-based restrictions (e.g. GPT-5
+    // xhigh capped to high for Max-tier users on server-side keys).
     if (this.capabilities.supportsReasoning) {
-      const effort = this.capabilities.supportsReasoningEffort
-        ? (this.capabilities.reasoningEffort ?? 'low')
+      const effective = this.capabilities.supportsReasoningEffort
+        ? (this.getEffectiveReasoningEffort() ?? 'low')
         : 'low';
+      const effort = effective === 'none' ? 'low' : effective;
       params.reasoning = {
-        effort: this.validateReasoningEffort(
-          effort === 'none' ? 'low' : effort,
-        ),
+        effort: this.validateReasoningEffort(effort),
       };
     }
 
@@ -324,27 +323,36 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         ? this.createOutputStream()
         : undefined;
 
-      for await (const chunk of stream) {
-        const { contentDelta, reasoningDelta } = aggregator.consumeChunk(chunk);
-        if (reasoningDelta) thinking.append(reasoningDelta);
-        if (contentDelta) output?.append(contentDelta);
-      }
+      try {
+        for await (const chunk of stream) {
+          const { contentDelta, reasoningDelta } =
+            aggregator.consumeChunk(chunk);
+          if (reasoningDelta) thinking.append(reasoningDelta);
+          if (contentDelta) output?.append(contentDelta);
+        }
 
-      const response = aggregator.buildResponse();
-      const finalReasoning = this.processThinkingBlock(response);
-      thinking.finalize(finalReasoning ?? undefined);
-      const finalOutput = response.choices?.[0]?.message?.content ?? '';
-      if (output)
-        output.finalize(typeof finalOutput === 'string' ? finalOutput : '');
+        const response = aggregator.buildResponse();
+        const finalReasoning = this.processThinkingBlock(response);
+        thinking.finalize(finalReasoning ?? undefined);
+        const finalOutput = response.choices?.[0]?.message?.content ?? '';
+        if (output)
+          output.finalize(typeof finalOutput === 'string' ? finalOutput : '');
 
-      if (response.usage?.promptTokens) {
-        this.lastKnownInputTokens = response.usage.promptTokens;
-      } else {
-        this.logger.warn(
-          'No usage data in streaming response — token tracking and compaction may be affected',
-        );
+        if (response.usage?.promptTokens) {
+          this.lastKnownInputTokens = response.usage.promptTokens;
+        } else {
+          this.logger.warn(
+            'No usage data in streaming response — token tracking and compaction may be affected',
+          );
+        }
+        return { response, updatedMessages };
+      } catch (err) {
+        // Ensure progress streams are finalized on error to prevent
+        // the progress view from being stuck in a loading state
+        thinking.finalize(undefined);
+        output?.finalize('');
+        throw err;
       }
-      return { response, updatedMessages };
     }
 
     // Non-streaming
@@ -735,8 +743,13 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       this.config.outputPrice,
     );
 
+    const reasoningTokens =
+      responseUsage.completionTokensDetails?.reasoningTokens ?? 0;
     const cachedTokens = responseUsage.promptTokensDetails?.cachedTokens ?? 0;
 
+    if (reasoningTokens) {
+      basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
+    }
     if (cachedTokens) {
       basePrice -=
         (cachedTokens *
