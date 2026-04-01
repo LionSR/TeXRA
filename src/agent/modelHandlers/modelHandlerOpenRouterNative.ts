@@ -356,6 +356,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     // Non-streaming
+    params.stream = false;
     const response = (await client.chat.send(
       { chatGenerationParams: params as any },
       { signal },
