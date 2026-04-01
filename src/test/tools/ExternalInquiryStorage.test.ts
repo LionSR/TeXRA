@@ -352,6 +352,46 @@ describe('externalInquiryStorage', () => {
     );
   });
 
+  it('rejects uploaded files whose declared size exceeds the safety cap', async () => {
+    await assert.rejects(
+      () =>
+        persistExternalInquiryTurn({
+          mode: 'new',
+          question: 'Inspect this file',
+          answer: 'Oversized upload',
+          uploadedFiles: [
+            {
+              fileName: 'note.txt',
+              mediaType: 'text/plain',
+              sizeBytes: 17 * 1024 * 1024,
+              base64: Buffer.from('small', 'utf8').toString('base64'),
+            },
+          ],
+        }),
+      /too large to safely process/,
+    );
+  });
+
+  it('rejects uploaded files whose base64 payload exceeds the safety cap', async () => {
+    await assert.rejects(
+      () =>
+        persistExternalInquiryTurn({
+          mode: 'new',
+          question: 'Inspect this file',
+          answer: 'Oversized upload',
+          uploadedFiles: [
+            {
+              fileName: 'note.txt',
+              mediaType: 'text/plain',
+              sizeBytes: 1,
+              base64: 'A'.repeat(24 * 1024 * 1024),
+            },
+          ],
+        }),
+      /too large to safely process/,
+    );
+  });
+
   it('detects UTF-8 text bytes conservatively', () => {
     assert.strictEqual(
       looksLikeUtf8Text(Buffer.from('plain text', 'utf8')),

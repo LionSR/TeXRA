@@ -26,7 +26,7 @@ import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
-  getDisabledToolNamesCached,
+  getDisabledToolNames,
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
@@ -82,8 +82,8 @@ function resolveTools(
   logger: { warn: (msg: string) => void },
   isSubagent?: boolean,
 ): ToolDefinition[] {
-  const disabled = getDisabledToolNamesCached();
-  const unavailable = getUnavailableToolNamesCached();
+  const disabled = getDisabledToolNames();
+  const unavailable = getUnavailableToolNamesCached(disabled);
   const missingDependency: string[] = [];
   const excluded: string[] = [];
 

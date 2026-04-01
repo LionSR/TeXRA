@@ -51,7 +51,7 @@ function buildDisabledToolNameSet(): ReadonlySet<string> {
 }
 
 /** Read the current set of disabled tool names from persisted Settings state. */
-export function getDisabledToolNamesCached(): ReadonlySet<string> {
+export function getDisabledToolNames(): ReadonlySet<string> {
   return buildDisabledToolNameSet();
 }
 
@@ -91,11 +91,11 @@ export async function runExternalToolChecks(): Promise<
   return results;
 }
 
-/** Build the set of unavailable tool names from check results + disabled IDs. */
+/** Build the set of unavailable tool names from external check results only. */
 function buildUnavailableSet(
   results: ExternalToolCheckResult[],
 ): ReadonlySet<string> {
-  const unavailable = new Set<string>(buildDisabledToolNameSet());
+  const unavailable = new Set<string>();
   for (const { id, tools, status } of results) {
     if (status === 'not-found') {
       for (const t of tools) unavailable.add(t);
@@ -118,7 +118,7 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  */
 export function refreshDisabledToolCache(): void {
   if (!lastResults) {
-    cached = buildDisabledToolNameSet();
+    cached = null;
     return;
   }
   cached = buildUnavailableSet(lastResults);
@@ -133,8 +133,9 @@ export function refreshDisabledToolCache(): void {
  * flow on network probes. External tools that are actually missing will
  * fail at call time with a clear error — same as pre-dashboard behavior.
  */
-export function getUnavailableToolNamesCached(): ReadonlySet<string> {
-  const disabled = buildDisabledToolNameSet();
+export function getUnavailableToolNamesCached(
+  disabled = buildDisabledToolNameSet(),
+): ReadonlySet<string> {
   if (!cached) return disabled;
   if (disabled.size === 0) return cached;
 

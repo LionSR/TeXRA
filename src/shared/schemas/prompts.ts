@@ -112,6 +112,8 @@ export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'reject'] as const;
 export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
 
 export const EXTERNAL_INQUIRY_MAX_UPLOAD_FILES = 5;
+export const EXTERNAL_INQUIRY_MAX_SAFE_UPLOAD_BYTES = 16 * 1024 * 1024;
+export const EXTERNAL_INQUIRY_MAX_SAFE_TOTAL_UPLOAD_BYTES = 32 * 1024 * 1024;
 
 export const EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS: ReadonlySet<string> =
   new Set([

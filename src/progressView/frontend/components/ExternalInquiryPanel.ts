@@ -74,6 +74,9 @@ function isProbablyTextContent(bytes: Uint8Array): boolean {
     if (isControl) suspiciousControlBytes += 1;
   }
 
+  const text = new TextDecoder('utf-8').decode(bytes);
+  if (text.includes('\uFFFD')) return false;
+
   return suspiciousControlBytes / bytes.length < 0.05;
 }
 

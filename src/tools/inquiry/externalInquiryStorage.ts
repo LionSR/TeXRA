@@ -9,6 +9,8 @@ import {
   EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS,
   EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES,
   EXTERNAL_INQUIRY_MAX_UPLOAD_FILES,
+  EXTERNAL_INQUIRY_MAX_SAFE_TOTAL_UPLOAD_BYTES,
+  EXTERNAL_INQUIRY_MAX_SAFE_UPLOAD_BYTES,
   ExternalInquiryModeSchema,
   ExternalInquiryThreadIdSchema,
   type ExternalInquiryMode,
@@ -317,6 +319,42 @@ function validateUploadCount(
   }
 }
 
+function estimateDecodedBase64Size(base64: string): number {
+  const trimmed = base64.trim();
+  if (trimmed.length === 0) return 0;
+
+  const padding = trimmed.endsWith('==') ? 2 : trimmed.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((trimmed.length * 3) / 4) - padding);
+}
+
+function validateUploadSizes(
+  uploadedFiles: readonly ExternalInquiryUploadedFile[],
+): void {
+  let totalSize = 0;
+
+  for (const uploadedFile of uploadedFiles) {
+    if (uploadedFile.sizeBytes > EXTERNAL_INQUIRY_MAX_SAFE_UPLOAD_BYTES) {
+      throw new ToolError(
+        `Uploaded file ${uploadedFile.fileName} is too large to safely process.`,
+      );
+    }
+
+    const estimatedDecodedSize = estimateDecodedBase64Size(uploadedFile.base64);
+    if (estimatedDecodedSize > EXTERNAL_INQUIRY_MAX_SAFE_UPLOAD_BYTES) {
+      throw new ToolError(
+        `Uploaded file ${uploadedFile.fileName} is too large to safely process.`,
+      );
+    }
+
+    totalSize += estimatedDecodedSize;
+    if (totalSize > EXTERNAL_INQUIRY_MAX_SAFE_TOTAL_UPLOAD_BYTES) {
+      throw new ToolError(
+        'External inquiry uploads are too large to safely process together.',
+      );
+    }
+  }
+}
+
 async function persistUploadedFiles(params: {
   threadId: ExternalInquiryThreadId;
   turnIndex: number;
@@ -401,6 +439,7 @@ export async function persistExternalInquiryTurn(params: {
 }): Promise<PersistedExternalInquiryTurn> {
   const uploadedFiles = params.uploadedFiles ?? [];
   validateUploadCount(uploadedFiles);
+  validateUploadSizes(uploadedFiles);
 
   const threadId = params.threadId ?? createStoredThreadId();
   const existingManifest = await readThreadManifest(threadId);
