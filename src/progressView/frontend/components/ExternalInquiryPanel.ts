@@ -31,6 +31,7 @@ import {
   EXTERNAL_INQUIRY_ACTIONS,
   EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS,
   EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES,
+  EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES,
   EXTERNAL_INQUIRY_MAX_UPLOAD_FILES,
 } from '@shared/schemas';
 import { formatBytes } from '@shared/utils/string';
@@ -52,6 +53,7 @@ const resolvedIds = new Set<string>();
 const FILE_INPUT_ACCEPT = [...EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS].join(
   ',',
 );
+const MAX_UPLOAD_SIZE_LABEL = `${EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES / (1024 * 1024)} MiB`;
 
 function getExtension(fileName: string): string {
   const dot = fileName.lastIndexOf('.');
@@ -346,10 +348,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           >
         </div>
         <div class="external-inquiry-request__upload-help">
-          Text files only, up to ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} files. If
+          Text files only, up to ${EXTERNAL_INQUIRY_MAX_UPLOAD_FILES} files and
+          ${MAX_UPLOAD_SIZE_LABEL} per file. You can either upload them here or
+          save them into the workspace and tell the agent the paths. If
           drag-and-drop does not work in this webview, use
-          <strong>Choose Files</strong>. You can also save returned files into
-          the workspace yourself and tell the agent the paths.
+          <strong>Choose Files</strong>.
         </div>
         ${this.fileMessage
           ? html`
@@ -561,6 +564,12 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
 
     if (isBlockedMime) {
       throw new Error(`${file.name} is not a supported text file.`);
+    }
+
+    if (file.size > EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES) {
+      throw new Error(
+        `${file.name} exceeds the ${MAX_UPLOAD_SIZE_LABEL} upload limit. Save it into the workspace instead and tell the agent the path.`,
+      );
     }
 
     const previewBytes = new Uint8Array(

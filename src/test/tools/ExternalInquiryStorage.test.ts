@@ -3,7 +3,10 @@ import * as assert from 'assert';
 import * as path from 'path';
 
 // Local imports - schemas
-import { ExternalInquiryThreadIdSchema } from '@shared/schemas';
+import {
+  EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES,
+  ExternalInquiryThreadIdSchema,
+} from '@shared/schemas';
 
 // Local imports - inquiry storage
 import {
@@ -352,7 +355,7 @@ describe('externalInquiryStorage', () => {
     );
   });
 
-  it('rejects uploaded files whose declared size exceeds the safety cap', async () => {
+  it('rejects uploaded files whose declared size exceeds the upload limit', async () => {
     await assert.rejects(
       () =>
         persistExternalInquiryTurn({
@@ -363,16 +366,16 @@ describe('externalInquiryStorage', () => {
             {
               fileName: 'note.txt',
               mediaType: 'text/plain',
-              sizeBytes: 17 * 1024 * 1024,
+              sizeBytes: EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES + 1,
               base64: Buffer.from('small', 'utf8').toString('base64'),
             },
           ],
         }),
-      /too large to safely process/,
+      /exceeds the external inquiry size limit/,
     );
   });
 
-  it('rejects uploaded files whose base64 payload exceeds the safety cap', async () => {
+  it('rejects uploaded files whose base64 payload exceeds the upload limit', async () => {
     await assert.rejects(
       () =>
         persistExternalInquiryTurn({
@@ -384,11 +387,11 @@ describe('externalInquiryStorage', () => {
               fileName: 'note.txt',
               mediaType: 'text/plain',
               sizeBytes: 1,
-              base64: 'A'.repeat(24 * 1024 * 1024),
+              base64: 'A'.repeat(EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES * 2),
             },
           ],
         }),
-      /too large to safely process/,
+      /exceeds the external inquiry size limit/,
     );
   });
 

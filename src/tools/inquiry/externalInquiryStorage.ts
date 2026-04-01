@@ -9,8 +9,8 @@ import {
   EXTERNAL_INQUIRY_ALLOWED_FILE_EXTENSIONS,
   EXTERNAL_INQUIRY_BLOCKED_MIME_TYPES,
   EXTERNAL_INQUIRY_MAX_UPLOAD_FILES,
-  EXTERNAL_INQUIRY_MAX_SAFE_TOTAL_UPLOAD_BYTES,
-  EXTERNAL_INQUIRY_MAX_SAFE_UPLOAD_BYTES,
+  EXTERNAL_INQUIRY_MAX_TOTAL_UPLOAD_BYTES,
+  EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES,
   ExternalInquiryModeSchema,
   ExternalInquiryThreadIdSchema,
   type ExternalInquiryMode,
@@ -333,23 +333,23 @@ function validateUploadSizes(
   let totalSize = 0;
 
   for (const uploadedFile of uploadedFiles) {
-    if (uploadedFile.sizeBytes > EXTERNAL_INQUIRY_MAX_SAFE_UPLOAD_BYTES) {
+    if (uploadedFile.sizeBytes > EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES) {
       throw new ToolError(
-        `Uploaded file ${uploadedFile.fileName} is too large to safely process.`,
+        `Uploaded file ${uploadedFile.fileName} exceeds the external inquiry size limit.`,
       );
     }
 
     const estimatedDecodedSize = estimateDecodedBase64Size(uploadedFile.base64);
-    if (estimatedDecodedSize > EXTERNAL_INQUIRY_MAX_SAFE_UPLOAD_BYTES) {
+    if (estimatedDecodedSize > EXTERNAL_INQUIRY_MAX_UPLOAD_BYTES) {
       throw new ToolError(
-        `Uploaded file ${uploadedFile.fileName} is too large to safely process.`,
+        `Uploaded file ${uploadedFile.fileName} exceeds the external inquiry size limit.`,
       );
     }
 
     totalSize += estimatedDecodedSize;
-    if (totalSize > EXTERNAL_INQUIRY_MAX_SAFE_TOTAL_UPLOAD_BYTES) {
+    if (totalSize > EXTERNAL_INQUIRY_MAX_TOTAL_UPLOAD_BYTES) {
       throw new ToolError(
-        'External inquiry uploads are too large to safely process together.',
+        'External inquiry uploads exceed the total size limit.',
       );
     }
   }
