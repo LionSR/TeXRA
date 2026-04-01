@@ -175,6 +175,24 @@ describe('buildCodexCommandToolLog', () => {
     });
   });
 
+  it('keeps failed SDK status as error even when exit code is zero', () => {
+    const log = buildCodexCommandToolLog({
+      command: 'lake build',
+      aggregated_output: 'sandbox denied',
+      exit_code: 0,
+      status: 'failed',
+    });
+
+    assert.deepEqual(log, {
+      toolName: 'bash',
+      summary: 'lake build',
+      input: { command: 'lake build' },
+      output: 'sandbox denied',
+      error: 'Command failed (exit 0)',
+      isError: true,
+      status: 'completed',
+    });
+  });
   it('keeps running commands in progress while streaming output', () => {
     const log = buildCodexCommandToolLog({
       command: 'lake build',

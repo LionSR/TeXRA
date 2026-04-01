@@ -85,9 +85,8 @@ export function buildCodexCommandToolLog(
     options.aggregated_output.trimEnd() ||
     (toolStatus === 'completed' ? `(${exitInfo})` : '');
   const isError =
-    options.exit_code == null
-      ? options.status === 'failed'
-      : options.exit_code !== 0;
+    options.status === 'failed' ||
+    (options.exit_code != null && options.exit_code !== 0);
 
   return {
     toolName: 'bash',
