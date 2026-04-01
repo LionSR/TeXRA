@@ -88,6 +88,7 @@ export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
             icon="check"
             label="Approve"
             title="Approve this plan (y)"
+            data-action="approve"
             @click=${() => this.emitAction('approve')}
             >Approve</vscode-toolbar-button
           >
