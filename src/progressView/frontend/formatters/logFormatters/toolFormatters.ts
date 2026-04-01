@@ -26,21 +26,8 @@ import type {
   WorkflowAgentInput,
 } from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
-import type { CodexInput } from '@tools/codex';
-import {
-  CODEX_FILE_CHANGE_TOOL,
-  CODEX_THREAD_TOOL,
-  CODEX_TODO_TOOL,
-  CODEX_TURN_TOOL,
-  type CodexFileChange,
-  type CodexFileChangeToolInput,
-  type CodexMcpToolOutput,
-  type CodexThreadToolInput,
-  type CodexTodoToolInput,
-  type CodexTurnToolInput,
-} from '@tools/codexShared';
+import { type CodexMcpToolOutput } from '@tools/codexShared';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
-import { formatDuration } from '@utils/core';
 
 // Local imports - Lit template utilities
 import {
@@ -67,7 +54,7 @@ import {
 import { normalizeToolUseData } from '../logDataParsers';
 import { registerProposalInput } from '../proposalInputStore';
 import { stringifyWithLanguage, extractCodeOnlyInput } from '../parseUtils';
-import { formatTokens } from '../timestampUtils';
+import { renderCodexToolSections } from './codexToolTemplates';
 import {
   TOOLS_WITH_DIFF_INPUT,
   TOOLS_WITH_FILE_LINK,
@@ -542,148 +529,9 @@ export function formatToolUseTemplate(
       sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
     }
   }
-  // Handle codex tool with structured display
-  else if (toolName === 'codex' && isPlainObject(input)) {
-    const codexInput = input as CodexInput;
-
-    // Prompt as readable text
-    if (codexInput.prompt) {
-      sections.push(
-        buildToolUseSection('Prompt:', wrapInPre(codexInput.prompt)),
-      );
-    }
-
-    // Sandbox mode + background as compact badges
-    const badges: TemplateResult[] = [];
-    if (codexInput.sandbox_mode) {
-      // prettier-ignore
-      badges.push(html`<span class="extract-flag"><i class="codicon codicon-shield"></i> ${codexInput.sandbox_mode}</span>`);
-    }
-    if (codexInput.run_in_background) {
-      // prettier-ignore
-      badges.push(html`<span class="extract-flag"><i class="codicon codicon-run-all"></i> background</span>`);
-    }
-    if (badges.length > 0) {
-      // prettier-ignore
-      sections.push(buildToolUseSection('Mode:', html`${badges}`));
-    }
-
-    // Working directory if specified
-    if (codexInput.working_directory) {
-      sections.push(
-        buildToolUseSection(
-          'Directory:',
-          wrapInPre(codexInput.working_directory),
-        ),
-      );
-    }
-  }
-  // Handle Codex file changes as native tool-use file cards
-  else if (toolName === CODEX_FILE_CHANGE_TOOL && isPlainObject(input)) {
-    const patchInput = input as Partial<CodexFileChangeToolInput>;
-    const changes = Array.isArray(patchInput.changes)
-      ? (input.changes as CodexFileChange[]).filter(
-          (change) =>
-            typeof change?.path === 'string' &&
-            typeof change?.kind === 'string',
-        )
-      : [];
-    const patchStatus =
-      typeof patchInput.patchStatus === 'string' ? patchInput.patchStatus : '';
-
-    if (patchStatus) {
-      // prettier-ignore
-      sections.push(buildToolUseSection('Status:', html`<span class="extract-flag"><i class="codicon ${patchStatus === 'failed' ? 'codicon-error' : 'codicon-check'}"></i> ${patchStatus}</span>`));
-    }
-
-    if (changes.length > 0) {
-      // prettier-ignore
-      const fileItems = html`${changes.map((change) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${change.path}>${change.path}</span> <span class="file-source">(${change.kind})</span></li>`)}`;
-      // prettier-ignore
-      sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
-    }
-  }
-  // Handle Codex thread lifecycle cards
-  else if (toolName === CODEX_THREAD_TOOL && isPlainObject(input)) {
-    const threadInput = input as Partial<CodexThreadToolInput>;
-    if (typeof threadInput.threadId === 'string' && threadInput.threadId) {
-      // prettier-ignore
-      sections.push(buildToolUseSection('Thread ID:', html`<code class="execution-id">${threadInput.threadId}</code>`));
-    }
-  }
-  // Handle Codex todo/checklist cards
-  else if (toolName === CODEX_TODO_TOOL && isPlainObject(input)) {
-    const todoInput = input as Partial<CodexTodoToolInput>;
-    const totalCount =
-      typeof todoInput.totalCount === 'number' ? todoInput.totalCount : 0;
-    const completedCount =
-      typeof todoInput.completedCount === 'number'
-        ? todoInput.completedCount
-        : 0;
-    const items = Array.isArray(todoInput.items)
-      ? todoInput.items.filter(
-          (item) =>
-            typeof item?.text === 'string' &&
-            typeof item?.completed === 'boolean',
-        )
-      : [];
-
-    if (totalCount > 0) {
-      // prettier-ignore
-      sections.push(buildToolUseSection('Progress:', html`<span class="extract-flag"><i class="codicon codicon-checklist"></i> ${completedCount}/${totalCount} completed</span>`));
-    }
-
-    if (items.length > 0) {
-      // prettier-ignore
-      const todoItems = html`${items.map((item) => html`<li class="detail-item"><i class="codicon ${item.completed ? 'codicon-pass-filled' : 'codicon-circle-large-outline'}"></i> <span>${item.text}</span></li>`)}`;
-      // prettier-ignore
-      sections.push(buildToolUseSection('Checklist:', html`<ul class="detail-list">${todoItems}</ul>`));
-    }
-  }
-  // Handle Codex turn summaries as native tool-use cards
-  else if (toolName === CODEX_TURN_TOOL && isPlainObject(input)) {
-    const turnInput = input as Partial<CodexTurnToolInput>;
-    const state = typeof turnInput.state === 'string' ? turnInput.state : '';
-    const wallTimeMs =
-      typeof turnInput.wallTimeMs === 'number' ? turnInput.wallTimeMs : 0;
-
-    if (state) {
-      const stateIcon =
-        state === 'failed'
-          ? 'codicon-error'
-          : state === 'running'
-            ? 'codicon-sync spin'
-            : 'codicon-check';
-      // prettier-ignore
-      sections.push(buildToolUseSection('State:', html`<span class="extract-flag"><i class="codicon ${stateIcon}"></i> ${state}</span>`));
-    }
-
-    if (wallTimeMs > 0) {
-      sections.push(
-        buildToolUseSection('Duration:', wrapInPre(formatDuration(wallTimeMs))),
-      );
-    }
-
-    const badges: TemplateResult[] = [];
-    if (typeof turnInput.inputTokens === 'number') {
-      // prettier-ignore
-      badges.push(html`<span class="extract-flag"><i class="codicon codicon-arrow-up"></i> ${formatTokens(turnInput.inputTokens)} in</span>`);
-    }
-    if (typeof turnInput.outputTokens === 'number') {
-      // prettier-ignore
-      badges.push(html`<span class="extract-flag"><i class="codicon codicon-arrow-down"></i> ${formatTokens(turnInput.outputTokens)} out</span>`);
-    }
-    if (
-      typeof turnInput.cachedInputTokens === 'number' &&
-      turnInput.cachedInputTokens > 0
-    ) {
-      // prettier-ignore
-      badges.push(html`<span class="extract-flag"><i class="codicon codicon-history"></i> ${formatTokens(turnInput.cachedInputTokens)} cached</span>`);
-    }
-    if (badges.length > 0) {
-      // prettier-ignore
-      sections.push(buildToolUseSection('Usage:', html`${badges}`));
-    }
+  // Handle Codex cards through dedicated Lit-native helpers
+  else if (toolName === 'codex' || toolName.startsWith('codex_')) {
+    sections.push(...(renderCodexToolSections(toolName, input) ?? []));
   }
   // Handle MCP tool calls with richer result rendering
   else if (toolName.startsWith('mcp:')) {
