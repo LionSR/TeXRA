@@ -292,11 +292,19 @@ export type UpdateToolDashboardMessage = z.infer<
 // Approval settings data schema
 // ============================================================
 
+/** Valid Codex sandbox modes (mirrors CODEX_SANDBOX_MODES in codexConfig.ts). */
+export const CodexSandboxModeSchema = z.enum([
+  'read-only',
+  'workspace-write',
+  'danger-full-access',
+]);
+export type CodexSandboxMode = z.infer<typeof CodexSandboxModeSchema>;
+
 /** Outbound: backend → frontend approval settings */
 export const UpdateApprovalSettingsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
   bashApprovalEnabled: z.boolean(),
-  codexApprovalEnabled: z.boolean(),
+  codexSandboxMode: CodexSandboxModeSchema,
 });
 export type UpdateApprovalSettingsMessage = z.infer<
   typeof UpdateApprovalSettingsMessageSchema
@@ -618,9 +626,9 @@ const SetBashApprovalEnabledMessageSchema = z.object({
   command: z.literal(CMD.SET_BASH_APPROVAL_ENABLED),
   enabled: z.boolean(),
 });
-const SetCodexApprovalEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_CODEX_APPROVAL_ENABLED),
-  enabled: z.boolean(),
+const SetCodexSandboxModeMessageSchema = z.object({
+  command: z.literal(CMD.SET_CODEX_SANDBOX_MODE),
+  mode: CodexSandboxModeSchema,
 });
 
 // Navigation inbound messages
@@ -710,7 +718,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Approval settings messages
     GetApprovalSettingsMessageSchema,
     SetBashApprovalEnabledMessageSchema,
-    SetCodexApprovalEnabledMessageSchema,
+    SetCodexSandboxModeMessageSchema,
     // Agent mode preset messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,

@@ -18,7 +18,6 @@ export interface BashApprovalResult {
 }
 
 export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';
-export const CODEX_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireCodexApproval';
 
 export const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
 
@@ -53,13 +52,11 @@ const pendingApprovals = new Map<
   }
 >();
 
-function requestApproval(
-  configKey: string,
+export async function requestBashApproval(
   request: BashApprovalRequest,
 ): Promise<BashApprovalResult> {
-  const approvalsEnabled = getConfig<boolean>(configKey, true);
+  const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
 
-  // Resolve streamId from context if not provided
   const context = getCurrentToolFileInteractionContext();
   const streamId = request.streamId ?? context?.streamId;
 
@@ -67,7 +64,7 @@ function requestApproval(
     !approvalsEnabled ||
     (streamId && isApprovalBypassedForStream(streamId))
   ) {
-    return Promise.resolve({ accepted: true });
+    return { accepted: true };
   }
 
   const operation = queue.then(() => showApprovalPrompt(request, streamId));
@@ -76,18 +73,6 @@ function requestApproval(
     () => {},
   );
   return operation;
-}
-
-export function requestBashApproval(
-  request: BashApprovalRequest,
-): Promise<BashApprovalResult> {
-  return requestApproval(BASH_APPROVAL_CONFIG_KEY, request);
-}
-
-export function requestCodexApproval(
-  request: BashApprovalRequest,
-): Promise<BashApprovalResult> {
-  return requestApproval(CODEX_APPROVAL_CONFIG_KEY, request);
 }
 
 async function showApprovalPrompt(

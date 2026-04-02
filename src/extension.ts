@@ -42,6 +42,11 @@ import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
+import {
+  CODEX_SANDBOX_CONFIG_KEY,
+  parseCodexSandboxMode,
+  setCodexSandboxModeGetter,
+} from '@tools/codexConfig';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
@@ -202,6 +207,13 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  setCodexSandboxModeGetter(() =>
+    parseCodexSandboxMode(
+      vscode.workspace
+        .getConfiguration()
+        .get<string>(CODEX_SANDBOX_CONFIG_KEY, 'workspace-write'),
+    ),
+  );
 
   applyGitAuthorConfig();
 

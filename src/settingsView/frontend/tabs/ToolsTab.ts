@@ -16,10 +16,21 @@ import { createEvent } from '@shared/utils/events';
 import type {
   ToolDashboardItem,
   ToolCategory,
+  CodexSandboxMode,
 } from '@shared/schemas/settingsViewMessages';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
+
+/** Sandbox mode display labels — single source of truth for the UI. */
+const SANDBOX_MODE_OPTIONS: readonly {
+  value: CodexSandboxMode;
+  label: string;
+}[] = [
+  { value: 'read-only', label: 'Read-only' },
+  { value: 'workspace-write', label: 'Workspace write' },
+  { value: 'danger-full-access', label: 'Full access' },
+] as const;
 
 /** Per-category display metadata. */
 interface CategoryMeta {
@@ -193,73 +204,30 @@ export class ToolsTab extends LitElement {
         gap: var(--spacing-medium);
       }
 
-      .approval-toggle-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: var(--spacing-small) var(--spacing-medium);
-        border-radius: var(--border-radius);
-        background: var(--vscode-editor-background);
+      .setting-block {
         margin-bottom: var(--spacing-small);
       }
 
-      .approval-toggle-info {
+      .codex-inline-settings {
+        padding: var(--spacing-small) var(--spacing-medium);
+        margin-bottom: var(--spacing-small);
+      }
+
+      .sandbox-mode-row {
         display: flex;
-        flex-direction: column;
-        gap: 2px;
+        align-items: center;
+        gap: var(--spacing-medium);
       }
 
-      .approval-toggle-label {
-        font-size: var(--font-size);
-        font-weight: var(--font-weight-medium);
-      }
-
-      .approval-toggle-description {
+      .sandbox-mode-row label {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
+        white-space: nowrap;
       }
 
-      .approval-toggle {
-        position: relative;
-        display: inline-block;
-        width: 36px;
-        height: 20px;
-        flex-shrink: 0;
-      }
-
-      .approval-toggle input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-      }
-
-      .approval-toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        inset: 0;
-        background: var(--vscode-checkbox-border, #616161);
-        border-radius: 10px;
-        transition: background var(--transition-fast);
-      }
-
-      .approval-toggle-slider::before {
-        content: '';
-        position: absolute;
-        height: 14px;
-        width: 14px;
-        left: 3px;
-        bottom: 3px;
-        background: var(--vscode-editor-background, #fff);
-        border-radius: 50%;
-        transition: transform var(--transition-fast);
-      }
-
-      .approval-toggle input:checked + .approval-toggle-slider {
-        background: var(--vscode-checkbox-selectBackground, #0078d4);
-      }
-
-      .approval-toggle input:checked + .approval-toggle-slider::before {
-        transform: translateX(16px);
+      .sandbox-mode-select {
+        min-width: 10rem;
+        max-width: 14rem;
       }
     `,
   ];
@@ -267,20 +235,29 @@ export class ToolsTab extends LitElement {
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean }) bashApprovalEnabled = true;
-  @property({ type: Boolean }) codexApprovalEnabled = true;
+  @property({ type: String }) codexSandboxMode = 'workspace-write';
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
   }
 
-  private handleBashApprovalToggle(e: Event): void {
-    const enabled = (e.target as HTMLInputElement).checked;
-    this.dispatchEvent(createEvent('bash-approval-toggle', { enabled }));
+  private emitToggle(eventName: string, e: Event): void {
+    const target = e.target as HTMLInputElement | null;
+    this.dispatchEvent(
+      createEvent(eventName, { enabled: Boolean(target?.checked) }),
+    );
   }
 
-  private handleCodexApprovalToggle(e: Event): void {
-    const enabled = (e.target as HTMLInputElement).checked;
-    this.dispatchEvent(createEvent('codex-approval-toggle', { enabled }));
+  private handleBashApprovalToggle = (e: Event): void => {
+    this.emitToggle('bash-approval-toggle', e);
+  };
+
+  private handleCodexSandboxModeChange(e: Event): void {
+    const target = e.target as HTMLSelectElement | null;
+    const mode = target?.value;
+    if (mode) {
+      this.dispatchEvent(createEvent('codex-sandbox-mode-change', { mode }));
+    }
   }
 
   private renderApprovalSettings(): TemplateResult {
@@ -288,39 +265,42 @@ export class ToolsTab extends LitElement {
       <div class="category-section">
         <div class="category-header">
           <span class="codicon codicon-shield"></span>
-          Approval Settings
+          Approval &amp; Safety
         </div>
-        <div class="approval-toggle-row">
-          <div class="approval-toggle-info">
-            <span class="approval-toggle-label">Bash command approval</span>
-            <span class="approval-toggle-description"
-              >Require approval before executing shell commands</span
-            >
-          </div>
-          <label class="approval-toggle">
-            <input
-              type="checkbox"
-              .checked=${this.bashApprovalEnabled}
-              @change=${this.handleBashApprovalToggle}
-            />
-            <span class="approval-toggle-slider"></span>
-          </label>
+
+        <div class="setting-block">
+          <vscode-checkbox
+            ?checked=${this.bashApprovalEnabled}
+            @change=${this.handleBashApprovalToggle}
+          >
+            Require approval for shell commands &amp; Codex sessions
+          </vscode-checkbox>
         </div>
-        <div class="approval-toggle-row">
-          <div class="approval-toggle-info">
-            <span class="approval-toggle-label">Codex agent approval</span>
-            <span class="approval-toggle-description"
-              >Require approval before launching Codex agent sessions</span
-            >
-          </div>
-          <label class="approval-toggle">
-            <input
-              type="checkbox"
-              .checked=${this.codexApprovalEnabled}
-              @change=${this.handleCodexApprovalToggle}
-            />
-            <span class="approval-toggle-slider"></span>
-          </label>
+      </div>
+    `;
+  }
+
+  private renderCodexInlineSettings(): TemplateResult {
+    return html`
+      <div class="codex-inline-settings">
+        <div class="sandbox-mode-row">
+          <label>Sandbox mode</label>
+          <vscode-single-select
+            class="sandbox-mode-select"
+            .value=${this.codexSandboxMode}
+            @change=${this.handleCodexSandboxModeChange}
+          >
+            ${SANDBOX_MODE_OPTIONS.map(
+              (opt) => html`
+                <vscode-option
+                  value=${opt.value}
+                  ?selected=${this.codexSandboxMode === opt.value}
+                >
+                  ${opt.label}
+                </vscode-option>
+              `,
+            )}
+          </vscode-single-select>
         </div>
       </div>
     `;
@@ -417,7 +397,12 @@ export class ToolsTab extends LitElement {
         ${repeat(
           items,
           (item) => item.id,
-          (item) => html`<tool-card .item=${item}></tool-card>`,
+          (item) => html`
+            <tool-card .item=${item}></tool-card>
+            ${category === 'computation' && item.id === 'codex'
+              ? this.renderCodexInlineSettings()
+              : nothing}
+          `,
         )}
       </div>
     `;
