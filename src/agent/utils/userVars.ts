@@ -451,6 +451,7 @@ export function getToolFlags(
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): UserVars {
+  const toolNames = new Set(agentSetting.tools.map((t) => t.name));
   const flags: UserVars = {
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
@@ -460,6 +461,7 @@ export function getToolFlags(
       false,
     ),
     AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
+    HAS_CODEX: toolNames.has('codex'),
   };
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
