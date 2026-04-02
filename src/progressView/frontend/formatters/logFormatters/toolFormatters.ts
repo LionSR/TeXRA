@@ -140,7 +140,7 @@ function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
 
 type SpecializedToolRenderer = (
   input: unknown,
-) => TemplateResult | typeof nothing;
+) => TemplateResult | typeof nothing | null | undefined;
 
 const SPECIALIZED_TOOL_SECTION_RENDERERS = {
   ...codexToolRenderers,
@@ -543,7 +543,7 @@ export function formatToolUseTemplate(
       SPECIALIZED_TOOL_SECTION_RENDERERS[
         toolName as keyof typeof SPECIALIZED_TOOL_SECTION_RENDERERS
       ](input);
-    if (content !== nothing) {
+    if (content != null && content !== nothing) {
       sections.push(content);
     }
   }
