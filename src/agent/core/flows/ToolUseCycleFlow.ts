@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
-import { BaseNode, GroupedBatchNode, Flow } from '@agent/node';
+import { BaseNode, Flow, Node } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
@@ -492,10 +492,8 @@ const DEFERRED_LOG_TOOLS = new Set(['bash', 'codex']);
 /** Tools that support streaming partial output to the UI. */
 const STREAMABLE_TOOLS = new Set(['bash']);
 
-/** Tools safe to execute concurrently within a batch. These block on external
- *  input (user interaction, network) and have no side-effect dependencies on
- *  other tools, making parallel execution beneficial. */
-const CONCURRENT_SAFE_TOOLS = new Set(['external_inquiry']);
+/** External inquiry calls can run concurrently when they start distinct threads. */
+const CONCURRENT_EXTERNAL_INQUIRY_TOOL = 'external_inquiry';
 
 /** Maximum size of the streaming output buffer sent to the UI (bytes). */
 const STREAM_BUFFER_MAX = 50_000;
@@ -521,27 +519,22 @@ interface ToolExecutionResult {
 }
 
 /**
- * Dispatches tool calls using GroupedBatchNode for hybrid execution.
+ * Dispatches tool calls with hybrid sequential/parallel execution.
  *
  * Sequential by default to preserve ordering guarantees when tools have
- * dependencies (e.g., read file then edit file). Tools listed in
- * CONCURRENT_SAFE_TOOLS run in parallel when they appear consecutively,
- * allowing e.g. multiple external_inquiry calls to dispatch simultaneously.
+ * dependencies (e.g., read file then edit file). Consecutive independent
+ * external_inquiry calls run in parallel so the user can work through
+ * multiple outside-model prompts at once.
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-class ToolUseDispatchNode<C> extends GroupedBatchNode<
+class ToolUseDispatchNode<C> extends Node<
   ToolUseCycleShared,
   CycleParams,
   ToolUseCycleServices<C>
 > {
   /** Call IDs that are safe to dispatch concurrently in this batch. */
   private _concurrentCallIds = new Set<string>();
-
-  protected override isConcurrent(item: unknown): boolean {
-    const call = item as SdkToolCall;
-    return this._concurrentCallIds.has(call.callId);
-  }
 
   /**
    * Call IDs of duplicate parallel calls detected during prep().
@@ -554,7 +547,7 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
   private getExternalInquiryFollowupThreadKey(
     call: SdkToolCall,
   ): string | null {
-    if (call.name !== 'external_inquiry') return null;
+    if (call.name !== CONCURRENT_EXTERNAL_INQUIRY_TOOL) return null;
     const input = parseToolInput(call.input, call.callId, this.services.logger);
     if (typeof input !== 'object' || input == null) return null;
     const threadId = (input as Record<string, unknown>).thread_id;
@@ -577,14 +570,14 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
     const followupCounts = new Map<string, number>();
 
     for (const call of toolCalls) {
-      if (!CONCURRENT_SAFE_TOOLS.has(call.name)) continue;
+      if (call.name !== CONCURRENT_EXTERNAL_INQUIRY_TOOL) continue;
       const threadKey = this.getExternalInquiryFollowupThreadKey(call);
       if (!threadKey) continue;
       followupCounts.set(threadKey, (followupCounts.get(threadKey) ?? 0) + 1);
     }
 
     for (const call of toolCalls) {
-      if (!CONCURRENT_SAFE_TOOLS.has(call.name)) continue;
+      if (call.name !== CONCURRENT_EXTERNAL_INQUIRY_TOOL) continue;
       const threadKey = this.getExternalInquiryFollowupThreadKey(call);
       if (!threadKey) {
         // thread_id omitted: starts a new thread, so it remains parallel-safe.
@@ -597,6 +590,88 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
     }
 
     return concurrent;
+  }
+
+  private isConcurrentExternalInquiryCall(call: SdkToolCall): boolean {
+    return this._concurrentCallIds.has(call.callId);
+  }
+
+  private buildConcurrentFailureResult(
+    call: SdkToolCall,
+    error: unknown,
+  ): ToolExecutionResult {
+    const parsedInput = parseToolInput(
+      call.input,
+      call.callId,
+      this.services.logger,
+    );
+    const { message, diagnostics } = normalizeToolCallError(call.name, error);
+
+    return {
+      call,
+      result: {
+        error: message,
+        isError: true,
+        ...(diagnostics ? { diagnostics } : {}),
+      },
+      parsedInput,
+      extracted: {
+        sanitizedResult: { error: message },
+        attachments: [],
+      },
+      editedFiles: [],
+      logRef: {
+        logId: undefined,
+        groupId: this.services.logger.resolveActiveGroupId(),
+      },
+    };
+  }
+
+  private async executeConcurrentGroup(
+    group: SdkToolCall[],
+  ): Promise<(ToolExecutionResult | null)[]> {
+    const settled = await Promise.allSettled(
+      group.map((call) => super._exec(call)),
+    );
+    return settled.map((result, index) =>
+      result.status === 'fulfilled'
+        ? (result.value as ToolExecutionResult | null)
+        : this.buildConcurrentFailureResult(group[index], result.reason),
+    );
+  }
+
+  override async _exec(
+    items: unknown[],
+  ): Promise<(ToolExecutionResult | null)[]> {
+    if (!Array.isArray(items)) return [];
+
+    const toolCalls = items as SdkToolCall[];
+    const results: (ToolExecutionResult | null)[] = [];
+    let index = 0;
+
+    while (index < toolCalls.length) {
+      if (this.signal?.aborted || this.services.checkInterruption()) break;
+
+      const currentCall = toolCalls[index];
+      if (this.isConcurrentExternalInquiryCall(currentCall)) {
+        const group: SdkToolCall[] = [];
+        while (
+          index < toolCalls.length &&
+          this.isConcurrentExternalInquiryCall(toolCalls[index])
+        ) {
+          group.push(toolCalls[index++]);
+        }
+        results.push(...(await this.executeConcurrentGroup(group)));
+        continue;
+      }
+
+      results.push(
+        (await super._exec(currentCall)) as ToolExecutionResult | null,
+      );
+      index++;
+    }
+
+    return results;
   }
 
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */

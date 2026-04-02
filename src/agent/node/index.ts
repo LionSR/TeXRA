@@ -265,65 +265,6 @@ class ParallelBatchNode<
     return results;
   }
 }
-/**
- * Batch node with hybrid sequential/parallel execution.
- *
- * Subclasses override `isConcurrent(item)` to mark items that can run
- * in parallel. Consecutive concurrent items form a group executed via
- * Promise.allSettled; everything else runs sequentially one-by-one.
- *
- * Example: items [A, B*, C*, D, E*] where * = concurrent
- *   → sequential A
- *   → parallel [B, C]
- *   → sequential D
- *   → parallel [E]   (single-item group, effectively sequential)
- */
-class GroupedBatchNode<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-> extends Node<S, P, Svc> {
-  /** Override to mark which items can execute concurrently. Default: false. */
-  protected isConcurrent(_item: unknown): boolean {
-    return false;
-  }
-
-  async _exec(items: unknown[]): Promise<unknown[]> {
-    if (!Array.isArray(items)) return [];
-    const results: unknown[] = [];
-    let i = 0;
-
-    while (i < items.length) {
-      if (this.signal?.aborted) break;
-
-      if (this.isConcurrent(items[i])) {
-        // Collect consecutive concurrent items into a group
-        const group: unknown[] = [];
-        while (i < items.length && this.isConcurrent(items[i])) {
-          group.push(items[i++]);
-        }
-        // Execute group in parallel — allSettled so one failure doesn't cancel siblings
-        const settled = await Promise.allSettled(
-          group.map((item) => super._exec(item)),
-        );
-        for (const s of settled) {
-          if (s.status === 'fulfilled') {
-            results.push(s.value);
-            continue;
-          }
-          throw s.reason instanceof Error
-            ? s.reason
-            : new Error(String(s.reason));
-        }
-      } else {
-        // Sequential execution (same as BatchNode)
-        results.push(await super._exec(items[i]));
-        i++;
-      }
-    }
-    return results;
-  }
-}
 class Flow<
   S = unknown,
   P extends NonIterableObject = NonIterableObject,
@@ -355,4 +296,4 @@ class Flow<
     throw new Error("Flow can't exec.");
   }
 }
-export { BaseNode, Node, BatchNode, ParallelBatchNode, GroupedBatchNode, Flow };
+export { BaseNode, Node, BatchNode, ParallelBatchNode, Flow };
