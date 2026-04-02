@@ -35,6 +35,7 @@ import {
   getActivePermission,
   getPermissionKey,
   groupPermissions,
+  isActiveExternalInquiryCarousel,
   isTextInput,
   type PermissionGroups,
 } from './RequestPanelsState';
@@ -272,7 +273,12 @@ export class RequestPanels extends LitElement {
     const key = event.key.toLowerCase();
 
     // Arrow keys navigate the external inquiry carousel
-    if (this.permissionGroups.externalInquiry.length > 1) {
+    if (
+      isActiveExternalInquiryCarousel({
+        permissions: this.permissions,
+        externalInquiryPermissions: this.permissionGroups.externalInquiry,
+      })
+    ) {
       if (key === 'arrowleft') {
         this._eiPrev();
         event.preventDefault();

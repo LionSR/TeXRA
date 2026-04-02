@@ -85,7 +85,6 @@ function resolveTools(
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
   const missingDependency: string[] = [];
-  const excluded: string[] = [];
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
@@ -96,7 +95,6 @@ function resolveTools(
         logger.warn(
           `Tool "${def.name}" excluded: disabled in Settings > Tools`,
         );
-        excluded.push(def.name);
         return false;
       }
       if (unavailable.has(def.name)) {
@@ -122,10 +120,6 @@ function resolveTools(
     } else {
       logger.warn('Memory tool not found in registry');
     }
-  }
-
-  if (excluded.length) {
-    logger.warn(`Disabled tools excluded: ${excluded.join(', ')}`);
   }
 
   if (missingDependency.length) {

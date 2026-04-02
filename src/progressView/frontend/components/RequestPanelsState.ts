@@ -100,6 +100,16 @@ export function getActivePermission(params: {
   return newest;
 }
 
+export function isActiveExternalInquiryCarousel(params: {
+  permissions: PermissionState[];
+  externalInquiryPermissions: PermissionState[];
+}): boolean {
+  return (
+    params.permissions[0]?.kind === PERMISSION_KIND.EXTERNAL_INQUIRY &&
+    params.externalInquiryPermissions.length > 1
+  );
+}
+
 export function findPanelForPermission(
   renderRoot: ParentNode,
   permission: PermissionState | null,
