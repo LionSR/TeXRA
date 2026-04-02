@@ -289,6 +289,7 @@ export function handlePermissionAction(
   ctx: MessageHandlerContext,
 ): void {
   const { permission, action, feedback, modelOverride, answer } = event.detail;
+  const { sessionLinks } = event.detail;
 
   switch (permission.kind) {
     case PERMISSION_KIND.TOOL_EDIT:
@@ -372,6 +373,7 @@ export function handlePermissionAction(
         action,
         feedback,
         answer,
+        sessionLinks,
       });
       removePrompt(
         ctx,

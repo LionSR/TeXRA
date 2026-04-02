@@ -18,6 +18,7 @@ import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
+import { repeat } from 'lit/directives/repeat.js';
 
 import {
   codiconIconClasses,
@@ -34,8 +35,13 @@ import { ProgressEvents } from '../events';
 
 // ── Draft persistence ──
 
+interface InquiryDraft {
+  answerText: string;
+  sessionLinksText: string;
+}
+
 const DRAFT_CACHE_CAP = 50;
-const draftCache = new Map<string, string>();
+const draftCache = new Map<string, InquiryDraft>();
 const resolvedIds = new Set<string>();
 
 function getRequestId(permission: { data: unknown }): string {
@@ -65,6 +71,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   ];
 
   @state() private answerText = '';
+  @state() private sessionLinksText = '';
 
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
@@ -83,7 +90,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
       this.draftRestored = true;
       const draft = draftCache.get(getRequestId(this.permission));
       if (draft) {
-        this.answerText = draft;
+        this.answerText = draft.answerText;
+        this.sessionLinksText = draft.sessionLinksText;
       }
     }
   }
@@ -91,8 +99,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   private saveDraft(): void {
     const id = getRequestId(this.permission);
     if (resolvedIds.has(id)) return;
-    if (this.answerText) {
-      draftCache.set(id, this.answerText);
+    if (this.answerText || this.sessionLinksText) {
+      draftCache.set(id, {
+        answerText: this.answerText,
+        sessionLinksText: this.sessionLinksText,
+      });
       if (draftCache.size > DRAFT_CACHE_CAP) {
         const oldest = draftCache.keys().next().value;
         if (oldest !== undefined) draftCache.delete(oldest);
@@ -124,6 +135,17 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     return this.answerText.trim().length > 0;
   }
 
+  private get normalizedSessionLinks(): string[] {
+    return [
+      ...new Set(
+        this.sessionLinksText
+          .split('\n')
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0),
+      ),
+    ];
+  }
+
   override render(): TemplateResult {
     const data = this.permission.data as ExternalInquiryPermission;
 
@@ -142,6 +164,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           ${data.attachFiles?.length
             ? this.renderAttachFiles(data.attachFiles)
             : nothing}
+          ${this.renderSessionLinks(data.sessionLinks ?? [])}
           ${this.renderAnswerArea()}
           ${this.renderFeedbackSection(
             'external-inquiry-request__feedback',
@@ -239,6 +262,48 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     `;
   }
 
+  private renderSessionLinks(sessionLinks: string[]): TemplateResult {
+    return html`
+      <div class="external-inquiry-request__session-links">
+        ${sessionLinks.length
+          ? html`
+              <div class="external-inquiry-request__session-links-known">
+                <div class="external-inquiry-request__session-links-label">
+                  Known external session links for this thread:
+                </div>
+                <div class="external-inquiry-request__session-links-list">
+                  ${repeat(
+                    sessionLinks,
+                    (link) => link,
+                    (link) => html`
+                      <div class="external-inquiry-request__session-link-item">
+                        ${link}
+                      </div>
+                    `,
+                  )}
+                </div>
+              </div>
+            `
+          : nothing}
+        <div class="external-inquiry-request__session-links-input-group">
+          <div class="external-inquiry-request__session-links-label">
+            External chat/thread links (optional):
+          </div>
+          <textarea
+            class="external-inquiry-request__session-links-input"
+            placeholder="Paste one ChatGPT/Claude/Gemini thread link per line..."
+            .value=${live(this.sessionLinksText)}
+            @input=${this.handleSessionLinksInput}
+          ></textarea>
+          <div class="external-inquiry-request__session-links-hint">
+            Paste back the external chat URLs you used so follow-up inquiries
+            can point you to the same conversations later.
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private renderActions(): TemplateResult {
     return html`
       <vscode-toolbar-container class="external-inquiry-request__actions">
@@ -262,6 +327,10 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     this.answerText = (e.target as HTMLTextAreaElement).value;
   }
 
+  private handleSessionLinksInput(e: Event): void {
+    this.sessionLinksText = (e.target as HTMLTextAreaElement).value;
+  }
+
   private handleKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -272,6 +341,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   private handleSubmit(): void {
     if (!this.hasAnswer) return;
     const answer = this.answerText.trim();
+    const sessionLinks = this.normalizedSessionLinks;
 
     clearInquiryDraft(getRequestId(this.permission));
 
@@ -280,6 +350,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
         permission: this.permission,
         action: EXTERNAL_INQUIRY_ACTIONS[0],
         answer,
+        sessionLinks: sessionLinks.length ? sessionLinks : undefined,
       }),
     );
   }

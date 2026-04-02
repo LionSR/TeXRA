@@ -26,6 +26,7 @@ import { defineTool } from '@tools/core/define';
 import {
   persistExternalInquiryTurn,
   readExternalInquiryThread,
+  type ExternalInquiryThreadManifest,
   type PersistedExternalInquiryTurn,
 } from './externalInquiryStorage';
 
@@ -100,6 +101,7 @@ export interface ExternalInquiryResult {
   submitted: boolean;
   answer?: string;
   feedback?: string;
+  sessionLinks?: string[];
 }
 
 let inquiryCounter = 0;
@@ -137,6 +139,34 @@ function appendManifestHint(lines: string[], manifestPath?: string): void {
   );
 }
 
+function appendSessionLinks(
+  lines: string[],
+  sessionLinks?: string[],
+  heading = 'External session links:',
+): void {
+  if (!sessionLinks?.length) return;
+  lines.push('', heading, ...sessionLinks.map((link) => `- ${link}`));
+}
+
+function collectKnownSessionLinks(
+  manifest: ExternalInquiryThreadManifest | null | undefined,
+): string[] | undefined {
+  if (!manifest) return undefined;
+
+  const known: string[] = [];
+  const seen = new Set<string>();
+
+  for (const turn of [...manifest.turns].reverse()) {
+    for (const link of turn.sessionLinks ?? []) {
+      if (seen.has(link)) continue;
+      seen.add(link);
+      known.push(link);
+    }
+  }
+
+  return known.length ? known : undefined;
+}
+
 function buildExternalInquiryOutput(
   persisted: PersistedExternalInquiryTurn,
   answer: string,
@@ -151,6 +181,7 @@ function buildExternalInquiryOutput(
     `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
   ];
 
+  appendSessionLinks(lines, persisted.turn.sessionLinks ?? undefined);
   appendManifestHint(lines, currentManifestPath(persisted));
 
   return lines.join('\n');
@@ -174,6 +205,8 @@ function buildExternalInquiryReport(
     'Answer:',
     answer,
   ];
+
+  appendSessionLinks(lines, persisted.turn.sessionLinks ?? undefined);
 
   const mirror = persisted.executionMirrorPaths;
   if (mirror) {
@@ -238,6 +271,7 @@ function buildLongAnswerResult(
     `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
   ];
 
+  appendSessionLinks(lines, persisted.turn.sessionLinks ?? undefined);
   appendManifestHint(lines, currentManifestPath(persisted));
 
   if (preview) {
@@ -259,6 +293,7 @@ export async function handleExternalInquiryAction(payload: {
   action: ExternalInquiryAction | 'skip';
   answer?: string;
   feedback?: string;
+  sessionLinks?: string[];
 }): Promise<void> {
   const entry = pendingInquiries.get(payload.requestId);
   if (!entry || entry.isSettled()) return;
@@ -269,6 +304,7 @@ export async function handleExternalInquiryAction(payload: {
     submitted: isSubmit,
     answer: isSubmit ? payload.answer : undefined,
     feedback: isSubmit ? undefined : payload.feedback,
+    sessionLinks: isSubmit ? payload.sessionLinks : undefined,
   });
 }
 
@@ -335,11 +371,19 @@ When you have multiple independent questions for external models, you can call e
 
     // Fail fast for followup mode: verify thread exists before asking user to
     // do the external-model roundtrip.
+    let existingThread: ExternalInquiryThreadManifest | null = null;
     if (input.mode === 'followup' && input.thread_id) {
-      const existing = await readExternalInquiryThread(input.thread_id);
-      if (!existing) {
+      existingThread = await readExternalInquiryThread(input.thread_id);
+      if (!existingThread) {
         throw new ToolError(
           `External inquiry thread not found: ${input.thread_id}`,
+        );
+      }
+
+      const sessionLinks = collectKnownSessionLinks(existingThread);
+      if (sessionLinks?.length) {
+        logger.debug(
+          `Found ${sessionLinks.length} known external session link(s) for ${input.thread_id}`,
         );
       }
     }
@@ -372,6 +416,7 @@ When you have multiple independent questions for external models, you can call e
           context: input.context ?? undefined,
           suggestSearch: input.suggestSearch ?? undefined,
           attachFiles: input.attachFiles ?? undefined,
+          sessionLinks: collectKnownSessionLinks(existingThread),
           allowBypass: false,
           streamId: streamId ?? '',
         });
@@ -400,6 +445,7 @@ When you have multiple independent questions for external models, you can call e
         question: input.question,
         context: input.context ?? undefined,
         answer,
+        sessionLinks: result.sessionLinks,
         executionId,
       });
 

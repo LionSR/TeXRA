@@ -271,11 +271,11 @@ export class ToolCard extends LitElement {
   }
 
   private handleToggle(e: Event): void {
-    const checked = (e.target as HTMLInputElement).checked;
+    const target = e.currentTarget as HTMLInputElement | null;
     this.dispatchEvent(
       createEvent('tool-toggle', {
         toolId: this.item.id,
-        enabled: checked,
+        enabled: Boolean(target?.checked),
       }),
     );
   }

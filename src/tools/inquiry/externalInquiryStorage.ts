@@ -7,6 +7,7 @@ import { isDirectory, isFile } from '@common/files/fsEntryType';
 import type { ExecutionId } from '@shared/schemas';
 import {
   ExternalInquiryModeSchema,
+  ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
   type ExternalInquiryMode,
   type ExternalInquiryThreadId,
@@ -27,6 +28,7 @@ const ExternalInquiryTurnRecordSchema = z.strictObject({
   questionRelativePath: z.string().min(1),
   contextRelativePath: z.string().nullish(),
   answerRelativePath: z.string().min(1),
+  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
 });
 
 const ExternalInquiryThreadManifestSchema = z.strictObject({
@@ -189,12 +191,25 @@ function createStoredThreadId(): ExternalInquiryThreadId {
   return `ei_${randomBytes(6).toString('hex')}` as ExternalInquiryThreadId;
 }
 
+function normalizeSessionLinks(links?: string[]): string[] | undefined {
+  if (!links?.length) return undefined;
+
+  const normalized = [
+    ...new Set(
+      links.map((link) => link.trim()).filter((link) => link.length > 0),
+    ),
+  ];
+
+  return normalized.length ? normalized : undefined;
+}
+
 export async function persistExternalInquiryTurn(params: {
   mode: ExternalInquiryMode;
   threadId?: ExternalInquiryThreadId;
   question: string;
   context?: string;
   answer: string;
+  sessionLinks?: string[];
   executionId?: ExecutionId;
 }): Promise<PersistedExternalInquiryTurn> {
   const threadId = params.threadId ?? createStoredThreadId();
@@ -212,6 +227,7 @@ export async function persistExternalInquiryTurn(params: {
     const turnIndex = manifest.turns.length + 1;
     const turnPath = threadTurnDir(threadId, turnIndex);
     const trimmedContext = params.context?.trim() || undefined;
+    const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
     await GlobalStorageFS.ensureDir(turnPath);
 
@@ -250,6 +266,7 @@ export async function persistExternalInquiryTurn(params: {
       questionRelativePath,
       contextRelativePath,
       answerRelativePath,
+      sessionLinks,
     };
 
     const nextManifest: ExternalInquiryThreadManifest = {

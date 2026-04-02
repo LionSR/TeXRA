@@ -694,6 +694,71 @@ export const requestPanelStyles: CSSResult = css`
     gap: var(--spacing-small);
   }
 
+  .external-inquiry-request__session-links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-small);
+  }
+
+  .external-inquiry-request__session-links-known,
+  .external-inquiry-request__session-links-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-small);
+  }
+
+  .external-inquiry-request__session-links-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--vscode-editor-foreground);
+  }
+
+  .external-inquiry-request__session-links-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-tiny);
+    padding: var(--spacing-small);
+    background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    border-radius: var(--border-radius-small);
+  }
+
+  .external-inquiry-request__session-link-item {
+    font-size: var(--font-size-sm);
+    font-family: var(--vscode-editor-font-family);
+    color: var(--vscode-textLink-foreground);
+    word-break: break-word;
+  }
+
+  .external-inquiry-request__session-links-input {
+    width: 100%;
+    min-height: 72px;
+    max-height: min(18vh, 8rem);
+    resize: vertical;
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    padding: var(--spacing-medium);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: var(--border-thin) solid var(--vscode-input-border);
+    border-radius: var(--border-radius);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .external-inquiry-request__session-links-input:focus {
+    border-color: var(--vscode-focusBorder);
+  }
+
+  .external-inquiry-request__session-links-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+  }
+
+  .external-inquiry-request__session-links-hint {
+    font-size: var(--font-size-sm);
+    color: var(--vscode-descriptionForeground);
+  }
+
   .external-inquiry-request__answer-label {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
@@ -746,6 +811,11 @@ export const requestPanelStyles: CSSResult = css`
     .external-inquiry-request__answer-input {
       min-height: 80px;
       max-height: min(20vh, 10rem);
+    }
+
+    .external-inquiry-request__session-links-input {
+      min-height: 64px;
+      max-height: min(16vh, 7rem);
     }
   }
 

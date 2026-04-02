@@ -110,6 +110,13 @@ export type AgentProposalPermission = z.infer<
 
 export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'reject'] as const;
 export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
+export const ExternalInquirySessionLinkSchema = z.string().trim().min(1);
+export const ExternalInquirySessionLinksSchema = z.array(
+  ExternalInquirySessionLinkSchema,
+);
+export type ExternalInquirySessionLink = z.infer<
+  typeof ExternalInquirySessionLinkSchema
+>;
 
 export const ExternalInquiryModeSchema = z.enum(['new', 'followup']);
 export type ExternalInquiryMode = z.infer<typeof ExternalInquiryModeSchema>;
@@ -128,6 +135,7 @@ export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({
   context: z.string().nullish(),
   suggestSearch: z.boolean().nullish(),
   attachFiles: z.array(z.string()).nullish(),
+  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
 });
 export type ExternalInquiryPermission = z.infer<
   typeof ExternalInquiryPermissionSchema

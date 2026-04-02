@@ -50,6 +50,8 @@ export interface PermissionActionDetail {
   modelOverride?: string;
   /** Answer text from external inquiry panel (submit action only). */
   answer?: string;
+  /** External chat/thread links captured from the user (submit action only). */
+  sessionLinks?: string[];
 }
 
 /**

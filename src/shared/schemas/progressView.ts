@@ -22,6 +22,7 @@ import {
   AgentProposalPermissionSchema,
   BashPermissionSchema,
   EXTERNAL_INQUIRY_ACTIONS,
+  ExternalInquirySessionLinksSchema,
   ExternalInquiryPermissionSchema,
   PLAN_APPROVAL_ACTIONS,
   PlanApprovalPermissionSchema,
@@ -634,6 +635,7 @@ const ExternalInquiryActionMessageSchema = z.object({
   action: z.enum([...EXTERNAL_INQUIRY_ACTIONS, 'skip'] as const),
   answer: z.string().optional(),
   feedback: z.string().optional(),
+  sessionLinks: ExternalInquirySessionLinksSchema.optional(),
 });
 
 const RestoreProposalConfigMessageSchema = z.object({
