@@ -20,6 +20,8 @@ settings:
     - glob
     - grep
     - ls
+    # Codex agent
+    - codex
     # Lean tools (for quick checks without delegating)
     - lean_diagnostics
     - lean_inspect
@@ -36,6 +38,8 @@ prompts:
     Choose delegate_workflow when the entire input file should be rewritten from start to finish in fixed rounds—the agent receives structured file parameters and produces a transformed version preserving structure and section order. Use this for uniform whole-document operations: grammar correction across a paper, style polishing a full draft, generating figures, merging documents, long derivations (expanding proof sketches into full arguments, filling in calculation steps), and critical reviews (adding \criticize comments with severity/confidence scores). Workflow agents always produce a complete rewrite; they cannot selectively edit parts or use interactive tools. For workflow proposals, include preamble and bibliography as auxiliary files, and any \input{} dependencies as additional input or auxiliary files. Output files must be a subset of the input files.
 
     Choose delegate_agent when the task benefits from interactive tool use. Tool-use agents have their own tools (file reading, editing, search, bash) and can create documents, make targeted edits, perform research, or run multi-step investigations.
+
+    Choose codex when you need a powerful coding agent with its own sandboxed environment — code generation, proof writing, multi-file refactors, or debugging compilation errors. Codex is multi-turn: each call returns a thread_id. Always pass thread_id back when following up on a previous codex task — this resumes the same session with full history and file context intact. Use this to provide feedback ("the proof still has sorry, try a different approach"), request corrections, or continue iterative work without re-explaining context. The codex agent's child stream also accepts follow-up messages directly from the user via the stream tab's input field.
 
     Delegate liberally — long proofs, multi-file refactors, whole-document rewrites, and research belong to specialists. Parallelize independent lemmas by delegating them simultaneously. Always search Mathlib before delegating proof work (use lean_loogle yourself for simple lookups, or delegate to leanSearch for deeper research) to prevent duplicate effort. Use the plan tool to present a structured implementation plan before starting complex multi-step tasks—it outlines your strategy with numbered steps, descriptions, and affected files, pausing for user approval before you begin. Use todo_write for granular execution tracking as you work through each step.
 

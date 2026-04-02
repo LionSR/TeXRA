@@ -252,7 +252,7 @@ function formatCodexDelivery(
   const durationSec = (wallTimeMs / 1000).toFixed(1);
   const response = turn.finalResponse || '(no response)';
   const lines = [
-    `<codex-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}"${threadId ? ` thread-id="${escapeAttr(threadId)}"` : ''}>`,
+    `<codex-result id="${escapeAttr(executionId)}"${threadId ? ` thread-id="${escapeAttr(threadId)}"` : ''}>`,
     `<wall-time>${durationSec}s</wall-time>`,
     `<response>${escapeText(response)}</response>`,
   ];
@@ -726,7 +726,9 @@ export class CodexTool extends defineTool({
     'Set working_directory to a workspace subdirectory or an absolute path, including a separate git worktree; an orchestrator can prepare that worktree first when isolated changes help. ' +
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
     'Auth is handled by the CLI itself — use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
-    'Returns a thread_id that can be passed back to continue the conversation in subsequent calls.',
+    'MULTI-TURN: Each call returns a thread_id. Pass it back via the thread_id parameter to resume the same session — ' +
+    'the agent retains full conversation history, file context, and in-progress work. ' +
+    'Always resume an existing thread when following up, providing feedback, or asking for corrections on prior codex work.',
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
