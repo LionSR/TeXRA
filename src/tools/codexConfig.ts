@@ -1,17 +1,42 @@
 // Standard library imports
 import * as path from 'path';
 
-// Third-party imports
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 // Local imports - agent config
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { WorkspaceFS } from '@utils/files';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
-/** The API model ID sent to the Codex CLI via --model. */
-export const CODEX_API_MODEL = MODEL_CONFIGS[CODEX_DISPLAY_MODEL].fullName;
+// ============================================================================
+// Sandbox mode config (injectable — VS Code layer sets the real getter)
+// ============================================================================
+
+export const CODEX_SANDBOX_CONFIG_KEY = 'texra.toolUse.codexSandboxMode';
+
+export const CODEX_SANDBOX_MODES = [
+  'read-only',
+  'workspace-write',
+  'danger-full-access',
+] as const;
+
+export type CodexSandboxMode = (typeof CODEX_SANDBOX_MODES)[number];
+
+/** Default sandbox mode when no VS Code config getter is registered. */
+const DEFAULT_SANDBOX_MODE: CodexSandboxMode = 'workspace-write';
+
+let sandboxModeGetter: () => CodexSandboxMode = () => DEFAULT_SANDBOX_MODE;
+
+/** Register a platform-specific getter for the configured sandbox mode. */
+export function setCodexSandboxModeGetter(
+  getter: () => CodexSandboxMode,
+): void {
+  sandboxModeGetter = getter;
+}
+
+/** Read the user-configured default sandbox mode. */
+export function getCodexSandboxMode(): CodexSandboxMode {
+  return sandboxModeGetter();
+}
 
 /**
  * Build synthetic execution metadata for Codex child streams.

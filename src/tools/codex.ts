@@ -53,7 +53,7 @@ import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { escapeAttr, escapeText } from '@tools/subagentResults';
 import {
-  requestCodexApproval,
+  requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
@@ -66,7 +66,7 @@ import { defineTool } from './core/define';
 import {
   buildCodexConfig,
   buildCodexWorkspaceOptions,
-  CODEX_API_MODEL,
+  getCodexSandboxMode,
 } from './codexConfig';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import {
@@ -110,8 +110,10 @@ const CodexInputSchema = z.strictObject({
     ),
   sandbox_mode: z
     .enum(SANDBOX_MODES)
-    .prefault('read-only')
-    .describe('File access level for the Codex agent'),
+    .nullish()
+    .describe(
+      'File access level for the Codex agent. Defaults to the user-configured sandbox mode (usually workspace-write).',
+    ),
   run_in_background: z
     .boolean()
     .prefault(false)
@@ -726,9 +728,12 @@ export class CodexTool extends defineTool({
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
+    // Apply user-configured default sandbox mode
+    const sandboxMode = input.sandbox_mode ?? getCodexSandboxMode();
+
     // Request approval — same pattern as BashTool
-    const approvalLabel = `[codex ${input.sandbox_mode}] ${input.prompt}`;
-    const approval = await requestCodexApproval({ command: approvalLabel });
+    const approvalLabel = `[codex ${sandboxMode}] ${input.prompt}`;
+    const approval = await requestBashApproval({ command: approvalLabel });
     if (!approval.accepted) {
       return buildBashApprovalRejectedResult(
         approvalLabel,
@@ -776,9 +781,7 @@ export class CodexTool extends defineTool({
         ? {}
         : buildCodexWorkspaceOptions(input.working_directory);
     const threadOptions = {
-      model: CODEX_API_MODEL,
-      modelReasoningEffort: 'high' as const,
-      sandboxMode: input.sandbox_mode,
+      sandboxMode: input.sandbox_mode ?? getCodexSandboxMode(),
       skipGitRepoCheck: true as const,
       ...workspaceOptions,
     };
@@ -930,7 +933,7 @@ export class CodexTool extends defineTool({
     return {
       summary: `Launched Codex: ${preview}`,
       output: [
-        `Codex agent launched in background (${input.sandbox_mode}).`,
+        `Codex agent launched in background (${input.sandbox_mode ?? getCodexSandboxMode()}).`,
         `Execution ID: ${executionId}`,
         `Stream tab: ${childStreamId}`,
         'Result will be delivered as a follow-up message when complete.',
