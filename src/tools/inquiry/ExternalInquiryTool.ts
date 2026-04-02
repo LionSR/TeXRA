@@ -10,7 +10,6 @@
 
 import { z } from 'zod';
 
-import { getExecutionStore } from '@agent/storage';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -27,12 +26,15 @@ import {
   persistExternalInquiryTurn,
   readExternalInquiryThread,
   type ExternalInquiryThreadManifest,
-  type PersistedExternalInquiryTurn,
 } from './externalInquiryStorage';
+import {
+  appendExternalInquiryReport,
+  buildExternalInquiryResult,
+  buildRejectedExternalInquiryResult,
+  collectKnownSessionLinks,
+} from './externalInquiryResultFormatter';
 
 const logger = new AgentLogger('ExternalInquiryTool');
-const EXTERNAL_INQUIRY_REPORT_THRESHOLD = 20_000;
-const EXTERNAL_INQUIRY_PREVIEW_LENGTH = 2_000;
 
 // ============================================================================
 // Tool Schema
@@ -114,174 +116,66 @@ const pendingInquiries = new Map<
   }
 >();
 
-function toCurrentExecutionPath(path: string, executionId?: string): string {
-  if (!executionId) return path;
-  const prefix = `/executions/${executionId}/`;
-  return path.startsWith(prefix)
-    ? `/executions/current/${path.slice(prefix.length)}`
-    : path;
-}
+async function resolveExistingThread(
+  input: ExternalInquiryInput,
+): Promise<ExternalInquiryThreadManifest | null> {
+  if (input.mode !== 'followup' || !input.thread_id) return null;
 
-function currentManifestPath(
-  persisted: PersistedExternalInquiryTurn,
-): string | undefined {
-  const mirror = persisted.executionMirrorPaths;
-  if (!mirror) return undefined;
-  return toCurrentExecutionPath(mirror.manifestPath, mirror.executionId);
-}
-
-function appendManifestHint(lines: string[], manifestPath?: string): void {
-  if (!manifestPath) return;
-  lines.push(
-    '',
-    `Thread manifest: ${manifestPath}`,
-    `Use the executions tool with path=${manifestPath} to inspect mirrored files.`,
-  );
-}
-
-function appendSessionLinks(
-  lines: string[],
-  sessionLinks?: string[],
-  heading = 'External session links:',
-): void {
-  if (!sessionLinks?.length) return;
-  lines.push('', heading, ...sessionLinks.map((link) => `- ${link}`));
-}
-
-function collectKnownSessionLinks(
-  manifest: ExternalInquiryThreadManifest | null | undefined,
-): string[] | undefined {
-  if (!manifest) return undefined;
-
-  const known: string[] = [];
-  const seen = new Set<string>();
-
-  for (const turn of [...manifest.turns].reverse()) {
-    for (const link of turn.sessionLinks ?? []) {
-      if (seen.has(link)) continue;
-      seen.add(link);
-      known.push(link);
-    }
-  }
-
-  return known.length ? known : undefined;
-}
-
-function buildExternalInquiryOutput(
-  persisted: PersistedExternalInquiryTurn,
-  answer: string,
-): string {
-  const lines = [
-    `Thread ID: ${persisted.threadId}`,
-    `Turn: ${persisted.turn.turnIndex}`,
-    'Answer from external model:',
-    '',
-    answer,
-    '',
-    `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
-  ];
-
-  appendSessionLinks(lines, persisted.turn.sessionLinks ?? undefined);
-  appendManifestHint(lines, currentManifestPath(persisted));
-
-  return lines.join('\n');
-}
-
-function buildExternalInquiryReport(
-  persisted: PersistedExternalInquiryTurn,
-  answer: string,
-): string {
-  const lines = [
-    'External inquiry result',
-    `Thread ID: ${persisted.threadId}`,
-    `Turn: ${persisted.turn.turnIndex}`,
-    `Mode: ${persisted.turn.mode}`,
-    `Timestamp: ${persisted.turn.timestamp}`,
-    ...(persisted.turn.context ? [`Context: ${persisted.turn.context}`] : []),
-    '',
-    'Question:',
-    persisted.turn.question,
-    '',
-    'Answer:',
-    answer,
-  ];
-
-  appendSessionLinks(lines, persisted.turn.sessionLinks ?? undefined);
-
-  const mirror = persisted.executionMirrorPaths;
-  if (mirror) {
-    lines.push(
-      '',
-      'Mirrored execution files:',
-      `- Manifest: ${mirror.manifestPath}`,
-      `- Question: ${mirror.questionPath}`,
-      ...(mirror.contextPath ? [`- Context: ${mirror.contextPath}`] : []),
-      `- Answer: ${mirror.answerPath}`,
+  const existingThread = await readExternalInquiryThread(input.thread_id);
+  if (!existingThread) {
+    throw new ToolError(
+      `External inquiry thread not found: ${input.thread_id}`,
     );
   }
 
-  return lines.join('\n');
+  const sessionLinks = collectKnownSessionLinks(existingThread);
+  if (sessionLinks?.length) {
+    logger.debug(
+      `Found ${sessionLinks.length} known external session link(s) for ${input.thread_id}`,
+    );
+  }
+
+  return existingThread;
 }
 
-// Per-execution lock to prevent concurrent report appends from overwriting each other.
-const reportLocks = new Map<string, Promise<void>>();
+async function awaitExternalInquiryResponse(params: {
+  requestId: string;
+  input: ExternalInquiryInput;
+  streamId?: StreamTabId;
+  existingThread: ExternalInquiryThreadManifest | null;
+}): Promise<ExternalInquiryResult> {
+  return new Promise<ExternalInquiryResult>((resolve) => {
+    let settled = false;
+    const settle = (result: ExternalInquiryResult) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
 
-async function appendExternalInquiryReport(params: {
-  executionId: string;
-  persisted: PersistedExternalInquiryTurn;
-  answer: string;
-}): Promise<void> {
-  const prev = reportLocks.get(params.executionId) ?? Promise.resolve();
-  let release!: () => void;
-  const next = new Promise<void>((resolve) => {
-    release = resolve;
+    pendingInquiries.set(params.requestId, {
+      streamId: params.streamId,
+      settle,
+      isSettled: () => settled,
+    });
+
+    bus.emit('requestEnsureProgressView', {});
+
+    if (params.streamId) {
+      bus.emit('setActiveStream', { streamId: params.streamId });
+    }
+
+    bus.emit('showExternalInquiry', {
+      requestId: params.requestId,
+      question: params.input.question,
+      mode: params.input.mode,
+      context: params.input.context ?? undefined,
+      suggestSearch: params.input.suggestSearch ?? undefined,
+      attachFiles: params.input.attachFiles ?? undefined,
+      sessionLinks: collectKnownSessionLinks(params.existingThread),
+      allowBypass: false,
+      streamId: params.streamId ?? '',
+    });
   });
-  reportLocks.set(params.executionId, next);
-
-  await prev;
-  try {
-    const store = getExecutionStore(params.executionId);
-    const existing = await store.readReport();
-    const nextSection = buildExternalInquiryReport(
-      params.persisted,
-      params.answer,
-    );
-    const separator = '\n\n' + '='.repeat(80) + '\n\n';
-    await store.writeReport(
-      existing?.trim() ? `${existing}${separator}${nextSection}` : nextSection,
-    );
-  } finally {
-    release();
-    if (reportLocks.get(params.executionId) === next) {
-      reportLocks.delete(params.executionId);
-    }
-  }
-}
-
-function buildLongAnswerResult(
-  persisted: PersistedExternalInquiryTurn,
-  answer: string,
-): ToolResult {
-  const preview = answer.slice(0, EXTERNAL_INQUIRY_PREVIEW_LENGTH);
-  const lines = [
-    'The external model returned a long answer.',
-    `Thread ID: ${persisted.threadId}`,
-    'The full answer has been saved to /executions/current/report.',
-    'Use the executions tool with path=/executions/current/report to inspect it.',
-    `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
-  ];
-
-  appendSessionLinks(lines, persisted.turn.sessionLinks ?? undefined);
-  appendManifestHint(lines, currentManifestPath(persisted));
-
-  if (preview) {
-    lines.push('', `Preview:\n\n${preview}`);
-  }
-
-  return {
-    summary: 'Received long answer from external model',
-    output: lines.join('\n'),
-  };
 }
 
 // ============================================================================
@@ -369,69 +263,18 @@ When you have multiple independent questions for external models, you can call e
       `External inquiry [${input.mode}${input.thread_id ? ` ${input.thread_id}` : ''}]: ${input.question.substring(0, 100)}...`,
     );
 
-    // Fail fast for followup mode: verify thread exists before asking user to
-    // do the external-model roundtrip.
-    let existingThread: ExternalInquiryThreadManifest | null = null;
-    if (input.mode === 'followup' && input.thread_id) {
-      existingThread = await readExternalInquiryThread(input.thread_id);
-      if (!existingThread) {
-        throw new ToolError(
-          `External inquiry thread not found: ${input.thread_id}`,
-        );
-      }
-
-      const sessionLinks = collectKnownSessionLinks(existingThread);
-      if (sessionLinks?.length) {
-        logger.debug(
-          `Found ${sessionLinks.length} known external session link(s) for ${input.thread_id}`,
-        );
-      }
-    }
+    const existingThread = await resolveExistingThread(input);
 
     try {
-      const result = await new Promise<ExternalInquiryResult>((resolve) => {
-        let settled = false;
-        const settle = (settledResult: ExternalInquiryResult) => {
-          if (settled) return;
-          settled = true;
-          resolve(settledResult);
-        };
-
-        pendingInquiries.set(requestId, {
-          streamId,
-          settle,
-          isSettled: () => settled,
-        });
-
-        bus.emit('requestEnsureProgressView', {});
-
-        if (streamId) {
-          bus.emit('setActiveStream', { streamId });
-        }
-
-        bus.emit('showExternalInquiry', {
-          requestId,
-          question: input.question,
-          mode: input.mode,
-          context: input.context ?? undefined,
-          suggestSearch: input.suggestSearch ?? undefined,
-          attachFiles: input.attachFiles ?? undefined,
-          sessionLinks: collectKnownSessionLinks(existingThread),
-          allowBypass: false,
-          streamId: streamId ?? '',
-        });
+      const result = await awaitExternalInquiryResponse({
+        requestId,
+        input,
+        streamId,
+        existingThread,
       });
 
       if (!result.submitted) {
-        const feedback = result.feedback?.trim();
-        return {
-          summary: feedback
-            ? 'User rejected external inquiry with feedback'
-            : 'User rejected external inquiry',
-          output: feedback
-            ? `The user rejected this external inquiry and provided feedback:\n\n${feedback}\n\nRevise the question or try a different approach.`
-            : 'The user rejected this external inquiry. Revise the question or try a different approach.',
-        };
+        return buildRejectedExternalInquiryResult(result.feedback);
       }
 
       const answer = result.answer?.trim();
@@ -457,14 +300,11 @@ When you have multiple independent questions for external models, you can call e
         });
       }
 
-      if (executionId && answer.length > EXTERNAL_INQUIRY_REPORT_THRESHOLD) {
-        return buildLongAnswerResult(persisted, answer);
-      }
-
-      return {
-        summary: `Received answer from external model (${input.mode})`,
-        output: buildExternalInquiryOutput(persisted, answer),
-      };
+      return buildExternalInquiryResult({
+        persisted,
+        answer,
+        includeLongAnswerRedirect: executionId != null,
+      });
     } finally {
       pendingInquiries.delete(requestId);
       bus.emit('resolveExternalInquiry', { requestId });
