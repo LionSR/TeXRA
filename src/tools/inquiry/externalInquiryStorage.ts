@@ -28,7 +28,7 @@ const ExternalInquiryTurnRecordSchema = z.looseObject({
   sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
 });
 
-const ExternalInquiryThreadManifestSchema = z.strictObject({
+const ExternalInquiryThreadManifestSchema = z.looseObject({
   threadId: ExternalInquiryThreadIdSchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
@@ -48,6 +48,12 @@ export interface ExternalInquiryExecutionMirrorPaths {
   questionPath: string;
   contextPath?: string;
   answerPath: string;
+}
+
+export interface ExternalInquiryThreadMirrorPaths {
+  executionId: ExecutionId;
+  threadPath: string;
+  manifestPath: string;
 }
 
 export interface PersistedExternalInquiryTurn {
@@ -148,22 +154,45 @@ async function copyGlobalDirectoryToExecution(
   }
 }
 
-async function mirrorThreadToExecution(params: {
+function buildExecutionThreadMirrorPaths(params: {
   executionId: ExecutionId;
   threadId: ExternalInquiryThreadId;
-  turn: ExternalInquiryTurnRecord;
-}): Promise<ExternalInquiryExecutionMirrorPaths> {
+}): ExternalInquiryThreadMirrorPaths {
+  const threadPath = `/executions/${params.executionId}/files/${EXEC_DIR}/${params.threadId}`;
+  return {
+    executionId: params.executionId,
+    threadPath,
+    manifestPath: `${threadPath}/manifest.json`,
+  };
+}
+
+export async function ensureExternalInquiryThreadMirror(params: {
+  executionId: ExecutionId;
+  threadId: ExternalInquiryThreadId;
+}): Promise<ExternalInquiryThreadMirrorPaths> {
   await copyGlobalDirectoryToExecution(
     threadDir(params.threadId),
     path.join('executions', params.executionId, EXEC_DIR, params.threadId),
   );
 
-  const base = `/executions/${params.executionId}/files/${EXEC_DIR}/${params.threadId}`;
+  return buildExecutionThreadMirrorPaths(params);
+}
+
+async function mirrorThreadToExecution(params: {
+  executionId: ExecutionId;
+  threadId: ExternalInquiryThreadId;
+  turn: ExternalInquiryTurnRecord;
+}): Promise<ExternalInquiryExecutionMirrorPaths> {
+  const mirror = await ensureExternalInquiryThreadMirror({
+    executionId: params.executionId,
+    threadId: params.threadId,
+  });
+  const base = mirror.threadPath;
   const toPath = (rel: string) => `${base}/${normalizeFilePath(rel)}`;
 
   return {
-    executionId: params.executionId,
-    manifestPath: toPath('manifest.json'),
+    executionId: mirror.executionId,
+    manifestPath: mirror.manifestPath,
     questionPath: toPath(params.turn.questionRelativePath),
     answerPath: toPath(params.turn.answerRelativePath),
     ...(params.turn.contextRelativePath

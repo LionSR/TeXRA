@@ -22,6 +22,7 @@ import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 import {
+  ensureExternalInquiryThreadMirror,
   persistExternalInquiryTurn,
   readExternalInquiryThread,
   type ExternalInquiryThreadManifest,
@@ -96,6 +97,7 @@ const pendingInquiries = new Map<
 
 async function resolveExistingThread(
   input: ExternalInquiryInput,
+  executionId?: string,
 ): Promise<ExternalInquiryThreadManifest | null> {
   if (!input.thread_id) return null;
 
@@ -110,6 +112,16 @@ async function resolveExistingThread(
   if (sessionLinks?.length) {
     logger.debug(
       `Found ${sessionLinks.length} known external session link(s) for ${input.thread_id}`,
+    );
+  }
+
+  if (executionId) {
+    await ensureExternalInquiryThreadMirror({
+      executionId,
+      threadId: existingThread.threadId,
+    });
+    logger.debug(
+      `Mirrored external inquiry thread ${input.thread_id} into execution ${executionId}`,
     );
   }
 
@@ -242,7 +254,7 @@ When you have multiple independent questions for external models, you can call e
       `External inquiry [${threadLabel}]: ${input.question.substring(0, 100)}...`,
     );
 
-    const existingThread = await resolveExistingThread(input);
+    const existingThread = await resolveExistingThread(input, executionId);
 
     try {
       const result = await awaitExternalInquiryResponse({
