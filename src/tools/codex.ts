@@ -47,11 +47,16 @@ import type {
   StreamTabId,
   ExecutionId,
   StorageKey,
+  TodoItem,
   ToolUseLog,
 } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
-import { escapeAttr, escapeText } from '@tools/subagentResults';
+import {
+  escapeAttr,
+  escapeText,
+  formatSubagentProgress,
+} from '@tools/subagentResults';
 import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
@@ -244,7 +249,6 @@ function formatTurnResult(turn: RunResult, threadId?: string | null): string {
 /** Format a Codex result for background delivery as XML. */
 function formatCodexDelivery(
   executionId: string,
-  prompt: string,
   wallTimeMs: number,
   turn: RunResult,
   threadId?: string | null,
@@ -268,13 +272,9 @@ function formatCodexDelivery(
 }
 
 /** Format a Codex error for background delivery. */
-function formatCodexError(
-  executionId: string,
-  prompt: string,
-  err: unknown,
-): string {
+function formatCodexError(executionId: string, err: unknown): string {
   return [
-    `<codex-error id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
+    `<codex-error id="${escapeAttr(executionId)}">`,
     `<message>${escapeText(toErrorMessage(err))}</message>`,
     '</codex-error>',
   ].join('\n');
@@ -322,16 +322,38 @@ function createCodexStream(
   return { childStreamId, logger };
 }
 
+interface OrchestratorContext {
+  parentStreamId: StreamTabId;
+  executionId: ExecutionId;
+}
+
+/** Per-stream snapshot of the last emitted todo state, used to skip no-op updates. */
+const lastTodoSnapshot = new Map<StreamTabId, string>();
+
 function syncCodexTodoState(
   item: Extract<ThreadItem, { type: 'todo_list' }>,
   childStreamId: StreamTabId,
+  orchestrator?: OrchestratorContext,
 ): void {
-  const todos = item.items.map((t) => ({
+  const todos: TodoItem[] = item.items.map((t) => ({
     content: t.text,
     status: t.completed ? ('completed' as const) : ('pending' as const),
     activeForm: t.text,
   }));
+
+  const snapshot = JSON.stringify(todos);
+  if (snapshot === lastTodoSnapshot.get(childStreamId)) return;
+  lastTodoSnapshot.set(childStreamId, snapshot);
+
   bus.emit('updateTodos', { streamId: childStreamId, todos });
+  if (orchestrator) {
+    const msg = formatSubagentProgress(
+      orchestrator.executionId,
+      CODEX_AGENT_NAME,
+      { kind: 'todos', todos },
+    );
+    ToolUseFollowUpQueue.enqueue(orchestrator.parentStreamId, msg);
+  }
 }
 
 function updateTrackedToolUseLog(
@@ -420,9 +442,10 @@ function handleTrackedCodexItemEvent(
   childStreamId: StreamTabId,
   logger: AgentLogger,
   trackedLogs: Map<string, ActiveTrackedToolUseLog>,
+  orchestrator?: OrchestratorContext,
 ): void {
   if (item.type === 'todo_list') {
-    syncCodexTodoState(item, childStreamId);
+    syncCodexTodoState(item, childStreamId, orchestrator);
   }
 
   const toolLog =
@@ -487,6 +510,7 @@ function finalizeCodexStream(
     childStreamId,
     options?.error ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
   );
+  lastTodoSnapshot.delete(childStreamId);
   untrackExecution(executionId);
 }
 
@@ -594,6 +618,7 @@ async function runStreamedTurn(
   childStreamId: StreamTabId,
   logger: AgentLogger,
   executionId: ExecutionId,
+  orchestrator?: OrchestratorContext,
 ): Promise<RunResult> {
   logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
   const { events } = await thread.runStreamed(prompt);
@@ -632,6 +657,7 @@ async function runStreamedTurn(
               childStreamId,
               logger,
               trackedLogs,
+              orchestrator,
             );
           }
           break;
@@ -648,6 +674,7 @@ async function runStreamedTurn(
               childStreamId,
               logger,
               trackedLogs,
+              orchestrator,
             );
           } else {
             logCompletedCodexItem(item, logger);
@@ -895,6 +922,7 @@ export class CodexTool extends defineTool({
     );
 
     const startedAt = Date.now();
+    const orchestrator: OrchestratorContext = { parentStreamId, executionId };
 
     void (async () => {
       try {
@@ -904,6 +932,7 @@ export class CodexTool extends defineTool({
           childStreamId,
           logger,
           executionId,
+          orchestrator,
         );
         const wallTimeMs = Date.now() - startedAt;
         const threadId = thread.id;
@@ -911,7 +940,6 @@ export class CodexTool extends defineTool({
 
         const msg = formatCodexDelivery(
           executionId,
-          input.prompt,
           wallTimeMs,
           turn,
           threadId,
@@ -930,7 +958,7 @@ export class CodexTool extends defineTool({
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         finalizeCodexStream(childStreamId, executionId, logger, { error: err });
 
-        const msg = formatCodexError(executionId, input.prompt, err);
+        const msg = formatCodexError(executionId, err);
         await getExecutionStore(executionId).writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       }
