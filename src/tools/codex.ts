@@ -63,7 +63,11 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { buildCodexConfig, buildCodexWorkspaceOptions } from './codexConfig';
+import {
+  buildCodexConfig,
+  buildCodexWorkspaceOptions,
+  CODEX_API_MODEL,
+} from './codexConfig';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import {
   buildCodexCommandToolLog,
@@ -772,6 +776,7 @@ export class CodexTool extends defineTool({
         ? {}
         : buildCodexWorkspaceOptions(input.working_directory);
     const threadOptions = {
+      model: CODEX_API_MODEL,
       sandboxMode: input.sandbox_mode,
       skipGitRepoCheck: true as const,
       ...workspaceOptions,

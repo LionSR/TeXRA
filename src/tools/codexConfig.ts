@@ -1,11 +1,17 @@
 // Standard library imports
 import * as path from 'path';
 
+// Third-party imports
+import { MODEL_CONFIGS } from 'llm-zoo';
+
 // Local imports - agent config
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { WorkspaceFS } from '@utils/files';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
+
+/** The API model ID sent to the Codex CLI via --model. */
+export const CODEX_API_MODEL = MODEL_CONFIGS[CODEX_DISPLAY_MODEL].fullName;
 
 /**
  * Build synthetic execution metadata for Codex child streams.
