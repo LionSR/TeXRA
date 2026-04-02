@@ -11,7 +11,7 @@ import type {
 } from '@openai/codex-sdk';
 
 export const CODEX_AGENT_NAME = 'codex';
-export const CODEX_DISPLAY_MODEL = 'codex';
+export const CODEX_DISPLAY_MODEL = 'gpt53codex';
 export const CODEX_FILE_CHANGE_TOOL = 'codex_patch';
 export const CODEX_THREAD_TOOL = 'codex_thread';
 export const CODEX_TODO_TOOL = 'codex_todo';
