@@ -53,10 +53,11 @@ const pendingApprovals = new Map<
   }
 >();
 
-export async function requestBashApproval(
+function requestApproval(
+  configKey: string,
   request: BashApprovalRequest,
 ): Promise<BashApprovalResult> {
-  const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
+  const approvalsEnabled = getConfig<boolean>(configKey, true);
 
   // Resolve streamId from context if not provided
   const context = getCurrentToolFileInteractionContext();
@@ -66,7 +67,7 @@ export async function requestBashApproval(
     !approvalsEnabled ||
     (streamId && isApprovalBypassedForStream(streamId))
   ) {
-    return { accepted: true };
+    return Promise.resolve({ accepted: true });
   }
 
   const operation = queue.then(() => showApprovalPrompt(request, streamId));
@@ -77,27 +78,16 @@ export async function requestBashApproval(
   return operation;
 }
 
-export async function requestCodexApproval(
+export function requestBashApproval(
   request: BashApprovalRequest,
 ): Promise<BashApprovalResult> {
-  const approvalsEnabled = getConfig<boolean>(CODEX_APPROVAL_CONFIG_KEY, true);
+  return requestApproval(BASH_APPROVAL_CONFIG_KEY, request);
+}
 
-  const context = getCurrentToolFileInteractionContext();
-  const streamId = request.streamId ?? context?.streamId;
-
-  if (
-    !approvalsEnabled ||
-    (streamId && isApprovalBypassedForStream(streamId))
-  ) {
-    return { accepted: true };
-  }
-
-  const operation = queue.then(() => showApprovalPrompt(request, streamId));
-  queue = operation.then(
-    () => {},
-    () => {},
-  );
-  return operation;
+export function requestCodexApproval(
+  request: BashApprovalRequest,
+): Promise<BashApprovalResult> {
+  return requestApproval(CODEX_APPROVAL_CONFIG_KEY, request);
 }
 
 async function showApprovalPrompt(
