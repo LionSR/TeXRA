@@ -110,13 +110,10 @@ export type AgentProposalPermission = z.infer<
 
 export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'reject'] as const;
 export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
-export const ExternalInquirySessionLinkSchema = z.string().trim().min(1);
+const ExternalInquirySessionLinkSchema = z.string().trim().min(1);
 export const ExternalInquirySessionLinksSchema = z.array(
   ExternalInquirySessionLinkSchema,
 );
-export type ExternalInquirySessionLink = z.infer<
-  typeof ExternalInquirySessionLinkSchema
->;
 
 export const ExternalInquiryThreadIdSchema = z
   .string()
