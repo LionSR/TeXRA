@@ -53,7 +53,7 @@ import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { escapeAttr, escapeText } from '@tools/subagentResults';
 import {
-  requestBashApproval,
+  requestCodexApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
@@ -728,7 +728,7 @@ export class CodexTool extends defineTool({
   protected async execute(input: CodexInput): Promise<ToolResult> {
     // Request approval — same pattern as BashTool
     const approvalLabel = `[codex ${input.sandbox_mode}] ${input.prompt}`;
-    const approval = await requestBashApproval({ command: approvalLabel });
+    const approval = await requestCodexApproval({ command: approvalLabel });
     if (!approval.accepted) {
       return buildBashApprovalRejectedResult(
         approvalLabel,

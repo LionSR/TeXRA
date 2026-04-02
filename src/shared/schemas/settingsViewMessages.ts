@@ -289,6 +289,20 @@ export type UpdateToolDashboardMessage = z.infer<
 >;
 
 // ============================================================
+// Approval settings data schema
+// ============================================================
+
+/** Outbound: backend → frontend approval settings */
+export const UpdateApprovalSettingsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
+  bashApprovalEnabled: z.boolean(),
+  codexApprovalEnabled: z.boolean(),
+});
+export type UpdateApprovalSettingsMessage = z.infer<
+  typeof UpdateApprovalSettingsMessageSchema
+>;
+
+// ============================================================
 // Git author settings data schema
 // ============================================================
 
@@ -598,6 +612,17 @@ const RunInstallCommandMessageSchema = z.object({
   installCommand: z.string().min(1),
 });
 
+// Approval settings inbound messages
+const GetApprovalSettingsMessageSchema = commandOnly(CMD.GET_APPROVAL_SETTINGS);
+const SetBashApprovalEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_BASH_APPROVAL_ENABLED),
+  enabled: z.boolean(),
+});
+const SetCodexApprovalEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_CODEX_APPROVAL_ENABLED),
+  enabled: z.boolean(),
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 
@@ -682,6 +707,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetGitMarkCommitsMessageSchema,
     SetGitAuthorNameMessageSchema,
     SetGitAuthorEmailMessageSchema,
+    // Approval settings messages
+    GetApprovalSettingsMessageSchema,
+    SetBashApprovalEnabledMessageSchema,
+    SetCodexApprovalEnabledMessageSchema,
     // Agent mode preset messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,

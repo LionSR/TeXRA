@@ -192,14 +192,138 @@ export class ToolsTab extends LitElement {
         align-items: center;
         gap: var(--spacing-medium);
       }
+
+      .approval-toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--spacing-small) var(--spacing-medium);
+        border-radius: var(--border-radius);
+        background: var(--vscode-editor-background);
+        margin-bottom: var(--spacing-small);
+      }
+
+      .approval-toggle-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .approval-toggle-label {
+        font-size: var(--font-size);
+        font-weight: var(--font-weight-medium);
+      }
+
+      .approval-toggle-description {
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+      }
+
+      .approval-toggle {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 20px;
+        flex-shrink: 0;
+      }
+
+      .approval-toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .approval-toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: var(--vscode-checkbox-border, #616161);
+        border-radius: 10px;
+        transition: background var(--transition-fast);
+      }
+
+      .approval-toggle-slider::before {
+        content: '';
+        position: absolute;
+        height: 14px;
+        width: 14px;
+        left: 3px;
+        bottom: 3px;
+        background: var(--vscode-editor-background, #fff);
+        border-radius: 50%;
+        transition: transform var(--transition-fast);
+      }
+
+      .approval-toggle input:checked + .approval-toggle-slider {
+        background: var(--vscode-checkbox-selectBackground, #0078d4);
+      }
+
+      .approval-toggle input:checked + .approval-toggle-slider::before {
+        transform: translateX(16px);
+      }
     `,
   ];
 
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
+  @property({ type: Boolean }) bashApprovalEnabled = true;
+  @property({ type: Boolean }) codexApprovalEnabled = true;
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
+  }
+
+  private handleBashApprovalToggle(e: Event): void {
+    const enabled = (e.target as HTMLInputElement).checked;
+    this.dispatchEvent(createEvent('bash-approval-toggle', { enabled }));
+  }
+
+  private handleCodexApprovalToggle(e: Event): void {
+    const enabled = (e.target as HTMLInputElement).checked;
+    this.dispatchEvent(createEvent('codex-approval-toggle', { enabled }));
+  }
+
+  private renderApprovalSettings(): TemplateResult {
+    return html`
+      <div class="category-section">
+        <div class="category-header">
+          <span class="codicon codicon-shield"></span>
+          Approval Settings
+        </div>
+        <div class="approval-toggle-row">
+          <div class="approval-toggle-info">
+            <span class="approval-toggle-label">Bash command approval</span>
+            <span class="approval-toggle-description"
+              >Require approval before executing shell commands</span
+            >
+          </div>
+          <label class="approval-toggle">
+            <input
+              type="checkbox"
+              .checked=${this.bashApprovalEnabled}
+              @change=${this.handleBashApprovalToggle}
+            />
+            <span class="approval-toggle-slider"></span>
+          </label>
+        </div>
+        <div class="approval-toggle-row">
+          <div class="approval-toggle-info">
+            <span class="approval-toggle-label">Codex agent approval</span>
+            <span class="approval-toggle-description"
+              >Require approval before launching Codex agent sessions</span
+            >
+          </div>
+          <label class="approval-toggle">
+            <input
+              type="checkbox"
+              .checked=${this.codexApprovalEnabled}
+              @change=${this.handleCodexApprovalToggle}
+            />
+            <span class="approval-toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    `;
   }
 
   private groupByCategory(): Map<ToolCategory, ToolDashboardItem[]> {
@@ -329,6 +453,7 @@ export class ToolsTab extends LitElement {
           </div>
         </div>
 
+        ${this.renderApprovalSettings()}
         ${CATEGORY_ORDER.filter((cat) => groups.has(cat)).map((cat) =>
           this.renderCategory(cat, groups.get(cat)!),
         )}
