@@ -66,6 +66,8 @@ import { defineTool } from './core/define';
 import {
   buildCodexConfig,
   buildCodexWorkspaceOptions,
+  CODEX_CLI_MODEL,
+  CODEX_REASONING_EFFORT,
   getCodexSandboxMode,
 } from './codexConfig';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
@@ -781,8 +783,8 @@ export class CodexTool extends defineTool({
         ? {}
         : buildCodexWorkspaceOptions(input.working_directory);
     const threadOptions = {
-      model: 'gpt-5.4',
-      modelReasoningEffort: 'high' as const,
+      model: CODEX_CLI_MODEL,
+      modelReasoningEffort: CODEX_REASONING_EFFORT,
       sandboxMode: input.sandbox_mode ?? getCodexSandboxMode(),
       skipGitRepoCheck: true as const,
       ...workspaceOptions,

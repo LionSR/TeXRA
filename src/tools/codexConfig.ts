@@ -8,6 +8,16 @@ import { WorkspaceFS } from '@utils/files';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
 // ============================================================================
+// Model config — the Codex CLI uses short model names, not versioned API IDs
+// ============================================================================
+
+/** Short model name passed to the Codex CLI via --model. */
+export const CODEX_CLI_MODEL = 'gpt-5.4';
+
+/** Default reasoning effort passed to the Codex CLI. */
+export const CODEX_REASONING_EFFORT = 'high' as const;
+
+// ============================================================================
 // Sandbox mode config (injectable — VS Code layer sets the real getter)
 // ============================================================================
 
@@ -21,8 +31,14 @@ export const CODEX_SANDBOX_MODES = [
 
 export type CodexSandboxMode = (typeof CODEX_SANDBOX_MODES)[number];
 
-/** Default sandbox mode when no VS Code config getter is registered. */
 const DEFAULT_SANDBOX_MODE: CodexSandboxMode = 'workspace-write';
+
+/** Validate a raw string into a sandbox mode, falling back to the default. */
+export function parseCodexSandboxMode(raw: string): CodexSandboxMode {
+  return CODEX_SANDBOX_MODES.includes(raw as CodexSandboxMode)
+    ? (raw as CodexSandboxMode)
+    : DEFAULT_SANDBOX_MODE;
+}
 
 let sandboxModeGetter: () => CodexSandboxMode = () => DEFAULT_SANDBOX_MODE;
 
