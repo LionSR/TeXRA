@@ -16,7 +16,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { ExternalInquiryAction, StreamTabId } from '@shared/schemas';
 import {
   EXTERNAL_INQUIRY_ACTIONS,
-  ExternalInquiryModeSchema,
   ExternalInquiryThreadIdSchema,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
@@ -49,12 +48,9 @@ const ExternalInquiryInputSchema = z
           'MUST include all necessary background, definitions, notation, and problem setup ' +
           'because the external model has NO context from this conversation.',
       ),
-    mode: ExternalInquiryModeSchema.describe(
-      "'new' to start a fresh external-inquiry thread, 'followup' to continue a prior external-inquiry thread.",
-    ),
     thread_id: ExternalInquiryThreadIdSchema.nullish().describe(
       'Durable external inquiry thread ID from a previous external_inquiry result. ' +
-        "Required for mode='followup'. Must be omitted for mode='new'.",
+        'Omit to start a new external-inquiry thread. Pass it to continue an existing thread.',
     ),
     context: z
       .string()
@@ -74,23 +70,6 @@ const ExternalInquiryInputSchema = z
       .describe(
         'Workspace-relative file paths the user should upload to the external model.',
       ),
-  })
-  .superRefine((value, ctx) => {
-    if (value.mode === 'new' && value.thread_id != null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['thread_id'],
-        message: "thread_id must be omitted when mode='new'.",
-      });
-    }
-
-    if (value.mode === 'followup' && value.thread_id == null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['thread_id'],
-        message: "thread_id is required when mode='followup'.",
-      });
-    }
   });
 
 export type ExternalInquiryInput = z.infer<typeof ExternalInquiryInputSchema>;
@@ -119,7 +98,7 @@ const pendingInquiries = new Map<
 async function resolveExistingThread(
   input: ExternalInquiryInput,
 ): Promise<ExternalInquiryThreadManifest | null> {
-  if (input.mode !== 'followup' || !input.thread_id) return null;
+  if (!input.thread_id) return null;
 
   const existingThread = await readExternalInquiryThread(input.thread_id);
   if (!existingThread) {
@@ -167,7 +146,7 @@ async function awaitExternalInquiryResponse(params: {
     bus.emit('showExternalInquiry', {
       requestId: params.requestId,
       question: params.input.question,
-      mode: params.input.mode,
+      threadId: params.input.thread_id ?? undefined,
       context: params.input.context ?? undefined,
       suggestSearch: params.input.suggestSearch ?? undefined,
       attachFiles: params.input.attachFiles ?? undefined,
@@ -237,9 +216,9 @@ Tips for effective questions:
 - State the problem completely with all definitions
 - Include relevant equations and notation
 - Specify what kind of answer you need (proof sketch, calculation, reference, etc.)
-- If this is a follow-up, summarize what was established before
+- If continuing an existing external thread, summarize what was established before
 
-Every successful call returns a durable thread_id. Pass that thread_id back with mode='followup' to continue the same external-inquiry thread in later calls, even from a future run.
+Every successful call returns a durable thread_id. Omit thread_id to start a new external-inquiry thread. Pass thread_id to continue the same thread in later calls, even from a future run.
 
 Set suggestSearch=true when the question could benefit from the external model using web search (e.g., looking up recent papers, checking specific results).
 
@@ -258,9 +237,10 @@ When you have multiple independent questions for external models, you can call e
     const executionId = context?.executionId;
 
     const requestId = `inquiry-${Date.now().toString(36)}-${++inquiryCounter}`;
+    const threadLabel = input.thread_id ?? 'new';
 
     logger.info(
-      `External inquiry [${input.mode}${input.thread_id ? ` ${input.thread_id}` : ''}]: ${input.question.substring(0, 100)}...`,
+      `External inquiry [${threadLabel}]: ${input.question.substring(0, 100)}...`,
     );
 
     const existingThread = await resolveExistingThread(input);
@@ -283,7 +263,6 @@ When you have multiple independent questions for external models, you can call e
       }
 
       const persisted = await persistExternalInquiryTurn({
-        mode: input.mode,
         threadId: input.thread_id ?? undefined,
         question: input.question,
         context: input.context ?? undefined,

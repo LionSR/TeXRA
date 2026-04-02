@@ -6,10 +6,8 @@ import { z } from 'zod';
 import { isDirectory, isFile } from '@common/files/fsEntryType';
 import type { ExecutionId } from '@shared/schemas';
 import {
-  ExternalInquiryModeSchema,
   ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
-  type ExternalInquiryMode,
   type ExternalInquiryThreadId,
 } from '@shared/schemas';
 import { normalizeFilePath } from '@shared/utils/path';
@@ -19,9 +17,8 @@ import { GlobalStorageFS, StorageFS } from '@utils/files';
 const THREADS_DIR = 'ei_threads';
 const EXEC_DIR = 'ei';
 
-const ExternalInquiryTurnRecordSchema = z.strictObject({
+const ExternalInquiryTurnRecordSchema = z.looseObject({
   turnIndex: z.int().positive(),
-  mode: ExternalInquiryModeSchema,
   timestamp: z.string().min(1),
   question: z.string(),
   context: z.string().nullish(),
@@ -204,7 +201,6 @@ function normalizeSessionLinks(links?: string[]): string[] | undefined {
 }
 
 export async function persistExternalInquiryTurn(params: {
-  mode: ExternalInquiryMode;
   threadId?: ExternalInquiryThreadId;
   question: string;
   context?: string;
@@ -259,7 +255,6 @@ export async function persistExternalInquiryTurn(params: {
 
     const turn: ExternalInquiryTurnRecord = {
       turnIndex,
-      mode: params.mode,
       timestamp,
       question: params.question,
       context: trimmedContext,

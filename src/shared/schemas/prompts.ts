@@ -118,9 +118,6 @@ export type ExternalInquirySessionLink = z.infer<
   typeof ExternalInquirySessionLinkSchema
 >;
 
-export const ExternalInquiryModeSchema = z.enum(['new', 'followup']);
-export type ExternalInquiryMode = z.infer<typeof ExternalInquiryModeSchema>;
-
 export const ExternalInquiryThreadIdSchema = z
   .string()
   .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID')
@@ -131,7 +128,7 @@ export type ExternalInquiryThreadId = z.infer<
 
 export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({
   question: z.string(),
-  mode: ExternalInquiryModeSchema,
+  threadId: ExternalInquiryThreadIdSchema.nullish(),
   context: z.string().nullish(),
   suggestSearch: z.boolean().nullish(),
   attachFiles: z.array(z.string()).nullish(),

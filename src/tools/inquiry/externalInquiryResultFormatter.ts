@@ -91,7 +91,7 @@ export function buildExternalInquiryOutput(
     '',
     answer,
     '',
-    `Use thread_id=${persisted.threadId} with mode='followup' to continue this external conversation.`,
+    `Use thread_id=${persisted.threadId} to continue this external conversation.`,
   ];
 
   appendSessionLinks(lines, persisted.turn.sessionLinks ?? undefined);
@@ -108,7 +108,6 @@ function buildExternalInquiryReport(
     'External inquiry result',
     `Thread ID: ${persisted.threadId}`,
     `Turn: ${persisted.turn.turnIndex}`,
-    `Mode: ${persisted.turn.mode}`,
     `Timestamp: ${persisted.turn.timestamp}`,
     ...(persisted.turn.context ? [`Context: ${persisted.turn.context}`] : []),
     '',
@@ -185,7 +184,7 @@ export function buildExternalInquiryResult(params: {
       `Thread ID: ${params.persisted.threadId}`,
       'The full answer has been saved to /executions/current/report.',
       'Use the executions tool with path=/executions/current/report to inspect it.',
-      `Use thread_id=${params.persisted.threadId} with mode='followup' to continue this external conversation.`,
+      `Use thread_id=${params.persisted.threadId} to continue this external conversation.`,
     ];
 
     appendSessionLinks(lines, params.persisted.turn.sessionLinks ?? undefined);
@@ -202,7 +201,7 @@ export function buildExternalInquiryResult(params: {
   }
 
   return {
-    summary: `Received answer from external model (${params.persisted.turn.mode})`,
+    summary: 'Received answer from external model',
     output: buildExternalInquiryOutput(params.persisted, params.answer),
   };
 }

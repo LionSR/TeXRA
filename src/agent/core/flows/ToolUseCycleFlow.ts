@@ -550,18 +550,13 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
    */
   private _duplicateCallIds = new Set<string>();
 
-  /** Extract a normalized thread key for external_inquiry followup calls. */
+  /** Extract a normalized thread key for external_inquiry follow-up calls. */
   private getExternalInquiryFollowupThreadKey(
     call: SdkToolCall,
   ): string | null {
     if (call.name !== 'external_inquiry') return null;
     const input = parseToolInput(call.input, call.callId, this.services.logger);
     if (typeof input !== 'object' || input == null) return null;
-    const mode =
-      typeof (input as Record<string, unknown>).mode === 'string'
-        ? (input as Record<string, unknown>).mode
-        : null;
-    if (mode !== 'followup') return null;
     const threadId = (input as Record<string, unknown>).thread_id;
     if (typeof threadId !== 'string' || threadId.trim().length === 0) {
       return null;
@@ -573,9 +568,9 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
    * Compute which calls are safe to run concurrently.
    *
    * external_inquiry calls are parallel-safe only when independent:
-   * - mode='new' is always independent
-   * - mode='followup' is parallel-safe only when the thread_id is unique in
-   *   the current batch
+   * - calls without thread_id start new threads and are always independent
+   * - calls with thread_id are follow-ups and are parallel-safe only when the
+   *   thread_id is unique in the current batch
    */
   private buildConcurrentCallIds(toolCalls: SdkToolCall[]): Set<string> {
     const concurrent = new Set<string>();
@@ -592,7 +587,7 @@ class ToolUseDispatchNode<C> extends GroupedBatchNode<
       if (!CONCURRENT_SAFE_TOOLS.has(call.name)) continue;
       const threadKey = this.getExternalInquiryFollowupThreadKey(call);
       if (!threadKey) {
-        // Non-followup external_inquiry (e.g., mode='new') remains parallel-safe.
+        // thread_id omitted: starts a new thread, so it remains parallel-safe.
         concurrent.add(call.callId);
         continue;
       }
