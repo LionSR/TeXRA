@@ -55,9 +55,6 @@ export type CodexTurnState = 'running' | 'completed' | 'failed';
 export interface CodexTurnToolInput {
   state: CodexTurnState;
   wallTimeMs?: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  cachedInputTokens?: number;
 }
 
 function truncateSummary(text: string, maxLength: number): string {
@@ -204,7 +201,6 @@ export function buildCodexTodoToolLog(
 
 export function buildCodexTurnToolLog(options?: {
   wallTimeMs?: number | null;
-  usage?: Usage | null;
   state?: CodexTurnState;
   error?: string;
 }): ToolUseLog {
@@ -217,13 +213,6 @@ export function buildCodexTurnToolLog(options?: {
     state,
     ...(roundedMs != null && {
       wallTimeMs: roundedMs,
-    }),
-    ...(options?.usage && {
-      inputTokens: options.usage.input_tokens,
-      outputTokens: options.usage.output_tokens,
-      ...(options.usage.cached_input_tokens != null && {
-        cachedInputTokens: options.usage.cached_input_tokens,
-      }),
     }),
   };
 

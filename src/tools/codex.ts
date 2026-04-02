@@ -664,7 +664,6 @@ async function runStreamedTurn(
               buildCodexTurnToolLog({
                 state: 'completed',
                 wallTimeMs: Date.now() - activeTurnLog.startedAt,
-                usage,
               }),
             );
             activeTurnLog = null;
@@ -672,7 +671,6 @@ async function runStreamedTurn(
             logger.logToolUse(
               buildCodexTurnToolLog({
                 state: 'completed',
-                usage,
               }),
             );
           }
