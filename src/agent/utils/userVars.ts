@@ -451,7 +451,6 @@ export function getToolFlags(
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): UserVars {
-  const toolNames = new Set(agentSetting.tools.map((t) => t.name));
   const flags: UserVars = {
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
@@ -461,7 +460,15 @@ export function getToolFlags(
       false,
     ),
     AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
-    HAS_CODEX: toolNames.has('codex'),
+    TOOLS: agentSetting.tools.map((t) => t.name),
+    CODEX_GUIDANCE: agentSetting.tools.some((t) => t.name === 'codex')
+      ? 'Choose codex for coding tasks that benefit from a separate OpenAI agent — it runs in its own sandbox with independent tool use. ' +
+        'Codex is multi-turn: each call returns a thread_id. Always pass thread_id back when following up on a previous codex task — ' +
+        'this resumes the same session with full history and file context intact. ' +
+        'Use this to provide feedback, request corrections, or continue iterative work without re-explaining context. ' +
+        'When multiple codex agents need to edit the same files, or when you want to isolate experimental changes, ' +
+        'use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.'
+      : '',
   };
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
