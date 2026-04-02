@@ -781,6 +781,8 @@ export class CodexTool extends defineTool({
         ? {}
         : buildCodexWorkspaceOptions(input.working_directory);
     const threadOptions = {
+      model: 'gpt-5.4',
+      modelReasoningEffort: 'high' as const,
       sandboxMode: input.sandbox_mode ?? getCodexSandboxMode(),
       skipGitRepoCheck: true as const,
       ...workspaceOptions,
