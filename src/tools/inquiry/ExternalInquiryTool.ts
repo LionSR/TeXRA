@@ -39,38 +39,37 @@ const logger = new AgentLogger('ExternalInquiryTool');
 // Tool Schema
 // ============================================================================
 
-const ExternalInquiryInputSchema = z
-  .strictObject({
-    question: z
-      .string()
-      .describe(
-        'The complete, self-contained question to ask the external model. ' +
-          'MUST include all necessary background, definitions, notation, and problem setup ' +
-          'because the external model has NO context from this conversation.',
-      ),
-    thread_id: ExternalInquiryThreadIdSchema.nullish().describe(
-      'Durable external inquiry thread ID from a previous external_inquiry result. ' +
-        'Omit to start a new external-inquiry thread. Pass it to continue an existing thread.',
+const ExternalInquiryInputSchema = z.strictObject({
+  question: z
+    .string()
+    .describe(
+      'The complete, self-contained question to ask the external model. ' +
+        'MUST include all necessary background, definitions, notation, and problem setup ' +
+        'because the external model has NO context from this conversation.',
     ),
-    context: z
-      .string()
-      .nullish()
-      .describe(
-        'Brief note shown to the user explaining why this question is being asked.',
-      ),
-    suggestSearch: z
-      .boolean()
-      .nullish()
-      .describe(
-        'Set to true to suggest the user enable web search mode in the external tool.',
-      ),
-    attachFiles: z
-      .array(z.string())
-      .nullish()
-      .describe(
-        'Workspace-relative file paths the user should upload to the external model.',
-      ),
-  });
+  thread_id: ExternalInquiryThreadIdSchema.nullish().describe(
+    'Durable external inquiry thread ID from a previous external_inquiry result. ' +
+      'Omit to start a new external-inquiry thread. Pass it to continue an existing thread.',
+  ),
+  context: z
+    .string()
+    .nullish()
+    .describe(
+      'Brief note shown to the user explaining why this question is being asked.',
+    ),
+  suggestSearch: z
+    .boolean()
+    .nullish()
+    .describe(
+      'Set to true to suggest the user enable web search mode in the external tool.',
+    ),
+  attachFiles: z
+    .array(z.string())
+    .nullish()
+    .describe(
+      'Workspace-relative file paths the user should upload to the external model.',
+    ),
+});
 
 export type ExternalInquiryInput = z.infer<typeof ExternalInquiryInputSchema>;
 
