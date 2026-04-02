@@ -777,6 +777,7 @@ export class CodexTool extends defineTool({
         : buildCodexWorkspaceOptions(input.working_directory);
     const threadOptions = {
       model: CODEX_API_MODEL,
+      modelReasoningEffort: 'high' as const,
       sandboxMode: input.sandbox_mode,
       skipGitRepoCheck: true as const,
       ...workspaceOptions,
