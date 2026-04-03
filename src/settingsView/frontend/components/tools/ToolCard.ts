@@ -228,54 +228,11 @@ export class ToolCard extends LitElement {
       }
 
       .tool-toggle {
-        position: relative;
-        display: inline-block;
-        width: 36px;
-        height: 20px;
+        display: inline-flex;
+        align-items: center;
         flex-shrink: 0;
-      }
-
-      .tool-toggle input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-      }
-
-      .tool-toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: var(--vscode-input-background, rgba(128, 128, 128, 0.3));
-        border-radius: 10px;
-        transition: background var(--transition-fast);
-      }
-
-      .tool-toggle-slider::before {
-        content: '';
-        position: absolute;
-        height: 14px;
-        width: 14px;
-        left: 3px;
-        bottom: 3px;
-        background: var(--vscode-foreground);
-        border-radius: 50%;
-        transition: transform var(--transition-fast);
-      }
-
-      .tool-toggle input:checked + .tool-toggle-slider {
-        background: var(--vscode-button-background, #0e639c);
-      }
-
-      .tool-toggle input:checked + .tool-toggle-slider::before {
-        transform: translateX(16px);
-      }
-
-      .tool-toggle input:focus-visible + .tool-toggle-slider {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
-        outline-offset: 1px;
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
       }
 
       .tool-config-note {
@@ -314,11 +271,11 @@ export class ToolCard extends LitElement {
   }
 
   private handleToggle(e: Event): void {
-    const checked = (e.target as HTMLInputElement).checked;
+    const target = e.currentTarget as HTMLInputElement | null;
     this.dispatchEvent(
       createEvent('tool-toggle', {
         toolId: this.item.id,
-        enabled: checked,
+        enabled: Boolean(target?.checked),
       }),
     );
   }
@@ -410,18 +367,17 @@ export class ToolCard extends LitElement {
   private renderToggle(): TemplateResult | typeof nothing {
     if (!this.item.toggleable) return nothing;
     return html`
-      <label
+      <vscode-checkbox
         class="tool-toggle"
         title="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this.item
           .name}"
+        ?checked=${this.item.enabled !== false}
+        aria-label="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this
+          .item.name}"
+        @change=${this.handleToggle}
       >
-        <input
-          type="checkbox"
-          .checked=${this.item.enabled !== false}
-          @change=${this.handleToggle}
-        />
-        <span class="tool-toggle-slider"></span>
-      </label>
+        Enabled
+      </vscode-checkbox>
     `;
   }
 

@@ -42,6 +42,10 @@ const DETAILS = selectorGroup(ITEM_NAMES, '__details');
 const ACTIONS = selectorGroup(ITEM_NAMES, '__actions');
 const FEEDBACKS = selectorGroup(ITEM_NAMES, '__feedback');
 const FEEDBACK_INPUTS = selectorGroup(ITEM_NAMES, '__feedback-input');
+const FEEDBACK_ACTIVE = selectorGroup(ITEM_NAMES, '--feedback-active');
+const BADGES = unsafeCSS(
+  '.workflow-proposal__category-badge, .external-inquiry-request__mode-badge',
+);
 
 export const requestPanelStyles: CSSResult = css`
   /* ================================================================
@@ -51,11 +55,13 @@ export const requestPanelStyles: CSSResult = css`
   :is(${CONTAINERS}) {
     margin: var(--spacing-large) 0;
     padding: var(--spacing-large);
+    border: var(--border-thin) solid var(--vscode-input-border);
     border-radius: var(--border-radius-large);
+    background: var(--vscode-editor-background);
     box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.12));
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-large);
+    gap: var(--spacing-medium);
   }
 
   :is(${HEADERS}) {
@@ -69,7 +75,7 @@ export const requestPanelStyles: CSSResult = css`
   :is(${LISTS}) {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-large);
+    gap: var(--spacing-medium);
   }
 
   :is(${ITEMS}) {
@@ -78,7 +84,7 @@ export const requestPanelStyles: CSSResult = css`
     border-radius: var(--border-radius);
     border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
     background: var(--vscode-editorHoverWidget-background);
-    padding: var(--spacing-large);
+    padding: var(--spacing-medium);
     gap: var(--spacing-medium);
     position: relative;
   }
@@ -97,8 +103,9 @@ export const requestPanelStyles: CSSResult = css`
   .retry-request__details,
   .plan-approval-request__details,
   .external-inquiry-request__details {
-    max-height: 50vh;
+    max-height: min(34vh, 26rem);
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   .approval-request__meta,
@@ -132,13 +139,51 @@ export const requestPanelStyles: CSSResult = css`
     gap: var(--spacing-small);
   }
 
-  /* Shared container chrome — approval, bash, retry, and plan use the same border/bg */
-  .approval-requests,
-  .bash-approval-requests,
-  .retry-requests,
-  .plan-approval-requests {
-    border: var(--border-thin) solid var(--vscode-input-border);
-    background: var(--vscode-editor-background);
+  /* Shared action button colors */
+  :is(${ACTIONS}) vscode-toolbar-button[data-action='approve']::part(control),
+  :is(${ACTIONS}) vscode-toolbar-button[data-action='submit']::part(control) {
+    color: var(--vscode-testing-iconPassed);
+  }
+
+  :is(${ACTIONS}) vscode-toolbar-button[data-action='setup']::part(control) {
+    color: var(--vscode-textLink-foreground);
+  }
+
+  :is(${FEEDBACK_ACTIVE})
+    :is(${ACTIONS})
+    vscode-toolbar-button[data-action='reject']::part(control) {
+    color: var(--vscode-inputValidation-warningBorder);
+  }
+
+  /* Shared badge base */
+  :is(${BADGES}) {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: var(--spacing-tiny) var(--border-radius-large);
+    border-radius: var(--border-radius);
+    white-space: nowrap;
+  }
+
+  /* Type-specific item accent */
+  .approval-request {
+    border-left: var(--border-thick) solid var(--vscode-editor-foreground);
+  }
+  .bash-approval-request {
+    border-left: var(--border-thick) solid var(--vscode-terminal-ansiYellow);
+  }
+  .retry-request {
+    border-left: var(--border-thick) solid var(--color-warning);
+  }
+  .workflow-proposal {
+    border-left: var(--border-thick) solid var(--vscode-textLink-foreground);
+  }
+  .plan-approval-request {
+    border-left: var(--border-thick) solid var(--vscode-textLink-foreground);
+  }
+  .external-inquiry-request {
+    border-left: var(--border-thick) solid var(--vscode-focusBorder);
   }
 
   /* Shared action button width — approval and bash use the same flex-basis */
@@ -317,24 +362,9 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-editorWarning-foreground, #ff8c00);
   }
 
-  .retry-request--relay::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    inset-block: 0;
-    width: var(--border-thick);
-    background: var(--vscode-editorWarning-foreground, #ff8c00);
-    border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
-  }
-
   /* ================================================================
    * Workflow proposals
    * ================================================================ */
-
-  .workflow-proposals {
-    border: var(--border-thin) solid var(--vscode-inputValidation-infoBorder);
-    background: var(--vscode-inputValidation-infoBackground);
-  }
 
   .workflow-proposals__header .codicon {
     color: var(--vscode-textLink-foreground);
@@ -344,25 +374,11 @@ export const requestPanelStyles: CSSResult = css`
     flex: 1 1 6rem;
   }
 
-  .workflow-proposal {
-    position: relative;
-  }
-
   .workflow-proposal__header-row {
     display: flex;
     align-items: baseline;
     gap: var(--spacing-medium);
     flex-wrap: wrap;
-  }
-
-  .workflow-proposal__category-badge {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: var(--spacing-tiny) var(--border-radius-large);
-    border-radius: var(--border-radius);
-    white-space: nowrap;
   }
 
   .workflow-proposal__category-badge--workflow {
@@ -486,21 +502,6 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-textLink-foreground);
   }
 
-  .workflow-proposal__actions
-    vscode-toolbar-button[data-action='approve']::part(control) {
-    color: var(--vscode-testing-iconPassed);
-  }
-
-  .workflow-proposal__actions
-    vscode-toolbar-button[data-action='reject']::part(control) {
-    color: var(--vscode-testing-iconFailed);
-  }
-
-  .workflow-proposal__actions
-    vscode-toolbar-button[data-action='setup']::part(control) {
-    color: var(--vscode-textLink-foreground);
-  }
-
   /* ================================================================
    * Plan approval requests
    * ================================================================ */
@@ -555,46 +556,54 @@ export const requestPanelStyles: CSSResult = css`
     width: 100%;
   }
 
-  .approval-request--feedback-active
-    .approval-request__actions
-    vscode-toolbar-button[data-action='reject']::part(control),
-  .bash-approval-request--feedback-active
-    .bash-approval-request__actions
-    vscode-toolbar-button[data-action='reject']::part(control),
-  .workflow-proposal--feedback-active
-    .workflow-proposal__actions
-    vscode-toolbar-button[data-action='reject']::part(control),
-  .plan-approval-request--feedback-active
-    .plan-approval-request__actions
-    vscode-toolbar-button[data-action='reject']::part(control) {
-    color: var(--vscode-inputValidation-warningBorder);
-  }
-
   /* ================================================================
    * External inquiry requests
    * ================================================================ */
-
-  .external-inquiry-requests {
-    border: var(--border-thin) solid var(--vscode-focusBorder);
-    background: var(--vscode-editor-background);
-  }
 
   .external-inquiry-requests__header .codicon {
     color: var(--vscode-focusBorder);
   }
 
-  .external-inquiry-request {
-    border-left: var(--border-thick) solid var(--vscode-focusBorder);
+  /* Carousel navigation for multiple external inquiries */
+  .external-inquiry-requests__nav {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    margin-left: auto;
+  }
+
+  .external-inquiry-requests__counter {
+    font-size: var(--font-size-sm);
+    color: var(--vscode-descriptionForeground);
+    font-variant-numeric: tabular-nums;
+    min-width: 3ch;
+    text-align: center;
+  }
+
+  .external-inquiry-requests__nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: var(--border-radius-small);
+    background: transparent;
+    color: var(--vscode-editor-foreground);
+    cursor: pointer;
+  }
+
+  .external-inquiry-requests__nav-btn:hover:not(:disabled) {
+    background: var(--vscode-toolbar-hoverBackground);
+  }
+
+  .external-inquiry-requests__nav-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 
   .external-inquiry-request__mode-badge {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: var(--spacing-tiny) var(--border-radius-large);
-    border-radius: var(--border-radius);
-    white-space: nowrap;
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
   }
@@ -624,8 +633,9 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-editor-foreground);
     white-space: pre-wrap;
     word-break: break-word;
-    max-height: 40vh;
+    max-height: min(22vh, 14rem);
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   .external-inquiry-request__question-actions {
@@ -684,6 +694,71 @@ export const requestPanelStyles: CSSResult = css`
     gap: var(--spacing-small);
   }
 
+  .external-inquiry-request__session-links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-small);
+  }
+
+  .external-inquiry-request__session-links-known,
+  .external-inquiry-request__session-links-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-small);
+  }
+
+  .external-inquiry-request__session-links-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--vscode-editor-foreground);
+  }
+
+  .external-inquiry-request__session-links-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-tiny);
+    padding: var(--spacing-small);
+    background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    border-radius: var(--border-radius-small);
+  }
+
+  .external-inquiry-request__session-link-item {
+    font-size: var(--font-size-sm);
+    font-family: var(--vscode-editor-font-family);
+    color: var(--vscode-textLink-foreground);
+    word-break: break-word;
+  }
+
+  .external-inquiry-request__session-links-input {
+    width: 100%;
+    min-height: 72px;
+    max-height: min(18vh, 8rem);
+    resize: vertical;
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    padding: var(--spacing-medium);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: var(--border-thin) solid var(--vscode-input-border);
+    border-radius: var(--border-radius);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  .external-inquiry-request__session-links-input:focus {
+    border-color: var(--vscode-focusBorder);
+  }
+
+  .external-inquiry-request__session-links-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+  }
+
+  .external-inquiry-request__session-links-hint {
+    font-size: var(--font-size-sm);
+    color: var(--vscode-descriptionForeground);
+  }
+
   .external-inquiry-request__answer-label {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
@@ -692,7 +767,8 @@ export const requestPanelStyles: CSSResult = css`
 
   .external-inquiry-request__answer-input {
     width: 100%;
-    min-height: 150px;
+    min-height: 96px;
+    max-height: min(24vh, 12rem);
     resize: vertical;
     font-family: var(--vscode-editor-font-family);
     font-size: var(--font-size);
@@ -714,57 +790,36 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-input-placeholderForeground);
   }
 
-  .external-inquiry-request__drop-zone {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing-small);
-    padding: var(--spacing-medium);
-    border: 2px dashed var(--vscode-input-border);
-    border-radius: var(--border-radius);
+  .external-inquiry-request__answer-hint {
+    font-size: var(--font-size-sm);
     color: var(--vscode-descriptionForeground);
-    font-size: var(--font-size-sm);
-    text-align: center;
-    transition:
-      border-color 0.15s ease,
-      background 0.15s ease;
   }
 
-  .external-inquiry-request__drop-zone--active {
-    border-color: var(--vscode-focusBorder);
-    background: var(--vscode-list-hoverBackground);
-  }
+  @media (max-height: 900px) {
+    .approval-request__details,
+    .bash-approval-request__details,
+    .retry-request__details,
+    .plan-approval-request__details,
+    .external-inquiry-request__details {
+      max-height: min(28vh, 20rem);
+    }
 
-  .external-inquiry-request__dropped-files {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-tiny);
-  }
+    .external-inquiry-request__question-text {
+      max-height: min(18vh, 10rem);
+    }
 
-  .external-inquiry-request__dropped-file {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    font-size: var(--font-size-sm);
-    font-family: var(--vscode-editor-font-family);
-    color: var(--vscode-editor-foreground);
-  }
+    .external-inquiry-request__answer-input {
+      min-height: 80px;
+      max-height: min(20vh, 10rem);
+    }
 
-  .external-inquiry-request__dropped-file .codicon-check {
-    color: var(--color-added);
+    .external-inquiry-request__session-links-input {
+      min-height: 64px;
+      max-height: min(16vh, 7rem);
+    }
   }
 
   .external-inquiry-request__actions vscode-toolbar-button {
     flex: 1 1 8rem;
-  }
-
-  .external-inquiry-request__actions
-    vscode-toolbar-button[data-action='submit']::part(control) {
-    color: var(--vscode-testing-iconPassed);
-  }
-
-  .external-inquiry-request__actions
-    vscode-toolbar-button[data-action='skip']::part(control) {
-    color: var(--vscode-descriptionForeground);
   }
 `;

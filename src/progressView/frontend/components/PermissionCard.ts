@@ -134,9 +134,14 @@ const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
     },
     { action: 'reject', label: 'Reject', icon: 'codicon-x', variant: 'reject' },
   ],
-  // External inquiry uses its own panel with answer textarea; only skip here as fallback.
+  // External inquiry uses its own panel with answer textarea; only reject here as fallback.
   [PERMISSION_KIND.EXTERNAL_INQUIRY]: [
-    { action: 'skip', label: 'Skip', icon: 'codicon-x', variant: 'reject' },
+    {
+      action: 'reject',
+      label: 'Reject',
+      icon: 'codicon-x',
+      variant: 'reject',
+    },
   ],
 };
 
