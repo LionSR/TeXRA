@@ -227,4 +227,9 @@ export const FILTER_BUTTONS = [
     label: 'Chat',
     filter: 'toolUse',
   },
+  {
+    id: 'filterBackgroundBtn',
+    label: 'Background',
+    filter: 'background',
+  },
 ];

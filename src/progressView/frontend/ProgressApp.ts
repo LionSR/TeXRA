@@ -290,39 +290,68 @@ export class ProgressApp extends ProgressAppBase {
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
   /**
-   * Filtered + sorted stream list.
-   * Uses fine-grained selectors so log appends (which only change streamLogs$)
-   * don't trigger recomputation.
+   * All streams sorted (unfiltered).  Used for active-stream lookup so
+   * navigating to a child stream from BackgroundTasksPanel always works
+   * regardless of the current filter selection.
    */
-  private filteredStreams$ = combine(
-    [
-      this.streamById$,
-      this.streamFilter$,
-      this.streamSort$,
-      this.streamStates$,
-    ] as const,
-    (streamById, filter, sort, states) => {
-      const sorted = sortStreams([...streamById.values()], sort, {
+  private sortedStreams$ = combine(
+    [this.streamById$, this.streamSort$, this.streamStates$] as const,
+    (streamById, sort, states) =>
+      sortStreams([...streamById.values()], sort, {
         getLastActivityTimestamp: (stream) =>
           states.get(stream.name)?.lastTimestamp,
-      });
-      if (filter === 'all') return sorted;
-      return sorted.filter((stream) => stream.agentCategory === filter);
-    },
+      }),
   );
 
+  /** Map of ALL streams for active-stream lookup (filter-independent). */
   private filteredStreamMap$ = new Signal.Computed(
-    () => new Map(this.filteredStreams$.get().map((s) => [s.name, s])),
+    () => new Map(this.sortedStreams$.get().map((s) => [s.name, s])),
+  );
+
+  /** Active background statuses — child streams in these states are shown. */
+  private static readonly ACTIVE_STREAM_STATUSES: ReadonlySet<string> = new Set(
+    [
+      STREAM_STATUS.RUNNING,
+      STREAM_STATUS.WAITING,
+      STREAM_STATUS.INITIALIZING,
+      STREAM_STATUS.RESUMING,
+    ],
   );
 
   /**
    * Streams visible in the sidebar tab list.
-   * Child streams (those with a parentStreamId) are excluded — they're
-   * accessible via the BackgroundTasksPanel inside the content area.
+   *
+   * - **all / workflow / toolUse**: top-level streams only (child streams
+   *   are accessible via the BackgroundTasksPanel inside the content area).
+   * - **background**: active child streams only — finished ones auto-hide.
    */
-  private tabStreams$ = new Signal.Computed(() =>
-    this.filteredStreams$.get().filter((s) => !s.parentStreamId),
+  private tabStreams$ = combine(
+    [
+      this.sortedStreams$,
+      this.streamFilter$,
+      this.streamStates$,
+    ] as const,
+    (sorted, filter, states) => {
+      if (filter === 'background') {
+        return sorted.filter((s) => {
+          if (!s.parentStreamId) return false;
+          const status =
+            states.get(s.name)?.status ?? STREAM_STATUS.READY;
+          return ProgressApp.ACTIVE_STREAM_STATUSES.has(status);
+        });
+      }
+      // All other filters exclude child streams
+      const topLevel = sorted.filter((s) => !s.parentStreamId);
+      if (filter === 'all') return topLevel;
+      return topLevel.filter((s) => s.agentCategory === filter);
+    },
   );
+
+  /**
+   * Filtered streams (legacy alias used by hasStreams$).
+   * Same as tabStreams$ for determining whether the view has content.
+   */
+  private filteredStreams$ = this.tabStreams$;
 
   /** Status and timestamp per stream tab (single pass over tab-visible streams). */
   private statusAndTimestampById$ = combine(

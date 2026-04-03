@@ -66,6 +66,12 @@ export class BackgroundTasksPanel extends LitElement {
         gap: var(--spacing-tiny);
       }
 
+      .section-content {
+        max-height: 16rem;
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+      }
+
       .task-item {
         margin-bottom: var(--spacing-tiny);
       }
@@ -282,18 +288,20 @@ export class BackgroundTasksPanel extends LitElement {
               : nothing}</span
           >
         </summary>
-        ${hasActive
-          ? repeat(
-              active,
-              (c) => c.executionId,
-              (c) => this.renderTaskItem(c, kind),
-            )
-          : nothing}
-        ${!hasActive && hasFinished
-          ? html`<div class="empty-message">
-              All ${finishedCount} ${label.toLowerCase()} completed
-            </div>`
-          : nothing}
+        <div class="section-content">
+          ${hasActive
+            ? repeat(
+                active,
+                (c) => c.executionId,
+                (c) => this.renderTaskItem(c, kind),
+              )
+            : nothing}
+          ${!hasActive && hasFinished
+            ? html`<div class="empty-message">
+                All ${finishedCount} ${label.toLowerCase()} completed
+              </div>`
+            : nothing}
+        </div>
       </details>
     `;
   }
