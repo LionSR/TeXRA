@@ -1,13 +1,13 @@
 // Third-party imports
 import { OpenRouter } from '@openrouter/sdk';
 import type {
-  ChatResponse,
-  ChatStreamingResponseChunk,
-  ChatGenerationTokenUsage,
-  Message,
-  AssistantMessage,
-  ChatMessageToolCall,
-  ChatMessageContentItem,
+  ChatResult,
+  ChatStreamChunk,
+  ChatUsage,
+  ChatMessages,
+  ChatAssistantMessage,
+  ChatToolCall,
+  ChatContentItems,
   ReasoningDetailUnion,
 } from '@openrouter/sdk/models';
 import { ModelProvider } from 'llm-zoo';
@@ -59,7 +59,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 // ============================================================================
 
 /**
- * Accumulates streaming chunks into a final ChatResponse since the OpenRouter SDK
+ * Accumulates streaming chunks into a final ChatResult since the OpenRouter SDK
  * does not provide a `finalChatCompletion()` helper.
  */
 class OpenRouterStreamAggregator {
@@ -75,12 +75,12 @@ class OpenRouterStreamAggregator {
     }
   >();
   private finishReason: string | null = null;
-  private usage: ChatGenerationTokenUsage | null = null;
+  private usage: ChatUsage | null = null;
   private model = '';
   private id = '';
   private created = 0;
 
-  consumeChunk(chunk: ChatStreamingResponseChunk): {
+  consumeChunk(chunk: ChatStreamChunk): {
     contentDelta: string;
     reasoningDelta: string;
   } {
@@ -149,8 +149,8 @@ class OpenRouterStreamAggregator {
     return { contentDelta, reasoningDelta };
   }
 
-  buildResponse(): ChatResponse {
-    const toolCalls: ChatMessageToolCall[] = [];
+  buildResponse(): ChatResult {
+    const toolCalls: ChatToolCall[] = [];
     // Sort by index to maintain order
     const sorted = [...this.toolCallMap.entries()].sort(([a], [b]) => a - b);
     for (const [, tc] of sorted) {
@@ -161,7 +161,7 @@ class OpenRouterStreamAggregator {
       });
     }
 
-    const message: AssistantMessage & { role: 'assistant' } = {
+    const message: ChatAssistantMessage & { role: 'assistant' } = {
       role: 'assistant',
       content: this.content || undefined,
     };
@@ -202,12 +202,12 @@ class OpenRouterStreamAggregator {
  * Decoupled from the OpenAI SDK — uses OpenRouter-native types and client.
  */
 export class ModelHandlerOpenRouterNative extends ModelHandler<
-  Message,
-  ChatGenerationTokenUsage | null,
-  ChatGenerationTokenUsage,
+  ChatMessages,
+  ChatUsage | null,
+  ChatUsage,
   OpenRouterToolCall,
   OpenRouter,
-  ChatResponse
+  ChatResult
 > {
   // ── Client-side compaction state ──────────────────────────────────────
   private lastKnownInputTokens = 0;
@@ -245,8 +245,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ---------------------------------------------------------------------------
 
   async createResponse(
-    options: CreateResponseOptions<Message, OpenRouter>,
-  ): Promise<CreateResponseResult<ChatResponse, Message>> {
+    options: CreateResponseOptions<ChatMessages, OpenRouter>,
+  ): Promise<CreateResponseResult<ChatResult, ChatMessages>> {
     const {
       client,
       messages: rawMessages,
@@ -257,7 +257,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     } = options;
 
     // Phase 0: COMPACT - Check if conversation should be compacted
-    let updatedMessages: Message[] | undefined;
+    let updatedMessages: ChatMessages[] | undefined;
     let messagesToUse = rawMessages;
 
     if (this.shouldCompact()) {
@@ -310,13 +310,13 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       params.streamOptions = { includeUsage: true };
 
       const result = await client.chat.send(
-        { chatGenerationParams: params as any },
+        { chatRequest: params as any },
         { signal },
       );
 
       // Streaming returns EventStream (AsyncIterable)
       const stream =
-        result as unknown as AsyncIterable<ChatStreamingResponseChunk>;
+        result as unknown as AsyncIterable<ChatStreamChunk>;
       const aggregator = new OpenRouterStreamAggregator();
       const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
@@ -358,9 +358,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     // Non-streaming
     params.stream = false;
     const response = (await client.chat.send(
-      { chatGenerationParams: params as any },
+      { chatRequest: params as any },
       { signal },
-    )) as ChatResponse;
+    )) as ChatResult;
 
     if (response.usage?.promptTokens) {
       this.lastKnownInputTokens = response.usage.promptTokens;
@@ -394,15 +394,15 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
   private async compactConversation(
     client: OpenRouter,
-    messages: Message[],
+    messages: ChatMessages[],
     signal?: AbortSignal,
-  ): Promise<{ compactedMessages: Message[]; didCompact: boolean }> {
+  ): Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }> {
     const tokensBefore = this.lastKnownInputTokens;
     const contextWindow = this.config.contextWindow;
 
     // Separate system messages from conversation
-    const systemMessages: Message[] = [];
-    const conversationMessages: Message[] = [];
+    const systemMessages: ChatMessages[] = [];
+    const conversationMessages: ChatMessages[] = [];
     for (const msg of messages) {
       if (
         (msg.role === 'system' || msg.role === 'developer') &&
@@ -422,7 +422,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     try {
       const summaryResponse = (await client.chat.send(
         {
-          chatGenerationParams: {
+          chatRequest: {
             model: this.config.openrouterFullName,
             messages: [
               {
@@ -441,7 +441,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           } as any,
         },
         { signal },
-      )) as ChatResponse;
+      )) as ChatResult;
 
       const summaryText = summaryResponse.choices[0]?.message?.content;
       const summary = typeof summaryText === 'string' ? summaryText.trim() : '';
@@ -450,7 +450,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         return { compactedMessages: messages, didCompact: false };
       }
 
-      const compactedMessages: Message[] = [
+      const compactedMessages: ChatMessages[] = [
         ...systemMessages,
         {
           role: 'user',
@@ -499,8 +499,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     userRequest: string,
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
-  ): Promise<Message[]> {
-    const messages: Message[] = [];
+  ): Promise<ChatMessages[]> {
+    const messages: ChatMessages[] = [];
 
     if (systemPrompt) {
       const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
@@ -517,7 +517,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       }
     }
 
-    const userContent: ChatMessageContentItem[] = [];
+    const userContent: ChatContentItems[] = [];
     if (userPrefix) {
       userContent.push({ type: 'text', text: userPrefix });
     }
@@ -534,8 +534,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     // Append to existing user message or create new
     const lastMsg = messages.at(-1);
     if (lastMsg?.role === 'user' && Array.isArray(lastMsg.content)) {
-      (lastMsg.content as ChatMessageContentItem[]).push(...userContent);
-    } else if (userContent.length > 0) {
+      (lastMsg.content as ChatContentItems[]).push(...userContent);
+    } else {
       messages.push({ role: 'user', content: userContent });
     }
 
@@ -550,7 +550,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       lastMessage?.role === 'user' &&
       Array.isArray(lastMessage.content)
     ) {
-      (lastMessage.content as ChatMessageContentItem[]).push({
+      (lastMessage.content as ChatContentItems[]).push({
         type: 'text',
         text: userRequest,
       });
@@ -570,11 +570,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   async createRoundMessages(
-    messages: Message[],
+    messages: ChatMessages[],
     userMessage: string,
     mediaFiles?: FileLocation[],
-  ): Promise<Message[]> {
-    const roundContent: ChatMessageContentItem[] = [];
+  ): Promise<ChatMessages[]> {
+    const roundContent: ChatContentItems[] = [];
 
     if (
       mediaFiles?.length &&
@@ -603,9 +603,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   async createUserFollowUpMessages(
-    messages: Message[],
+    messages: ChatMessages[],
     userMessage: string,
-  ): Promise<Message[]> {
+  ): Promise<ChatMessages[]> {
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessage }],
@@ -613,16 +613,16 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return messages;
   }
 
-  createAssistantMessage(text: string): Message {
-    return { role: 'assistant', content: text } as Message;
+  createAssistantMessage(text: string): ChatMessages {
+    return { role: 'assistant', content: text } as ChatMessages;
   }
 
-  extractAssistantText(message: Message): string | undefined {
+  extractAssistantText(message: ChatMessages): string | undefined {
     if (message.role !== 'assistant') return undefined;
-    const msg = message as AssistantMessage;
+    const msg = message as ChatAssistantMessage;
     if (typeof msg.content === 'string') return msg.content;
     if (!Array.isArray(msg.content)) return undefined;
-    const texts = (msg.content as ChatMessageContentItem[])
+    const texts = (msg.content as ChatContentItems[])
       .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
       .map((p) => p.text)
       .filter(Boolean);
@@ -633,8 +633,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // Media
   // ---------------------------------------------------------------------------
 
-  createMediaContent(mediaMessage: MediaEntry[]): ChatMessageContentItem[] {
-    return mediaMessage.flatMap((media): ChatMessageContentItem[] => {
+  createMediaContent(mediaMessage: MediaEntry[]): ChatContentItems[] {
+    return mediaMessage.flatMap((media): ChatContentItems[] => {
       if (media.media_category === 'image') {
         return [
           { type: 'text', text: `Image: ${media.file_name}` },
@@ -644,7 +644,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
               url: `data:${media.media_type};base64,${media.data}`,
               detail: 'high',
             },
-          } as ChatMessageContentItem,
+          } as ChatContentItems,
         ];
       } else if (
         media.media_category === 'audio' &&
@@ -661,7 +661,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
               data: media.data,
               format: audioFormat,
             },
-          } as ChatMessageContentItem,
+          } as ChatContentItems,
         ];
       } else if (media.media_category === 'audio') {
         this.logger.warn(
@@ -679,7 +679,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ---------------------------------------------------------------------------
 
   extractResponse(
-    responseObject: ChatResponse,
+    responseObject: ChatResult,
     endTag: string,
   ): ExtractResponseResult {
     if (!responseObject.choices?.length) {
@@ -697,7 +697,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     if (typeof msg.content === 'string') {
       newResponse = msg.content.trim();
     } else if (Array.isArray(msg.content)) {
-      newResponse = (msg.content as ChatMessageContentItem[])
+      newResponse = (msg.content as ChatContentItems[])
         .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
         .map((p) => p.text)
         .join('')
@@ -731,7 +731,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // Pricing & usage
   // ---------------------------------------------------------------------------
 
-  computePrice(responseUsage: ChatGenerationTokenUsage | null): number {
+  computePrice(responseUsage: ChatUsage | null): number {
     if (!responseUsage) return 0;
 
     const promptTokens = responseUsage.promptTokens ?? 0;
@@ -763,7 +763,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   normalizeUsage(
-    rawUsage: ChatGenerationTokenUsage | null,
+    rawUsage: ChatUsage | null,
     responseTimeMs: number,
   ): NormalizedUsage {
     if (!rawUsage) {
@@ -798,14 +798,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ---------------------------------------------------------------------------
 
   processThinkingBlock(
-    responseObject: ChatResponse,
+    responseObject: ChatResult,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
     const message = responseObject?.choices?.[0]?.message;
     if (!message) return null;
 
     // Try reasoningDetails first (OpenRouter normalized format)
-    const reasoningDetails = (message as AssistantMessage).reasoningDetails;
+    const reasoningDetails = (message as ChatAssistantMessage).reasoningDetails;
     if (reasoningDetails) {
       const extracted = extractTextFromReasoningDetails(reasoningDetails);
       if (extracted) {
@@ -815,7 +815,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     // Fall back to reasoning string
-    const reasoning = (message as AssistantMessage).reasoning;
+    const reasoning = (message as ChatAssistantMessage).reasoning;
     if (isNonEmptyString(reasoning)) {
       this.setThinkingState(reasoning, workspaceState);
       return reasoning;
@@ -843,12 +843,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // Tool use
   // ---------------------------------------------------------------------------
 
-  extractToolUse(responseObject: ChatResponse): OpenRouterToolCall[] {
+  extractToolUse(responseObject: ChatResult): OpenRouterToolCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.toolCalls;
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) return [];
 
     return toolCalls
-      .filter((call): call is ChatMessageToolCall =>
+      .filter((call): call is ChatToolCall =>
         Boolean(call && call.function?.name && call.id),
       )
       .map((call) => ({
@@ -867,23 +867,23 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
-  ): Promise<Message[]> {
-    const callMsg: Message = {
+  ): Promise<ChatMessages[]> {
+    const callMsg: ChatMessages = {
       role: 'assistant',
       toolCalls: [call.raw],
       ...(text ? { content: text } : {}),
-    } as Message;
+    } as ChatMessages;
 
     const attachmentSummary =
       this.canProcessToolResultAttachments && attachments.length > 0
         ? formatAttachmentSummary(attachments)
         : undefined;
 
-    const resultMsg: Message = {
+    const resultMsg: ChatMessages = {
       role: 'tool',
       toolCallId: call.callId,
       content: formatToolResultAsText(result, attachmentSummary),
-    } as Message;
+    } as ChatMessages;
 
     return [callMsg, resultMsg];
   }
@@ -894,7 +894,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     _attachmentsPerCall: ToolFileAttachment[][],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
-  ): Promise<Message[]> {
+  ): Promise<ChatMessages[]> {
     if (calls.length !== results.length) {
       throw new Error(
         `Batched tool calls mismatch: ${calls.length} calls vs ${results.length} results`,
@@ -902,19 +902,19 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
     if (calls.length === 0) return [];
 
-    const callMsg: Message = {
+    const callMsg: ChatMessages = {
       role: 'assistant',
       toolCalls: calls.map((c) => c.raw),
       ...(text ? { content: text } : {}),
-    } as Message;
+    } as ChatMessages;
 
-    const resultMsgs: Message[] = calls.map(
+    const resultMsgs: ChatMessages[] = calls.map(
       (call, i) =>
         ({
           role: 'tool',
           toolCallId: call.callId,
           content: formatToolResultAsText(results[i]),
-        }) as Message,
+        }) as ChatMessages,
     );
 
     return [callMsg, ...resultMsgs];
@@ -936,7 +936,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   addContinueMessageWithPrefill(
-    _messages: Message[],
+    _messages: ChatMessages[],
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
   ): void {
@@ -944,7 +944,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   addContinueMessageWithoutPrefill(
-    messages: Message[],
+    messages: ChatMessages[],
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
   ): void {
@@ -977,16 +977,16 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   async initializeOutputAndPrefill(
     _agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: Message[],
+    messages: ChatMessages[],
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
     prefill: string,
-  ): Promise<[boolean, Message[]]> {
+  ): Promise<[boolean, ChatMessages[]]> {
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage && Array.isArray(lastMessage.content)) {
-        (lastMessage.content as ChatMessageContentItem[]).push({
+        (lastMessage.content as ChatContentItems[]).push({
           type: 'text',
           text: pseudoPrefillMsg,
         });
@@ -1010,7 +1010,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     messages.push({
       role: 'assistant',
       content: [{ type: 'text', text: fileContent }],
-    } as Message);
+    } as ChatMessages);
 
     // If the file already contains the end tag, the prior run finished — no model call needed
     if (hasEndTag(agentSetting, fileContent)) {
@@ -1041,7 +1041,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   updateMessageContentWithPrefill(
-    messages: Message[],
+    messages: ChatMessages[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
@@ -1049,16 +1049,16 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     const lastMessage = messages.at(-1);
 
     if (lastMessage?.role === 'assistant') {
-      const msg = lastMessage as AssistantMessage;
+      const msg = lastMessage as ChatAssistantMessage;
       if (Array.isArray(msg.content)) {
         if (this.isAnthropicViaOpenRouter) {
           // Anthropic prefill: replace the last text part
-          const lastPart = (msg.content as ChatMessageContentItem[]).at(-1);
+          const lastPart = (msg.content as ChatContentItems[]).at(-1);
           if (lastPart && 'text' in lastPart) {
             (lastPart as any).text = bestConnector + newResponse;
           }
         } else {
-          (msg.content as ChatMessageContentItem[]).push({
+          (msg.content as ChatContentItems[]).push({
             type: 'text',
             text: bestConnector + newResponse,
           });
@@ -1075,12 +1075,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       messages.push({
         role: 'assistant',
         content: bestConnector + newResponse,
-      } as Message);
+      } as ChatMessages);
     }
   }
 
   updateMessageContentWithoutPrefill(
-    messages: Message[],
+    messages: ChatMessages[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
@@ -1097,7 +1097,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
               text: workspaceState.assembly.accumulatedOutput,
             },
           ],
-        } as Message);
+        } as ChatMessages);
       }
       return;
     }
@@ -1117,9 +1117,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
     if (this.containCutOffMessage(lastMessage.content)) {
       if (secondLastMessage?.role === 'assistant') {
-        const msg = secondLastMessage as AssistantMessage;
+        const msg = secondLastMessage as ChatAssistantMessage;
         if (Array.isArray(msg.content)) {
-          (msg.content as ChatMessageContentItem[]).push({
+          (msg.content as ChatContentItems[]).push({
             type: 'text',
             text: bestConnector + newResponse,
           });
@@ -1141,7 +1141,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         content: [
           { type: 'text', text: workspaceState.assembly.accumulatedOutput },
         ],
-      } as Message);
+      } as ChatMessages);
     }
   }
 
@@ -1149,7 +1149,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // Message modification
   // ---------------------------------------------------------------------------
 
-  prependTextToUserMessage(messages: Message[], text: string): void {
+  prependTextToUserMessage(messages: ChatMessages[], text: string): void {
     if (!text.trim()) return;
     const lastUserMsg = messages.findLast((m) => m.role === 'user');
     if (!lastUserMsg || !('content' in lastUserMsg)) return;
@@ -1158,12 +1158,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       (lastUserMsg as any).content = text + lastUserMsg.content;
     } else if (Array.isArray(lastUserMsg.content)) {
       const firstTextPart = (
-        lastUserMsg.content as ChatMessageContentItem[]
+        lastUserMsg.content as ChatContentItems[]
       ).find((p) => p.type === 'text');
       if (firstTextPart && 'text' in firstTextPart) {
         (firstTextPart as any).text = text + (firstTextPart as any).text;
       } else {
-        (lastUserMsg.content as ChatMessageContentItem[]).unshift({
+        (lastUserMsg.content as ChatContentItems[]).unshift({
           type: 'text',
           text,
         });
@@ -1172,7 +1172,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   async addMediaToUserMessage(
-    messages: Message[],
+    messages: ChatMessages[],
     mediaFiles: FileLocation[],
   ): Promise<void> {
     if (!mediaFiles.length || !this.capabilities.supportsVision) return;
@@ -1187,7 +1187,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           { type: 'text', text: lastUserMsg.content },
         ];
       } else if (Array.isArray(lastUserMsg.content)) {
-        (lastUserMsg.content as ChatMessageContentItem[]).unshift(
+        (lastUserMsg.content as ChatContentItems[]).unshift(
           ...formattedMedia,
         );
       }

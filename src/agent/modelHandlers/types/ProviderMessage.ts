@@ -4,7 +4,7 @@ import type { MessageParam } from '@anthropic-ai/sdk/resources/messages/messages
 import type { Content } from '@google/genai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
-import type { Message as OpenRouterMessage } from '@openrouter/sdk/models';
+import type { ChatMessages as OpenRouterMessage } from '@openrouter/sdk/models';
 
 /**
  * Message formats supported by the various model providers.

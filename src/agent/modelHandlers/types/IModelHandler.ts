@@ -24,7 +24,7 @@ import type {
 import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
-import type { ChatMessageToolCall as ORChatMessageToolCall } from '@openrouter/sdk/models';
+import type { ChatToolCall as ORChatToolCall } from '@openrouter/sdk/models';
 import type { ServerToolExtractionResult } from './ServerToolTypes';
 
 /**
@@ -166,7 +166,7 @@ export type OpenRouterToolCall = {
   callId: string;
   name: string;
   input: unknown;
-  raw: ORChatMessageToolCall;
+  raw: ORChatToolCall;
 };
 
 export type SdkToolCall =
