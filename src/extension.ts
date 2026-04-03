@@ -21,7 +21,11 @@ import {
   SIDEBAR_VIEWS,
   setActiveSidebarView,
 } from '@common/webview';
-import { initializeStateManagers } from '@common/state';
+import {
+  initializeStateManagers,
+  workspaceSM,
+  WorkspaceStateKey,
+} from '@common/state';
 import { isTerminalStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
@@ -42,6 +46,10 @@ import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
+import {
+  parseCodexSandboxMode,
+  setCodexSandboxModeGetter,
+} from '@tools/codexConfig';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
@@ -202,6 +210,14 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  setCodexSandboxModeGetter(() =>
+    parseCodexSandboxMode(
+      workspaceSM.get<string>(
+        WorkspaceStateKey.CODEX_SANDBOX_MODE,
+        'workspace-write',
+      ) ?? 'workspace-write',
+    ),
+  );
 
   applyGitAuthorConfig();
 

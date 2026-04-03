@@ -458,8 +458,13 @@ export class StreamHeader extends LitElement {
   }
 
   private renderRunSelector(): TemplateResult | typeof nothing {
-    // Only show run selector for workflow streams with runs
-    if (this.stream?.agentCategory !== 'workflow' || this.runs.length === 0) {
+    // Only show run selector for top-level workflow streams with runs.
+    // Child streams (e.g. codex subagents) never have sessions.
+    if (
+      this.stream?.agentCategory !== 'workflow' ||
+      this.stream.parentStreamId ||
+      this.runs.length === 0
+    ) {
       return nothing;
     }
 
