@@ -25,11 +25,10 @@ import {
 
 // Local imports - formatter helpers
 import { buildToolUseSection, wrapInPre } from '../htmlBuilders';
-import { formatTokens } from '../timestampUtils';
 
 type RenderableSection = TemplateResult | typeof nothing | undefined | null;
 type BadgeData = { iconClass: string; label: string };
-type CodexToolRenderer = (input: unknown) => RenderableSection;
+type CodexToolRenderer = (input: unknown) => TemplateResult | typeof nothing;
 
 function renderBadge({ iconClass, label }: BadgeData): TemplateResult {
   // prettier-ignore
@@ -56,7 +55,7 @@ function renderBadgeSection(
 
 function renderSectionGroup(
   sections: readonly RenderableSection[],
-): RenderableSection {
+): TemplateResult | typeof nothing {
   const visibleSections = sections.filter(
     (section): section is TemplateResult =>
       section !== nothing && section != null,
@@ -102,7 +101,7 @@ function renderCodexDirectorySection(input: CodexInput): RenderableSection {
   );
 }
 
-function renderCodexInputContent(input: unknown): RenderableSection {
+function renderCodexInputContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -161,7 +160,7 @@ function renderCodexFileListSection(
   );
 }
 
-function renderCodexFileChangeContent(input: unknown): RenderableSection {
+function renderCodexFileChangeContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -182,7 +181,7 @@ function renderCodexFileChangeContent(input: unknown): RenderableSection {
   ]);
 }
 
-function renderCodexThreadContent(input: unknown): RenderableSection {
+function renderCodexThreadContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -253,7 +252,7 @@ function renderCodexTodoListSection(
   );
 }
 
-function renderCodexTodoContent(input: unknown): RenderableSection {
+function renderCodexTodoContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -299,41 +298,7 @@ function renderCodexTurnDurationSection(wallTimeMs: number): RenderableSection {
     : nothing;
 }
 
-function renderCodexTurnUsageSection(
-  turnInput: Partial<CodexTurnToolInput>,
-): RenderableSection {
-  const badges = [
-    ...(typeof turnInput.inputTokens === 'number'
-      ? [
-          {
-            iconClass: 'codicon-arrow-up',
-            label: `${formatTokens(turnInput.inputTokens)} in`,
-          },
-        ]
-      : []),
-    ...(typeof turnInput.outputTokens === 'number'
-      ? [
-          {
-            iconClass: 'codicon-arrow-down',
-            label: `${formatTokens(turnInput.outputTokens)} out`,
-          },
-        ]
-      : []),
-    ...(typeof turnInput.cachedInputTokens === 'number' &&
-    turnInput.cachedInputTokens > 0
-      ? [
-          {
-            iconClass: 'codicon-history',
-            label: `${formatTokens(turnInput.cachedInputTokens)} cached`,
-          },
-        ]
-      : []),
-  ];
-
-  return renderBadgeSection('Usage:', badges);
-}
-
-function renderCodexTurnContent(input: unknown): RenderableSection {
+function renderCodexTurnContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -346,7 +311,6 @@ function renderCodexTurnContent(input: unknown): RenderableSection {
   return renderSectionGroup([
     renderCodexTurnStateSection(state),
     renderCodexTurnDurationSection(wallTimeMs),
-    renderCodexTurnUsageSection(turnInput),
   ]);
 }
 

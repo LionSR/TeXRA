@@ -16,10 +16,21 @@ import { createEvent } from '@shared/utils/events';
 import type {
   ToolDashboardItem,
   ToolCategory,
+  CodexSandboxMode,
 } from '@shared/schemas/settingsViewMessages';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
+
+/** Sandbox mode display labels — single source of truth for the UI. */
+const SANDBOX_MODE_OPTIONS: readonly {
+  value: CodexSandboxMode;
+  label: string;
+}[] = [
+  { value: 'read-only', label: 'Read-only' },
+  { value: 'workspace-write', label: 'Workspace write' },
+  { value: 'danger-full-access', label: 'Full access' },
+] as const;
 
 /** Per-category display metadata. */
 interface CategoryMeta {
@@ -192,14 +203,107 @@ export class ToolsTab extends LitElement {
         align-items: center;
         gap: var(--spacing-medium);
       }
+
+      .setting-block {
+        margin-bottom: var(--spacing-small);
+      }
+
+      .codex-inline-settings {
+        padding: var(--spacing-small) var(--spacing-medium);
+        margin-bottom: var(--spacing-small);
+      }
+
+      .sandbox-mode-row {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+      }
+
+      .sandbox-mode-row label {
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+        white-space: nowrap;
+      }
+
+      .sandbox-mode-select {
+        min-width: 10rem;
+        max-width: 14rem;
+      }
     `,
   ];
 
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
+  @property({ type: Boolean }) bashApprovalEnabled = true;
+  @property({ type: String }) codexSandboxMode = 'workspace-write';
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
+  }
+
+  private emitToggle(eventName: string, e: Event): void {
+    const target = e.target as HTMLInputElement | null;
+    this.dispatchEvent(
+      createEvent(eventName, { enabled: Boolean(target?.checked) }),
+    );
+  }
+
+  private handleBashApprovalToggle = (e: Event): void => {
+    this.emitToggle('bash-approval-toggle', e);
+  };
+
+  private handleCodexSandboxModeChange(e: Event): void {
+    const target = e.target as HTMLSelectElement | null;
+    const mode = target?.value;
+    if (mode) {
+      this.dispatchEvent(createEvent('codex-sandbox-mode-change', { mode }));
+    }
+  }
+
+  private renderApprovalSettings(): TemplateResult {
+    return html`
+      <div class="category-section">
+        <div class="category-header">
+          <span class="codicon codicon-shield"></span>
+          Approval &amp; Safety
+        </div>
+
+        <div class="setting-block">
+          <vscode-checkbox
+            ?checked=${this.bashApprovalEnabled}
+            @change=${this.handleBashApprovalToggle}
+          >
+            Require approval for shell commands &amp; Codex sessions
+          </vscode-checkbox>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderCodexInlineSettings(): TemplateResult {
+    return html`
+      <div class="codex-inline-settings">
+        <div class="sandbox-mode-row">
+          <label>Sandbox mode</label>
+          <vscode-single-select
+            class="sandbox-mode-select"
+            .value=${this.codexSandboxMode}
+            @change=${this.handleCodexSandboxModeChange}
+          >
+            ${SANDBOX_MODE_OPTIONS.map(
+              (opt) => html`
+                <vscode-option
+                  value=${opt.value}
+                  ?selected=${this.codexSandboxMode === opt.value}
+                >
+                  ${opt.label}
+                </vscode-option>
+              `,
+            )}
+          </vscode-single-select>
+        </div>
+      </div>
+    `;
   }
 
   private groupByCategory(): Map<ToolCategory, ToolDashboardItem[]> {
@@ -293,7 +397,12 @@ export class ToolsTab extends LitElement {
         ${repeat(
           items,
           (item) => item.id,
-          (item) => html`<tool-card .item=${item}></tool-card>`,
+          (item) => html`
+            <tool-card .item=${item}></tool-card>
+            ${category === 'computation' && item.id === 'codex'
+              ? this.renderCodexInlineSettings()
+              : nothing}
+          `,
         )}
       </div>
     `;
@@ -329,6 +438,7 @@ export class ToolsTab extends LitElement {
           </div>
         </div>
 
+        ${this.renderApprovalSettings()}
         ${CATEGORY_ORDER.filter((cat) => groups.has(cat)).map((cat) =>
           this.renderCategory(cat, groups.get(cat)!),
         )}

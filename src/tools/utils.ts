@@ -8,6 +8,7 @@ import { Minimatch } from 'minimatch';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - tools
+import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import { ToolError, type ToolFileAttachment } from '@tools/result';
 
 // Local imports - core utilities
@@ -386,6 +387,20 @@ export async function buildFileAttachment({
 
   const inferredMime =
     mimeType ?? getMimeType(path.relative) ?? 'application/octet-stream';
+
+  // Strip binary data from oversized images to prevent non-retryable API 400 errors.
+  // Downstream handlers see no bytes → metadata-only fallback with read_file hint.
+  if (inferredMime.startsWith('image/') && isOversizedImage(buffer)) {
+    buffer.fill(0);
+    return {
+      path: display,
+      mimeType: inferredMime,
+      description:
+        (description ? `${description} — ` : '') +
+        `Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
+    };
+  }
+
   const base64Data = includeBase64 ? buffer.toString('base64') : undefined;
   const bytes = Uint8Array.from(buffer);
   buffer.fill(0);
