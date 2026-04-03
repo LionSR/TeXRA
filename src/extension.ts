@@ -21,7 +21,11 @@ import {
   SIDEBAR_VIEWS,
   setActiveSidebarView,
 } from '@common/webview';
-import { initializeStateManagers } from '@common/state';
+import {
+  initializeStateManagers,
+  workspaceSM,
+  WorkspaceStateKey,
+} from '@common/state';
 import { isTerminalStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
@@ -43,7 +47,6 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import {
-  CODEX_SANDBOX_CONFIG_KEY,
   parseCodexSandboxMode,
   setCodexSandboxModeGetter,
 } from '@tools/codexConfig';
@@ -209,9 +212,10 @@ export async function activate(context: vscode.ExtensionContext) {
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
   setCodexSandboxModeGetter(() =>
     parseCodexSandboxMode(
-      vscode.workspace
-        .getConfiguration()
-        .get<string>(CODEX_SANDBOX_CONFIG_KEY, 'workspace-write'),
+      workspaceSM.get<string>(
+        WorkspaceStateKey.CODEX_SANDBOX_MODE,
+        'workspace-write',
+      ) ?? 'workspace-write',
     ),
   );
 

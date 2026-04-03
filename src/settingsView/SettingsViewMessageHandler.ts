@@ -102,10 +102,7 @@ import {
   countPinnedMemories,
 } from '@tools/memory/memoryMeta';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
-import {
-  CODEX_SANDBOX_CONFIG_KEY,
-  parseCodexSandboxMode,
-} from '@tools/codexConfig';
+import { parseCodexSandboxMode } from '@tools/codexConfig';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
@@ -819,7 +816,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
       bashApprovalEnabled: getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true),
       codexSandboxMode: parseCodexSandboxMode(
-        getConfig<string>(CODEX_SANDBOX_CONFIG_KEY, 'workspace-write'),
+        workspaceSM.get<string>(
+          WorkspaceStateKey.CODEX_SANDBOX_MODE,
+          'workspace-write',
+        ) ?? 'workspace-write',
       ),
     });
   }
@@ -834,12 +834,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleSetCodexSandboxMode(mode: string): Promise<void> {
-    const config = vscode.workspace.getConfiguration();
-    await config.update(
-      CODEX_SANDBOX_CONFIG_KEY,
-      mode,
-      vscode.ConfigurationTarget.Global,
-    );
+    await workspaceSM.update(WorkspaceStateKey.CODEX_SANDBOX_MODE, mode);
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 

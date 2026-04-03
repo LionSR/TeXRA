@@ -21,8 +21,6 @@ export const CODEX_REASONING_EFFORT = 'high' as const;
 // Sandbox mode config (injectable — VS Code layer sets the real getter)
 // ============================================================================
 
-export const CODEX_SANDBOX_CONFIG_KEY = 'texra.toolUse.codexSandboxMode';
-
 export const CODEX_SANDBOX_MODES = [
   'read-only',
   'workspace-write',

@@ -697,22 +697,6 @@
             "description": "Require user approval before tool-use agents execute bash commands",
             "scope": "resource"
           },
-          "texra.toolUse.codexSandboxMode": {
-            "type": "string",
-            "default": "workspace-write",
-            "enum": [
-              "read-only",
-              "workspace-write",
-              "danger-full-access"
-            ],
-            "enumDescriptions": [
-              "Read-only access — can read files and run commands but cannot modify the filesystem",
-              "Workspace write — can read, write, and edit files within the workspace",
-              "Full access — unrestricted system access (use with caution)"
-            ],
-            "description": "Default sandbox mode for the Codex agent",
-            "scope": "resource"
-          },
           "texra.toolUse.persistence.enabled": {
             "type": "boolean",
             "default": true,
