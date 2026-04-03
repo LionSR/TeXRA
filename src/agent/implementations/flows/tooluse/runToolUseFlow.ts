@@ -25,7 +25,10 @@ import type { SubagentProgressUpdate } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 
 import { getDefaultToolRegistry } from '@tools/registry';
-import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
+import {
+  getDisabledToolNames,
+  getUnavailableToolNamesCached,
+} from '@tools/toolAvailability';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
 import { getToolUseMemoryEnabled } from '@utils/config';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
@@ -79,19 +82,26 @@ function resolveTools(
   logger: { warn: (msg: string) => void },
   isSubagent?: boolean,
 ): ToolDefinition[] {
+  const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
-  const excluded: string[] = [];
+  const missingDependency: string[] = [];
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
       if (isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
+      if (disabled.has(def.name)) {
+        logger.warn(
+          `Tool "${def.name}" excluded: disabled in Settings > Tools`,
+        );
+        return false;
+      }
       if (unavailable.has(def.name)) {
         logger.warn(
           `Tool "${def.name}" excluded: external dependency not installed`,
         );
-        excluded.push(def.name);
+        missingDependency.push(def.name);
         return false;
       }
       if (!registry.has(def.name)) {
@@ -112,8 +122,8 @@ function resolveTools(
     }
   }
 
-  if (excluded.length) {
-    notifyUnavailableTools(excluded);
+  if (missingDependency.length) {
+    notifyUnavailableTools(missingDependency);
   }
 
   return resolved;

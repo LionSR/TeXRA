@@ -121,6 +121,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
             icon="check"
             label="Approve"
             title="Approve (y)"
+            data-action="approve"
             @click=${() => this.emitAction('approve')}
             >Approve</vscode-toolbar-button
           >
@@ -129,6 +130,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
             icon="reply"
             label="Setup"
             title="Setup (s)"
+            data-action="setup"
             @click=${() => this.emitAction('setup')}
             >Setup</vscode-toolbar-button
           >
