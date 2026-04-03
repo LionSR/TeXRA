@@ -39,6 +39,17 @@ export function getAnthropicMaxPdfPages(contextWindow: number): number {
 /** Max tokens for the compaction summary response (client-side compaction for OpenAI-compatible models). */
 export const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
 
+/** System prompt used for client-side conversation compaction. */
+export const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Create a concise but complete summary of the conversation below. Preserve:
+- The original user request and goals
+- All key decisions made
+- File paths and code changes discussed or made
+- Tool call results and their outcomes
+- Current state of the task (what is done, what is pending)
+- Any errors encountered and how they were resolved
+
+Format the summary as a structured narrative that allows the conversation to continue seamlessly. Do NOT add any preamble or explanation — output only the summary.`;
+
 /** Compute reduced max tokens under context pressure (minimum 1). */
 export function computeReducedMaxTokens(
   availableTokens: number,

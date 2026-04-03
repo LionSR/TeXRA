@@ -7,6 +7,7 @@ import type {
 import type { GenerateContentResponseUsageMetadata } from '@google/genai';
 import type { CompletionUsage } from 'openai/resources/completions';
 import type { ResponseUsage as OpenAIResponseUsage } from 'openai/resources/responses/responses';
+import type { ChatUsage as OpenRouterChatUsage } from '@openrouter/sdk/models';
 
 /**
  * Extended OpenAI usage type with additional fields used by various providers.
@@ -37,7 +38,8 @@ export type NativeUsagePayload =
   | ExtendedCompletionUsage
   | OpenAIResponseUsage
   | AnthropicUsage
-  | GenerateContentResponseUsageMetadata;
+  | GenerateContentResponseUsageMetadata
+  | OpenRouterChatUsage;
 
 /**
  * Provider usage type for API responses.
