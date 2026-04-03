@@ -52,6 +52,14 @@ import {
 /** Stable empty array for activeTaskGroups$ default (avoids new [] per read). */
 const EMPTY_TASK_GROUPS: TaskGroup[] = [];
 
+/** Stream statuses that represent an active (non-terminal) child stream. */
+const ACTIVE_CHILD_STATUSES: ReadonlySet<string> = new Set([
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.WAITING,
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.RESUMING,
+]);
+
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
   streamFilter: AgentCategoryFilterSchema.catch('all'),
@@ -308,16 +316,6 @@ export class ProgressApp extends ProgressAppBase {
     () => new Map(this.sortedStreams$.get().map((s) => [s.name, s])),
   );
 
-  /** Active background statuses — child streams in these states are shown. */
-  private static readonly ACTIVE_STREAM_STATUSES: ReadonlySet<string> = new Set(
-    [
-      STREAM_STATUS.RUNNING,
-      STREAM_STATUS.WAITING,
-      STREAM_STATUS.INITIALIZING,
-      STREAM_STATUS.RESUMING,
-    ],
-  );
-
   /**
    * Streams visible in the sidebar tab list.
    *
@@ -337,7 +335,7 @@ export class ProgressApp extends ProgressAppBase {
           if (!s.parentStreamId) return false;
           const status =
             states.get(s.name)?.status ?? STREAM_STATUS.READY;
-          return ProgressApp.ACTIVE_STREAM_STATUSES.has(status);
+          return ACTIVE_CHILD_STATUSES.has(status);
         });
       }
       // All other filters exclude child streams
@@ -346,12 +344,6 @@ export class ProgressApp extends ProgressAppBase {
       return topLevel.filter((s) => s.agentCategory === filter);
     },
   );
-
-  /**
-   * Filtered streams (legacy alias used by hasStreams$).
-   * Same as tabStreams$ for determining whether the view has content.
-   */
-  private filteredStreams$ = this.tabStreams$;
 
   /** Status and timestamp per stream tab (single pass over tab-visible streams). */
   private statusAndTimestampById$ = combine(
@@ -380,7 +372,7 @@ export class ProgressApp extends ProgressAppBase {
   });
 
   private hasStreams$ = new Signal.Computed(
-    () => this.filteredStreams$.get().length > 0,
+    () => this.sortedStreams$.get().length > 0,
   );
 
   /** Only changes when the ACTIVE stream's state changes, not any stream. */
