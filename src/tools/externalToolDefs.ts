@@ -211,6 +211,19 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes: 'Lean 4 VS Code extension must be installed and active.',
     check: async () => extensionChecker(LEAN4_EXT_ID),
   },
+  {
+    id: 'external-inquiry',
+    tools: ['external_inquiry'],
+    name: 'External Inquiry',
+    category: 'workflow',
+    description:
+      'Lets agents ask you to query an external chat model such as ChatGPT, Claude, or Gemini and paste the answer back into the run.',
+    configNotes:
+      'No local install required. Uses your own external chat subscription and a human-in-the-loop copy/paste flow.',
+    authNote: 'Uses external chat subscription',
+    toggleable: true,
+    check: async () => true,
+  },
 
   {
     id: 'codex',

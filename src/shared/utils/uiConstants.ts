@@ -24,6 +24,7 @@ export const FEEDBACK_ELIGIBLE_KINDS = new Set<PermissionKind>([
   PERMISSION_KIND.BASH,
   PERMISSION_KIND.PROPOSAL,
   PERMISSION_KIND.PLAN_APPROVAL,
+  PERMISSION_KIND.EXTERNAL_INQUIRY,
 ]);
 
 /** Generates the getting started banner HTML with command links. */

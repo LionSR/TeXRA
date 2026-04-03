@@ -77,6 +77,7 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
         icon=${this.showFeedback ? 'check' : 'close'}
         label=${this.showFeedback ? 'Submit' : 'Reject'}
         title=${this.showFeedback ? 'Submit rejection (n)' : rejectTitle}
+        data-action="reject"
         @click=${() => this.handleRejectAction()}
         >${this.showFeedback ? 'Submit' : 'Reject'}</vscode-toolbar-button
       >
