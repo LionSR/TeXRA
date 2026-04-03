@@ -101,6 +101,8 @@ import {
   setPinnedMeta,
   countPinnedMemories,
 } from '@tools/memory/memoryMeta';
+import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
+import { parseCodexSandboxMode } from '@tools/codexConfig';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
@@ -481,6 +483,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND]: (data) =>
         this.latexHandlers.handleRunInstallCommand(data),
 
+      // Approval settings handlers
+      [SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS]: () =>
+        this.withActiveWebview((w) => this.sendApprovalSettings(w)),
+      [SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED]: (data) =>
+        this.handleSetApprovalEnabled(BASH_APPROVAL_CONFIG_KEY, data.enabled),
+      [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (data) =>
+        this.handleSetCodexSandboxMode(data.mode),
+
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
         this.withActiveWebview((w) => this.sendToolDashboardData(w)),
@@ -564,6 +574,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendSuperYoloEnabled(webview),
       this.agentHandlers.sendAgentModePresets(webview),
       this.sendGitAuthorSettings(webview),
+      this.sendApprovalSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
     ]);
   }
@@ -794,6 +805,37 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) =>
       this.sendGitAuthorSettings(w, settings),
     );
+  }
+
+  // ============================================================
+  // Approval settings handler implementations
+  // ============================================================
+
+  private async sendApprovalSettings(webview: vscode.Webview): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      bashApprovalEnabled: getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true),
+      codexSandboxMode: parseCodexSandboxMode(
+        workspaceSM.get<string>(
+          WorkspaceStateKey.CODEX_SANDBOX_MODE,
+          'workspace-write',
+        ) ?? 'workspace-write',
+      ),
+    });
+  }
+
+  private async handleSetApprovalEnabled(
+    configKey: string,
+    enabled: boolean,
+  ): Promise<void> {
+    const config = vscode.workspace.getConfiguration();
+    await config.update(configKey, enabled, vscode.ConfigurationTarget.Global);
+    await this.withActiveWebview((w) => this.sendApprovalSettings(w));
+  }
+
+  private async handleSetCodexSandboxMode(mode: string): Promise<void> {
+    await workspaceSM.update(WorkspaceStateKey.CODEX_SANDBOX_MODE, mode);
+    await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
   // ============================================================
