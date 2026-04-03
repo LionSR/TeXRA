@@ -315,9 +315,18 @@ export class ProgressApp extends ProgressAppBase {
     () => new Map(this.filteredStreams$.get().map((s) => [s.name, s])),
   );
 
-  /** Status and timestamp per stream tab (single pass over filtered streams). */
+  /**
+   * Streams visible in the sidebar tab list.
+   * Child streams (those with a parentStreamId) are excluded — they're
+   * accessible via the BackgroundTasksPanel inside the content area.
+   */
+  private tabStreams$ = new Signal.Computed(() =>
+    this.filteredStreams$.get().filter((s) => !s.parentStreamId),
+  );
+
+  /** Status and timestamp per stream tab (single pass over tab-visible streams). */
   private statusAndTimestampById$ = combine(
-    [this.streamStates$, this.filteredStreams$] as const,
+    [this.streamStates$, this.tabStreams$] as const,
     (states, streams) => {
       const statusMap = new Map<StreamTabId, string>();
       const timestampMap = new Map<StreamTabId, number | undefined>();
@@ -537,7 +546,7 @@ export class ProgressApp extends ProgressAppBase {
             <stream-tabs
               slot="end"
               .compact=${compactTabs}
-              .streams=${this.filteredStreams$.get()}
+              .streams=${this.tabStreams$.get()}
               .activeStreamId=${this.activeStreamId$.get()}
               .filter=${this.streamFilter$.get()}
               .sort=${this.streamSort$.get()}
