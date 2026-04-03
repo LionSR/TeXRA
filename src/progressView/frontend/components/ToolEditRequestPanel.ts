@@ -83,6 +83,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
             icon="check"
             label="Approve"
             title="Approve (y)"
+            data-action="approve"
             @click=${() => this.emitAction('approve')}
             >Approve</vscode-toolbar-button
           >

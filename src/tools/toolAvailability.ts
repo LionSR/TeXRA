@@ -37,6 +37,24 @@ let cached: ReadonlySet<string> | null = null;
 /** Last check results — kept for rebuilding the cache without re-probing. */
 let lastResults: ExternalToolCheckResult[] | null = null;
 
+/** Current disabled tool names derived from persisted Settings state. */
+function buildDisabledToolNameSet(): ReadonlySet<string> {
+  const disabledIds = getDisabledToolIds();
+  const disabled = new Set<string>();
+
+  for (const def of EXTERNAL_TOOL_DEFS) {
+    if (!disabledIds.has(def.id)) continue;
+    for (const toolName of def.tools) disabled.add(toolName);
+  }
+
+  return disabled;
+}
+
+/** Read the current set of disabled tool names from persisted Settings state. */
+export function getDisabledToolNames(): ReadonlySet<string> {
+  return buildDisabledToolNameSet();
+}
+
 /**
  * Run all external tool checks in parallel.
  * Always performs fresh checks and updates the availability cache.
@@ -73,14 +91,13 @@ export async function runExternalToolChecks(): Promise<
   return results;
 }
 
-/** Build the set of unavailable tool names from check results + disabled IDs. */
+/** Build the set of unavailable tool names from external check results only. */
 function buildUnavailableSet(
   results: ExternalToolCheckResult[],
 ): ReadonlySet<string> {
   const unavailable = new Set<string>();
-  const disabledIds = getDisabledToolIds();
-  for (const { id, tools, status } of results) {
-    if (status === 'not-found' || disabledIds.has(id)) {
+  for (const { tools, status } of results) {
+    if (status === 'not-found') {
       for (const t of tools) unavailable.add(t);
     }
   }
@@ -100,7 +117,10 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * re-probing external tools. Called after toggling a tool on/off.
  */
 export function refreshDisabledToolCache(): void {
-  if (!lastResults) return;
+  if (!lastResults) {
+    cached = null;
+    return;
+  }
   cached = buildUnavailableSet(lastResults);
 }
 
@@ -108,6 +128,10 @@ export function refreshDisabledToolCache(): void {
  * Non-blocking cache read — returns cached unavailable tool names if
  * checks have already completed, or an empty set if the cache isn't
  * populated yet. Never triggers I/O.
+ *
+ * Only includes tools whose external dependency is missing (not-found).
+ * Disabled tools are NOT included — the caller handles those separately
+ * via {@link getDisabledToolNames}.
  *
  * Used by the agent tool resolver to avoid blocking the first tool-use
  * flow on network probes. External tools that are actually missing will
