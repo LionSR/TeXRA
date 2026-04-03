@@ -460,7 +460,6 @@ export function getToolFlags(
       false,
     ),
     AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
-    TOOLS: agentSetting.tools.map((t) => t.name),
     CODEX_GUIDANCE: agentSetting.tools.some((t) => t.name === 'codex')
       ? 'Choose codex for coding tasks that benefit from a separate OpenAI agent — it runs in its own sandbox with independent tool use. ' +
         'Codex is multi-turn: each call returns a thread_id. Always pass thread_id back when following up on a previous codex task — ' +

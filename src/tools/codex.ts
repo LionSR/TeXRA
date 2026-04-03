@@ -73,6 +73,7 @@ import {
   buildCodexWorkspaceOptions,
   CODEX_CLI_MODEL,
   CODEX_REASONING_EFFORT,
+  CODEX_SANDBOX_MODES,
   getCodexSandboxMode,
 } from './codexConfig';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
@@ -100,13 +101,6 @@ import type {
 // Schema
 // ============================================================================
 
-/** All sandbox modes from the SDK, exposed to the LLM. */
-const SANDBOX_MODES = [
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-] as const satisfies readonly SandboxMode[];
-
 const CodexInputSchema = z.strictObject({
   prompt: z.string().describe('Instruction for the Codex agent'),
   working_directory: z
@@ -116,7 +110,7 @@ const CodexInputSchema = z.strictObject({
       'Directory to run in. Defaults to the workspace root. Accepts relative workspace paths or absolute paths such as a separate git worktree.',
     ),
   sandbox_mode: z
-    .enum(SANDBOX_MODES)
+    .enum(CODEX_SANDBOX_MODES)
     .nullish()
     .describe(
       'File access level for the Codex agent. Defaults to the user-configured sandbox mode (usually workspace-write).',
@@ -580,6 +574,7 @@ function startFollowUpLoop(
 
       const threadId = thread.id;
       if (threadId) threadRegistry.delete(threadId);
+      lastTodoSnapshot.delete(childStreamId);
 
       if (StreamStatusService.get(childStreamId) === STREAM_STATUS.WAITING) {
         StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
@@ -776,12 +771,13 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-    const thread = await this.resolveThread(input);
+    const thread = await this.resolveThread(input, sandboxMode);
 
     if (input.run_in_background) {
       return this.executeBackground(
         thread,
         input,
+        sandboxMode,
         ctx?.streamId,
         ctx?.executionId,
       );
@@ -791,7 +787,10 @@ export class CodexTool extends defineTool({
   }
 
   /** Resolve thread — resume existing or start new. */
-  private async resolveThread(input: CodexInput): Promise<Thread> {
+  private async resolveThread(
+    input: CodexInput,
+    sandboxMode: SandboxMode,
+  ): Promise<Thread> {
     if (input.thread_id) {
       const stored = threadRegistry.get(input.thread_id);
       if (stored) {
@@ -814,7 +813,7 @@ export class CodexTool extends defineTool({
     const threadOptions = {
       model: CODEX_CLI_MODEL,
       modelReasoningEffort: CODEX_REASONING_EFFORT,
-      sandboxMode: input.sandbox_mode ?? getCodexSandboxMode(),
+      sandboxMode,
       skipGitRepoCheck: true as const,
       ...workspaceOptions,
     };
@@ -888,6 +887,7 @@ export class CodexTool extends defineTool({
   private async executeBackground(
     thread: Thread,
     input: CodexInput,
+    sandboxMode: SandboxMode,
     parentStreamId: StreamTabId | undefined,
     parentExecutionId: ExecutionId | undefined,
   ): Promise<ToolResult> {
@@ -967,7 +967,7 @@ export class CodexTool extends defineTool({
     return {
       summary: `Launched Codex: ${preview}`,
       output: [
-        `Codex agent launched in background (${input.sandbox_mode ?? getCodexSandboxMode()}).`,
+        `Codex agent launched in background (${sandboxMode}).`,
         `Execution ID: ${executionId}`,
         `Stream tab: ${childStreamId}`,
         'Result will be delivered as a follow-up message when complete.',

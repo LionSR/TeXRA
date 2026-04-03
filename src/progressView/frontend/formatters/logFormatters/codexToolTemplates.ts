@@ -28,7 +28,7 @@ import { buildToolUseSection, wrapInPre } from '../htmlBuilders';
 
 type RenderableSection = TemplateResult | typeof nothing | undefined | null;
 type BadgeData = { iconClass: string; label: string };
-type CodexToolRenderer = (input: unknown) => RenderableSection;
+type CodexToolRenderer = (input: unknown) => TemplateResult | typeof nothing;
 
 function renderBadge({ iconClass, label }: BadgeData): TemplateResult {
   // prettier-ignore
@@ -55,7 +55,7 @@ function renderBadgeSection(
 
 function renderSectionGroup(
   sections: readonly RenderableSection[],
-): RenderableSection {
+): TemplateResult | typeof nothing {
   const visibleSections = sections.filter(
     (section): section is TemplateResult =>
       section !== nothing && section != null,
@@ -101,7 +101,7 @@ function renderCodexDirectorySection(input: CodexInput): RenderableSection {
   );
 }
 
-function renderCodexInputContent(input: unknown): RenderableSection {
+function renderCodexInputContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -160,7 +160,7 @@ function renderCodexFileListSection(
   );
 }
 
-function renderCodexFileChangeContent(input: unknown): RenderableSection {
+function renderCodexFileChangeContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -181,7 +181,7 @@ function renderCodexFileChangeContent(input: unknown): RenderableSection {
   ]);
 }
 
-function renderCodexThreadContent(input: unknown): RenderableSection {
+function renderCodexThreadContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -252,7 +252,7 @@ function renderCodexTodoListSection(
   );
 }
 
-function renderCodexTodoContent(input: unknown): RenderableSection {
+function renderCodexTodoContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -298,7 +298,7 @@ function renderCodexTurnDurationSection(wallTimeMs: number): RenderableSection {
     : nothing;
 }
 
-function renderCodexTurnContent(input: unknown): RenderableSection {
+function renderCodexTurnContent(input: unknown): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
