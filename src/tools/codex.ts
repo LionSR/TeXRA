@@ -47,11 +47,16 @@ import type {
   StreamTabId,
   ExecutionId,
   StorageKey,
+  TodoItem,
   ToolUseLog,
 } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
-import { escapeAttr, escapeText } from '@tools/subagentResults';
+import {
+  escapeAttr,
+  escapeText,
+  formatSubagentProgress,
+} from '@tools/subagentResults';
 import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
@@ -63,7 +68,14 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { buildCodexConfig, buildCodexWorkspaceOptions } from './codexConfig';
+import {
+  buildCodexConfig,
+  buildCodexWorkspaceOptions,
+  CODEX_CLI_MODEL,
+  CODEX_REASONING_EFFORT,
+  CODEX_SANDBOX_MODES,
+  getCodexSandboxMode,
+} from './codexConfig';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import {
   buildCodexCommandToolLog,
@@ -89,13 +101,6 @@ import type {
 // Schema
 // ============================================================================
 
-/** All sandbox modes from the SDK, exposed to the LLM. */
-const SANDBOX_MODES = [
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-] as const satisfies readonly SandboxMode[];
-
 const CodexInputSchema = z.strictObject({
   prompt: z.string().describe('Instruction for the Codex agent'),
   working_directory: z
@@ -105,9 +110,11 @@ const CodexInputSchema = z.strictObject({
       'Directory to run in. Defaults to the workspace root. Accepts relative workspace paths or absolute paths such as a separate git worktree.',
     ),
   sandbox_mode: z
-    .enum(SANDBOX_MODES)
-    .prefault('read-only')
-    .describe('File access level for the Codex agent'),
+    .enum(CODEX_SANDBOX_MODES)
+    .nullish()
+    .describe(
+      'File access level for the Codex agent. Defaults to the user-configured sandbox mode (usually workspace-write).',
+    ),
   run_in_background: z
     .boolean()
     .prefault(false)
@@ -236,7 +243,6 @@ function formatTurnResult(turn: RunResult, threadId?: string | null): string {
 /** Format a Codex result for background delivery as XML. */
 function formatCodexDelivery(
   executionId: string,
-  prompt: string,
   wallTimeMs: number,
   turn: RunResult,
   threadId?: string | null,
@@ -244,7 +250,7 @@ function formatCodexDelivery(
   const durationSec = (wallTimeMs / 1000).toFixed(1);
   const response = turn.finalResponse || '(no response)';
   const lines = [
-    `<codex-result id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}"${threadId ? ` thread-id="${escapeAttr(threadId)}"` : ''}>`,
+    `<codex-result id="${escapeAttr(executionId)}"${threadId ? ` thread-id="${escapeAttr(threadId)}"` : ''}>`,
     `<wall-time>${durationSec}s</wall-time>`,
     `<response>${escapeText(response)}</response>`,
   ];
@@ -260,13 +266,9 @@ function formatCodexDelivery(
 }
 
 /** Format a Codex error for background delivery. */
-function formatCodexError(
-  executionId: string,
-  prompt: string,
-  err: unknown,
-): string {
+function formatCodexError(executionId: string, err: unknown): string {
   return [
-    `<codex-error id="${escapeAttr(executionId)}" prompt="${escapeAttr(prompt.slice(0, 200))}">`,
+    `<codex-error id="${escapeAttr(executionId)}">`,
     `<message>${escapeText(toErrorMessage(err))}</message>`,
     '</codex-error>',
   ].join('\n');
@@ -314,16 +316,38 @@ function createCodexStream(
   return { childStreamId, logger };
 }
 
+interface OrchestratorContext {
+  parentStreamId: StreamTabId;
+  executionId: ExecutionId;
+}
+
+/** Per-stream snapshot of the last emitted todo state, used to skip no-op updates. */
+const lastTodoSnapshot = new Map<StreamTabId, string>();
+
 function syncCodexTodoState(
   item: Extract<ThreadItem, { type: 'todo_list' }>,
   childStreamId: StreamTabId,
+  orchestrator?: OrchestratorContext,
 ): void {
-  const todos = item.items.map((t) => ({
+  const todos: TodoItem[] = item.items.map((t) => ({
     content: t.text,
     status: t.completed ? ('completed' as const) : ('pending' as const),
     activeForm: t.text,
   }));
+
+  const snapshot = JSON.stringify(todos);
+  if (snapshot === lastTodoSnapshot.get(childStreamId)) return;
+  lastTodoSnapshot.set(childStreamId, snapshot);
+
   bus.emit('updateTodos', { streamId: childStreamId, todos });
+  if (orchestrator) {
+    const msg = formatSubagentProgress(
+      orchestrator.executionId,
+      CODEX_AGENT_NAME,
+      { kind: 'todos', todos },
+    );
+    ToolUseFollowUpQueue.enqueue(orchestrator.parentStreamId, msg);
+  }
 }
 
 function updateTrackedToolUseLog(
@@ -412,9 +436,10 @@ function handleTrackedCodexItemEvent(
   childStreamId: StreamTabId,
   logger: AgentLogger,
   trackedLogs: Map<string, ActiveTrackedToolUseLog>,
+  orchestrator?: OrchestratorContext,
 ): void {
   if (item.type === 'todo_list') {
-    syncCodexTodoState(item, childStreamId);
+    syncCodexTodoState(item, childStreamId, orchestrator);
   }
 
   const toolLog =
@@ -479,6 +504,7 @@ function finalizeCodexStream(
     childStreamId,
     options?.error ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
   );
+  lastTodoSnapshot.delete(childStreamId);
   untrackExecution(executionId);
 }
 
@@ -548,6 +574,7 @@ function startFollowUpLoop(
 
       const threadId = thread.id;
       if (threadId) threadRegistry.delete(threadId);
+      lastTodoSnapshot.delete(childStreamId);
 
       if (StreamStatusService.get(childStreamId) === STREAM_STATUS.WAITING) {
         StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
@@ -586,6 +613,7 @@ async function runStreamedTurn(
   childStreamId: StreamTabId,
   logger: AgentLogger,
   executionId: ExecutionId,
+  orchestrator?: OrchestratorContext,
 ): Promise<RunResult> {
   logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
   const { events } = await thread.runStreamed(prompt);
@@ -624,6 +652,7 @@ async function runStreamedTurn(
               childStreamId,
               logger,
               trackedLogs,
+              orchestrator,
             );
           }
           break;
@@ -640,6 +669,7 @@ async function runStreamedTurn(
               childStreamId,
               logger,
               trackedLogs,
+              orchestrator,
             );
           } else {
             logCompletedCodexItem(item, logger);
@@ -664,7 +694,6 @@ async function runStreamedTurn(
               buildCodexTurnToolLog({
                 state: 'completed',
                 wallTimeMs: Date.now() - activeTurnLog.startedAt,
-                usage,
               }),
             );
             activeTurnLog = null;
@@ -672,7 +701,6 @@ async function runStreamedTurn(
             logger.logToolUse(
               buildCodexTurnToolLog({
                 state: 'completed',
-                usage,
               }),
             );
           }
@@ -720,12 +748,17 @@ export class CodexTool extends defineTool({
     'Set working_directory to a workspace subdirectory or an absolute path, including a separate git worktree; an orchestrator can prepare that worktree first when isolated changes help. ' +
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
     'Auth is handled by the CLI itself — use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
-    'Returns a thread_id that can be passed back to continue the conversation in subsequent calls.',
+    'MULTI-TURN: Each call returns a thread_id. Pass it back via the thread_id parameter to resume the same session — ' +
+    'the agent retains full conversation history, file context, and in-progress work. ' +
+    'Always resume an existing thread when following up, providing feedback, or asking for corrections on prior codex work.',
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
+    // Apply user-configured default sandbox mode
+    const sandboxMode = input.sandbox_mode ?? getCodexSandboxMode();
+
     // Request approval — same pattern as BashTool
-    const approvalLabel = `[codex ${input.sandbox_mode}] ${input.prompt}`;
+    const approvalLabel = `[codex ${sandboxMode}] ${input.prompt}`;
     const approval = await requestBashApproval({ command: approvalLabel });
     if (!approval.accepted) {
       return buildBashApprovalRejectedResult(
@@ -738,12 +771,13 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-    const thread = await this.resolveThread(input);
+    const thread = await this.resolveThread(input, sandboxMode);
 
     if (input.run_in_background) {
       return this.executeBackground(
         thread,
         input,
+        sandboxMode,
         ctx?.streamId,
         ctx?.executionId,
       );
@@ -753,7 +787,10 @@ export class CodexTool extends defineTool({
   }
 
   /** Resolve thread — resume existing or start new. */
-  private async resolveThread(input: CodexInput): Promise<Thread> {
+  private async resolveThread(
+    input: CodexInput,
+    sandboxMode: SandboxMode,
+  ): Promise<Thread> {
     if (input.thread_id) {
       const stored = threadRegistry.get(input.thread_id);
       if (stored) {
@@ -774,7 +811,9 @@ export class CodexTool extends defineTool({
         ? {}
         : buildCodexWorkspaceOptions(input.working_directory);
     const threadOptions = {
-      sandboxMode: input.sandbox_mode,
+      model: CODEX_CLI_MODEL,
+      modelReasoningEffort: CODEX_REASONING_EFFORT,
+      sandboxMode,
       skipGitRepoCheck: true as const,
       ...workspaceOptions,
     };
@@ -848,6 +887,7 @@ export class CodexTool extends defineTool({
   private async executeBackground(
     thread: Thread,
     input: CodexInput,
+    sandboxMode: SandboxMode,
     parentStreamId: StreamTabId | undefined,
     parentExecutionId: ExecutionId | undefined,
   ): Promise<ToolResult> {
@@ -882,6 +922,7 @@ export class CodexTool extends defineTool({
     );
 
     const startedAt = Date.now();
+    const orchestrator: OrchestratorContext = { parentStreamId, executionId };
 
     void (async () => {
       try {
@@ -891,6 +932,7 @@ export class CodexTool extends defineTool({
           childStreamId,
           logger,
           executionId,
+          orchestrator,
         );
         const wallTimeMs = Date.now() - startedAt;
         const threadId = thread.id;
@@ -898,7 +940,6 @@ export class CodexTool extends defineTool({
 
         const msg = formatCodexDelivery(
           executionId,
-          input.prompt,
           wallTimeMs,
           turn,
           threadId,
@@ -917,7 +958,7 @@ export class CodexTool extends defineTool({
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         finalizeCodexStream(childStreamId, executionId, logger, { error: err });
 
-        const msg = formatCodexError(executionId, input.prompt, err);
+        const msg = formatCodexError(executionId, err);
         await getExecutionStore(executionId).writeReport(msg);
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
       }
@@ -926,7 +967,7 @@ export class CodexTool extends defineTool({
     return {
       summary: `Launched Codex: ${preview}`,
       output: [
-        `Codex agent launched in background (${input.sandbox_mode}).`,
+        `Codex agent launched in background (${sandboxMode}).`,
         `Execution ID: ${executionId}`,
         `Stream tab: ${childStreamId}`,
         'Result will be delivered as a follow-up message when complete.',

@@ -168,7 +168,7 @@ export class PlanView extends LitElement {
    *  open state on context switches (e.g. switching streams). */
   @property({ type: String }) collapseKey = '';
 
-  @state() private open = true;
+  @state() private open = false;
 
   protected override willUpdate(changed: PropertyValues): void {
     if (
@@ -176,10 +176,6 @@ export class PlanView extends LitElement {
       changed.get('collapseKey') !== undefined
     ) {
       this.open = false;
-      return;
-    }
-    if (changed.has('plan')) {
-      this.open = Boolean(this.plan);
     }
   }
 

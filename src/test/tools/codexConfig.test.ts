@@ -289,11 +289,6 @@ describe('buildCodexTurnToolLog', () => {
     const log = buildCodexTurnToolLog({
       state: 'completed',
       wallTimeMs: 518_000,
-      usage: {
-        input_tokens: 5_535_644,
-        output_tokens: 17_166,
-        cached_input_tokens: 1200,
-      },
     });
 
     assert.deepEqual(log, {
@@ -302,9 +297,6 @@ describe('buildCodexTurnToolLog', () => {
       input: {
         state: 'completed',
         wallTimeMs: 518_000,
-        inputTokens: 5_535_644,
-        outputTokens: 17_166,
-        cachedInputTokens: 1200,
       },
       status: 'completed',
     });
