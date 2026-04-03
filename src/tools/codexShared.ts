@@ -1,3 +1,6 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - shared schemas
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -29,33 +32,60 @@ export type CodexMcpContentBlock = NonNullable<
   NonNullable<McpToolCallItem['result']>['content']
 >[number];
 
-export interface CodexFileChangeToolInput {
-  changes: CodexFileChange[];
-  patchStatus: FileChangeItem['status'];
-}
+// ---------------------------------------------------------------------------
+// Zod schemas for codex tool-log inputs (used for safe parsing in renderers)
+// ---------------------------------------------------------------------------
 
-export interface CodexMcpToolOutput {
-  status: McpToolCallItem['status'];
-  structuredContent?: unknown;
-  contentBlocks?: CodexMcpContentBlock[];
-}
+const CodexFileChangeItemSchema = z.object({
+  path: z.string(),
+  kind: z.string(),
+});
 
-export interface CodexThreadToolInput {
-  threadId: string;
-}
+export const CodexFileChangeToolInputSchema = z.object({
+  changes: z.array(CodexFileChangeItemSchema),
+  patchStatus: z.string().optional(),
+});
 
-export interface CodexTodoToolInput {
-  items: CodexTodoItem[];
-  completedCount: number;
-  totalCount: number;
-}
+export type CodexFileChangeToolInput = z.infer<
+  typeof CodexFileChangeToolInputSchema
+>;
 
-export type CodexTurnState = 'running' | 'completed' | 'failed';
+export const CodexMcpToolOutputSchema = z.object({
+  status: z.string().optional(),
+  structuredContent: z.unknown().optional(),
+  contentBlocks: z.array(z.record(z.unknown())).optional(),
+});
 
-export interface CodexTurnToolInput {
-  state: CodexTurnState;
-  wallTimeMs?: number;
-}
+export type CodexMcpToolOutput = z.infer<typeof CodexMcpToolOutputSchema>;
+
+export const CodexThreadToolInputSchema = z.object({
+  threadId: z.string(),
+});
+
+export type CodexThreadToolInput = z.infer<typeof CodexThreadToolInputSchema>;
+
+const CodexTodoItemSchema = z.object({
+  text: z.string(),
+  completed: z.boolean(),
+});
+
+export const CodexTodoToolInputSchema = z.object({
+  items: z.array(CodexTodoItemSchema),
+  completedCount: z.number(),
+  totalCount: z.number(),
+});
+
+export type CodexTodoToolInput = z.infer<typeof CodexTodoToolInputSchema>;
+
+export const CodexTurnStateSchema = z.enum(['running', 'completed', 'failed']);
+export type CodexTurnState = z.infer<typeof CodexTurnStateSchema>;
+
+export const CodexTurnToolInputSchema = z.object({
+  state: z.string(),
+  wallTimeMs: z.number().optional(),
+});
+
+export type CodexTurnToolInput = z.infer<typeof CodexTurnToolInputSchema>;
 
 function truncateSummary(text: string, maxLength: number): string {
   const oneLine = text.replaceAll(/\s+/g, ' ').trim();

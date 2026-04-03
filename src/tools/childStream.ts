@@ -16,7 +16,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - shared
-import type { StreamTabId, StorageKey } from '@shared/schemas';
+import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
 import { STREAM_STATUS } from '@shared/schemas';
 
 // Local imports - utils
@@ -44,7 +44,7 @@ interface FinalizeChildStreamOptions {
 
 /** Create a child stream tab and execution handle for a background child task. */
 export function createChildStream(
-  executionId: string,
+  executionId: ExecutionId,
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
 ): { childStreamId: StreamTabId; logger: AgentLogger } {
@@ -83,7 +83,7 @@ export function createChildStream(
 /** Finalize a child stream tab and untrack its execution handle. */
 export function finalizeChildStream(
   childStreamId: StreamTabId,
-  executionId: string,
+  executionId: ExecutionId,
   logger: AgentLogger,
   options?: FinalizeChildStreamOptions,
 ): void {
