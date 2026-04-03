@@ -57,7 +57,6 @@ export async function requestBashApproval(
 ): Promise<BashApprovalResult> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
 
-  // Resolve streamId from context if not provided
   const context = getCurrentToolFileInteractionContext();
   const streamId = request.streamId ?? context?.streamId;
 
