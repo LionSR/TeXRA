@@ -72,6 +72,10 @@ export const SETTINGS_VIEW_CMD = {
   SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
   DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
   GET_AGENT_MODE_PRESETS: 'getAgentModePresets',
+  // Approval settings commands
+  GET_APPROVAL_SETTINGS: 'getApprovalSettings',
+  SET_BASH_APPROVAL_ENABLED: 'setBashApprovalEnabled',
+  SET_CODEX_SANDBOX_MODE: 'setCodexSandboxMode',
   // Tool dashboard commands
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
@@ -106,6 +110,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
   UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
+  UPDATE_APPROVAL_SETTINGS: 'updateApprovalSettings',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
   UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',

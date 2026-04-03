@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { ToolError, type ToolResult } from '@tools/result';
+import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import {
   buildFileAttachment,
   formatFileView,
@@ -124,12 +125,21 @@ export class ReadFileTool extends defineTool({
     });
 
     if (emlImages.length > 0) {
-      result.files = emlImages.map((img) => ({
-        path: img.filename,
-        mimeType: img.mimeType,
-        bytes: img.bytes,
-        description: `Image attachment from email: ${img.filename}`,
-      }));
+      result.files = emlImages.map((img) => {
+        if (isOversizedImage(img.bytes)) {
+          return {
+            path: img.filename,
+            mimeType: img.mimeType,
+            description: `Image attachment from email: ${img.filename} — Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
+          };
+        }
+        return {
+          path: img.filename,
+          mimeType: img.mimeType,
+          bytes: img.bytes,
+          description: `Image attachment from email: ${img.filename}`,
+        };
+      });
     }
 
     return result;

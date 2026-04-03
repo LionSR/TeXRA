@@ -42,6 +42,7 @@ import {
   UpdateCustomAgentDirMessageSchema,
   UpdateSuperYoloEnabledMessageSchema,
   UpdateAgentModePresetsMessageSchema,
+  UpdateApprovalSettingsMessageSchema,
   UpdateToolDashboardMessageSchema,
   UpdateGitAuthorSettingsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
@@ -181,6 +182,10 @@ export class SettingsApp extends SettingsAppBase {
   private readonly allowOrchestratorKill = signal(true);
   private readonly detachSubagentsOnStop = signal(false);
 
+  // Approval settings state
+  private readonly bashApprovalEnabled = signal(true);
+  private readonly codexSandboxMode = signal<string>('workspace-write');
+
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
   private readonly toolDashboardLoaded = signal(false);
@@ -212,6 +217,7 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR,
     SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED,
     SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS,
+    SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS,
     SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA,
     SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
     SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS,
@@ -340,6 +346,17 @@ export class SettingsApp extends SettingsAppBase {
         );
         if (!data) return;
         this.customPresets.set(data.customPresets);
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS: {
+        const data = this.parseMessage(
+          raw,
+          UpdateApprovalSettingsMessageSchema,
+        );
+        if (!data) return;
+        this.bashApprovalEnabled.set(data.bashApprovalEnabled);
+        this.codexSandboxMode.set(data.codexSandboxMode);
         return;
       }
 
@@ -582,6 +599,15 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleToolToggle = forwardDetail(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL);
 
+  // Approval settings event handlers
+  private handleBashApprovalToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED,
+  );
+
+  private handleCodexSandboxModeChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE,
+  );
+
   // Git settings event handlers
   private handleGitMarkCommitsToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS,
@@ -799,10 +825,14 @@ export class SettingsApp extends SettingsAppBase {
             <tools-tab
               .items=${this.toolDashboardItems.get()}
               .loaded=${this.toolDashboardLoaded.get()}
+              .bashApprovalEnabled=${this.bashApprovalEnabled.get()}
+              .codexSandboxMode=${this.codexSandboxMode.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-recheck=${this.handleToolRecheck}
               @tool-toggle=${this.handleToolToggle}
+              @bash-approval-toggle=${this.handleBashApprovalToggle}
+              @codex-sandbox-mode-change=${this.handleCodexSandboxModeChange}
             ></tools-tab>
           </vscode-tab-panel>
 
