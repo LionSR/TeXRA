@@ -96,7 +96,7 @@ function buildUnavailableSet(
   results: ExternalToolCheckResult[],
 ): ReadonlySet<string> {
   const unavailable = new Set<string>();
-  for (const { id, tools, status } of results) {
+  for (const { tools, status } of results) {
     if (status === 'not-found') {
       for (const t of tools) unavailable.add(t);
     }

@@ -29,7 +29,6 @@ import {
 
 // Local imports - progress view helpers
 import {
-  clampExternalInquiryIndex,
   createEmptyPermissionGroups,
   findPanelForPermission,
   getActivePermission,
@@ -37,6 +36,7 @@ import {
   groupPermissions,
   isActiveExternalInquiryCarousel,
   isTextInput,
+  resolveExternalInquiryIndex,
   type PermissionGroups,
 } from './RequestPanelsState';
 
@@ -123,6 +123,9 @@ export class RequestPanels extends LitElement {
   /** Currently displayed external inquiry index (carousel). */
   @state() private _eiIndex = 0;
 
+  /** Key of the currently viewed external inquiry, for stable tracking across list changes. */
+  private _eiTrackedKey: string | null = null;
+
   /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
   private permissionGroups: PermissionGroups = createEmptyPermissionGroups();
 
@@ -130,10 +133,12 @@ export class RequestPanels extends LitElement {
     if (!changedProperties.has('permissions')) return;
 
     this.permissionGroups = groupPermissions(this.permissions);
-    this._eiIndex = clampExternalInquiryIndex(
+    this._eiIndex = resolveExternalInquiryIndex(
       this._eiIndex,
       this.permissionGroups.externalInquiry,
+      this._eiTrackedKey,
     );
+    this._updateTrackedKey();
   }
 
   override connectedCallback(): void {
@@ -244,13 +249,24 @@ export class RequestPanels extends LitElement {
     `;
   }
 
+  private _updateTrackedKey(): void {
+    const ei = this.permissionGroups.externalInquiry;
+    this._eiTrackedKey =
+      ei.length > 0 ? getPermissionKey(ei[this._eiIndex]) : null;
+  }
+
   private _eiPrev(): void {
-    if (this._eiIndex > 0) this._eiIndex--;
+    if (this._eiIndex > 0) {
+      this._eiIndex--;
+      this._updateTrackedKey();
+    }
   }
 
   private _eiNext(): void {
-    if (this._eiIndex < this.permissionGroups.externalInquiry.length - 1)
+    if (this._eiIndex < this.permissionGroups.externalInquiry.length - 1) {
       this._eiIndex++;
+      this._updateTrackedKey();
+    }
   }
 
   // ===========================================================================

@@ -158,7 +158,7 @@ function buildExecutionThreadMirrorPaths(params: {
   executionId: ExecutionId;
   threadId: ExternalInquiryThreadId;
 }): ExternalInquiryThreadMirrorPaths {
-  const threadPath = `/executions/${params.executionId}/files/${EXEC_DIR}/${params.threadId}`;
+  const threadPath = `/executions/${params.executionId}/${EXEC_DIR}/${params.threadId}`;
   return {
     executionId: params.executionId,
     threadPath,

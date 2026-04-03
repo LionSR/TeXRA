@@ -114,19 +114,9 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   }
 
   override handleKeyboardShortcut(key: string): boolean {
-    switch (key) {
-      case 'n':
-        this.handleRejectAction();
-        return true;
-      case 'escape':
-        if (this.showFeedback) {
-          this.showFeedback = false;
-          return true;
-        }
-        return false;
-      default:
-        return false;
-    }
+    // Suppress the parent's 'y' → approve binding (invalid for external inquiry)
+    if (key === 'y') return false;
+    return super.handleKeyboardShortcut(key);
   }
 
   // ── Render ──

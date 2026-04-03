@@ -59,12 +59,26 @@ export function groupPermissions(
   return groups;
 }
 
-export function clampExternalInquiryIndex(
-  index: number,
+/**
+ * Resolve the external inquiry carousel index after the permissions list
+ * changes. When a tracked permission key is provided, try to find it in
+ * the updated list so the carousel stays on the same inquiry even when
+ * earlier entries are resolved. Falls back to clamping when the tracked
+ * entry is no longer present.
+ */
+export function resolveExternalInquiryIndex(
+  prevIndex: number,
   permissions: PermissionState[],
+  trackedKey: string | null,
 ): number {
   if (permissions.length === 0) return 0;
-  return Math.min(index, permissions.length - 1);
+  if (trackedKey) {
+    const found = permissions.findIndex(
+      (p) => getPermissionKey(p) === trackedKey,
+    );
+    if (found >= 0) return found;
+  }
+  return Math.min(prevIndex, permissions.length - 1);
 }
 
 export function isTextInput(el: Element | null): boolean {
