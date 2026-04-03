@@ -12,6 +12,8 @@ import {
   formatFileView,
   READ_FILE_MAX_LINES,
   resolveWorkspaceRelativePath,
+  parseWorkingDirectory,
+  WorkingDirectorySchema,
 } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml } from '@tools/emlParser';
@@ -54,12 +56,7 @@ const RangeSchema = z.preprocess(
 const ReadInputSchema = z.strictObject({
   path: z.string(),
   range: RangeSchema.nullish(),
-  working_directory: z
-    .string()
-    .nullish()
-    .describe(
-      'Absolute path to resolve files in (e.g. a git worktree). Defaults to workspace root.',
-    ),
+  working_directory: WorkingDirectorySchema,
 });
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
@@ -71,22 +68,21 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    // When working_directory is set, resolve to absolute path for fs operations
-    const root = input.working_directory?.trim() || undefined;
-    const filePath = root
-      ? resolveWorkspaceRelativePath(input.path, root).absolute
-      : input.path;
+    const root = parseWorkingDirectory(input.working_directory);
+    const resolved = root
+      ? resolveWorkspaceRelativePath(input.path, root)
+      : undefined;
+    const filePath = resolved?.fsPath ?? input.path;
 
     const attachmentConfig = this.getAttachmentConfig(input.path);
     if (attachmentConfig) {
       const result = await this.returnBinaryAttachment(input, attachmentConfig);
-      recordToolFileRead(input.path);
+      recordToolFileRead(filePath);
       return result;
     }
 
-    // EML files are text-based but use complex MIME encoding (multipart,
-    // base64 attachments, quoted-printable). Parse them into readable text
-    // and extract image attachments so vision-capable models can inspect them.
+    // EML files use complex MIME encoding (multipart, base64, quoted-printable).
+    // Parse into readable text and extract image attachments for vision models.
     let emlImages: Awaited<ReturnType<typeof parseEml>>['images'] = [];
     let lines: string[];
 
@@ -105,7 +101,7 @@ export class ReadFileTool extends defineTool({
       lines = splitContentLines(await WorkspaceFS.read(filePath));
     }
 
-    recordToolFileRead(input.path);
+    recordToolFileRead(filePath);
 
     const totalLines = lines.length;
     const requestedStartLine = input.range?.start ?? 1;

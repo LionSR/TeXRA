@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Third-party imports
 import { Minimatch } from 'minimatch';
+import { z } from 'zod';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -20,6 +21,30 @@ import { toPosixPath } from '@utils/core/pathCore';
 export interface WorkspacePathResolution {
   relative: string;
   absolute: string;
+  /**
+   * The path to pass to filesystem operations.
+   * Absolute when operating outside the workspace (e.g. a worktree),
+   * workspace-relative otherwise (for WorkspaceFS compatibility).
+   */
+  fsPath: string;
+}
+
+/**
+ * Shared Zod schema field for the optional `working_directory` parameter.
+ * Use in tool schemas: `working_directory: WorkingDirectorySchema`.
+ */
+export const WorkingDirectorySchema = z
+  .string()
+  .nullish()
+  .describe(
+    'Absolute path to operate in (e.g. a git worktree). Defaults to workspace root.',
+  );
+
+/** Trim a working_directory input to a clean string or undefined. */
+export function parseWorkingDirectory(
+  raw: string | null | undefined,
+): string | undefined {
+  return raw?.trim() || undefined;
 }
 
 /**
@@ -45,10 +70,8 @@ export function resolveWorkspaceRelativePath(
     if (resolved.kind === 'external') {
       throw new ToolError('Path must stay within the working directory.');
     }
-    return {
-      relative: resolved.relativePath || '.',
-      absolute: resolved.absolutePath,
-    };
+    const relative = resolved.relativePath || '.';
+    return { relative, absolute: resolved.absolutePath, fsPath: resolved.absolutePath };
   }
 
   if (!WorkspaceFS.getPath()) {
@@ -61,10 +84,8 @@ export function resolveWorkspaceRelativePath(
     throw new ToolError('Path must stay within the workspace.');
   }
 
-  return {
-    relative: resolved.relativePath || '.',
-    absolute: resolved.absolutePath,
-  };
+  const relative = resolved.relativePath || '.';
+  return { relative, absolute: resolved.absolutePath, fsPath: relative };
 }
 
 /**

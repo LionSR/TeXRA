@@ -10,6 +10,8 @@ import {
   resolveAndFormat,
   formatToolOutput,
   pluralize,
+  parseWorkingDirectory,
+  WorkingDirectorySchema,
 } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
@@ -21,12 +23,7 @@ import { defineTool } from './core/define';
 const GlobInputSchema = z.strictObject({
   pattern: z.string().min(1, 'pattern is required'),
   path: z.string().nullish(),
-  working_directory: z
-    .string()
-    .nullish()
-    .describe(
-      'Absolute path to resolve files in (e.g. a git worktree). Defaults to workspace root.',
-    ),
+  working_directory: WorkingDirectorySchema,
 });
 
 export type GlobInput = z.infer<typeof GlobInputSchema>;
@@ -43,7 +40,7 @@ export class GlobTool extends defineTool({
   schema: GlobInputSchema,
 }) {
   protected async execute(input: GlobInput): Promise<ToolResult> {
-    const root = input.working_directory?.trim() || undefined;
+    const root = parseWorkingDirectory(input.working_directory);
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
 
@@ -80,9 +77,7 @@ export class GlobTool extends defineTool({
           return null;
         }
 
-        // Use absolute path for stat when operating outside the workspace
-        const statPath = root ? resolved.absolute : relativePath;
-        const stat = await WorkspaceFS.stat(statPath).catch(() => null);
+        const stat = await WorkspaceFS.stat(resolved.fsPath).catch(() => null);
         return { relativePath, mtime: stat?.mtime ?? 0 };
       },
     );

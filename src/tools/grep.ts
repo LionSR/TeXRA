@@ -4,7 +4,11 @@ import { z } from 'zod';
 // Local imports - tools
 import { ToolError, type ToolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { resolveAndFormat } from '@tools/utils';
+import {
+  resolveAndFormat,
+  parseWorkingDirectory,
+  WorkingDirectorySchema,
+} from '@tools/utils';
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
@@ -60,12 +64,7 @@ const GrepInputSchema = z.strictObject({
     .nullish()
     .describe('Enable multiline matching (pattern can span lines).'),
   literal: z.boolean().nullish().describe('Exact string, not regex.'),
-  working_directory: z
-    .string()
-    .nullish()
-    .describe(
-      'Absolute path to search in (e.g. a git worktree). Defaults to workspace root.',
-    ),
+  working_directory: WorkingDirectorySchema,
 });
 
 export type GrepInput = z.infer<typeof GrepInputSchema>;
@@ -116,7 +115,7 @@ export class GrepTool extends defineTool({
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const { output_mode: outputMode } = input;
-    const root = input.working_directory?.trim() || undefined;
+    const root = parseWorkingDirectory(input.working_directory);
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
@@ -125,14 +124,12 @@ export class GrepTool extends defineTool({
       ignoreFile,
     ]);
 
-    // When operating in a worktree, search the absolute path and set cwd
-    const searchPath = root ? path.absolute : path.relative;
     const command = [
       'rg',
       ...args,
       ...ignoreArgs,
       input.pattern,
-      searchPath,
+      path.fsPath,
     ];
 
     const result = await executeCommand(command, {
