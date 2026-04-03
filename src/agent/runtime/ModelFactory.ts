@@ -8,10 +8,7 @@ import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
 import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
 import { ModelHandlerMiniMax } from '@agent/modelHandlers/modelHandlerMiniMax';
 import { ModelHandlerGLM } from '@agent/modelHandlers/modelHandlerGLM';
-import {
-  ModelHandlerOpenRouter,
-  ModelHandlerAnthropicViaOpenRouter,
-} from '@agent/modelHandlers/modelHandlerOpenRouter';
+import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
@@ -37,7 +34,7 @@ const PROVIDER_HANDLERS = new Map<
   [ModelProvider.DASHSCOPE, ModelHandlerDashScope],
   [ModelProvider.MINIMAX, ModelHandlerMiniMax],
   [ModelProvider.GLM, ModelHandlerGLM],
-  [ModelProvider.OTHERS, ModelHandlerOpenRouter],
+  [ModelProvider.OTHERS, ModelHandlerOpenRouterNative],
 ]);
 
 /**
@@ -128,16 +125,8 @@ export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
   if (config.openRouterOnly || useOpenRouter) {
     const openrouterFullName =
       config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
-    if (config.provider === ModelProvider.ANTHROPIC) {
-      return withReasoningOverride(
-        new ModelHandlerAnthropicViaOpenRouter({
-          ...config,
-          openrouterFullName,
-        }),
-      );
-    }
     return withReasoningOverride(
-      new ModelHandlerOpenRouter({ ...config, openrouterFullName }),
+      new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
     );
   }
 

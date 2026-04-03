@@ -1,0 +1,29 @@
+import type { ReasoningDetailUnion } from '@openrouter/sdk/models';
+
+/** Extract text content from a reasoning detail item by type. */
+function getReasoningItemText(item: ReasoningDetailUnion): string | undefined {
+  if (item.type === 'reasoning.text') return item.text ?? undefined;
+  if (item.type === 'reasoning.summary') return item.summary;
+  return undefined;
+}
+
+/**
+ * Extracts text content from OpenRouter reasoning_details array.
+ * Handles the structured format with type-specific fields.
+ * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+ */
+export function extractTextFromReasoningDetails(
+  details: ReasoningDetailUnion[] | unknown,
+): string {
+  if (!Array.isArray(details)) {
+    return typeof details === 'string' ? details : '';
+  }
+  return details
+    .filter(
+      (item): item is ReasoningDetailUnion =>
+        !!item && typeof item === 'object',
+    )
+    .map(getReasoningItemText)
+    .filter((text): text is string => !!text)
+    .join('');
+}

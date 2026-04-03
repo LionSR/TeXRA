@@ -1386,7 +1386,7 @@
     "@lit/context": "^1.1.6",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/codex-sdk": "^0.118.0",
-    "@openrouter/sdk": "^0.10.2",
+    "@openrouter/sdk": "^0.11.2",
     "@supabase/supabase-js": "^2.101.1",
     "@vscode-elements/elements": "^2.5.1",
     "@vscode/codicons": "^0.0.45",

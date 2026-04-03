@@ -9,9 +9,6 @@ export { ModelHandlerKimi } from './modelHandlerKimi';
 export { ModelHandlerDashScope } from './modelHandlerDashScope';
 export { ModelHandlerMiniMax } from './modelHandlerMiniMax';
 export { ModelHandlerGLM } from './modelHandlerGLM';
-export {
-  ModelHandlerOpenRouter,
-  ModelHandlerAnthropicViaOpenRouter,
-} from './modelHandlerOpenRouter';
+export { ModelHandlerOpenRouterNative } from './modelHandlerOpenRouterNative';
 export { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 export { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
