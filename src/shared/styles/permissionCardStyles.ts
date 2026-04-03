@@ -27,6 +27,8 @@ export const permissionCardStyles: CSSResult = css`
     padding: var(--spacing-xlarge);
     max-width: 600px;
     width: min(92vw, 600px);
+    max-height: min(80vh, 44rem);
+    overflow: hidden;
     box-shadow: 0 6px 24px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.35));
   }
 
@@ -41,8 +43,9 @@ export const permissionCardStyles: CSSResult = css`
   .permission-body {
     font-size: var(--font-size);
     line-height: var(--line-height-relaxed);
-    max-height: 50vh;
+    max-height: min(38vh, 24rem);
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   .code-block {

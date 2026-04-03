@@ -19,6 +19,7 @@ import {
 } from './store';
 import { removePrompt, resolvedProposalIds } from './slices/permissionSlice';
 import { updateToolUseState, updateWorkflowState } from './stateUtils';
+import { clearInquiryDraft } from './components/ExternalInquiryPanel';
 import type {
   FilterEventDetail,
   FollowUpChangeDetail,
@@ -32,7 +33,6 @@ import type {
   ToolbarCommandDetail,
 } from './events';
 import type { MessageHandlerContext } from './messageDispatcher';
-import { clearInquiryDraft } from './components/ExternalInquiryPanel';
 
 /**
  * Context passed to frontend event handlers providing access to state and refs.
@@ -288,8 +288,8 @@ export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
   ctx: MessageHandlerContext,
 ): void {
-  const { permission, action, feedback, modelOverride, answer, attachedFiles } =
-    event.detail;
+  const { permission, action, feedback, modelOverride, answer } = event.detail;
+  const { sessionLinks } = event.detail;
 
   switch (permission.kind) {
     case PERMISSION_KIND.TOOL_EDIT:
@@ -371,8 +371,9 @@ export function handlePermissionAction(
       postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
         requestId,
         action,
+        feedback,
         answer,
-        attachedFiles,
+        sessionLinks,
       });
       removePrompt(
         ctx,
