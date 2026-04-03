@@ -5,7 +5,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { BaseRequestPanel } from './BaseRequestPanel';
 import type { PermissionState } from './PermissionCard';
 
-export const REQUEST_PANEL_SELECTOR =
+const REQUEST_PANEL_SELECTOR =
   'tool-edit-request-panel, bash-request-panel, retry-request-panel, proposal-request-panel, plan-approval-request-panel, external-inquiry-panel';
 
 export interface PermissionGroups {
