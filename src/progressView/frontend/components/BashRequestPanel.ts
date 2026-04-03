@@ -62,6 +62,7 @@ export class BashRequestPanel extends BaseFeedbackPanel {
             icon="check"
             label="Approve"
             title="Allow this command to execute (y)"
+            data-action="approve"
             @click=${() => this.emitAction('approve')}
             >Approve</vscode-toolbar-button
           >

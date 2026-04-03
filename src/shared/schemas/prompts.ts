@@ -108,15 +108,28 @@ export type AgentProposalPermission = z.infer<
 // External Inquiry
 // ============================================================================
 
-export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'skip'] as const;
+export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'reject'] as const;
 export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
+const ExternalInquirySessionLinkSchema = z.string().trim().min(1);
+export const ExternalInquirySessionLinksSchema = z.array(
+  ExternalInquirySessionLinkSchema,
+);
+
+export const ExternalInquiryThreadIdSchema = z
+  .string()
+  .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID')
+  .transform((value) => value.toLowerCase());
+export type ExternalInquiryThreadId = z.infer<
+  typeof ExternalInquiryThreadIdSchema
+>;
 
 export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({
   question: z.string(),
-  mode: z.enum(['new', 'followup']),
-  context: z.string().optional(),
-  suggestSearch: z.boolean().optional(),
-  attachFiles: z.array(z.string()).optional(),
+  threadId: ExternalInquiryThreadIdSchema.nullish(),
+  context: z.string().nullish(),
+  suggestSearch: z.boolean().nullish(),
+  attachFiles: z.array(z.string()).nullish(),
+  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
 });
 export type ExternalInquiryPermission = z.infer<
   typeof ExternalInquiryPermissionSchema

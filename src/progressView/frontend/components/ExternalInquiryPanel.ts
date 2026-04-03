@@ -3,19 +3,22 @@
  *
  * Displays a question formulated by the agent, with a "Copy Question" button
  * for the user to paste into an external AI model (ChatGPT, Gemini, Claude, etc.).
- * Provides a textarea for the user to paste the answer back, and an optional
- * file attachment drop zone for files downloaded from the external model.
+ * Provides a textarea for the user to paste the answer back.
  *
- * User input (answer text, dropped files) is persisted in a module-level cache
- * keyed by requestId so it survives component recreation during webview
- * hide/show cycles — the permission is replayed via ApprovalRequestHandler
- * but the component is re-mounted with fresh @state.
+ * If the external model returns files, the user saves them into the workspace
+ * and tells the agent the paths.
+ *
+ * User input (answer text) is persisted in a module-level cache keyed by
+ * requestId so it survives component recreation during webview hide/show
+ * cycles — the permission is replayed via ApprovalRequestHandler but the
+ * component is re-mounted with fresh @state.
  */
 
-import { html, nothing, type TemplateResult, type PropertyValues } from 'lit';
+import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
+import { repeat } from 'lit/directives/repeat.js';
 
 import {
   codiconIconClasses,
@@ -27,31 +30,25 @@ import type { ExternalInquiryPermission } from '@shared/schemas';
 import { EXTERNAL_INQUIRY_ACTIONS } from '@shared/schemas';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 
-import { BaseRequestPanel } from './BaseRequestPanel';
+import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { ProgressEvents } from '../events';
 
 // ── Draft persistence ──
 
 interface InquiryDraft {
   answerText: string;
-  droppedFiles: string[];
+  sessionLinksText: string;
 }
 
 const DRAFT_CACHE_CAP = 50;
 const draftCache = new Map<string, InquiryDraft>();
 const resolvedIds = new Set<string>();
 
-function evictOldestDraft(): void {
-  if (draftCache.size <= DRAFT_CACHE_CAP) return;
-  const oldest = draftCache.keys().next().value;
-  if (oldest !== undefined) draftCache.delete(oldest);
-}
-
 function getRequestId(permission: { data: unknown }): string {
   return (permission.data as ExternalInquiryPermission).requestId;
 }
 
-/** Clear draft for a resolved inquiry. Called from eventHandlers on submit/skip. */
+/** Clear draft for a resolved inquiry. Called from eventHandlers on submit/reject. */
 export function clearInquiryDraft(requestId: string): void {
   draftCache.delete(requestId);
   resolvedIds.add(requestId);
@@ -65,7 +62,7 @@ export function clearInquiryDraft(requestId: string): void {
 // ── Component ──
 
 @customElement('external-inquiry-panel')
-export class ExternalInquiryPanel extends BaseRequestPanel {
+export class ExternalInquiryPanel extends BaseFeedbackPanel {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -74,8 +71,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   ];
 
   @state() private answerText = '';
-  @state() private droppedFiles: string[] = [];
-  @state() private dropActive = false;
+  @state() private sessionLinksText = '';
 
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
@@ -95,7 +91,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
       const draft = draftCache.get(getRequestId(this.permission));
       if (draft) {
         this.answerText = draft.answerText;
-        this.droppedFiles = draft.droppedFiles;
+        this.sessionLinksText = draft.sessionLinksText;
       }
     }
   }
@@ -103,19 +99,24 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   private saveDraft(): void {
     const id = getRequestId(this.permission);
     if (resolvedIds.has(id)) return;
-    if (this.answerText || this.droppedFiles.length > 0) {
+    if (this.answerText || this.sessionLinksText) {
       draftCache.set(id, {
         answerText: this.answerText,
-        droppedFiles: this.droppedFiles,
+        sessionLinksText: this.sessionLinksText,
       });
-      evictOldestDraft();
+      if (draftCache.size > DRAFT_CACHE_CAP) {
+        const oldest = draftCache.keys().next().value;
+        if (oldest !== undefined) draftCache.delete(oldest);
+      }
     } else {
       draftCache.delete(id);
     }
   }
 
-  override handleKeyboardShortcut(_key: string): boolean {
-    return false;
+  override handleKeyboardShortcut(key: string): boolean {
+    // Suppress the parent's 'y' → approve binding (invalid for external inquiry)
+    if (key === 'y') return false;
+    return super.handleKeyboardShortcut(key);
   }
 
   // ── Render ──
@@ -124,11 +125,27 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
     return this.answerText.trim().length > 0;
   }
 
+  private get normalizedSessionLinks(): string[] {
+    return [
+      ...new Set(
+        this.sessionLinksText
+          .split('\n')
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0),
+      ),
+    ];
+  }
+
   override render(): TemplateResult {
     const data = this.permission.data as ExternalInquiryPermission;
 
     return html`
-      <div class="external-inquiry-request">
+      <div
+        class=${classMap({
+          'external-inquiry-request': true,
+          'external-inquiry-request--feedback-active': this.showFeedback,
+        })}
+      >
         <div class="external-inquiry-request__details">
           ${this.renderHeader(data)}
           ${data.context ? this.renderContext(data.context) : nothing}
@@ -137,7 +154,13 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           ${data.attachFiles?.length
             ? this.renderAttachFiles(data.attachFiles)
             : nothing}
-          ${this.renderAnswerArea()} ${this.renderDropZone()}
+          ${this.renderSessionLinks(data.sessionLinks ?? [])}
+          ${this.renderAnswerArea()}
+          ${this.renderFeedbackSection(
+            'external-inquiry-request__feedback',
+            'external-inquiry-request__feedback-input',
+            'Why are you rejecting this external inquiry?',
+          )}
         </div>
         ${this.renderActions()}
       </div>
@@ -147,7 +170,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   private renderHeader(data: ExternalInquiryPermission): TemplateResult {
     return html`
       <div class="external-inquiry-request__mode-badge">
-        ${data.mode === 'followup' ? 'follow-up' : 'new question'}
+        ${data.threadId ? 'follow-up' : 'new question'}
       </div>
     `;
   }
@@ -221,50 +244,52 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           @input=${this.handleAnswerInput}
           @keydown=${this.handleKeyDown}
         ></textarea>
-      </div>
-    `;
-  }
-
-  private renderDropZone(): TemplateResult {
-    return html`
-      <div class="external-inquiry-request__answer-area">
-        <div class="external-inquiry-request__attach-label">
-          <i class="codicon codicon-cloud-download"></i>
-          Attach files from external model (optional):
-        </div>
-        <div
-          class=${classMap({
-            'external-inquiry-request__drop-zone': true,
-            'external-inquiry-request__drop-zone--active': this.dropActive,
-          })}
-          @dragover=${this.handleDragOver}
-          @dragleave=${this.handleDragLeave}
-          @drop=${this.handleDrop}
-        >
-          ${this.droppedFiles.length > 0
-            ? this.renderDroppedFiles()
-            : html`<span>Drop files here from your file explorer</span>`}
+        <div class="external-inquiry-request__answer-hint">
+          If the external model returns files, save them into the workspace and
+          tell the agent the paths.
         </div>
       </div>
     `;
   }
 
-  private renderDroppedFiles(): TemplateResult {
+  private renderSessionLinks(sessionLinks: string[]): TemplateResult {
     return html`
-      <div class="external-inquiry-request__dropped-files">
-        ${this.droppedFiles.map(
-          (file, idx) => html`
-            <div class="external-inquiry-request__dropped-file">
-              <i class="codicon codicon-check"></i>
-              <span>${file}</span>
-              <vscode-toolbar-button
-                icon="close"
-                title="Remove"
-                @click=${() => this.removeFile(idx)}
-              ></vscode-toolbar-button>
-            </div>
-          `,
-        )}
+      <div class="external-inquiry-request__session-links">
+        ${sessionLinks.length
+          ? html`
+              <div class="external-inquiry-request__session-links-known">
+                <div class="external-inquiry-request__session-links-label">
+                  Known external session links for this thread:
+                </div>
+                <div class="external-inquiry-request__session-links-list">
+                  ${repeat(
+                    sessionLinks,
+                    (link) => link,
+                    (link) => html`
+                      <div class="external-inquiry-request__session-link-item">
+                        ${link}
+                      </div>
+                    `,
+                  )}
+                </div>
+              </div>
+            `
+          : nothing}
+        <div class="external-inquiry-request__session-links-input-group">
+          <div class="external-inquiry-request__session-links-label">
+            External chat/thread links (optional):
+          </div>
+          <textarea
+            class="external-inquiry-request__session-links-input"
+            placeholder="Paste one ChatGPT/Claude/Gemini thread link per line..."
+            .value=${live(this.sessionLinksText)}
+            @input=${this.handleSessionLinksInput}
+          ></textarea>
+          <div class="external-inquiry-request__session-links-hint">
+            Paste back the external chat URLs you used so follow-up inquiries
+            can point you to the same conversations later.
+          </div>
+        </div>
       </div>
     `;
   }
@@ -281,14 +306,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
           @click=${this.handleSubmit}
           >Submit Answer</vscode-toolbar-button
         >
-        <vscode-toolbar-button
-          icon="close"
-          label="Skip"
-          title="Skip this external inquiry"
-          data-action=${EXTERNAL_INQUIRY_ACTIONS[1]}
-          @click=${() => this.emitAction(EXTERNAL_INQUIRY_ACTIONS[1])}
-          >Skip</vscode-toolbar-button
-        >
+        ${this.renderRejectButton('Reject this external inquiry (n)')}
       </vscode-toolbar-container>
     `;
   }
@@ -299,6 +317,10 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
     this.answerText = (e.target as HTMLTextAreaElement).value;
   }
 
+  private handleSessionLinksInput(e: Event): void {
+    this.sessionLinksText = (e.target as HTMLTextAreaElement).value;
+  }
+
   private handleKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -307,8 +329,9 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
   }
 
   private handleSubmit(): void {
+    if (!this.hasAnswer) return;
     const answer = this.answerText.trim();
-    if (!answer) return;
+    const sessionLinks = this.normalizedSessionLinks;
 
     clearInquiryDraft(getRequestId(this.permission));
 
@@ -317,31 +340,9 @@ export class ExternalInquiryPanel extends BaseRequestPanel {
         permission: this.permission,
         action: EXTERNAL_INQUIRY_ACTIONS[0],
         answer,
-        attachedFiles: this.droppedFiles,
+        sessionLinks: sessionLinks.length ? sessionLinks : undefined,
       }),
     );
-  }
-
-  private handleDragOver(e: DragEvent): void {
-    e.preventDefault();
-    if (!this.dropActive) this.dropActive = true;
-  }
-
-  private handleDragLeave(): void {
-    if (this.dropActive) this.dropActive = false;
-  }
-
-  private handleDrop(e: DragEvent): void {
-    e.preventDefault();
-    this.dropActive = false;
-    if (e.dataTransfer?.files) {
-      const newFiles = Array.from(e.dataTransfer.files).map((f) => f.name);
-      this.droppedFiles = [...this.droppedFiles, ...newFiles];
-    }
-  }
-
-  private removeFile(index: number): void {
-    this.droppedFiles = this.droppedFiles.filter((_, i) => i !== index);
   }
 }
 

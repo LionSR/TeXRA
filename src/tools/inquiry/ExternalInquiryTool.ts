@@ -3,10 +3,9 @@
  *
  * The agent formulates a self-contained question. The user copies it to
  * an external model (ChatGPT, Gemini, Claude, etc.), gets an answer,
- * and pastes it back. The answer (plus any attached files) is returned
- * to the agent as the tool result.
- *
- * Follows the same async promise pattern as bashApproval.ts.
+ * and pastes it back. The answer is persisted into a durable
+ * external-inquiry thread and mirrored into the current execution so
+ * the agent can inspect it through `executions`.
  */
 
 import { z } from 'zod';
@@ -15,8 +14,25 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ExternalInquiryAction, StreamTabId } from '@shared/schemas';
-import { type ToolResult } from '@tools/result';
+import {
+  EXTERNAL_INQUIRY_ACTIONS,
+  ExternalInquiryThreadIdSchema,
+} from '@shared/schemas';
+import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+
+import {
+  ensureExternalInquiryThreadMirror,
+  persistExternalInquiryTurn,
+  readExternalInquiryThread,
+  type ExternalInquiryThreadManifest,
+} from './externalInquiryStorage';
+import {
+  appendExternalInquiryReport,
+  buildExternalInquiryResult,
+  buildRejectedExternalInquiryResult,
+  collectKnownSessionLinks,
+} from './externalInquiryResultFormatter';
 
 const logger = new AgentLogger('ExternalInquiryTool');
 
@@ -32,12 +48,10 @@ const ExternalInquiryInputSchema = z.strictObject({
         'MUST include all necessary background, definitions, notation, and problem setup ' +
         'because the external model has NO context from this conversation.',
     ),
-  mode: z
-    .enum(['new', 'followup'])
-    .describe(
-      "'new' to start a fresh topic in the external model, " +
-        "'followup' to continue a prior external conversation thread.",
-    ),
+  thread_id: ExternalInquiryThreadIdSchema.nullish().describe(
+    'Durable external inquiry thread ID from a previous external_inquiry result. ' +
+      'Omit to start a new external-inquiry thread. Pass it to continue an existing thread.',
+  ),
   context: z
     .string()
     .nullish()
@@ -67,7 +81,8 @@ export type ExternalInquiryInput = z.infer<typeof ExternalInquiryInputSchema>;
 export interface ExternalInquiryResult {
   submitted: boolean;
   answer?: string;
-  attachedFiles?: string[];
+  feedback?: string;
+  sessionLinks?: string[];
 }
 
 let inquiryCounter = 0;
@@ -80,24 +95,100 @@ const pendingInquiries = new Map<
   }
 >();
 
+async function resolveExistingThread(
+  input: ExternalInquiryInput,
+  executionId?: string,
+): Promise<ExternalInquiryThreadManifest | null> {
+  if (!input.thread_id) return null;
+
+  const existingThread = await readExternalInquiryThread(input.thread_id);
+  if (!existingThread) {
+    throw new ToolError(
+      `External inquiry thread not found: ${input.thread_id}`,
+    );
+  }
+
+  const sessionLinks = collectKnownSessionLinks(existingThread);
+  if (sessionLinks?.length) {
+    logger.debug(
+      `Found ${sessionLinks.length} known external session link(s) for ${input.thread_id}`,
+    );
+  }
+
+  if (executionId) {
+    await ensureExternalInquiryThreadMirror({
+      executionId,
+      threadId: existingThread.threadId,
+    });
+    logger.debug(
+      `Mirrored external inquiry thread ${input.thread_id} into execution ${executionId}`,
+    );
+  }
+
+  return existingThread;
+}
+
+async function awaitExternalInquiryResponse(params: {
+  requestId: string;
+  input: ExternalInquiryInput;
+  streamId?: StreamTabId;
+  existingThread: ExternalInquiryThreadManifest | null;
+}): Promise<ExternalInquiryResult> {
+  return new Promise<ExternalInquiryResult>((resolve) => {
+    let settled = false;
+    const settle = (result: ExternalInquiryResult) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
+    pendingInquiries.set(params.requestId, {
+      streamId: params.streamId,
+      settle,
+      isSettled: () => settled,
+    });
+
+    bus.emit('requestEnsureProgressView', {});
+
+    if (params.streamId) {
+      bus.emit('setActiveStream', { streamId: params.streamId });
+    }
+
+    bus.emit('showExternalInquiry', {
+      requestId: params.requestId,
+      question: params.input.question,
+      threadId: params.input.thread_id ?? undefined,
+      context: params.input.context ?? undefined,
+      suggestSearch: params.input.suggestSearch ?? undefined,
+      attachFiles: params.input.attachFiles ?? undefined,
+      sessionLinks: collectKnownSessionLinks(params.existingThread),
+      allowBypass: false,
+      streamId: params.streamId ?? '',
+    });
+  });
+}
+
 // ============================================================================
 // Public API (called from progress view message handler)
 // ============================================================================
 
 export async function handleExternalInquiryAction(payload: {
   requestId: string;
-  action: ExternalInquiryAction;
+  action: ExternalInquiryAction | 'skip';
   answer?: string;
-  attachedFiles?: string[];
+  feedback?: string;
+  sessionLinks?: string[];
 }): Promise<void> {
   const entry = pendingInquiries.get(payload.requestId);
   if (!entry || entry.isSettled()) return;
 
+  const isSubmit = payload.action === EXTERNAL_INQUIRY_ACTIONS[0];
+
   entry.settle({
-    submitted: payload.action === 'submit',
-    answer: payload.action === 'submit' ? payload.answer : undefined,
-    attachedFiles:
-      payload.action === 'submit' ? payload.attachedFiles : undefined,
+    submitted: isSubmit,
+    answer: isSubmit ? payload.answer : undefined,
+    feedback: isSubmit ? undefined : payload.feedback,
+    sessionLinks: isSubmit ? payload.sessionLinks : undefined,
   });
 }
 
@@ -136,78 +227,74 @@ Tips for effective questions:
 - State the problem completely with all definitions
 - Include relevant equations and notation
 - Specify what kind of answer you need (proof sketch, calculation, reference, etc.)
-- If this is a follow-up, summarize what was established before
+- If continuing an existing external thread, summarize what was established before
 
-Use mode='followup' when continuing a thread in the same external session (the user keeps that session open). Use mode='new' when starting a fresh topic.
+Every successful call returns a durable thread_id. Omit thread_id to start a new external-inquiry thread. Pass thread_id to continue the same thread in later calls, even from a future run.
 
 Set suggestSearch=true when the question could benefit from the external model using web search (e.g., looking up recent papers, checking specific results).
 
-Use attachFiles to list workspace files the user should upload to the external model for reference.`,
+Use attachFiles to list workspace files the user should upload to the external model for reference.
+
+If the external model returns files, the user should save them into the workspace and tell you the paths.
+
+Do not treat paper-specific claims from the external model as automatically verified. If the answer relies on a nonstandard result from a cited paper, verify it by inspecting the paper directly with tools such as arxiv_search, arxiv_metadata, and download_arxiv_source before building further conclusions on top of it.
+
+When you have multiple independent questions for external models, you can call external_inquiry multiple times in the same response. All inquiries will be dispatched simultaneously, allowing the user to query multiple models in parallel. Only batch truly independent questions — if one answer depends on another, ask them sequentially.`,
   schema: ExternalInquiryInputSchema,
 }) {
   protected async execute(input: ExternalInquiryInput): Promise<ToolResult> {
     const context = getCurrentToolFileInteractionContext();
     const streamId = context?.streamId;
+    const executionId = context?.executionId;
 
     const requestId = `inquiry-${Date.now().toString(36)}-${++inquiryCounter}`;
+    const threadLabel = input.thread_id ?? 'new';
 
     logger.info(
-      `External inquiry [${input.mode}]: ${input.question.substring(0, 100)}...`,
+      `External inquiry [${threadLabel}]: ${input.question.substring(0, 100)}...`,
     );
 
+    const existingThread = await resolveExistingThread(input, executionId);
+
     try {
-      const result = await new Promise<ExternalInquiryResult>((resolve) => {
-        let settled = false;
-        const settle = (r: ExternalInquiryResult) => {
-          if (settled) return;
-          settled = true;
-          resolve(r);
-        };
-
-        pendingInquiries.set(requestId, {
-          streamId,
-          settle,
-          isSettled: () => settled,
-        });
-
-        bus.emit('requestEnsureProgressView', {});
-
-        if (streamId) {
-          bus.emit('setActiveStream', { streamId });
-        }
-
-        bus.emit('showExternalInquiry', {
-          requestId,
-          question: input.question,
-          mode: input.mode,
-          context: input.context ?? undefined,
-          suggestSearch: input.suggestSearch ?? undefined,
-          attachFiles: input.attachFiles ?? undefined,
-          allowBypass: false,
-          streamId: streamId ?? '',
-        });
+      const result = await awaitExternalInquiryResponse({
+        requestId,
+        input,
+        streamId,
+        existingThread,
       });
 
       if (!result.submitted) {
-        return {
-          summary: 'User skipped external inquiry',
-          output:
-            'The user chose to skip this external inquiry. ' +
-            'Proceed without the external answer, or try a different approach.',
-        };
+        return buildRejectedExternalInquiryResult(result.feedback);
       }
 
-      let output = `Answer from external model:\n\n${result.answer ?? ''}`;
-
-      if (result.attachedFiles?.length) {
-        const fileList = result.attachedFiles.map((f) => `- ${f}`).join('\n');
-        output += `\n\nFiles attached by user from the external model:\n${fileList}`;
+      const answer = result.answer?.trim();
+      if (!answer) {
+        throw new ToolError('External inquiry answer cannot be empty.');
       }
 
-      return {
-        summary: `Received answer from external model (${input.mode})`,
-        output,
-      };
+      const persisted = await persistExternalInquiryTurn({
+        threadId: input.thread_id ?? undefined,
+        question: input.question,
+        context: input.context ?? undefined,
+        answer,
+        sessionLinks: result.sessionLinks,
+        executionId,
+      });
+
+      if (executionId) {
+        await appendExternalInquiryReport({
+          executionId,
+          persisted,
+          answer,
+        });
+      }
+
+      return buildExternalInquiryResult({
+        persisted,
+        answer,
+        includeLongAnswerRedirect: executionId != null,
+      });
     } finally {
       pendingInquiries.delete(requestId);
       bus.emit('resolveExternalInquiry', { requestId });
