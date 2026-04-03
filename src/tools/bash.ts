@@ -203,6 +203,7 @@ export class BashTool extends defineTool({
         agentName: 'bash',
         description: command,
         config: syntheticConfig,
+        toolName: 'bash',
       },
     );
     let stdoutTail = '';

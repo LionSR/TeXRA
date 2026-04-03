@@ -578,6 +578,7 @@ export class CodexTool extends defineTool({
           agentName: 'codex',
           description: input.prompt,
           config,
+          toolName: 'codex',
         })
       : undefined;
 
@@ -653,6 +654,7 @@ export class CodexTool extends defineTool({
         agentName: 'codex',
         description: input.prompt,
         config,
+        toolName: 'codex',
       },
     );
 

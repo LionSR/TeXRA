@@ -30,6 +30,8 @@ interface CreateChildStreamOptions {
   agentName: string;
   description: string;
   config: AgentConfig;
+  /** Tool that spawned this child (e.g. "bash", "codex"). Used for icon selection in the UI. */
+  toolName?: string;
 }
 
 interface FinalizeChildStreamOptions {
@@ -67,15 +69,15 @@ export function createChildStream(
   });
 
   const logger = new AgentLogger(childStreamId, true);
-  trackExecution(
-    new AgentExecutionHandle(
-      executionId,
-      parentStreamId,
-      childStreamId,
-      options.agentName,
-      'toolUse',
-    ),
+  const handle = new AgentExecutionHandle(
+    executionId,
+    parentStreamId,
+    childStreamId,
+    options.agentName,
+    'toolUse',
   );
+  if (options.toolName) handle.toolName = options.toolName;
+  trackExecution(handle);
 
   return { childStreamId, logger };
 }

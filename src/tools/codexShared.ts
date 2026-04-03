@@ -81,7 +81,7 @@ export const CodexTurnStateSchema = z.enum(['running', 'completed', 'failed']);
 export type CodexTurnState = z.infer<typeof CodexTurnStateSchema>;
 
 export const CodexTurnToolInputSchema = z.object({
-  state: z.string(),
+  state: CodexTurnStateSchema,
   wallTimeMs: z.number().optional(),
 });
 
