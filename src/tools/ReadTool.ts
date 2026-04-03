@@ -11,6 +11,7 @@ import {
   buildFileAttachment,
   formatFileView,
   READ_FILE_MAX_LINES,
+  resolveWorkspaceRelativePath,
 } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml } from '@tools/emlParser';
@@ -53,6 +54,12 @@ const RangeSchema = z.preprocess(
 const ReadInputSchema = z.strictObject({
   path: z.string(),
   range: RangeSchema.nullish(),
+  working_directory: z
+    .string()
+    .nullish()
+    .describe(
+      'Absolute path to resolve files in (e.g. a git worktree). Defaults to workspace root.',
+    ),
 });
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
@@ -64,6 +71,12 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
+    // When working_directory is set, resolve to absolute path for fs operations
+    const root = input.working_directory?.trim() || undefined;
+    const filePath = root
+      ? resolveWorkspaceRelativePath(input.path, root).absolute
+      : input.path;
+
     const attachmentConfig = this.getAttachmentConfig(input.path);
     if (attachmentConfig) {
       const result = await this.returnBinaryAttachment(input, attachmentConfig);
@@ -78,18 +91,18 @@ export class ReadFileTool extends defineTool({
     let lines: string[];
 
     if (path.extname(input.path).toLowerCase() === '.eml') {
-      const stats = await WorkspaceFS.stat(input.path);
+      const stats = await WorkspaceFS.stat(filePath);
       if (stats.size > MAX_EML_BYTES) {
         throw new ToolError(
           `EML file exceeds maximum size of ${MAX_EML_BYTES / (1024 * 1024)} MiB.`,
         );
       }
-      const raw = await WorkspaceFS.read(input.path);
+      const raw = await WorkspaceFS.read(filePath);
       const { text, images } = await parseEml(raw);
       lines = splitContentLines(text);
       emlImages = images;
     } else {
-      lines = splitContentLines(await WorkspaceFS.read(input.path));
+      lines = splitContentLines(await WorkspaceFS.read(filePath));
     }
 
     recordToolFileRead(input.path);

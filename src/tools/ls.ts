@@ -25,6 +25,12 @@ import { defineTool } from './core/define';
 const LsInputSchema = z.strictObject({
   path: z.string(),
   ignore: z.array(z.string()).prefault([]),
+  working_directory: z
+    .string()
+    .nullish()
+    .describe(
+      'Absolute path to resolve files in (e.g. a git worktree). Defaults to workspace root.',
+    ),
 });
 
 export type LsInput = z.infer<typeof LsInputSchema>;
@@ -56,7 +62,8 @@ export class LsTool extends defineTool({
   schema: LsInputSchema,
 }) {
   protected async execute(input: LsInput): Promise<ToolResult> {
-    const { path: resolved, display } = resolveAndFormat(input.path);
+    const root = input.working_directory?.trim() || undefined;
+    const { path: resolved, display } = resolveAndFormat(input.path, root);
     const gitignore = await getGitignoreMatcher();
     const header = `Listing for ${display}`;
 
@@ -68,9 +75,11 @@ export class LsTool extends defineTool({
       output: formatToolOutput(header, content, NO_ENTRIES_MESSAGE),
     });
 
+    // Use absolute path for fs operations when operating outside the workspace
+    const fsPath = root ? resolved.absolute : resolved.relative;
     let statType: number;
     try {
-      const stats = await WorkspaceFS.stat(resolved.relative);
+      const stats = await WorkspaceFS.stat(fsPath);
       statType = stats.type;
     } catch (err) {
       const message = toErrorMessage(err);
@@ -101,12 +110,16 @@ export class LsTool extends defineTool({
       return makeResult(null);
     }
 
-    const entries = await WorkspaceFS.readDir(resolved.relative);
+    const entries = await WorkspaceFS.readDir(fsPath);
     const filtered = entries.filter(([name]) => {
       if (isDefaultHiddenName(name)) {
         return false;
       }
-      const resolvedChild = joinWorkspaceRelativePath(resolved.relative, name);
+      const resolvedChild = joinWorkspaceRelativePath(
+        resolved.relative,
+        name,
+        root,
+      );
       const entryPath = toPosixPath(resolvedChild.relative);
       return (
         !gitignore.ignores(resolvedChild.relative) &&

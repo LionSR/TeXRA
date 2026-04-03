@@ -52,6 +52,12 @@ const BashInputSchema = z.strictObject({
     .describe(
       'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
     ),
+  working_directory: z
+    .string()
+    .nullish()
+    .describe(
+      'Absolute path to run the command in (e.g. a git worktree). Defaults to workspace root.',
+    ),
   run_in_background: z
     .boolean()
     .prefault(false)
@@ -113,25 +119,30 @@ export class BashTool extends defineTool({
 
     const timeoutMs = input.timeout ?? BASH_TIMEOUT_MS;
 
+    const cwd = input.working_directory?.trim() || undefined;
+
     if (input.run_in_background) {
       return this.executeBackground(
         input.command,
         timeoutMs,
         ctx?.streamId,
         ctx?.executionId,
+        cwd,
       );
     }
 
-    return this.executeForeground(input.command, timeoutMs, ctx);
+    return this.executeForeground(input.command, timeoutMs, ctx, cwd);
   }
 
   private async executeForeground(
     command: string,
     timeoutMs: number,
     ctx: ReturnType<typeof getCurrentToolFileInteractionContext>,
+    cwd?: string,
   ): Promise<ToolResult> {
     const startedAt = Date.now();
     const result = await executeCommand(command, {
+      cwd,
       truncate: true,
       timeout: timeoutMs,
       onStdout: ctx?.onToolOutput,
@@ -173,6 +184,7 @@ export class BashTool extends defineTool({
     timeoutMs: number,
     parentStreamId: StreamTabId | undefined,
     parentExecutionId: ExecutionId | undefined,
+    cwd?: string,
   ): Promise<ToolResult> {
     if (!parentStreamId) {
       throw new ToolError(
@@ -237,6 +249,7 @@ export class BashTool extends defineTool({
 
     const startedAt = Date.now();
     const promise = executeCommand(command, {
+      cwd,
       timeout: timeoutMs,
       buffer: false,
       onPid: (p) => {

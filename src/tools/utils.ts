@@ -14,6 +14,7 @@ import { ToolError, type ToolFileAttachment } from '@tools/result';
 // Local imports - core utilities
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS, getMimeType } from '@utils/files';
+import { locatePathInRoot } from '@utils/files/workspaceRoot';
 import { toPosixPath } from '@utils/core/pathCore';
 
 export interface WorkspacePathResolution {
@@ -22,23 +23,39 @@ export interface WorkspacePathResolution {
 }
 
 /**
- * Resolve a potentially absolute or relative path against the workspace root.
+ * Resolve a potentially absolute or relative path against a root directory.
  *
- * Thin policy wrapper around WorkspaceFS.locatePath() that throws ToolError
- * when the path is external. Tools use this; non-tool code should call
- * WorkspaceFS.locatePath() directly and handle the discriminated union.
+ * When `root` is provided, paths are resolved against that directory instead
+ * of the workspace root. This supports operating in git worktrees or other
+ * directories outside the main workspace.
+ *
+ * Thin policy wrapper around WorkspaceFS.locatePath() / locatePathInRoot()
+ * that throws ToolError when the path escapes the root. Tools use this;
+ * non-tool code should call WorkspaceFS.locatePath() directly.
  */
 export function resolveWorkspaceRelativePath(
   targetPath?: string,
+  root?: string,
 ): WorkspacePathResolution {
+  const trimmed = targetPath?.trim();
+  const input = !trimmed || trimmed === '.' ? '' : trimmed;
+
+  if (root) {
+    const resolved = locatePathInRoot(root, input);
+    if (resolved.kind === 'external') {
+      throw new ToolError('Path must stay within the working directory.');
+    }
+    return {
+      relative: resolved.relativePath || '.',
+      absolute: resolved.absolutePath,
+    };
+  }
+
   if (!WorkspaceFS.getPath()) {
     throw new ToolError('Workspace path is not available.');
   }
 
-  const trimmed = targetPath?.trim();
-  const resolved = WorkspaceFS.locatePath(
-    !trimmed || trimmed === '.' ? '' : trimmed,
-  );
+  const resolved = WorkspaceFS.locatePath(input);
 
   if (resolved.kind === 'external') {
     throw new ToolError('Path must stay within the workspace.');
@@ -52,14 +69,18 @@ export function resolveWorkspaceRelativePath(
 
 /**
  * Join a workspace-relative base path with a child segment and ensure the
- * result stays within the workspace root.
+ * result stays within the root directory.
  */
 export function joinWorkspaceRelativePath(
   baseRelative: string,
   child: string,
+  root?: string,
 ): WorkspacePathResolution {
   // path.join handles empty/dot bases naturally: join('.', 'x') and join('', 'x') both return 'x'
-  return resolveWorkspaceRelativePath(path.join(baseRelative || '.', child));
+  return resolveWorkspaceRelativePath(
+    path.join(baseRelative || '.', child),
+    root,
+  );
 }
 
 /**
@@ -247,14 +268,17 @@ export function formatToolOutput(
 }
 
 /**
- * Common pattern for resolving and formatting workspace paths.
+ * Common pattern for resolving and formatting paths.
  * Returns `path` (resolution with relative/absolute) and `display` (formatted string).
  */
-export function resolveAndFormat(targetPath?: string): {
+export function resolveAndFormat(
+  targetPath?: string,
+  root?: string,
+): {
   path: WorkspacePathResolution;
   display: string;
 } {
-  const path = resolveWorkspaceRelativePath(targetPath);
+  const path = resolveWorkspaceRelativePath(targetPath, root);
   const display = toPosixPath(path.relative);
   return { path, display };
 }

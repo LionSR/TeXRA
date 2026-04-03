@@ -9,6 +9,7 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
+import { resolveWorkspaceRelativePath } from '@tools/utils';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -24,6 +25,12 @@ import { defineTool } from './core/define';
 const WriteInputSchema = z.strictObject({
   path: z.string(),
   content: z.string(),
+  working_directory: z
+    .string()
+    .nullish()
+    .describe(
+      'Absolute path to resolve files in (e.g. a git worktree). Defaults to workspace root.',
+    ),
 });
 
 export type WriteInput = z.infer<typeof WriteInputSchema>;
@@ -35,13 +42,19 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    const exists = await WorkspaceFS.exists(input.path);
+    // When working_directory is set, resolve to absolute path for fs operations
+    const root = input.working_directory?.trim() || undefined;
+    const filePath = root
+      ? resolveWorkspaceRelativePath(input.path, root).absolute
+      : input.path;
+
+    const exists = await WorkspaceFS.exists(filePath);
     const readGate = requireFileReadForEdit(input.path, exists);
     if (readGate) {
       return readGate;
     }
 
-    const originalContent = exists ? await WorkspaceFS.read(input.path) : '';
+    const originalContent = exists ? await WorkspaceFS.read(filePath) : '';
 
     const proposedContent = isTexFile(input.path)
       ? replacementEngine.applyAll(input.content)

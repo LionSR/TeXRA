@@ -26,7 +26,12 @@ import { splitContentLines } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 import { ToolResult, ToolError } from './result';
-import { formatFileView, formatLinesWithNumbers, requireField } from './utils';
+import {
+  formatFileView,
+  formatLinesWithNumbers,
+  requireField,
+  resolveWorkspaceRelativePath,
+} from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -60,6 +65,12 @@ export const TextEditorInputSchema = z.strictObject({
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
   insert_line: z.number().nullish().describe('1-indexed.'),
+  working_directory: z
+    .string()
+    .nullish()
+    .describe(
+      'Absolute path to resolve files in (e.g. a git worktree). Defaults to workspace root.',
+    ),
 });
 
 /** Derived from TextEditorInputSchema - single source of truth */
@@ -105,7 +116,13 @@ export class TextEditorTool extends defineTool({
   }
 
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
-    const { command, path: filePath } = input;
+    const { command, path: inputPath } = input;
+
+    // When working_directory is set, resolve to absolute path for fs operations
+    const root = input.working_directory?.trim() || undefined;
+    const filePath = root
+      ? resolveWorkspaceRelativePath(inputPath, root).absolute
+      : inputPath;
 
     await this.validatePath(command, filePath);
 

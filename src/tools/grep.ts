@@ -60,6 +60,12 @@ const GrepInputSchema = z.strictObject({
     .nullish()
     .describe('Enable multiline matching (pattern can span lines).'),
   literal: z.boolean().nullish().describe('Exact string, not regex.'),
+  working_directory: z
+    .string()
+    .nullish()
+    .describe(
+      'Absolute path to search in (e.g. a git worktree). Defaults to workspace root.',
+    ),
 });
 
 export type GrepInput = z.infer<typeof GrepInputSchema>;
@@ -110,7 +116,8 @@ export class GrepTool extends defineTool({
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const { output_mode: outputMode } = input;
-    const { path, display } = resolveAndFormat(input.path ?? undefined);
+    const root = input.working_directory?.trim() || undefined;
+    const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
     const ignoreArgs = gitignore.ignoreFiles.flatMap((ignoreFile) => [
@@ -118,15 +125,18 @@ export class GrepTool extends defineTool({
       ignoreFile,
     ]);
 
+    // When operating in a worktree, search the absolute path and set cwd
+    const searchPath = root ? path.absolute : path.relative;
     const command = [
       'rg',
       ...args,
       ...ignoreArgs,
       input.pattern,
-      path.relative,
+      searchPath,
     ];
 
     const result = await executeCommand(command, {
+      cwd: root,
       channel: CHANNEL,
       truncate: false,
     });
