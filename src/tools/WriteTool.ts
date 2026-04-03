@@ -55,12 +55,12 @@ export class WriteFileTool extends defineTool({
 
     const originalContent = exists ? await WorkspaceFS.read(filePath) : '';
 
-    const proposedContent = isTexFile(input.path)
+    const proposedContent = isTexFile(filePath)
       ? replacementEngine.applyAll(input.content)
       : input.content;
 
     const approval = await requestToolEditApproval({
-      path: input.path,
+      path: filePath,
       originalContent,
       proposedContent,
       sourceTool: 'write_file',
@@ -68,7 +68,7 @@ export class WriteFileTool extends defineTool({
 
     if (!approval.accepted) {
       return buildApprovalRejectedResult(
-        input.path,
+        filePath,
         'write_file',
         approval.userMessage,
       );
@@ -76,15 +76,15 @@ export class WriteFileTool extends defineTool({
 
     const finalContent = getApprovedContent(approval, proposedContent);
     const { appliedContent } = await writeApprovedContent(
-      input.path,
+      filePath,
       originalContent,
       finalContent,
     );
 
-    recordToolFileRead(input.path);
+    recordToolFileRead(filePath);
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
-      input.path,
+      filePath,
       proposedContent,
       appliedContent,
     );
@@ -93,7 +93,7 @@ export class WriteFileTool extends defineTool({
     const originalLineCount = originalContent.split('\n').length;
     const newLineCount = appliedContent.split('\n').length;
     const action = exists ? 'Overwrote' : 'Created';
-    const summary = `${action} ${input.path} (${newLineCount} lines)`;
+    const summary = `${action} ${filePath} (${newLineCount} lines)`;
     const userInstruction =
       exists && originalLineCount > 0
         ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
@@ -105,7 +105,7 @@ export class WriteFileTool extends defineTool({
       userPatch: approval.userPatch,
       edits: [
         {
-          path: input.path,
+          path: filePath,
           lineChanges: approval.lineChanges,
           startLine: approval.startLine,
         },
