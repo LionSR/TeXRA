@@ -315,8 +315,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       );
 
       // Streaming returns EventStream (AsyncIterable)
-      const stream =
-        result as unknown as AsyncIterable<ChatStreamChunk>;
+      const stream = result as unknown as AsyncIterable<ChatStreamChunk>;
       const aggregator = new OpenRouterStreamAggregator();
       const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
@@ -1157,9 +1156,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     if (typeof lastUserMsg.content === 'string') {
       (lastUserMsg as any).content = text + lastUserMsg.content;
     } else if (Array.isArray(lastUserMsg.content)) {
-      const firstTextPart = (
-        lastUserMsg.content as ChatContentItems[]
-      ).find((p) => p.type === 'text');
+      const firstTextPart = (lastUserMsg.content as ChatContentItems[]).find(
+        (p) => p.type === 'text',
+      );
       if (firstTextPart && 'text' in firstTextPart) {
         (firstTextPart as any).text = text + (firstTextPart as any).text;
       } else {
@@ -1187,9 +1186,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           { type: 'text', text: lastUserMsg.content },
         ];
       } else if (Array.isArray(lastUserMsg.content)) {
-        (lastUserMsg.content as ChatContentItems[]).unshift(
-          ...formattedMedia,
-        );
+        (lastUserMsg.content as ChatContentItems[]).unshift(...formattedMedia);
       }
     } catch (err) {
       this.logger.logError(
