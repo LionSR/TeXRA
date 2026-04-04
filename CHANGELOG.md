@@ -6,26 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **External Inquiry tool** — consult external AI agents (like ChatGPT or Gemini) directly from a conversation. Threads persist across sessions so you can resume multi-turn consultations later. Multiple inquiries dispatch in parallel with a carousel UI for navigating responses.
-- **Codex tool overhaul** — Codex now runs as a native child stream instead of polling temp files. Follow-up turns, file diffs, command output, and todo lists all render inline. Sessions persist and can be resumed after reloading the extension.
-- **Background bash in child streams** — long-running shell commands now stream output into nested child tabs with live progress, replacing the old temp-file approach. Output is capped at 200k characters to keep memory bounded.
-- **Native OpenRouter SDK handler** — full OpenRouter SDK integration with extended message format, context compaction, and reasoning support for compatible models.
+- **External Inquiry tool** — ask external AI agents (like ChatGPT or Gemini) questions directly from a conversation. Threads persist across sessions so you can resume consultations later, and multiple inquiries run in parallel with a carousel UI for navigating responses.
+- **Codex tool redesign** — Codex sessions now appear as live child streams with inline file diffs, command output, and todo lists. Multi-turn follow-ups are supported, and sessions survive extension reloads.
+- **Native OpenRouter SDK** — full OpenRouter integration with context compaction and reasoning support for compatible models.
 
 ### Improvements
 
-- **Child stream nesting** — background tasks, Codex sessions, and sub-agents now nest under their parent tab in the sidebar with expand/collapse toggles, active-count badges, and auto-expand on creation.
-- **Performance for many child streams** — optimized rendering and state tracking for 100+ concurrent child streams (structural sharing, memoized tab renders, single-pass status computation).
-- **Tool toggle system** — toggleable tools can now be enabled or disabled from the Tools settings tab. Disabled tools are excluded from agent tool lists.
-- **Self-contained document outputs** — all document-producing agents (correct, polish, paper2slide, paper2poster, review, lean, research) now ensure their output is readable without the surrounding conversation context.
+- **Child stream nesting** — background tasks, Codex sessions, and sub-agents now nest under their parent tab in the sidebar with expand/collapse controls and active-count badges.
+- **Live background bash output** — long-running shell commands now stream output into child tabs with live progress instead of appearing only after completion.
+- **Performance for many child streams** — the sidebar stays responsive even with 100+ concurrent child streams.
+- **Tool toggles** — individual tools can now be enabled or disabled from the Tools settings tab.
+- **Self-contained document outputs** — all document-producing agents (correct, polish, paper2slide, paper2poster, review, lean, research) now produce output that is readable on its own, without needing the conversation for context.
 - Updated dependencies (@anthropic-ai/sdk, @google/genai, esbuild, fast-xml-parser, and others).
 
 ### Bug Fixes
 
-- Fixed execution leak in Codex follow-up loop and concurrent-turn race conditions.
-- Fixed interrupt race where stopping a background bash command before it started was silently ignored.
-- Fixed child stream status incorrectly overriding a user-initiated stop.
-- Fixed spurious `/files/` path segment in external inquiry execution mirrors.
-- Fixed carousel identity tracking so resolving one inquiry no longer jumps to another panel.
+- Fixed Codex sessions occasionally hanging or running duplicate turns.
+- Stopping a background command before it started is no longer silently ignored.
+- Pressing Stop now reliably halts child streams instead of being overridden.
+- Resolving one external inquiry no longer causes the carousel to jump to a different panel.
 
 ## [0.36.10] - 2026-03-28
 
