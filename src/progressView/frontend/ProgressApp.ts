@@ -53,6 +53,9 @@ import {
 /** Stable empty array for activeTaskGroups$ default (avoids new [] per read). */
 const EMPTY_TASK_GROUPS: TaskGroup[] = [];
 
+/** Stable empty map returned when no parent has active children. */
+const EMPTY_CHILD_MAP: Map<StreamTabId, StreamTabInfo[]> = new Map();
+
 /** Stream statuses that represent an active (non-terminal) child stream. */
 const ACTIVE_CHILD_STATUSES: ReadonlySet<string> = new Set([
   STREAM_STATUS.RUNNING,
@@ -347,10 +350,11 @@ export class ProgressApp extends ProgressAppBase {
   private childStreamsByParent$ = combine(
     [this.sortedStreams$, this.streamStates$] as const,
     (sorted, states) => {
-      const map = new Map<StreamTabId, StreamTabInfo[]>();
+      let map: Map<StreamTabId, StreamTabInfo[]> | undefined;
       for (const s of sorted) {
         if (!s.parentStreamId) continue;
         if (!isActiveChildStream(s, states)) continue;
+        if (!map) map = new Map();
         let children = map.get(s.parentStreamId);
         if (!children) {
           children = [];
@@ -358,7 +362,7 @@ export class ProgressApp extends ProgressAppBase {
         }
         children.push(s);
       }
-      return map;
+      return map ?? EMPTY_CHILD_MAP;
     },
   );
 
@@ -368,15 +372,18 @@ export class ProgressApp extends ProgressAppBase {
     (states, streams, childMap) => {
       const statusMap = new Map<StreamTabId, string>();
       const timestampMap = new Map<StreamTabId, number | undefined>();
-      const populate = (s: StreamTabInfo): void => {
-        const state = states.get(s.name);
-        statusMap.set(s.name, state?.status ?? STREAM_STATUS.READY);
-        timestampMap.set(s.name, state?.lastTimestamp);
-      };
       for (const stream of streams) {
-        populate(stream);
+        const state = states.get(stream.name);
+        statusMap.set(stream.name, state?.status ?? STREAM_STATUS.READY);
+        timestampMap.set(stream.name, state?.lastTimestamp);
         const children = childMap.get(stream.name);
-        if (children) children.forEach(populate);
+        if (children) {
+          for (const child of children) {
+            const cs = states.get(child.name);
+            statusMap.set(child.name, cs?.status ?? STREAM_STATUS.READY);
+            timestampMap.set(child.name, cs?.lastTimestamp);
+          }
+        }
       }
       return { statusMap, timestampMap };
     },

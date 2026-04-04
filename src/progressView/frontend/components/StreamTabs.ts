@@ -414,10 +414,6 @@ export class StreamTabs extends LitElement {
       }
 
       /* Child stream nesting */
-      .stream-group {
-        display: contents;
-      }
-
       .child-streams {
         padding-left: var(--spacing-medium, 12px);
         border-left: var(--border-thin) solid var(--color-border);
@@ -477,25 +473,38 @@ export class StreamTabs extends LitElement {
   protected override willUpdate(
     changed: import('lit').PropertyValues,
   ): void {
-    if (changed.has('childStreamsByParent')) {
-      const next = new Set(this.expandedParents);
-      let dirty = false;
-      // Auto-expand parents that gained children
-      for (const parentId of this.childStreamsByParent.keys()) {
-        if (!next.has(parentId)) {
-          next.add(parentId);
-          dirty = true;
-        }
+    if (!changed.has('childStreamsByParent')) return;
+
+    // Quick check: is there anything to add or remove?
+    let needsExpand = false;
+    let needsCollapse = false;
+    for (const parentId of this.childStreamsByParent.keys()) {
+      if (!this.expandedParents.has(parentId)) {
+        needsExpand = true;
+        break;
       }
-      // Auto-collapse parents that lost all children
-      for (const parentId of next) {
-        if (!this.childStreamsByParent.has(parentId)) {
-          next.delete(parentId);
-          dirty = true;
-        }
-      }
-      if (dirty) this.expandedParents = next;
     }
+    if (!needsExpand) {
+      for (const parentId of this.expandedParents) {
+        if (!this.childStreamsByParent.has(parentId)) {
+          needsCollapse = true;
+          break;
+        }
+      }
+    }
+    if (!needsExpand && !needsCollapse) return;
+
+    // Only allocate when we know something changed
+    const next = new Set(this.expandedParents);
+    for (const parentId of this.childStreamsByParent.keys()) {
+      next.add(parentId);
+    }
+    for (const parentId of next) {
+      if (!this.childStreamsByParent.has(parentId)) {
+        next.delete(parentId);
+      }
+    }
+    this.expandedParents = next;
   }
 
   override render(): TemplateResult {
@@ -513,63 +522,8 @@ export class StreamTabs extends LitElement {
                 const expanded =
                   hasChildren && this.expandedParents.has(stream.name);
 
-                return html`
-                  <div class="stream-group">
-                    <stream-tab
-                      .info=${stream}
-                      .compact=${this.compact}
-                      .status=${this.streamStatusById.get(stream.name) ??
-                      STREAM_STATUS.READY}
-                      .lastTimestamp=${this.streamLastTimestampById.get(
-                        stream.name,
-                      )}
-                      ?active=${stream.name === this.activeStreamId}
-                      .hasPendingApproval=${this.pendingApprovalStreamIds.has(
-                        stream.name,
-                      )}
-                    ></stream-tab>
-                    ${hasChildren && !this.compact
-                      ? html`
-                          <button
-                            class="child-toggle"
-                            aria-expanded=${expanded ? 'true' : 'false'}
-                            data-parent=${stream.name}
-                            data-action="toggle-children"
-                            title=${expanded
-                              ? 'Collapse child streams'
-                              : `${children.length} active child stream${children.length > 1 ? 's' : ''}`}
-                          >
-                            <i class="codicon codicon-chevron-right"></i>
-                            <span>${children.length} active</span>
-                          </button>
-                          ${expanded
-                            ? html`
-                                <div class="child-streams">
-                                  ${repeat(
-                                    children,
-                                    (child) => child.name,
-                                    (child) => html`
-                                      <stream-tab
-                                        .info=${child}
-                                        .compact=${false}
-                                        .status=${this.streamStatusById.get(
-                                          child.name,
-                                        ) ?? STREAM_STATUS.READY}
-                                        .lastTimestamp=${this.streamLastTimestampById.get(
-                                          child.name,
-                                        )}
-                                        ?active=${child.name ===
-                                        this.activeStreamId}
-                                      ></stream-tab>
-                                    `,
-                                  )}
-                                </div>
-                              `
-                            : nothing}
-                        `
-                      : nothing}
-                  </div>
-                `;
+                // prettier-ignore
+                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.streamStatusById.get(stream.name) ?? STREAM_STATUS.READY} .lastTimestamp=${this.streamLastTimestampById.get(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}></stream-tab>${hasChildren && !this.compact ? html`<button class="child-toggle" aria-expanded=${expanded ? 'true' : 'false'} data-parent=${stream.name} @click=${this.handleChildToggle} title=${expanded ? 'Collapse child streams' : `${children.length} active child stream${children.length > 1 ? 's' : ''}`}><i class="codicon codicon-chevron-right"></i><span>${children.length} active</span></button>${expanded ? html`<div class="child-streams">${repeat(children, (child) => child.name, (child) => html`<stream-tab .info=${child} .compact=${false} .status=${this.streamStatusById.get(child.name) ?? STREAM_STATUS.READY} .lastTimestamp=${this.streamLastTimestampById.get(child.name)} ?active=${child.name === this.activeStreamId}></stream-tab>`)}</div>` : nothing}` : nothing}`;
               },
             )}
           </div>
@@ -643,28 +597,11 @@ export class StreamTabs extends LitElement {
   private handleTabClick(event: MouseEvent): void {
     const actionElement = getComposedPathElement<HTMLElement>(
       event,
-      '[data-action]',
+      '[data-stream][data-action]',
     );
     if (!(actionElement instanceof HTMLElement)) return;
 
-    const { action } = actionElement.dataset;
-
-    // Handle child-stream toggle
-    if (action === 'toggle-children') {
-      const parentId = actionElement.dataset.parent;
-      if (!parentId) return;
-      const next = new Set(this.expandedParents);
-      if (next.has(parentId)) {
-        next.delete(parentId);
-      } else {
-        next.add(parentId);
-      }
-      this.expandedParents = next;
-      return;
-    }
-
-    // Handle stream tab actions (select, delete)
-    const streamId = actionElement.dataset.stream;
+    const { stream: streamId, action } = actionElement.dataset;
     if (!streamId) return;
 
     switch (action) {
@@ -677,6 +614,19 @@ export class StreamTabs extends LitElement {
       default:
         break;
     }
+  }
+
+  private handleChildToggle(event: MouseEvent): void {
+    const button = event.currentTarget as HTMLElement;
+    const parentId = button.dataset.parent;
+    if (!parentId) return;
+    const next = new Set(this.expandedParents);
+    if (next.has(parentId)) {
+      next.delete(parentId);
+    } else {
+      next.add(parentId);
+    }
+    this.expandedParents = next;
   }
 
   private handleFilterChange(event: Event): void {
