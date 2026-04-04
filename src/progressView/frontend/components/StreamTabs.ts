@@ -24,6 +24,14 @@ import { ProgressEvents } from '../events';
 import { getComposedPathElement, getRadioValue } from '../utils';
 import type { StreamFilter, StreamSort } from '../store';
 
+/** Stream statuses considered active (non-terminal) for child stream display. */
+const ACTIVE_CHILD_STATUSES: ReadonlySet<string> = new Set([
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.WAITING,
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.RESUMING,
+]);
+
 function buildTooltip(
   info: StreamTabInfo,
   lastTimestamp: number | undefined,
@@ -418,6 +426,18 @@ export class StreamTabs extends LitElement {
         padding-left: var(--spacing-medium, 12px);
         border-left: var(--border-thin) solid var(--color-border);
         margin-left: var(--spacing-small);
+        max-height: 12rem;
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+      }
+
+      .child-streams stream-tab {
+        opacity: 1;
+        transition: opacity var(--transition-fast);
+      }
+
+      .child-streams stream-tab.is-finished {
+        opacity: var(--opacity-subtle, 0.5);
       }
 
       .child-toggle {
@@ -522,9 +542,25 @@ export class StreamTabs extends LitElement {
                 const hasChildren = children && children.length > 0;
                 const expanded =
                   hasChildren && this.expandedParents.has(stream.name);
+                const activeCount = hasChildren
+                  ? children.filter((c) => {
+                      const s =
+                        this.streamStatusById.get(c.name) ??
+                        STREAM_STATUS.READY;
+                      return ACTIVE_CHILD_STATUSES.has(s);
+                    }).length
+                  : 0;
+                const toggleLabel = activeCount > 0
+                  ? `${activeCount} active`
+                  : `${children?.length ?? 0} done`;
 
                 // prettier-ignore
-                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.streamStatusById.get(stream.name) ?? STREAM_STATUS.READY} .lastTimestamp=${this.streamLastTimestampById.get(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}></stream-tab>${hasChildren && !this.compact ? html`<button class="child-toggle" aria-expanded=${expanded ? 'true' : 'false'} data-parent=${stream.name} @click=${this.handleChildToggle} title=${expanded ? 'Collapse child streams' : `${children.length} active child stream${children.length > 1 ? 's' : ''}`}><i class="codicon codicon-chevron-right"></i><span>${children.length} active</span></button>${expanded ? html`<div class="child-streams">${repeat(children, (child) => child.name, (child) => html`<stream-tab .info=${child} .compact=${false} .status=${this.streamStatusById.get(child.name) ?? STREAM_STATUS.READY} .lastTimestamp=${this.streamLastTimestampById.get(child.name)} ?active=${child.name === this.activeStreamId}></stream-tab>`)}</div>` : nothing}` : nothing}`;
+                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.streamStatusById.get(stream.name) ?? STREAM_STATUS.READY} .lastTimestamp=${this.streamLastTimestampById.get(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}></stream-tab>${hasChildren && !this.compact ? html`<button class="child-toggle" aria-expanded=${expanded ? 'true' : 'false'} data-parent=${stream.name} @click=${this.handleChildToggle} title=${expanded ? 'Collapse child streams' : `${children.length} child stream${children.length > 1 ? 's' : ''}`}><i class="codicon codicon-chevron-right"></i><span>${toggleLabel}</span></button>${expanded ? html`<div class="child-streams">${repeat(children, (child) => child.name, (child) => {
+                  const childStatus = this.streamStatusById.get(child.name) ?? STREAM_STATUS.READY;
+                  const isFinished = !ACTIVE_CHILD_STATUSES.has(childStatus);
+                  // prettier-ignore
+                  return html`<stream-tab class=${isFinished ? 'is-finished' : ''} .info=${child} .compact=${false} .status=${childStatus} .lastTimestamp=${this.streamLastTimestampById.get(child.name)} ?active=${child.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(child.name)}></stream-tab>`;
+                })}</div>` : nothing}` : nothing}`;
               },
             )}
           </div>

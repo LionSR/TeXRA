@@ -343,17 +343,15 @@ export class ProgressApp extends ProgressAppBase {
   );
 
   /**
-   * Active child streams grouped by parent stream ID.
-   * Only includes children that are still running/waiting — finished ones
-   * are omitted so the nested list auto-cleans.
+   * Child streams grouped by parent stream ID.
+   * Includes both active and finished children so the user can still
+   * navigate to completed/errored child streams.
    */
-  private childStreamsByParent$ = combine(
-    [this.sortedStreams$, this.streamStates$] as const,
-    (sorted, states) => {
+  private childStreamsByParent$ = new Signal.Computed(() => {
+      const sorted = this.sortedStreams$.get();
       let map: Map<StreamTabId, StreamTabInfo[]> | undefined;
       for (const s of sorted) {
         if (!s.parentStreamId) continue;
-        if (!isActiveChildStream(s, states)) continue;
         if (!map) map = new Map();
         let children = map.get(s.parentStreamId);
         if (!children) {
@@ -363,8 +361,7 @@ export class ProgressApp extends ProgressAppBase {
         children.push(s);
       }
       return map ?? EMPTY_CHILD_MAP;
-    },
-  );
+  });
 
   /** Status and timestamp for all visible streams (top-level + active children). */
   private statusAndTimestampById$ = combine(
