@@ -1,16 +1,16 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - shared utilities
-import { isPlainObject } from '@shared/utils/string';
-import type { CodexInput } from '@tools/codex';
 import {
   CODEX_FILE_CHANGE_TOOL,
   CODEX_THREAD_TOOL,
   CODEX_TODO_TOOL,
   CODEX_TURN_TOOL,
-  type CodexFileChange,
-  type CodexFileChangeToolInput,
-  type CodexThreadToolInput,
-  type CodexTodoToolInput,
-  type CodexTurnToolInput,
+  CodexFileChangeToolInputSchema,
+  CodexThreadToolInputSchema,
+  CodexTodoToolInputSchema,
+  CodexTurnToolInputSchema,
 } from '@tools/codexShared';
 import { formatDuration } from '@utils/core';
 
@@ -29,6 +29,18 @@ import { buildToolUseSection, wrapInPre } from '../htmlBuilders';
 type RenderableSection = TemplateResult | typeof nothing | undefined | null;
 type BadgeData = { iconClass: string; label: string };
 type CodexToolRenderer = (input: unknown) => TemplateResult | typeof nothing;
+
+/** Lenient schema for parsing codex tool input in the renderer. */
+const CodexInputDisplaySchema = z.object({
+  prompt: z.string().optional().default(''),
+  sandbox_mode: z.string().optional(),
+  run_in_background: z.boolean().optional(),
+  working_directory: z.string().optional(),
+});
+
+type CodexInputDisplay = z.infer<typeof CodexInputDisplaySchema>;
+type CodexFileChangeToolInput = z.infer<typeof CodexFileChangeToolInputSchema>;
+type CodexTodoToolInput = z.infer<typeof CodexTodoToolInputSchema>;
 
 function renderBadge({ iconClass, label }: BadgeData): TemplateResult {
   // prettier-ignore
@@ -75,13 +87,15 @@ function renderSectionGroup(
   )}`;
 }
 
-function renderCodexPromptSection(input: CodexInput): RenderableSection {
+function renderCodexPromptSection(
+  input: CodexInputDisplay,
+): RenderableSection {
   return when(Boolean(input.prompt), () =>
     buildToolUseSection('Prompt:', wrapInPre(input.prompt)),
   );
 }
 
-function renderCodexModeSection(input: CodexInput): RenderableSection {
+function renderCodexModeSection(input: CodexInputDisplay): RenderableSection {
   const badges = [
     ...(input.sandbox_mode
       ? [{ iconClass: 'codicon-shield', label: input.sandbox_mode }]
@@ -94,7 +108,9 @@ function renderCodexModeSection(input: CodexInput): RenderableSection {
   return renderBadgeSection('Mode:', badges);
 }
 
-function renderCodexDirectorySection(input: CodexInput): RenderableSection {
+function renderCodexDirectorySection(
+  input: CodexInputDisplay,
+): RenderableSection {
   const workingDirectory = input.working_directory ?? '';
   return when(workingDirectory.length > 0, () =>
     buildToolUseSection('Directory:', wrapInPre(workingDirectory)),
@@ -104,15 +120,13 @@ function renderCodexDirectorySection(input: CodexInput): RenderableSection {
 function renderCodexInputContent(
   input: unknown,
 ): TemplateResult | typeof nothing {
-  if (!isPlainObject(input)) {
-    return nothing;
-  }
+  const parsed = CodexInputDisplaySchema.safeParse(input);
+  if (!parsed.success) return nothing;
 
-  const codexInput = input as CodexInput;
   return renderSectionGroup([
-    renderCodexPromptSection(codexInput),
-    renderCodexModeSection(codexInput),
-    renderCodexDirectorySection(codexInput),
+    renderCodexPromptSection(parsed.data),
+    renderCodexModeSection(parsed.data),
+    renderCodexDirectorySection(parsed.data),
   ]);
 }
 
@@ -128,7 +142,9 @@ function renderCodexFileStatusSection(patchStatus: string): RenderableSection {
     : nothing;
 }
 
-function renderCodexFileChangeItem(change: CodexFileChange): TemplateResult {
+function renderCodexFileChangeItem(
+  change: CodexFileChangeToolInput['changes'][number],
+): TemplateResult {
   return html`
     <li class="detail-item">
       <i class="codicon codicon-file"></i>
@@ -141,7 +157,7 @@ function renderCodexFileChangeItem(change: CodexFileChange): TemplateResult {
 }
 
 function renderCodexFileListSection(
-  changes: CodexFileChange[],
+  changes: CodexFileChangeToolInput['changes'],
 ): RenderableSection {
   return when(
     changes.length > 0,
@@ -165,43 +181,27 @@ function renderCodexFileListSection(
 function renderCodexFileChangeContent(
   input: unknown,
 ): TemplateResult | typeof nothing {
-  if (!isPlainObject(input)) {
-    return nothing;
-  }
-
-  const patchInput = input as Partial<CodexFileChangeToolInput>;
-  const changes = Array.isArray(patchInput.changes)
-    ? patchInput.changes.filter(
-        (change): change is CodexFileChange =>
-          typeof change?.path === 'string' && typeof change?.kind === 'string',
-      )
-    : [];
-  const patchStatus =
-    typeof patchInput.patchStatus === 'string' ? patchInput.patchStatus : '';
+  const parsed = CodexFileChangeToolInputSchema.safeParse(input);
+  if (!parsed.success) return nothing;
 
   return renderSectionGroup([
-    renderCodexFileStatusSection(patchStatus),
-    renderCodexFileListSection(changes),
+    renderCodexFileStatusSection(parsed.data.patchStatus ?? ''),
+    renderCodexFileListSection(parsed.data.changes),
   ]);
 }
 
 function renderCodexThreadContent(
   input: unknown,
 ): TemplateResult | typeof nothing {
-  if (!isPlainObject(input)) {
-    return nothing;
-  }
+  const parsed = CodexThreadToolInputSchema.safeParse(input);
+  if (!parsed.success) return nothing;
 
-  const threadInput = input as Partial<CodexThreadToolInput>;
   return renderSectionGroup([
-    when(
-      typeof threadInput.threadId === 'string' &&
-        threadInput.threadId.length > 0,
-      () =>
-        buildToolUseSection(
-          'Thread ID:',
-          html`<code class="execution-id">${threadInput.threadId}</code>`,
-        ),
+    when(parsed.data.threadId.length > 0, () =>
+      buildToolUseSection(
+        'Thread ID:',
+        html`<code class="execution-id">${parsed.data.threadId}</code>`,
+      ),
     ),
   ]);
 }
@@ -237,7 +237,7 @@ function renderCodexTodoItem(item: {
 }
 
 function renderCodexTodoListSection(
-  items: Array<{ text: string; completed: boolean }>,
+  items: CodexTodoToolInput['items'],
 ): RenderableSection {
   return when(
     items.length > 0,
@@ -261,26 +261,15 @@ function renderCodexTodoListSection(
 function renderCodexTodoContent(
   input: unknown,
 ): TemplateResult | typeof nothing {
-  if (!isPlainObject(input)) {
-    return nothing;
-  }
-
-  const todoInput = input as Partial<CodexTodoToolInput>;
-  const totalCount =
-    typeof todoInput.totalCount === 'number' ? todoInput.totalCount : 0;
-  const completedCount =
-    typeof todoInput.completedCount === 'number' ? todoInput.completedCount : 0;
-  const items = Array.isArray(todoInput.items)
-    ? todoInput.items.filter(
-        (item): item is { text: string; completed: boolean } =>
-          typeof item?.text === 'string' &&
-          typeof item?.completed === 'boolean',
-      )
-    : [];
+  const parsed = CodexTodoToolInputSchema.safeParse(input);
+  if (!parsed.success) return nothing;
 
   return renderSectionGroup([
-    renderCodexTodoProgressSection(completedCount, totalCount),
-    renderCodexTodoListSection(items),
+    renderCodexTodoProgressSection(
+      parsed.data.completedCount,
+      parsed.data.totalCount,
+    ),
+    renderCodexTodoListSection(parsed.data.items),
   ]);
 }
 
@@ -309,18 +298,12 @@ function renderCodexTurnDurationSection(wallTimeMs: number): RenderableSection {
 function renderCodexTurnContent(
   input: unknown,
 ): TemplateResult | typeof nothing {
-  if (!isPlainObject(input)) {
-    return nothing;
-  }
-
-  const turnInput = input as Partial<CodexTurnToolInput>;
-  const state = typeof turnInput.state === 'string' ? turnInput.state : '';
-  const wallTimeMs =
-    typeof turnInput.wallTimeMs === 'number' ? turnInput.wallTimeMs : 0;
+  const parsed = CodexTurnToolInputSchema.safeParse(input);
+  if (!parsed.success) return nothing;
 
   return renderSectionGroup([
-    renderCodexTurnStateSection(state),
-    renderCodexTurnDurationSection(wallTimeMs),
+    renderCodexTurnStateSection(parsed.data.state),
+    renderCodexTurnDurationSection(parsed.data.wallTimeMs ?? 0),
   ]);
 }
 
