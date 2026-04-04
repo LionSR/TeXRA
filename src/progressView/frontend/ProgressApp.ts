@@ -347,22 +347,6 @@ export class ProgressApp extends ProgressAppBase {
       return map ?? EMPTY_CHILD_MAP;
   });
 
-  /**
-   * Status and timestamp for ALL streams (single pass over streamStates).
-   * Covers both top-level and child streams so StreamTabs can look up
-   * any stream without requiring a separate computation per nesting level.
-   */
-  private statusAndTimestampById$ = new Signal.Computed(() => {
-    const states = this.streamStates$.get();
-    const statusMap = new Map<StreamTabId, string>();
-    const timestampMap = new Map<StreamTabId, number | undefined>();
-    for (const [name, state] of states) {
-      statusMap.set(name, state?.status ?? STREAM_STATUS.READY);
-      timestampMap.set(name, state?.lastTimestamp);
-    }
-    return { statusMap, timestampMap };
-  });
-
   // --- Fine-grained active-stream selectors ---
   // These return stable Map entry values (via Mutative structural sharing).
   // When stream B's state changes, activeStreamState$ still returns stream A's
@@ -574,9 +558,7 @@ export class ProgressApp extends ProgressAppBase {
               .activeStreamId=${this.activeStreamId$.get()}
               .filter=${this.streamFilter$.get()}
               .sort=${this.streamSort$.get()}
-              .streamStatusById=${this.statusAndTimestampById$.get().statusMap}
-              .streamLastTimestampById=${this.statusAndTimestampById$.get()
-                .timestampMap}
+              .streamStates=${this.streamStates$.get()}
               .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
               .childStreamsByParent=${this.childStreamsByParent$.get()}
               @stream-switch=${this.onStreamSwitch}

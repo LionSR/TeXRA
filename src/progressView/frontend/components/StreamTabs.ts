@@ -6,7 +6,12 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import { STREAM_STATUS, type StreamTabInfo } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  type StreamTabId,
+  type StreamTabInfo,
+} from '@shared/schemas';
+import type { StreamState } from '../store';
 import {
   designTokens,
   animationStyles,
@@ -291,17 +296,36 @@ export class StreamTab extends LitElement {
   /** Whether the child list is expanded. */
   @property({ type: Boolean }) expanded = false;
 
+  // Cached derived values — only recomputed when inputs change
+  private _cachedInfo: StreamTabInfo | null = null;
+  private _compactLabel = '';
+  private _agentDecorator = getAgentCategoryDecorator('toolUse');
+  private _cachedTooltipKey = '';
+  private _tooltip = '';
+
   override render(): TemplateResult {
     const stream = this.info;
     const status = this.status || STREAM_STATUS.READY;
-    const tooltip = buildTooltip(stream, this.lastTimestamp, status);
-    const agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
-    const rawCompactLabel =
-      `${stream.parentStreamId ? '↳' : ''}${stream.label || stream.name}`.trim();
-    const compactLabel =
-      rawCompactLabel.length > 8
-        ? rawCompactLabel.slice(0, 7) + '…'
-        : rawCompactLabel;
+
+    // Memoize info-derived values (only change when stream identity changes)
+    if (this._cachedInfo !== stream) {
+      this._cachedInfo = stream;
+      this._agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
+      const raw =
+        `${stream.parentStreamId ? '↳' : ''}${stream.label || stream.name}`.trim();
+      this._compactLabel = raw.length > 8 ? raw.slice(0, 7) + '…' : raw;
+    }
+
+    // Memoize tooltip (changes on status or timestamp, not on every render)
+    const tooltipKey = `${status}\0${this.lastTimestamp}`;
+    if (this._cachedTooltipKey !== tooltipKey) {
+      this._cachedTooltipKey = tooltipKey;
+      this._tooltip = buildTooltip(stream, this.lastTimestamp, status);
+    }
+
+    const tooltip = this._tooltip;
+    const agentDecorator = this._agentDecorator;
+    const compactLabel = this._compactLabel;
     const hasChildren = this.childCount > 0 && !this.compact;
 
     return html`
@@ -497,10 +521,13 @@ export class StreamTabs extends LitElement {
   @property({ attribute: false }) activeStreamId: string | null = null;
   @property({ attribute: false }) filter: StreamFilter = 'all';
   @property({ attribute: false }) sort: StreamSort = 'time';
+  /**
+   * Stream states map — passed directly from ProgressApp's streamStates$.
+   * Stable Mutative reference (only changed entries get new refs), so
+   * Lit's Object.is() check prevents unnecessary re-renders.
+   */
   @property({ attribute: false })
-  streamStatusById: Map<string, string> = new Map();
-  @property({ attribute: false })
-  streamLastTimestampById: Map<string, number | undefined> = new Map();
+  streamStates: Map<StreamTabId, StreamState> = new Map();
   @property({ attribute: false })
   pendingApprovalStreamIds: Set<string> = new Set();
   @property({ attribute: false })
@@ -548,6 +575,16 @@ export class StreamTabs extends LitElement {
     if (dirty) this.expandedParents = next;
   }
 
+  /** Look up stream status from the states map (O(1), no allocation). */
+  private getStatus(name: string): string {
+    return this.streamStates.get(name as StreamTabId)?.status ?? STREAM_STATUS.READY;
+  }
+
+  /** Look up last timestamp from the states map (O(1), no allocation). */
+  private getTimestamp(name: string): number | undefined {
+    return this.streamStates.get(name as StreamTabId)?.lastTimestamp;
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="tabs">
@@ -564,11 +601,11 @@ export class StreamTabs extends LitElement {
                   childCount > 0 && this.expandedParents.has(stream.name);
 
                 // prettier-ignore
-                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.streamStatusById.get(stream.name) ?? STREAM_STATUS.READY} .lastTimestamp=${this.streamLastTimestampById.get(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${childCount} ?expanded=${expanded}></stream-tab>${expanded && children ? html`<div class="child-streams">${repeat(children, (child) => child.name, (child) => {
-                  const childStatus = this.streamStatusById.get(child.name) ?? STREAM_STATUS.READY;
+                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${childCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded}>${repeat(children, (child) => child.name, (child) => {
+                  const childStatus = this.getStatus(child.name);
                   const isFinished = !ACTIVE_CHILD_STATUSES.has(childStatus);
                   // prettier-ignore
-                  return html`<stream-tab class=${isFinished ? 'is-finished' : ''} .info=${child} .compact=${false} .status=${childStatus} .lastTimestamp=${this.streamLastTimestampById.get(child.name)} ?active=${child.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(child.name)}></stream-tab>`;
+                  return html`<stream-tab class=${isFinished ? 'is-finished' : ''} .info=${child} .compact=${false} .status=${childStatus} .lastTimestamp=${this.getTimestamp(child.name)} ?active=${child.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(child.name)}></stream-tab>`;
                 })}</div>` : nothing}`;
               },
             )}
