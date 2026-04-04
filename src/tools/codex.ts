@@ -22,7 +22,7 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -53,26 +53,50 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import {
-  buildCodexConfig,
-  buildCodexWorkspaceOptions,
-  CODEX_CLI_MODEL,
-  CODEX_REASONING_EFFORT,
-  CODEX_SANDBOX_MODES,
-  getCodexSandboxMode,
-} from './codexConfig';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream, finalizeChildStream } from './childStream';
+import {
+  CODEX_AGENT_NAME,
+  CODEX_DISPLAY_MODEL,
+} from './codexShared';
 
 // Type-only imports (kept separate for bundler efficiency)
 import type {
   McpToolCallItem,
   RunResult,
+  SandboxMode,
   Thread,
   ThreadItem,
   TodoListItem,
   WebSearchItem,
 } from '@openai/codex-sdk';
+
+// ============================================================================
+// Codex config (inlined to avoid importing codexConfig.ts which pulls in vscode)
+// ============================================================================
+
+/** Short model name passed to the Codex CLI via --model. */
+const CODEX_CLI_MODEL = 'gpt-5.4';
+
+/** Default reasoning effort passed to the Codex CLI. */
+const CODEX_REASONING_EFFORT = 'high' as const;
+
+/** All sandbox modes from the SDK, exposed to the LLM. */
+const CODEX_SANDBOX_MODES = [
+  'read-only',
+  'workspace-write',
+  'danger-full-access',
+] as const satisfies readonly SandboxMode[];
+
+/** Build synthetic AgentConfig for codex child streams. */
+function buildCodexConfig(prompt: string): AgentConfig {
+  return AgentConfigSchema.parse({
+    agent: CODEX_AGENT_NAME,
+    model: CODEX_DISPLAY_MODEL,
+    instruction: prompt,
+    agentCategory: AgentCategory.ToolUse,
+  });
+}
 
 // ============================================================================
 // Schema
@@ -487,8 +511,12 @@ export class CodexTool extends defineTool({
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
-    // Resolve sandbox mode default early so it's available for approval label + output
-    input.sandbox_mode = input.sandbox_mode ?? getCodexSandboxMode();
+    // Resolve sandbox mode default early so it's available for approval label + output.
+    // Lazy import to avoid pulling vscode into the module graph at parse time.
+    if (!input.sandbox_mode) {
+      const { getCodexSandboxMode } = await import('./codexConfig');
+      input.sandbox_mode = getCodexSandboxMode();
+    }
 
     // Request approval — same pattern as BashTool
     const approvalLabel = `[codex ${input.sandbox_mode}] ${input.prompt}`;
@@ -535,14 +563,16 @@ export class CodexTool extends defineTool({
 
     const CodexClass = await importCodexClass();
     const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
-    const sandboxMode = input.sandbox_mode ?? getCodexSandboxMode();
+    // sandbox_mode is always resolved in execute() before this is called
+    const sandboxMode = input.sandbox_mode;
     // Only compute workspace for new threads — resumed threads keep their
     // stored workspace unless the caller explicitly overrides.
-    const workspace = input.working_directory
-      ? buildCodexWorkspaceOptions(input.working_directory)
-      : input.thread_id
-        ? {}
-        : buildCodexWorkspaceOptions();
+    // Lazy import to avoid pulling vscode into the module graph at parse time.
+    let workspace: { workingDirectory?: string; additionalDirectories?: string[] } = {};
+    if (input.working_directory || !input.thread_id) {
+      const { buildCodexWorkspaceOptions } = await import('./codexConfig');
+      workspace = buildCodexWorkspaceOptions(input.working_directory);
+    }
     const threadOptions = {
       ...workspace,
       sandboxMode,
