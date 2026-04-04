@@ -53,7 +53,7 @@ export type CodexFileChangeToolInput = z.infer<
 export const CodexMcpToolOutputSchema = z.object({
   status: z.string().optional(),
   structuredContent: z.unknown().optional(),
-  contentBlocks: z.array(z.record(z.unknown())).optional(),
+  contentBlocks: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 
 export type CodexMcpToolOutput = z.infer<typeof CodexMcpToolOutputSchema>;
