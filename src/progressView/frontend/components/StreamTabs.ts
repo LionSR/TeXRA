@@ -513,7 +513,6 @@ export class StreamTabs extends LitElement {
       .child-streams stream-tab.is-finished {
         opacity: var(--opacity-subtle, 0.5);
       }
-
     `,
   ];
 
@@ -544,9 +543,7 @@ export class StreamTabs extends LitElement {
   private manuallyCollapsed: Set<string> = new Set();
 
   /** Auto-expand parents when children appear, auto-collapse when gone. */
-  protected override willUpdate(
-    changed: import('lit').PropertyValues,
-  ): void {
+  protected override willUpdate(changed: import('lit').PropertyValues): void {
     if (!changed.has('childStreamsByParent')) return;
 
     let dirty = false;
@@ -593,8 +590,7 @@ export class StreamTabs extends LitElement {
               this.streams,
               (stream) => stream.name,
               (stream) => {
-                const children =
-                  this.childStreamsByParent.get(stream.name);
+                const children = this.childStreamsByParent.get(stream.name);
                 const childCount = !this.compact ? (children?.length ?? 0) : 0;
                 const expanded =
                   childCount > 0 && this.expandedParents.has(stream.name);
