@@ -494,6 +494,9 @@ export class CodexTool extends defineTool({
   schema: CodexInputSchema,
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
+    // Resolve sandbox mode default early so it's available for approval label + output
+    input.sandbox_mode = input.sandbox_mode ?? getCodexSandboxMode();
+
     // Request approval — same pattern as BashTool
     const approvalLabel = `[codex ${input.sandbox_mode}] ${input.prompt}`;
     const approval = await requestBashApproval({ command: approvalLabel });
