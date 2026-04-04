@@ -97,11 +97,11 @@ const CodexInputSchema = z.strictObject({
   prompt: z.string().describe('Instruction for the Codex agent'),
   working_directory: z
     .string()
-    .optional()
+    .nullish()
     .describe('Directory to run in (defaults to workspace root)'),
   sandbox_mode: z
     .enum(CODEX_SANDBOX_MODES)
-    .optional()
+    .nullish()
     .describe(
       'File access level for the Codex agent (defaults to user-configured mode, typically workspace-write)',
     ),
@@ -113,7 +113,7 @@ const CodexInputSchema = z.strictObject({
     ),
   thread_id: z
     .string()
-    .optional()
+    .nullish()
     .describe(
       'Resume an existing Codex thread by its ID. ' +
         'When provided, continues the conversation from where it left off instead of starting a new one. ' +
