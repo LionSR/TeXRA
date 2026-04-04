@@ -1,6 +1,6 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
@@ -23,6 +23,14 @@ import { ELEMENT_IDS, FILTER_BUTTONS, SORT_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement, getRadioValue } from '../utils';
 import type { StreamFilter, StreamSort } from '../store';
+
+/** Stream statuses considered active (non-terminal) for child stream display. */
+const ACTIVE_CHILD_STATUSES: ReadonlySet<string> = new Set([
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.WAITING,
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.RESUMING,
+]);
 
 function buildTooltip(
   info: StreamTabInfo,
@@ -412,6 +420,55 @@ export class StreamTabs extends LitElement {
       .sort-btn.active::part(control) {
         background-color: var(--vscode-toolbar-hoverBackground);
       }
+
+      /* Child stream nesting */
+      .child-streams {
+        padding-left: var(--spacing-medium, 12px);
+        border-left: var(--border-thin) solid var(--color-border);
+        margin-left: var(--spacing-small);
+        max-height: 12rem;
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+      }
+
+      .child-streams stream-tab {
+        opacity: 1;
+        transition: opacity var(--transition-fast);
+      }
+
+      .child-streams stream-tab.is-finished {
+        opacity: var(--opacity-subtle, 0.5);
+      }
+
+      .child-toggle {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        padding: var(--spacing-tiny) var(--spacing-small);
+        border: none;
+        background: none;
+        color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+        opacity: 0.7;
+        font-size: var(--font-size-xs);
+        font-family: var(--font-family);
+        cursor: pointer;
+        width: 100%;
+        text-align: left;
+      }
+
+      .child-toggle:hover {
+        opacity: 1;
+        background-color: var(--vscode-list-hoverBackground);
+      }
+
+      .child-toggle .codicon {
+        font-size: var(--font-size-xs);
+        transition: transform var(--transition-fast);
+      }
+
+      .child-toggle[aria-expanded='true'] .codicon {
+        transform: rotate(90deg);
+      }
     `,
   ];
 
@@ -426,6 +483,50 @@ export class StreamTabs extends LitElement {
   streamLastTimestampById: Map<string, number | undefined> = new Map();
   @property({ attribute: false })
   pendingApprovalStreamIds: Set<string> = new Set();
+  @property({ attribute: false })
+  childStreamsByParent: Map<string, StreamTabInfo[]> = new Map();
+
+  /** Which parent streams have their child list expanded. */
+  @state() private expandedParents: Set<string> = new Set();
+
+  /**
+   * Parents the user has manually collapsed. Auto-expand won't override
+   * these — only cleared when all children finish (parent leaves the map).
+   */
+  private manuallyCollapsed: Set<string> = new Set();
+
+  /** Auto-expand parents when children appear, auto-collapse when gone. */
+  protected override willUpdate(
+    changed: import('lit').PropertyValues,
+  ): void {
+    if (!changed.has('childStreamsByParent')) return;
+
+    let dirty = false;
+    const next = new Set(this.expandedParents);
+
+    // Auto-expand NEW parents (not yet seen and not manually collapsed)
+    for (const parentId of this.childStreamsByParent.keys()) {
+      if (!next.has(parentId) && !this.manuallyCollapsed.has(parentId)) {
+        next.add(parentId);
+        dirty = true;
+      }
+    }
+    // Auto-collapse parents that lost all children + clear manual state
+    for (const parentId of next) {
+      if (!this.childStreamsByParent.has(parentId)) {
+        next.delete(parentId);
+        this.manuallyCollapsed.delete(parentId);
+        dirty = true;
+      }
+    }
+    // Also clean manual set for parents no longer in the map
+    for (const parentId of this.manuallyCollapsed) {
+      if (!this.childStreamsByParent.has(parentId)) {
+        this.manuallyCollapsed.delete(parentId);
+      }
+    }
+    if (dirty) this.expandedParents = next;
+  }
 
   override render(): TemplateResult {
     return html`
@@ -435,21 +536,32 @@ export class StreamTabs extends LitElement {
             ${repeat(
               this.streams,
               (stream) => stream.name,
-              (stream) => html`
-                <stream-tab
-                  .info=${stream}
-                  .compact=${this.compact}
-                  .status=${this.streamStatusById.get(stream.name) ??
-                  STREAM_STATUS.READY}
-                  .lastTimestamp=${this.streamLastTimestampById.get(
-                    stream.name,
-                  )}
-                  ?active=${stream.name === this.activeStreamId}
-                  .hasPendingApproval=${this.pendingApprovalStreamIds.has(
-                    stream.name,
-                  )}
-                ></stream-tab>
-              `,
+              (stream) => {
+                const children =
+                  this.childStreamsByParent.get(stream.name);
+                const hasChildren = children && children.length > 0;
+                const expanded =
+                  hasChildren && this.expandedParents.has(stream.name);
+                const activeCount = hasChildren
+                  ? children.filter((c) => {
+                      const s =
+                        this.streamStatusById.get(c.name) ??
+                        STREAM_STATUS.READY;
+                      return ACTIVE_CHILD_STATUSES.has(s);
+                    }).length
+                  : 0;
+                const toggleLabel = activeCount > 0
+                  ? `${activeCount} active`
+                  : `${children?.length ?? 0} done`;
+
+                // prettier-ignore
+                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.streamStatusById.get(stream.name) ?? STREAM_STATUS.READY} .lastTimestamp=${this.streamLastTimestampById.get(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}></stream-tab>${hasChildren && !this.compact ? html`<button class="child-toggle" aria-expanded=${expanded ? 'true' : 'false'} data-parent=${stream.name} @click=${this.handleChildToggle} title=${expanded ? 'Collapse child streams' : `${children.length} child stream${children.length > 1 ? 's' : ''}`}><i class="codicon codicon-chevron-right"></i><span>${toggleLabel}</span></button>${expanded ? html`<div class="child-streams">${repeat(children, (child) => child.name, (child) => {
+                  const childStatus = this.streamStatusById.get(child.name) ?? STREAM_STATUS.READY;
+                  const isFinished = !ACTIVE_CHILD_STATUSES.has(childStatus);
+                  // prettier-ignore
+                  return html`<stream-tab class=${isFinished ? 'is-finished' : ''} .info=${child} .compact=${false} .status=${childStatus} .lastTimestamp=${this.streamLastTimestampById.get(child.name)} ?active=${child.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(child.name)}></stream-tab>`;
+                })}</div>` : nothing}` : nothing}`;
+              },
             )}
           </div>
           ${when(
@@ -539,6 +651,21 @@ export class StreamTabs extends LitElement {
       default:
         break;
     }
+  }
+
+  private handleChildToggle(event: MouseEvent): void {
+    const button = event.currentTarget as HTMLElement;
+    const parentId = button.dataset.parent;
+    if (!parentId) return;
+    const next = new Set(this.expandedParents);
+    if (next.has(parentId)) {
+      next.delete(parentId);
+      this.manuallyCollapsed.add(parentId);
+    } else {
+      next.add(parentId);
+      this.manuallyCollapsed.delete(parentId);
+    }
+    this.expandedParents = next;
   }
 
   private handleFilterChange(event: Event): void {
