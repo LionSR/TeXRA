@@ -314,9 +314,10 @@ export class StreamTab extends LitElement {
       const raw =
         `${stream.parentStreamId ? '↳' : ''}${stream.label || stream.name}`.trim();
       this._compactLabel = raw.length > 8 ? raw.slice(0, 7) + '…' : raw;
+      this._cachedTooltipKey = ''; // invalidate tooltip when info changes
     }
 
-    // Memoize tooltip (changes on status or timestamp, not on every render)
+    // Memoize tooltip (changes on info, status, or timestamp)
     const tooltipKey = `${status}\0${this.lastTimestamp}`;
     if (this._cachedTooltipKey !== tooltipKey) {
       this._cachedTooltipKey = tooltipKey;
@@ -596,7 +597,7 @@ export class StreamTabs extends LitElement {
               (stream) => {
                 const children =
                   this.childStreamsByParent.get(stream.name);
-                const childCount = children?.length ?? 0;
+                const childCount = !this.compact ? (children?.length ?? 0) : 0;
                 const expanded =
                   childCount > 0 && this.expandedParents.has(stream.name);
 
