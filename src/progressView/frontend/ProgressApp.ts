@@ -56,23 +56,6 @@ const EMPTY_TASK_GROUPS: TaskGroup[] = [];
 /** Stable empty map returned when no parent has active children. */
 const EMPTY_CHILD_MAP: Map<StreamTabId, StreamTabInfo[]> = new Map();
 
-/** Stream statuses that represent an active (non-terminal) child stream. */
-const ACTIVE_CHILD_STATUSES: ReadonlySet<string> = new Set([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.WAITING,
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.RESUMING,
-]);
-
-/** Check whether a child stream is still active (used for sidebar grouping). */
-function isActiveChildStream(
-  stream: StreamTabInfo,
-  states: Map<StreamTabId, StreamState>,
-): boolean {
-  const status = states.get(stream.name)?.status ?? STREAM_STATUS.READY;
-  return ACTIVE_CHILD_STATUSES.has(status);
-}
-
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
   streamFilter: AgentCategoryFilterSchema.catch('all'),
