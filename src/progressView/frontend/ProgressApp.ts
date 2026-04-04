@@ -328,19 +328,17 @@ export class ProgressApp extends ProgressAppBase {
    * every status or timestamp update.
    */
   private childStreamsByParent$ = new Signal.Computed(() => {
-      const streams = this.streamById$.get();
-      let map: Map<StreamTabId, StreamTabInfo[]> | undefined;
-      for (const s of streams.values()) {
-        if (!s.parentStreamId) continue;
-        if (!map) map = new Map();
-        let children = map.get(s.parentStreamId);
-        if (!children) {
-          children = [];
-          map.set(s.parentStreamId, children);
-        }
-        children.push(s);
+    const grouped = new Map<StreamTabId, StreamTabInfo[]>();
+    for (const stream of this.streamById$.get().values()) {
+      if (!stream.parentStreamId) continue;
+      const siblings = grouped.get(stream.parentStreamId);
+      if (siblings) {
+        siblings.push(stream);
+      } else {
+        grouped.set(stream.parentStreamId, [stream]);
       }
-      return map ?? EMPTY_CHILD_MAP;
+    }
+    return grouped.size > 0 ? grouped : EMPTY_CHILD_MAP;
   });
 
   // --- Fine-grained active-stream selectors ---

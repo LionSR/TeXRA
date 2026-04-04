@@ -294,7 +294,7 @@ export class StreamTab extends LitElement {
   /** Number of child streams (0 = no toggle shown). */
   @property({ type: Number }) childCount = 0;
   /** Whether the child list is expanded. */
-  @property({ type: Boolean }) expanded = false;
+  @property({ type: Boolean, reflect: true }) expanded = false;
 
   // Cached derived values — only recomputed when inputs change
   private _cachedInfo: StreamTabInfo | null = null;
@@ -576,14 +576,12 @@ export class StreamTabs extends LitElement {
     if (dirty) this.expandedParents = next;
   }
 
-  /** Look up stream status from the states map (O(1), no allocation). */
-  private getStatus(name: string): string {
-    return this.streamStates.get(name as StreamTabId)?.status ?? STREAM_STATUS.READY;
+  private getStatus(name: StreamTabId): string {
+    return this.streamStates.get(name)?.status ?? STREAM_STATUS.READY;
   }
 
-  /** Look up last timestamp from the states map (O(1), no allocation). */
-  private getTimestamp(name: string): number | undefined {
-    return this.streamStates.get(name as StreamTabId)?.lastTimestamp;
+  private getTimestamp(name: StreamTabId): number | undefined {
+    return this.streamStates.get(name)?.lastTimestamp;
   }
 
   override render(): TemplateResult {
