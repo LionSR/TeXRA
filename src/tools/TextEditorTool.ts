@@ -32,8 +32,8 @@ import {
   requireField,
   resolveWorkspaceRelativePath,
   parseWorkingDirectory,
-  WorkingDirectorySchema,
 } from './utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -67,7 +67,6 @@ export const TextEditorInputSchema = z.strictObject({
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
   insert_line: z.number().nullish().describe('1-indexed.'),
-  working_directory: WorkingDirectorySchema,
 });
 
 /** Derived from TextEditorInputSchema - single source of truth */
@@ -114,7 +113,7 @@ export class TextEditorTool extends defineTool({
 
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
     const { command, path: inputPath } = input;
-    const root = parseWorkingDirectory(input.working_directory);
+    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
     const resolved = root
       ? resolveWorkspaceRelativePath(inputPath, root)
       : undefined;

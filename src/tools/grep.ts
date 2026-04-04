@@ -4,11 +4,8 @@ import { z } from 'zod';
 // Local imports - tools
 import { ToolError, type ToolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import {
-  resolveAndFormat,
-  parseWorkingDirectory,
-  WorkingDirectorySchema,
-} from '@tools/utils';
+import { resolveAndFormat, parseWorkingDirectory } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
@@ -64,7 +61,6 @@ const GrepInputSchema = z.strictObject({
     .nullish()
     .describe('Enable multiline matching (pattern can span lines).'),
   literal: z.boolean().nullish().describe('Exact string, not regex.'),
-  working_directory: WorkingDirectorySchema,
 });
 
 export type GrepInput = z.infer<typeof GrepInputSchema>;
@@ -115,7 +111,7 @@ export class GrepTool extends defineTool({
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const { output_mode: outputMode } = input;
-    const root = parseWorkingDirectory(input.working_directory);
+    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);

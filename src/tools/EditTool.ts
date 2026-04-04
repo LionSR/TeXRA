@@ -12,8 +12,8 @@ import {
   pluralize,
   resolveWorkspaceRelativePath,
   parseWorkingDirectory,
-  WorkingDirectorySchema,
 } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -31,7 +31,6 @@ const EditInputSchema = z.strictObject({
   old_str: z.string(),
   new_str: z.string(),
   replace_all: z.boolean().nullish(),
-  working_directory: WorkingDirectorySchema,
 });
 
 export type EditInput = z.infer<typeof EditInputSchema>;
@@ -44,7 +43,7 @@ export class EditFileTool extends defineTool({
 }) {
   protected async execute(input: EditInput): Promise<ToolResult> {
     const { old_str, new_str, replace_all } = input;
-    const root = parseWorkingDirectory(input.working_directory);
+    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
     const resolved = root
       ? resolveWorkspaceRelativePath(input.path, root)
       : undefined;

@@ -11,8 +11,8 @@ import {
   formatToolOutput,
   pluralize,
   parseWorkingDirectory,
-  WorkingDirectorySchema,
 } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
@@ -23,7 +23,6 @@ import { defineTool } from './core/define';
 const GlobInputSchema = z.strictObject({
   pattern: z.string().min(1, 'pattern is required'),
   path: z.string().nullish(),
-  working_directory: WorkingDirectorySchema,
 });
 
 export type GlobInput = z.infer<typeof GlobInputSchema>;
@@ -40,7 +39,7 @@ export class GlobTool extends defineTool({
   schema: GlobInputSchema,
 }) {
   protected async execute(input: GlobInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(input.working_directory);
+    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
 

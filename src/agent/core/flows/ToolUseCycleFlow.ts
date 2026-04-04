@@ -786,6 +786,7 @@ class ToolUseDispatchNode<C> extends Node<
           toolCallId: call.callId,
           model: options.modelName ?? options.config.model,
           agentName: options.agentName,
+          workingDirectory: options.workingDirectory,
           onExecutionReady,
           onToolOutput,
         },

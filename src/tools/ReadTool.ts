@@ -13,8 +13,8 @@ import {
   READ_FILE_MAX_LINES,
   resolveWorkspaceRelativePath,
   parseWorkingDirectory,
-  WorkingDirectorySchema,
 } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml } from '@tools/emlParser';
 import {
@@ -56,7 +56,6 @@ const RangeSchema = z.preprocess(
 const ReadInputSchema = z.strictObject({
   path: z.string(),
   range: RangeSchema.nullish(),
-  working_directory: WorkingDirectorySchema,
 });
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
@@ -68,7 +67,7 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(input.working_directory);
+    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
     const resolved = root
       ? resolveWorkspaceRelativePath(input.path, root)
       : undefined;

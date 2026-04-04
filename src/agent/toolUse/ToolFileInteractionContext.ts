@@ -14,6 +14,8 @@ export interface ToolFileInteractionContext {
   model?: string;
   /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
   agentName?: string;
+  /** Working directory override for tool calls (e.g. a git worktree path). */
+  workingDirectory?: string;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;

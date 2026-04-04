@@ -650,6 +650,12 @@ const DelegateAgentInputSchema = z.object({
       'Plain prose instruction for the agent. For new delegations, include file paths naturally. For resumes, reference previous work freely — the subagent retains its full history.',
     ),
   memories: memoriesField,
+  working_directory: z
+    .string()
+    .nullish()
+    .describe(
+      'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root.',
+    ),
   execution_id: z
     .string()
     .optional()
@@ -723,6 +729,7 @@ Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliograp
       model,
       instruction: input.instruction,
       memories: input.memories,
+      workingDirectory: input.working_directory?.trim() || undefined,
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);

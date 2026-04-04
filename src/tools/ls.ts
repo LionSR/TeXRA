@@ -15,8 +15,8 @@ import {
   formatToolOutput,
   pluralize,
   parseWorkingDirectory,
-  WorkingDirectorySchema,
 } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
@@ -27,7 +27,6 @@ import { defineTool } from './core/define';
 const LsInputSchema = z.strictObject({
   path: z.string(),
   ignore: z.array(z.string()).prefault([]),
-  working_directory: WorkingDirectorySchema,
 });
 
 export type LsInput = z.infer<typeof LsInputSchema>;
@@ -59,7 +58,7 @@ export class LsTool extends defineTool({
   schema: LsInputSchema,
 }) {
   protected async execute(input: LsInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(input.working_directory);
+    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
     const { path: resolved, display } = resolveAndFormat(input.path, root);
     const gitignore = await getGitignoreMatcher();
     const header = `Listing for ${display}`;

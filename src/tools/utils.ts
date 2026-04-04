@@ -3,7 +3,6 @@ import * as path from 'path';
 
 // Third-party imports
 import { Minimatch } from 'minimatch';
-import { z } from 'zod';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -28,17 +27,6 @@ export interface WorkspacePathResolution {
    */
   fsPath: string;
 }
-
-/**
- * Shared Zod schema field for the optional `working_directory` parameter.
- * Use in tool schemas: `working_directory: WorkingDirectorySchema`.
- */
-export const WorkingDirectorySchema = z
-  .string()
-  .nullish()
-  .describe(
-    'Absolute path to operate in (e.g. a git worktree). Defaults to workspace root.',
-  );
 
 /** Trim a working_directory input to a clean string or undefined. */
 export function parseWorkingDirectory(

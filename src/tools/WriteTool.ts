@@ -12,8 +12,8 @@ import {
 import {
   resolveWorkspaceRelativePath,
   parseWorkingDirectory,
-  WorkingDirectorySchema,
 } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -29,7 +29,6 @@ import { defineTool } from './core/define';
 const WriteInputSchema = z.strictObject({
   path: z.string(),
   content: z.string(),
-  working_directory: WorkingDirectorySchema,
 });
 
 export type WriteInput = z.infer<typeof WriteInputSchema>;
@@ -41,7 +40,7 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(input.working_directory);
+    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
     const resolved = root
       ? resolveWorkspaceRelativePath(input.path, root)
       : undefined;

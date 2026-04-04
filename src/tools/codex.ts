@@ -95,10 +95,6 @@ async function getCodexConfig(): Promise<typeof import('./codexConfig')> {
 
 const CodexInputSchema = z.strictObject({
   prompt: z.string().describe('Instruction for the Codex agent'),
-  working_directory: z
-    .string()
-    .nullish()
-    .describe('Directory to run in (defaults to workspace root)'),
   sandbox_mode: z
     .enum(CODEX_SANDBOX_MODES)
     .nullish()
@@ -537,7 +533,12 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
+<<<<<<< HEAD
     const thread = await this.resolveThread(input);
+=======
+    const workingDir = ctx?.workingDirectory;
+    const thread = await this.resolveThread(input, sandboxMode, workingDir);
+>>>>>>> b4acbd0 (Move working_directory from per-tool param to per-agent context)
 
     if (input.run_in_background) {
       return this.executeBackground(
@@ -552,7 +553,15 @@ export class CodexTool extends defineTool({
   }
 
   /** Resolve thread — resume existing or start new. */
+<<<<<<< HEAD
   private async resolveThread(input: CodexInput): Promise<Thread> {
+=======
+  private async resolveThread(
+    input: CodexInput,
+    sandboxMode: SandboxMode,
+    workingDir?: string,
+  ): Promise<Thread> {
+>>>>>>> b4acbd0 (Move working_directory from per-tool param to per-agent context)
     if (input.thread_id) {
       const stored = threadRegistry.get(input.thread_id);
       if (stored) {
@@ -568,6 +577,7 @@ export class CodexTool extends defineTool({
 
     const CodexClass = await importCodexClass();
     const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
+<<<<<<< HEAD
     const config = await getCodexConfig();
     // sandbox_mode is always resolved in execute() before this is called
     const sandboxMode = input.sandbox_mode;
@@ -577,6 +587,12 @@ export class CodexTool extends defineTool({
       input.working_directory || !input.thread_id
         ? config.buildCodexWorkspaceOptions(input.working_directory)
         : {};
+=======
+    const workspaceOptions =
+      input.thread_id && !workingDir
+        ? {}
+        : buildCodexWorkspaceOptions(workingDir);
+>>>>>>> b4acbd0 (Move working_directory from per-tool param to per-agent context)
     const threadOptions = {
       ...workspace,
       sandboxMode,

@@ -36,7 +36,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 import { createChildStream, finalizeChildStream } from './childStream';
-import { parseWorkingDirectory, WorkingDirectorySchema } from './utils';
+import { parseWorkingDirectory } from './utils';
 
 const BASH_TIMEOUT_MS = 120_000; // 120 s
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
@@ -53,7 +53,6 @@ const BashInputSchema = z.strictObject({
     .describe(
       'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
     ),
-  working_directory: WorkingDirectorySchema,
   run_in_background: z
     .boolean()
     .prefault(false)
@@ -115,7 +114,7 @@ export class BashTool extends defineTool({
 
     const timeoutMs = input.timeout ?? BASH_TIMEOUT_MS;
 
-    const cwd = parseWorkingDirectory(input.working_directory);
+    const cwd = parseWorkingDirectory(ctx?.workingDirectory);
 
     if (input.run_in_background) {
       return this.executeBackground(
