@@ -247,6 +247,36 @@ export class StreamTab extends LitElement {
       .tab-delete:focus-within {
         color: var(--vscode-errorForeground);
       }
+
+      /* Expand/collapse chevron for parent tabs with children */
+      .tab-expand {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        min-width: 20px;
+        height: 100%;
+        border: none;
+        background: none;
+        cursor: pointer;
+        color: var(--vscode-icon-foreground, var(--vscode-foreground));
+        opacity: 0.6;
+        padding: 0;
+      }
+
+      .tab-expand:hover {
+        opacity: 1;
+        background-color: var(--vscode-toolbar-hoverBackground);
+      }
+
+      .tab-expand .codicon {
+        font-size: var(--font-size-xs);
+        transition: transform var(--transition-fast);
+      }
+
+      .tab-expand[aria-expanded='true'] .codicon {
+        transform: rotate(90deg);
+      }
     `,
   ];
 
@@ -256,6 +286,10 @@ export class StreamTab extends LitElement {
   @property({ type: Boolean }) active = false;
   @property({ type: Boolean }) compact = false;
   @property({ type: Boolean }) hasPendingApproval = false;
+  /** Number of child streams (0 = no toggle shown). */
+  @property({ type: Number }) childCount = 0;
+  /** Whether the child list is expanded. */
+  @property({ type: Boolean }) expanded = false;
 
   override render(): TemplateResult {
     const stream = this.info;
@@ -268,6 +302,7 @@ export class StreamTab extends LitElement {
       rawCompactLabel.length > 8
         ? rawCompactLabel.slice(0, 7) + '…'
         : rawCompactLabel;
+    const hasChildren = this.childCount > 0 && !this.compact;
 
     return html`
       <div
@@ -276,10 +311,24 @@ export class StreamTab extends LitElement {
           'stream-tab': true,
           'is-active': this.active,
           'is-compact': this.compact,
+          'has-children': hasChildren,
           [`status-${status}`]: Boolean(status),
           'has-pending-approval': this.hasPendingApproval,
         })}
       >
+        ${hasChildren
+          ? html`<button
+              class="tab-expand"
+              data-stream=${stream.name}
+              data-action="toggle-children"
+              title=${this.expanded
+                ? 'Collapse child streams'
+                : `${this.childCount} child stream${this.childCount > 1 ? 's' : ''}`}
+              aria-expanded=${this.expanded ? 'true' : 'false'}
+            >
+              <i class="codicon codicon-chevron-right"></i>
+            </button>`
+          : nothing}
         <button
           class="tab"
           data-stream=${stream.name}
@@ -440,35 +489,6 @@ export class StreamTabs extends LitElement {
         opacity: var(--opacity-subtle, 0.5);
       }
 
-      .child-toggle {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        padding: var(--spacing-tiny) var(--spacing-small);
-        border: none;
-        background: none;
-        color: var(--vscode-descriptionForeground, var(--vscode-foreground));
-        opacity: 0.7;
-        font-size: var(--font-size-xs);
-        font-family: var(--font-family);
-        cursor: pointer;
-        width: 100%;
-        text-align: left;
-      }
-
-      .child-toggle:hover {
-        opacity: 1;
-        background-color: var(--vscode-list-hoverBackground);
-      }
-
-      .child-toggle .codicon {
-        font-size: var(--font-size-xs);
-        transition: transform var(--transition-fast);
-      }
-
-      .child-toggle[aria-expanded='true'] .codicon {
-        transform: rotate(90deg);
-      }
     `,
   ];
 
@@ -539,28 +559,17 @@ export class StreamTabs extends LitElement {
               (stream) => {
                 const children =
                   this.childStreamsByParent.get(stream.name);
-                const hasChildren = children && children.length > 0;
+                const childCount = children?.length ?? 0;
                 const expanded =
-                  hasChildren && this.expandedParents.has(stream.name);
-                const activeCount = hasChildren
-                  ? children.filter((c) => {
-                      const s =
-                        this.streamStatusById.get(c.name) ??
-                        STREAM_STATUS.READY;
-                      return ACTIVE_CHILD_STATUSES.has(s);
-                    }).length
-                  : 0;
-                const toggleLabel = activeCount > 0
-                  ? `${activeCount} active`
-                  : `${children?.length ?? 0} done`;
+                  childCount > 0 && this.expandedParents.has(stream.name);
 
                 // prettier-ignore
-                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.streamStatusById.get(stream.name) ?? STREAM_STATUS.READY} .lastTimestamp=${this.streamLastTimestampById.get(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}></stream-tab>${hasChildren && !this.compact ? html`<button class="child-toggle" aria-expanded=${expanded ? 'true' : 'false'} data-parent=${stream.name} @click=${this.handleChildToggle} title=${expanded ? 'Collapse child streams' : `${children.length} child stream${children.length > 1 ? 's' : ''}`}><i class="codicon codicon-chevron-right"></i><span>${toggleLabel}</span></button>${expanded ? html`<div class="child-streams">${repeat(children, (child) => child.name, (child) => {
+                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.streamStatusById.get(stream.name) ?? STREAM_STATUS.READY} .lastTimestamp=${this.streamLastTimestampById.get(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${childCount} ?expanded=${expanded}></stream-tab>${expanded && children ? html`<div class="child-streams">${repeat(children, (child) => child.name, (child) => {
                   const childStatus = this.streamStatusById.get(child.name) ?? STREAM_STATUS.READY;
                   const isFinished = !ACTIVE_CHILD_STATUSES.has(childStatus);
                   // prettier-ignore
                   return html`<stream-tab class=${isFinished ? 'is-finished' : ''} .info=${child} .compact=${false} .status=${childStatus} .lastTimestamp=${this.streamLastTimestampById.get(child.name)} ?active=${child.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(child.name)}></stream-tab>`;
-                })}</div>` : nothing}` : nothing}`;
+                })}</div>` : nothing}`;
               },
             )}
           </div>
@@ -648,15 +657,15 @@ export class StreamTabs extends LitElement {
       case 'delete':
         this.dispatchEvent(ProgressEvents.streamDelete({ streamId }));
         break;
+      case 'toggle-children':
+        this.toggleChildren(streamId);
+        break;
       default:
         break;
     }
   }
 
-  private handleChildToggle(event: MouseEvent): void {
-    const button = event.currentTarget as HTMLElement;
-    const parentId = button.dataset.parent;
-    if (!parentId) return;
+  private toggleChildren(parentId: string): void {
     const next = new Set(this.expandedParents);
     if (next.has(parentId)) {
       next.delete(parentId);

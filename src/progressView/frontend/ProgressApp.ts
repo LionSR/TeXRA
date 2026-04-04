@@ -327,13 +327,14 @@ export class ProgressApp extends ProgressAppBase {
 
   /**
    * Child streams grouped by parent stream ID.
-   * Includes both active and finished children so the user can still
-   * navigate to completed/errored child streams.
+   * Depends only on streamById$ (stream registry), NOT streamStates$,
+   * so it only recomputes when streams are added/removed — not on
+   * every status or timestamp update.
    */
   private childStreamsByParent$ = new Signal.Computed(() => {
-      const sorted = this.sortedStreams$.get();
+      const streams = this.streamById$.get();
       let map: Map<StreamTabId, StreamTabInfo[]> | undefined;
-      for (const s of sorted) {
+      for (const s of streams.values()) {
         if (!s.parentStreamId) continue;
         if (!map) map = new Map();
         let children = map.get(s.parentStreamId);
@@ -346,28 +347,21 @@ export class ProgressApp extends ProgressAppBase {
       return map ?? EMPTY_CHILD_MAP;
   });
 
-  /** Status and timestamp for all visible streams (top-level + active children). */
-  private statusAndTimestampById$ = combine(
-    [this.streamStates$, this.tabStreams$, this.childStreamsByParent$] as const,
-    (states, streams, childMap) => {
-      const statusMap = new Map<StreamTabId, string>();
-      const timestampMap = new Map<StreamTabId, number | undefined>();
-      for (const stream of streams) {
-        const state = states.get(stream.name);
-        statusMap.set(stream.name, state?.status ?? STREAM_STATUS.READY);
-        timestampMap.set(stream.name, state?.lastTimestamp);
-        const children = childMap.get(stream.name);
-        if (children) {
-          for (const child of children) {
-            const cs = states.get(child.name);
-            statusMap.set(child.name, cs?.status ?? STREAM_STATUS.READY);
-            timestampMap.set(child.name, cs?.lastTimestamp);
-          }
-        }
-      }
-      return { statusMap, timestampMap };
-    },
-  );
+  /**
+   * Status and timestamp for ALL streams (single pass over streamStates).
+   * Covers both top-level and child streams so StreamTabs can look up
+   * any stream without requiring a separate computation per nesting level.
+   */
+  private statusAndTimestampById$ = new Signal.Computed(() => {
+    const states = this.streamStates$.get();
+    const statusMap = new Map<StreamTabId, string>();
+    const timestampMap = new Map<StreamTabId, number | undefined>();
+    for (const [name, state] of states) {
+      statusMap.set(name, state?.status ?? STREAM_STATUS.READY);
+      timestampMap.set(name, state?.lastTimestamp);
+    }
+    return { statusMap, timestampMap };
+  });
 
   // --- Fine-grained active-stream selectors ---
   // These return stable Map entry values (via Mutative structural sharing).
