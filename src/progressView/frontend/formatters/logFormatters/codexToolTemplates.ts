@@ -101,7 +101,9 @@ function renderCodexDirectorySection(input: CodexInput): RenderableSection {
   );
 }
 
-function renderCodexInputContent(input: unknown): TemplateResult | typeof nothing {
+function renderCodexInputContent(
+  input: unknown,
+): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -160,7 +162,9 @@ function renderCodexFileListSection(
   );
 }
 
-function renderCodexFileChangeContent(input: unknown): TemplateResult | typeof nothing {
+function renderCodexFileChangeContent(
+  input: unknown,
+): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -181,7 +185,9 @@ function renderCodexFileChangeContent(input: unknown): TemplateResult | typeof n
   ]);
 }
 
-function renderCodexThreadContent(input: unknown): TemplateResult | typeof nothing {
+function renderCodexThreadContent(
+  input: unknown,
+): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -252,7 +258,9 @@ function renderCodexTodoListSection(
   );
 }
 
-function renderCodexTodoContent(input: unknown): TemplateResult | typeof nothing {
+function renderCodexTodoContent(
+  input: unknown,
+): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
@@ -298,7 +306,9 @@ function renderCodexTurnDurationSection(wallTimeMs: number): RenderableSection {
     : nothing;
 }
 
-function renderCodexTurnContent(input: unknown): TemplateResult | typeof nothing {
+function renderCodexTurnContent(
+  input: unknown,
+): TemplateResult | typeof nothing {
   if (!isPlainObject(input)) {
     return nothing;
   }
