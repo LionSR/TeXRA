@@ -49,7 +49,6 @@ import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
 
 export const AgentCategoryFilterSchema = z.union([
   z.literal('all'),
-  z.literal('background'),
   AgentCategorySchema,
 ]);
 export type AgentCategoryFilter = z.infer<typeof AgentCategoryFilterSchema>;

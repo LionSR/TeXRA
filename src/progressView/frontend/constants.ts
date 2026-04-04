@@ -234,9 +234,4 @@ export const FILTER_BUTTONS: readonly FilterButton[] = [
     label: 'Chat',
     filter: 'toolUse',
   },
-  {
-    id: 'filterBackgroundBtn',
-    label: 'Background',
-    filter: 'background',
-  },
 ];

@@ -25,6 +25,7 @@ import {
   type ProgressViewPlacement,
   type ProgressViewOutboundMessage,
   type StreamTabId,
+  type StreamTabInfo,
   type TaskGroup,
 } from '@shared/schemas';
 import {
@@ -59,6 +60,15 @@ const ACTIVE_CHILD_STATUSES: ReadonlySet<string> = new Set([
   STREAM_STATUS.INITIALIZING,
   STREAM_STATUS.RESUMING,
 ]);
+
+/** Check whether a child stream is still active (used for sidebar grouping). */
+function isActiveChildStream(
+  stream: StreamTabInfo,
+  states: Map<StreamTabId, StreamState>,
+): boolean {
+  const status = states.get(stream.name)?.status ?? STREAM_STATUS.READY;
+  return ACTIVE_CHILD_STATUSES.has(status);
+}
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
@@ -317,44 +327,56 @@ export class ProgressApp extends ProgressAppBase {
   );
 
   /**
-   * Streams visible in the sidebar tab list.
-   *
-   * - **all / workflow / toolUse**: top-level streams only (child streams
-   *   are accessible via the BackgroundTasksPanel inside the content area).
-   * - **background**: active child streams only — finished ones auto-hide.
+   * Top-level streams for the sidebar tab list (child streams excluded).
+   * Child streams are shown nested under their parent via childStreamsByParent$.
    */
   private tabStreams$ = combine(
-    [
-      this.sortedStreams$,
-      this.streamFilter$,
-      this.streamStates$,
-    ] as const,
-    (sorted, filter, states) => {
-      if (filter === 'background') {
-        return sorted.filter((s) => {
-          if (!s.parentStreamId) return false;
-          const status =
-            states.get(s.name)?.status ?? STREAM_STATUS.READY;
-          return ACTIVE_CHILD_STATUSES.has(status);
-        });
-      }
-      // All other filters exclude child streams
+    [this.sortedStreams$, this.streamFilter$] as const,
+    (sorted, filter) => {
       const topLevel = sorted.filter((s) => !s.parentStreamId);
       if (filter === 'all') return topLevel;
       return topLevel.filter((s) => s.agentCategory === filter);
     },
   );
 
-  /** Status and timestamp per stream tab (single pass over tab-visible streams). */
+  /**
+   * Active child streams grouped by parent stream ID.
+   * Only includes children that are still running/waiting — finished ones
+   * are omitted so the nested list auto-cleans.
+   */
+  private childStreamsByParent$ = combine(
+    [this.sortedStreams$, this.streamStates$] as const,
+    (sorted, states) => {
+      const map = new Map<StreamTabId, StreamTabInfo[]>();
+      for (const s of sorted) {
+        if (!s.parentStreamId) continue;
+        if (!isActiveChildStream(s, states)) continue;
+        let children = map.get(s.parentStreamId);
+        if (!children) {
+          children = [];
+          map.set(s.parentStreamId, children);
+        }
+        children.push(s);
+      }
+      return map;
+    },
+  );
+
+  /** Status and timestamp for all visible streams (top-level + active children). */
   private statusAndTimestampById$ = combine(
-    [this.streamStates$, this.tabStreams$] as const,
-    (states, streams) => {
+    [this.streamStates$, this.tabStreams$, this.childStreamsByParent$] as const,
+    (states, streams, childMap) => {
       const statusMap = new Map<StreamTabId, string>();
       const timestampMap = new Map<StreamTabId, number | undefined>();
+      const populate = (s: StreamTabInfo): void => {
+        const state = states.get(s.name);
+        statusMap.set(s.name, state?.status ?? STREAM_STATUS.READY);
+        timestampMap.set(s.name, state?.lastTimestamp);
+      };
       for (const stream of streams) {
-        const state = states.get(stream.name);
-        statusMap.set(stream.name, state?.status ?? STREAM_STATUS.READY);
-        timestampMap.set(stream.name, state?.lastTimestamp);
+        populate(stream);
+        const children = childMap.get(stream.name);
+        if (children) children.forEach(populate);
       }
       return { statusMap, timestampMap };
     },
@@ -575,6 +597,7 @@ export class ProgressApp extends ProgressAppBase {
               .streamLastTimestampById=${this.statusAndTimestampById$.get()
                 .timestampMap}
               .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
+              .childStreamsByParent=${this.childStreamsByParent$.get()}
               @stream-switch=${this.onStreamSwitch}
               @stream-delete=${this.onStreamDelete}
               @filter-change=${this.onFilterChange}
