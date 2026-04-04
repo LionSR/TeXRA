@@ -1,4 +1,5 @@
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import type { AgentCategoryFilter } from '@shared/schemas';
 
 /**
  * DOM element IDs used across the progress view.
@@ -211,7 +212,13 @@ export const SORT_BUTTONS = [
   },
 ];
 
-export const FILTER_BUTTONS = [
+interface FilterButton {
+  readonly id: string;
+  readonly label: string;
+  readonly filter: AgentCategoryFilter;
+}
+
+export const FILTER_BUTTONS: readonly FilterButton[] = [
   {
     id: ELEMENT_IDS.FILTER_ALL_BTN,
     label: 'All',

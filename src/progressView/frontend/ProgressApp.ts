@@ -25,6 +25,7 @@ import {
   type ProgressViewPlacement,
   type ProgressViewOutboundMessage,
   type StreamTabId,
+  type StreamTabInfo,
   type TaskGroup,
 } from '@shared/schemas';
 import {
@@ -51,6 +52,9 @@ import {
 
 /** Stable empty array for activeTaskGroups$ default (avoids new [] per read). */
 const EMPTY_TASK_GROUPS: TaskGroup[] = [];
+
+/** Stable empty map returned when no parent has active children. */
+const EMPTY_CHILD_MAP: Map<StreamTabId, StreamTabInfo[]> = new Map();
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
@@ -290,41 +294,76 @@ export class ProgressApp extends ProgressAppBase {
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
   /**
-   * Filtered + sorted stream list.
-   * Uses fine-grained selectors so log appends (which only change streamLogs$)
-   * don't trigger recomputation.
+   * All streams sorted (unfiltered).  Used for active-stream lookup so
+   * navigating to a child stream from BackgroundTasksPanel always works
+   * regardless of the current filter selection.
    */
-  private filteredStreams$ = combine(
-    [
-      this.streamById$,
-      this.streamFilter$,
-      this.streamSort$,
-      this.streamStates$,
-    ] as const,
-    (streamById, filter, sort, states) => {
-      const sorted = sortStreams([...streamById.values()], sort, {
+  private sortedStreams$ = combine(
+    [this.streamById$, this.streamSort$, this.streamStates$] as const,
+    (streamById, sort, states) =>
+      sortStreams([...streamById.values()], sort, {
         getLastActivityTimestamp: (stream) =>
           states.get(stream.name)?.lastTimestamp,
-      });
-      if (filter === 'all') return sorted;
-      return sorted.filter((stream) => stream.agentCategory === filter);
+      }),
+  );
+
+  /** Map of ALL streams for active-stream lookup (filter-independent). */
+  private filteredStreamMap$ = new Signal.Computed(
+    () => new Map(this.sortedStreams$.get().map((s) => [s.name, s])),
+  );
+
+  /**
+   * Top-level streams for the sidebar tab list (child streams excluded).
+   * Child streams are shown nested under their parent via childStreamsByParent$.
+   */
+  private tabStreams$ = combine(
+    [this.sortedStreams$, this.streamFilter$] as const,
+    (sorted, filter) => {
+      const topLevel = sorted.filter((s) => !s.parentStreamId);
+      if (filter === 'all') return topLevel;
+      return topLevel.filter((s) => s.agentCategory === filter);
     },
   );
 
-  private filteredStreamMap$ = new Signal.Computed(
-    () => new Map(this.filteredStreams$.get().map((s) => [s.name, s])),
-  );
+  /**
+   * Child streams grouped by parent stream ID.
+   * Includes both active and finished children so the user can still
+   * navigate to completed/errored child streams.
+   */
+  private childStreamsByParent$ = new Signal.Computed(() => {
+      const sorted = this.sortedStreams$.get();
+      let map: Map<StreamTabId, StreamTabInfo[]> | undefined;
+      for (const s of sorted) {
+        if (!s.parentStreamId) continue;
+        if (!map) map = new Map();
+        let children = map.get(s.parentStreamId);
+        if (!children) {
+          children = [];
+          map.set(s.parentStreamId, children);
+        }
+        children.push(s);
+      }
+      return map ?? EMPTY_CHILD_MAP;
+  });
 
-  /** Status and timestamp per stream tab (single pass over filtered streams). */
+  /** Status and timestamp for all visible streams (top-level + active children). */
   private statusAndTimestampById$ = combine(
-    [this.streamStates$, this.filteredStreams$] as const,
-    (states, streams) => {
+    [this.streamStates$, this.tabStreams$, this.childStreamsByParent$] as const,
+    (states, streams, childMap) => {
       const statusMap = new Map<StreamTabId, string>();
       const timestampMap = new Map<StreamTabId, number | undefined>();
       for (const stream of streams) {
         const state = states.get(stream.name);
         statusMap.set(stream.name, state?.status ?? STREAM_STATUS.READY);
         timestampMap.set(stream.name, state?.lastTimestamp);
+        const children = childMap.get(stream.name);
+        if (children) {
+          for (const child of children) {
+            const cs = states.get(child.name);
+            statusMap.set(child.name, cs?.status ?? STREAM_STATUS.READY);
+            timestampMap.set(child.name, cs?.lastTimestamp);
+          }
+        }
       }
       return { statusMap, timestampMap };
     },
@@ -342,7 +381,7 @@ export class ProgressApp extends ProgressAppBase {
   });
 
   private hasStreams$ = new Signal.Computed(
-    () => this.filteredStreams$.get().length > 0,
+    () => this.sortedStreams$.get().length > 0,
   );
 
   /** Only changes when the ACTIVE stream's state changes, not any stream. */
@@ -537,7 +576,7 @@ export class ProgressApp extends ProgressAppBase {
             <stream-tabs
               slot="end"
               .compact=${compactTabs}
-              .streams=${this.filteredStreams$.get()}
+              .streams=${this.tabStreams$.get()}
               .activeStreamId=${this.activeStreamId$.get()}
               .filter=${this.streamFilter$.get()}
               .sort=${this.streamSort$.get()}
@@ -545,6 +584,7 @@ export class ProgressApp extends ProgressAppBase {
               .streamLastTimestampById=${this.statusAndTimestampById$.get()
                 .timestampMap}
               .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
+              .childStreamsByParent=${this.childStreamsByParent$.get()}
               @stream-switch=${this.onStreamSwitch}
               @stream-delete=${this.onStreamDelete}
               @filter-change=${this.onFilterChange}
