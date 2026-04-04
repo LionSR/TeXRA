@@ -11,6 +11,7 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
 } from '@shared/constants/git';
 import { setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
+import { setWorktreeSupportEnabled } from '@tools/worktreeConfig';
 
 /** Read the current git author settings from workspace state with defaults. */
 export function readGitAuthorSettings(): {
@@ -53,5 +54,6 @@ export function applyGitAuthorConfig(): ReturnType<
       GIT_COMMITTER_EMAIL: authorEmail,
     });
   }
+  setWorktreeSupportEnabled(settings.worktreeSupport);
   return settings;
 }

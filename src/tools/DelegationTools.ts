@@ -70,6 +70,9 @@ import { defineTool } from '@tools/core/define';
 // Local imports - memory
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 
+// Local imports - worktree config
+import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
+
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -729,7 +732,9 @@ Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliograp
       model,
       instruction: input.instruction,
       memories: input.memories,
-      workingDirectory: input.working_directory?.trim() || undefined,
+      workingDirectory: isWorktreeSupportEnabled()
+        ? (input.working_directory?.trim() || undefined)
+        : undefined,
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);

@@ -125,7 +125,7 @@ export class GrepTool extends defineTool({
       ...args,
       ...ignoreArgs,
       input.pattern,
-      path.fsPath,
+      path.relative,
     ];
 
     const result = await executeCommand(command, {

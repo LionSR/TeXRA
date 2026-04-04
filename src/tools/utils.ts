@@ -28,11 +28,17 @@ export interface WorkspacePathResolution {
   fsPath: string;
 }
 
-/** Trim a working_directory input to a clean string or undefined. */
+/** Trim and validate a working_directory value. Must be absolute if provided. */
 export function parseWorkingDirectory(
   raw: string | null | undefined,
 ): string | undefined {
-  return raw?.trim() || undefined;
+  const trimmed = raw?.trim() || undefined;
+  if (trimmed && !path.isAbsolute(trimmed)) {
+    throw new ToolError(
+      `working_directory must be an absolute path, got: ${trimmed}`,
+    );
+  }
+  return trimmed;
 }
 
 /**
