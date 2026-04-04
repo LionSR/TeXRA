@@ -67,7 +67,6 @@ import { createChildStream, finalizeChildStream } from './childStream';
 import type {
   McpToolCallItem,
   RunResult,
-  SandboxMode,
   Thread,
   ThreadItem,
   TodoListItem,
@@ -78,13 +77,6 @@ import type {
 // Schema
 // ============================================================================
 
-/** All sandbox modes from the SDK, exposed to the LLM. */
-const SANDBOX_MODES = [
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-] as const satisfies readonly SandboxMode[];
-
 const CodexInputSchema = z.strictObject({
   prompt: z.string().describe('Instruction for the Codex agent'),
   working_directory: z
@@ -92,7 +84,7 @@ const CodexInputSchema = z.strictObject({
     .optional()
     .describe('Directory to run in (defaults to workspace root)'),
   sandbox_mode: z
-    .enum(SANDBOX_MODES)
+    .enum(CODEX_SANDBOX_MODES)
     .optional()
     .describe(
       'File access level for the Codex agent (defaults to user-configured mode, typically workspace-write)',
@@ -543,7 +535,13 @@ export class CodexTool extends defineTool({
     const CodexClass = await importCodexClass();
     const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
     const sandboxMode = input.sandbox_mode ?? getCodexSandboxMode();
-    const workspace = buildCodexWorkspaceOptions(input.working_directory);
+    // Only compute workspace for new threads — resumed threads keep their
+    // stored workspace unless the caller explicitly overrides.
+    const workspace = input.working_directory
+      ? buildCodexWorkspaceOptions(input.working_directory)
+      : input.thread_id
+        ? {}
+        : buildCodexWorkspaceOptions();
     const threadOptions = {
       ...workspace,
       sandboxMode,
