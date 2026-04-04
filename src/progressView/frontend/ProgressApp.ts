@@ -294,18 +294,27 @@ export class ProgressApp extends ProgressAppBase {
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
   /**
-   * All streams sorted (unfiltered).  Used for active-stream lookup so
-   * navigating to a child stream from BackgroundTasksPanel always works
-   * regardless of the current filter selection.
+   * All streams sorted (unfiltered).
+   *
+   * For agent/inputFile sort: depends only on streamById$ (stable after
+   * stream creation — no re-sort on status/timestamp updates).
+   *
+   * For time sort: also reads streamStates$ for lastTimestamp, so log
+   * appends trigger a re-sort. This is unavoidable since time sort IS
+   * the timestamp ordering.
    */
-  private sortedStreams$ = combine(
-    [this.streamById$, this.streamSort$, this.streamStates$] as const,
-    (streamById, sort, states) =>
-      sortStreams([...streamById.values()], sort, {
-        getLastActivityTimestamp: (stream) =>
-          states.get(stream.name)?.lastTimestamp,
-      }),
-  );
+  private sortedStreams$ = new Signal.Computed(() => {
+    const streamById = this.streamById$.get();
+    const sort = this.streamSort$.get();
+    // Only read streamStates$ when time-sorting — for agent/inputFile
+    // sort, this signal won't re-evaluate on status/timestamp changes.
+    const states = sort === 'time' ? this.streamStates$.get() : undefined;
+    return sortStreams([...streamById.values()], sort, {
+      getLastActivityTimestamp: states
+        ? (stream) => states.get(stream.name)?.lastTimestamp
+        : undefined,
+    });
+  });
 
 
   /**
@@ -353,7 +362,7 @@ export class ProgressApp extends ProgressAppBase {
   });
 
   private hasStreams$ = new Signal.Computed(
-    () => this.sortedStreams$.get().length > 0,
+    () => this.streamById$.get().size > 0,
   );
 
   /** Only changes when the ACTIVE stream's state changes, not any stream. */
