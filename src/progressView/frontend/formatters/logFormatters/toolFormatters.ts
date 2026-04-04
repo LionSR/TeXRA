@@ -26,7 +26,10 @@ import type {
   WorkflowAgentInput,
 } from '@tools/DelegationTools';
 import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
-import { type CodexMcpToolOutput } from '@tools/codexShared';
+import {
+  CodexMcpToolOutputSchema,
+  type CodexMcpToolOutput,
+} from '@tools/codexShared';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -564,8 +567,9 @@ export function formatToolUseTemplate(
       }
     }
 
-    const mcpOutput = isPlainObject(parsed.output)
-      ? (parsed.output as Partial<CodexMcpToolOutput>)
+    const mcpParsed = CodexMcpToolOutputSchema.safeParse(parsed.output);
+    const mcpOutput: CodexMcpToolOutput | null = mcpParsed.success
+      ? mcpParsed.data
       : null;
     const contentBlocks = Array.isArray(mcpOutput?.contentBlocks)
       ? mcpOutput.contentBlocks

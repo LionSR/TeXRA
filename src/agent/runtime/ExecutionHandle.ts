@@ -81,6 +81,9 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private progress: { currentRound?: number; totalRounds?: number } = {};
   private _parentStreamId: StreamTabId;
 
+  /** Stable tool name for UI identification (e.g. "bash", "codex"). */
+  toolName?: string;
+
   constructor(
     readonly executionId: string,
     parentStreamId: StreamTabId,
@@ -232,6 +235,7 @@ export function collectChildSummary(
     };
     if (handle instanceof AgentExecutionHandle) {
       info.childStreamId = handle.childStreamId;
+      if (handle.toolName) info.toolName = handle.toolName;
     } else if (handle instanceof ProcessExecutionHandle && handle.toolName) {
       info.toolName = handle.toolName;
     }

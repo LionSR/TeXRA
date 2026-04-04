@@ -66,6 +66,12 @@ export class BackgroundTasksPanel extends LitElement {
         gap: var(--spacing-tiny);
       }
 
+      .section-content {
+        max-height: 16rem;
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+      }
+
       .task-item {
         margin-bottom: var(--spacing-tiny);
       }
@@ -282,18 +288,20 @@ export class BackgroundTasksPanel extends LitElement {
               : nothing}</span
           >
         </summary>
-        ${hasActive
-          ? repeat(
-              active,
-              (c) => c.executionId,
-              (c) => this.renderTaskItem(c, kind),
-            )
-          : nothing}
-        ${!hasActive && hasFinished
-          ? html`<div class="empty-message">
-              All ${finishedCount} ${label.toLowerCase()} completed
-            </div>`
-          : nothing}
+        <div class="section-content">
+          ${hasActive
+            ? repeat(
+                active,
+                (c) => c.executionId,
+                (c) => this.renderTaskItem(c, kind),
+              )
+            : nothing}
+          ${!hasActive && hasFinished
+            ? html`<div class="empty-message">
+                All ${finishedCount} ${label.toLowerCase()} completed
+              </div>`
+            : nothing}
+        </div>
       </details>
     `;
   }
@@ -302,9 +310,9 @@ export class BackgroundTasksPanel extends LitElement {
     child: ActiveChildInfo,
     kind: 'process' | 'subagent',
   ): TemplateResult {
-    const icon = getTaskIcon(child, kind);
+    const icon = getTaskIcon(child);
     const entry = this.processOutputs.get(child.executionId);
-    const isClickable = kind === 'subagent' && Boolean(child.childStreamId);
+    const isClickable = Boolean(child.childStreamId);
     const description = child.childStreamId
       ? this.descriptions.get(child.childStreamId)
       : undefined;
@@ -318,10 +326,8 @@ export class BackgroundTasksPanel extends LitElement {
               codicon: true,
               [icon]: true,
               'task-icon': true,
-              'task-icon--process':
-                kind === 'process' && !isAgentProcess(child),
-              'task-icon--subagent':
-                kind === 'subagent' || isAgentProcess(child),
+              'task-icon--process': !isAgentTool(child),
+              'task-icon--subagent': isAgentTool(child),
             })}
           ></i>
           <span
@@ -395,19 +401,21 @@ export class BackgroundTasksPanel extends LitElement {
   }
 }
 
-/** Check if a child process represents an AI agent (distinct from plain shell). */
-function isAgentProcess(child: ActiveChildInfo): boolean {
-  return child.toolName === 'codex';
+/** True when the child is an AI agent (codex, delegation) rather than a plain shell tool. */
+function isAgentTool(child: ActiveChildInfo): boolean {
+  // Explicit tool name match, or subagent with no tool name (delegation/workflow)
+  return child.toolName === 'codex' || (!child.toolName && Boolean(child.childStreamId));
 }
 
 /** Pick the appropriate codicon for a background task item. */
-function getTaskIcon(
-  child: ActiveChildInfo,
-  kind: 'process' | 'subagent',
-): string {
-  if (kind === 'subagent') return 'codicon-server-process';
-  if (isAgentProcess(child)) return 'codicon-robot';
-  return 'codicon-terminal';
+function getTaskIcon(child: ActiveChildInfo): string {
+  if (child.toolName === 'bash') return 'codicon-terminal';
+  if (isAgentTool(child)) return 'codicon-robot';
+  // Subagents (delegation, workflow) default to server-process;
+  // processes without a toolName fall back to terminal.
+  return child.childStreamId
+    ? 'codicon-server-process'
+    : 'codicon-terminal';
 }
 
 /** Check if a child is in a waiting/idle state rather than actively processing. */
