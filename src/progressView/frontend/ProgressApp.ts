@@ -307,10 +307,6 @@ export class ProgressApp extends ProgressAppBase {
       }),
   );
 
-  /** Map of ALL streams for active-stream lookup (filter-independent). */
-  private filteredStreamMap$ = new Signal.Computed(
-    () => new Map(this.sortedStreams$.get().map((s) => [s.name, s])),
-  );
 
   /**
    * Top-level streams for the sidebar tab list (child streams excluded).
@@ -355,7 +351,7 @@ export class ProgressApp extends ProgressAppBase {
   /** Only changes when active stream switches or stream list changes. */
   private activeStreamInfo$ = new Signal.Computed(() => {
     const id = this.activeStreamId$.get();
-    return id ? (this.filteredStreamMap$.get().get(id) ?? null) : null;
+    return id ? (this.streamById$.get().get(id) ?? null) : null;
   });
 
   private hasStreams$ = new Signal.Computed(
