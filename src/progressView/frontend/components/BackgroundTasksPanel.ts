@@ -404,7 +404,10 @@ export class BackgroundTasksPanel extends LitElement {
 /** True when the child is an AI agent (codex, delegation) rather than a plain shell tool. */
 function isAgentTool(child: ActiveChildInfo): boolean {
   // Explicit tool name match, or subagent with no tool name (delegation/workflow)
-  return child.toolName === 'codex' || (!child.toolName && Boolean(child.childStreamId));
+  return (
+    child.toolName === 'codex' ||
+    (!child.toolName && Boolean(child.childStreamId))
+  );
 }
 
 /** Pick the appropriate codicon for a background task item. */
@@ -413,9 +416,7 @@ function getTaskIcon(child: ActiveChildInfo): string {
   if (isAgentTool(child)) return 'codicon-robot';
   // Subagents (delegation, workflow) default to server-process;
   // processes without a toolName fall back to terminal.
-  return child.childStreamId
-    ? 'codicon-server-process'
-    : 'codicon-terminal';
+  return child.childStreamId ? 'codicon-server-process' : 'codicon-terminal';
 }
 
 /** Check if a child is in a waiting/idle state rather than actively processing. */
