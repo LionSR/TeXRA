@@ -403,7 +403,8 @@ export class BackgroundTasksPanel extends LitElement {
 
 /** True when the child is an AI agent (codex, delegation) rather than a plain shell tool. */
 function isAgentTool(child: ActiveChildInfo): boolean {
-  return child.toolName === 'codex';
+  // Explicit tool name match, or subagent with no tool name (delegation/workflow)
+  return child.toolName === 'codex' || (!child.toolName && Boolean(child.childStreamId));
 }
 
 /** Pick the appropriate codicon for a background task item. */
