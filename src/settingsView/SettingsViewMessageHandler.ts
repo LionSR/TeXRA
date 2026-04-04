@@ -469,6 +469,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           WorkspaceStateKey.GIT_AUTHOR_EMAIL,
           data.email,
         ),
+      [SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT]: (data) =>
+        this.updateGitAuthorSetting(
+          WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+          data.enabled,
+        ),
 
       // ── Delegated to LatexSettingsHandlers ──
 

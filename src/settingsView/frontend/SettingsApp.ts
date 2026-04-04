@@ -194,6 +194,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly gitMarkCommits = signal(false);
   private readonly gitAuthorName = signal(DEFAULT_GIT_AUTHOR_NAME);
   private readonly gitAuthorEmail = signal(DEFAULT_GIT_AUTHOR_EMAIL);
+  private readonly gitWorktreeSupport = signal(false);
   private readonly gitSettingsLoaded = signal(false);
 
   // LaTeX settings state
@@ -377,6 +378,7 @@ export class SettingsApp extends SettingsAppBase {
         this.gitMarkCommits.set(data.markCommits);
         this.gitAuthorName.set(data.authorName);
         this.gitAuthorEmail.set(data.authorEmail);
+        this.gitWorktreeSupport.set(data.worktreeSupport);
         this.gitSettingsLoaded.set(true);
         return;
       }
@@ -621,6 +623,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL,
   );
 
+  private handleGitWorktreeSupportToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT,
+  );
+
   // LaTeX settings event handlers
   private handleApplyLatexSettings = forwardDetail(
     SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS,
@@ -841,10 +847,12 @@ export class SettingsApp extends SettingsAppBase {
               .markCommits=${this.gitMarkCommits.get()}
               .authorName=${this.gitAuthorName.get()}
               .authorEmail=${this.gitAuthorEmail.get()}
+              .worktreeSupport=${this.gitWorktreeSupport.get()}
               .toggleDisabled=${!this.gitSettingsLoaded.get()}
               @git-mark-commits-toggle=${this.handleGitMarkCommitsToggle}
               @git-author-name-change=${this.handleGitAuthorNameChange}
               @git-author-email-change=${this.handleGitAuthorEmailChange}
+              @git-worktree-support-toggle=${this.handleGitWorktreeSupportToggle}
             ></git-tab>
           </vscode-tab-panel>
 

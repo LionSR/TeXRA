@@ -32,6 +32,9 @@ export enum WorkspaceStateKey {
   GIT_MARK_COMMITS = 'texra.git.markCommits',
   GIT_AUTHOR_NAME = 'texra.git.authorName',
   GIT_AUTHOR_EMAIL = 'texra.git.authorEmail',
+
+  // Git worktree support
+  GIT_WORKTREE_SUPPORT = 'texra.git.worktreeSupport',
 }
 
 export enum GlobalStateKey {

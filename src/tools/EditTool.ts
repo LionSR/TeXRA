@@ -7,7 +7,13 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
-import { countOccurrences, pluralize } from '@tools/utils';
+import {
+  countOccurrences,
+  pluralize,
+  resolveWorkspaceRelativePath,
+  parseWorkingDirectory,
+  WorkingDirectorySchema,
+} from '@tools/utils';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -25,6 +31,7 @@ const EditInputSchema = z.strictObject({
   old_str: z.string(),
   new_str: z.string(),
   replace_all: z.boolean().nullish(),
+  working_directory: WorkingDirectorySchema,
 });
 
 export type EditInput = z.infer<typeof EditInputSchema>;
@@ -36,7 +43,12 @@ export class EditFileTool extends defineTool({
   schema: EditInputSchema,
 }) {
   protected async execute(input: EditInput): Promise<ToolResult> {
-    const { path: targetPath, old_str, new_str, replace_all } = input;
+    const { old_str, new_str, replace_all } = input;
+    const root = parseWorkingDirectory(input.working_directory);
+    const resolved = root
+      ? resolveWorkspaceRelativePath(input.path, root)
+      : undefined;
+    const targetPath = resolved?.fsPath ?? input.path;
 
     if (old_str.length === 0) {
       throw new ToolError(
