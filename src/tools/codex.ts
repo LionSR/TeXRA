@@ -22,7 +22,7 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -38,7 +38,7 @@ import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { escapeAttr, escapeText } from '@tools/subagentResults';
@@ -55,10 +55,6 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream, finalizeChildStream } from './childStream';
-import {
-  CODEX_AGENT_NAME,
-  CODEX_DISPLAY_MODEL,
-} from './codexShared';
 
 // Type-only imports (kept separate for bundler efficiency)
 import type {
@@ -72,14 +68,13 @@ import type {
 } from '@openai/codex-sdk';
 
 // ============================================================================
-// Codex config (inlined to avoid importing codexConfig.ts which pulls in vscode)
+// Codex config
 // ============================================================================
 
-/** Short model name passed to the Codex CLI via --model. */
-const CODEX_CLI_MODEL = 'gpt-5.4';
-
-/** Default reasoning effort passed to the Codex CLI. */
-const CODEX_REASONING_EFFORT = 'high' as const;
+// CODEX_SANDBOX_MODES must be inlined (used at module-level by the schema).
+// All other config (model, reasoning, buildCodexConfig, workspace, sandbox
+// getter) is lazy-imported from codexConfig.ts at runtime to avoid pulling
+// vscode into the module graph — src/tools/ is a VS Code-free zone.
 
 /** All sandbox modes from the SDK, exposed to the LLM. */
 const CODEX_SANDBOX_MODES = [
@@ -88,14 +83,10 @@ const CODEX_SANDBOX_MODES = [
   'danger-full-access',
 ] as const satisfies readonly SandboxMode[];
 
-/** Build synthetic AgentConfig for codex child streams. */
-function buildCodexConfig(prompt: string): AgentConfig {
-  return AgentConfigSchema.parse({
-    agent: CODEX_AGENT_NAME,
-    model: CODEX_DISPLAY_MODEL,
-    instruction: prompt,
-    agentCategory: AgentCategory.ToolUse,
-  });
+/** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
+let _configModule: typeof import('./codexConfig') | null = null;
+async function getCodexConfig(): Promise<typeof import('./codexConfig')> {
+  return (_configModule ??= await import('./codexConfig'));
 }
 
 // ============================================================================
@@ -441,6 +432,20 @@ function handleTurnSuccess(
   logger: AgentLogger,
   wallTimeMs: number,
 ): void {
+  // Persist structured usage stats for the UI
+  if (turn.usage) {
+    bus.emit('updateStreamUsage', {
+      streamId: childStreamId,
+      storageKey: executionId as StorageKey,
+      executionId,
+      usage: {
+        inputTokens: turn.usage.input_tokens,
+        outputTokens: turn.usage.output_tokens,
+        cost: 0,
+      },
+    });
+  }
+
   const threadId = thread.id;
   if (threadId) {
     logTurnSummary(logger, wallTimeMs, turn.usage);
@@ -513,10 +518,9 @@ export class CodexTool extends defineTool({
 }) {
   protected async execute(input: CodexInput): Promise<ToolResult> {
     // Resolve sandbox mode default early so it's available for approval label + output.
-    // Lazy import to avoid pulling vscode into the module graph at parse time.
     if (!input.sandbox_mode) {
-      const { getCodexSandboxMode } = await import('./codexConfig');
-      input.sandbox_mode = getCodexSandboxMode();
+      const config = await getCodexConfig();
+      input.sandbox_mode = config.getCodexSandboxMode();
     }
 
     // Request approval — same pattern as BashTool
@@ -564,21 +568,20 @@ export class CodexTool extends defineTool({
 
     const CodexClass = await importCodexClass();
     const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
+    const config = await getCodexConfig();
     // sandbox_mode is always resolved in execute() before this is called
     const sandboxMode = input.sandbox_mode;
     // Only compute workspace for new threads — resumed threads keep their
     // stored workspace unless the caller explicitly overrides.
-    // Lazy import to avoid pulling vscode into the module graph at parse time.
-    let workspace: { workingDirectory?: string; additionalDirectories?: string[] } = {};
-    if (input.working_directory || !input.thread_id) {
-      const { buildCodexWorkspaceOptions } = await import('./codexConfig');
-      workspace = buildCodexWorkspaceOptions(input.working_directory);
-    }
+    const workspace =
+      input.working_directory || !input.thread_id
+        ? config.buildCodexWorkspaceOptions(input.working_directory)
+        : {};
     const threadOptions = {
       ...workspace,
       sandboxMode,
-      model: CODEX_CLI_MODEL,
-      modelReasoningEffort: CODEX_REASONING_EFFORT,
+      model: config.CODEX_CLI_MODEL,
+      modelReasoningEffort: config.CODEX_REASONING_EFFORT,
       skipGitRepoCheck: true as const,
     };
 
@@ -595,7 +598,8 @@ export class CodexTool extends defineTool({
     const executionId = generateExecutionId();
     const preview = truncateWithEllipsis(input.prompt, 60);
     const startedAt = Date.now();
-    const config = buildCodexConfig(input.prompt);
+    const codexConfig = await getCodexConfig();
+    const config = codexConfig.buildCodexConfig(input.prompt);
 
     if (parentStreamId) {
       await ensureRunDir(executionId);
@@ -675,7 +679,8 @@ export class CodexTool extends defineTool({
     await ensureRunDir(executionId);
 
     const preview = truncateWithEllipsis(input.prompt, 60);
-    const config = buildCodexConfig(input.prompt);
+    const codexConfig = await getCodexConfig();
+    const config = codexConfig.buildCodexConfig(input.prompt);
 
     try {
       await registerExecution(executionId, config, 'codex', parentExecutionId);

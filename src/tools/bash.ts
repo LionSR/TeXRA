@@ -72,14 +72,21 @@ function appendTail(current: string, chunk: string, maxChars: number): string {
 
 class BashBackgroundSession implements IInterruptible {
   private pid: number | undefined;
+  private interrupted = false;
 
   setPid(pid: number): void {
     this.pid = pid;
+    // If interrupt() was called before pid arrived, kill now
+    if (this.interrupted) {
+      signalProcessGroup(pid, 'SIGTERM');
+    }
   }
 
   interrupt(): void {
-    if (!this.pid) return;
-    signalProcessGroup(this.pid, 'SIGTERM');
+    this.interrupted = true;
+    if (this.pid) {
+      signalProcessGroup(this.pid, 'SIGTERM');
+    }
   }
 }
 
