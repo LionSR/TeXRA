@@ -58,6 +58,7 @@ import {
   buildCodexWorkspaceOptions,
   CODEX_CLI_MODEL,
   CODEX_REASONING_EFFORT,
+  CODEX_SANDBOX_MODES,
   getCodexSandboxMode,
 } from './codexConfig';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
