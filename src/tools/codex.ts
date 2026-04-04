@@ -283,10 +283,11 @@ function logCodexItem(
           : item.exit_code === 0
             ? 'ok'
             : `exit ${item.exit_code}`;
+      const output = item.aggregated_output?.trim() || `(${exitInfo})`;
       logger.logToolUse({
         toolName: 'bash',
         input: { command: item.command },
-        output: `(${exitInfo})`,
+        output,
         status: 'completed',
       });
       break;

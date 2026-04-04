@@ -469,42 +469,43 @@ export class StreamTabs extends LitElement {
   /** Which parent streams have their child list expanded. */
   @state() private expandedParents: Set<string> = new Set();
 
+  /**
+   * Parents the user has manually collapsed. Auto-expand won't override
+   * these — only cleared when all children finish (parent leaves the map).
+   */
+  private manuallyCollapsed: Set<string> = new Set();
+
   /** Auto-expand parents when children appear, auto-collapse when gone. */
   protected override willUpdate(
     changed: import('lit').PropertyValues,
   ): void {
     if (!changed.has('childStreamsByParent')) return;
 
-    // Quick check: is there anything to add or remove?
-    let needsExpand = false;
-    let needsCollapse = false;
-    for (const parentId of this.childStreamsByParent.keys()) {
-      if (!this.expandedParents.has(parentId)) {
-        needsExpand = true;
-        break;
-      }
-    }
-    if (!needsExpand) {
-      for (const parentId of this.expandedParents) {
-        if (!this.childStreamsByParent.has(parentId)) {
-          needsCollapse = true;
-          break;
-        }
-      }
-    }
-    if (!needsExpand && !needsCollapse) return;
-
-    // Only allocate when we know something changed
+    let dirty = false;
     const next = new Set(this.expandedParents);
+
+    // Auto-expand NEW parents (not yet seen and not manually collapsed)
     for (const parentId of this.childStreamsByParent.keys()) {
-      next.add(parentId);
+      if (!next.has(parentId) && !this.manuallyCollapsed.has(parentId)) {
+        next.add(parentId);
+        dirty = true;
+      }
     }
+    // Auto-collapse parents that lost all children + clear manual state
     for (const parentId of next) {
       if (!this.childStreamsByParent.has(parentId)) {
         next.delete(parentId);
+        this.manuallyCollapsed.delete(parentId);
+        dirty = true;
       }
     }
-    this.expandedParents = next;
+    // Also clean manual set for parents no longer in the map
+    for (const parentId of this.manuallyCollapsed) {
+      if (!this.childStreamsByParent.has(parentId)) {
+        this.manuallyCollapsed.delete(parentId);
+      }
+    }
+    if (dirty) this.expandedParents = next;
   }
 
   override render(): TemplateResult {
@@ -623,8 +624,10 @@ export class StreamTabs extends LitElement {
     const next = new Set(this.expandedParents);
     if (next.has(parentId)) {
       next.delete(parentId);
+      this.manuallyCollapsed.add(parentId);
     } else {
       next.add(parentId);
+      this.manuallyCollapsed.delete(parentId);
     }
     this.expandedParents = next;
   }
