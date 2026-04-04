@@ -76,7 +76,12 @@ export class ReadFileTool extends defineTool({
 
     const attachmentConfig = this.getAttachmentConfig(input.path);
     if (attachmentConfig) {
-      const result = await this.returnBinaryAttachment(input, attachmentConfig);
+      const result = await this.returnBinaryAttachment(
+        input,
+        attachmentConfig,
+        filePath,
+        root,
+      );
       recordToolFileRead(filePath);
       return result;
     }
@@ -199,11 +204,14 @@ export class ReadFileTool extends defineTool({
   private async returnBinaryAttachment(
     input: ReadInput,
     config: { kind: 'pdf' | 'image' | 'document'; label: string },
+    filePath: string,
+    root?: string,
   ): Promise<ToolResult> {
     const copy = ATTACHMENT_COPY[config.kind];
     const attachment = await buildFileAttachment({
-      filePath: input.path,
+      filePath,
       description: `${config.label} returned by read_file tool.`,
+      root,
     });
 
     const baseSummary = `Attached ${config.label} ${attachment.path}.`;

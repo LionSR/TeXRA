@@ -66,6 +66,14 @@ export function resolveWorkspaceRelativePath(
   const input = !trimmed || trimmed === '.' ? '' : trimmed;
 
   if (root) {
+    // Absolute paths need special handling — locatePathInRoot only works with relative paths.
+    if (input && path.isAbsolute(input)) {
+      const relative = path.relative(root, input);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new ToolError('Path must stay within the working directory.');
+      }
+      return { relative: relative || '.', absolute: input, fsPath: input };
+    }
     const resolved = locatePathInRoot(root, input);
     if (resolved.kind === 'external') {
       throw new ToolError('Path must stay within the working directory.');
@@ -389,6 +397,8 @@ export interface BuildFileAttachmentOptions {
   includeBase64?: boolean;
   /** Maximum allowed file size in bytes */
   maxBytes?: number;
+  /** Optional root directory override (e.g. a git worktree) */
+  root?: string;
 }
 
 const DEFAULT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
@@ -402,19 +412,20 @@ export async function buildFileAttachment({
   mimeType,
   includeBase64 = false,
   maxBytes = DEFAULT_ATTACHMENT_MAX_BYTES,
+  root,
 }: BuildFileAttachmentOptions): Promise<ToolFileAttachment> {
   if (!isNonEmptyString(filePath)) {
     throw new ToolError('Attachment path must be provided.');
   }
 
-  const { path, display } = resolveAndFormat(filePath);
-  const exists = await WorkspaceFS.exists(path.relative);
+  const { path, display } = resolveAndFormat(filePath, root);
+  const exists = await WorkspaceFS.exists(path.fsPath);
   if (!exists) {
     throw new ToolError(`Attachment not found: ${display}`);
   }
 
   const stats = await wrapApiCall(
-    () => WorkspaceFS.stat(path.relative),
+    () => WorkspaceFS.stat(path.fsPath),
     `Failed to inspect attachment ${display}`,
   );
 
@@ -426,12 +437,12 @@ export async function buildFileAttachment({
   }
 
   const buffer = await wrapApiCall(
-    () => WorkspaceFS.readBytes(path.relative),
+    () => WorkspaceFS.readBytes(path.fsPath),
     `Failed to read attachment ${display}`,
   );
 
   const inferredMime =
-    mimeType ?? getMimeType(path.relative) ?? 'application/octet-stream';
+    mimeType ?? getMimeType(path.fsPath) ?? 'application/octet-stream';
 
   // Strip binary data from oversized images to prevent non-retryable API 400 errors.
   // Downstream handlers see no bytes → metadata-only fallback with read_file hint.
