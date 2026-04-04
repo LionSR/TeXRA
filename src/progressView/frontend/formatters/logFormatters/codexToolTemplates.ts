@@ -87,9 +87,7 @@ function renderSectionGroup(
   )}`;
 }
 
-function renderCodexPromptSection(
-  input: CodexInputDisplay,
-): RenderableSection {
+function renderCodexPromptSection(input: CodexInputDisplay): RenderableSection {
   return when(Boolean(input.prompt), () =>
     buildToolUseSection('Prompt:', wrapInPre(input.prompt)),
   );

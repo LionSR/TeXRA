@@ -316,7 +316,6 @@ export class ProgressApp extends ProgressAppBase {
     });
   });
 
-
   /**
    * Top-level streams for the sidebar tab list (child streams excluded).
    * Child streams are shown nested under their parent via childStreamsByParent$.
