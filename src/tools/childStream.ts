@@ -105,9 +105,13 @@ export function finalizeChildStream(
     );
   }
 
-  StreamStatusService.set(
-    childStreamId,
-    hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
-  );
+  // Preserve user-initiated STOPPED status — don't overwrite with ERROR/READY
+  const currentStatus = StreamStatusService.get(childStreamId);
+  if (currentStatus !== STREAM_STATUS.STOPPED) {
+    StreamStatusService.set(
+      childStreamId,
+      hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+    );
+  }
   untrackExecution(executionId);
 }

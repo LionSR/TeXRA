@@ -39,6 +39,8 @@ import { createChildStream, finalizeChildStream } from './childStream';
 
 const BASH_TIMEOUT_MS = 120_000; // 120 s
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
+/** Max chars logged to the child stream tab to prevent unbounded memory growth. */
+const BACKGROUND_LOG_CAP_CHARS = 200_000;
 
 const BashInputSchema = z.strictObject({
   command: z.string(),
@@ -208,8 +210,23 @@ export class BashTool extends defineTool({
     );
     let stdoutTail = '';
     let stderrTail = '';
+    let loggedChars = 0;
+    let logCapReached = false;
     const session = new BashBackgroundSession();
     registerInterruptible(childStreamId, session);
+
+    const logChunk = (chunk: string, level: 'info' | 'warn'): void => {
+      if (logCapReached) return;
+      loggedChars += chunk.length;
+      if (loggedChars > BACKGROUND_LOG_CAP_CHARS) {
+        logCapReached = true;
+        logger.warn(
+          `[Stream log truncated at ${(BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars — tail available in follow-up result]`,
+        );
+        return;
+      }
+      logger[level](chunk);
+    };
 
     const startedAt = Date.now();
     const promise = executeCommand(command, {
@@ -224,7 +241,7 @@ export class BashTool extends defineTool({
           chunk,
           BACKGROUND_OUTPUT_TAIL_CHARS,
         );
-        logger.info(chunk);
+        logChunk(chunk, 'info');
       },
       onStderr: (chunk) => {
         stderrTail = appendTail(
@@ -232,7 +249,7 @@ export class BashTool extends defineTool({
           chunk,
           BACKGROUND_OUTPUT_TAIL_CHARS,
         );
-        logger.warn(chunk);
+        logChunk(chunk, 'warn');
       },
     });
 

@@ -22,7 +22,7 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -53,6 +53,13 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+import {
+  buildCodexConfig,
+  buildCodexWorkspaceOptions,
+  CODEX_CLI_MODEL,
+  CODEX_REASONING_EFFORT,
+  getCodexSandboxMode,
+} from './codexConfig';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream, finalizeChildStream } from './childStream';
 
@@ -86,8 +93,10 @@ const CodexInputSchema = z.strictObject({
     .describe('Directory to run in (defaults to workspace root)'),
   sandbox_mode: z
     .enum(SANDBOX_MODES)
-    .prefault('read-only')
-    .describe('File access level for the Codex agent'),
+    .optional()
+    .describe(
+      'File access level for the Codex agent (defaults to user-configured mode, typically workspace-write)',
+    ),
   run_in_background: z
     .boolean()
     .prefault(false)
@@ -242,14 +251,6 @@ function formatCodexError(
 // ============================================================================
 // Stream tab helpers
 // ============================================================================
-
-/** Build a synthetic AgentConfig for codex (used for TaskState and execution registration). */
-function buildCodexConfig(prompt: string): AgentConfig {
-  return AgentConfigSchema.parse({
-    agent: 'codex',
-    instruction: prompt,
-  });
-}
 
 /** Log a completed codex thread item to the child stream's logger. */
 function logCodexItem(
@@ -538,9 +539,13 @@ export class CodexTool extends defineTool({
 
     const CodexClass = await importCodexClass();
     const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
+    const sandboxMode = input.sandbox_mode ?? getCodexSandboxMode();
+    const workspace = buildCodexWorkspaceOptions(input.working_directory);
     const threadOptions = {
-      workingDirectory: input.working_directory,
-      sandboxMode: input.sandbox_mode,
+      ...workspace,
+      sandboxMode,
+      model: CODEX_CLI_MODEL,
+      modelReasoningEffort: CODEX_REASONING_EFFORT,
       skipGitRepoCheck: true as const,
     };
 
