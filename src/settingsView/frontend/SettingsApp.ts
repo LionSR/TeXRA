@@ -185,6 +185,7 @@ export class SettingsApp extends SettingsAppBase {
   // Approval settings state
   private readonly bashApprovalEnabled = signal(true);
   private readonly codexSandboxMode = signal<string>('workspace-write');
+  private readonly codexReasoningEffort = signal<string>('high');
 
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
@@ -357,6 +358,7 @@ export class SettingsApp extends SettingsAppBase {
         if (!data) return;
         this.bashApprovalEnabled.set(data.bashApprovalEnabled);
         this.codexSandboxMode.set(data.codexSandboxMode);
+        this.codexReasoningEffort.set(data.codexReasoningEffort);
         return;
       }
 
@@ -608,6 +610,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE,
   );
 
+  private handleCodexReasoningEffortChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT,
+  );
+
   // Git settings event handlers
   private handleGitMarkCommitsToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS,
@@ -827,12 +833,14 @@ export class SettingsApp extends SettingsAppBase {
               .loaded=${this.toolDashboardLoaded.get()}
               .bashApprovalEnabled=${this.bashApprovalEnabled.get()}
               .codexSandboxMode=${this.codexSandboxMode.get()}
+              .codexReasoningEffort=${this.codexReasoningEffort.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-recheck=${this.handleToolRecheck}
               @tool-toggle=${this.handleToolToggle}
               @bash-approval-toggle=${this.handleBashApprovalToggle}
               @codex-sandbox-mode-change=${this.handleCodexSandboxModeChange}
+              @codex-reasoning-effort-change=${this.handleCodexReasoningEffortChange}
             ></tools-tab>
           </vscode-tab-panel>
 
