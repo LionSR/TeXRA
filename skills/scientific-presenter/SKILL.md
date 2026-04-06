@@ -27,8 +27,4 @@ Use this skill for research talks, posters, code walkthrough decks, paper-to-sli
 - Use progressive disclosure when the audience must absorb a derivation, algorithm, or workflow in stages.
 - Treat visual QA as mandatory. A slide that compiles but clips, overlaps, or hides labels is not done.
 
-Read [references/slide-quality-checklist.md](references/slide-quality-checklist.md) when refining layout, diagrams, or Beamer-specific structure.
-
-## Use References Only When Needed
-
-Open the reference checklist when you need detailed review criteria for slide density, figure validation, poster layout, or code-presentation choices. Otherwise keep moving with the workflow above.
+For a stricter final pass, use [references/slide-quality-checklist.md](references/slide-quality-checklist.md) to review slide density, figure quality, poster layout, and Beamer-specific issues.

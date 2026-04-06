@@ -27,8 +27,4 @@ Use this skill for serious review passes on papers, notes, appendices, or techni
 - Prefer a short list of high-signal findings over a noisy dump of minor edits.
 - If no major issues are found, say that explicitly and note any residual uncertainty or untested areas.
 
-Read [references/review-checklist.md](references/review-checklist.md) when you need the fuller checklist for math verification, notation auditing, source checking, and findings format.
-
-## Use References Only When Needed
-
-Open the reference file when the manuscript is mathematically dense, has code-backed figures or computations, or needs a formal review report rather than a light editorial pass.
+For a formal audit pass, use [references/review-checklist.md](references/review-checklist.md) when the manuscript is mathematically dense, has code-backed figures or computations, or needs a full findings report.

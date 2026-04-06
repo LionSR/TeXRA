@@ -26,8 +26,4 @@ Use this skill when the input is handwritten math, a screenshot of equations, or
 - Prefer standard LaTeX environments already used by the target document.
 - Call out unresolved ambiguity instead of silently inventing a precise symbol.
 
-Read [references/ocr-checklist.md](references/ocr-checklist.md) when you need the longer checklist for ambiguity resolution and final validation.
-
-## Use References Only When Needed
-
-Open the reference file when the handwriting is messy, symbols are overloaded, or the OCR output must be inserted into an existing manuscript with strict notation rules.
+For ambiguity-heavy input, use [references/ocr-checklist.md](references/ocr-checklist.md) when the handwriting is messy, symbols are overloaded, or the result must fit strict manuscript notation.

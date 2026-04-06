@@ -26,8 +26,4 @@ Use this skill when the main job is discovery rather than proving: find the righ
 - Show what you searched and what you found so the answer is auditable.
 - When uncertain, provide the best nearby API and explain the gap.
 
-Read [references/search-playbook.md](references/search-playbook.md) when you need the longer playbook for Loogle, source search, import discovery, and “does this already exist?” cases.
-
-## Use References Only When Needed
-
-Open the reference file when the result is hard to find, multiple candidate APIs exist, or you need a disciplined multi-source search.
+For hard-to-find results, use [references/search-playbook.md](references/search-playbook.md) to run a more disciplined search across theorem names, type shapes, source files, and import paths.

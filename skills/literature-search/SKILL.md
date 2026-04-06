@@ -27,8 +27,4 @@ Use this skill for related-work searches, citation verification, research briefi
 - Separate what a paper claims from what you infer from it.
 - Note recency explicitly when the topic is moving quickly.
 
-Read [references/source-evaluation.md](references/source-evaluation.md) when you need a fuller checklist for source quality, attribution, and synthesis style.
-
-## Use References Only When Needed
-
-Open the reference file when you are comparing conflicting sources, building a formal literature review, or verifying whether a citation actually supports a statement.
+For a deeper evaluation pass, use [references/source-evaluation.md](references/source-evaluation.md) when comparing conflicting sources, building a formal literature review, or checking whether a citation really supports a claim.

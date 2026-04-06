@@ -27,8 +27,4 @@ Use this skill for day-to-day Lean 4 proof development: proving lemmas, debuggin
 - Treat diagnostics as ground truth.
 - If a proof attempt becomes opaque or fragile, back up and choose a clearer route.
 
-Read [references/proof-workflow.md](references/proof-workflow.md) when you need a fuller checklist for search tactics, proof iteration, and cleanup.
-
-## Use References Only When Needed
-
-Open the reference file when a proof is stuck, the right tactic family is unclear, or you need a more systematic development loop.
+For stuck proofs or longer debugging sessions, use [references/proof-workflow.md](references/proof-workflow.md) for a stricter loop around search, inspection, iteration, and cleanup.

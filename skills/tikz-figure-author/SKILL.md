@@ -28,8 +28,4 @@ Use this skill for architecture diagrams, workflows, commutative diagrams, tenso
 - Do not stop at source edits alone when a build is possible; the default is to compile and refine until the rendered figure is clean.
 - Ensure the figure integrates cleanly into the surrounding text and layout.
 
-Read [references/figure-checklist.md](references/figure-checklist.md) when you need the longer validation checklist for layout, consistency, and math-sensitive diagrams.
-
-## Use References Only When Needed
-
-Open the reference file when the figure is dense, mathematically constrained, or part of a larger family of related TikZ figures that should share styles and conventions.
+For dense or math-sensitive figures, use [references/figure-checklist.md](references/figure-checklist.md) to run a stricter pass over layout, consistency, and rendered correctness.

@@ -27,8 +27,4 @@ Use this skill when Lean code already works or nearly works, but it is noisy, re
 - Remove debugging leftovers, dead code, and sorry-driven scaffolding.
 - A shorter proof is worse if it becomes opaque.
 
-Read [references/simplifier-checklist.md](references/simplifier-checklist.md) when you need the longer checklist for style, generality, proof cleanup, and lint-oriented review.
-
-## Use References Only When Needed
-
-Open the reference file when you are doing a serious cleanup pass, preparing code for upstreaming, or deciding whether to generalize or rename declarations.
+For serious cleanup or upstream preparation, use [references/simplifier-checklist.md](references/simplifier-checklist.md) to review style, generality, proof cleanup, and lint-facing details.

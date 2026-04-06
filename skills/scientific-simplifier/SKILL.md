@@ -27,8 +27,4 @@ Use this skill when a scientific project feels bloated, repetitive, over-abstrac
 - Prefer smaller, safer edits over sweeping rewrites when the verification surface is large.
 - If a simplification changes results, semantics, or narrative emphasis, revert it.
 
-Read [references/simplification-checklist.md](references/simplification-checklist.md) when you need the longer checklist for duplication, abstraction, prose cleanup, and verification strategy.
-
-## Use References Only When Needed
-
-Open the reference file when the target codebase is large, the prose shows obvious AI artifacts, or you need a more systematic pass over abstraction and duplication hotspots.
+For a broader cleanup pass, use [references/simplification-checklist.md](references/simplification-checklist.md) when the codebase is large, the prose shows obvious AI artifacts, or you need a more systematic review of duplication and abstraction.

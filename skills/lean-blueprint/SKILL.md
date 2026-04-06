@@ -27,8 +27,4 @@ Use this skill for blueprint authoring and maintenance: writing new dependency-t
 - Formalized status markers should reflect reality, not aspiration.
 - Statement mismatches between blueprint and Lean are real bugs, not cosmetic issues.
 
-Read [references/blueprint-checklist.md](references/blueprint-checklist.md) when you need the longer checklist for dependency tracking, statement syncing, and notation translation.
-
-## Use References Only When Needed
-
-Open the reference file when building a new blueprint skeleton, auditing an existing blueprint for drift, or translating Lean declarations into standard mathematical prose.
+For new blueprint skeletons or drift audits, use [references/blueprint-checklist.md](references/blueprint-checklist.md) to check dependency tracking, statement syncing, and notation translation.
