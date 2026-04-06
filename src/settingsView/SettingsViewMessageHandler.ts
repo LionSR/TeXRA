@@ -102,7 +102,10 @@ import {
   countPinnedMemories,
 } from '@tools/memory/memoryMeta';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
-import { parseCodexSandboxMode } from '@tools/codexConfig';
+import {
+  parseCodexSandboxMode,
+  parseCodexReasoningEffort,
+} from '@tools/codexConfig';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
@@ -490,6 +493,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleSetApprovalEnabled(BASH_APPROVAL_CONFIG_KEY, data.enabled),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (data) =>
         this.handleSetCodexSandboxMode(data.mode),
+      [SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT]: (data) =>
+        this.handleSetCodexReasoningEffort(data.effort),
 
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
@@ -821,6 +826,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           'workspace-write',
         ) ?? 'workspace-write',
       ),
+      codexReasoningEffort: parseCodexReasoningEffort(
+        workspaceSM.get<string>(
+          WorkspaceStateKey.CODEX_REASONING_EFFORT,
+          'high',
+        ) ?? 'high',
+      ),
     });
   }
 
@@ -835,6 +846,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async handleSetCodexSandboxMode(mode: string): Promise<void> {
     await workspaceSM.update(WorkspaceStateKey.CODEX_SANDBOX_MODE, mode);
+    await this.withActiveWebview((w) => this.sendApprovalSettings(w));
+  }
+
+  private async handleSetCodexReasoningEffort(effort: string): Promise<void> {
+    await workspaceSM.update(WorkspaceStateKey.CODEX_REASONING_EFFORT, effort);
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 

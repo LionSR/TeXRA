@@ -17,6 +17,7 @@ import type {
   ToolDashboardItem,
   ToolCategory,
   CodexSandboxMode,
+  CodexReasoningEffort,
 } from '@shared/schemas/settingsViewMessages';
 
 // Side-effect: register tool card component
@@ -30,6 +31,16 @@ const SANDBOX_MODE_OPTIONS: readonly {
   { value: 'read-only', label: 'Read-only' },
   { value: 'workspace-write', label: 'Workspace write' },
   { value: 'danger-full-access', label: 'Full access' },
+] as const;
+
+/** Reasoning effort display labels — single source of truth for the UI. */
+const REASONING_EFFORT_OPTIONS: readonly {
+  value: CodexReasoningEffort;
+  label: string;
+}[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
 ] as const;
 
 /** Per-category display metadata. */
@@ -236,6 +247,7 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: String }) codexSandboxMode = 'workspace-write';
+  @property({ type: String }) codexReasoningEffort = 'high';
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
@@ -257,6 +269,16 @@ export class ToolsTab extends LitElement {
     const mode = target?.value;
     if (mode) {
       this.dispatchEvent(createEvent('codex-sandbox-mode-change', { mode }));
+    }
+  }
+
+  private handleCodexReasoningEffortChange(e: Event): void {
+    const target = e.target as HTMLSelectElement | null;
+    const effort = target?.value;
+    if (effort) {
+      this.dispatchEvent(
+        createEvent('codex-reasoning-effort-change', { effort }),
+      );
     }
   }
 
@@ -295,6 +317,25 @@ export class ToolsTab extends LitElement {
                 <vscode-option
                   value=${opt.value}
                   ?selected=${this.codexSandboxMode === opt.value}
+                >
+                  ${opt.label}
+                </vscode-option>
+              `,
+            )}
+          </vscode-single-select>
+        </div>
+        <div class="sandbox-mode-row">
+          <label>Reasoning effort</label>
+          <vscode-single-select
+            class="sandbox-mode-select"
+            .value=${this.codexReasoningEffort}
+            @change=${this.handleCodexReasoningEffortChange}
+          >
+            ${REASONING_EFFORT_OPTIONS.map(
+              (opt) => html`
+                <vscode-option
+                  value=${opt.value}
+                  ?selected=${this.codexReasoningEffort === opt.value}
                 >
                   ${opt.label}
                 </vscode-option>

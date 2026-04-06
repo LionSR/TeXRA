@@ -14,8 +14,37 @@ import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 /** Short model name passed to the Codex CLI via --model. */
 export const CODEX_CLI_MODEL = 'gpt-5.4';
 
-/** Default reasoning effort passed to the Codex CLI. */
-export const CODEX_REASONING_EFFORT = 'high' as const;
+// ============================================================================
+// Reasoning effort config (injectable — VS Code layer sets the real getter)
+// ============================================================================
+
+export const CODEX_REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
+
+export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number];
+
+const DEFAULT_REASONING_EFFORT: CodexReasoningEffort = 'high';
+
+/** Validate a raw string into a reasoning effort, falling back to the default. */
+export function parseCodexReasoningEffort(raw: string): CodexReasoningEffort {
+  return CODEX_REASONING_EFFORTS.includes(raw as CodexReasoningEffort)
+    ? (raw as CodexReasoningEffort)
+    : DEFAULT_REASONING_EFFORT;
+}
+
+let reasoningEffortGetter: () => CodexReasoningEffort = () =>
+  DEFAULT_REASONING_EFFORT;
+
+/** Register a platform-specific getter for the configured reasoning effort. */
+export function setCodexReasoningEffortGetter(
+  getter: () => CodexReasoningEffort,
+): void {
+  reasoningEffortGetter = getter;
+}
+
+/** Read the user-configured reasoning effort. */
+export function getCodexReasoningEffort(): CodexReasoningEffort {
+  return reasoningEffortGetter();
+}
 
 // ============================================================================
 // Sandbox mode config (injectable — VS Code layer sets the real getter)

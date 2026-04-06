@@ -49,6 +49,8 @@ import { interruptAllCodexSessions } from '@tools/codex';
 import {
   parseCodexSandboxMode,
   setCodexSandboxModeGetter,
+  parseCodexReasoningEffort,
+  setCodexReasoningEffortGetter,
 } from '@tools/codexConfig';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
@@ -216,6 +218,14 @@ export async function activate(context: vscode.ExtensionContext) {
         WorkspaceStateKey.CODEX_SANDBOX_MODE,
         'workspace-write',
       ) ?? 'workspace-write',
+    ),
+  );
+  setCodexReasoningEffortGetter(() =>
+    parseCodexReasoningEffort(
+      workspaceSM.get<string>(
+        WorkspaceStateKey.CODEX_REASONING_EFFORT,
+        'high',
+      ) ?? 'high',
     ),
   );
 
