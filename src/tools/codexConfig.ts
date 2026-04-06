@@ -15,76 +15,62 @@ import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 export const CODEX_CLI_MODEL = 'gpt-5.4';
 
 // ============================================================================
-// Reasoning effort config (injectable — VS Code layer sets the real getter)
+// Injectable config factory — used for Codex settings that the VS Code layer
+// provides at startup via a getter, keeping src/tools/ free of vscode imports.
 // ============================================================================
 
-export const CODEX_REASONING_EFFORTS = [
-  'low',
-  'medium',
+interface CodexConfigSetting<T extends string> {
+  readonly values: readonly T[];
+  parse: (raw: string) => T;
+  get: () => T;
+  setGetter: (getter: () => T) => void;
+}
+
+function createCodexSetting<const T extends string>(
+  values: readonly T[],
+  defaultValue: NoInfer<T>,
+): CodexConfigSetting<T> {
+  let getter: () => T = () => defaultValue;
+  return {
+    values,
+    parse: (raw: string): T =>
+      (values as readonly string[]).includes(raw) ? (raw as T) : defaultValue,
+    get: () => getter(),
+    setGetter: (fn: () => T) => {
+      getter = fn;
+    },
+  };
+}
+
+// ============================================================================
+// Reasoning effort
+// ============================================================================
+
+const reasoningEffort = createCodexSetting(
+  ['low', 'medium', 'high', 'xhigh'] as const,
   'high',
-  'xhigh',
-] as const;
+);
 
+export const CODEX_REASONING_EFFORTS = reasoningEffort.values;
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number];
-
-const DEFAULT_REASONING_EFFORT: CodexReasoningEffort = 'high';
-
-/** Validate a raw string into a reasoning effort, falling back to the default. */
-export function parseCodexReasoningEffort(raw: string): CodexReasoningEffort {
-  return CODEX_REASONING_EFFORTS.includes(raw as CodexReasoningEffort)
-    ? (raw as CodexReasoningEffort)
-    : DEFAULT_REASONING_EFFORT;
-}
-
-let reasoningEffortGetter: () => CodexReasoningEffort = () =>
-  DEFAULT_REASONING_EFFORT;
-
-/** Register a platform-specific getter for the configured reasoning effort. */
-export function setCodexReasoningEffortGetter(
-  getter: () => CodexReasoningEffort,
-): void {
-  reasoningEffortGetter = getter;
-}
-
-/** Read the user-configured reasoning effort. */
-export function getCodexReasoningEffort(): CodexReasoningEffort {
-  return reasoningEffortGetter();
-}
+export const parseCodexReasoningEffort = reasoningEffort.parse;
+export const getCodexReasoningEffort = reasoningEffort.get;
+export const setCodexReasoningEffortGetter = reasoningEffort.setGetter;
 
 // ============================================================================
-// Sandbox mode config (injectable — VS Code layer sets the real getter)
+// Sandbox mode
 // ============================================================================
 
-export const CODEX_SANDBOX_MODES = [
-  'read-only',
+const sandboxMode = createCodexSetting(
+  ['read-only', 'workspace-write', 'danger-full-access'] as const,
   'workspace-write',
-  'danger-full-access',
-] as const;
+);
 
+export const CODEX_SANDBOX_MODES = sandboxMode.values;
 export type CodexSandboxMode = (typeof CODEX_SANDBOX_MODES)[number];
-
-const DEFAULT_SANDBOX_MODE: CodexSandboxMode = 'workspace-write';
-
-/** Validate a raw string into a sandbox mode, falling back to the default. */
-export function parseCodexSandboxMode(raw: string): CodexSandboxMode {
-  return CODEX_SANDBOX_MODES.includes(raw as CodexSandboxMode)
-    ? (raw as CodexSandboxMode)
-    : DEFAULT_SANDBOX_MODE;
-}
-
-let sandboxModeGetter: () => CodexSandboxMode = () => DEFAULT_SANDBOX_MODE;
-
-/** Register a platform-specific getter for the configured sandbox mode. */
-export function setCodexSandboxModeGetter(
-  getter: () => CodexSandboxMode,
-): void {
-  sandboxModeGetter = getter;
-}
-
-/** Read the user-configured default sandbox mode. */
-export function getCodexSandboxMode(): CodexSandboxMode {
-  return sandboxModeGetter();
-}
+export const parseCodexSandboxMode = sandboxMode.parse;
+export const getCodexSandboxMode = sandboxMode.get;
+export const setCodexSandboxModeGetter = sandboxMode.setGetter;
 
 /**
  * Build synthetic execution metadata for Codex child streams.

@@ -492,9 +492,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED]: (data) =>
         this.handleSetApprovalEnabled(BASH_APPROVAL_CONFIG_KEY, data.enabled),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (data) =>
-        this.handleSetCodexSandboxMode(data.mode),
+        this.updateCodexSetting(WorkspaceStateKey.CODEX_SANDBOX_MODE, data.mode),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT]: (data) =>
-        this.handleSetCodexReasoningEffort(data.effort),
+        this.updateCodexSetting(
+          WorkspaceStateKey.CODEX_REASONING_EFFORT,
+          data.effort,
+        ),
 
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
@@ -844,13 +847,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
-  private async handleSetCodexSandboxMode(mode: string): Promise<void> {
-    await workspaceSM.update(WorkspaceStateKey.CODEX_SANDBOX_MODE, mode);
-    await this.withActiveWebview((w) => this.sendApprovalSettings(w));
-  }
-
-  private async handleSetCodexReasoningEffort(effort: string): Promise<void> {
-    await workspaceSM.update(WorkspaceStateKey.CODEX_REASONING_EFFORT, effort);
+  private async updateCodexSetting(
+    key: WorkspaceStateKey,
+    value: string,
+  ): Promise<void> {
+    await workspaceSM.update(key, value);
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 

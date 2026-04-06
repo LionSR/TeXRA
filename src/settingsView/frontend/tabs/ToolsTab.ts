@@ -225,19 +225,19 @@ export class ToolsTab extends LitElement {
         margin-bottom: var(--spacing-small);
       }
 
-      .sandbox-mode-row {
+      .setting-row {
         display: flex;
         align-items: center;
         gap: var(--spacing-medium);
       }
 
-      .sandbox-mode-row label {
+      .setting-row label {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         white-space: nowrap;
       }
 
-      .sandbox-mode-select {
+      .setting-select {
         min-width: 10rem;
         max-width: 14rem;
       }
@@ -300,47 +300,50 @@ export class ToolsTab extends LitElement {
     `;
   }
 
+  private renderSelectRow(
+    label: string,
+    value: string,
+    options: readonly { value: string; label: string }[],
+    onChange: (e: Event) => void,
+  ): TemplateResult {
+    return html`
+      <div class="setting-row">
+        <label>${label}</label>
+        <vscode-single-select
+          class="setting-select"
+          .value=${value}
+          @change=${onChange}
+        >
+          ${options.map(
+            (opt) => html`
+              <vscode-option
+                value=${opt.value}
+                ?selected=${value === opt.value}
+              >
+                ${opt.label}
+              </vscode-option>
+            `,
+          )}
+        </vscode-single-select>
+      </div>
+    `;
+  }
+
   private renderCodexInlineSettings(): TemplateResult {
     return html`
       <div class="codex-inline-settings">
-        <div class="sandbox-mode-row">
-          <label>Sandbox mode</label>
-          <vscode-single-select
-            class="sandbox-mode-select"
-            .value=${this.codexSandboxMode}
-            @change=${this.handleCodexSandboxModeChange}
-          >
-            ${SANDBOX_MODE_OPTIONS.map(
-              (opt) => html`
-                <vscode-option
-                  value=${opt.value}
-                  ?selected=${this.codexSandboxMode === opt.value}
-                >
-                  ${opt.label}
-                </vscode-option>
-              `,
-            )}
-          </vscode-single-select>
-        </div>
-        <div class="sandbox-mode-row">
-          <label>Reasoning effort</label>
-          <vscode-single-select
-            class="sandbox-mode-select"
-            .value=${this.codexReasoningEffort}
-            @change=${this.handleCodexReasoningEffortChange}
-          >
-            ${REASONING_EFFORT_OPTIONS.map(
-              (opt) => html`
-                <vscode-option
-                  value=${opt.value}
-                  ?selected=${this.codexReasoningEffort === opt.value}
-                >
-                  ${opt.label}
-                </vscode-option>
-              `,
-            )}
-          </vscode-single-select>
-        </div>
+        ${this.renderSelectRow(
+          'Sandbox mode',
+          this.codexSandboxMode,
+          SANDBOX_MODE_OPTIONS,
+          this.handleCodexSandboxModeChange,
+        )}
+        ${this.renderSelectRow(
+          'Reasoning effort',
+          this.codexReasoningEffort,
+          REASONING_EFFORT_OPTIONS,
+          this.handleCodexReasoningEffortChange,
+        )}
       </div>
     `;
   }
