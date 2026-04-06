@@ -222,10 +222,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   setCodexReasoningEffortGetter(() =>
     parseCodexReasoningEffort(
-      workspaceSM.get<string>(
-        WorkspaceStateKey.CODEX_REASONING_EFFORT,
-        'high',
-      ) ?? 'high',
+      workspaceSM.get<string>(WorkspaceStateKey.CODEX_REASONING_EFFORT, 'high')!,
     ),
   );
 

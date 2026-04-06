@@ -264,23 +264,20 @@ export class ToolsTab extends LitElement {
     this.emitToggle('bash-approval-toggle', e);
   };
 
-  private handleCodexSandboxModeChange(e: Event): void {
-    const target = e.target as HTMLSelectElement | null;
-    const mode = target?.value;
-    if (mode) {
-      this.dispatchEvent(createEvent('codex-sandbox-mode-change', { mode }));
+  private emitSelect(eventName: string, key: string, e: Event): void {
+    const value = (e.target as HTMLSelectElement | null)?.value;
+    if (value) {
+      this.dispatchEvent(createEvent(eventName, { [key]: value }));
     }
   }
 
-  private handleCodexReasoningEffortChange(e: Event): void {
-    const target = e.target as HTMLSelectElement | null;
-    const effort = target?.value;
-    if (effort) {
-      this.dispatchEvent(
-        createEvent('codex-reasoning-effort-change', { effort }),
-      );
-    }
-  }
+  private handleCodexSandboxModeChange = (e: Event): void => {
+    this.emitSelect('codex-sandbox-mode-change', 'mode', e);
+  };
+
+  private handleCodexReasoningEffortChange = (e: Event): void => {
+    this.emitSelect('codex-reasoning-effort-change', 'effort', e);
+  };
 
   private renderApprovalSettings(): TemplateResult {
     return html`
