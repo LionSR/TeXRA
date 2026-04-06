@@ -41,6 +41,7 @@ const REASONING_EFFORT_OPTIONS: readonly {
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'Extra high' },
 ] as const;
 
 /** Per-category display metadata. */

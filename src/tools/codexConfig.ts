@@ -18,7 +18,12 @@ export const CODEX_CLI_MODEL = 'gpt-5.4';
 // Reasoning effort config (injectable — VS Code layer sets the real getter)
 // ============================================================================
 
-export const CODEX_REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
+export const CODEX_REASONING_EFFORTS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const;
 
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number];
 

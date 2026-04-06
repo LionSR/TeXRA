@@ -301,7 +301,12 @@ export const CodexSandboxModeSchema = z.enum([
 export type CodexSandboxMode = z.infer<typeof CodexSandboxModeSchema>;
 
 /** Valid Codex reasoning effort levels (mirrors CODEX_REASONING_EFFORTS in codexConfig.ts). */
-export const CodexReasoningEffortSchema = z.enum(['low', 'medium', 'high']);
+export const CodexReasoningEffortSchema = z.enum([
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]);
 export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>;
 
 /** Outbound: backend → frontend approval settings */
