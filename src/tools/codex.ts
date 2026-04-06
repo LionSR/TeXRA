@@ -533,12 +533,8 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-<<<<<<< HEAD
-    const thread = await this.resolveThread(input);
-=======
     const workingDir = ctx?.workingDirectory;
-    const thread = await this.resolveThread(input, sandboxMode, workingDir);
->>>>>>> b4acbd0 (Move working_directory from per-tool param to per-agent context)
+    const thread = await this.resolveThread(input, workingDir);
 
     if (input.run_in_background) {
       return this.executeBackground(
@@ -553,15 +549,10 @@ export class CodexTool extends defineTool({
   }
 
   /** Resolve thread — resume existing or start new. */
-<<<<<<< HEAD
-  private async resolveThread(input: CodexInput): Promise<Thread> {
-=======
   private async resolveThread(
     input: CodexInput,
-    sandboxMode: SandboxMode,
     workingDir?: string,
   ): Promise<Thread> {
->>>>>>> b4acbd0 (Move working_directory from per-tool param to per-agent context)
     if (input.thread_id) {
       const stored = threadRegistry.get(input.thread_id);
       if (stored) {
@@ -577,22 +568,15 @@ export class CodexTool extends defineTool({
 
     const CodexClass = await importCodexClass();
     const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
-<<<<<<< HEAD
     const config = await getCodexConfig();
     // sandbox_mode is always resolved in execute() before this is called
     const sandboxMode = input.sandbox_mode;
     // Only compute workspace for new threads — resumed threads keep their
     // stored workspace unless the caller explicitly overrides.
     const workspace =
-      input.working_directory || !input.thread_id
-        ? config.buildCodexWorkspaceOptions(input.working_directory)
+      workingDir || !input.thread_id
+        ? config.buildCodexWorkspaceOptions(workingDir)
         : {};
-=======
-    const workspaceOptions =
-      input.thread_id && !workingDir
-        ? {}
-        : buildCodexWorkspaceOptions(workingDir);
->>>>>>> b4acbd0 (Move working_directory from per-tool param to per-agent context)
     const threadOptions = {
       ...workspace,
       sandboxMode,
