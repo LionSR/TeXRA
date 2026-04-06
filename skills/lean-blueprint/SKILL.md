@@ -1,0 +1,34 @@
+---
+name: lean-blueprint
+description: Create and maintain Lean blueprint documents that connect informal mathematics to Lean 4 formalization. Use when Codex needs to draft or sync blueprint entries, map paper results to Lean declarations, track dependencies between statements, or keep blueprint prose aligned with a changing Lean codebase.
+---
+
+# Lean Blueprint
+
+## When to use this skill
+
+Use this skill for blueprint authoring and maintenance: writing new dependency-tracked blueprint content, syncing an existing blueprint with Lean declarations, or translating Lean formalization progress into human-readable mathematical prose.
+
+## Workflow
+
+1. Survey the Lean project and the existing blueprint files before writing anything. Understand the mathematical architecture and the current formalization status first.
+2. Build or repair the dependency graph from the main results backward. Each node should be a meaningful unit of work for a contributor.
+3. Write blueprint prose as mathematics, not as disguised Lean syntax. Use conventional notation and let the Lean linkage live in the explicit blueprint macros.
+4. When a declaration exists, verify its name, status, and statement before marking blueprint entries as formalized.
+5. Keep blueprint statements, proof sketches, and dependency annotations synchronized with the real Lean codebase.
+6. Check for drift in both directions: Lean declarations missing from the blueprint, and blueprint entries that no longer match Lean.
+7. Treat the blueprint as a human coordination document first and a status mirror second.
+
+## Quality Bar
+
+- Blueprint prose should read like normal mathematical writing.
+- Never let Lean identifiers leak into the prose body when standard notation exists.
+- Dependencies should be explicit and accurate enough to support parallel work.
+- Formalized status markers should reflect reality, not aspiration.
+- Statement mismatches between blueprint and Lean are real bugs, not cosmetic issues.
+
+Read [references/blueprint-checklist.md](references/blueprint-checklist.md) when you need the longer checklist for dependency tracking, statement syncing, and notation translation.
+
+## Use References Only When Needed
+
+Open the reference file when building a new blueprint skeleton, auditing an existing blueprint for drift, or translating Lean declarations into standard mathematical prose.
