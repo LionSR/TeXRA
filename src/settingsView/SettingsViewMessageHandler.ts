@@ -102,7 +102,10 @@ import {
   countPinnedMemories,
 } from '@tools/memory/memoryMeta';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
-import { parseCodexSandboxMode } from '@tools/codexConfig';
+import {
+  parseCodexSandboxMode,
+  parseCodexReasoningEffort,
+} from '@tools/codexConfig';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
@@ -489,7 +492,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED]: (data) =>
         this.handleSetApprovalEnabled(BASH_APPROVAL_CONFIG_KEY, data.enabled),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (data) =>
-        this.handleSetCodexSandboxMode(data.mode),
+        this.updateCodexSetting(WorkspaceStateKey.CODEX_SANDBOX_MODE, data.mode),
+      [SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT]: (data) =>
+        this.updateCodexSetting(
+          WorkspaceStateKey.CODEX_REASONING_EFFORT,
+          data.effort,
+        ),
 
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
@@ -821,6 +829,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           'workspace-write',
         ) ?? 'workspace-write',
       ),
+      codexReasoningEffort: parseCodexReasoningEffort(
+        workspaceSM.get<string>(
+          WorkspaceStateKey.CODEX_REASONING_EFFORT,
+          'high',
+        ) ?? 'high',
+      ),
     });
   }
 
@@ -833,8 +847,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
-  private async handleSetCodexSandboxMode(mode: string): Promise<void> {
-    await workspaceSM.update(WorkspaceStateKey.CODEX_SANDBOX_MODE, mode);
+  private async updateCodexSetting(
+    key: WorkspaceStateKey,
+    value: string,
+  ): Promise<void> {
+    await workspaceSM.update(key, value);
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
