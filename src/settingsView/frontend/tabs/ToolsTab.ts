@@ -17,6 +17,7 @@ import type {
   ToolDashboardItem,
   ToolCategory,
   CodexSandboxMode,
+  CodexReasoningEffort,
 } from '@shared/schemas/settingsViewMessages';
 
 // Side-effect: register tool card component
@@ -30,6 +31,17 @@ const SANDBOX_MODE_OPTIONS: readonly {
   { value: 'read-only', label: 'Read-only' },
   { value: 'workspace-write', label: 'Workspace write' },
   { value: 'danger-full-access', label: 'Full access' },
+] as const;
+
+/** Reasoning effort display labels — single source of truth for the UI. */
+const REASONING_EFFORT_OPTIONS: readonly {
+  value: CodexReasoningEffort;
+  label: string;
+}[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'Extra high' },
 ] as const;
 
 /** Per-category display metadata. */
@@ -213,19 +225,19 @@ export class ToolsTab extends LitElement {
         margin-bottom: var(--spacing-small);
       }
 
-      .sandbox-mode-row {
+      .setting-row {
         display: flex;
         align-items: center;
         gap: var(--spacing-medium);
       }
 
-      .sandbox-mode-row label {
+      .setting-row label {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         white-space: nowrap;
       }
 
-      .sandbox-mode-select {
+      .setting-select {
         min-width: 10rem;
         max-width: 14rem;
       }
@@ -236,6 +248,7 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: String }) codexSandboxMode = 'workspace-write';
+  @property({ type: String }) codexReasoningEffort = 'high';
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
@@ -252,13 +265,20 @@ export class ToolsTab extends LitElement {
     this.emitToggle('bash-approval-toggle', e);
   };
 
-  private handleCodexSandboxModeChange(e: Event): void {
-    const target = e.target as HTMLSelectElement | null;
-    const mode = target?.value;
-    if (mode) {
-      this.dispatchEvent(createEvent('codex-sandbox-mode-change', { mode }));
+  private emitSelect(eventName: string, key: string, e: Event): void {
+    const value = (e.target as HTMLSelectElement | null)?.value;
+    if (value) {
+      this.dispatchEvent(createEvent(eventName, { [key]: value }));
     }
   }
+
+  private handleCodexSandboxModeChange = (e: Event): void => {
+    this.emitSelect('codex-sandbox-mode-change', 'mode', e);
+  };
+
+  private handleCodexReasoningEffortChange = (e: Event): void => {
+    this.emitSelect('codex-reasoning-effort-change', 'effort', e);
+  };
 
   private renderApprovalSettings(): TemplateResult {
     return html`
@@ -280,28 +300,50 @@ export class ToolsTab extends LitElement {
     `;
   }
 
+  private renderSelectRow(
+    label: string,
+    value: string,
+    options: readonly { value: string; label: string }[],
+    onChange: (e: Event) => void,
+  ): TemplateResult {
+    return html`
+      <div class="setting-row">
+        <label>${label}</label>
+        <vscode-single-select
+          class="setting-select"
+          .value=${value}
+          @change=${onChange}
+        >
+          ${options.map(
+            (opt) => html`
+              <vscode-option
+                value=${opt.value}
+                ?selected=${value === opt.value}
+              >
+                ${opt.label}
+              </vscode-option>
+            `,
+          )}
+        </vscode-single-select>
+      </div>
+    `;
+  }
+
   private renderCodexInlineSettings(): TemplateResult {
     return html`
       <div class="codex-inline-settings">
-        <div class="sandbox-mode-row">
-          <label>Sandbox mode</label>
-          <vscode-single-select
-            class="sandbox-mode-select"
-            .value=${this.codexSandboxMode}
-            @change=${this.handleCodexSandboxModeChange}
-          >
-            ${SANDBOX_MODE_OPTIONS.map(
-              (opt) => html`
-                <vscode-option
-                  value=${opt.value}
-                  ?selected=${this.codexSandboxMode === opt.value}
-                >
-                  ${opt.label}
-                </vscode-option>
-              `,
-            )}
-          </vscode-single-select>
-        </div>
+        ${this.renderSelectRow(
+          'Sandbox mode',
+          this.codexSandboxMode,
+          SANDBOX_MODE_OPTIONS,
+          this.handleCodexSandboxModeChange,
+        )}
+        ${this.renderSelectRow(
+          'Reasoning effort',
+          this.codexReasoningEffort,
+          REASONING_EFFORT_OPTIONS,
+          this.handleCodexReasoningEffortChange,
+        )}
       </div>
     `;
   }
