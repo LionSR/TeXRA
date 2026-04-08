@@ -492,7 +492,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED]: (data) =>
         this.handleSetApprovalEnabled(BASH_APPROVAL_CONFIG_KEY, data.enabled),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (data) =>
-        this.updateCodexSetting(WorkspaceStateKey.CODEX_SANDBOX_MODE, data.mode),
+        this.updateCodexSetting(
+          WorkspaceStateKey.CODEX_SANDBOX_MODE,
+          data.mode,
+        ),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT]: (data) =>
         this.updateCodexSetting(
           WorkspaceStateKey.CODEX_REASONING_EFFORT,
