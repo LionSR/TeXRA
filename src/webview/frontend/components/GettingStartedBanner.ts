@@ -62,30 +62,27 @@ export class GettingStartedBanner extends LitElement {
     return html`
       <div id="gettingStartedBanner" class="getting-started-banner">
         <span class="getting-started-text">
-          <strong>Welcome to TeXRA!</strong> To get started, open a workspace
-          with LaTeX files or try one of these:
+          <strong>Welcome to TeXRA!</strong> Open a workspace with LaTeX files,
+          or get started with one of these:
         </span>
         <ul class="getting-started-list">
           <li>
-            <a href=${COMMAND_LINKS.GETTING_STARTED}
-              >Open the getting started walkthrough</a
-            >
-            -- step-by-step setup guide
+            <a href=${COMMAND_LINKS.GETTING_STARTED}>Walk me through setup</a>
+            -- takes a few minutes
           </li>
           <li>
             <a href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}
-              >Create a sample project</a
+              >Try the sample project</a
             >
-            -- bundled LaTeX files to experiment with
+            -- play around risk-free
           </li>
           <li>
-            <a href=${COMMAND_LINKS.CLONE_OVERLEAF}>Clone an Overleaf project</a
-            >
+            <a href=${COMMAND_LINKS.CLONE_OVERLEAF}>Pull from Overleaf</a>
             -- import an existing project
           </li>
           <li>
-            <a href=${COMMAND_LINKS.DOWNLOAD_ARXIV}>Download an arXiv source</a>
-            -- grab a paper's source files
+            <a href=${COMMAND_LINKS.DOWNLOAD_ARXIV}>Grab from arXiv</a>
+            -- download a paper's source
           </li>
         </ul>
       </div>

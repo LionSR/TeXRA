@@ -1,5 +1,5 @@
 name: orchestrator
-description: Coordinates your workflow by analyzing your paper and delegating tasks to specialized agents (correct, polish, draw, review, research). Proposes subtasks for your approval in the Progress view.
+description: Reads your paper, figures out what needs work, and hands each task to the right agent. You approve proposals as they come in.
 
 settings:
   agentCategory: toolUse

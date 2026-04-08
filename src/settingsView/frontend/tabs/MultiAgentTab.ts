@@ -391,31 +391,28 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div class="multi-agent-container tab-content-container">
         <div class="how-it-works">
-          <strong>The orchestrator is the recommended way to use TeXRA.</strong>
-          It analyzes your paper, breaks the work into subtasks, and delegates
-          each one to the right specialized agent.
+          <strong>The orchestrator reads your paper and figures out what to do.</strong>
+          It breaks the work into tasks and hands each one to the right agent.
           <ol class="how-it-works-steps">
             <li class="how-it-works-step">
               <span class="step-number">1</span>
               <span
-                ><strong>Pick a preset</strong> below to configure which agents
-                the orchestrator can use. Choose the one that matches your
-                discipline.</span
+                ><strong>Pick a preset</strong> below that matches your field.
+                This decides which agents the orchestrator can use.</span
               >
             </li>
             <li class="how-it-works-step">
               <span class="step-number">2</span>
               <span
-                ><strong>Select orchestrator</strong> from the agent dropdown in
-                the main view and click Execute.</span
+                ><strong>Go to the main view</strong>, select orchestrator from
+                the agent dropdown, and click Execute.</span
               >
             </li>
             <li class="how-it-works-step">
               <span class="step-number">3</span>
               <span
-                ><strong>Approve or adjust</strong> each proposal in the
-                Progress view. Or enable auto-approve below to let it run
-                hands-free.</span
+                ><strong>Approve each task</strong> as it comes up in the
+                Progress view -- or turn on auto-approve below.</span
               >
             </li>
           </ol>
@@ -424,8 +421,8 @@ export class MultiAgentTab extends LitElement {
         <h3>Mode Presets</h3>
 
         <p class="text-secondary setting-description">
-          Click a preset to enable its agents. You can also create your own
-          presets from the Agents tab.
+          Click one to activate it. You can make your own presets in the Agents
+          tab.
         </p>
 
         <div class="preset-grid">
@@ -436,9 +433,8 @@ export class MultiAgentTab extends LitElement {
         <h3>Agent Delegation</h3>
 
         <p class="text-secondary setting-description">
-          These settings control how the orchestrator delegates work to
-          subagents. The orchestrator can only use agents and models you have
-          enabled in the Models and Agents tabs.
+          Control how the orchestrator hands off work. It can only use agents
+          and models you've turned on in the Models and Agents tabs.
         </p>
 
         <div class="setting-block">
@@ -447,13 +443,13 @@ export class MultiAgentTab extends LitElement {
             ?disabled=${this.toggleDisabled}
             @change=${this.handleToggle}
           >
-            Auto-approve delegation proposals (Super YOLO)
+            Auto-approve tasks (Super YOLO)
           </vscode-checkbox>
           <p class="text-secondary setting-description">
-            Skip manual approval of each subagent task. When enabled, use the
-            rocket button
-            <span class="codicon codicon-rocket"></span> in the Progress view
-            toolbar to activate auto-approve for individual streams.
+            Let the orchestrator run without waiting for your OK on each task.
+            Use the rocket button
+            <span class="codicon codicon-rocket"></span> in Progress to turn
+            this on per stream.
           </p>
         </div>
 
@@ -462,12 +458,12 @@ export class MultiAgentTab extends LitElement {
             ?checked=${this.allowOrchestratorKill}
             @change=${this.handleKillToggle}
           >
-            Allow orchestrator to stop subagents
+            Let orchestrator stop agents early
           </vscode-checkbox>
           <p class="text-secondary setting-description">
-            Let the orchestrator terminate subagents that are stuck or no longer
-            needed. Disable this if you want subagents to always run to
-            completion.
+            The orchestrator can cancel agents that are stuck or no longer
+            needed. Turn this off if you want every agent to finish no matter
+            what.
           </p>
         </div>
 
@@ -476,11 +472,11 @@ export class MultiAgentTab extends LitElement {
             ?checked=${this.detachSubagentsOnStop}
             @change=${this.handleDetachToggle}
           >
-            Keep subagents running when orchestrator stops
+            Keep agents running if I stop the orchestrator
           </vscode-checkbox>
           <p class="text-secondary setting-description">
-            When you stop the orchestrator, its subagents normally stop too.
-            Enable this to let in-progress subagents finish on their own.
+            Normally everything stops when you stop the orchestrator. Turn this
+            on to let agents that are mid-task finish on their own.
           </p>
         </div>
 
@@ -488,8 +484,7 @@ export class MultiAgentTab extends LitElement {
           ? html`
               <h3>Reliability</h3>
               <p class="text-secondary setting-description">
-                Fine-tune retry behavior and context management for long-running
-                multi-agent sessions.
+                Tweak how long sessions handle retries and context limits.
               </p>
               <div class="setting-block">
                 ${this.reliabilitySettings.map((s) =>

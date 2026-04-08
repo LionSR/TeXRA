@@ -78,10 +78,9 @@ export class OrchestratorBanner extends LitElement {
     return html`
       <div class="orchestrator-banner">
         <div class="orchestrator-banner-content">
-          <strong>Orchestrator selected.</strong> When you click Execute, it will
-          analyze your paper and propose subtasks for specialized agents
-          (correct, polish, draw, review, etc.). Each proposal appears in the
-          Progress view for you to approve or adjust.
+          <strong>Orchestrator selected.</strong> When you hit Execute, it'll
+          read through your paper, figure out what needs work, and propose tasks
+          for you to approve in the Progress view.
         </div>
         <button
           class="dismiss-btn"
