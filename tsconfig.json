@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "module": "commonjs",
     "target": "ES2022",
     "lib": ["ES2023", "DOM"],
