@@ -1888,7 +1888,7 @@ export class MainApp extends MainAppBase {
             }}
             .gettingStartedVisible=${this.gettingStartedVisible.get()}
             .loginBannerVisible=${this.loginBannerVisible.get()}
-            .orchestratorSelected=${this.toolUseAgent.get().endsWith(':orchestrator') || this.toolUseAgent.get() === 'orchestrator'}
+            .orchestratorSelected=${this.sessionType.get() === SESSION_TYPES.TOOL_USE && (this.toolUseAgent.get().endsWith(':orchestrator') || this.toolUseAgent.get() === 'orchestrator')}
             @api-key-action=${this.handleComponentApiKeyAction}
             @agent-config-action=${this.handleComponentAgentConfigAction}
             @dependency-dismiss=${this.handleComponentDependencyDismiss}
