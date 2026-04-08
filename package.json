@@ -1036,7 +1036,7 @@
       {
         "id": "texra.gettingStarted",
         "title": "Get started with TeXRA",
-        "description": "Set up your AI-powered LaTeX research assistant: configure an API key, choose a mode for your discipline, and let the orchestrator coordinate your first workflow.",
+        "description": "Set up your AI-powered LaTeX research assistant: connect an API key or sign in, choose a mode for your discipline, and let the orchestrator coordinate your first workflow.",
         "steps": [
           {
             "id": "texra.gettingStarted.sampleWorkspace",
@@ -1052,13 +1052,25 @@
           {
             "id": "texra.gettingStarted.apiKeys",
             "title": "Connect your API key",
-            "description": "TeXRA needs an API key to talk to AI models. Chat subscriptions (ChatGPT Plus, Claude Pro) do **not** include API access -- you need a separate developer key.\n\n[Set API key](command:texra.setApiKey)\n\nSupported providers: Anthropic, OpenAI, Google, Mistral, and more. You only need one to get started.",
+            "description": "TeXRA needs an API key to talk to AI models. Chat subscriptions (ChatGPT Plus, Claude Pro) do **not** include API access -- you need a separate developer key.\n\n[Set API key](command:texra.setApiKey)\n\nSupported providers: Anthropic, OpenAI, Google, Mistral, and more. You only need one to get started.\n\n**Don't have an API key?** Sign in with the Researcher Access Program in the next step instead.",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the API key configuration view"
             },
             "completionEvents": [
               "onCommand:texra.setApiKey"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.signIn",
+            "title": "Or sign in for free model access",
+            "description": "The **Researcher Access Program** gives you access to AI models and remote agents without needing your own API keys.\n\n[Sign In](command:texra.auth.signIn)\n\nIf you already set an API key in the previous step, you can skip this -- but signing in unlocks additional remote agents and features.",
+            "media": {
+              "image": "resources/walkthroughs/media/api-key-setup.png",
+              "altText": "Screenshot of the sign-in flow"
+            },
+            "completionEvents": [
+              "onCommand:texra.auth.signIn"
             ]
           },
           {

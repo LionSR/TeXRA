@@ -17,13 +17,14 @@ You can also run any of these agents individually for focused, single-task work.
 Follow the checklist on the left. Each step links directly to the relevant command.
 
 1. **Create the sample workspace** -- A bundled LaTeX project you can experiment with safely.
-2. **Connect your API key** -- You need an API key from Anthropic, OpenAI, Google, or another supported provider. Note: chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do **not** include API access -- you need a separate developer API key.
-3. **Choose your files** -- Tell TeXRA which files to read: your manuscript (Input), references, auxiliary files, and media.
-4. **Select the orchestrator** -- The recommended agent. It coordinates all the specialized agents on your behalf.
-5. **Choose a mode preset** -- Pick a preset for your discipline (Physicist, Mathematician, Lean Project) to configure which agents the orchestrator can use.
-6. **Auto-extract figures** -- Optionally let TeXRA find figures and TikZ blocks before editing.
-7. **Run and approve proposals** -- The orchestrator proposes subtasks for you to approve, adjust, or reject in the Progress view.
-8. **Review results** -- Compare generated files against your originals using VS Code's diff view.
-9. **Archive or clean up** -- Save outputs to a `History/` folder with Pack, or delete them with Clean.
+2. **Connect your API key** -- You need an API key from Anthropic, OpenAI, Google, or another supported provider. Chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do **not** include API access -- you need a separate developer API key.
+3. **Or sign in for free model access** -- The Researcher Access Program gives you access to AI models and remote agents without your own API keys. You can also sign in even if you have API keys to unlock additional remote agents.
+4. **Choose your files** -- Tell TeXRA which files to read: your manuscript (Input), references, auxiliary files, and media.
+5. **Select the orchestrator** -- The recommended agent. It coordinates all the specialized agents on your behalf.
+6. **Choose a mode preset** -- Pick a preset for your discipline (Physicist, Mathematician, Lean Project) to configure which agents the orchestrator can use.
+7. **Auto-extract figures** -- Optionally let TeXRA find figures and TikZ blocks before editing.
+8. **Run and approve proposals** -- The orchestrator proposes subtasks for you to approve, adjust, or reject in the Progress view.
+9. **Review results** -- Compare generated files against your originals using VS Code's diff view.
+10. **Archive or clean up** -- Save outputs to a `History/` folder with Pack, or delete them with Clean.
 
 > **Tip:** You can reopen this walkthrough anytime from the Command Palette: **TeXRA: Open Getting Started**.
