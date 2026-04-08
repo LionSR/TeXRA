@@ -45,6 +45,12 @@ export class GettingStartedBanner extends LitElement {
       .getting-started-banner a:hover {
         text-decoration: underline;
       }
+
+      .getting-started-list {
+        margin: var(--spacing-tiny) 0 0 0;
+        padding-left: var(--spacing-large);
+        line-height: var(--line-height-relaxed);
+      }
     `,
   ];
 
@@ -56,18 +62,29 @@ export class GettingStartedBanner extends LitElement {
     return html`
       <div id="gettingStartedBanner" class="getting-started-banner">
         <span class="getting-started-text">
-          No files found in workspace. Try
-          <a href=${COMMAND_LINKS.GETTING_STARTED}
-            >opening the getting started walkthrough</a
-          >,
-          <a href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}
-            >creating a sample project</a
-          >,
-          <a href=${COMMAND_LINKS.CLONE_OVERLEAF}>cloning an Overleaf project</a
-          >, or
-          <a href=${COMMAND_LINKS.DOWNLOAD_ARXIV}>downloading an arXiv source</a
-          >.
+          <strong>Welcome to TeXRA!</strong> Open a workspace with LaTeX files,
+          or get started with one of these:
         </span>
+        <ul class="getting-started-list">
+          <li>
+            <a href=${COMMAND_LINKS.GETTING_STARTED}>Walk me through setup</a>
+            -- takes a few minutes
+          </li>
+          <li>
+            <a href=${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}
+              >Try the sample project</a
+            >
+            -- play around risk-free
+          </li>
+          <li>
+            <a href=${COMMAND_LINKS.CLONE_OVERLEAF}>Pull from Overleaf</a>
+            -- import an existing project
+          </li>
+          <li>
+            <a href=${COMMAND_LINKS.DOWNLOAD_ARXIV}>Grab from arXiv</a>
+            -- download a paper's source
+          </li>
+        </ul>
       </div>
     `;
   }
