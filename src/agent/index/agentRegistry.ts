@@ -128,7 +128,6 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
  */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
 const PREFERRED_TOOL_USE_AGENTS = ['orchestrator', 'chat'] as const;
-const DEFAULT_TOOL_USE_AGENT = PREFERRED_TOOL_USE_AGENTS[0];
 
 // =============================================================================
 // STATE

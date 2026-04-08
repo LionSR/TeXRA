@@ -1,5 +1,5 @@
 name: orchestrator
-description: AI scientist that analyzes documents, tracks progress, and proposes agent tasks.
+description: Coordinates your workflow by analyzing your paper and delegating tasks to specialized agents (correct, polish, draw, review, research). Proposes subtasks for your approval in the Progress view.
 
 settings:
   agentCategory: toolUse

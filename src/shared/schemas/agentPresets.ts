@@ -51,7 +51,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'Best for physics manuscripts. Includes agents for symbolic derivations, literature search, presentation slides, and critical review.',
     icon: 'codicon-symbol-operator',
-    workflowAgents: ['criticize', 'generic'],
+    workflowAgents: ['criticize', 'generic', 'devise', 'apply'],
     toolUseAgents: [
       'ask',
       'orchestrator',
@@ -67,7 +67,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'Best for math papers with optional Lean 4 formalization. Combines proof tools, research agents, and LaTeX correction for rigorous manuscripts.',
     icon: 'codicon-symbol-number',
-    workflowAgents: ['correct', 'polish', 'draw'],
+    workflowAgents: ['correct', 'polish', 'draw', 'devise', 'apply'],
     toolUseAgents: [
       'lean',
       'leanSearch',
