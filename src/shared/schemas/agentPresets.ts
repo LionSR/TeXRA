@@ -32,7 +32,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     id: 'lean-project',
     name: 'Lean Project',
     description:
-      'Formal proof development with Lean 4, theorem search, tactic simplification, and LaTeX document support.',
+      'Best for Lean 4 formalization projects. Includes theorem search, tactic simplification, blueprint generation, and LaTeX polishing agents.',
     icon: 'codicon-symbol-structure',
     workflowAgents: ['correct', 'polish', 'draw'],
     toolUseAgents: [
@@ -49,7 +49,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     id: 'physicist',
     name: 'Physicist',
     description:
-      'Symbolic derivations, mathematical verification, literature discussion, and rigorous manuscript review.',
+      'Best for physics manuscripts. Includes agents for symbolic derivations, literature search, presentation slides, and critical review.',
     icon: 'codicon-symbol-operator',
     workflowAgents: ['criticize', 'generic'],
     toolUseAgents: [
@@ -66,7 +66,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     id: 'mathematician',
     name: 'Mathematician',
     description:
-      'Formal proofs with Lean 4, symbolic computation, derivation verification, and theorem exploration.',
+      'Best for math papers with optional Lean 4 formalization. Combines proof tools, research agents, and LaTeX correction for rigorous manuscripts.',
     icon: 'codicon-symbol-number',
     workflowAgents: ['correct', 'polish', 'draw'],
     toolUseAgents: [

@@ -191,6 +191,47 @@ export class MultiAgentTab extends LitElement {
         display: inline-flex;
       }
 
+      /* Intro / how-it-works */
+      .how-it-works {
+        padding: var(--spacing-medium);
+        background-color: var(--vscode-inputValidation-infoBackground);
+        color: var(--vscode-inputValidation-infoForeground);
+        border: var(--border-thin) solid
+          var(--vscode-inputValidation-infoBorder);
+        border-radius: var(--border-radius);
+        line-height: var(--line-height-relaxed);
+        font-size: var(--font-size-sm);
+      }
+
+      .how-it-works-steps {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-small);
+        margin: var(--spacing-small) 0 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .how-it-works-step {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-small);
+      }
+
+      .step-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        background: var(--vscode-focusBorder);
+        color: var(--vscode-editor-background);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-bold);
+      }
+
       /* Reliability settings */
       .reliability-row {
         display: flex;
@@ -349,7 +390,42 @@ export class MultiAgentTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
+        <div class="how-it-works">
+          <strong>How multi-agent works</strong>
+          <ol class="how-it-works-steps">
+            <li class="how-it-works-step">
+              <span class="step-number">1</span>
+              <span
+                ><strong>Pick a preset</strong> below (or build your own in the
+                Agents tab). This controls which agents the orchestrator can
+                delegate to.</span
+              >
+            </li>
+            <li class="how-it-works-step">
+              <span class="step-number">2</span>
+              <span
+                ><strong>Run the orchestrator</strong> agent from the main view.
+                It reads your files, breaks the work into subtasks, and proposes
+                which agent should handle each one.</span
+              >
+            </li>
+            <li class="how-it-works-step">
+              <span class="step-number">3</span>
+              <span
+                ><strong>Approve or adjust</strong> each proposal in the
+                Progress view. Or enable auto-approve below to let the
+                orchestrator run hands-free.</span
+              >
+            </li>
+          </ol>
+        </div>
+
         <h3>Mode Presets</h3>
+
+        <p class="text-secondary setting-description">
+          Click a preset to enable its agents. You can also create your own
+          presets from the Agents tab.
+        </p>
 
         <div class="preset-grid">
           ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}
@@ -359,8 +435,9 @@ export class MultiAgentTab extends LitElement {
         <h3>Agent Delegation</h3>
 
         <p class="text-secondary setting-description">
-          Models and agents enabled in the Models and Agents tabs are displayed
-          to the orchestrator agent as available options for delegation.
+          These settings control how the orchestrator delegates work to
+          subagents. The orchestrator can only use agents and models you have
+          enabled in the Models and Agents tabs.
         </p>
 
         <div class="setting-block">
@@ -369,12 +446,13 @@ export class MultiAgentTab extends LitElement {
             ?disabled=${this.toggleDisabled}
             @change=${this.handleToggle}
           >
-            Enable Super YOLO mode
+            Auto-approve delegation proposals (Super YOLO)
           </vscode-checkbox>
           <p class="text-secondary setting-description">
-            When enabled, allows per-stream auto-approval of agent delegation
-            proposals. Use the rocket button in the progress view toolbar to
-            activate Super YOLO for individual streams.
+            Skip manual approval of each subagent task. When enabled, use the
+            rocket button
+            <span class="codicon codicon-rocket"></span> in the Progress view
+            toolbar to activate auto-approve for individual streams.
           </p>
         </div>
 
@@ -383,12 +461,12 @@ export class MultiAgentTab extends LitElement {
             ?checked=${this.allowOrchestratorKill}
             @change=${this.handleKillToggle}
           >
-            Allow orchestrator to kill subagents
+            Allow orchestrator to stop subagents
           </vscode-checkbox>
           <p class="text-secondary setting-description">
-            When enabled, the orchestrator can terminate running subagents via
-            the kill action. Disable to prevent premature termination of
-            long-running tasks.
+            Let the orchestrator terminate subagents that are stuck or no longer
+            needed. Disable this if you want subagents to always run to
+            completion.
           </p>
         </div>
 
@@ -397,18 +475,21 @@ export class MultiAgentTab extends LitElement {
             ?checked=${this.detachSubagentsOnStop}
             @change=${this.handleDetachToggle}
           >
-            Detach subagents when stopping orchestrator
+            Keep subagents running when orchestrator stops
           </vscode-checkbox>
           <p class="text-secondary setting-description">
-            When enabled, stopping an orchestrator lets its subagents continue
-            running independently. When disabled, subagents are terminated
-            alongside the orchestrator.
+            When you stop the orchestrator, its subagents normally stop too.
+            Enable this to let in-progress subagents finish on their own.
           </p>
         </div>
 
         ${this.reliabilitySettings.length > 0
           ? html`
               <h3>Reliability</h3>
+              <p class="text-secondary setting-description">
+                Fine-tune retry behavior and context management for long-running
+                multi-agent sessions.
+              </p>
               <div class="setting-block">
                 ${this.reliabilitySettings.map((s) =>
                   this.renderReliabilitySetting(s),

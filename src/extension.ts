@@ -330,7 +330,7 @@ export async function activate(context: vscode.ExtensionContext) {
     void vscode.commands.executeCommand('texra.openGettingStarted');
     void showInstructionWithSuppress(
       'welcome',
-      'Welcome to TeXRA! The new "Run your first TeXRA workflow" walkthrough will guide you through seeding the sample project, configuring API keys, staging files, enabling automatic figure/TikZ extraction, and executing your first run.',
+      'Welcome to TeXRA! TeXRA uses AI to help you correct, polish, and review your LaTeX papers. The quickest way to get started: set an API key, open a LaTeX file, pick an agent, and hit Execute.',
       [
         {
           title: 'Open Walkthrough',
