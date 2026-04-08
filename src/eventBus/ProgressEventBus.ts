@@ -118,6 +118,10 @@ export interface ProgressEventPayloads {
     childStreamId: StreamTabId;
     parentStreamId: StreamTabId;
   };
+  /** A follow-up message was sent to an active tool-use session.
+   *  Listened by blocking tools (e.g. ExecutionsTool wait) to abort early. */
+  followUpSent: { streamId: StreamTabId };
+
   extensionDeactivating: undefined;
 
   // ── Frontend-bound events ──
