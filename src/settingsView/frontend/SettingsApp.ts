@@ -840,7 +840,8 @@ export class SettingsApp extends SettingsAppBase {
               @tool-toggle=${this.handleToolToggle}
               @bash-approval-toggle=${this.handleBashApprovalToggle}
               @codex-sandbox-mode-change=${this.handleCodexSandboxModeChange}
-              @codex-reasoning-effort-change=${this.handleCodexReasoningEffortChange}
+              @codex-reasoning-effort-change=${this
+                .handleCodexReasoningEffortChange}
             ></tools-tab>
           </vscode-tab-panel>
 
