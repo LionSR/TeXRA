@@ -122,7 +122,7 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
 
 /** Default agents for dropdowns. */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
-const DEFAULT_TOOL_USE_AGENT = 'chat';
+const DEFAULT_TOOL_USE_AGENT = 'orchestrator';
 
 // =============================================================================
 // STATE
