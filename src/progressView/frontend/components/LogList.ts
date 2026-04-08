@@ -41,6 +41,9 @@ import {
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
 
+// Local imports - progress view events
+import { ProgressEvents } from '../events';
+
 // Local imports - progress view formatters
 import { getCopyContent } from '../formatters/copyContentStore';
 import { getProposalInput } from '../formatters/proposalInputStore';
@@ -270,12 +273,7 @@ export class LogList extends LitElement {
     if (breakWaitBtn) {
       event.preventDefault();
       event.stopPropagation();
-      this.dispatchEvent(
-        new CustomEvent('followup-focus-request', {
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.dispatchEvent(ProgressEvents.followupFocusRequest());
       return;
     }
 

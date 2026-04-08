@@ -147,8 +147,8 @@ export const toolUseStyles = css`
     border: var(--border-thin) solid var(--color-border);
   }
 
-  /* Proposal setup link (in summary row and body) */
-  .proposal-restore-link {
+  /* Shared base for inline action links */
+  :is(.proposal-restore-link, .followup-break-wait) {
     color: var(--color-text-link);
     cursor: pointer;
     font-size: var(--font-size-sm);
@@ -156,17 +156,20 @@ export const toolUseStyles = css`
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-tiny);
-    transition: color var(--transition-fast);
+    transition:
+      color var(--transition-fast),
+      background-color var(--transition-fast);
   }
 
-  .proposal-restore-link:hover {
-    text-decoration: underline;
-  }
-
-  .proposal-restore-link:focus-visible {
+  :is(.proposal-restore-link, .followup-break-wait):focus-visible {
     outline: var(--border-thin) solid var(--vscode-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
+  }
+
+  /* Proposal setup link (in summary row and body) */
+  .proposal-restore-link:hover {
+    text-decoration: underline;
   }
 
   .proposal-banner-setup {
@@ -175,20 +178,10 @@ export const toolUseStyles = css`
 
   /* Follow-up break-wait button (shown inside executions wait entries) */
   .followup-break-wait {
-    color: var(--color-text-link);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-tiny);
     margin-top: var(--spacing-small);
     padding: var(--spacing-tiny) var(--spacing-small);
     border: var(--border-thin) solid var(--color-text-link);
     border-radius: var(--border-radius-small);
-    transition:
-      color var(--transition-fast),
-      background-color var(--transition-fast);
   }
 
   .followup-break-wait:hover {
@@ -197,12 +190,6 @@ export const toolUseStyles = css`
       var(--color-text-link) 15%,
       transparent
     );
-    text-decoration: none;
-  }
-
-  .followup-break-wait:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
-    outline-offset: 1px;
   }
 
   /* Diff styles */
