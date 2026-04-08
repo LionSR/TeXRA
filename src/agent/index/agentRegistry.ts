@@ -120,9 +120,15 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'remote',
 ];
 
-/** Default agents for dropdowns. */
+/**
+ * Preferred agents for dropdowns, in priority order.
+ * The first available agent in the list is pre-selected and sorted to the top.
+ * Orchestrator is preferred but requires sign-in (remote agent);
+ * chat is the local fallback.
+ */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
-const DEFAULT_TOOL_USE_AGENT = 'orchestrator';
+const PREFERRED_TOOL_USE_AGENTS = ['orchestrator', 'chat'] as const;
+const DEFAULT_TOOL_USE_AGENT = PREFERRED_TOOL_USE_AGENTS[0];
 
 // =============================================================================
 // STATE
@@ -724,16 +730,23 @@ function entryToOptionData(entry: AgentEntry): AgentOptionData {
 }
 
 /**
- * Sort entries: default agent first, then alphabetically.
+ * Sort entries: preferred agents first (in priority order), then alphabetically.
  */
 function sortAgentEntries(
   entries: AgentEntry[],
-  defaultName: string,
+  preferredNames: readonly string[],
 ): AgentEntry[] {
-  const defaultEntry = entries.find((e) => e.name === defaultName);
+  const preferredSet = new Map(
+    preferredNames
+      .map((name, i) => [entries.find((e) => e.name === name), i] as const)
+      .filter(([entry]) => entry != null),
+  );
   return [...entries].sort((a, b) => {
-    if (a === defaultEntry) return -1;
-    if (b === defaultEntry) return 1;
+    const aIdx = preferredSet.get(a);
+    const bIdx = preferredSet.get(b);
+    if (aIdx != null && bIdx != null) return aIdx - bIdx;
+    if (aIdx != null) return -1;
+    if (bIdx != null) return 1;
     return a.name.localeCompare(b.name);
   });
 }
@@ -750,11 +763,11 @@ export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload
   return {
     workflow: sortAgentEntries(
       getVisibleAgents('workflow'),
-      DEFAULT_WORKFLOW_AGENT,
+      [DEFAULT_WORKFLOW_AGENT],
     ).map(entryToOptionData),
     toolUse: sortAgentEntries(
       getVisibleAgents('toolUse'),
-      DEFAULT_TOOL_USE_AGENT,
+      PREFERRED_TOOL_USE_AGENTS,
     ).map(entryToOptionData),
   };
 }
