@@ -45,6 +45,12 @@ export class GettingStartedBanner extends LitElement {
       .getting-started-banner a:hover {
         text-decoration: underline;
       }
+
+      .getting-started-list {
+        margin: var(--spacing-tiny) 0 0 0;
+        padding-left: var(--spacing-large);
+        line-height: var(--line-height-relaxed);
+      }
     `,
   ];
 
@@ -59,9 +65,7 @@ export class GettingStartedBanner extends LitElement {
           <strong>Welcome to TeXRA!</strong> To get started, open a workspace
           with LaTeX files or try one of these:
         </span>
-        <ul
-          style="margin: 4px 0 0 0; padding-left: 20px; line-height: 1.8;"
-        >
+        <ul class="getting-started-list">
           <li>
             <a href=${COMMAND_LINKS.GETTING_STARTED}
               >Open the getting started walkthrough</a

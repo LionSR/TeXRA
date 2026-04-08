@@ -53,7 +53,6 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     icon: 'codicon-symbol-operator',
     workflowAgents: ['criticize', 'generic'],
     toolUseAgents: [
-      'chat',
       'ask',
       'orchestrator',
       'research',
@@ -76,7 +75,6 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'leanBlueprint',
       'research',
       'review',
-      'chat',
       'orchestrator',
     ],
   },
