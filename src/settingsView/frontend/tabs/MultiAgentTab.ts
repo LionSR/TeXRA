@@ -391,30 +391,31 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div class="multi-agent-container tab-content-container">
         <div class="how-it-works">
-          <strong>How multi-agent works</strong>
+          <strong>The orchestrator is the recommended way to use TeXRA.</strong>
+          It analyzes your paper, breaks the work into subtasks, and delegates
+          each one to the right specialized agent.
           <ol class="how-it-works-steps">
             <li class="how-it-works-step">
               <span class="step-number">1</span>
               <span
-                ><strong>Pick a preset</strong> below (or build your own in the
-                Agents tab). This controls which agents the orchestrator can
-                delegate to.</span
+                ><strong>Pick a preset</strong> below to configure which agents
+                the orchestrator can use. Choose the one that matches your
+                discipline.</span
               >
             </li>
             <li class="how-it-works-step">
               <span class="step-number">2</span>
               <span
-                ><strong>Run the orchestrator</strong> agent from the main view.
-                It reads your files, breaks the work into subtasks, and proposes
-                which agent should handle each one.</span
+                ><strong>Select orchestrator</strong> from the agent dropdown in
+                the main view and click Execute.</span
               >
             </li>
             <li class="how-it-works-step">
               <span class="step-number">3</span>
               <span
                 ><strong>Approve or adjust</strong> each proposal in the
-                Progress view. Or enable auto-approve below to let the
-                orchestrator run hands-free.</span
+                Progress view. Or enable auto-approve below to let it run
+                hands-free.</span
               >
             </li>
           </ol>

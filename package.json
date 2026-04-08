@@ -1036,7 +1036,7 @@
       {
         "id": "texra.gettingStarted",
         "title": "Get started with TeXRA",
-        "description": "Set up your AI-powered LaTeX assistant in a few steps: configure an API key, pick an agent, and run your first workflow.",
+        "description": "Set up your AI-powered LaTeX research assistant: configure an API key, choose a mode for your discipline, and let the orchestrator coordinate your first workflow.",
         "steps": [
           {
             "id": "texra.gettingStarted.sampleWorkspace",
@@ -1075,12 +1075,24 @@
           },
           {
             "id": "texra.gettingStarted.agentModel",
-            "title": "Pick an agent and model",
-            "description": "Each agent is tuned for a specific task:\n\n- **correct** -- fix grammar, structure, and LaTeX errors\n- **polish** -- improve clarity, flow, and academic tone\n- **draw** -- generate TikZ diagrams from descriptions\n- **review** -- get critical, reviewer-style feedback\n\nPair your agent with a model. Larger models (e.g. Claude Opus, GPT-4o) are more capable; smaller ones are faster and cheaper.",
+            "title": "Select the orchestrator (recommended)",
+            "description": "The **orchestrator** is the recommended way to use TeXRA. It analyzes your paper, breaks the work into subtasks, and delegates each one to specialized agents (correct, polish, draw, review, research, etc.).\n\nSelect **orchestrator** from the agent dropdown in the main view. For focused single-task runs, you can also pick an individual agent directly.\n\nPair your agent with a model. Larger models (e.g. Claude Opus, GPT-4o) are more capable; smaller ones are faster and cheaper.",
             "media": {
               "image": "resources/walkthroughs/media/agent-model-selection.png",
               "altText": "Screenshot of the agent and model selection UI"
             }
+          },
+          {
+            "id": "texra.gettingStarted.multiAgent",
+            "title": "Choose a mode for your discipline",
+            "description": "Mode presets configure which agents the orchestrator can delegate to. Pick the one that matches your field:\n\n- **Physicist** -- derivations, literature search, presentations, critical review\n- **Mathematician** -- Lean 4 proofs, research, LaTeX correction\n- **Lean Project** -- Lean 4 formalization with theorem search and blueprints\n\n[Open Settings](command:texra.showDashboard) and go to the **Multi-Agent** tab to apply a preset. You can also create your own from the Agents tab.",
+            "media": {
+              "image": "resources/walkthroughs/media/agent-model-selection.png",
+              "altText": "Screenshot of mode preset selection"
+            },
+            "completionEvents": [
+              "onCommand:texra.showDashboard"
+            ]
           },
           {
             "id": "texra.gettingStarted.autoExtract",
@@ -1097,8 +1109,8 @@
           },
           {
             "id": "texra.gettingStarted.progress",
-            "title": "Run your first agent",
-            "description": "Everything is set -- time to run! Click Execute and watch the agent work in real time.\n\n[Execute the agent](command:texra.execute)\n\nOpen the [Progress view](command:texra.showProgressView) to see logs, tool calls, and outputs as they stream in.",
+            "title": "Run and approve proposals",
+            "description": "Click Execute to start the orchestrator. It will analyze your paper and propose subtasks -- each one appears in the [Progress view](command:texra.showProgressView) for you to approve, adjust, or reject.\n\n[Execute the agent](command:texra.execute)\n\nYou can also enable **auto-approve** in Settings > Multi-Agent to let the orchestrator run hands-free.",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot of the Progress view"
