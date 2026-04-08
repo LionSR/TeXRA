@@ -597,6 +597,7 @@ export class ProgressApp extends ProgressAppBase {
           @followup-polish=${this.onFollowUpPolish}
           @followup-clear=${this.onFollowUpClear}
           @followup-focus-complete=${this.onFollowUpFocusComplete}
+          @followup-focus-request=${this.onFollowUpFocusRequest}
         ></tool-use-stream-content>
       `;
     }
@@ -788,6 +789,19 @@ export class ProgressApp extends ProgressAppBase {
       e,
       this.getEventHandlerContext(),
     );
+
+  /** Focus the follow-up input (e.g. from the "Send Follow-up" button in log entries). */
+  private onFollowUpFocusRequest(): void {
+    const streamId = this.appState.get().activeStreamId;
+    if (!streamId) return;
+
+    this.setStreamState(streamId, (prev) => {
+      if (!isToolUseState(prev)) return prev;
+      return create(prev, (draft) => {
+        draft.ui.shouldFocusFollowUp = true;
+      });
+    });
+  }
 
   /**
    * Reset focus/polish/transcription triggers after they've been consumed.

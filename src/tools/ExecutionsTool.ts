@@ -38,6 +38,7 @@ import {
 // Local imports - utils
 import { WorkspaceStateKey, workspaceSM } from '@common/state';
 import { isDirectory } from '@common/files/fsEntryType';
+import { bus } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
   EXECUTION_STATUS,
@@ -93,6 +94,27 @@ function getAvailablePaths(category?: string, hasChildren?: boolean): string[] {
     default:
       return [...common, 'conversation', 'todos', 'files', 'output'];
   }
+}
+
+/**
+ * Listen for follow-up messages on the current stream and abort the given
+ * AbortController when one arrives. This lets users break out of a blocking
+ * `executions wait` by sending a follow-up message.
+ *
+ * Returns a cleanup function that removes the listener.
+ */
+function listenForFollowUp(ac: AbortController): () => void {
+  const ctx = getCurrentToolFileInteractionContext();
+  if (!ctx?.streamId) return () => {};
+
+  const streamId = ctx.streamId;
+  return bus.on(
+    'followUpSent',
+    (payload) => {
+      if (payload.streamId === streamId) ac.abort();
+    },
+    { signal: ac.signal },
+  );
 }
 
 // ============================================================================
@@ -409,12 +431,15 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
+    // Abort early if a follow-up is sent to this stream (user wants to break the wait)
+    const cleanupFollowUp = listenForFollowUp(ac);
     // Register callback before re-checking to close the race window
     const waitPromise = waitForAnyExecutionChange(pendingIds, ac.signal);
     // Re-check after registration: if all resolved in the gap, abort.
     if (pendingIds.every(shouldSkipWait)) ac.abort();
     await waitPromise;
     clearTimeout(timer);
+    cleanupFollowUp();
   }
 
   /** Wait for a specific execution to change status, with timeout. */
@@ -426,12 +451,15 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
+    // Abort early if a follow-up is sent to this stream (user wants to break the wait)
+    const cleanupFollowUp = listenForFollowUp(ac);
     // Register callback before re-checking to close the race window
     const waitPromise = waitForExecutionChange(executionId, ac.signal);
     // Re-check after registration: if state changed in the gap, abort.
     if (shouldSkipWait(executionId)) ac.abort();
     await waitPromise;
     clearTimeout(timer);
+    cleanupFollowUp();
   }
 
   private async listExecutions(

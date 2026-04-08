@@ -173,6 +173,38 @@ export const toolUseStyles = css`
     margin-left: auto;
   }
 
+  /* Follow-up break-wait button (shown inside executions wait entries) */
+  .followup-break-wait {
+    color: var(--color-text-link);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-tiny);
+    margin-top: var(--spacing-small);
+    padding: var(--spacing-tiny) var(--spacing-small);
+    border: var(--border-thin) solid var(--color-text-link);
+    border-radius: var(--border-radius-small);
+    transition:
+      color var(--transition-fast),
+      background-color var(--transition-fast);
+  }
+
+  .followup-break-wait:hover {
+    background-color: color-mix(
+      in srgb,
+      var(--color-text-link) 15%,
+      transparent
+    );
+    text-decoration: none;
+  }
+
+  .followup-break-wait:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+  }
+
   /* Diff styles */
   .diff-add {
     color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
