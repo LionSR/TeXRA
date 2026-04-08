@@ -284,6 +284,12 @@ export function formatToolUseTemplate(
       typeof input.prompt === 'string'
     ) {
       headerSummary = truncatePrompt(input.prompt, 60);
+    } else if (
+      toolName === 'bash' &&
+      isPlainObject(input) &&
+      typeof input.command === 'string'
+    ) {
+      headerSummary = truncatePrompt(input.command, 60);
     }
   }
   const titleText = headerSummary
