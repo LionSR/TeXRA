@@ -1035,13 +1035,13 @@
     "walkthroughs": [
       {
         "id": "texra.gettingStarted",
-        "title": "Run your first TeXRA workflow",
-        "description": "Complete this checklist to configure TeXRA, run your first agent, and review results without leaving VS Code.",
+        "title": "Get started with TeXRA",
+        "description": "Get TeXRA up and running in a few minutes. Connect your account, pick your field, and run your first paper through the orchestrator.",
         "steps": [
           {
             "id": "texra.gettingStarted.sampleWorkspace",
-            "title": "Seed the sample workspace",
-            "description": "Start with the bundled workspace so you can experiment safely.\n[Create the sample project](command:texra.createSampleProject) and review the README that opens for links back to this checklist.",
+            "title": "Try the sample project",
+            "description": "Not sure where to start? We've bundled a small LaTeX project you can play with.\n\n[Create the sample project](command:texra.createSampleProject)\n\nYou'll get a folder with example `.tex` files and a README that explains the layout.",
             "media": {
               "markdown": "resources/walkthroughs/getting-started.md"
             },
@@ -1051,8 +1051,8 @@
           },
           {
             "id": "texra.gettingStarted.apiKeys",
-            "title": "Connect your API keys",
-            "description": "Register your Anthropic, OpenAI, Google, or other provider keys before running agents.\n[Set API keys](command:texra.setApiKey) and keep the defaults unless you need workspace-specific overrides.",
+            "title": "Add your API key",
+            "description": "You'll need an API key from a provider like Anthropic, OpenAI, or Google. Just one is enough.\n\n[Set API key](command:texra.setApiKey)\n\nHeads up: chat subscriptions (ChatGPT Plus, Claude Pro) don't come with API access. You need a separate key from the provider's developer platform.\n\n**No API key?** No problem -- sign in with the Researcher Access Program in the next step instead.",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the API key configuration view"
@@ -1062,9 +1062,21 @@
             ]
           },
           {
+            "id": "texra.gettingStarted.signIn",
+            "title": "Or just sign in",
+            "description": "The **Researcher Access Program** lets you use AI models and remote agents for free -- no API key needed.\n\n[Sign In](command:texra.auth.signIn)\n\nAlready set an API key? You can skip this, but signing in still unlocks extra agents you can't get with a key alone.",
+            "media": {
+              "image": "resources/walkthroughs/media/api-key-setup.png",
+              "altText": "Screenshot of the sign-in flow"
+            },
+            "completionEvents": [
+              "onCommand:texra.auth.signIn"
+            ]
+          },
+          {
             "id": "texra.gettingStarted.stageFiles",
-            "title": "Stage your files",
-            "description": "Use the Input, Reference, Auxiliary, and Media pickers to tell TeXRA what to read.\n[Open the TeXRA main view](command:texra.showMainView) and choose whether you want a single output or multiple outputs for parallel drafts.",
+            "title": "Pick your files",
+            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Reference** -- papers or notes for context (optional)\n- **Auxiliary** -- bib files, style files, preambles (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
             "media": {
               "image": "resources/walkthroughs/media/file-selection.png",
               "altText": "Screenshot of the file selection interface"
@@ -1075,17 +1087,29 @@
           },
           {
             "id": "texra.gettingStarted.agentModel",
-            "title": "Choose an agent and model",
-            "description": "Match your task to the right persona—`correct` for structural fixes, `polish` for copy edits, or `draw` for diagrams—and pair it with a model tier that balances quality and speed.",
+            "title": "Use the orchestrator",
+            "description": "We recommend starting with the **orchestrator**. It reads your paper, figures out what needs work, and hands each task to the right agent automatically.\n\nJust pick **orchestrator** from the agent dropdown. You'll also want to choose a model -- bigger models give better results, smaller ones are faster and cheaper.\n\nIf you'd rather do one specific thing (just fix grammar, just draw a diagram), you can pick a single agent instead.",
             "media": {
               "image": "resources/walkthroughs/media/agent-model-selection.png",
               "altText": "Screenshot of the agent and model selection UI"
             }
           },
           {
+            "id": "texra.gettingStarted.multiAgent",
+            "title": "Pick your field",
+            "description": "We have presets for different disciplines that give the orchestrator the right set of tools for your work:\n\n- **Physicist** -- derivations, literature, presentations\n- **Mathematician** -- proofs, formalization, research\n- **Lean Project** -- Lean 4 with theorem search and blueprints\n\n[Open Settings](command:texra.showDashboard) and go to the **Multi-Agent** tab to pick one. You can always tweak it or make your own later.",
+            "media": {
+              "image": "resources/walkthroughs/media/agent-model-selection.png",
+              "altText": "Screenshot of mode preset selection"
+            },
+            "completionEvents": [
+              "onCommand:texra.showDashboard"
+            ]
+          },
+          {
             "id": "texra.gettingStarted.autoExtract",
-            "title": "Enable automatic figure extraction",
-            "description": "Toggle **Auto-extract figures** and **Auto-extract TikZ blocks** before you run so TeXRA gathers assets for you. You can also try the standalone commands: [Extract figure paths](command:texra.extractFigurePaths) or [Extract TikZ figures](command:texra.extractTikzFigures).",
+            "title": "Auto-extract figures (optional)",
+            "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run them manually:\n\n[Extract figure paths](command:texra.extractFigurePaths) | [Extract TikZ figures](command:texra.extractTikzFigures)",
             "media": {
               "image": "resources/walkthroughs/media/auto-extract-options.png",
               "altText": "Screenshot showing auto-extraction options"
@@ -1097,8 +1121,8 @@
           },
           {
             "id": "texra.gettingStarted.progress",
-            "title": "Execute and watch progress",
-            "description": "Kick off your run and watch logs, tool calls, and outputs stream into Progress.\n[Execute the agent](command:texra.execute) and keep an eye on [Show Progress](command:texra.showProgressView) for status updates.",
+            "title": "Hit Execute!",
+            "description": "You're all set. Click Execute and the orchestrator will start working through your paper.\n\n[Execute](command:texra.execute)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.showProgressView) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot of the Progress view"
@@ -1109,8 +1133,8 @@
           },
           {
             "id": "texra.gettingStarted.review",
-            "title": "Review and diff outputs",
-            "description": "Open the generated files, compare them against your sources, and accept or iterate. Use VS Code's diff view to see every change before you commit.",
+            "title": "Check what it did",
+            "description": "Your originals are safe -- TeXRA writes edits to new files. Open them up and use VS Code's diff view to see exactly what changed. Accept what you like, ignore what you don't.",
             "media": {
               "image": "resources/walkthroughs/media/vscode-compare.png",
               "altText": "Screenshot of the VS Code diff view"
@@ -1118,8 +1142,8 @@
           },
           {
             "id": "texra.gettingStarted.housekeeping",
-            "title": "Pack and clean up",
-            "description": "After reviewing, use **Pack** $(archive) to archive outputs into a timestamped `History/` folder, or **Clean** $(trash) to delete generated files.\n\nFind these actions in:\n- The **Progress toolbar** on each completed run\n- The **editor title menu** (overflow `...`) when editing a `.tex` file\n- The **right-click context menu** on `.tex` files\n\nOr try the workspace-wide commands: [Clean all LLM outputs](command:texra.cleanOutput) | [Clean all build files](command:texra.cleanBuild)",
+            "title": "Clean up when you're done",
+            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar, or right-click any `.tex` file.\n\n[Clean all outputs](command:texra.cleanOutput) | [Clean build files](command:texra.cleanBuild)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot showing pack and clean buttons in the Progress toolbar"

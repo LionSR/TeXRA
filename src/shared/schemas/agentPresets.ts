@@ -32,7 +32,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     id: 'lean-project',
     name: 'Lean Project',
     description:
-      'Formal proof development with Lean 4, theorem search, tactic simplification, and LaTeX document support.',
+      'For Lean 4 projects -- theorem search, tactic simplification, blueprints, and LaTeX polishing.',
     icon: 'codicon-symbol-structure',
     workflowAgents: ['correct', 'polish', 'draw'],
     toolUseAgents: [
@@ -49,11 +49,10 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     id: 'physicist',
     name: 'Physicist',
     description:
-      'Symbolic derivations, mathematical verification, literature discussion, and rigorous manuscript review.',
+      'For physics papers -- derivations, literature search, slides, and critical review.',
     icon: 'codicon-symbol-operator',
-    workflowAgents: ['criticize', 'generic'],
+    workflowAgents: ['criticize', 'generic', 'devise', 'apply'],
     toolUseAgents: [
-      'chat',
       'ask',
       'orchestrator',
       'research',
@@ -66,9 +65,9 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     id: 'mathematician',
     name: 'Mathematician',
     description:
-      'Formal proofs with Lean 4, symbolic computation, derivation verification, and theorem exploration.',
+      'For math papers -- proofs, Lean 4 formalization, research, and LaTeX correction.',
     icon: 'codicon-symbol-number',
-    workflowAgents: ['correct', 'polish', 'draw'],
+    workflowAgents: ['correct', 'polish', 'draw', 'devise', 'apply'],
     toolUseAgents: [
       'lean',
       'leanSearch',
@@ -76,7 +75,6 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'leanBlueprint',
       'research',
       'review',
-      'chat',
       'orchestrator',
     ],
   },
