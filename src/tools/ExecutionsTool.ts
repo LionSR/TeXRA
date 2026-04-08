@@ -108,13 +108,19 @@ function listenForFollowUp(ac: AbortController): () => void {
   if (!ctx?.streamId) return () => {};
 
   const streamId = ctx.streamId;
-  return bus.on(
+  // `ready` gate: bus.on() replays buffered events synchronously during
+  // registration. Setting `ready` after the call ensures stale replayed
+  // events are ignored — only events emitted after subscription trigger abort.
+  let ready = false;
+  const cleanup = bus.on(
     'followUpSent',
     (payload) => {
-      if (payload.streamId === streamId) ac.abort();
+      if (ready && payload.streamId === streamId) ac.abort();
     },
     { signal: ac.signal },
   );
+  ready = true;
+  return cleanup;
 }
 
 // ============================================================================
