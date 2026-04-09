@@ -8,7 +8,6 @@ import * as vscode from 'vscode';
 
 import type { PlatformSecrets } from '@platform/secrets';
 
-
 export class VscodeSecrets implements PlatformSecrets {
   private readonly storage: vscode.SecretStorage;
 
