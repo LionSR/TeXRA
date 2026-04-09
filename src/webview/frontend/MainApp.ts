@@ -143,6 +143,13 @@ export class MainApp extends MainAppBase {
   private readonly model = signal(DEFAULT_STATE.model);
   private readonly commit = signal(DEFAULT_STATE.commit);
   private readonly instruction = signal(DEFAULT_STATE.instruction);
+  /** Per-mode instruction storage so switching modes doesn't clobber text. */
+  private readonly workflowInstruction = signal(
+    DEFAULT_STATE.workflowInstruction,
+  );
+  private readonly toolUseInstruction = signal(
+    DEFAULT_STATE.toolUseInstruction,
+  );
   private readonly singleFiles = signal<SingleFiles>({
     ...DEFAULT_SINGLE_FILES,
   });
@@ -399,6 +406,8 @@ export class MainApp extends MainAppBase {
       model: this.model.get(),
       commit: this.commit.get(),
       instruction: this.instruction.get(),
+      workflowInstruction: this.workflowInstruction.get(),
+      toolUseInstruction: this.toolUseInstruction.get(),
       inputFile: sf.inputFile,
       referenceFile: sf.referenceFile,
       auxiliaryFile: sf.auxiliaryFile,
@@ -437,7 +446,26 @@ export class MainApp extends MainAppBase {
     this.toolUseAgent.set(state.toolUseAgent);
     this.model.set(state.model);
     this.commit.set(state.commit);
-    this.instruction.set(state.instruction);
+
+    // Restore per-mode instructions. Migrate legacy single `instruction` field:
+    // if per-mode fields are empty but `instruction` has content, assign it to
+    // the active session type so existing users don't lose their draft.
+    const hasPerMode = state.workflowInstruction || state.toolUseInstruction;
+    if (hasPerMode) {
+      this.workflowInstruction.set(state.workflowInstruction);
+      this.toolUseInstruction.set(state.toolUseInstruction);
+    } else {
+      if (state.sessionType === SESSION_TYPES.WORKFLOW) {
+        this.workflowInstruction.set(state.instruction);
+      } else {
+        this.toolUseInstruction.set(state.instruction);
+      }
+    }
+    this.instruction.set(
+      state.sessionType === SESSION_TYPES.WORKFLOW
+        ? this.workflowInstruction.get()
+        : this.toolUseInstruction.get(),
+    );
     this.singleFiles.set({
       inputFile: state.inputFile,
       referenceFile: state.referenceFile,
@@ -501,6 +529,18 @@ export class MainApp extends MainAppBase {
     const command = FILE_UPDATE_COMMANDS[fileType];
     if (command) {
       postMessage(command, { fileType, files });
+    }
+  }
+
+  /**
+   * Set the active instruction and sync it to the per-mode store.
+   */
+  private setInstruction(value: string): void {
+    this.instruction.set(value);
+    if (this.sessionType.get() === SESSION_TYPES.WORKFLOW) {
+      this.workflowInstruction.set(value);
+    } else {
+      this.toolUseInstruction.set(value);
     }
   }
 
@@ -792,7 +832,7 @@ export class MainApp extends MainAppBase {
   ): void {
     this.isPolishing.set(false);
     if (message.text.trim()) {
-      this.instruction.set(message.text);
+      this.setInstruction(message.text);
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Instruction text has been polished!',
       });
@@ -824,7 +864,7 @@ export class MainApp extends MainAppBase {
 
     const current = this.instruction.get();
     const updated = current ? `${current} ${message.text}` : message.text;
-    this.instruction.set(updated);
+    this.setInstruction(updated);
     this.isRecording.set(false);
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
       text: 'Instruction text transcribed!',
@@ -861,7 +901,7 @@ export class MainApp extends MainAppBase {
       this.toolUseAgent.set(state.toolUseAgent);
       this.model.set(state.model);
       this.commit.set(state.commit);
-      this.instruction.set(state.instruction);
+      this.setInstruction(state.instruction);
       this.singleFiles.set({
         inputFile: state.inputFile,
         referenceFile: state.referenceFile,
@@ -916,7 +956,7 @@ export class MainApp extends MainAppBase {
   }
 
   private clearForNewSession(): void {
-    this.instruction.set('');
+    this.setInstruction('');
     const defaults = SESSION_DEFAULTS[this.sessionType.get()];
     if (defaults.resetFiles) {
       this.singleFiles.set({
@@ -1108,7 +1148,22 @@ export class MainApp extends MainAppBase {
 
   private handleSessionTypeChange(value: string): void {
     const parsed = parseSessionType(value) ?? SESSION_TYPES.WORKFLOW;
-    if (parsed === this.sessionType.get()) return;
+    const prev = this.sessionType.get();
+    if (parsed === prev) return;
+
+    // Stash current instruction into the mode being left
+    if (prev === SESSION_TYPES.WORKFLOW) {
+      this.workflowInstruction.set(this.instruction.get());
+    } else {
+      this.toolUseInstruction.set(this.instruction.get());
+    }
+    // Restore instruction for the mode being entered
+    this.instruction.set(
+      parsed === SESSION_TYPES.WORKFLOW
+        ? this.workflowInstruction.get()
+        : this.toolUseInstruction.get(),
+    );
+
     this.sessionType.set(parsed);
     if (parsed === SESSION_TYPES.TOOL_USE) {
       this.outputFilesActive.set(false);
@@ -1128,6 +1183,7 @@ export class MainApp extends MainAppBase {
       this.toolUseAgent.set(value);
     }
     this.sessionType.set(sessionType);
+    this.refreshInstructionPlaceholder(false);
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
     postMessage(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE);
@@ -1215,15 +1271,24 @@ export class MainApp extends MainAppBase {
     }
   }
 
+  private getPlaceholderKey(): keyof typeof ONBOARDING_PLACEHOLDERS {
+    if (this.sessionType.get() !== SESSION_TYPES.TOOL_USE) return 'workflow';
+    const agent = this.toolUseAgent.get();
+    if (agent === 'orchestrator' || agent.endsWith(':orchestrator')) {
+      return 'orchestrator';
+    }
+    return 'toolUse';
+  }
+
   private refreshInstructionPlaceholder(advance: boolean): void {
-    const placeholders = ONBOARDING_PLACEHOLDERS[this.sessionType.get()];
+    const placeholders = ONBOARDING_PLACEHOLDERS[this.getPlaceholderKey()];
     if (!placeholders.length) return;
     const current = this.instructionPlaceholder.get();
     const currentIndex = placeholders.indexOf(current);
     if (advance) {
       const nextIndex = (currentIndex + 1) % placeholders.length;
       this.instructionPlaceholder.set(placeholders[nextIndex]);
-    } else if (!current) {
+    } else if (!current || currentIndex === -1) {
       this.instructionPlaceholder.set(placeholders[0]);
     }
   }
@@ -1686,7 +1751,7 @@ export class MainApp extends MainAppBase {
   private handleComponentInstructionInput(
     e: CustomEvent<InstructionChangeDetail>,
   ): void {
-    this.instruction.set(e.detail.value);
+    this.setInstruction(e.detail.value);
     this.scheduleInstructionSave();
   }
 
@@ -1705,7 +1770,7 @@ export class MainApp extends MainAppBase {
         this.handleRecordingToggle();
         break;
       case 'erase':
-        this.instruction.set('');
+        this.setInstruction('');
         this.saveState();
         break;
     }

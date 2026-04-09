@@ -95,6 +95,8 @@ export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
   model: z.string().prefault('gemini31p'),
   commit: z.string().prefault('HEAD'),
   instruction: z.string().prefault(''),
+  workflowInstruction: z.string().prefault(''),
+  toolUseInstruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
   inputFilesVisible: z.boolean().prefault(false),
   referenceFilesVisible: z.boolean().prefault(false),
