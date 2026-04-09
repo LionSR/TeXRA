@@ -1592,6 +1592,14 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
   }
 
+  private handleOpenProgressView(): void {
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'progress' });
+  }
+
+  private handleOpenMultiAgentSettings(): void {
+    postMessage(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS);
+  }
+
   private handleComponentLatexDiffsToggle(
     e: CustomEvent<LatexDiffsToggleDetail>,
   ): void {
@@ -1888,7 +1896,10 @@ export class MainApp extends MainAppBase {
             }}
             .gettingStartedVisible=${this.gettingStartedVisible.get()}
             .loginBannerVisible=${this.loginBannerVisible.get()}
-            .orchestratorSelected=${this.sessionType.get() === SESSION_TYPES.TOOL_USE && (this.toolUseAgent.get().endsWith(':orchestrator') || this.toolUseAgent.get() === 'orchestrator')}
+            .orchestratorSelected=${this.sessionType.get() ===
+              SESSION_TYPES.TOOL_USE &&
+            (this.toolUseAgent.get().endsWith(':orchestrator') ||
+              this.toolUseAgent.get() === 'orchestrator')}
             @api-key-action=${this.handleComponentApiKeyAction}
             @agent-config-action=${this.handleComponentAgentConfigAction}
             @dependency-dismiss=${this.handleComponentDependencyDismiss}
@@ -1896,6 +1907,8 @@ export class MainApp extends MainAppBase {
             @open-install-guide=${this.handleComponentOpenInstallGuide}
             @sign-in=${this.handleComponentSignIn}
             @dismiss-login=${this.handleComponentDismissLogin}
+            @open-progress-view=${this.handleOpenProgressView}
+            @open-multi-agent-settings=${this.handleOpenMultiAgentSettings}
           ></banner-group>
         </div>
 
