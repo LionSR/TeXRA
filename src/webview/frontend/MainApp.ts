@@ -893,7 +893,18 @@ export class MainApp extends MainAppBase {
       this.toolUseAgent.set(state.toolUseAgent);
       this.model.set(state.model);
       this.commit.set(state.commit);
-      this.setInstruction(state.instruction);
+      // Restore per-mode instructions (same migration as restorePersistedState)
+      const wf =
+        state.workflowInstruction ||
+        (state.sessionType === SESSION_TYPES.WORKFLOW ? state.instruction : '');
+      const tu =
+        state.toolUseInstruction ||
+        (state.sessionType !== SESSION_TYPES.WORKFLOW ? state.instruction : '');
+      this.workflowInstruction.set(wf);
+      this.toolUseInstruction.set(tu);
+      this.instruction.set(
+        state.sessionType === SESSION_TYPES.WORKFLOW ? wf : tu,
+      );
       this.singleFiles.set({
         inputFile: state.inputFile,
         referenceFile: state.referenceFile,
@@ -948,7 +959,9 @@ export class MainApp extends MainAppBase {
   }
 
   private clearForNewSession(): void {
-    this.setInstruction('');
+    this.instruction.set('');
+    this.workflowInstruction.set('');
+    this.toolUseInstruction.set('');
     const defaults = SESSION_DEFAULTS[this.sessionType.get()];
     if (defaults.resetFiles) {
       this.singleFiles.set({
@@ -1173,6 +1186,20 @@ export class MainApp extends MainAppBase {
       this.workflowAgent.set(value);
     } else {
       this.toolUseAgent.set(value);
+    }
+    // Stash/restore instructions when session type changes via agent selection
+    const prev = this.sessionType.get();
+    if (prev !== sessionType) {
+      if (prev === SESSION_TYPES.WORKFLOW) {
+        this.workflowInstruction.set(this.instruction.get());
+      } else {
+        this.toolUseInstruction.set(this.instruction.get());
+      }
+      this.instruction.set(
+        sessionType === SESSION_TYPES.WORKFLOW
+          ? this.workflowInstruction.get()
+          : this.toolUseInstruction.get(),
+      );
     }
     this.sessionType.set(sessionType);
     this.refreshInstructionPlaceholder(false);
