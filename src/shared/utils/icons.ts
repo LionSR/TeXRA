@@ -110,3 +110,13 @@ export function getAgentCategoryDecorator(
     ? categories[agentCategory as AgentCategory]
     : categories.workflow;
 }
+
+/** Whether the given agent ID (with or without source prefix) is an orchestrator. */
+export function isOrchestratorId(agentId: string): boolean {
+  return (
+    agentId === 'orchestrator' ||
+    agentId.endsWith(':orchestrator') ||
+    agentId === 'leanOrchestrator' ||
+    agentId.endsWith(':leanOrchestrator')
+  );
+}

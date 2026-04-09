@@ -46,6 +46,7 @@ import {
   type SessionTypeChangeDetail,
 } from '@shared/schemas';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
+import { isOrchestratorId } from '@shared/utils/icons';
 import { capitalize } from '@shared/utils/string';
 
 import './components/FileSelectGroup';
@@ -143,7 +144,6 @@ export class MainApp extends MainAppBase {
   private readonly model = signal(DEFAULT_STATE.model);
   private readonly commit = signal(DEFAULT_STATE.commit);
   private readonly instruction = signal(DEFAULT_STATE.instruction);
-  /** Per-mode instruction storage so switching modes doesn't clobber text. */
   private readonly workflowInstruction = signal(
     DEFAULT_STATE.workflowInstruction,
   );
@@ -447,24 +447,19 @@ export class MainApp extends MainAppBase {
     this.model.set(state.model);
     this.commit.set(state.commit);
 
-    // Restore per-mode instructions. Migrate legacy single `instruction` field:
-    // if per-mode fields are empty but `instruction` has content, assign it to
-    // the active session type so existing users don't lose their draft.
-    const hasPerMode = state.workflowInstruction || state.toolUseInstruction;
-    if (hasPerMode) {
-      this.workflowInstruction.set(state.workflowInstruction);
-      this.toolUseInstruction.set(state.toolUseInstruction);
-    } else {
-      if (state.sessionType === SESSION_TYPES.WORKFLOW) {
-        this.workflowInstruction.set(state.instruction);
-      } else {
-        this.toolUseInstruction.set(state.instruction);
-      }
-    }
+    // Restore per-mode instructions. Migrate legacy single `instruction`:
+    // if neither per-mode field has content but legacy `instruction` does,
+    // assign it to the active session type so the draft isn't lost.
+    const wf =
+      state.workflowInstruction ||
+      (state.sessionType === SESSION_TYPES.WORKFLOW ? state.instruction : '');
+    const tu =
+      state.toolUseInstruction ||
+      (state.sessionType !== SESSION_TYPES.WORKFLOW ? state.instruction : '');
+    this.workflowInstruction.set(wf);
+    this.toolUseInstruction.set(tu);
     this.instruction.set(
-      state.sessionType === SESSION_TYPES.WORKFLOW
-        ? this.workflowInstruction.get()
-        : this.toolUseInstruction.get(),
+      state.sessionType === SESSION_TYPES.WORKFLOW ? wf : tu,
     );
     this.singleFiles.set({
       inputFile: state.inputFile,
@@ -532,9 +527,6 @@ export class MainApp extends MainAppBase {
     }
   }
 
-  /**
-   * Set the active instruction and sync it to the per-mode store.
-   */
   private setInstruction(value: string): void {
     this.instruction.set(value);
     if (this.sessionType.get() === SESSION_TYPES.WORKFLOW) {
@@ -1273,11 +1265,9 @@ export class MainApp extends MainAppBase {
 
   private getPlaceholderKey(): keyof typeof ONBOARDING_PLACEHOLDERS {
     if (this.sessionType.get() !== SESSION_TYPES.TOOL_USE) return 'workflow';
-    const agent = this.toolUseAgent.get();
-    if (agent === 'orchestrator' || agent.endsWith(':orchestrator')) {
-      return 'orchestrator';
-    }
-    return 'toolUse';
+    return isOrchestratorId(this.toolUseAgent.get())
+      ? 'orchestrator'
+      : 'toolUse';
   }
 
   private refreshInstructionPlaceholder(advance: boolean): void {
@@ -1955,8 +1945,7 @@ export class MainApp extends MainAppBase {
             .loginBannerVisible=${this.loginBannerVisible.get()}
             .orchestratorSelected=${this.sessionType.get() ===
               SESSION_TYPES.TOOL_USE &&
-            (this.toolUseAgent.get().endsWith(':orchestrator') ||
-              this.toolUseAgent.get() === 'orchestrator')}
+            isOrchestratorId(this.toolUseAgent.get())}
             @api-key-action=${this.handleComponentApiKeyAction}
             @agent-config-action=${this.handleComponentAgentConfigAction}
             @dependency-dismiss=${this.handleComponentDependencyDismiss}
