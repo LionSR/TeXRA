@@ -24,7 +24,6 @@ import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { getHelperModelName } from '@agent/runtime/helperModel';
 import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { getToolUseMemoryEnabled } from '@agent/core/stateStore';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -597,7 +596,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    const enabled = getToolUseMemoryEnabled();
+    const enabled = globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true;
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
       enabled,

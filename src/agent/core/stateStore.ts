@@ -50,18 +50,3 @@ export function getGlobalState(): StateStore {
 export function getWorkspaceState(): StateStore {
   return workspace;
 }
-
-// ---------------------------------------------------------------------------
-// Convenience readers (previously in @utils/config/constants.ts)
-// ---------------------------------------------------------------------------
-
-const MEMORY_ENABLED_KEY = 'texra.memory.enabled';
-const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
-
-/** Whether the memory tool is enabled for tool-use sessions. */
-export function getToolUseMemoryEnabled(): boolean {
-  return (
-    global.get<boolean>(MEMORY_ENABLED_KEY, DEFAULT_TOOL_USE_MEMORY_ENABLED) ??
-    DEFAULT_TOOL_USE_MEMORY_ENABLED
-  );
-}

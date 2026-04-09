@@ -6,10 +6,7 @@ import {
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import {
-  getModelRetryBackoffMs,
-  getModelRetryMaxAttempts,
-} from '@agent/core/config';
+import { getConfig } from '@agent/core/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { formatProviderHttpError, toErrorMessage } from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -27,8 +24,8 @@ export interface RetryState {
 
 /** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
 function getNodeRetryConfig(): { maxRetries: number; wait: number } {
-  const maxAutoAttempts = getModelRetryMaxAttempts();
-  const backoffMs = getModelRetryBackoffMs();
+  const maxAutoAttempts = getConfig<number>('texra.model.retry.maxAttempts', 1);
+  const backoffMs = getConfig<number>('texra.model.retry.backoffMs', 1000);
 
   return {
     maxRetries: 1 + Math.max(0, maxAutoAttempts),

@@ -27,17 +27,3 @@ export function setConfigProvider(p: ConfigProvider): void {
 export function getConfig<T>(key: string, defaultValue?: T): T {
   return provider.get(key, defaultValue);
 }
-
-// ---------------------------------------------------------------------------
-// Convenience wrappers (previously in @utils/config/constants.ts)
-// ---------------------------------------------------------------------------
-
-/** Maximum number of automatic retry attempts for model calls. */
-export function getModelRetryMaxAttempts(): number {
-  return getConfig<number>('texra.model.retry.maxAttempts', 1);
-}
-
-/** Backoff delay in milliseconds between retry attempts. */
-export function getModelRetryBackoffMs(): number {
-  return getConfig<number>('texra.model.retry.backoffMs', 1000);
-}
