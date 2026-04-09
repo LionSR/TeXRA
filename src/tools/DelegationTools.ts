@@ -520,6 +520,8 @@ export class WorkflowAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleAgents('workflow'))}
 
+Agent selection: match the task to the most specific agent. Read each agent's description carefully. Do NOT default to correct for everything—correct is strictly for proofreading (typos, grammar, LaTeX formatting). For applying review suggestions use apply; for adding derivations use devise; for instruction-driven rewriting use polish; for critical review use criticize. Use the agent whose description best matches the task.
+
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
