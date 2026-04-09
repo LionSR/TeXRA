@@ -10,10 +10,10 @@
  */
 
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
+import * as logger from '@agent/core/logger';
 import { isFileNotFoundError } from '@common/errors';
 import { isDirectory } from '@common/files/fsEntryType';
 import { workspaceSM } from '@common/state/stateManager';
-import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';
 

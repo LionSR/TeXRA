@@ -1,15 +1,5 @@
 // Third-party imports
 import { OpenRouter } from '@openrouter/sdk';
-import type {
-  ChatResult,
-  ChatStreamChunk,
-  ChatUsage,
-  ChatMessages,
-  ChatAssistantMessage,
-  ChatToolCall,
-  ChatContentItems,
-  ReasoningDetailUnion,
-} from '@openrouter/sdk/models';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
@@ -19,13 +9,13 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { K_SLICE } from '@agent/core/constants';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
-import { K_SLICE } from '@agent/core/constants';
 import { getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { computeCachePercentage } from './utils/usageNormalization';
@@ -47,6 +37,16 @@ import {
   COMPACTION_SYSTEM_PROMPT,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
 } from './contextManagementConstants';
+import type {
+  ChatResult,
+  ChatStreamChunk,
+  ChatUsage,
+  ChatMessages,
+  ChatAssistantMessage,
+  ChatToolCall,
+  ChatContentItems,
+  ReasoningDetailUnion,
+} from '@openrouter/sdk/models';
 import type {
   CreateResponseOptions,
   CreateResponseResult,

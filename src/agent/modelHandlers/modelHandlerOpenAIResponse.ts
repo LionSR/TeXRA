@@ -15,6 +15,7 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { K_SLICE } from '@agent/core/constants';
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
@@ -27,15 +28,14 @@ import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
-import { K_SLICE } from '@agent/core/constants';
 import { getConfig } from '@utils/config';
+import { delay } from '@utils/core';
+import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
+import { isNonEmptyString } from '@utils/core';
 import {
   getWebSocketEnabled,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
-import { delay } from '@utils/core';
-import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
-import { isNonEmptyString } from '@utils/core';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 

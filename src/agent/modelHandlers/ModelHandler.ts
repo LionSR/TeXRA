@@ -17,6 +17,7 @@ import type {
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -32,7 +33,6 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { K_SLICE } from '@agent/core/constants';
 import type { FileLocation } from '@utils/files';
 import {
   getProviderStreaming,

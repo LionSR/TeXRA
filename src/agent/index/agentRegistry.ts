@@ -10,6 +10,7 @@ import {
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
+import * as logger from '@agent/core/logger';
 import {
   GlobalStateKey,
   WorkspaceStateKey,
@@ -17,7 +18,6 @@ import {
   workspaceSM,
 } from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import * as logger from '@logger/logUtils';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentKey as createKey } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';

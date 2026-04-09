@@ -22,12 +22,12 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { getActiveChildren } from '@agent/runtime/executionRegistry';
-import { formatPostCompactionContext } from '@tools/subagentResults';
+import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@agent/core/constants';
 import { bestConnectionMethod } from '@latex';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
+import { formatPostCompactionContext } from '@tools/subagentResults';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
-import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@agent/core/constants';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 

@@ -13,8 +13,8 @@ import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import * as logger from '@agent/core/logger';
 import { GlobalStateKey, globalSM } from '@common/state';
-import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 

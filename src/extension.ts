@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { loadAgents } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
+import { setLogBackend } from '@agent/core/logger';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
@@ -42,6 +43,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
+import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
@@ -58,7 +60,6 @@ import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
-import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -127,6 +128,7 @@ export async function activate(context: vscode.ExtensionContext) {
   initializePolishModel(context.extensionPath);
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
+  setLogBackend(logger);
   FileLister.initialize(context);
   initializeServerSideKeyAccess(context, {
     isAuthenticated: () => SupabaseClient.isAuthenticated(),
