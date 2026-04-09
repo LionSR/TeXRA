@@ -38,7 +38,7 @@ const SOURCE_DISPLAY_NAMES: Record<string, string> = {
   [AGENT_SOURCE.BUILT_IN_WORKFLOW]: 'Built-in',
   [AGENT_SOURCE.BUILT_IN_TOOL_USE]: 'Built-in',
   [AGENT_SOURCE.CUSTOM]: 'Custom',
-  [AGENT_SOURCE.REMOTE]: 'Shared',
+  [AGENT_SOURCE.REMOTE]: 'Online',
 };
 
 function isBuiltIn(source: string): boolean {
@@ -564,10 +564,10 @@ export class AgentSelectionPanel extends LitElement {
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
           ${agent.hasMultiple
-            ? html`<span title="Generates multiple alternatives">⧉</span>`
+            ? html`<span title="Can produce multiple output files">⧉</span>`
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<span title="Shared agent">☁</span>`
+            ? html`<span title="Online agent">☁</span>`
             : nothing}
           ${agent.source === AGENT_SOURCE.CUSTOM
             ? html`<span title="Custom agent">★</span>`
@@ -655,8 +655,8 @@ export class AgentSelectionPanel extends LitElement {
               >`
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<span class="agent-source-badge" title="Shared agent"
-                >☁ Shared</span
+            ? html`<span class="agent-source-badge" title="Online agent"
+                >☁ Online</span
               >`
             : nothing}
         </div>
@@ -678,11 +678,11 @@ export class AgentSelectionPanel extends LitElement {
             ${agent.enabled ? 'Yes' : 'No'}
           </span>
 
-          <span class="agent-detail-meta-label">Multiple alternatives</span>
+          <span class="agent-detail-meta-label">Multiple outputs</span>
           <span class="agent-detail-meta-value">
             ${agent.hasMultiple
-              ? 'Yes — generates several options per run'
-              : 'No — produces a single result'}
+              ? 'Yes — can produce multiple output files per run'
+              : 'No — produces a single output file'}
           </span>
 
           ${agent.tools && agent.tools.length > 0
