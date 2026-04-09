@@ -1592,14 +1592,6 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
   }
 
-  private handleOpenProgressView(): void {
-    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'progress' });
-  }
-
-  private handleOpenMultiAgentSettings(): void {
-    postMessage(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS);
-  }
-
   private handleComponentLatexDiffsToggle(
     e: CustomEvent<LatexDiffsToggleDetail>,
   ): void {
@@ -1907,8 +1899,6 @@ export class MainApp extends MainAppBase {
             @open-install-guide=${this.handleComponentOpenInstallGuide}
             @sign-in=${this.handleComponentSignIn}
             @dismiss-login=${this.handleComponentDismissLogin}
-            @open-progress-view=${this.handleOpenProgressView}
-            @open-multi-agent-settings=${this.handleOpenMultiAgentSettings}
           ></banner-group>
         </div>
 

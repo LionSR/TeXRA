@@ -699,7 +699,6 @@ const CommonMessages = [
 const SettingsMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SETTINGS_OPEN),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS),
-  commandOnly(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS),
   z.object({
