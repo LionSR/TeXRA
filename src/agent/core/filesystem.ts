@@ -64,19 +64,10 @@ function isNotFound(err: unknown): boolean {
 }
 
 /**
- * Compute the bitmask file type for a path, matching vscode.FileType behavior.
- *
- * Uses lstat to detect symlinks. For symlinks, also stats the target to
- * produce combined bitmasks (e.g. SymbolicLink | File = 65).
+ * Resolve the target type of a symlink, producing combined bitmasks
+ * (e.g. SymbolicLink | File = 65) matching vscode.FileType behavior.
  */
-async function nodeFileType(target: string): Promise<number> {
-  const lstats = await fs.promises.lstat(target);
-  if (!lstats.isSymbolicLink()) {
-    if (lstats.isFile()) return FileType.File;
-    if (lstats.isDirectory()) return FileType.Directory;
-    return FileType.Unknown;
-  }
-  // Symlink: resolve target type to produce combined bitmask
+async function resolveSymlinkType(target: string): Promise<number> {
   let targetType: number = FileType.Unknown;
   try {
     const stats = await fs.promises.stat(target);
@@ -89,11 +80,27 @@ async function nodeFileType(target: string): Promise<number> {
 }
 
 /**
+ * Compute the bitmask file type from an lstat result.
+ * For symlinks, resolves the target path to produce combined bitmasks.
+ */
+async function lstatFileType(
+  lstats: fs.Stats,
+  target: string,
+): Promise<number> {
+  if (!lstats.isSymbolicLink()) {
+    if (lstats.isFile()) return FileType.File;
+    if (lstats.isDirectory()) return FileType.Directory;
+    return FileType.Unknown;
+  }
+  return resolveSymlinkType(target);
+}
+
+/**
  * Compute bitmask file type for a directory entry.
  *
  * Node.js Dirent methods are mutually exclusive: for symlinks, isSymbolicLink()
- * is true but isFile()/isDirectory() are false. We need lstat+stat on the
- * resolved path to produce combined bitmasks matching vscode.FileType.
+ * is true but isFile()/isDirectory() are false. We resolve the symlink target
+ * to produce combined bitmasks matching vscode.FileType.
  */
 async function direntFileType(
   entry: fs.Dirent,
@@ -104,23 +111,14 @@ async function direntFileType(
     if (entry.isDirectory()) return FileType.Directory;
     return FileType.Unknown;
   }
-  // Resolve symlink target type
-  let targetType: number = FileType.Unknown;
-  try {
-    const stats = await fs.promises.stat(path.join(parentDir, entry.name));
-    if (stats.isFile()) targetType = FileType.File;
-    else if (stats.isDirectory()) targetType = FileType.Directory;
-  } catch {
-    // Dangling symlink
-  }
-  return FileType.SymbolicLink | targetType;
+  return resolveSymlinkType(path.join(parentDir, entry.name));
 }
 
 const nodeBackend: FileSystemProvider = {
   async stat(target: string): Promise<FileStat> {
     const lstats = await fs.promises.lstat(target);
     return {
-      type: await nodeFileType(target),
+      type: await lstatFileType(lstats, target),
       ctime: lstats.ctimeMs,
       mtime: lstats.mtimeMs,
       size: lstats.size,
