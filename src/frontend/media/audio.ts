@@ -62,7 +62,6 @@ export async function startRecording(
       logger.warn(CHANNEL, `Sox check failed but found at: ${soxPath}`);
     }
 
-    StorageFS.initialize(context);
     await StorageFS.ensureDir(RECORDINGS_DIR);
     const relativePath = path.join(RECORDINGS_DIR, `record_${Date.now()}.wav`);
     const absPath = StorageFS.fullPath(relativePath);
@@ -176,7 +175,6 @@ export async function stopRecordingAndTranscribe(
       response_format: 'json',
     });
 
-    StorageFS.initialize(context);
     await StorageFS.cleanupOldFiles(RECORDINGS_DIR, THREE_DAYS_MS);
 
     return { success: true, text: result.text };

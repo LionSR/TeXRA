@@ -9,10 +9,10 @@ import {
 } from '@common/schemas';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 
 // Local imports - utils
-import { getConfig } from '@utils/config';
+import { getConfig } from '@agent/core/config';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';

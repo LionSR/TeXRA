@@ -1,8 +1,8 @@
 // Standard library imports
 import * as path from 'path';
 
-// Third-party imports
-import * as vscode from 'vscode';
+// Platform imports
+import { isFile } from '@common/files/fsEntryType';
 
 // Local imports - filesystem
 import { BaseFS } from './baseFS';
@@ -39,7 +39,7 @@ export abstract class RelativeFS extends BaseFS {
 
     await Promise.all(
       entries
-        .filter(([, type]) => type === vscode.FileType.File)
+        .filter(([, type]) => isFile(type))
         .map(async ([name]) => {
           const filePath = path.join(target, name);
           const stats = await this.stat(filePath);

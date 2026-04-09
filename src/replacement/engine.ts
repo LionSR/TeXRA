@@ -6,8 +6,8 @@
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
+import * as logger from '@agent/core/logger';
+import { getConfig } from '@agent/core/config';
 
 const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);
