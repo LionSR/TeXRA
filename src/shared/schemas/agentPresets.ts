@@ -34,7 +34,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For Lean 4 projects -- theorem search, tactic simplification, blueprints, and LaTeX polishing.',
     icon: 'codicon-symbol-structure',
-    workflowAgents: ['correct', 'polish', 'draw'],
+    workflowAgents: ['correct', 'polish'],
     toolUseAgents: [
       'lean',
       'leanSearch',
@@ -53,12 +53,13 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     icon: 'codicon-symbol-operator',
     workflowAgents: ['criticize', 'generic', 'devise', 'apply'],
     toolUseAgents: [
-      'ask',
+      'chat',
       'orchestrator',
       'research',
       'review',
       'search',
       'presenter',
+      'simplifier',
     ],
   },
   {
@@ -67,14 +68,12 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For math papers -- proofs, Lean 4 formalization, research, and LaTeX correction.',
     icon: 'codicon-symbol-number',
-    workflowAgents: ['correct', 'polish', 'draw', 'devise', 'apply'],
+    workflowAgents: ['correct', 'polish', 'generic', 'devise', 'apply'],
     toolUseAgents: [
       'lean',
-      'leanSearch',
-      'leanSimplifier',
-      'leanBlueprint',
       'research',
       'review',
+      'simplifier',
       'orchestrator',
     ],
   },
