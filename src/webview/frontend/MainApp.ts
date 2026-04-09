@@ -619,10 +619,11 @@ export class MainApp extends MainAppBase {
   }
 
   /**
-   * Validate agent selection with name-based fallback.
+   * Validate agent selection with name-based matching.
    * Handles source changes (e.g. remote:lean → builtInToolUse:lean after dedup)
    * and plain-name defaults (e.g. 'orchestrator' matching 'remote:orchestrator').
-   * Falls back to first option (the preferred agent, since options are sorted).
+   * Does NOT silently fall back — if the agent is gone, keeps the stale value
+   * so the dropdown shows no selection and execution errors explicitly.
    */
   private validateAgentSelection(
     options: AgentOptionData[],
@@ -638,8 +639,9 @@ export class MainApp extends MainAppBase {
       : currentValue;
     const byName = options.find((opt) => opt.label === name);
     if (byName) return byName.value;
-    // Fall back to first option (preferred agent due to sorting)
-    return options[0]?.value ?? '';
+    // No match — keep stale value so the UI shows no selection.
+    // Execution will error with "unknown agent" if the user proceeds.
+    return currentValue;
   }
 
   private handleSetSingleFileOptions(
