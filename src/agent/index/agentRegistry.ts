@@ -14,7 +14,7 @@ import * as logger from '@agent/core/logger';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state';
 import type { AgentOptionData } from '@shared/schemas';
-import { agentKey as createKey } from '@shared/schemas/agent';
+import { agentKey as createKey, agentName } from '@shared/schemas/agent';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
 
@@ -124,17 +124,17 @@ const MULTIPLE_SUFFIX = '_multiple';
 /** Source priority for lookups (higher priority first). */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
+  'remote',
   'builtInWorkflow',
   'builtInToolUse',
-  'remote',
 ];
 
-/** Source priority for tool-use sessions (prefers tool-use agents). */
+/** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
 const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
+  'remote',
   'builtInToolUse',
   'builtInWorkflow',
-  'remote',
 ];
 
 /**
@@ -236,7 +236,7 @@ async function doLoad(): Promise<void> {
  * Supports "source:name" format or just "name" (finds first match by priority).
  *
  * When preferToolUse is true, uses tool-use lookup priority:
- * custom → builtInToolUse → builtInWorkflow → remote
+ * custom → remote → builtInToolUse → builtInWorkflow
  *
  * This handles name collisions where a workflow agent shadows a tool-use agent.
  */
@@ -344,20 +344,23 @@ export function resolveAgent(
   };
 }
 
-/** Get all workflow agents (excludes internal agents by default). */
-export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
-  return [...cache.values()].filter(
-    (e) =>
-      e.category === AgentCategory.Workflow && (includeInternal || !e.internal),
+function getAgentsByCategory(
+  category: AgentCategory,
+  includeInternal: boolean,
+): AgentEntry[] {
+  return deduplicateByName(
+    [...cache.values()].filter(
+      (e) => e.category === category && (includeInternal || !e.internal),
+    ),
   );
 }
 
-/** Get all tool-use agents (excludes internal agents by default). */
+export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
+  return getAgentsByCategory(AgentCategory.Workflow, includeInternal);
+}
+
 export function getToolUseAgents(includeInternal = false): AgentEntry[] {
-  return [...cache.values()].filter(
-    (e) =>
-      e.category === AgentCategory.ToolUse && (includeInternal || !e.internal),
-  );
+  return getAgentsByCategory(AgentCategory.ToolUse, includeInternal);
 }
 
 /** Get agents by source. */
@@ -614,7 +617,8 @@ export function resolveAgentKey(
 
 /**
  * Extract the clean agent name from an identifier.
- * Handles source:name format (e.g., "custom:summarize" → "summarize").
+ * Like agentName() but validates the prefix is a known AgentSource first,
+ * so arbitrary strings with colons (e.g. URLs) pass through unchanged.
  */
 export function getCleanAgentName(agentIdentifier: string): string {
   const colonIdx = agentIdentifier.indexOf(':');
@@ -623,7 +627,7 @@ export function getCleanAgentName(agentIdentifier: string): string {
   const source = agentIdentifier.slice(0, colonIdx);
   if (!AgentSource.safeParse(source).success) return agentIdentifier;
 
-  return agentIdentifier.slice(colonIdx + 1);
+  return agentName(agentIdentifier);
 }
 
 // =============================================================================
@@ -658,7 +662,8 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
 // =============================================================================
 
 /**
- * Get visible agents for a category (filtered and deduplicated).
+ * Get visible agents for a category (filtered by user visibility config).
+ * Agents are already deduplicated by name from the getter functions.
  * No default → undefined means "never configured" (show all).
  */
 export function getVisibleAgents(
@@ -670,24 +675,20 @@ export function getVisibleAgents(
     ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
     : WorkspaceStateKey.ENABLED_AGENTS;
   const raw = getWorkspaceState().get<string[]>(stateKey);
-  return deduplicateByName(filterVisible(entries, raw));
+  return filterVisible(entries, raw);
 }
 
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
- * Custom agents override built-in agents with the same name.
- * Remote agents use source:name keys to prevent deduplication.
+ * Priority: custom > remote > builtInWorkflow > builtInToolUse.
+ * When the same agent name exists in multiple sources (e.g. local + remote),
+ * only the highest-priority version appears in the dropdown.
  */
-export function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
+function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();
 
   for (const entry of entries) {
-    // Remote agents use source:name key to preserve uniqueness
-    const key =
-      entry.source === 'remote'
-        ? createKey(entry.source, entry.name)
-        : entry.name;
-    const existing = byKey.get(key);
+    const existing = byKey.get(entry.name);
 
     // Keep entry if none exists or if this one has higher priority
     const isHigherPriority =
@@ -696,7 +697,7 @@ export function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
         LOOKUP_PRIORITY.indexOf(existing.source);
 
     if (isHigherPriority) {
-      byKey.set(key, entry);
+      byKey.set(entry.name, entry);
     }
   }
 
@@ -709,15 +710,9 @@ function filterVisible(
 ): AgentEntry[] {
   // undefined = never configured → show all; [] = explicitly empty → show none
   if (configured === undefined) return entries;
-  const configuredSet = new Set(configured);
-
-  // All agents (including remote) are filtered by the configured visibility set.
-  // Remote agents are visible by default when never configured (handled above).
-  return entries.filter(
-    (entry) =>
-      configuredSet.has(createKey(entry.source, entry.name)) ||
-      configuredSet.has(entry.name),
-  );
+  // Match by name so visibility survives when dedup changes the winning source.
+  const enabledNames = new Set(configured.map(agentName));
+  return entries.filter((entry) => enabledNames.has(entry.name));
 }
 
 // =============================================================================
