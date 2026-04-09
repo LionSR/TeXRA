@@ -5,13 +5,14 @@
  * module for convenience; the canonical definition lives in
  * `@platform/interfaces`.
  */
-import { platform } from '@platform/platform';
+import { tryPlatform } from '@platform/platform';
 
 export interface ConfigProvider {
   get<T>(key: string, defaultValue?: T): T;
 }
 
-/** Read a configuration value. */
+/** Read a configuration value. Returns defaultValue if platform not yet initialized. */
 export function getConfig<T>(key: string, defaultValue?: T): T {
-  return platform().config.get(key, defaultValue);
+  const p = tryPlatform();
+  return p ? p.config.get(key, defaultValue) : (defaultValue as T);
 }

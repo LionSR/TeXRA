@@ -4,7 +4,7 @@
  * Re-exports from `@platform/` for backward compatibility.
  * New code should import from `@platform/` directly.
  */
-export { initPlatform, platform, type Platform } from '@platform/platform';
+export { initPlatform, platform, tryPlatform, type Platform } from '@platform/platform';
 
 // Re-export individual types for existing consumers
 export type { ConfigProvider } from './config';

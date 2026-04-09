@@ -4,7 +4,7 @@
  * Hosts call `initPlatform()` at startup. Core code calls `platform()`
  * to access services, or uses the convenience facades in `@agent/core/`.
  */
-export { initPlatform, platform, type Platform } from './platform';
+export { initPlatform, platform, tryPlatform, type Platform } from './platform';
 export type {
   PlatformConfig,
   PlatformState,

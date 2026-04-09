@@ -9,7 +9,7 @@
  * calls @logger/logUtils directly. Duplicating AsyncLocalStorage here would
  * cause silent context divergence.
  */
-import { platform } from '@platform/platform';
+import { tryPlatform } from '@platform/platform';
 
 export interface LogUtilsOptions {
   isAgent?: boolean;
@@ -53,11 +53,18 @@ export const consoleBackend: LogBackend = {
 };
 
 // ---------------------------------------------------------------------------
-// Public API – delegates to platform().log
+// Public API – delegates to platform().log, falls back to console before init
 // ---------------------------------------------------------------------------
 
+/** Get the active log backend, falling back to console if platform not yet initialized.
+ *  This is needed because module-level `logger.initialize(CHANNEL)` calls
+ *  execute at import time, before initPlatform() runs. */
+function backend(): LogBackend {
+  return tryPlatform()?.log ?? consoleBackend;
+}
+
 export function initialize(channel: string, isAgent = false): void {
-  platform().log.initialize(channel, isAgent);
+  backend().initialize(channel, isAgent);
 }
 
 export function debug(
@@ -65,7 +72,7 @@ export function debug(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  platform().log.debug(channel, message, options);
+  backend().debug(channel, message, options);
 }
 
 export function info(
@@ -73,7 +80,7 @@ export function info(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  platform().log.info(channel, message, options);
+  backend().info(channel, message, options);
 }
 
 export function warn(
@@ -81,7 +88,7 @@ export function warn(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  platform().log.warn(channel, message, options);
+  backend().warn(channel, message, options);
 }
 
 export function error(
@@ -89,5 +96,5 @@ export function error(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  platform().log.error(channel, message, options);
+  backend().error(channel, message, options);
 }
