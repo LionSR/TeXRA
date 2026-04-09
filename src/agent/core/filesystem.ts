@@ -154,13 +154,14 @@ const nodeBackend: FileSystemProvider = {
     options?: { recursive?: boolean },
   ): Promise<void> {
     try {
-      const stats = await fs.promises.stat(target);
-      if (stats.isDirectory()) {
+      // Use lstat so dangling/circular symlinks are detected and removed
+      const stats = await fs.promises.lstat(target);
+      if (stats.isSymbolicLink() || !stats.isDirectory()) {
+        await fs.promises.unlink(target);
+      } else {
         await fs.promises.rm(target, {
           recursive: options?.recursive ?? false,
         });
-      } else {
-        await fs.promises.unlink(target);
       }
     } catch (err) {
       if (!isNotFound(err)) throw err;
