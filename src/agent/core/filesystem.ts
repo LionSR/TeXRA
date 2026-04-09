@@ -59,22 +59,71 @@ export interface FileSystemProvider {
 // Default backend – Node.js fs/promises (for CLI / Electron / tests)
 // ---------------------------------------------------------------------------
 
-function nodeFileType(stats: fs.Stats): number {
-  let type: number = FileType.Unknown;
-  if (stats.isFile()) type = FileType.File;
-  else if (stats.isDirectory()) type = FileType.Directory;
-  if (stats.isSymbolicLink()) type |= FileType.SymbolicLink;
-  return type;
+function isNotFound(err: unknown): boolean {
+  return (err as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
+/**
+ * Compute the bitmask file type for a path, matching vscode.FileType behavior.
+ *
+ * Uses lstat to detect symlinks. For symlinks, also stats the target to
+ * produce combined bitmasks (e.g. SymbolicLink | File = 65).
+ */
+async function nodeFileType(target: string): Promise<number> {
+  const lstats = await fs.promises.lstat(target);
+  if (!lstats.isSymbolicLink()) {
+    if (lstats.isFile()) return FileType.File;
+    if (lstats.isDirectory()) return FileType.Directory;
+    return FileType.Unknown;
+  }
+  // Symlink: resolve target type to produce combined bitmask
+  let targetType: number = FileType.Unknown;
+  try {
+    const stats = await fs.promises.stat(target);
+    if (stats.isFile()) targetType = FileType.File;
+    else if (stats.isDirectory()) targetType = FileType.Directory;
+  } catch {
+    // Dangling symlink — target type stays Unknown
+  }
+  return FileType.SymbolicLink | targetType;
+}
+
+/**
+ * Compute bitmask file type for a directory entry.
+ *
+ * Node.js Dirent methods are mutually exclusive: for symlinks, isSymbolicLink()
+ * is true but isFile()/isDirectory() are false. We need lstat+stat on the
+ * resolved path to produce combined bitmasks matching vscode.FileType.
+ */
+async function direntFileType(
+  entry: fs.Dirent,
+  parentDir: string,
+): Promise<number> {
+  if (!entry.isSymbolicLink()) {
+    if (entry.isFile()) return FileType.File;
+    if (entry.isDirectory()) return FileType.Directory;
+    return FileType.Unknown;
+  }
+  // Resolve symlink target type
+  let targetType: number = FileType.Unknown;
+  try {
+    const stats = await fs.promises.stat(path.join(parentDir, entry.name));
+    if (stats.isFile()) targetType = FileType.File;
+    else if (stats.isDirectory()) targetType = FileType.Directory;
+  } catch {
+    // Dangling symlink
+  }
+  return FileType.SymbolicLink | targetType;
 }
 
 const nodeBackend: FileSystemProvider = {
   async stat(target: string): Promise<FileStat> {
-    const stats = await fs.promises.stat(target);
+    const lstats = await fs.promises.lstat(target);
     return {
-      type: nodeFileType(stats),
-      ctime: stats.ctimeMs,
-      mtime: stats.mtimeMs,
-      size: stats.size,
+      type: await nodeFileType(target),
+      ctime: lstats.ctimeMs,
+      mtime: lstats.mtimeMs,
+      size: lstats.size,
     };
   },
 
@@ -83,8 +132,6 @@ const nodeBackend: FileSystemProvider = {
   },
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
-    const dir = path.dirname(target);
-    await fs.promises.mkdir(dir, { recursive: true });
     await fs.promises.writeFile(target, content);
   },
 
@@ -92,12 +139,17 @@ const nodeBackend: FileSystemProvider = {
     target: string,
     options?: { recursive?: boolean },
   ): Promise<void> {
-    const stats = await fs.promises.stat(target).catch(() => null);
-    if (!stats) return;
-    if (stats.isDirectory()) {
-      await fs.promises.rm(target, { recursive: options?.recursive ?? false });
-    } else {
-      await fs.promises.unlink(target);
+    try {
+      const stats = await fs.promises.stat(target);
+      if (stats.isDirectory()) {
+        await fs.promises.rm(target, {
+          recursive: options?.recursive ?? false,
+        });
+      } else {
+        await fs.promises.unlink(target);
+      }
+    } catch (err) {
+      if (!isNotFound(err)) throw err;
     }
   },
 
@@ -107,13 +159,12 @@ const nodeBackend: FileSystemProvider = {
 
   async readDirectory(target: string): Promise<[string, number][]> {
     const entries = await fs.promises.readdir(target, { withFileTypes: true });
-    return entries.map((entry) => {
-      let type: number = FileType.Unknown;
-      if (entry.isFile()) type = FileType.File;
-      else if (entry.isDirectory()) type = FileType.Directory;
-      if (entry.isSymbolicLink()) type |= FileType.SymbolicLink;
-      return [entry.name, type] as [string, number];
-    });
+    return Promise.all(
+      entries.map(async (entry) => {
+        const type = await direntFileType(entry, target);
+        return [entry.name, type] as [string, number];
+      }),
+    );
   },
 
   async copy(
@@ -121,13 +172,14 @@ const nodeBackend: FileSystemProvider = {
     dest: string,
     options?: { overwrite?: boolean },
   ): Promise<void> {
-    const flag = options?.overwrite ? 0 : fs.constants.COPYFILE_EXCL;
     const srcStat = await fs.promises.stat(source);
     if (srcStat.isDirectory()) {
-      await fs.promises.cp(source, dest, { recursive: true, force: !!options?.overwrite });
+      await fs.promises.cp(source, dest, {
+        recursive: true,
+        force: !!options?.overwrite,
+      });
     } else {
-      const dir = path.dirname(dest);
-      await fs.promises.mkdir(dir, { recursive: true });
+      const flag = options?.overwrite ? 0 : fs.constants.COPYFILE_EXCL;
       await fs.promises.copyFile(source, dest, flag);
     }
   },
@@ -135,9 +187,19 @@ const nodeBackend: FileSystemProvider = {
   async rename(
     source: string,
     dest: string,
+    options?: { overwrite?: boolean },
   ): Promise<void> {
-    const dir = path.dirname(dest);
-    await fs.promises.mkdir(dir, { recursive: true });
+    if (!options?.overwrite) {
+      // Check if dest exists — POSIX rename silently overwrites by default
+      try {
+        await fs.promises.lstat(dest);
+        throw Object.assign(new Error(`Target already exists: ${dest}`), {
+          code: 'EEXIST',
+        });
+      } catch (err) {
+        if (!isNotFound(err)) throw err;
+      }
+    }
     await fs.promises.rename(source, dest);
   },
 };
