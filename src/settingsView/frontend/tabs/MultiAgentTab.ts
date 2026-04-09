@@ -402,7 +402,8 @@ export class MultiAgentTab extends LitElement {
               <span class="step-number">1</span>
               <span
                 ><strong>Pick a preset</strong> below that matches your field.
-                This decides which specialized agents are available.</span
+                This enables and configures the right specialized agents for
+                you.</span
               >
             </li>
             <li class="how-it-works-step">
