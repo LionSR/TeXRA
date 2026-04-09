@@ -20,6 +20,6 @@ Use this file when a TikZ figure needs a stricter validation pass.
 ## Compile-and-inspect loop
 
 - Recompile after meaningful edits.
-- Inspect the rendered figure, not just the source.
+- Visually read the rendered figure, not just the source.
 - Fix layout defects immediately instead of stacking more edits on top.
 - Repeat the loop until clipping, collisions, spacing defects, and notation mismatches are gone rather than stopping after the first successful build.

@@ -1,4 +1,0 @@
-interface:
-  display_name: "TikZ Figure Author"
-  short_description: "Create and refine TikZ diagrams"
-  default_prompt: "Use $tikz-figure-author to create or improve a TikZ figure that matches the manuscript's notation and layout."
