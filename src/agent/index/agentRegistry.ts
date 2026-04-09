@@ -714,12 +714,19 @@ function filterVisible(
   if (configured === undefined) return entries;
   const configuredSet = new Set(configured);
 
-  // All agents (including remote) are filtered by the configured visibility set.
-  // Remote agents are visible by default when never configured (handled above).
+  // Extract plain names from stored keys (e.g. "builtInToolUse:lean" → "lean")
+  // so visibility survives when dedup changes the winning source.
+  const configuredNames = new Set<string>();
+  for (const key of configured) {
+    const idx = key.indexOf(':');
+    if (idx >= 0) configuredNames.add(key.slice(idx + 1));
+  }
+
   return entries.filter(
     (entry) =>
       configuredSet.has(createKey(entry.source, entry.name)) ||
-      configuredSet.has(entry.name),
+      configuredSet.has(entry.name) ||
+      configuredNames.has(entry.name),
   );
 }
 
