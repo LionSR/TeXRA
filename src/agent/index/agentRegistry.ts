@@ -16,6 +16,7 @@ import { GlobalStateKey, WorkspaceStateKey } from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentKey as createKey } from '@shared/schemas/agent';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'agentRegistry';
@@ -187,7 +188,10 @@ async function doLoad(): Promise<void> {
 
   // Apply category overrides from config
   const toolUseOverrides = new Set(
-    getWorkspaceState().get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []),
+    getWorkspaceState().get<string[]>(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      [],
+    ),
   );
 
   for (const entry of allEntries) {
@@ -714,6 +718,7 @@ function entryToOptionData(entry: AgentEntry): AgentOptionData {
     label: entry.name,
     isMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
     isToolUse: entry.category === AgentCategory.ToolUse,
+    isOrchestrator: entry.tools?.some((t) => DELEGATION_TOOLS.has(t)),
     isRemote: entry.source === 'remote',
     isCustom: entry.source === 'custom',
     description: entry.description,
@@ -752,10 +757,9 @@ export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload
   }
 
   return {
-    workflow: sortAgentEntries(
-      getVisibleAgents('workflow'),
-      [DEFAULT_WORKFLOW_AGENT],
-    ).map(entryToOptionData),
+    workflow: sortAgentEntries(getVisibleAgents('workflow'), [
+      DEFAULT_WORKFLOW_AGENT,
+    ]).map(entryToOptionData),
     toolUse: sortAgentEntries(
       getVisibleAgents('toolUse'),
       PREFERRED_TOOL_USE_AGENTS,

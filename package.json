@@ -989,6 +989,12 @@
         "icon": "$(tools)"
       },
       {
+        "command": "texra.showMultiAgent",
+        "title": "Show Multi-Agent Settings",
+        "category": "TeXRA",
+        "icon": "$(organization)"
+      },
+      {
         "command": "texra.openSettings",
         "title": "Open TeXRA Settings",
         "category": "TeXRA",
