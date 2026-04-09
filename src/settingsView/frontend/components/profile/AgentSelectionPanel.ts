@@ -558,13 +558,13 @@ export class AgentSelectionPanel extends LitElement {
             this.handleToggleEnabled(agent);
           }}
           title=${agent.enabled
-            ? 'Exclude from agent dropdown'
-            : 'Include in agent dropdown'}
+            ? 'Hide from agent selector'
+            : 'Show in agent selector'}
         />
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
           ${agent.hasMultiple
-            ? html`<span title="Multiple outputs">⧉</span>`
+            ? html`<span title="Can produce multiple output files">⧉</span>`
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE
             ? html`<span title="Remote agent">☁</span>`
@@ -673,16 +673,16 @@ export class AgentSelectionPanel extends LitElement {
           : nothing}
 
         <div class="agent-detail-meta">
-          <span class="agent-detail-meta-label">In dropdown</span>
+          <span class="agent-detail-meta-label">Available</span>
           <span class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
           </span>
 
-          <span class="agent-detail-meta-label">Multi-output</span>
+          <span class="agent-detail-meta-label">Multiple outputs</span>
           <span class="agent-detail-meta-value">
             ${agent.hasMultiple
-              ? 'Yes — generates multiple alternatives per run'
-              : 'No — produces a single output'}
+              ? 'Yes — can produce multiple output files per run'
+              : 'No — produces a single output file'}
           </span>
 
           ${agent.tools && agent.tools.length > 0
