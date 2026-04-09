@@ -32,7 +32,7 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { K_SLICE } from '@utils/config';
+import { K_SLICE } from '@agent/core/constants';
 import type { FileLocation } from '@utils/files';
 import {
   getProviderStreaming,

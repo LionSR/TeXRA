@@ -27,7 +27,7 @@ import { bestConnectionMethod } from '@latex';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
-import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
+import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@agent/core/constants';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 

@@ -108,7 +108,7 @@ import {
 } from '@tools/codexConfig';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
-import { agentConfigToTaskState } from '@utils/config/configConversion';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
   getToolUseMemoryEnabled,
   setToolUseMemoryEnabled,
