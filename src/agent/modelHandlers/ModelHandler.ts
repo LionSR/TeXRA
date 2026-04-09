@@ -22,8 +22,11 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 
-// Local imports - frontend
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
+// Local imports - platform
+import { platform } from '@platform/platform';
+
+// Local imports - model
+import { getApiKey, type ApiProvider } from '@model/apiProviders';
 
 // Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
@@ -286,7 +289,7 @@ export abstract class ModelHandler<
     errorMessage: string,
   ): Promise<string> {
     try {
-      return await SecretManager.getApiKey(provider);
+      return await getApiKey(platform().secrets, provider);
     } catch {
       throw new Error(errorMessage);
     }

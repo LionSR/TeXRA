@@ -1,45 +1,29 @@
-// Third-party imports
-import * as vscode from 'vscode';
+// Platform imports
+import { getStorageProvider } from '@agent/core/storage';
 
 // Local imports - fs
 import { RelativeFS } from './relativeFS';
 
 /**
- * StorageFS provides a unified interface for VS Code extension storage operations.
+ * StorageFS provides a unified interface for extension storage operations.
  * Supports both workspace storage (per-workspace) and global storage (shared across workspaces).
+ *
+ * Storage paths are provided by the platform's StorageProvider, which is set
+ * via initPlatform() at startup. Default: ~/.texra/ paths.
  */
 export class StorageFS extends RelativeFS {
-  private static context: vscode.ExtensionContext | null = null;
-
-  /**
-   * Initialize StorageFS with the extension context
-   */
-  public static initialize(context: vscode.ExtensionContext): void {
-    this.context = context;
-  }
-
   /**
    * Return the workspace storage base path (per-workspace)
    */
   protected static override getBasePath(): string {
-    if (!this.context?.storageUri) {
-      throw new Error(
-        'StorageFS not initialized. Call StorageFS.initialize(context) first.',
-      );
-    }
-    return this.context.storageUri.fsPath;
+    return getStorageProvider().getStoragePath();
   }
 
   /**
    * Get the global storage base path (shared across workspaces)
    */
   public static getGlobalPath(): string {
-    if (!this.context?.globalStorageUri) {
-      throw new Error(
-        'StorageFS not initialized. Call StorageFS.initialize(context) first.',
-      );
-    }
-    return this.context.globalStorageUri.fsPath;
+    return getStorageProvider().getGlobalStoragePath();
   }
 
   // Inherit file operations from RelativeFS
