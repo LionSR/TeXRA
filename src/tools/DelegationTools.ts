@@ -32,7 +32,7 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - logger
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 
 // Local imports - model
 import {

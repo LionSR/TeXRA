@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { joinLatexPath } from '@utils/core/pathCore';
