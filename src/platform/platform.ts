@@ -3,34 +3,31 @@
  *
  * Single frozen context initialized once at startup by the host
  * (VS Code, CLI, Electron). All core business logic accesses
- * platform services through `platform()`.
+ * platform services through `platform()` or the convenience
+ * facades in `@agent/core/`.
  *
  * Pattern: Composition Root (Mark Seemann) + Frozen Object.
- * Industry precedent: Go's context.Context, React's useContext,
- * .NET's IServiceProvider.
  */
-import type {
-  PlatformConfig,
-  PlatformState,
-  PlatformLog,
-  PlatformFS,
-  PlatformWorkspace,
-  PlatformStorage,
-  PlatformSecrets,
-} from './interfaces';
+import type { ConfigProvider } from './interfaces/config';
+import type { StateStore } from './interfaces/state';
+import type { LogBackend } from './interfaces/log';
+import type { FileSystemProvider } from './interfaces/filesystem';
+import type { WorkspaceProvider } from './interfaces/workspace';
+import type { StorageProvider } from './interfaces/storage';
+import type { PlatformSecrets } from './secrets';
 
 /**
  * The complete set of platform services a host must provide.
  * Frozen after initialization — immutable for the lifetime of the process.
  */
 export interface Platform {
-  readonly config: PlatformConfig;
-  readonly globalState: PlatformState;
-  readonly workspaceState: PlatformState;
-  readonly log: PlatformLog;
-  readonly fs: PlatformFS;
-  readonly workspace: PlatformWorkspace;
-  readonly storage: PlatformStorage;
+  readonly config: ConfigProvider;
+  readonly globalState: StateStore;
+  readonly workspaceState: StateStore;
+  readonly log: LogBackend;
+  readonly fs: FileSystemProvider;
+  readonly workspace: WorkspaceProvider;
+  readonly storage: StorageProvider;
   readonly secrets: PlatformSecrets;
 }
 
@@ -39,34 +36,6 @@ let _platform: Readonly<Platform> | null = null;
 /**
  * Initialize the platform. Must be called exactly once at startup,
  * before any core business logic runs.
- *
- * @example VS Code
- * ```typescript
- * initPlatform({
- *   config: { get: getConfig },
- *   globalState: context.globalState,
- *   workspaceState: context.workspaceState,
- *   log: logger,
- *   fs: new VscodeFileSystem(),
- *   workspace: new VscodeWorkspace(),
- *   storage: new VscodeStorage(context),
- *   secrets: new VscodeSecrets(context),
- * });
- * ```
- *
- * @example CLI
- * ```typescript
- * initPlatform({
- *   config: new FileConfig('~/.texra/config.json'),
- *   globalState: new JsonFileStore('~/.texra/state.json'),
- *   workspaceState: createMemoryStore(),
- *   log: consoleBackend,
- *   fs: nodeBackend,
- *   workspace: { getWorkspacePath: () => cwd(), asRelativePath: ... },
- *   storage: { getStoragePath: () => '~/.texra/storage', ... },
- *   secrets: new EnvSecrets(),
- * });
- * ```
  */
 export function initPlatform(services: Platform): void {
   _platform = Object.freeze(services);
@@ -95,14 +64,3 @@ export function platform(): Readonly<Platform> {
 export function tryPlatform(): Readonly<Platform> | null {
   return _platform;
 }
-
-// Re-export the interface types for convenience
-export type {
-  PlatformConfig,
-  PlatformState,
-  PlatformLog,
-  PlatformFS,
-  PlatformWorkspace,
-  PlatformStorage,
-  PlatformSecrets,
-};

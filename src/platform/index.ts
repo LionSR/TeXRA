@@ -1,17 +1,13 @@
 /**
- * Platform Abstraction Layer — public API.
+ * Platform Abstraction Layer.
  *
- * Hosts call `initPlatform()` at startup. Core code calls `platform()`
- * to access services, or uses the convenience facades in `@agent/core/`.
+ * Import structure (no re-exports — import from the source):
+ *
+ *   Composition root:  import { initPlatform, platform } from '@platform/platform'
+ *   Interfaces:        import type { ConfigProvider } from '@platform/interfaces/config'
+ *   Defaults:          import { nodeFilesystem } from '@platform/defaults/nodeFilesystem'
+ *   Secrets:           import type { PlatformSecrets } from '@platform/secrets'
  */
+
+// Only export the composition root — everything else is imported directly.
 export { initPlatform, platform, tryPlatform, type Platform } from './platform';
-export type {
-  PlatformConfig,
-  PlatformState,
-  PlatformLog,
-  PlatformFS,
-  PlatformWorkspace,
-  PlatformStorage,
-  PlatformSecrets,
-} from './interfaces';
-export type { FileStat, FileType } from './interfaces';

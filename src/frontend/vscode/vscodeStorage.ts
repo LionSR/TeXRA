@@ -5,7 +5,7 @@
  */
 import * as vscode from 'vscode';
 
-import type { StorageProvider } from '@agent/core/storage';
+import type { StorageProvider } from '@platform/interfaces/storage';
 
 export class VscodeStorage implements StorageProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}

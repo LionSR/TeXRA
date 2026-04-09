@@ -1,23 +1,15 @@
 /**
- * Platform-agnostic state store facade for the agent core.
- *
- * Thin wrapper over `platform().globalState` and `platform().workspaceState`.
- * Consumer code imports this module for convenience; the canonical
- * definition lives in `@platform/interfaces`.
+ * State store facade — convenience wrapper over platform().globalState / workspaceState.
  */
 import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces/state';
 
-export interface StateStore {
-  get<T>(key: string, defaultValue?: T): T;
-  update(key: string, value: unknown): PromiseLike<void>;
-}
+export type { StateStore };
 
-/** Global state (cross-workspace). */
 export function getGlobalState(): StateStore {
   return platform().globalState;
 }
 
-/** Workspace-scoped state. */
 export function getWorkspaceState(): StateStore {
   return platform().workspaceState;
 }

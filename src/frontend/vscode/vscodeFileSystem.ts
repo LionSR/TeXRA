@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import type {
   FileSystemProvider,
   FileStat,
-} from '@agent/core/filesystem';
+} from '@platform/interfaces/filesystem';
 
 export class VscodeFileSystem implements FileSystemProvider {
   async stat(target: string): Promise<FileStat> {

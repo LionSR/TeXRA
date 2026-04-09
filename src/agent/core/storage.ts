@@ -1,21 +1,11 @@
 /**
- * Platform-agnostic storage path provider facade for the agent core.
- *
- * Thin wrapper over `platform().storage`. Consumer code imports this
- * module for convenience; the canonical definition lives in
- * `@platform/interfaces`.
+ * Storage facade — convenience wrapper over platform().storage.
  */
 import { platform } from '@platform/platform';
+import type { StorageProvider } from '@platform/interfaces/storage';
 
-export interface StorageProvider {
-  /** Per-workspace storage root path. */
-  getStoragePath(): string;
+export type { StorageProvider };
 
-  /** Cross-workspace global storage root path. */
-  getGlobalStoragePath(): string;
-}
-
-/** Get the active storage provider. */
 export function getStorageProvider(): StorageProvider {
   return platform().storage;
 }
