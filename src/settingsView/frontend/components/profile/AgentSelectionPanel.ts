@@ -38,7 +38,7 @@ const SOURCE_DISPLAY_NAMES: Record<string, string> = {
   [AGENT_SOURCE.BUILT_IN_WORKFLOW]: 'Built-in',
   [AGENT_SOURCE.BUILT_IN_TOOL_USE]: 'Built-in',
   [AGENT_SOURCE.CUSTOM]: 'Custom',
-  [AGENT_SOURCE.REMOTE]: 'Online',
+  [AGENT_SOURCE.REMOTE]: 'Remote',
 };
 
 function isBuiltIn(source: string): boolean {
@@ -567,7 +567,7 @@ export class AgentSelectionPanel extends LitElement {
             ? html`<span title="Can produce multiple output files">⧉</span>`
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<span title="Online agent">☁</span>`
+            ? html`<span title="Remote agent">☁</span>`
             : nothing}
           ${agent.source === AGENT_SOURCE.CUSTOM
             ? html`<span title="Custom agent">★</span>`
@@ -655,8 +655,8 @@ export class AgentSelectionPanel extends LitElement {
               >`
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<span class="agent-source-badge" title="Online agent"
-                >☁ Online</span
+            ? html`<span class="agent-source-badge" title="Remote agent"
+                >☁ Remote</span
               >`
             : nothing}
         </div>
