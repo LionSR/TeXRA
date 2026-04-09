@@ -117,8 +117,24 @@ async function direntFileType(
 const nodeBackend: FileSystemProvider = {
   async stat(target: string): Promise<FileStat> {
     const lstats = await fs.promises.lstat(target);
+    const type = await lstatFileType(lstats, target);
+    // For symlinks, use stat (follows link) for size/timestamps to match
+    // vscode.workspace.fs.stat behavior. For non-symlinks, lstat === stat.
+    if (lstats.isSymbolicLink()) {
+      try {
+        const stats = await fs.promises.stat(target);
+        return {
+          type,
+          ctime: stats.ctimeMs,
+          mtime: stats.mtimeMs,
+          size: stats.size,
+        };
+      } catch {
+        // Dangling symlink — fall through to lstat metadata
+      }
+    }
     return {
-      type: await lstatFileType(lstats, target),
+      type,
       ctime: lstats.ctimeMs,
       mtime: lstats.mtimeMs,
       size: lstats.size,
@@ -175,6 +191,7 @@ const nodeBackend: FileSystemProvider = {
       await fs.promises.cp(source, dest, {
         recursive: true,
         force: !!options?.overwrite,
+        errorOnExist: !options?.overwrite,
       });
     } else {
       const flag = options?.overwrite ? 0 : fs.constants.COPYFILE_EXCL;
