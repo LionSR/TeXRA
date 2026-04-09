@@ -391,7 +391,10 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div class="multi-agent-container tab-content-container">
         <div class="how-it-works">
-          <strong>The orchestrator reads your paper and figures out what to do.</strong>
+          <strong
+            >The orchestrator reads your paper and figures out what to
+            do.</strong
+          >
           It breaks the work into tasks and hands each one to the right agent.
           <ol class="how-it-works-steps">
             <li class="how-it-works-step">
@@ -404,15 +407,18 @@ export class MultiAgentTab extends LitElement {
             <li class="how-it-works-step">
               <span class="step-number">2</span>
               <span
-                ><strong>Go to the main view</strong>, select orchestrator from
-                the agent dropdown, and click Execute.</span
+                ><strong>Select orchestrator</strong> from the Interactive agent
+                dropdown in the main view (look for the 🎯 icon), then click
+                Execute.</span
               >
             </li>
             <li class="how-it-works-step">
               <span class="step-number">3</span>
               <span
-                ><strong>Approve each task</strong> as it comes up in the
-                Progress view -- or turn on auto-approve below.</span
+                ><strong>Approve tasks</strong> in the Progress view as they
+                come in -- press <strong>y</strong> to approve or
+                <strong>n</strong> to reject. Or turn on auto-approve
+                below.</span
               >
             </li>
           </ol>

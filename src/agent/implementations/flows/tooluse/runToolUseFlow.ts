@@ -114,7 +114,10 @@ function resolveTools(
 
   // Inject memory tool into all tool-use agents (including subagents)
   // so they share the same /memories directory.
-  const memoryEnabled = getGlobalState().get<boolean>(GlobalStateKey.MEMORY_ENABLED, true);
+  const memoryEnabled = getGlobalState().get<boolean>(
+    GlobalStateKey.MEMORY_ENABLED,
+    true,
+  );
   if (memoryEnabled && !resolved.some((d) => d.name === 'memory')) {
     const memoryTool = registry.get('memory');
     if (memoryTool) {

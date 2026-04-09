@@ -17,7 +17,7 @@ Follow the checklist on the left. Each step links to the right command.
 5. **Use the orchestrator** -- It'll coordinate everything for you.
 6. **Pick your field** -- Choose a preset (Physicist, Mathematician, Lean) so the orchestrator has the right tools.
 7. **Auto-extract figures** -- Optional. Pulls out figures and TikZ blocks before editing.
-8. **Hit Execute!** -- The orchestrator proposes tasks for you to approve in the Progress view.
+8. **Hit Execute!** -- The orchestrator proposes tasks for you to approve in the Progress view. Press **y** to approve or **n** to reject.
 9. **Check what it did** -- Compare the output against your original with VS Code's diff view.
 10. **Clean up** -- Pack results into History, or delete them to start fresh.
 
