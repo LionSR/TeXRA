@@ -673,10 +673,13 @@ export class DelegateAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
 
+Agent selection: prefer specialized agents over chat (the general-purpose fallback). Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks.
+
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example (new): agent=chat, instruction="Fix the \\cite commands on slides 3 and 7 in slides/talk.tex using refs.bib."
+Example (new, specialized): agent=research, instruction="Derive the asymptotic expansion of the partition function in appendix_A.tex using saddle-point methods. Verify with Wolfram."
+Example (new, general): agent=chat, instruction="Fix the \\cite commands on slides 3 and 7 in slides/talk.tex using refs.bib."
 Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."`,
   schema: DelegateAgentInputSchema,
 }) {
