@@ -64,6 +64,7 @@ export const MAIN_VIEW_COMMANDS = {
   SHOW_AGENT_HISTORY: 'showAgentHistory',
   OPEN_AGENT_SETTINGS: 'openAgentSettings',
   OPEN_MODEL_SETTINGS: 'openModelSettings',
+  OPEN_MULTI_AGENT_SETTINGS: 'openMultiAgentSettings',
   CLIPBOARD_IMAGE: 'clipboardImage',
   OPEN_SET_API_KEY: 'openSetApiKey',
   OPEN_SET_PROVIDER_API_KEY: 'openSetProviderApiKey',
