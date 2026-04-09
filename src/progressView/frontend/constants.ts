@@ -231,7 +231,7 @@ export const FILTER_BUTTONS: readonly FilterButton[] = [
   },
   {
     id: ELEMENT_IDS.FILTER_TOOL_BTN,
-    label: 'Chat',
+    label: 'Interactive',
     filter: 'toolUse',
   },
 ];
