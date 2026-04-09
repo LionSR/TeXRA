@@ -60,6 +60,9 @@ import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
+import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
+import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -123,17 +126,19 @@ export async function activate(context: vscode.ExtensionContext) {
   await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
 
   SecretManager.initialize(context);
-  StorageFS.initialize(context);
   agentDirectories.initialize(context);
   initializePolishModel(context.extensionPath);
-  await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   initPlatform({
     config: { get: getConfig },
     globalState: context.globalState,
     workspaceState: context.workspaceState,
     log: logger,
+    fs: new VscodeFileSystem(),
+    workspace: new VscodeWorkspace(),
+    storage: new VscodeStorage(context),
   });
+  await StorageFS.ensureDir(TASK_RUNS_DIR);
   FileLister.initialize(context);
   initializeServerSideKeyAccess(context, {
     isAuthenticated: () => SupabaseClient.isAuthenticated(),
