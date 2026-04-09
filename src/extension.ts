@@ -48,12 +48,6 @@ import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
-import {
-  parseCodexSandboxMode,
-  setCodexSandboxModeGetter,
-  parseCodexReasoningEffort,
-  setCodexReasoningEffortGetter,
-} from '@tools/codexConfig';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
@@ -233,23 +227,6 @@ export async function activate(context: vscode.ExtensionContext) {
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
   setLinterProvider(getLinterMessages);
   setOpenBuildDisplay(openBuildDisplayIfTex);
-  setCodexSandboxModeGetter(() =>
-    parseCodexSandboxMode(
-      workspaceSM.get<string>(
-        WorkspaceStateKey.CODEX_SANDBOX_MODE,
-        'workspace-write',
-      ) ?? 'workspace-write',
-    ),
-  );
-  setCodexReasoningEffortGetter(() =>
-    parseCodexReasoningEffort(
-      workspaceSM.get<string>(
-        WorkspaceStateKey.CODEX_REASONING_EFFORT,
-        'high',
-      )!,
-    ),
-  );
-
   applyGitAuthorConfig();
 
   setToolNotificationHandler((message, actionCommand) => {
