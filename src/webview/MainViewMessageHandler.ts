@@ -130,6 +130,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         ),
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: () =>
         safeExecuteCommand('texra.showModels', [], this.viewName),
+      [MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS]: () =>
+        safeExecuteCommand('texra.showMultiAgent', [], this.viewName),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
         if (!m.customDirSet) {
           await safeExecuteCommand('texra.showAgents', [], this.viewName);
