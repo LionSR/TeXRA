@@ -6,9 +6,9 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
-import { loadAgents } from '@agent/index';
+import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
-import { initPlatform } from '@agent/core/platform';
+import { initPlatform } from '@platform/platform';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
@@ -48,18 +48,20 @@ import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
-import {
-  parseCodexSandboxMode,
-  setCodexSandboxModeGetter,
-  parseCodexReasoningEffort,
-  setCodexReasoningEffortGetter,
-} from '@tools/codexConfig';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
+import { setLinterProvider } from '@tools/DiagnosticsTool';
+import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
+import { getLinterMessages } from '@frontend/latex/linter';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
+import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
+import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
+import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -123,17 +125,21 @@ export async function activate(context: vscode.ExtensionContext) {
   await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
 
   SecretManager.initialize(context);
-  StorageFS.initialize(context);
   agentDirectories.initialize(context);
+  setAgentDirectories(agentDirectories);
   initializePolishModel(context.extensionPath);
-  await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   initPlatform({
     config: { get: getConfig },
     globalState: context.globalState,
     workspaceState: context.workspaceState,
     log: logger,
+    fs: new VscodeFileSystem(),
+    workspace: new VscodeWorkspace(),
+    storage: new VscodeStorage(context),
+    secrets: new VscodeSecrets(context),
   });
+  await StorageFS.ensureDir(TASK_RUNS_DIR);
   FileLister.initialize(context);
   initializeServerSideKeyAccess(context, {
     isAuthenticated: () => SupabaseClient.isAuthenticated(),
@@ -219,23 +225,8 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
-  setCodexSandboxModeGetter(() =>
-    parseCodexSandboxMode(
-      workspaceSM.get<string>(
-        WorkspaceStateKey.CODEX_SANDBOX_MODE,
-        'workspace-write',
-      ) ?? 'workspace-write',
-    ),
-  );
-  setCodexReasoningEffortGetter(() =>
-    parseCodexReasoningEffort(
-      workspaceSM.get<string>(
-        WorkspaceStateKey.CODEX_REASONING_EFFORT,
-        'high',
-      )!,
-    ),
-  );
-
+  setLinterProvider(getLinterMessages);
+  setOpenBuildDisplay(openBuildDisplayIfTex);
   applyGitAuthorConfig();
 
   setToolNotificationHandler((message, actionCommand) => {

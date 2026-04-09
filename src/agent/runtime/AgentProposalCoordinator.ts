@@ -13,7 +13,6 @@
 
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { AgentProposal } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -70,8 +69,8 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
   ): Promise<ProposalResult> {
     const { proposalId, proposal, timeoutMs } = options;
 
-    // Show progress view to ensure user sees the proposal
-    void safeExecuteCommand('texra.showProgressView');
+    // Request host to show progress view so user sees the proposal
+    bus.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
     bus.emit('setActiveStream', { streamId });
