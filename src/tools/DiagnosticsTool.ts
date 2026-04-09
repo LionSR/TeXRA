@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Internal imports
 import { toErrorMessage } from '@common/errors';
 import { getLinterMessages } from '@frontend/latex/linter';
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import {
   countBySeverity,
   formatCounts,

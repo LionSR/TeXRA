@@ -12,7 +12,7 @@ import { sync as globSync } from 'glob';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import { getConfig } from '@utils/config';
+import { getConfig } from '@agent/core/config';
 import { WorkspaceFS, pathToLocation } from '@utils/files';
 
 /** Interface for entries that support LaTeX preview operations */

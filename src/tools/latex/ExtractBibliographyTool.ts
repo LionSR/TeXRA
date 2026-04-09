@@ -11,7 +11,7 @@ import { ToolError } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config';
+import { getConfig } from '@agent/core/config';
 
 const ExtractBibliographyInputSchema = z.strictObject({
   texPath: z
