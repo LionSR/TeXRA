@@ -447,20 +447,7 @@ export class MainApp extends MainAppBase {
     this.model.set(state.model);
     this.commit.set(state.commit);
 
-    // Restore per-mode instructions. Migrate legacy single `instruction`:
-    // if neither per-mode field has content but legacy `instruction` does,
-    // assign it to the active session type so the draft isn't lost.
-    const wf =
-      state.workflowInstruction ||
-      (state.sessionType === SESSION_TYPES.WORKFLOW ? state.instruction : '');
-    const tu =
-      state.toolUseInstruction ||
-      (state.sessionType !== SESSION_TYPES.WORKFLOW ? state.instruction : '');
-    this.workflowInstruction.set(wf);
-    this.toolUseInstruction.set(tu);
-    this.instruction.set(
-      state.sessionType === SESSION_TYPES.WORKFLOW ? wf : tu,
-    );
+    this.restorePerModeInstructions(state);
     this.singleFiles.set({
       inputFile: state.inputFile,
       referenceFile: state.referenceFile,
@@ -534,6 +521,39 @@ export class MainApp extends MainAppBase {
     } else {
       this.toolUseInstruction.set(value);
     }
+  }
+
+  /** Stash instruction for the mode being left, restore for the mode being entered. */
+  private swapModeInstruction(from: SessionType, to: SessionType): void {
+    if (from === to) return;
+    if (from === SESSION_TYPES.WORKFLOW) {
+      this.workflowInstruction.set(this.instruction.get());
+    } else {
+      this.toolUseInstruction.set(this.instruction.get());
+    }
+    this.instruction.set(
+      to === SESSION_TYPES.WORKFLOW
+        ? this.workflowInstruction.get()
+        : this.toolUseInstruction.get(),
+    );
+  }
+
+  /**
+   * Restore per-mode instructions from persisted state, migrating the legacy
+   * single `instruction` field for users who haven't saved per-mode fields yet.
+   */
+  private restorePerModeInstructions(state: MainViewPersistedState): void {
+    const wf =
+      state.workflowInstruction ||
+      (state.sessionType === SESSION_TYPES.WORKFLOW ? state.instruction : '');
+    const tu =
+      state.toolUseInstruction ||
+      (state.sessionType !== SESSION_TYPES.WORKFLOW ? state.instruction : '');
+    this.workflowInstruction.set(wf);
+    this.toolUseInstruction.set(tu);
+    this.instruction.set(
+      state.sessionType === SESSION_TYPES.WORKFLOW ? wf : tu,
+    );
   }
 
   /**
@@ -893,18 +913,7 @@ export class MainApp extends MainAppBase {
       this.toolUseAgent.set(state.toolUseAgent);
       this.model.set(state.model);
       this.commit.set(state.commit);
-      // Restore per-mode instructions (same migration as restorePersistedState)
-      const wf =
-        state.workflowInstruction ||
-        (state.sessionType === SESSION_TYPES.WORKFLOW ? state.instruction : '');
-      const tu =
-        state.toolUseInstruction ||
-        (state.sessionType !== SESSION_TYPES.WORKFLOW ? state.instruction : '');
-      this.workflowInstruction.set(wf);
-      this.toolUseInstruction.set(tu);
-      this.instruction.set(
-        state.sessionType === SESSION_TYPES.WORKFLOW ? wf : tu,
-      );
+      this.restorePerModeInstructions(state);
       this.singleFiles.set({
         inputFile: state.inputFile,
         referenceFile: state.referenceFile,
@@ -1156,20 +1165,9 @@ export class MainApp extends MainAppBase {
     const prev = this.sessionType.get();
     if (parsed === prev) return;
 
-    // Stash current instruction into the mode being left
-    if (prev === SESSION_TYPES.WORKFLOW) {
-      this.workflowInstruction.set(this.instruction.get());
-    } else {
-      this.toolUseInstruction.set(this.instruction.get());
-    }
-    // Restore instruction for the mode being entered
-    this.instruction.set(
-      parsed === SESSION_TYPES.WORKFLOW
-        ? this.workflowInstruction.get()
-        : this.toolUseInstruction.get(),
-    );
-
+    this.swapModeInstruction(prev, parsed);
     this.sessionType.set(parsed);
+    this.refreshInstructionPlaceholder(false);
     if (parsed === SESSION_TYPES.TOOL_USE) {
       this.outputFilesActive.set(false);
       this.multiFilesVisible.set({
@@ -1187,20 +1185,7 @@ export class MainApp extends MainAppBase {
     } else {
       this.toolUseAgent.set(value);
     }
-    // Stash/restore instructions when session type changes via agent selection
-    const prev = this.sessionType.get();
-    if (prev !== sessionType) {
-      if (prev === SESSION_TYPES.WORKFLOW) {
-        this.workflowInstruction.set(this.instruction.get());
-      } else {
-        this.toolUseInstruction.set(this.instruction.get());
-      }
-      this.instruction.set(
-        sessionType === SESSION_TYPES.WORKFLOW
-          ? this.workflowInstruction.get()
-          : this.toolUseInstruction.get(),
-      );
-    }
+    this.swapModeInstruction(this.sessionType.get(), sessionType);
     this.sessionType.set(sessionType);
     this.refreshInstructionPlaceholder(false);
     this.saveState();
@@ -1257,6 +1242,7 @@ export class MainApp extends MainAppBase {
   ): void {
     const sessionType = parseSessionType(message.sessionType ?? undefined);
     if (sessionType) {
+      this.swapModeInstruction(this.sessionType.get(), sessionType);
       this.sessionType.set(sessionType);
     }
     if (message.agentId) {
