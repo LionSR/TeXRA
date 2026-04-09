@@ -11,8 +11,8 @@ import { getAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
+import * as logger from '@agent/core/logger';
 import { bus } from '@eventBus/ProgressEventBus';
-import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 

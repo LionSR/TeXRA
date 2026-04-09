@@ -31,6 +31,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 
 // Local imports - common
+import { getConfig } from '@agent/core/config';
 import {
   getSdkErrorMessage,
   isContextWindowError,
@@ -44,7 +45,6 @@ import replacementEngine from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { getConfig } from '@utils/config';
 import { flexibleFS, type FileLocation } from '@utils/files';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { objectToLogString } from '@utils/text/stringUtils';

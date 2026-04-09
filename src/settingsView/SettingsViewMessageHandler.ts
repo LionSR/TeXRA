@@ -23,6 +23,7 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { getHelperModelName } from '@agent/runtime/helperModel';
 import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -92,6 +93,10 @@ import {
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import {
+  parseCodexSandboxMode,
+  parseCodexReasoningEffort,
+} from '@tools/codexConfig';
+import {
   MEMORY_STORAGE_ROOT,
   MAX_PINNED_MEMORIES,
 } from '@tools/memory/constants';
@@ -102,17 +107,9 @@ import {
   countPinnedMemories,
 } from '@tools/memory/memoryMeta';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
-import {
-  parseCodexSandboxMode,
-  parseCodexReasoningEffort,
-} from '@tools/codexConfig';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
-import { agentConfigToTaskState } from '@utils/config/configConversion';
-import {
-  getToolUseMemoryEnabled,
-  setToolUseMemoryEnabled,
-} from '@utils/config/constants';
+import { setToolUseMemoryEnabled } from '@utils/config/constants';
 import {
   getGlobalStreaming,
   setGlobalStreaming,
@@ -599,7 +596,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    const enabled = getToolUseMemoryEnabled();
+    const enabled = globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true;
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
       enabled,

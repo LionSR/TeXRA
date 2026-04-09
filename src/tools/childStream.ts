@@ -7,6 +7,7 @@ import {
   trackExecution,
   untrackExecution,
 } from '@agent/runtime/executionRegistry';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - event bus
 import { toErrorMessage } from '@common/errors';
@@ -21,7 +22,6 @@ import { STREAM_STATUS } from '@shared/schemas';
 
 // Local imports - utils
 import { formatDuration } from '@utils/core';
-import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 interface CreateChildStreamOptions {
