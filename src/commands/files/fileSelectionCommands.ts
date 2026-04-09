@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors';
 import { FILE_SELECTION_COMMAND_IDS, getFilterExtensions } from '@common/files';
-import { fileLister } from '@frontend/files';
+import { getFileLister } from '@frontend/files';
 import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -110,11 +110,11 @@ export function registerFileSelectionCommands(
     ),
     vscode.commands.registerCommand(
       FILE_SELECTION_COMMAND_IDS.refreshInputFiles,
-      () => fileLister.list('input'),
+      () => getFileLister().list('input'),
     ),
     vscode.commands.registerCommand(
       FILE_SELECTION_COMMAND_IDS.refreshBaseFiles,
-      () => fileLister.list('input'),
+      () => getFileLister().list('input'),
     ),
   );
 }
