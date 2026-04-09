@@ -9,11 +9,20 @@ import path from 'path';
 
 import { sync as globSync } from 'glob';
 
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { getConfig } from '@agent/core/config';
-import { WorkspaceFS, pathToLocation } from '@utils/files';
+import { WorkspaceFS, pathToLocation, type FileLocation } from '@utils/files';
+
+type BuildDisplayFn = (
+  location: FileLocation,
+  options?: { preserveFocus?: boolean },
+) => Promise<void>;
+let openBuildDisplayIfTex: BuildDisplayFn = async () => {};
+/** Inject the VS Code LaTeX build+display function. Default: no-op. */
+export function setOpenBuildDisplay(fn: BuildDisplayFn): void {
+  openBuildDisplayIfTex = fn;
+}
 
 /** Interface for entries that support LaTeX preview operations */
 export interface LatexPreviewEntry {

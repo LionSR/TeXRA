@@ -3,8 +3,15 @@ import { z } from 'zod';
 
 // Internal imports
 import { toErrorMessage } from '@common/errors';
-import { getLinterMessages } from '@frontend/latex/linter';
 import * as logger from '@agent/core/logger';
+import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+
+type LinterProvider = (path: string) => Promise<GenericDiagnostic[]>;
+let linterProvider: LinterProvider = async () => [];
+/** Inject the VS Code linter diagnostics provider. Default: returns empty. */
+export function setLinterProvider(provider: LinterProvider): void {
+  linterProvider = provider;
+}
 import {
   countBySeverity,
   formatCounts,
@@ -35,7 +42,7 @@ export class DiagnosticsTool extends defineTool({
     const { command, path } = input;
 
     try {
-      const messages = await getLinterMessages(path);
+      const messages = await linterProvider(path);
       const counts = countBySeverity(messages);
       const header = `${path}: ${formatCounts(counts)}`;
       const summary = `Diagnostics ${command} for ${path}`;

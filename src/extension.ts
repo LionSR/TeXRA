@@ -57,6 +57,10 @@ import {
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
+import { setLinterProvider } from '@tools/DiagnosticsTool';
+import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
+import { getLinterMessages } from '@frontend/latex/linter';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
@@ -227,6 +231,8 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  setLinterProvider(getLinterMessages);
+  setOpenBuildDisplay(openBuildDisplayIfTex);
   setCodexSandboxModeGetter(() =>
     parseCodexSandboxMode(
       workspaceSM.get<string>(
