@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getExecutionStore, registerExecution } from '@agent/storage';
-import { getAgent, getVisibleAgents } from '@agent/index/agentRegistry';
+import { getVisibleAgents } from '@agent/index/agentRegistry';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -532,20 +532,13 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
-    // Validate agent exists and is a workflow agent
-    const agentEntry = getAgent(input.agent);
+    // Validate agent is visible and is a workflow agent
+    const visible = getVisibleAgents('workflow');
+    const agentEntry = visible.find((a) => a.name === input.agent);
     if (!agentEntry) {
-      const available = getVisibleAgents('workflow')
-        .map((a) => a.name)
-        .join(', ');
+      const available = visible.map((a) => a.name).join(', ');
       throw new Error(
         `Unknown workflow agent '${input.agent}'. Available: ${available}`,
-      );
-    }
-
-    if (agentEntry.category !== AgentCategory.Workflow) {
-      throw new Error(
-        `'${input.agent}' is not a workflow agent. Use delegate_agent for tool-use agents.`,
       );
     }
 
@@ -693,20 +686,13 @@ Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliograp
       );
     }
 
-    // Validate agent exists and is a tool-use agent
-    const agentEntry = getAgent(input.agent);
+    // Validate agent is visible and is a tool-use agent
+    const visible = getVisibleAgents('toolUse');
+    const agentEntry = visible.find((a) => a.name === input.agent);
     if (!agentEntry) {
-      const available = getVisibleAgents('toolUse')
-        .map((a) => a.name)
-        .join(', ');
+      const available = visible.map((a) => a.name).join(', ');
       throw new Error(
         `Unknown tool-use agent '${input.agent}'. Available: ${available}`,
-      );
-    }
-
-    if (agentEntry.category !== AgentCategory.ToolUse) {
-      throw new Error(
-        `'${input.agent}' is not a tool-use agent. Use delegate_workflow for document processing.`,
       );
     }
 
