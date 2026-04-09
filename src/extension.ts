@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
-import { loadAgents } from '@agent/index';
+import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { initPlatform } from '@platform/platform';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
@@ -128,6 +128,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   SecretManager.initialize(context);
   agentDirectories.initialize(context);
+  setAgentDirectories(agentDirectories);
   initializePolishModel(context.extensionPath);
   initializeStateManagers(context);
   initPlatform({
