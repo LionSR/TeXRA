@@ -10,8 +10,10 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-// Local imports - shared styles
+// Local imports
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import { postMessage } from '@shared/vscode';
 
 @customElement('orchestrator-banner')
 export class OrchestratorBanner extends LitElement {
@@ -72,6 +74,20 @@ export class OrchestratorBanner extends LitElement {
         outline: var(--border-thin) solid var(--vscode-focusBorder);
         outline-offset: 1px;
       }
+
+      .settings-link {
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        text-decoration: underline;
+        padding: 0;
+        font: inherit;
+      }
+
+      .settings-link:hover {
+        opacity: 0.8;
+      }
     `,
   ];
 
@@ -82,20 +98,28 @@ export class OrchestratorBanner extends LitElement {
     this.dismissed = true;
   }
 
+  private handleOpenMultiAgentSettings(): void {
+    postMessage(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS);
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (!this.visible || this.dismissed) return nothing;
 
     return html`
       <div class="orchestrator-banner">
-        <strong>Orchestrator selected.</strong> Hit Execute and it will read
-        your paper, figure out what needs work, and propose tasks for you to
-        approve in the Progress view. Press <strong>y</strong>/<strong
-          >n</strong
-        >
-        to approve or reject quickly.
+        <strong>Orchestrator selected.</strong> Hit Execute to analyze your
+        paper and generate improvement tasks. Review and approve them in
+        Progress — press <strong>y</strong>/<strong>n</strong> to approve or
+        reject quickly.
         <div class="orchestrator-banner-footer">
           <span class="orchestrator-tip"
-            >Configure auto-approve and presets in Multi-Agent settings.</span
+            >Customize auto-approve rules and task presets in
+            <button
+              class="settings-link"
+              @click=${this.handleOpenMultiAgentSettings}
+            >
+              Multi-Agent settings</button
+            >.</span
           >
           <button class="got-it-btn" @click=${this.handleDismiss}>
             Got it
