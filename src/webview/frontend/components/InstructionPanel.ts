@@ -335,7 +335,7 @@ export class InstructionPanel extends LitElement {
                   value="toolUse"
                   data-session-type="toolUse"
                   ?checked=${session.sessionType === SESSION_TYPES.TOOL_USE}
-                  title="Interactive agents execute commands, use tools, and coordinate work"
+                  title="Chat-style agents that can run commands, browse files, and use tools — like a research assistant you talk to"
                 >
                   Interactive
                 </vscode-radio>
@@ -343,7 +343,7 @@ export class InstructionPanel extends LitElement {
                   value="workflow"
                   data-session-type="workflow"
                   ?checked=${session.sessionType === SESSION_TYPES.WORKFLOW}
-                  title="Workflow agents automate document editing tasks"
+                  title="One-shot agents that read your document, apply edits, and produce a revised file — no back-and-forth needed"
                 >
                   Workflow
                 </vscode-radio>
