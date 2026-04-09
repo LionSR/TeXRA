@@ -61,16 +61,6 @@ export function getToolUsePersistenceTtlHours(): number {
   return hours;
 }
 
-/** Determine whether the memory tool is enabled for tool-use sessions. */
-export function getToolUseMemoryEnabled(): boolean {
-  return (
-    globalSM?.get<boolean>(
-      GlobalStateKey.MEMORY_ENABLED,
-      DEFAULT_TOOL_USE_MEMORY_ENABLED,
-    ) ?? DEFAULT_TOOL_USE_MEMORY_ENABLED
-  );
-}
-
 /** Set whether the memory tool is enabled for tool-use sessions. */
 export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
   await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
@@ -96,14 +86,4 @@ export async function setToolEnabled(
     set.add(toolId);
   }
   await globalSM?.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
-}
-
-/** Get the maximum number of automatic retry attempts for model calls. */
-export function getModelRetryMaxAttempts(): number {
-  return getConfig<number>('texra.model.retry.maxAttempts', 1);
-}
-
-/** Get the backoff delay in milliseconds between retry attempts. */
-export function getModelRetryBackoffMs(): number {
-  return getConfig<number>('texra.model.retry.backoffMs', 1000);
 }

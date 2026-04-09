@@ -11,12 +11,8 @@ import {
 } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as logger from '@agent/core/logger';
-import {
-  GlobalStateKey,
-  WorkspaceStateKey,
-  globalSM,
-  workspaceSM,
-} from '@common/state';
+import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
+import { GlobalStateKey, WorkspaceStateKey } from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentKey as createKey } from '@shared/schemas/agent';
@@ -40,13 +36,11 @@ function isLegacyBuiltInKey(k: string): boolean {
 }
 
 function migrateLegacySourceKeys(): void {
-  if (!workspaceSM) return;
-
   for (const stateKey of [
     WorkspaceStateKey.ENABLED_AGENTS,
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
   ] as const) {
-    const stored = workspaceSM.get<string[]>(stateKey, []);
+    const stored = getWorkspaceState().get<string[]>(stateKey, []);
     if (!stored?.length) continue;
     if (!stored.some(isLegacyBuiltInKey)) continue;
 
@@ -55,7 +49,7 @@ function migrateLegacySourceKeys(): void {
         ? NEW_BUILTIN_PREFIX + k.slice(LEGACY_BUILTIN_PREFIX.length)
         : k,
     );
-    void workspaceSM.update(stateKey, migrated);
+    void getWorkspaceState().update(stateKey, migrated);
     logger.info(CHANNEL, `Migrated legacy builtIn keys in ${stateKey}`);
   }
 }
@@ -193,8 +187,7 @@ async function doLoad(): Promise<void> {
 
   // Apply category overrides from config
   const toolUseOverrides = new Set(
-    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ??
-      [],
+    getWorkspaceState().get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []),
   );
 
   for (const entry of allEntries) {
@@ -512,20 +505,19 @@ function persistRemoteAgentMeta(
   agentName: string,
   meta: { tools?: string[]; defaultOutputFiles?: string[] },
 ): void {
-  if (!globalSM) return;
   const stored =
-    globalSM.get<RemoteAgentMetaCache>(
+    getGlobalState().get<RemoteAgentMetaCache>(
       GlobalStateKey.REMOTE_AGENT_META_CACHE,
       {},
     ) ?? {};
   stored[agentName] = { ...stored[agentName], ...meta };
-  void globalSM.update(GlobalStateKey.REMOTE_AGENT_META_CACHE, stored);
+  void getGlobalState().update(GlobalStateKey.REMOTE_AGENT_META_CACHE, stored);
 }
 
 /** Load persisted remote agent metadata from globalState. */
 function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
   return (
-    globalSM?.get<RemoteAgentMetaCache>(
+    getGlobalState().get<RemoteAgentMetaCache>(
       GlobalStateKey.REMOTE_AGENT_META_CACHE,
       {},
     ) ?? {}
@@ -650,7 +642,7 @@ export function getVisibleAgents(
   const stateKey = isToolUse
     ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
     : WorkspaceStateKey.ENABLED_AGENTS;
-  const raw = workspaceSM?.get<string[]>(stateKey);
+  const raw = getWorkspaceState().get<string[]>(stateKey);
   return deduplicateByName(filterVisible(entries, raw));
 }
 

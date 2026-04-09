@@ -10,13 +10,13 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
+import { getConfig } from '@agent/core/config';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
-import { getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';

@@ -16,6 +16,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
+import { getConfig } from '@agent/core/config';
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
@@ -28,7 +29,6 @@ import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
-import { getConfig } from '@utils/config';
 import { delay } from '@utils/core';
 import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';

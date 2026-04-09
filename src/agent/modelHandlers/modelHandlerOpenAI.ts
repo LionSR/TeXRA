@@ -29,6 +29,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
+import { getConfig } from '@agent/core/config';
 import {
   getSdkErrorMessage,
   isContextWindowError,
@@ -40,7 +41,6 @@ import type { ToolDefinition } from '@model';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
-import { getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { computeCachePercentage } from './utils/usageNormalization';

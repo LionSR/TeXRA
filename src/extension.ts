@@ -8,7 +8,9 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { loadAgents } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
+import { setConfigProvider } from '@agent/core/config';
 import { setLogBackend } from '@agent/core/logger';
+import { setGlobalState, setWorkspaceState } from '@agent/core/stateStore';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
@@ -129,6 +131,9 @@ export async function activate(context: vscode.ExtensionContext) {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   setLogBackend(logger);
+  setConfigProvider({ get: getConfig });
+  setGlobalState(context.globalState);
+  setWorkspaceState(context.workspaceState);
   FileLister.initialize(context);
   initializeServerSideKeyAccess(context, {
     isAuthenticated: () => SupabaseClient.isAuthenticated(),

@@ -6,6 +6,10 @@ import {
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import {
+  getModelRetryBackoffMs,
+  getModelRetryMaxAttempts,
+} from '@agent/core/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { formatProviderHttpError, toErrorMessage } from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -14,10 +18,6 @@ import {
   STREAM_STATUS,
   type RetryErrorInfo,
 } from '@shared/schemas';
-import {
-  getModelRetryBackoffMs,
-  getModelRetryMaxAttempts,
-} from '@utils/config';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
