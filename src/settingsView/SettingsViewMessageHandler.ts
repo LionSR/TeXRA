@@ -596,7 +596,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    const enabled = globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true;
+    const enabled =
+      globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true;
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
       enabled,

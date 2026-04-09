@@ -42,7 +42,9 @@ export type HelperModelResult =
  * only the model name (not a full handler) is needed.
  */
 export function getHelperModelName(): string {
-  const configuredModel = getGlobalState().get<string>(GlobalStateKey.HELPER_MODEL);
+  const configuredModel = getGlobalState().get<string>(
+    GlobalStateKey.HELPER_MODEL,
+  );
   if (!isNonEmptyString(configuredModel)) {
     return DEFAULT_HELPER_MODEL;
   }

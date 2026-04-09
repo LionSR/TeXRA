@@ -187,7 +187,10 @@ async function doLoad(): Promise<void> {
 
   // Apply category overrides from config
   const toolUseOverrides = new Set(
-    getWorkspaceState().get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []),
+    getWorkspaceState().get<string[]>(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      [],
+    ),
   );
 
   for (const entry of allEntries) {
@@ -752,10 +755,9 @@ export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload
   }
 
   return {
-    workflow: sortAgentEntries(
-      getVisibleAgents('workflow'),
-      [DEFAULT_WORKFLOW_AGENT],
-    ).map(entryToOptionData),
+    workflow: sortAgentEntries(getVisibleAgents('workflow'), [
+      DEFAULT_WORKFLOW_AGENT,
+    ]).map(entryToOptionData),
     toolUse: sortAgentEntries(
       getVisibleAgents('toolUse'),
       PREFERRED_TOOL_USE_AGENTS,
