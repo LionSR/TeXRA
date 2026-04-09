@@ -34,7 +34,9 @@ export function setAgentDirectories(dirs: AgentDirectories): void {
 
 function getAgentDirectories(): AgentDirectories {
   if (!agentDirectories) {
-    throw new Error('Agent directories not initialized — call setAgentDirectories() first.');
+    throw new Error(
+      'Agent directories not initialized — call setAgentDirectories() first.',
+    );
   }
   return agentDirectories;
 }
