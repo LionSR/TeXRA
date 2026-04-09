@@ -4,9 +4,12 @@ import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
 // Local imports - auth
 import { getServerSideKeyService } from '@auth/serverKeys';
 
-// Local imports - frontend
+// Local imports - state
 import { GlobalStateKey, globalSM } from '@common/state';
-import { ApiProvider, SecretManager } from '@frontend/secretManager';
+
+// Local imports - platform
+import { platform } from '@platform/platform';
+import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
 
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
@@ -91,11 +94,11 @@ async function hasPersonalKeyForModel(
   if (config.openRouterOnly) return hasOpenRouter;
 
   const provider = config.provider as ApiProvider;
-  if (!SecretManager.API_PROVIDERS.includes(provider)) return true;
+  if (!(API_PROVIDERS as readonly string[]).includes(provider)) return true;
 
   try {
     return (
-      (await SecretManager.apiKeyExists(provider)) ||
+      (await apiKeyExists(platform().secrets, provider)) ||
       !!(config.openrouterFullName && hasOpenRouter)
     );
   } catch {
@@ -142,7 +145,7 @@ async function isModelAvailable(
 async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
   const serverSideKeyService = getServerSideKeyService();
   const [hasOpenRouter, hasServerAccess] = await Promise.all([
-    SecretManager.apiKeyExists('openRouter'),
+    apiKeyExists(platform().secrets, 'openRouter'),
     serverSideKeyService.canUseServerSideKeys(),
   ]);
   return {
