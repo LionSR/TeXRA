@@ -1,5 +1,5 @@
 name: correct
-description: Corrects typos, grammar, and LaTeX formatting issues in your document.
+description: Fixes typos, grammar, and LaTeX formatting without changing your writing style or content.
 
 settings:
   agentCategory: workflow

@@ -118,7 +118,7 @@ export class AgentHandlers {
       const entry = getAgent(key);
       if (!entry) {
         await vscode.window.showErrorMessage(
-          `Agent not found: ${data.agentName} (${data.agentSource})`,
+          `Agent "${data.agentName}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`,
         );
         return;
       }
@@ -127,7 +127,7 @@ export class AgentHandlers {
         data.variant === 'multiple' ? entry.multiplePath : entry.path;
       if (!agentPath) {
         await vscode.window.showErrorMessage(
-          `No ${data.variant} YAML path for agent: ${data.agentName}`,
+          `No configuration file found for agent "${data.agentName}". The agent definition may be incomplete — try re-creating it from the Agents tab.`,
         );
         return;
       }

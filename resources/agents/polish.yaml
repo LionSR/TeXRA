@@ -1,5 +1,5 @@
 name: polish
-description: Improves writing quality and clarity based on your specific instructions.
+description: Rewrites and restructures text to improve clarity, flow, and readability based on your instructions.
 
 settings:
   agentCategory: workflow
