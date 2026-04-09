@@ -24,7 +24,6 @@ export const FILE_TYPES = [
 
 export type FileType = (typeof FILE_TYPES)[number];
 
-
 // Time constants
 export const SHORT_SLEEP_MS = 50;
 export const REFRESH_THRESHOLD_MS = 200;
