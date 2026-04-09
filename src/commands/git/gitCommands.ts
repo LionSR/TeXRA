@@ -274,7 +274,7 @@ async function checkClonePreconditions(
     return false;
   }
 
-  let entries: [string, vscode.FileType][];
+  let entries: [string, number][];
   try {
     entries = await WorkspaceFS.readDir(workspacePath);
   } catch (e) {

@@ -13,7 +13,7 @@ import {
   countPdfPages,
   getBase64EncodedMedia,
   processPdf2Png,
-} from '@frontend/media/img';
+} from '@utils/media/img';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Type imports

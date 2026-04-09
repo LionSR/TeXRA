@@ -2,9 +2,9 @@
 import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Internal imports
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import { executeCommand } from '@utils/system';
-import { getConfig } from '@utils/config';
+import { getConfig } from '@agent/core/config';
 
 // Local file imports
 import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';

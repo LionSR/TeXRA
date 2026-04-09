@@ -10,7 +10,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/computeModelOptions';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
-import { GlobalStorageFS, StorageFS } from '@utils/files';
+import { GlobalStorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
@@ -35,8 +35,6 @@ const LEGACY_AGENT_FILES = [
 export async function copyDefaultAgents(
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  StorageFS.initialize(context);
-
   const currentVersion = vscode.extensions.getExtension(context.extension.id)
     ?.packageJSON.version;
   const lastKnownVersion = globalSM.get<string>(
