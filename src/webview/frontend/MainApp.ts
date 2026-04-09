@@ -600,10 +600,9 @@ export class MainApp extends MainAppBase {
     if (optionsData.workflow) {
       this.workflowAgentOptions.set(optionsData.workflow);
       this.workflowAgent.set(
-        this.validateSelection(
+        this.validateAgentSelection(
           optionsData.workflow,
           this.workflowAgent.get(),
-          true, // preferEnabled for consistency (agents don't have disabled, but future-proof)
         ),
       );
     }
@@ -611,13 +610,36 @@ export class MainApp extends MainAppBase {
     if (optionsData.toolUse) {
       this.toolUseAgentOptions.set(optionsData.toolUse);
       this.toolUseAgent.set(
-        this.validateSelection(
+        this.validateAgentSelection(
           optionsData.toolUse,
           this.toolUseAgent.get(),
-          true,
         ),
       );
     }
+  }
+
+  /**
+   * Validate agent selection with name-based fallback.
+   * Handles source changes (e.g. remote:lean → builtInToolUse:lean after dedup)
+   * and plain-name defaults (e.g. 'orchestrator' matching 'remote:orchestrator').
+   * Falls back to first option (the preferred agent, since options are sorted).
+   */
+  private validateAgentSelection(
+    options: AgentOptionData[],
+    currentValue: string,
+  ): string {
+    // Exact match (source:name)
+    if (options.some((opt) => opt.value === currentValue)) {
+      return currentValue;
+    }
+    // Match by name: handles source changes and plain-name defaults
+    const name = currentValue.includes(':')
+      ? currentValue.slice(currentValue.indexOf(':') + 1)
+      : currentValue;
+    const byName = options.find((opt) => opt.label === name);
+    if (byName) return byName.value;
+    // Fall back to first option (preferred agent due to sorting)
+    return options[0]?.value ?? '';
   }
 
   private handleSetSingleFileOptions(

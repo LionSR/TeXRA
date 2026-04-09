@@ -124,17 +124,17 @@ const MULTIPLE_SUFFIX = '_multiple';
 /** Source priority for lookups (higher priority first). */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
+  'remote',
   'builtInWorkflow',
   'builtInToolUse',
-  'remote',
 ];
 
-/** Source priority for tool-use sessions (prefers tool-use agents). */
+/** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
 const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
+  'remote',
   'builtInToolUse',
   'builtInWorkflow',
-  'remote',
 ];
 
 /**
@@ -236,7 +236,7 @@ async function doLoad(): Promise<void> {
  * Supports "source:name" format or just "name" (finds first match by priority).
  *
  * When preferToolUse is true, uses tool-use lookup priority:
- * custom → builtInToolUse → builtInWorkflow → remote
+ * custom → remote → builtInToolUse → builtInWorkflow
  *
  * This handles name collisions where a workflow agent shadows a tool-use agent.
  */
@@ -682,7 +682,7 @@ export function getVisibleAgents(
 
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
- * Priority: custom > builtInWorkflow > builtInToolUse > remote.
+ * Priority: custom > remote > builtInWorkflow > builtInToolUse.
  * When the same agent name exists in multiple sources (e.g. local + remote),
  * only the highest-priority version appears in the dropdown.
  */
