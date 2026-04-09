@@ -54,3 +54,9 @@ export type AgentMetadataBase = z.infer<typeof AgentMetadataBaseSchema>;
 export function agentKey(source: string, name: string): string {
   return `${source}:${name}`;
 }
+
+/** Extract the plain agent name from a possibly source-qualified key ("source:name" → "name"). */
+export function agentName(key: string): string {
+  const idx = key.indexOf(':');
+  return idx >= 0 ? key.slice(idx + 1) : key;
+}
