@@ -12,6 +12,8 @@ function buildAgentTooltip(opt: AgentOptionData): string {
   const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];
 
+  if (opt.isOrchestrator)
+    hints.push('Coordinates agents to work on your paper');
   if (opt.isRemote) hints.push(properties.remote.hint);
   if (opt.isCustom) hints.push(properties.custom.hint);
   if (opt.description) hints.push(opt.description);
@@ -28,6 +30,7 @@ function renderAgentOption(
   const { properties } = AGENT_DECORATORS;
   const tooltip = buildAgentTooltip(opt);
 
+  const isOrch = opt.isOrchestrator;
   return html`
     <vscode-option
       value=${opt.value}
@@ -40,7 +43,9 @@ function renderAgentOption(
       data-custom=${opt.isCustom ? 'true' : nothing}
       data-description=${opt.description || nothing}
     >
-      ${opt.label}
+      ${isOrch
+        ? html`<span class="agent-icon">🎯 </span>`
+        : nothing}${opt.label}
       ${opt.isMultiple
         ? html`<span class="agent-icon">
             ${properties.multipleOutputs.unicode}</span

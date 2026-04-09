@@ -335,9 +335,9 @@ export class InstructionPanel extends LitElement {
                   value="toolUse"
                   data-session-type="toolUse"
                   ?checked=${session.sessionType === SESSION_TYPES.TOOL_USE}
-                  title="Chat agents execute commands and scripts"
+                  title="Interactive agents execute commands, use tools, and coordinate work"
                 >
-                  Chat
+                  Interactive
                 </vscode-radio>
                 <vscode-radio
                   value="workflow"
