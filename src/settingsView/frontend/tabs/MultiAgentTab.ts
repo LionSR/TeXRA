@@ -1,7 +1,7 @@
 /**
  * MultiAgentTab component - multi-agent settings for the settings view.
  * Contains agent mode presets (built-in + custom) for quick configuration,
- * the Super YOLO toggle for auto-approving agent delegation proposals,
+ * the auto-approve toggle for agent delegation proposals,
  * and reliability settings.
  */
 
@@ -449,13 +449,13 @@ export class MultiAgentTab extends LitElement {
             ?disabled=${this.toggleDisabled}
             @change=${this.handleToggle}
           >
-            Auto-approve tasks (Super YOLO)
+            Auto-approve delegated tasks
           </vscode-checkbox>
           <p class="text-secondary setting-description">
-            Let the orchestrator run without waiting for your OK on each task.
-            Use the rocket button
+            Let the orchestrator run without waiting for your approval on each
+            task. Use the rocket button
             <span class="codicon codicon-rocket"></span> in Progress to turn
-            this on per stream.
+            this on for a single stream.
           </p>
         </div>
 
