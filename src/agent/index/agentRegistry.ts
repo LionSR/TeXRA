@@ -675,19 +675,15 @@ export function getVisibleAgents(
 
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
- * Custom agents override built-in agents with the same name.
- * Remote agents use source:name keys to prevent deduplication.
+ * Priority: custom > builtInWorkflow > builtInToolUse > remote.
+ * When the same agent name exists in multiple sources (e.g. local + remote),
+ * only the highest-priority version appears in the dropdown.
  */
 export function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();
 
   for (const entry of entries) {
-    // Remote agents use source:name key to preserve uniqueness
-    const key =
-      entry.source === 'remote'
-        ? createKey(entry.source, entry.name)
-        : entry.name;
-    const existing = byKey.get(key);
+    const existing = byKey.get(entry.name);
 
     // Keep entry if none exists or if this one has higher priority
     const isHigherPriority =
@@ -696,7 +692,7 @@ export function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
         LOOKUP_PRIORITY.indexOf(existing.source);
 
     if (isHigherPriority) {
-      byKey.set(key, entry);
+      byKey.set(entry.name, entry);
     }
   }
 
