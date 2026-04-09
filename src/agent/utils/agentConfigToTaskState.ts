@@ -1,16 +1,11 @@
-// Local imports - models
 import { type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-
-// Type imports
 import {
   type TaskState,
   type ToolUseTaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
-
-// Local file imports
-import { FILE_TYPES, type FileType } from './constants';
+import { FILE_TYPES, type FileType } from '@utils/config/constants';
 
 /** Check if a file type is active based on the config fields. */
 function isFileTypeActive(
