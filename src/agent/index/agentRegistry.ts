@@ -344,19 +344,25 @@ export function resolveAgent(
   };
 }
 
-/** Get all workflow agents (excludes internal agents by default). */
+/** Get all workflow agents, deduplicated by name (excludes internal agents by default). */
 export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
-  return [...cache.values()].filter(
-    (e) =>
-      e.category === AgentCategory.Workflow && (includeInternal || !e.internal),
+  return deduplicateByName(
+    [...cache.values()].filter(
+      (e) =>
+        e.category === AgentCategory.Workflow &&
+        (includeInternal || !e.internal),
+    ),
   );
 }
 
-/** Get all tool-use agents (excludes internal agents by default). */
+/** Get all tool-use agents, deduplicated by name (excludes internal agents by default). */
 export function getToolUseAgents(includeInternal = false): AgentEntry[] {
-  return [...cache.values()].filter(
-    (e) =>
-      e.category === AgentCategory.ToolUse && (includeInternal || !e.internal),
+  return deduplicateByName(
+    [...cache.values()].filter(
+      (e) =>
+        e.category === AgentCategory.ToolUse &&
+        (includeInternal || !e.internal),
+    ),
   );
 }
 
@@ -658,7 +664,8 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
 // =============================================================================
 
 /**
- * Get visible agents for a category (filtered and deduplicated).
+ * Get visible agents for a category (filtered by user visibility config).
+ * Agents are already deduplicated by name from the getter functions.
  * No default → undefined means "never configured" (show all).
  */
 export function getVisibleAgents(
@@ -670,7 +677,7 @@ export function getVisibleAgents(
     ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
     : WorkspaceStateKey.ENABLED_AGENTS;
   const raw = getWorkspaceState().get<string[]>(stateKey);
-  return deduplicateByName(filterVisible(entries, raw));
+  return filterVisible(entries, raw);
 }
 
 /**
@@ -679,7 +686,7 @@ export function getVisibleAgents(
  * When the same agent name exists in multiple sources (e.g. local + remote),
  * only the highest-priority version appears in the dropdown.
  */
-export function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
+function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();
 
   for (const entry of entries) {
