@@ -108,9 +108,9 @@ export class OrchestratorBanner extends LitElement {
     return html`
       <div class="orchestrator-banner">
         <strong>Orchestrator selected.</strong> Hit Execute to analyze your
-        paper and generate improvement tasks. Review and approve them in the
-        Progress view — press <strong>y</strong>/<strong>n</strong> to approve
-        or reject quickly.
+        paper and generate improvement tasks. Review and approve them in
+        Progress — press <strong>y</strong>/<strong>n</strong> to approve or
+        reject quickly.
         <div class="orchestrator-banner-footer">
           <span class="orchestrator-tip"
             >Customize auto-approve rules and task presets in
