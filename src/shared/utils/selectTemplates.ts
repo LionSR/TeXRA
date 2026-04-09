@@ -6,17 +6,13 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
-import {
-  AGENT_DECORATORS,
-  getModelProviderDecorator,
-  isOrchestratorId,
-} from './icons';
+import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 
 function buildAgentTooltip(opt: AgentOptionData): string {
   const { properties } = AGENT_DECORATORS;
   const hints: string[] = [];
 
-  if (isOrchestratorId(opt.value))
+  if (opt.isOrchestrator)
     hints.push('Coordinates agents to work on your paper');
   if (opt.isRemote) hints.push(properties.remote.hint);
   if (opt.isCustom) hints.push(properties.custom.hint);
@@ -34,7 +30,7 @@ function renderAgentOption(
   const { properties } = AGENT_DECORATORS;
   const tooltip = buildAgentTooltip(opt);
 
-  const isOrch = isOrchestratorId(opt.value);
+  const isOrch = opt.isOrchestrator;
   return html`
     <vscode-option
       value=${opt.value}

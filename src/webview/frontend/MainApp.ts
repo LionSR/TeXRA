@@ -46,7 +46,6 @@ import {
   type SessionTypeChangeDetail,
 } from '@shared/schemas';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
-import { isOrchestratorId } from '@shared/utils/icons';
 import { capitalize } from '@shared/utils/string';
 
 import './components/FileSelectGroup';
@@ -1277,11 +1276,17 @@ export class MainApp extends MainAppBase {
     }
   }
 
+  private isSelectedAgentOrchestrator(): boolean {
+    if (this.sessionType.get() !== SESSION_TYPES.TOOL_USE) return false;
+    const agentId = this.toolUseAgent.get();
+    const opt = this.toolUseAgentOptions.get().find((o) => o.value === agentId);
+    return opt?.isOrchestrator ?? false;
+  }
+
   private getPlaceholderKey(): keyof typeof ONBOARDING_PLACEHOLDERS {
-    if (this.sessionType.get() !== SESSION_TYPES.TOOL_USE) return 'workflow';
-    return isOrchestratorId(this.toolUseAgent.get())
+    return this.isSelectedAgentOrchestrator()
       ? 'orchestrator'
-      : 'toolUse';
+      : this.sessionType.get();
   }
 
   private refreshInstructionPlaceholder(advance: boolean): void {
@@ -1957,9 +1962,7 @@ export class MainApp extends MainAppBase {
             }}
             .gettingStartedVisible=${this.gettingStartedVisible.get()}
             .loginBannerVisible=${this.loginBannerVisible.get()}
-            .orchestratorSelected=${this.sessionType.get() ===
-              SESSION_TYPES.TOOL_USE &&
-            isOrchestratorId(this.toolUseAgent.get())}
+            .orchestratorSelected=${this.isSelectedAgentOrchestrator()}
             @api-key-action=${this.handleComponentApiKeyAction}
             @agent-config-action=${this.handleComponentAgentConfigAction}
             @dependency-dismiss=${this.handleComponentDependencyDismiss}

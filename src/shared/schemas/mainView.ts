@@ -75,6 +75,7 @@ export const AgentOptionDataSchema = z.object({
   label: z.string(),
   isMultiple: z.boolean().optional(),
   isToolUse: z.boolean().optional(),
+  isOrchestrator: z.boolean().optional(),
   isRemote: z.boolean().optional(),
   isCustom: z.boolean().optional(),
   description: z.string().optional(),
