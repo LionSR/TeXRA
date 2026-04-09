@@ -76,7 +76,10 @@ export abstract class BaseFS {
     target: string,
     content: string | Uint8Array,
   ): Promise<void> {
-    await getFileSystem().writeFile(this.preparePath(target), toBuffer(content));
+    await getFileSystem().writeFile(
+      this.preparePath(target),
+      toBuffer(content),
+    );
   }
 
   public static async appendFile(
@@ -189,9 +192,7 @@ export abstract class BaseFS {
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
-      return (
-        (stats.type & FileType.SymbolicLink) === FileType.SymbolicLink
-      );
+      return (stats.type & FileType.SymbolicLink) === FileType.SymbolicLink;
     } catch (_err) {
       return false;
     }
