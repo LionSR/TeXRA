@@ -10,7 +10,7 @@ import type { AgentSource } from '@agent/index';
 import { showLoggedMessageWithDocs, toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import * as logger from '@logger/logUtils';
-import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
+import { GlobalStorageFS, AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
@@ -48,7 +48,6 @@ export class AgentDirectoryManager {
 
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
-    StorageFS.initialize(context);
   }
 
   private ensureInitialized(): void {

@@ -6,7 +6,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 import { getSdkErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

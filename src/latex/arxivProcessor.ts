@@ -9,7 +9,7 @@ import * as tar from 'tar';
 
 import { toErrorMessage } from '@common/errors';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import { normaliseArxivIdentifier } from '@tools/latex/arxivShared';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 

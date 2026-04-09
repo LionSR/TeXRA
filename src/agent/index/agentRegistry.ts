@@ -13,11 +13,31 @@ import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as logger from '@agent/core/logger';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentKey as createKey } from '@shared/schemas/agent';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
+
+/** Injectable provider for agent directory paths. */
+export interface AgentDirectories {
+  custom(): Promise<string>;
+  builtIn(): Promise<string>;
+  builtInToolUse(): Promise<string>;
+}
+
+let agentDirectories: AgentDirectories | null = null;
+
+/** Inject the agent directory provider. Called from extension.ts at activation. */
+export function setAgentDirectories(dirs: AgentDirectories): void {
+  agentDirectories = dirs;
+}
+
+function getAgentDirectories(): AgentDirectories {
+  if (!agentDirectories) {
+    throw new Error('Agent directories not initialized — call setAgentDirectories() first.');
+  }
+  return agentDirectories;
+}
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
@@ -164,10 +184,11 @@ async function doLoad(): Promise<void> {
   migrateLegacySourceKeys();
 
   // Load from all sources in parallel
+  const dirs = getAgentDirectories();
   const [customDir, builtInDir, toolUseDir] = await Promise.all([
-    agentDirectories.custom(),
-    agentDirectories.builtIn(),
-    agentDirectories.builtInToolUse(),
+    dirs.custom(),
+    dirs.builtIn(),
+    dirs.builtInToolUse(),
   ]);
 
   const [customEntries, builtInEntries, toolUseEntries, remoteEntries] =
