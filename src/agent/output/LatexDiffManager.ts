@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import { getConfig } from '@agent/core/config';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
@@ -11,7 +12,6 @@ import {
   MESSAGE_TYPES,
   type OutputFileInfo,
 } from '@shared/schemas';
-import { getConfig } from '@utils/config';
 import {
   flexibleFS,
   TaskRunFileService,

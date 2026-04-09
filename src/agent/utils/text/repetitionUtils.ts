@@ -2,11 +2,11 @@
 import { diff_match_patch } from 'diff-match-patch';
 
 // Local imports - logging
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import {
   REPETITION_DETECTION_THRESHOLD,
   REPETITION_PREVIEW_LENGTH,
-} from '@utils/config';
+} from '@agent/core/constants';
 
 const CHANNEL = 'repetitionUtils';
 logger.initialize(CHANNEL);

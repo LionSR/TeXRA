@@ -17,10 +17,10 @@ import {
   updateAgentDefaultOutputFiles,
 } from '@agent/index/agentRegistry';
 import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
+import * as logger from '@agent/core/logger';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 
 import {
