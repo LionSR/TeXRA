@@ -1,6 +1,6 @@
 import { ModelProvider } from 'llm-zoo';
+import { getConfig } from '@agent/core/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { getConfig } from '@utils/config';
 import {
   getProviderEndpoint,
   getDashScopeUseChina,

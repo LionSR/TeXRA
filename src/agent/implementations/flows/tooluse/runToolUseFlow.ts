@@ -14,6 +14,8 @@ import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { getGlobalState } from '@agent/core/stateStore';
+import { GlobalStateKey } from '@common/state';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import {
@@ -30,7 +32,6 @@ import {
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
-import { getToolUseMemoryEnabled } from '@utils/config';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -113,7 +114,8 @@ function resolveTools(
 
   // Inject memory tool into all tool-use agents (including subagents)
   // so they share the same /memories directory.
-  if (getToolUseMemoryEnabled() && !resolved.some((d) => d.name === 'memory')) {
+  const memoryEnabled = getGlobalState().get<boolean>(GlobalStateKey.MEMORY_ENABLED, true);
+  if (memoryEnabled && !resolved.some((d) => d.name === 'memory')) {
     const memoryTool = registry.get('memory');
     if (memoryTool) {
       resolved.push(memoryTool.definition);
