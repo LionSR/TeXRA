@@ -16,9 +16,17 @@ Use this skill for inline technical review of mathematical or derivation-heavy p
 3. Prioritize issues that affect validity: broken proofs, missing essential steps, unjustified coefficients, hidden assumptions, incorrect limits, or inconsistent claims.
 4. If a derivation is already handled in an appendix, say so and adjust severity accordingly rather than treating the main text as simply wrong.
 5. When the document already uses a `\criticize{comment}{severity}{confidence}`-style macro, preserve that format. Otherwise adapt to the local inline annotation convention without losing the same discipline.
-6. Use inline comments strategically. Group related minor issues and reserve the harshest comments for problems that really threaten the result.
-7. When a calculation checks out, leave explicit verification comments when that helps the author distinguish true problems from confirmed material.
-8. Ensure every inline comment is valid LaTeX and can remain in the document without breaking compilation.
+6. If the macro is missing, provide a minimal command definition before inserting annotations:
+
+   ```latex
+   \newcommand{\criticize}[3]{\textcolor{red}{\textbf{[#2|#3]} #1}}
+   ```
+
+   Keep the document's existing color/theme conventions when present.
+
+7. Use inline comments strategically. Group related minor issues and reserve the harshest comments for problems that really threaten the result.
+8. When a calculation checks out, leave explicit verification comments when that helps the author distinguish true problems from confirmed material.
+9. Ensure every inline comment is valid LaTeX and can remain in the document without breaking compilation.
 
 ## Quality Bar
 

@@ -35,4 +35,6 @@ Use this checklist for inline technical criticism of a manuscript.
 
 - Write inline comments that compile cleanly.
 - Use proper math mode, escaped special characters, and reference syntax.
+- If `\criticize` is undefined, add a minimal macro such as
+  `\newcommand{\criticize}[3]{\textcolor{red}{\textbf{[#2|#3]} #1}}` and match local style conventions.
 - Prefer fewer precise comments over many noisy ones.
