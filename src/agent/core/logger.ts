@@ -1,15 +1,15 @@
 /**
  * Platform-agnostic logging facade for the agent core.
  *
- * Delegates to a settable backend. Default: console.
- * VS Code sets the real OutputChannel-backed backend at activation via
- * `setLogBackend()`.
+ * Thin wrapper over `platform().log`. Consumer code imports this module
+ * for convenience (e.g. `import * as logger from '@agent/core/logger'`).
  *
  * NOTE: Group-context functions (getActiveGroupId, runWithGroupContext) are
  * intentionally NOT exposed here. They are used only by AgentLogger, which
  * calls @logger/logUtils directly. Duplicating AsyncLocalStorage here would
  * cause silent context divergence.
  */
+import { platform } from '@platform/platform';
 
 export interface LogUtilsOptions {
   isAgent?: boolean;
@@ -27,7 +27,7 @@ export interface LogBackend {
 }
 
 // ---------------------------------------------------------------------------
-// Default backend – writes to the process console.
+// Default backend – writes to the process console (for CLI / Electron / tests)
 // ---------------------------------------------------------------------------
 
 function timestamp(): string {
@@ -36,7 +36,7 @@ function timestamp(): string {
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}.${p(now.getMilliseconds(), 3)}`;
 }
 
-const consoleBackend: LogBackend = {
+export const consoleBackend: LogBackend = {
   initialize() {},
   debug(ch, msg) {
     console.debug(`[${timestamp()}] [${ch}] ${msg}`);
@@ -53,22 +53,11 @@ const consoleBackend: LogBackend = {
 };
 
 // ---------------------------------------------------------------------------
-// Settable backend
-// ---------------------------------------------------------------------------
-
-let backend: LogBackend = consoleBackend;
-
-/** Replace the log backend. Called once at platform init (e.g. extension activate). */
-export function setLogBackend(b: LogBackend): void {
-  backend = b;
-}
-
-// ---------------------------------------------------------------------------
-// Public API – matches the surface used by src/agent/ files.
+// Public API – delegates to platform().log
 // ---------------------------------------------------------------------------
 
 export function initialize(channel: string, isAgent = false): void {
-  backend.initialize(channel, isAgent);
+  platform().log.initialize(channel, isAgent);
 }
 
 export function debug(
@@ -76,7 +65,7 @@ export function debug(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  backend.debug(channel, message, options);
+  platform().log.debug(channel, message, options);
 }
 
 export function info(
@@ -84,7 +73,7 @@ export function info(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  backend.info(channel, message, options);
+  platform().log.info(channel, message, options);
 }
 
 export function warn(
@@ -92,7 +81,7 @@ export function warn(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  backend.warn(channel, message, options);
+  platform().log.warn(channel, message, options);
 }
 
 export function error(
@@ -100,5 +89,5 @@ export function error(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  backend.error(channel, message, options);
+  platform().log.error(channel, message, options);
 }

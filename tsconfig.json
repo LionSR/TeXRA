@@ -33,6 +33,8 @@
       "@types/*": ["src/types/*"],
       "@eventBus/*": ["src/eventBus/*"],
       "@auth/*": ["src/auth/*"],
+      "@platform": ["src/platform"],
+      "@platform/*": ["src/platform/*"],
       "@openrouter/sdk": ["node_modules/@openrouter/sdk/esm/index.d.ts"],
       "@openrouter/sdk/models": [
         "node_modules/@openrouter/sdk/esm/models/index.d.ts"

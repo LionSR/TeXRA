@@ -1,12 +1,13 @@
 /**
  * Platform-agnostic filesystem provider for the agent core.
  *
- * Delegates to a settable backend. Default: Node.js fs/promises.
- * VS Code calls `setFileSystem()` at activation to use
- * vscode.workspace.fs.
+ * Thin wrapper over `platform().fs`. Also exports the Node.js default
+ * backend for use by CLI/Electron hosts and tests.
  */
 import * as fs from 'fs';
 import * as path from 'path';
+
+import { platform } from '@platform/platform';
 
 /**
  * File type enum (bitmask-compatible with vscode.FileType).
@@ -221,17 +222,14 @@ const nodeBackend: FileSystemProvider = {
 };
 
 // ---------------------------------------------------------------------------
-// Settable backend
+// Public API
 // ---------------------------------------------------------------------------
 
-let backend: FileSystemProvider = nodeBackend;
+/** The Node.js default filesystem backend. Use this when initializing
+ *  the platform for CLI, Electron, or tests. */
+export { nodeBackend as nodeFileSystem };
 
-/** Replace the filesystem backend. Called once at platform init. */
-export function setFileSystem(provider: FileSystemProvider): void {
-  backend = provider;
-}
-
-/** Get the active filesystem provider. */
+/** Get the active filesystem provider from the platform context. */
 export function getFileSystem(): FileSystemProvider {
-  return backend;
+  return platform().fs;
 }

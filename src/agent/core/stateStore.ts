@@ -1,52 +1,23 @@
 /**
  * Platform-agnostic state store facade for the agent core.
  *
- * Provides a KV interface matching vscode.Memento. Default: in-memory Map.
- * VS Code calls `setGlobalState()` / `setWorkspaceState()` at activation.
+ * Thin wrapper over `platform().globalState` and `platform().workspaceState`.
+ * Consumer code imports this module for convenience; the canonical
+ * definition lives in `@platform/interfaces`.
  */
+import { platform } from '@platform/platform';
 
 export interface StateStore {
   get<T>(key: string, defaultValue?: T): T;
   update(key: string, value: unknown): PromiseLike<void>;
 }
 
-// ---------------------------------------------------------------------------
-// In-memory default (for CLI / tests)
-// ---------------------------------------------------------------------------
-
-function createMemoryStore(): StateStore {
-  const map = new Map<string, unknown>();
-  return {
-    get<T>(key: string, defaultValue?: T): T {
-      const v = map.get(key);
-      return v !== undefined ? (v as T) : (defaultValue as T);
-    },
-    async update(key: string, value: unknown): Promise<void> {
-      map.set(key, value);
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Settable stores
-// ---------------------------------------------------------------------------
-
-let global: StateStore = createMemoryStore();
-let workspace: StateStore = createMemoryStore();
-
-export function setGlobalState(store: StateStore): void {
-  global = store;
-}
-export function setWorkspaceState(store: StateStore): void {
-  workspace = store;
-}
-
 /** Global state (cross-workspace). */
 export function getGlobalState(): StateStore {
-  return global;
+  return platform().globalState;
 }
 
 /** Workspace-scoped state. */
 export function getWorkspaceState(): StateStore {
-  return workspace;
+  return platform().workspaceState;
 }

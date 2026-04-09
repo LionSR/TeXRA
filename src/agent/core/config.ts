@@ -1,29 +1,17 @@
 /**
  * Platform-agnostic configuration facade for the agent core.
  *
- * Delegates to a settable provider. Default: returns the default value.
- * VS Code calls `setConfigProvider()` at activation to use
- * vscode.workspace.getConfiguration.
+ * Thin wrapper over `platform().config`. Consumer code imports this
+ * module for convenience; the canonical definition lives in
+ * `@platform/interfaces`.
  */
+import { platform } from '@platform/platform';
 
 export interface ConfigProvider {
   get<T>(key: string, defaultValue?: T): T;
 }
 
-const defaultProvider: ConfigProvider = {
-  get<T>(_key: string, defaultValue?: T): T {
-    return defaultValue as T;
-  },
-};
-
-let provider: ConfigProvider = defaultProvider;
-
-/** Replace the config provider. Called once at platform init. */
-export function setConfigProvider(p: ConfigProvider): void {
-  provider = p;
-}
-
 /** Read a configuration value. */
 export function getConfig<T>(key: string, defaultValue?: T): T {
-  return provider.get(key, defaultValue);
+  return platform().config.get(key, defaultValue);
 }

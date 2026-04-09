@@ -1,12 +1,11 @@
 /**
- * Platform-agnostic storage path provider for the agent core.
+ * Platform-agnostic storage path provider facade for the agent core.
  *
- * Delegates to a settable backend. Default: uses ~/.texra/ paths.
- * VS Code calls `setStorageProvider()` at activation to use
- * context.storageUri and context.globalStorageUri.
+ * Thin wrapper over `platform().storage`. Consumer code imports this
+ * module for convenience; the canonical definition lives in
+ * `@platform/interfaces`.
  */
-import * as os from 'os';
-import * as path from 'path';
+import { platform } from '@platform/platform';
 
 export interface StorageProvider {
   /** Per-workspace storage root path. */
@@ -16,32 +15,7 @@ export interface StorageProvider {
   getGlobalStoragePath(): string;
 }
 
-// ---------------------------------------------------------------------------
-// Default backend – ~/.texra/ (for CLI / Electron / tests)
-// ---------------------------------------------------------------------------
-
-const defaultBackend: StorageProvider = {
-  getStoragePath(): string {
-    return path.join(os.homedir(), '.texra', 'workspace-storage');
-  },
-
-  getGlobalStoragePath(): string {
-    return path.join(os.homedir(), '.texra', 'global-storage');
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Settable backend
-// ---------------------------------------------------------------------------
-
-let backend: StorageProvider = defaultBackend;
-
-/** Replace the storage provider. Called once at platform init. */
-export function setStorageProvider(provider: StorageProvider): void {
-  backend = provider;
-}
-
 /** Get the active storage provider. */
 export function getStorageProvider(): StorageProvider {
-  return backend;
+  return platform().storage;
 }

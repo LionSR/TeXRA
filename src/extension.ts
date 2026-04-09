@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { loadAgents } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
-import { initPlatform } from '@agent/core/platform';
+import { initPlatform } from '@platform/platform';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
@@ -63,6 +63,7 @@ import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
 import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
 import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
+import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -137,6 +138,7 @@ export async function activate(context: vscode.ExtensionContext) {
     fs: new VscodeFileSystem(),
     workspace: new VscodeWorkspace(),
     storage: new VscodeStorage(context),
+    secrets: new VscodeSecrets(context),
   });
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   FileLister.initialize(context);

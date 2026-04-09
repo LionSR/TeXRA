@@ -1,11 +1,11 @@
 /**
- * Platform-agnostic workspace provider for the agent core.
+ * Platform-agnostic workspace provider facade for the agent core.
  *
- * Delegates to a settable backend. Default: uses process.cwd().
- * VS Code calls `setWorkspaceProvider()` at activation to use
- * vscode.workspace.workspaceFolders and asRelativePath.
+ * Thin wrapper over `platform().workspace`. Consumer code imports this
+ * module for convenience; the canonical definition lives in
+ * `@platform/interfaces`.
  */
-import * as path from 'path';
+import { platform } from '@platform/platform';
 
 export interface WorkspaceProvider {
   /** The workspace root path, or undefined if none is open. */
@@ -19,38 +19,7 @@ export interface WorkspaceProvider {
   asRelativePath(filePath: string): string;
 }
 
-// ---------------------------------------------------------------------------
-// Default backend – uses process.cwd() (for CLI / Electron / tests)
-// ---------------------------------------------------------------------------
-
-const defaultBackend: WorkspaceProvider = {
-  getWorkspacePath(): string | undefined {
-    return process.cwd();
-  },
-
-  asRelativePath(filePath: string): string {
-    const root = this.getWorkspacePath();
-    if (!root) return filePath;
-    const relative = path.relative(root, filePath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      return filePath;
-    }
-    return relative.replaceAll('\\', '/');
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Settable backend
-// ---------------------------------------------------------------------------
-
-let backend: WorkspaceProvider = defaultBackend;
-
-/** Replace the workspace provider. Called once at platform init. */
-export function setWorkspaceProvider(provider: WorkspaceProvider): void {
-  backend = provider;
-}
-
 /** Get the active workspace provider. */
 export function getWorkspaceProvider(): WorkspaceProvider {
-  return backend;
+  return platform().workspace;
 }
