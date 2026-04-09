@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
 // Local imports - frontend
-import { fileLister } from '@frontend/files';
+import { getFileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - logging
@@ -44,8 +44,8 @@ export async function openLabel(label: string): Promise<void> {
   const escape = label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
   const candidates = new Set([
-    ...(await fileLister.list('input')),
-    ...(await fileLister.list('reference')),
+    ...(await getFileLister().list('input')),
+    ...(await getFileLister().list('reference')),
   ]);
 
   for (const file of candidates) {

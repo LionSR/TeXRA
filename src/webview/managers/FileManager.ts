@@ -16,7 +16,7 @@ import {
 } from '@common/files';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
-import { fileLister } from '@frontend/files';
+import { getFileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import type { MainViewInboundMessage } from '@shared/schemas';
@@ -135,7 +135,7 @@ export class FileManager extends BaseWebviewManager {
       path.extname(message.filePath),
     );
     const filteredEditedFiles =
-      await fileLister.listEditedFiles(baseFileNameForInput);
+      await getFileLister().listEditedFiles(baseFileNameForInput);
     this.postFileUpdate('Edited', filteredEditedFiles);
   }
 
@@ -162,7 +162,7 @@ export class FileManager extends BaseWebviewManager {
       | 'reference'
       | 'auxiliary'
       | 'media';
-    const files = await fileLister.list(listType);
+    const files = await getFileLister().list(listType);
     this.postFileUpdate(fileType, files, {
       notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
@@ -172,7 +172,7 @@ export class FileManager extends BaseWebviewManager {
     message: RequestEditedFileMessage,
   ): Promise<void> {
     const files = message.baseFile
-      ? await fileLister.listEditedFiles(
+      ? await getFileLister().listEditedFiles(
           path.basename(message.baseFile, path.extname(message.baseFile)),
         )
       : [];
@@ -182,7 +182,7 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
-    const files = await fileLister.list('input');
+    const files = await getFileLister().list('input');
     this.postFileUpdate('Base', files, {
       notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
       additionalPayload: message.preserveBaseFile
@@ -253,10 +253,10 @@ export class FileManager extends BaseWebviewManager {
   async handleRefreshAllFiles(): Promise<void> {
     const [inputFiles, referenceFiles, auxiliaryFiles, mediaFiles] =
       await Promise.all([
-        fileLister.list('input'),
-        fileLister.list('reference'),
-        fileLister.list('auxiliary'),
-        fileLister.list('media'),
+        getFileLister().list('input'),
+        getFileLister().list('reference'),
+        getFileLister().list('auxiliary'),
+        getFileLister().list('media'),
       ]);
 
     this.postMessage({
@@ -477,7 +477,7 @@ export class FileManager extends BaseWebviewManager {
   }
 
   private async updateBaseFileSelect(): Promise<void> {
-    const baseFiles = await fileLister.list('input');
+    const baseFiles = await getFileLister().list('input');
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
       files: baseFiles,
