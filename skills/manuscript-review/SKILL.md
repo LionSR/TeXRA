@@ -14,10 +14,12 @@ Use this skill for serious review passes on papers, notes, appendices, or techni
 1. Read the full manuscript context first, including appendices, bibliography, macros, figures, and any supporting code that drives results.
 2. Identify the main claims and the highest-risk derivations, proofs, experiments, and references before going broad.
 3. Verify critical calculations independently when feasible. Check limiting cases, dimensions, signs, factors, boundary conditions, and whether stated results follow from the setup.
-4. Trace notation across the document. Confirm symbols are defined before use and stay stable across sections, figures, and code.
-5. Check whether the manuscript actually delivers the goals stated in the abstract and introduction.
-6. Produce findings first. Order them by severity and point to exact locations.
-7. Distinguish confirmed errors, likely issues, and open questions. Do not blur them together.
+4. Use computational verification tools when available for symbolic algebra, identities, spot checks, and code-backed results. If you verify something numerically or symbolically, say so explicitly in the findings.
+5. Trace notation across the document. Confirm symbols are defined before use and stay stable across sections, figures, and code.
+6. Check code-manuscript consistency when the paper depends on scripts, notebooks, generated figures, or implemented algorithms.
+7. Check whether the manuscript actually delivers the goals stated in the abstract and introduction.
+8. Produce findings first. Order them by severity and point to exact locations.
+9. Distinguish confirmed errors, likely issues, and open questions. Do not blur them together.
 
 ## Quality Bar
 

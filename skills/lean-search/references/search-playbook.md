@@ -8,6 +8,7 @@ Use this playbook when the first obvious search attempt does not find the right 
 - Search Mathlib source directly when local packages are available.
 - Read surrounding source, not just isolated hits.
 - Check docs or community references when the local codebase is inconclusive.
+- Do not conclude “missing” after a single failed query; reformulate the statement and search again.
 
 ## Reporting results
 

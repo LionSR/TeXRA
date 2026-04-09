@@ -12,6 +12,7 @@ Use this file when the manuscript needs a formal technical review rather than a 
 - Reproduce key derivations independently when feasible.
 - Check signs, factors, dimensions, limits, and boundary conditions.
 - Verify that solutions satisfy the equations they claim to solve.
+- Use symbolic or numerical checks when useful, and report what was checked.
 
 ## Appendices and notation
 
@@ -24,6 +25,7 @@ Use this file when the manuscript needs a formal technical review rather than a 
 - Check that figures match the text and that labels are consistent.
 - Compare code-backed claims with the actual implementation when code is available.
 - Verify that cited sources support the specific claims attached to them.
+- Check that quantitative claims in prose match tables, code outputs, and plotted data.
 
 ## Findings format
 

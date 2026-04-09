@@ -12,11 +12,12 @@ Use this skill when the main job is discovery rather than proving: find the righ
 ## Workflow
 
 1. Start from the mathematical content, not from a guessed theorem name.
-2. Search broadly and iteratively. Try type-shape searches, name-pattern searches, source grep, and docs lookup before concluding something is missing.
+2. Search broadly and iteratively. Try multiple surfaces before concluding something is missing: type-shape search, name-pattern search, source grep, module-path discovery, and docs or community references.
 3. Read the actual source around promising hits. The surrounding lemmas and proof patterns often matter more than the first exact match.
 4. Distinguish exact matches, adaptable near-matches, and genuinely missing API.
 5. When something appears missing, say where it would likely belong and what the most general statement should be.
 6. Report enough metadata to make the result usable immediately: full name, import path, statement shape, and any caveats.
+7. Show your search process briefly so another formalizer can trust the conclusion and continue from it.
 
 ## Quality Bar
 
