@@ -79,11 +79,11 @@ const PERMISSION_ICONS: Record<PermissionState['kind'], string> = {
 
 /** Title for each permission type */
 const PERMISSION_TITLES: Record<PermissionState['kind'], string> = {
-  [PERMISSION_KIND.TOOL_EDIT]: 'Tool edit approval',
-  [PERMISSION_KIND.BASH]: 'Command approval',
+  [PERMISSION_KIND.TOOL_EDIT]: 'Approve file edit',
+  [PERMISSION_KIND.BASH]: 'Approve command',
   [PERMISSION_KIND.RETRY]: 'Retry request',
-  [PERMISSION_KIND.PROPOSAL]: 'Agent proposal',
-  [PERMISSION_KIND.PLAN_APPROVAL]: 'Plan approval',
+  [PERMISSION_KIND.PROPOSAL]: 'Approve task',
+  [PERMISSION_KIND.PLAN_APPROVAL]: 'Approve plan',
   [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'External inquiry',
 };
 
@@ -227,8 +227,8 @@ export class PermissionCard extends LitElement {
 
     if (this.permission.kind === PERMISSION_KIND.PROPOSAL) {
       return this.permission.data.agentCategory === AGENT_CATEGORY.WORKFLOW
-        ? 'Agent proposal (Workflow)'
-        : 'Agent proposal (Tool-Use)';
+        ? 'Approve task (Workflow)'
+        : 'Approve task (Interactive)';
     }
 
     return PERMISSION_TITLES[this.permission.kind];
