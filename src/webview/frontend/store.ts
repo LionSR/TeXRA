@@ -146,7 +146,7 @@ export const MULTI_FILE_COMMAND_TO_KEY: Record<string, keyof MultiFiles> = {
 /** Placeholder rotation interval in milliseconds */
 export const PLACEHOLDER_ROTATION_MS = 12000;
 
-/** Onboarding placeholder texts by session type */
+/** Onboarding placeholder texts by session type (+ orchestrator override) */
 export const ONBOARDING_PLACEHOLDERS = {
   workflow: [
     'Correct LaTeX errors, tighten language, and keep math notation intact.',
@@ -158,7 +158,12 @@ export const ONBOARDING_PLACEHOLDERS = {
     'Scan for TODOs and draft fixes with file paths.',
     'Run LaTeX checks and report compilation warnings.',
   ],
-} satisfies Record<SessionType, string[]>;
+  orchestrator: [
+    'Review my paper and suggest improvements.',
+    'Leave blank -- the orchestrator will figure out what to do.',
+    'Polish the writing, then run a critical review.',
+  ],
+} satisfies Record<SessionType | 'orchestrator', string[]>;
 
 /** Static configuration for each file selector type */
 export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [

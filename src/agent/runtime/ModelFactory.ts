@@ -95,7 +95,12 @@ function shouldUseResponsesAPI(
  * that only accept unpinned model identifiers.
  */
 function withShortModelName(config: ModelConfig): ModelConfig {
-  if (!getGlobalState().get<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES, false)) {
+  if (
+    !getGlobalState().get<boolean>(
+      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+      false,
+    )
+  ) {
     return config;
   }
   const short = config.shortName;

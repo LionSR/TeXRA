@@ -3,7 +3,7 @@
  *
  * Appears when the orchestrator is selected in the agent dropdown
  * to help users understand the delegation-based workflow.
- * Dismissable — once hidden, stays hidden for the session.
+ * Dismissable via a "Got it" button.
  */
 
 // Third-party imports
@@ -33,32 +33,42 @@ export class OrchestratorBanner extends LitElement {
         border: var(--border-thin) solid
           var(--vscode-inputValidation-infoBorder);
         line-height: var(--line-height-relaxed);
-        display: flex;
-        align-items: flex-start;
-        gap: var(--spacing-small);
-      }
-
-      .orchestrator-banner-content {
-        flex: 1;
         font-size: var(--font-size-sm);
       }
 
-      .dismiss-btn {
+      .orchestrator-banner-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: var(--spacing-small);
+      }
+
+      .orchestrator-tip {
+        font-size: var(--font-size-xs);
+        opacity: 0.8;
+      }
+
+      .got-it-btn {
         flex-shrink: 0;
         background: none;
-        border: none;
-        color: var(--color-text-secondary);
+        border: var(--border-thin) solid
+          var(--vscode-inputValidation-infoBorder);
+        color: var(--vscode-inputValidation-infoForeground);
         cursor: pointer;
-        padding: var(--spacing-tiny);
+        padding: var(--spacing-tiny) var(--spacing-medium);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
       }
 
-      .dismiss-btn:hover {
-        color: var(--vscode-foreground);
+      .got-it-btn:hover {
+        background: color-mix(
+          in srgb,
+          var(--vscode-inputValidation-infoBorder) 15%,
+          transparent
+        );
       }
 
-      .dismiss-btn:focus-visible {
+      .got-it-btn:focus-visible {
         outline: var(--border-thin) solid var(--vscode-focusBorder);
         outline-offset: 1px;
       }
@@ -77,18 +87,20 @@ export class OrchestratorBanner extends LitElement {
 
     return html`
       <div class="orchestrator-banner">
-        <div class="orchestrator-banner-content">
-          <strong>Orchestrator selected.</strong> When you hit Execute, it'll
-          read through your paper, figure out what needs work, and propose tasks
-          for you to approve in the Progress view.
-        </div>
-        <button
-          class="dismiss-btn"
-          title="Dismiss"
-          @click=${this.handleDismiss}
+        <strong>Orchestrator selected.</strong> Hit Execute and it will read
+        your paper, figure out what needs work, and propose tasks for you to
+        approve in the Progress view. Press <strong>y</strong>/<strong
+          >n</strong
         >
-          <span class="codicon codicon-close"></span>
-        </button>
+        to approve or reject quickly.
+        <div class="orchestrator-banner-footer">
+          <span class="orchestrator-tip"
+            >Configure auto-approve and presets in Multi-Agent settings.</span
+          >
+          <button class="got-it-btn" @click=${this.handleDismiss}>
+            Got it
+          </button>
+        </div>
       </div>
     `;
   }
