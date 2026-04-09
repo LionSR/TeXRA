@@ -46,6 +46,7 @@ import {
   type SessionTypeChangeDetail,
 } from '@shared/schemas';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
+import { agentName } from '@shared/schemas/agent';
 import { capitalize } from '@shared/utils/string';
 
 import './components/FileSelectGroup';
@@ -619,24 +620,18 @@ export class MainApp extends MainAppBase {
   }
 
   /**
-   * Validate agent selection with name-based matching.
-   * Handles source changes (e.g. remote:lean → builtInToolUse:lean after dedup)
-   * and plain-name defaults (e.g. 'orchestrator' matching 'remote:orchestrator').
-   * Does NOT silently fall back — if the agent is gone, keeps the stale value
+   * No silent fallback — if the agent is gone, keeps the stale value
    * so the dropdown shows no selection and execution errors explicitly.
    */
   private validateAgentSelection(
     options: AgentOptionData[],
     currentValue: string,
   ): string {
-    // Exact match (source:name)
     if (options.some((opt) => opt.value === currentValue)) {
       return currentValue;
     }
     // Match by name: handles source changes and plain-name defaults
-    const name = currentValue.includes(':')
-      ? currentValue.slice(currentValue.indexOf(':') + 1)
-      : currentValue;
+    const name = agentName(currentValue);
     const byName = options.find((opt) => opt.label === name);
     if (byName) return byName.value;
     // No match — keep stale value so the UI shows no selection.

@@ -14,7 +14,7 @@ import * as logger from '@agent/core/logger';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state';
 import type { AgentOptionData } from '@shared/schemas';
-import { agentKey as createKey } from '@shared/schemas/agent';
+import { agentKey as createKey, agentName } from '@shared/schemas/agent';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
 
@@ -344,26 +344,23 @@ export function resolveAgent(
   };
 }
 
-/** Get all workflow agents, deduplicated by name (excludes internal agents by default). */
-export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
+function getAgentsByCategory(
+  category: AgentCategory,
+  includeInternal: boolean,
+): AgentEntry[] {
   return deduplicateByName(
     [...cache.values()].filter(
-      (e) =>
-        e.category === AgentCategory.Workflow &&
-        (includeInternal || !e.internal),
+      (e) => e.category === category && (includeInternal || !e.internal),
     ),
   );
 }
 
-/** Get all tool-use agents, deduplicated by name (excludes internal agents by default). */
+export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
+  return getAgentsByCategory(AgentCategory.Workflow, includeInternal);
+}
+
 export function getToolUseAgents(includeInternal = false): AgentEntry[] {
-  return deduplicateByName(
-    [...cache.values()].filter(
-      (e) =>
-        e.category === AgentCategory.ToolUse &&
-        (includeInternal || !e.internal),
-    ),
-  );
+  return getAgentsByCategory(AgentCategory.ToolUse, includeInternal);
 }
 
 /** Get agents by source. */
@@ -620,7 +617,8 @@ export function resolveAgentKey(
 
 /**
  * Extract the clean agent name from an identifier.
- * Handles source:name format (e.g., "custom:summarize" → "summarize").
+ * Like agentName() but validates the prefix is a known AgentSource first,
+ * so arbitrary strings with colons (e.g. URLs) pass through unchanged.
  */
 export function getCleanAgentName(agentIdentifier: string): string {
   const colonIdx = agentIdentifier.indexOf(':');
@@ -629,7 +627,7 @@ export function getCleanAgentName(agentIdentifier: string): string {
   const source = agentIdentifier.slice(0, colonIdx);
   if (!AgentSource.safeParse(source).success) return agentIdentifier;
 
-  return agentIdentifier.slice(colonIdx + 1);
+  return agentName(agentIdentifier);
 }
 
 // =============================================================================
@@ -712,22 +710,9 @@ function filterVisible(
 ): AgentEntry[] {
   // undefined = never configured → show all; [] = explicitly empty → show none
   if (configured === undefined) return entries;
-  const configuredSet = new Set(configured);
-
-  // Extract plain names from stored keys (e.g. "builtInToolUse:lean" → "lean")
-  // so visibility survives when dedup changes the winning source.
-  const configuredNames = new Set<string>();
-  for (const key of configured) {
-    const idx = key.indexOf(':');
-    if (idx >= 0) configuredNames.add(key.slice(idx + 1));
-  }
-
-  return entries.filter(
-    (entry) =>
-      configuredSet.has(createKey(entry.source, entry.name)) ||
-      configuredSet.has(entry.name) ||
-      configuredNames.has(entry.name),
-  );
+  // Match by name so visibility survives when dedup changes the winning source.
+  const enabledNames = new Set(configured.map(agentName));
+  return entries.filter((entry) => enabledNames.has(entry.name));
 }
 
 // =============================================================================

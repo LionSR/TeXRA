@@ -328,6 +328,19 @@ function formatAgentList(
     .join('\n');
 }
 
+/** Find a visible agent by name or throw with available agents listed. */
+function resolveVisibleAgent(category: 'workflow' | 'toolUse', name: string) {
+  const visible = getVisibleAgents(category);
+  const entry = visible.find((a) => a.name === name);
+  if (!entry) {
+    const available = visible.map((a) => a.name).join(', ');
+    throw new Error(
+      `Unknown ${category} agent '${name}'. Available: ${available}`,
+    );
+  }
+  return entry;
+}
+
 /** Build a concise summary of proposal parameters for rejection echo. */
 function summarizeProposal(
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
@@ -532,16 +545,7 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
-    // Validate agent is visible and is a workflow agent
-    const visible = getVisibleAgents('workflow');
-    const agentEntry = visible.find((a) => a.name === input.agent);
-    if (!agentEntry) {
-      const available = visible.map((a) => a.name).join(', ');
-      throw new Error(
-        `Unknown workflow agent '${input.agent}'. Available: ${available}`,
-      );
-    }
-
+    const agentEntry = resolveVisibleAgent('workflow', input.agent);
     const ctx = getRequiredContext();
 
     // Resolve model: explicit input → parent model → first visible model
@@ -686,15 +690,7 @@ Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliograp
       );
     }
 
-    // Validate agent is visible and is a tool-use agent
-    const visible = getVisibleAgents('toolUse');
-    const agentEntry = visible.find((a) => a.name === input.agent);
-    if (!agentEntry) {
-      const available = visible.map((a) => a.name).join(', ');
-      throw new Error(
-        `Unknown tool-use agent '${input.agent}'. Available: ${available}`,
-      );
-    }
+    const agentEntry = resolveVisibleAgent('toolUse', input.agent);
 
     const ctx = getRequiredContext();
 
