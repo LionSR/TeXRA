@@ -4,8 +4,12 @@
  * Delegates to a settable backend. Default: console.
  * VS Code sets the real OutputChannel-backed backend at activation via
  * `setLogBackend()`.
+ *
+ * NOTE: Group-context functions (getActiveGroupId, runWithGroupContext) are
+ * intentionally NOT exposed here. They are used only by AgentLogger, which
+ * calls @logger/logUtils directly. Duplicating AsyncLocalStorage here would
+ * cause silent context divergence.
  */
-import { AsyncLocalStorage } from 'async_hooks';
 
 export interface LogUtilsOptions {
   isAgent?: boolean;
@@ -20,16 +24,6 @@ export interface LogBackend {
   info(channel: string, message: string, options?: LogUtilsOptions): void;
   warn(channel: string, message: string, options?: LogUtilsOptions): void;
   error(channel: string, message: string, options?: LogUtilsOptions): void;
-}
-
-// ---------------------------------------------------------------------------
-// Group context (AsyncLocalStorage) – independent of the output backend.
-// ---------------------------------------------------------------------------
-
-const contextStorage = new AsyncLocalStorage<Map<string, string[]>>();
-
-function getKey(channel: string, isAgent: boolean): string {
-  return `${channel}::${isAgent ? 'agent' : 'shared'}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +64,7 @@ export function setLogBackend(b: LogBackend): void {
 }
 
 // ---------------------------------------------------------------------------
-// Public API – matches the surface used by src/agent/ and AgentLogger.
+// Public API – matches the surface used by src/agent/ files.
 // ---------------------------------------------------------------------------
 
 export function initialize(channel: string, isAgent = false): void {
@@ -107,25 +101,4 @@ export function error(
   options: LogUtilsOptions = {},
 ): void {
   backend.error(channel, message, options);
-}
-
-export function getActiveGroupId(
-  channel: string,
-  isAgent = false,
-): string | undefined {
-  return contextStorage.getStore()?.get(getKey(channel, isAgent))?.at(-1);
-}
-
-export function runWithGroupContext<T>(
-  channel: string,
-  groupId: string,
-  isAgent: boolean,
-  fn: () => Promise<T> | T,
-): Promise<T> {
-  const parentStore = contextStorage.getStore() ?? new Map<string, string[]>();
-  const childStore = new Map(parentStore);
-  const key = getKey(channel, isAgent);
-  const stack = childStore.get(key) ?? [];
-  childStore.set(key, [...stack, groupId]);
-  return contextStorage.run(childStore, () => Promise.resolve().then(fn));
 }
