@@ -1252,6 +1252,7 @@ export class MainApp extends MainAppBase {
         this.workflowAgent.set(message.agentId);
       }
     }
+    this.refreshInstructionPlaceholder(false);
     this.saveState();
   }
 
