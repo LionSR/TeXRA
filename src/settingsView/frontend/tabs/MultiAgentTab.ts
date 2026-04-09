@@ -392,33 +392,32 @@ export class MultiAgentTab extends LitElement {
       <div class="multi-agent-container tab-content-container">
         <div class="how-it-works">
           <strong
-            >The orchestrator reads your paper and figures out what to
-            do.</strong
+            >The orchestrator reads your paper and delegates tasks to
+            specialized agents.</strong
           >
-          It breaks the work into tasks and hands each one to the right agent.
+          Each agent focuses on what it does best — writing, citations, figures,
+          formatting, and more.
           <ol class="how-it-works-steps">
             <li class="how-it-works-step">
               <span class="step-number">1</span>
               <span
                 ><strong>Pick a preset</strong> below that matches your field.
-                This decides which agents the orchestrator can use.</span
+                This decides which specialized agents are available.</span
               >
             </li>
             <li class="how-it-works-step">
               <span class="step-number">2</span>
               <span
-                ><strong>Select orchestrator</strong> from the Interactive agent
-                dropdown in the main view (look for the 🎯 icon), then click
-                Execute.</span
+                ><strong>Select orchestrator</strong> from the agent dropdown
+                (look for the 🎯 icon), then click Execute.</span
               >
             </li>
             <li class="how-it-works-step">
               <span class="step-number">3</span>
               <span
-                ><strong>Approve tasks</strong> in the Progress view as they
-                come in -- press <strong>y</strong> to approve or
-                <strong>n</strong> to reject. Or turn on auto-approve
-                below.</span
+                ><strong>Approve tasks</strong> in Progress as they come in —
+                press <strong>y</strong> to approve or <strong>n</strong> to
+                reject. Or turn on auto-approve below.</span
               >
             </li>
           </ol>
