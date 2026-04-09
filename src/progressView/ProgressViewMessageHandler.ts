@@ -1083,7 +1083,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
       });
       await vscode.window.showWarningMessage(
-        'Could not map output files to original inputs. File names may not match.',
+        'Could not match output files to their originals — the file names may have changed. Try running the agent again on the original files.',
       );
       return;
     }
