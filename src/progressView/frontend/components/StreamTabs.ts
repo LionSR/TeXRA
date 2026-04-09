@@ -206,7 +206,7 @@ export class StreamTab extends LitElement {
         width: var(--height-control);
         min-width: var(--height-control);
         height: var(--height-control);
-        margin: 0 var(--spacing-small) 0 0;
+        margin: 0;
         color: var(--vscode-icon-foreground, var(--vscode-foreground));
         transition:
           color var(--transition-fast),
@@ -470,6 +470,7 @@ export class StreamTabs extends LitElement {
         flex: 1;
         overflow-y: auto;
         min-height: 0;
+        scrollbar-width: thin;
       }
 
       .clear-all-container {
