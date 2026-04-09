@@ -2,14 +2,11 @@
  * State store facade — convenience wrapper over platform().globalState / workspaceState.
  */
 import { platform } from '@platform/platform';
-import type { StateStore } from '@platform/interfaces/state';
 
-export type { StateStore };
-
-export function getGlobalState(): StateStore {
+export function getGlobalState() {
   return platform().globalState;
 }
 
-export function getWorkspaceState(): StateStore {
+export function getWorkspaceState() {
   return platform().workspaceState;
 }

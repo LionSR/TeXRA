@@ -10,9 +10,7 @@
  */
 import { tryPlatform } from '@platform/platform';
 import { consoleLog } from '@platform/defaults/consoleLog';
-import type { LogBackend, LogUtilsOptions } from '@platform/interfaces/log';
-
-export type { LogBackend, LogUtilsOptions };
+import type { LogBackend } from '@platform/interfaces/log';
 
 function backend(): LogBackend {
   return tryPlatform()?.log ?? consoleLog;
@@ -25,7 +23,7 @@ export function initialize(channel: string, isAgent = false): void {
 export function debug(
   channel: string,
   message: string,
-  options: LogUtilsOptions = {},
+  options = {},
 ): void {
   backend().debug(channel, message, options);
 }
@@ -33,7 +31,7 @@ export function debug(
 export function info(
   channel: string,
   message: string,
-  options: LogUtilsOptions = {},
+  options = {},
 ): void {
   backend().info(channel, message, options);
 }
@@ -41,7 +39,7 @@ export function info(
 export function warn(
   channel: string,
   message: string,
-  options: LogUtilsOptions = {},
+  options = {},
 ): void {
   backend().warn(channel, message, options);
 }
@@ -49,7 +47,7 @@ export function warn(
 export function error(
   channel: string,
   message: string,
-  options: LogUtilsOptions = {},
+  options = {},
 ): void {
   backend().error(channel, message, options);
 }
