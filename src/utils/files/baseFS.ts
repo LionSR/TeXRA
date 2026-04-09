@@ -8,6 +8,7 @@ import {
   getFileSystem,
   type FileStat,
 } from '@agent/core/filesystem';
+import { isFile, isDirectory } from '@common/files/fsEntryType';
 
 /** Convert content to Buffer for writing. */
 function toBuffer(content: string | Uint8Array): Uint8Array {
@@ -167,7 +168,7 @@ export abstract class BaseFS {
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
-      return stats.type === FileType.Directory;
+      return isDirectory(stats.type);
     } catch (_err) {
       return false;
     }
@@ -179,7 +180,7 @@ export abstract class BaseFS {
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
-      return stats.type === FileType.File;
+      return isFile(stats.type);
     } catch (_err) {
       return false;
     }
