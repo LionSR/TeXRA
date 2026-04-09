@@ -180,4 +180,10 @@ export class FileLister {
   }
 }
 
-export const fileLister = FileLister.getInstance();
+/**
+ * Lazy accessor — returns the singleton without forcing construction at import time.
+ * Direct use of `FileLister.getInstance()` is equivalent; this exists for convenience.
+ */
+export function getFileLister(): FileLister {
+  return FileLister.getInstance();
+}
