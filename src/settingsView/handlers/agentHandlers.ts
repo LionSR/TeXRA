@@ -12,7 +12,6 @@ import { z } from 'zod';
 import {
   type AgentEntry,
   createKey,
-  deduplicateByName,
   getAgent,
   getVisibleAgents,
   getWorkflowAgents,
@@ -725,9 +724,8 @@ prompts:
     category: 'workflow' | 'toolUse',
     names: Set<string>,
   ): string[] {
-    const entries = deduplicateByName(
-      category === 'workflow' ? getWorkflowAgents() : getToolUseAgents(),
-    );
+    const entries =
+      category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
     return entries
       .filter((e) => names.has(e.name))
       .map((e) => createKey(e.source, e.name));
