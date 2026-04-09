@@ -7,11 +7,11 @@ import {
   AgentPrompt,
   AgentCategory,
 } from '@agent/core/AgentDataclass';
+import { getConfig } from '@agent/core/config';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
-import { getConfig } from '@utils/config';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getListOfFiles, getXmlFormatFromFiles } from '@utils/prompt';
 import { setVarFromFile } from '@utils/files/varsUtils';

@@ -1,8 +1,8 @@
 import * as path from 'path';
 
+import { getConfig } from '@agent/core/config';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ExecutionId } from '@shared/schemas';
-import { getConfig } from '@utils/config';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { ensureRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
