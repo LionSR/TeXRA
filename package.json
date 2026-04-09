@@ -92,19 +92,19 @@
           "texra.model.useOpenAIResponsesAPI": {
             "type": "boolean",
             "default": true,
-            "description": "Use the OpenAI Responses API instead of the Chat Completions API when available.",
+            "description": "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
             "scope": "resource"
           },
           "texra.model.useBackgroundResponses": {
             "type": "boolean",
             "default": false,
-            "description": "Enable background mode for OpenAI Responses API to handle long-running generations (>10mins) more reliably by preventing request timeouts. Adds polling overhead.",
+            "description": "Keep long-running OpenAI requests alive in the background instead of timing out after 10 minutes. Useful for complex tasks but adds slight overhead.",
             "scope": "resource"
           },
           "texra.model.openaiParallelToolCalls": {
             "type": "boolean",
             "default": false,
-            "description": "Allow OpenAI models to call multiple tools in parallel within a single turn. When disabled (default), forces sequential tool calls to preserve existing behavior.",
+            "description": "Let OpenAI models use multiple tools at the same time for faster results. Disabled by default for more predictable behavior.",
             "scope": "resource"
           },
           "texra.model.compactionThresholdPercent": {
@@ -112,13 +112,13 @@
             "default": 75,
             "minimum": 0,
             "maximum": 100,
-            "description": "Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction via /responses/compact. For Anthropic, triggers native server-side compaction on Claude Opus 4.6. Set to 0 to disable.",
+            "description": "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
             "scope": "resource"
           },
           "texra.model.gpt5ReasoningSummary": {
             "type": "boolean",
             "default": false,
-            "description": "Request reasoning summaries from GPT-5 models (requires verified account and appropriate user tier).",
+            "description": "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
             "scope": "resource"
           },
           "texra.model.useCopilot": {
@@ -845,7 +845,7 @@
       },
       {
         "command": "texra.testConnection",
-        "title": "Test Text Connection Methods",
+        "title": "Test API Connection",
         "category": "TeXRA"
       },
       {
@@ -954,7 +954,8 @@
       },
       {
         "command": "texra.mainView.reset",
-        "title": "New",
+        "title": "New Session",
+        "shortTitle": "New",
         "category": "TeXRA",
         "icon": "$(new-file)"
       },
@@ -1027,7 +1028,8 @@
       },
       {
         "command": "texra.showDashboard",
-        "title": "Show Dashboard",
+        "title": "Show Settings Dashboard",
+        "shortTitle": "Settings",
         "category": "TeXRA",
         "icon": "$(gear)"
       },
@@ -1271,6 +1273,16 @@
           "command": "texra.cleanBuild",
           "group": "z_texra@2"
         }
+      ],
+      "commandPalette": [
+        { "command": "texra.testConnection", "when": "config.texra.logger.debugMode" },
+        { "command": "texra.testAgentLoading", "when": "config.texra.logger.debugMode" },
+        { "command": "texra.loadSpecificAgent", "when": "config.texra.logger.debugMode" },
+        { "command": "texra.testTextEditor", "when": "config.texra.logger.debugMode" },
+        { "command": "texra.parseXml", "when": "config.texra.logger.debugMode" },
+        { "command": "texra.parseYaml", "when": "config.texra.logger.debugMode" },
+        { "command": "texra.showLinterMessages", "when": "config.texra.logger.debugMode" },
+        { "command": "texra.countLinterMessages", "when": "config.texra.logger.debugMode" }
       ]
     },
     "keybindings": [

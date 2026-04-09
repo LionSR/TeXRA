@@ -77,7 +77,7 @@ export async function signIn(): Promise<void> {
         ? initError.message
         : 'Authentication service not initialized';
       void vscode.window.showErrorMessage(
-        `Sign in failed: ${reason}. Please reload VS Code and try again. If the issue persists, check the TeXRA output channel for errors.`,
+        `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
       );
       return;
     }
