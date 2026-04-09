@@ -1,5 +1,5 @@
 // Local imports - formatter implementations
-import { getConfig } from '@utils/config';
+import { getConfig } from '@agent/core/config';
 
 // Local file imports
 import { runLatexIndent } from './formatter/latexindentpt';

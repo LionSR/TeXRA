@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import { renderPrompt } from '@utils/prompt';
 import {
   flexibleFS,
@@ -10,7 +10,7 @@ import {
   pathToLocation,
   type FileLocation,
 } from '@utils/files';
-import { getConfig } from '@utils/config';
+import { getConfig } from '@agent/core/config';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';

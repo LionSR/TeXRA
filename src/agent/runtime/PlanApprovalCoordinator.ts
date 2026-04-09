@@ -9,7 +9,6 @@
 
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { Plan } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -74,8 +73,8 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     this.streamApprovalMap.set(streamId, approvalId);
     this.approvalStreamMap.set(approvalId, streamId);
 
-    // Show progress view to ensure user sees the approval prompt
-    void safeExecuteCommand('texra.showProgressView');
+    // Request host to show progress view so user sees the approval prompt
+    bus.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
     bus.emit('setActiveStream', { streamId });

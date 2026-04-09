@@ -9,8 +9,10 @@ export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
+  type AgentDirectories,
   // Core functions
   loadAgents,
+  setAgentDirectories,
   getAgent,
   resolveAgent,
   getWorkflowAgents,
