@@ -383,9 +383,9 @@ export class AgentSelectionPanel extends LitElement {
 
   private static readonly SOURCE_ORDER = [
     AGENT_SOURCE.CUSTOM,
+    AGENT_SOURCE.REMOTE,
     AGENT_SOURCE.BUILT_IN_WORKFLOW,
     AGENT_SOURCE.BUILT_IN_TOOL_USE,
-    AGENT_SOURCE.REMOTE,
   ];
 
   protected override willUpdate(changed: PropertyValues): void {

@@ -46,6 +46,7 @@ import {
   type SessionTypeChangeDetail,
 } from '@shared/schemas';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
+import { agentName } from '@shared/schemas/agent';
 import { capitalize } from '@shared/utils/string';
 
 import './components/FileSelectGroup';
@@ -600,10 +601,9 @@ export class MainApp extends MainAppBase {
     if (optionsData.workflow) {
       this.workflowAgentOptions.set(optionsData.workflow);
       this.workflowAgent.set(
-        this.validateSelection(
+        this.validateAgentSelection(
           optionsData.workflow,
           this.workflowAgent.get(),
-          true, // preferEnabled for consistency (agents don't have disabled, but future-proof)
         ),
       );
     }
@@ -611,13 +611,32 @@ export class MainApp extends MainAppBase {
     if (optionsData.toolUse) {
       this.toolUseAgentOptions.set(optionsData.toolUse);
       this.toolUseAgent.set(
-        this.validateSelection(
+        this.validateAgentSelection(
           optionsData.toolUse,
           this.toolUseAgent.get(),
-          true,
         ),
       );
     }
+  }
+
+  /**
+   * No silent fallback — if the agent is gone, keeps the stale value
+   * so the dropdown shows no selection and execution errors explicitly.
+   */
+  private validateAgentSelection(
+    options: AgentOptionData[],
+    currentValue: string,
+  ): string {
+    if (options.some((opt) => opt.value === currentValue)) {
+      return currentValue;
+    }
+    // Match by name: handles source changes and plain-name defaults
+    const name = agentName(currentValue);
+    const byName = options.find((opt) => opt.label === name);
+    if (byName) return byName.value;
+    // No match — keep stale value so the UI shows no selection.
+    // Execution will error with "unknown agent" if the user proceeds.
+    return currentValue;
   }
 
   private handleSetSingleFileOptions(
