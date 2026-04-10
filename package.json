@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.37.1",
+  "version": "0.37.2",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.105.0"
@@ -1275,14 +1275,38 @@
         }
       ],
       "commandPalette": [
-        { "command": "texra.testConnection", "when": "config.texra.logger.debugMode" },
-        { "command": "texra.testAgentLoading", "when": "config.texra.logger.debugMode" },
-        { "command": "texra.loadSpecificAgent", "when": "config.texra.logger.debugMode" },
-        { "command": "texra.testTextEditor", "when": "config.texra.logger.debugMode" },
-        { "command": "texra.parseXml", "when": "config.texra.logger.debugMode" },
-        { "command": "texra.parseYaml", "when": "config.texra.logger.debugMode" },
-        { "command": "texra.showLinterMessages", "when": "config.texra.logger.debugMode" },
-        { "command": "texra.countLinterMessages", "when": "config.texra.logger.debugMode" }
+        {
+          "command": "texra.testConnection",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.testAgentLoading",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.loadSpecificAgent",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.testTextEditor",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.parseXml",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.parseYaml",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.showLinterMessages",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.countLinterMessages",
+          "when": "config.texra.logger.debugMode"
+        }
       ]
     },
     "keybindings": [
