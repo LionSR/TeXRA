@@ -23,6 +23,8 @@ export interface ExtractOptions {
   channel?: string;
 }
 
+export type ArxivDownloadDestination = 'root' | 'references';
+
 const INVALID_ARXIV_INPUT_ERROR =
   'Invalid arXiv ID or URL. Please provide a valid arXiv ID (e.g., 2404.12175) or URL (e.g., https://arxiv.org/abs/2404.12175)';
 
@@ -168,6 +170,7 @@ export class ArxivSourceProcessor {
     input: string,
     progressCallback?: (msg: string, increment?: number) => void,
     autoIndent = true,
+    destination: ArxivDownloadDestination = 'references',
   ): Promise<{ path: string; alreadyExisted: boolean }> {
     // Normalize input (URL or ID) to plain arXiv ID
     const id = this.normalizeInput(input);
@@ -182,9 +185,11 @@ export class ArxivSourceProcessor {
       throw new Error('No workspace folder is open');
     }
 
-    // Create project directory for the arXiv paper inside References/ (sanitize ID to avoid path issues)
+    // Determine download location based on destination preference.
+    // 'references' places files in References/{id}, 'root' places files directly in the workspace root.
     // Use forward slashes to match WorkspaceFS.relativePath() convention (not path.join which uses backslashes on Windows)
-    const paperDirRelative = `References/${id.replaceAll('/', '_')}`;
+    const paperDirRelative =
+      destination === 'root' ? '.' : `References/${id.replaceAll('/', '_')}`;
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
 
     // Check if source was already downloaded successfully.

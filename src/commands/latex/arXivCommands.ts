@@ -4,7 +4,10 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { toErrorMessage } from '@common/errors';
-import { arxivProcessor } from '@latex/arxivProcessor';
+import {
+  arxivProcessor,
+  type ArxivDownloadDestination,
+} from '@latex/arxivProcessor';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'arXivCommands';
@@ -32,6 +35,36 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
             return;
           }
 
+          const normalizedId = arxivProcessor.normalizeInput(arxivId);
+          const paperId = normalizedId
+            ? normalizedId.replaceAll('/', '_')
+            : arxivId;
+
+          const destinationPick = await vscode.window.showQuickPick(
+            [
+              {
+                label: `References/${paperId}`,
+                description: 'Download into References folder',
+                value: 'references' as ArxivDownloadDestination,
+              },
+              {
+                label: 'Workspace root',
+                description: 'Download directly into the workspace root',
+                value: 'root' as ArxivDownloadDestination,
+              },
+            ],
+            {
+              placeHolder: 'Where should the source be downloaded?',
+              canPickMany: false,
+            },
+          );
+
+          if (!destinationPick) {
+            return;
+          }
+
+          const destination = destinationPick.value;
+
           const autoIndent =
             (await vscode.window.showQuickPick(['Yes', 'No'], {
               placeHolder: 'Auto-indent LaTeX files after download?',
@@ -52,6 +85,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
                 arxivId,
                 (message, increment) => progress.report({ message, increment }),
                 autoIndent,
+                destination,
               );
               return downloadResult.path;
             },
