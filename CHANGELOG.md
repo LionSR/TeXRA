@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.37.2] - 2026-04-09
+
+### Features
+
+- **Orchestrator-first onboarding** — the getting-started walkthrough now recommends the orchestrator as the default agent. New users see a contextual banner explaining the proposal-based workflow, and the orchestrator is pre-selected in the agent dropdown.
+- **Codex reasoning effort setting** — new dropdown in the Tools settings tab to control Codex reasoning effort (Low / Medium / High / Extra High).
+- **Interrupt background waits** — when an agent is waiting on background tasks, sending a follow-up message now interrupts the wait immediately instead of queuing silently.
+- **Standalone Codex skills** — added ready-made Codex skills for research and Lean workflows.
+
+### Improvements
+
+- **Clearer labels and terminology** — renamed "Super YOLO" to "Auto-approve delegated tasks", renamed "Chat" mode to "Interactive", unified approval button labels, rewrote model setting descriptions in plain language, and hid internal commands from the command palette.
+- **Orchestrator UX** — info banner with guidance and a direct link to Multi-Agent settings, and per-mode instructions that persist when switching between Interactive and Workflow.
+- **Richer Codex display** — Codex actions now show structured cards with command previews, file lists, and status badges.
+- **Better error messages** — sign-in failures now show actionable steps, agent-not-found errors suggest what to try next, and warnings use friendlier language.
+- Tighter stream tabs layout.
+- Updated dependencies (axios, openai, vite).
+
+### Bug Fixes
+
+- Fixed extension occasionally failing to activate on startup.
+
 ## [0.37.0] - 2026-04-04
 
 ### Features
