@@ -59,6 +59,7 @@ export const SETTINGS_VIEW_CMD = {
   CUSTOMIZE_AGENT: 'customizeAgent',
   DELETE_CUSTOM_AGENT: 'deleteCustomAgent',
   REVEAL_AGENT_FILE: 'revealAgentFile',
+  VIEW_REMOTE_AGENT_PROMPT: 'viewRemoteAgentPrompt',
   // Custom agent directory commands
   GET_CUSTOM_AGENT_DIR: 'getCustomAgentDir',
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',

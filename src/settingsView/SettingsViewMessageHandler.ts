@@ -430,6 +430,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.agentHandlers.handleDeleteCustomAgent(data),
       [SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE]: (data) =>
         this.agentHandlers.handleRevealAgentFile(data),
+      [SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT]: (data) =>
+        this.agentHandlers.handleViewRemoteAgentPrompt(data),
 
       // Custom agent directory
       [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
