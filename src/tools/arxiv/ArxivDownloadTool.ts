@@ -3,10 +3,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
-import {
-  arxivProcessor,
-  type ArxivDownloadDestination,
-} from '@latex/arxivProcessor';
+import { arxivProcessor } from '@latex/arxivProcessor';
 import { LsTool } from '@tools/ls';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatToolOutput } from '@tools/utils';
@@ -23,7 +20,7 @@ const ArxivDownloadInputSchema = z.strictObject({
   destination: z
     .enum(['root', 'references'])
     .nullish()
-    .transform((v): ArxivDownloadDestination => v ?? 'references'),
+    .transform((v) => v ?? ('references' as const)),
 });
 
 export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
@@ -43,12 +40,10 @@ export class ArxivDownloadTool extends defineTool({
 
     let downloadResult: { path: string; alreadyExisted: boolean };
     try {
-      downloadResult = await arxivProcessor.downloadSource(
-        arxivId,
-        undefined,
-        input.autoIndent,
-        input.destination,
-      );
+      downloadResult = await arxivProcessor.downloadSource(arxivId, {
+        autoIndent: input.autoIndent,
+        destination: input.destination,
+      });
     } catch (err) {
       throw new ToolError(
         `Failed to download arXiv source: ${toErrorMessage(err)}`,

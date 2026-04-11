@@ -25,6 +25,12 @@ export interface ExtractOptions {
 
 export type ArxivDownloadDestination = 'root' | 'references';
 
+export interface DownloadSourceOptions {
+  progressCallback?: (msg: string, increment?: number) => void;
+  autoIndent?: boolean;
+  destination?: ArxivDownloadDestination;
+}
+
 const INVALID_ARXIV_INPUT_ERROR =
   'Invalid arXiv ID or URL. Please provide a valid arXiv ID (e.g., 2404.12175) or URL (e.g., https://arxiv.org/abs/2404.12175)';
 
@@ -81,6 +87,12 @@ export class ArxivSourceProcessor {
   public validateId(input: string): string | null {
     if (!input) return 'arXiv ID or URL is required';
     return this.normalizeInput(input) ? null : INVALID_ARXIV_INPUT_ERROR;
+  }
+
+  /** Sanitized directory name for a paper (e.g. `2404.12175` or `cs_0501072`). */
+  public getPaperDirName(input: string): string {
+    const id = this.normalizeInput(input);
+    return id ? id.replaceAll('/', '_') : input;
   }
 
   public async downloadFile(
@@ -168,10 +180,14 @@ export class ArxivSourceProcessor {
 
   public async downloadSource(
     input: string,
-    progressCallback?: (msg: string, increment?: number) => void,
-    autoIndent = true,
-    destination: ArxivDownloadDestination = 'references',
+    options: DownloadSourceOptions = {},
   ): Promise<{ path: string; alreadyExisted: boolean }> {
+    const {
+      progressCallback,
+      autoIndent = true,
+      destination = 'references',
+    } = options;
+
     // Normalize input (URL or ID) to plain arXiv ID
     const id = this.normalizeInput(input);
     if (!id) {
@@ -185,18 +201,18 @@ export class ArxivSourceProcessor {
       throw new Error('No workspace folder is open');
     }
 
-    // Determine download location based on destination preference.
-    // 'references' places files in References/{id}, 'root' places files directly in the workspace root.
+    const isRoot = destination === 'root';
     // Use forward slashes to match WorkspaceFS.relativePath() convention (not path.join which uses backslashes on Windows)
-    const paperDirRelative =
-      destination === 'root' ? '.' : `References/${id.replaceAll('/', '_')}`;
+    const paperDirRelative = isRoot
+      ? '.'
+      : `References/${id.replaceAll('/', '_')}`;
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
 
     // Check if source was already downloaded successfully.
-    // A .tex file in the paper directory is a reliable signal that extraction completed,
-    // regardless of whether the staging 'download' dir was cleaned up afterwards.
+    // Skip for root destination — the workspace root likely already contains .tex files
+    // that would produce a false positive.
     let needsDownload = true;
-    if (await WorkspaceFS.exists(paperDirRelative)) {
+    if (!isRoot && (await WorkspaceFS.exists(paperDirRelative))) {
       const entries = await WorkspaceFS.readDir(paperDirRelative);
       const hasTexFiles = entries.some(([name]) => name.endsWith('.tex'));
       if (hasTexFiles) {
@@ -232,9 +248,12 @@ export class ArxivSourceProcessor {
         await AbsoluteFS.delete(downloadDirFull, { recursive: true }).catch(
           () => undefined,
         );
-        await AbsoluteFS.delete(paperDirFull, { recursive: true }).catch(
-          () => undefined,
-        );
+        // Only clean up the paper directory when it was created for this download
+        if (!isRoot) {
+          await AbsoluteFS.delete(paperDirFull, { recursive: true }).catch(
+            () => undefined,
+          );
+        }
         throw new Error(
           'This arXiv paper only has a PDF submission — no LaTeX source is available for download',
         );
@@ -295,7 +314,8 @@ export class ArxivSourceProcessor {
       );
     }
 
-    if (autoIndent) {
+    // Skip auto-indent for root destination to avoid reformatting existing workspace files
+    if (autoIndent && !isRoot) {
       progressCallback?.('Formatting LaTeX files...', 85);
 
       const indentedCount = await indentLatexFilesInDirectory(

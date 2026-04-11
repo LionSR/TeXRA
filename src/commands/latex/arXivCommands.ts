@@ -35,10 +35,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
             return;
           }
 
-          const normalizedId = arxivProcessor.normalizeInput(arxivId);
-          const paperId = normalizedId
-            ? normalizedId.replaceAll('/', '_')
-            : arxivId;
+          const paperId = arxivProcessor.getPaperDirName(arxivId);
 
           const destinationPick = await vscode.window.showQuickPick(
             [
@@ -83,9 +80,12 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
 
               const downloadResult = await arxivProcessor.downloadSource(
                 arxivId,
-                (message, increment) => progress.report({ message, increment }),
-                autoIndent,
-                destination,
+                {
+                  progressCallback: (message, increment) =>
+                    progress.report({ message, increment }),
+                  autoIndent,
+                  destination,
+                },
               );
               return downloadResult.path;
             },
