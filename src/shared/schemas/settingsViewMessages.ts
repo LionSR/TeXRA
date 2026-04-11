@@ -523,6 +523,11 @@ const RevealAgentFileMessageSchema = z.object({
   agentSource: AgentSourceSchema,
 });
 
+const ViewRemoteAgentPromptMessageSchema = z.object({
+  command: z.literal(CMD.VIEW_REMOTE_AGENT_PROMPT),
+  agentName: z.string().min(1),
+});
+
 // Custom agent directory inbound messages
 const GetCustomAgentDirMessageSchema = commandOnly(CMD.GET_CUSTOM_AGENT_DIR);
 const SetCustomAgentDirMessageSchema = commandOnly(CMD.SET_CUSTOM_AGENT_DIR);
@@ -715,6 +720,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     CustomizeAgentMessageSchema,
     DeleteCustomAgentMessageSchema,
     RevealAgentFileMessageSchema,
+    ViewRemoteAgentPromptMessageSchema,
     // Custom agent directory messages
     GetCustomAgentDirMessageSchema,
     SetCustomAgentDirMessageSchema,
