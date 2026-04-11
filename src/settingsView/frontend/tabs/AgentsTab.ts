@@ -183,6 +183,7 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) customAgentDir = '';
   @property({ attribute: false }) customAgentDirIsDefault = true;
   @property({ attribute: false }) initialSubTab?: AgentCategory;
+  @property({ attribute: false }) userTier = 'free';
 
   @state() private activeSubTab: AgentCategory = 'workflow';
 
@@ -329,6 +330,7 @@ export class AgentsTab extends LitElement {
         <agent-selection-panel
           .agents=${activeAgents}
           .category=${this.activeSubTab}
+          .userTier=${this.userTier}
         ></agent-selection-panel>
       </div>
     `;

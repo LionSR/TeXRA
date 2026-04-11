@@ -562,6 +562,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
   );
 
+  private handleViewRemoteAgentPrompt = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT,
+  );
+
   private handleSuperYoloToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED,
   );
@@ -794,6 +798,7 @@ export class SettingsApp extends SettingsAppBase {
               .customAgentDir=${this.customAgentDir.get()}
               .customAgentDirIsDefault=${this.customAgentDirIsDefault.get()}
               .initialSubTab=${this.agentSubTab.get()}
+              .userTier=${this.tier.get()}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
               @agent-all-enabled-set=${this.handleSetAllAgentsEnabled}
@@ -805,6 +810,7 @@ export class SettingsApp extends SettingsAppBase {
               @agent-set-custom-dir=${this.handleSetCustomAgentDir}
               @agent-reset-custom-dir=${this.handleResetCustomAgentDir}
               @save-agent-mode-preset=${this.handleSaveAgentModePreset}
+              @agent-view-remote-prompt=${this.handleViewRemoteAgentPrompt}
             ></agents-tab>
           </vscode-tab-panel>
 
