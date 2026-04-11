@@ -301,7 +301,6 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.VIEW_REMOTE_AGENT_PROMPT>,
   ): Promise<void> {
     try {
-      // Verify Ultra tier
       const tier = await SupabaseClient.getUserTier();
       if (tier !== ULTRA_TIER) {
         await vscode.window.showErrorMessage(
@@ -318,7 +317,6 @@ export class AgentHandlers {
         return;
       }
 
-      // Fetch raw YAML from edge function
       const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
         method: 'POST',
         headers: {
@@ -340,19 +338,11 @@ export class AgentHandlers {
         await response.json(),
       );
 
-      // Open as a read-only virtual document
-      const uri = vscode.Uri.parse(
-        `untitled:${data.agentName}.yaml?readonly=true`,
-      );
-      const doc = await vscode.workspace.openTextDocument(uri);
-      const editor = await vscode.window.showTextDocument(doc, {
-        preview: false,
+      const doc = await vscode.workspace.openTextDocument({
+        content: responseData.config,
+        language: 'yaml',
       });
-
-      // Insert YAML content
-      await editor.edit((editBuilder) => {
-        editBuilder.insert(new vscode.Position(0, 0), responseData.config);
-      });
+      await vscode.window.showTextDocument(doc, { preview: false });
     } catch (error) {
       await showLoggedErrorMessage(
         this.ctx.channel,
