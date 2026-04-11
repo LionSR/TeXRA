@@ -369,6 +369,7 @@ export class AgentSelectionPanel extends LitElement {
 
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
   @property({ attribute: false }) category: AgentCategory = 'workflow';
+  @property({ attribute: false }) userTier = 'free';
 
   @state() private selectedKey: string | null = null;
 
@@ -498,6 +499,12 @@ export class AgentSelectionPanel extends LitElement {
 
   private cancelDelete(): void {
     this.pendingDeleteKey = null;
+  }
+
+  private handleViewRemotePrompt(agent: AgentSelectionItem): void {
+    this.dispatchEvent(
+      AgentSelectionEvents.viewRemotePrompt({ agentName: agent.name }),
+    );
   }
 
   private handleRevealAgentFile(agent: AgentSelectionItem): void {
@@ -709,6 +716,20 @@ export class AgentSelectionPanel extends LitElement {
                 >
                   <span class="codicon codicon-file-code"></span>
                   Open YAML
+                </button>
+              `
+            : nothing}
+          ${agent.source === AGENT_SOURCE.REMOTE &&
+          this.userTier === 'Ultra' &&
+          !agent.hasPath
+            ? html`
+                <button
+                  class="agent-action-btn"
+                  @click=${() => this.handleViewRemotePrompt(agent)}
+                  title="View the remote agent's prompt definition (read-only)"
+                >
+                  <span class="codicon codicon-file-code"></span>
+                  View Prompt
                 </button>
               `
             : nothing}
