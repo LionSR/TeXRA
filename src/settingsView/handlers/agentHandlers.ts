@@ -18,6 +18,9 @@ import {
   getToolUseAgents,
   loadAgents,
 } from '@agent/index';
+import { EdgeFunctionResponseSchema } from '@agent/remote/types';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
@@ -289,6 +292,71 @@ export class AgentHandlers {
       await showLoggedErrorMessage(
         this.ctx.channel,
         'Failed to reveal agent file',
+        error,
+      );
+    }
+  }
+
+  async handleViewRemoteAgentPrompt(
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.VIEW_REMOTE_AGENT_PROMPT>,
+  ): Promise<void> {
+    try {
+      // Verify Ultra tier
+      const tier = await SupabaseClient.getUserTier();
+      if (tier !== ULTRA_TIER) {
+        await vscode.window.showErrorMessage(
+          'Viewing remote agent prompts requires an Ultra plan.',
+        );
+        return;
+      }
+
+      const token = await SupabaseClient.getAccessToken();
+      if (!token) {
+        await vscode.window.showErrorMessage(
+          'Authentication required. Sign in using "TeXRA: Sign In".',
+        );
+        return;
+      }
+
+      // Fetch raw YAML from edge function
+      const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ agentName: data.agentName }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        await vscode.window.showErrorMessage(
+          `Failed to fetch agent prompt: ${errorText}`,
+        );
+        return;
+      }
+
+      const responseData = EdgeFunctionResponseSchema.parse(
+        await response.json(),
+      );
+
+      // Open as a read-only virtual document
+      const uri = vscode.Uri.parse(
+        `untitled:${data.agentName}.yaml?readonly=true`,
+      );
+      const doc = await vscode.workspace.openTextDocument(uri);
+      const editor = await vscode.window.showTextDocument(doc, {
+        preview: false,
+      });
+
+      // Insert YAML content
+      await editor.edit((editBuilder) => {
+        editBuilder.insert(new vscode.Position(0, 0), responseData.config);
+      });
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Failed to view remote agent prompt',
         error,
       );
     }
