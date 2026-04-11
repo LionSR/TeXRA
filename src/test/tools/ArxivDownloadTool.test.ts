@@ -12,9 +12,8 @@ declare module '@latex/arxivProcessor' {
   interface ArxivSourceProcessor {
     validateId(id: string): string | null;
     downloadSource(
-      id: string,
-      progress?: (msg: string, increment?: number) => void,
-      autoIndent?: boolean,
+      input: string,
+      options?: DownloadSourceOptions,
     ): Promise<{ path: string; alreadyExisted: boolean }>;
   }
 }
@@ -54,9 +53,9 @@ describe('ArxivDownloadTool', () => {
       return null;
     };
 
-    processor.downloadSource = async (id, _progress, autoIndent) => {
+    processor.downloadSource = async (id, options) => {
       receivedId = id;
-      receivedAutoIndent = autoIndent;
+      receivedAutoIndent = options?.autoIndent;
       return { path: '/workspace/project/sample', alreadyExisted: false };
     };
 
