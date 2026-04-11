@@ -227,11 +227,12 @@ export class ArxivSourceProcessor {
     if (needsDownload) {
       await WorkspaceFS.ensureDir(paperDirRelative);
 
-      // Create temporary download subdirectory for staging the archive
-      const downloadDirRelative = path.join(paperDirRelative, 'download');
+      // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
+      const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
+      const downloadDirRelative = path.join(paperDirRelative, stagingDirName);
       await WorkspaceFS.ensureDir(downloadDirRelative);
 
-      const downloadDirFull = path.join(paperDirFull, 'download');
+      const downloadDirFull = path.join(paperDirFull, stagingDirName);
       const downloadBasePath = path.join(downloadDirFull, 'source');
 
       progressCallback?.(`Downloading arXiv source for ${id}...`, 20);

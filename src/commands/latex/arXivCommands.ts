@@ -62,7 +62,9 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
 
           const destination = destinationPick.value;
 
+          // Auto-indent is not supported for root destination (would reformat all workspace files)
           const autoIndent =
+            destination !== 'root' &&
             (await vscode.window.showQuickPick(['Yes', 'No'], {
               placeHolder: 'Auto-indent LaTeX files after download?',
               canPickMany: false,
