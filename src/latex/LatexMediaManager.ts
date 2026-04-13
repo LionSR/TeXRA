@@ -16,6 +16,7 @@ import {
 import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
+import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
 import { tikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
@@ -135,6 +136,51 @@ export class LatexMediaManager {
     for (const result of compileResults) {
       if (result) {
         workspaceState.media.addMediaFiles([result]);
+      }
+    }
+  }
+
+  /**
+   * Parse \input, \include, \bibliography, and \addbibresource commands
+   * from LaTeX files and mirror the discovered dependencies into run storage.
+   * This ensures output files in run storage can be compiled successfully
+   * when the main document references other files.
+   */
+  private async mirrorLatexFileDependencies(
+    files: FileLocation[],
+  ): Promise<void> {
+    if (!this.fileService?.hasRunDirectory() || files.length === 0) {
+      return;
+    }
+
+    for (const file of files) {
+      try {
+        const deps = await extractLatexFileDependencies(file);
+        if (deps.length === 0) continue;
+
+        const baseDir = path.dirname(file.absolutePath);
+        const tasks = deps.map(async (relative) => {
+          const absolutePath = path.normalize(path.join(baseDir, relative));
+          try {
+            await this.fileService!.mirrorWorkspaceFile(
+              pathToLocation(absolutePath),
+            );
+          } catch (error) {
+            const message = toErrorMessage(error);
+            this.logger.debug(
+              `Unable to mirror LaTeX dependency ${absolutePath}: ${message}`,
+            );
+          }
+        });
+
+        await Promise.all(tasks);
+        this.logger.debug(
+          `Mirrored ${deps.length} LaTeX file dependencies from ${file.absolutePath}`,
+        );
+      } catch (error) {
+        this.logger.debug(
+          `Unable to extract LaTeX dependencies from ${file.absolutePath}: ${toErrorMessage(error)}`,
+        );
       }
     }
   }
@@ -272,6 +318,10 @@ export class LatexMediaManager {
 
     if (includeFigureExtraction && cfg.autoExtractFigure) {
       await this.extractFiguresFromFiles(existingFiles, workspaceState);
+    }
+
+    if (includeFigureExtraction) {
+      await this.mirrorLatexFileDependencies(existingFiles);
     }
 
     if (includeTikzCompilation && cfg.autoExtractTikzFigure) {
