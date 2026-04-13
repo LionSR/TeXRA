@@ -15,14 +15,8 @@ import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
-/** Comment line pattern — lines starting with optional whitespace then %. */
 const COMMENT_LINE = /^\s*%/;
 
-/**
- * Strip full-line comments from LaTeX content.
- * Inline comments (mid-line %) are kept to avoid breaking regex matching
- * on the same line; the extracted paths themselves never contain %.
- */
 function stripCommentLines(content: string): string {
   return content
     .split('\n')
@@ -34,26 +28,23 @@ function stripCommentLines(content: string): string {
 // Regex patterns
 // ---------------------------------------------------------------------------
 
-/** Matches \input{path} — LaTeX does NOT add .tex automatically for \input
- *  but many authors omit it. We try both with and without .tex. */
 const INPUT_PATTERN = /\\input\s*\{([^}]+)\}/g;
-
-/** Matches \include{path} — LaTeX always appends .tex for \include. */
 const INCLUDE_PATTERN = /\\include\s*\{([^}]+)\}/g;
 
-/** Matches \bibliography{file1,file2,...} */
-const BIBLIOGRAPHY_PATTERN = /\\bibliography\s*\{([^}]+)\}/g;
-
-/** Matches \addbibresource{file.bib} (biblatex). */
-const ADDBIBRESOURCE_PATTERN = /\\addbibresource\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+/** Matches both \bibliography{...} and \addbibresource[...]{...}.
+ *  Same pattern shape as extractBibliography.ts DIRECTIVE_PATTERN. */
+const BIB_DIRECTIVE_PATTERN = new RegExp(
+  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}',
+  'g',
+);
 
 // ---------------------------------------------------------------------------
 // Resolution helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Try to resolve a TeX input path to an existing file.
- * Checks the path as-is first, then with .tex appended.
+ * Resolve a TeX input path to an existing absolute path.
+ * Checks as-is first, then with .tex appended.
  */
 async function resolveTexInputPath(
   rawPath: string,
@@ -63,29 +54,25 @@ async function resolveTexInputPath(
   if (!trimmed) return null;
 
   const absolute = joinLatexPath(baseDir, trimmed);
-
-  // Check as-is first (author may have included .tex)
   if (
     await flexibleFS.exists({ kind: 'external', absolutePath: absolute })
   ) {
-    return path.relative(baseDir, absolute);
+    return absolute;
   }
 
-  // Try with .tex appended
   const withExt = ensureExtension(absolute, '.tex');
   if (
     withExt !== absolute &&
     (await flexibleFS.exists({ kind: 'external', absolutePath: withExt }))
   ) {
-    return path.relative(baseDir, withExt);
+    return withExt;
   }
 
   return null;
 }
 
 /**
- * Try to resolve a bibliography path to an existing file.
- * Always ensures .bib extension.
+ * Resolve a bibliography path to an existing absolute path.
  */
 async function resolveBibPath(
   rawPath: string,
@@ -94,13 +81,11 @@ async function resolveBibPath(
   const trimmed = rawPath.trim();
   if (!trimmed) return null;
 
-  const withExt = ensureExtension(trimmed, '.bib');
-  const absolute = joinLatexPath(baseDir, withExt);
-
+  const absolute = joinLatexPath(baseDir, ensureExtension(trimmed, '.bib'));
   if (
     await flexibleFS.exists({ kind: 'external', absolutePath: absolute })
   ) {
-    return path.relative(baseDir, absolute);
+    return absolute;
   }
 
   return null;
@@ -112,10 +97,7 @@ async function resolveBibPath(
 
 /**
  * Extract file dependencies (\input, \include, \bibliography, \addbibresource)
- * from a LaTeX file. Returns workspace-relative paths to existing files.
- *
- * Only returns files that actually exist on disk, similar to how
- * extractFigurePathsFromLatex works for \includegraphics.
+ * from a LaTeX file. Returns absolute paths to existing files.
  */
 export async function extractLatexFileDependencies(
   latexFileLocation: FileLocation,
@@ -123,16 +105,6 @@ export async function extractLatexFileDependencies(
   const latexDir = path.dirname(latexFileLocation.absolutePath);
   const content = await flexibleFS.read(latexFileLocation);
   const uncommented = stripCommentLines(content);
-
-  const discovered = new Set<string>();
-  const results: string[] = [];
-
-  const addResult = (relativePath: string) => {
-    if (!discovered.has(relativePath)) {
-      discovered.add(relativePath);
-      results.push(relativePath);
-    }
-  };
 
   // Collect raw paths from all patterns
   const texInputPaths: string[] = [];
@@ -144,31 +116,25 @@ export async function extractLatexFileDependencies(
   }
 
   const bibPaths: string[] = [];
-  for (const match of uncommented.matchAll(BIBLIOGRAPHY_PATTERN)) {
-    // \bibliography can have comma-separated entries
+  for (const match of uncommented.matchAll(BIB_DIRECTIVE_PATTERN)) {
     for (const entry of match[1].split(',')) {
       bibPaths.push(entry);
     }
   }
-  for (const match of uncommented.matchAll(ADDBIBRESOURCE_PATTERN)) {
-    bibPaths.push(match[1]);
-  }
 
-  // Resolve TeX input dependencies
-  const texResolved = await Promise.all(
-    texInputPaths.map((raw) => resolveTexInputPath(raw, latexDir)),
-  );
+  // Resolve all paths in parallel
+  const [texResolved, bibResolved] = await Promise.all([
+    Promise.all(texInputPaths.map((raw) => resolveTexInputPath(raw, latexDir))),
+    Promise.all(bibPaths.map((raw) => resolveBibPath(raw, latexDir))),
+  ]);
+
+  const results = new Set<string>();
   for (const resolved of texResolved) {
-    if (resolved) addResult(resolved);
+    if (resolved) results.add(resolved);
   }
-
-  // Resolve bibliography dependencies
-  const bibResolved = await Promise.all(
-    bibPaths.map((raw) => resolveBibPath(raw, latexDir)),
-  );
   for (const resolved of bibResolved) {
-    if (resolved) addResult(resolved);
+    if (resolved) results.add(resolved);
   }
 
-  return results;
+  return [...results];
 }

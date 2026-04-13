@@ -141,10 +141,8 @@ export class LatexMediaManager {
   }
 
   /**
-   * Parse \input, \include, \bibliography, and \addbibresource commands
-   * from LaTeX files and mirror the discovered dependencies into run storage.
-   * This ensures output files in run storage can be compiled successfully
-   * when the main document references other files.
+   * Mirror \input, \include, and bibliography dependencies into run storage
+   * so output files can be compiled outside the workspace.
    */
   private async mirrorLatexFileDependencies(
     files: FileLocation[],
@@ -153,36 +151,37 @@ export class LatexMediaManager {
       return;
     }
 
-    for (const file of files) {
-      try {
-        const deps = await extractLatexFileDependencies(file);
-        if (deps.length === 0) continue;
+    await pMap(
+      files,
+      async (file) => {
+        try {
+          const deps = await extractLatexFileDependencies(file);
+          if (deps.length === 0) return;
 
-        const baseDir = path.dirname(file.absolutePath);
-        const tasks = deps.map(async (relative) => {
-          const absolutePath = path.normalize(path.join(baseDir, relative));
-          try {
-            await this.fileService!.mirrorWorkspaceFile(
-              pathToLocation(absolutePath),
-            );
-          } catch (error) {
-            const message = toErrorMessage(error);
-            this.logger.debug(
-              `Unable to mirror LaTeX dependency ${absolutePath}: ${message}`,
-            );
-          }
-        });
-
-        await Promise.all(tasks);
-        this.logger.debug(
-          `Mirrored ${deps.length} LaTeX file dependencies from ${file.absolutePath}`,
-        );
-      } catch (error) {
-        this.logger.debug(
-          `Unable to extract LaTeX dependencies from ${file.absolutePath}: ${toErrorMessage(error)}`,
-        );
-      }
-    }
+          await Promise.all(
+            deps.map(async (absolutePath) => {
+              try {
+                await this.fileService!.mirrorWorkspaceFile(
+                  pathToLocation(absolutePath),
+                );
+              } catch (error) {
+                this.logger.debug(
+                  `Unable to mirror LaTeX dependency ${absolutePath}: ${toErrorMessage(error)}`,
+                );
+              }
+            }),
+          );
+          this.logger.debug(
+            `Mirrored ${deps.length} LaTeX file dependencies from ${file.absolutePath}`,
+          );
+        } catch (error) {
+          this.logger.debug(
+            `Unable to extract LaTeX dependencies from ${file.absolutePath}: ${toErrorMessage(error)}`,
+          );
+        }
+      },
+      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
+    );
   }
 
   private async extractFiguresFromFiles(
