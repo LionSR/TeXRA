@@ -9,19 +9,18 @@
 
 // Standard library imports
 import * as path from 'path';
+import { promises as fs } from 'fs';
 
 // Local imports
 import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
-const COMMENT_LINE = /^\s*%/;
+/** Strip everything after an unescaped % on each line (same approach as extractBibliography.ts). */
+const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
 
-function stripCommentLines(content: string): string {
-  return content
-    .split('\n')
-    .filter((line) => !COMMENT_LINE.test(line))
-    .join('\n');
+function stripComments(content: string): string {
+  return content.replaceAll(COMMENT_PATTERN, '$1');
 }
 
 // ---------------------------------------------------------------------------
@@ -98,13 +97,20 @@ async function resolveBibPath(
 /**
  * Extract file dependencies (\input, \include, \bibliography, \addbibresource)
  * from a LaTeX file. Returns absolute paths to existing files.
+ *
+ * Uses fs.realpath to follow symlinks so that when the input file lives in
+ * run storage (as a symlink to the workspace), dependencies are resolved
+ * relative to the original workspace location where they actually exist.
  */
 export async function extractLatexFileDependencies(
   latexFileLocation: FileLocation,
 ): Promise<string[]> {
-  const latexDir = path.dirname(latexFileLocation.absolutePath);
+  // Follow symlinks so run-storage paths resolve against the workspace
+  const realPath = await fs.realpath(latexFileLocation.absolutePath);
+  const latexDir = path.dirname(realPath);
+
   const content = await flexibleFS.read(latexFileLocation);
-  const uncommented = stripCommentLines(content);
+  const uncommented = stripComments(content);
 
   // Collect raw paths from all patterns
   const texInputPaths: string[] = [];

@@ -278,12 +278,14 @@ export class LatexMediaManager {
     supportsVision: boolean,
     {
       includeFigureExtraction,
+      mirrorFileDependencies,
       includeTikzCompilation,
       includePdfCompilation,
       extraMediaFiles = [],
       logTikzSummary = false,
     }: {
       includeFigureExtraction: boolean;
+      mirrorFileDependencies: boolean;
       includeTikzCompilation: boolean;
       includePdfCompilation: boolean;
       extraMediaFiles?: PathInput[];
@@ -319,7 +321,7 @@ export class LatexMediaManager {
       await this.extractFiguresFromFiles(existingFiles, workspaceState);
     }
 
-    if (includeFigureExtraction) {
+    if (mirrorFileDependencies) {
       await this.mirrorLatexFileDependencies(existingFiles);
     }
 
@@ -353,6 +355,7 @@ export class LatexMediaManager {
   ): Promise<void> {
     await this.processFiles(inputFiles, workspaceState, cfg, supportsVision, {
       includeFigureExtraction: true,
+      mirrorFileDependencies: true,
       includeTikzCompilation: true,
       includePdfCompilation: true,
       extraMediaFiles,
@@ -371,6 +374,7 @@ export class LatexMediaManager {
   ): Promise<void> {
     await this.processFiles(outputFiles, workspaceState, cfg, supportsVision, {
       includeFigureExtraction: false,
+      mirrorFileDependencies: false,
       includeTikzCompilation: true,
       includePdfCompilation: true,
     });
