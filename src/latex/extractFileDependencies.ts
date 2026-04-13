@@ -16,12 +16,11 @@ import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
-/** Strip everything after an unescaped % on each line (same approach as extractBibliography.ts). */
-const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
-
-function stripComments(content: string): string {
-  return content.replaceAll(COMMENT_PATTERN, '$1');
-}
+// Local file imports
+import {
+  stripLatexComments,
+  BIB_DIRECTIVE_PATTERN,
+} from './latexParsingUtils';
 
 // ---------------------------------------------------------------------------
 // Regex patterns
@@ -29,13 +28,6 @@ function stripComments(content: string): string {
 
 const INPUT_PATTERN = /\\input\s*\{([^}]+)\}/g;
 const INCLUDE_PATTERN = /\\include\s*\{([^}]+)\}/g;
-
-/** Matches both \bibliography{...} and \addbibresource[...]{...}.
- *  Same pattern shape as extractBibliography.ts DIRECTIVE_PATTERN. */
-const BIB_DIRECTIVE_PATTERN = new RegExp(
-  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}',
-  'g',
-);
 
 // ---------------------------------------------------------------------------
 // Resolution helpers
@@ -110,7 +102,7 @@ export async function extractLatexFileDependencies(
   const latexDir = path.dirname(realPath);
 
   const content = await flexibleFS.read(latexFileLocation);
-  const uncommented = stripComments(content);
+  const uncommented = stripLatexComments(content);
 
   // Collect raw paths from all patterns
   const texInputPaths: string[] = [];
