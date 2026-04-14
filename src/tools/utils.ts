@@ -73,7 +73,11 @@ export function resolveWorkspaceRelativePath(
       throw new ToolError('Path must stay within the working directory.');
     }
     const relative = resolved.relativePath || '.';
-    return { relative, absolute: resolved.absolutePath, fsPath: resolved.absolutePath };
+    return {
+      relative,
+      absolute: resolved.absolutePath,
+      fsPath: resolved.absolutePath,
+    };
   }
 
   if (!WorkspaceFS.getPath()) {

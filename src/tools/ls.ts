@@ -58,7 +58,9 @@ export class LsTool extends defineTool({
   schema: LsInputSchema,
 }) {
   protected async execute(input: LsInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
+    const root = parseWorkingDirectory(
+      getCurrentToolFileInteractionContext()?.workingDirectory,
+    );
     const { path: resolved, display } = resolveAndFormat(input.path, root);
     const gitignore = await getGitignoreMatcher();
     const header = `Listing for ${display}`;

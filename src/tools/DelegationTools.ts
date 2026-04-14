@@ -720,7 +720,7 @@ Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliograp
       instruction: input.instruction,
       memories: input.memories,
       workingDirectory: isWorktreeSupportEnabled()
-        ? (input.working_directory?.trim() || undefined)
+        ? input.working_directory?.trim() || undefined
         : undefined,
     } satisfies ToolUseAgentProposal);
 

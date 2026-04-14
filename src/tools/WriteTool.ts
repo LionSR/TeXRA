@@ -13,6 +13,7 @@ import {
   resolveWorkspaceRelativePath,
   parseWorkingDirectory,
 } from '@tools/utils';
+import { toPosixPath } from '@utils/core/pathCore';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   buildApprovalRejectedResult,
@@ -40,11 +41,12 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
-    const resolved = root
-      ? resolveWorkspaceRelativePath(input.path, root)
-      : undefined;
-    const filePath = resolved?.fsPath ?? input.path;
+    const root = parseWorkingDirectory(
+      getCurrentToolFileInteractionContext()?.workingDirectory,
+    );
+    const resolved = resolveWorkspaceRelativePath(input.path, root);
+    const filePath = resolved.fsPath;
+    const displayPath = toPosixPath(resolved.relative);
 
     const exists = await WorkspaceFS.exists(filePath);
     const readGate = requireFileReadForEdit(filePath, exists);
@@ -92,7 +94,7 @@ export class WriteFileTool extends defineTool({
     const originalLineCount = originalContent.split('\n').length;
     const newLineCount = appliedContent.split('\n').length;
     const action = exists ? 'Overwrote' : 'Created';
-    const summary = `${action} ${filePath} (${newLineCount} lines)`;
+    const summary = `${action} ${displayPath} (${newLineCount} lines)`;
     const userInstruction =
       exists && originalLineCount > 0
         ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
@@ -104,7 +106,7 @@ export class WriteFileTool extends defineTool({
       userPatch: approval.userPatch,
       edits: [
         {
-          path: filePath,
+          path: displayPath,
           lineChanges: approval.lineChanges,
           startLine: approval.startLine,
         },

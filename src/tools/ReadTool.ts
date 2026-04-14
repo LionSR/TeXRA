@@ -23,6 +23,7 @@ import {
   OFFICE_EXTENSIONS,
   OFFICE_MIME_TYPES,
 } from '@utils/files';
+import { toPosixPath } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -67,11 +68,12 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
-    const resolved = root
-      ? resolveWorkspaceRelativePath(input.path, root)
-      : undefined;
-    const filePath = resolved?.fsPath ?? input.path;
+    const root = parseWorkingDirectory(
+      getCurrentToolFileInteractionContext()?.workingDirectory,
+    );
+    const resolved = resolveWorkspaceRelativePath(input.path, root);
+    const filePath = resolved.fsPath;
+    const displayPath = toPosixPath(resolved.relative);
 
     const attachmentConfig = this.getAttachmentConfig(input.path);
     if (attachmentConfig) {
@@ -131,7 +133,7 @@ export class ReadFileTool extends defineTool({
       : '';
 
     const result = formatFileView({
-      path: input.path,
+      path: displayPath,
       lines,
       viewRange: input.range ? [startLine, endLine] : null,
       summarySuffix: suffix,

@@ -113,7 +113,9 @@ export class TextEditorTool extends defineTool({
 
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
     const { command, path: inputPath } = input;
-    const root = parseWorkingDirectory(getCurrentToolFileInteractionContext()?.workingDirectory);
+    const root = parseWorkingDirectory(
+      getCurrentToolFileInteractionContext()?.workingDirectory,
+    );
     const resolved = root
       ? resolveWorkspaceRelativePath(inputPath, root)
       : undefined;

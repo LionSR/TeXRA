@@ -867,7 +867,8 @@ export class SettingsApp extends SettingsAppBase {
               @git-mark-commits-toggle=${this.handleGitMarkCommitsToggle}
               @git-author-name-change=${this.handleGitAuthorNameChange}
               @git-author-email-change=${this.handleGitAuthorEmailChange}
-              @git-worktree-support-toggle=${this.handleGitWorktreeSupportToggle}
+              @git-worktree-support-toggle=${this
+                .handleGitWorktreeSupportToggle}
             ></git-tab>
           </vscode-tab-panel>
 
