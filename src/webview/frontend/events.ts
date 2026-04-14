@@ -95,6 +95,11 @@ export const MainViewEvents = {
 
   dismissLogin: () => createEvent('dismiss-login', undefined),
 
+  dismissGettingStarted: () =>
+    createEvent('dismiss-getting-started', undefined),
+
+  dismissOrchestrator: () => createEvent('dismiss-orchestrator', undefined),
+
   // LaTeXDiffs events
   latexDiffsToggle: (detail: LatexDiffsToggleDetail) =>
     createEvent('latexdiffs-toggle', detail),
