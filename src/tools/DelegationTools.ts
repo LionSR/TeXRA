@@ -8,7 +8,6 @@
 
 // Third-party imports
 import { randomUUID } from 'crypto';
-import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -75,6 +74,7 @@ import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
 
 // Local imports - utils
+import { parseWorkingDirectory } from '@tools/utils';
 import { WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
 
@@ -132,12 +132,13 @@ const memoriesField = z
     }
   });
 
+const WORKTREE_DISABLED_MESSAGE =
+  "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.";
+
 /**
  * Shared Zod field for the `working_directory` parameter on delegation tools.
- * Validates at schema parse time: (1) the worktree support workspace setting
- * is enabled, and (2) the path is absolute. Both checks surface as regular
- * Zod validation errors to the calling model, so a mis-delegating orchestrator
- * gets a clean retry signal instead of a silent drop or a delayed runtime crash.
+ * Validates and normalizes at schema-parse time so a mis-delegating orchestrator
+ * gets a clean Zod error instead of a silent drop or a delayed runtime crash.
  */
 const workingDirectoryField = z
   .string()
@@ -146,20 +147,20 @@ const workingDirectoryField = z
     'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support is enabled on the Multi-Agent settings tab.',
   )
   .superRefine((value, ctx) => {
-    const trimmed = value?.trim();
-    if (!trimmed) return;
-    if (!isWorktreeSupportEnabled()) {
+    let trimmed: string | undefined;
+    try {
+      trimmed = parseWorkingDirectory(value);
+    } catch (e) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message:
-          "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.",
+        message: e instanceof Error ? e.message : String(e),
       });
       return;
     }
-    if (!path.isAbsolute(trimmed)) {
+    if (trimmed && !isWorktreeSupportEnabled()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `working_directory must be an absolute path, got: ${trimmed}`,
+        message: WORKTREE_DISABLED_MESSAGE,
       });
     }
   });
@@ -239,8 +240,6 @@ async function executeSubagent(
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   }
 
-  const subagentWorkingDirectory = configPayload.workingDirectory ?? undefined;
-
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
     enforceCategory: true,
@@ -269,7 +268,7 @@ async function executeSubagent(
           executionId,
           streamId: childStreamId,
         },
-        { wallTimeMs, workingDirectory: subagentWorkingDirectory },
+        { wallTimeMs, workingDirectory: configPayload.workingDirectory ?? undefined },
       );
       // Best-effort persist — must never block delivery or abort the subagent.
       try {
@@ -307,7 +306,7 @@ async function executeSubagent(
       const msg = formatSubagentDelivery(agentName, result, {
         diffInfos,
         wallTimeMs,
-        workingDirectory: subagentWorkingDirectory,
+        workingDirectory: configPayload.workingDirectory ?? undefined,
       });
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
@@ -318,7 +317,7 @@ async function executeSubagent(
       const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentError(executionId, agentName, err, {
         wallTimeMs,
-        workingDirectory: subagentWorkingDirectory,
+        workingDirectory: configPayload.workingDirectory ?? undefined,
       });
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
@@ -750,8 +749,6 @@ Git worktree support: ${
     const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
 
     // Construct tool-use proposal (no file fields)
-    // memories and working_directory were already validated at schema parse time
-    // (memoriesField.superRefine, workingDirectoryField.superRefine).
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       agent: input.agent,

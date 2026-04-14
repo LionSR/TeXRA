@@ -259,6 +259,12 @@ function agentFriendlyStatus(status: string): string {
  * /executions/{id}/files/{diffRelPath} — the delivery only includes
  * the path reference, not the diff content itself.
  */
+function workingDirectoryElement(value: string | undefined): string | null {
+  return value
+    ? `<working-directory>${escapeText(value)}</working-directory>`
+    : null;
+}
+
 export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
@@ -277,11 +283,8 @@ export function formatSubagentDelivery(
     lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
   }
 
-  if (options?.workingDirectory) {
-    lines.push(
-      `<working-directory>${escapeText(options.workingDirectory)}</working-directory>`,
-    );
-  }
+  const wdElement = workingDirectoryElement(options?.workingDirectory);
+  if (wdElement) lines.push(wdElement);
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
     lines.push(...formatWorkflowOutputs(result.outputs, options?.diffInfos));
@@ -318,11 +321,8 @@ export function formatSubagentError(
   if (options?.wallTimeMs !== undefined) {
     lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
   }
-  if (options?.workingDirectory) {
-    lines.push(
-      `<working-directory>${escapeText(options.workingDirectory)}</working-directory>`,
-    );
-  }
+  const wdElement = workingDirectoryElement(options?.workingDirectory);
+  if (wdElement) lines.push(wdElement);
   lines.push(`<message>${escapeText(message)}</message>`, '</subagent-error>');
   return lines.join('\n');
 }
