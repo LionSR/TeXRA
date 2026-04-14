@@ -69,12 +69,6 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'For math papers -- proofs, Lean 4 formalization, research, and LaTeX correction.',
     icon: 'codicon-symbol-number',
     workflowAgents: ['correct', 'polish', 'generic', 'devise', 'apply'],
-    toolUseAgents: [
-      'lean',
-      'research',
-      'review',
-      'simplifier',
-      'orchestrator',
-    ],
+    toolUseAgents: ['lean', 'research', 'review', 'simplifier', 'orchestrator'],
   },
 ];
