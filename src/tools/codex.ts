@@ -41,6 +41,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
+import { parseWorkingDirectory } from '@tools/utils';
 import { escapeAttr, escapeText } from '@tools/subagentResults';
 import {
   requestBashApproval,
@@ -513,7 +514,7 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-    const workingDir = ctx?.workingDirectory;
+    const workingDir = parseWorkingDirectory(ctx?.workingDirectory);
     const thread = await this.resolveThread(input, workingDir);
 
     if (input.run_in_background) {
