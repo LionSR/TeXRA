@@ -330,6 +330,7 @@ export const UpdateGitAuthorSettingsMessageSchema = z.object({
   markCommits: z.boolean(),
   authorName: z.string(),
   authorEmail: z.string(),
+  worktreeSupport: z.boolean(),
 });
 export type UpdateGitAuthorSettingsMessage = z.infer<
   typeof UpdateGitAuthorSettingsMessageSchema
@@ -618,6 +619,11 @@ const SetGitAuthorEmailMessageSchema = z.object({
   email: z.string(),
 });
 
+const SetGitWorktreeSupportMessageSchema = z.object({
+  command: z.literal(CMD.SET_GIT_WORKTREE_SUPPORT),
+  enabled: z.boolean(),
+});
+
 // LaTeX settings inbound messages
 const GetLatexSettingsStatusMessageSchema = commandOnly(
   CMD.GET_LATEX_SETTINGS_STATUS,
@@ -735,6 +741,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetGitMarkCommitsMessageSchema,
     SetGitAuthorNameMessageSchema,
     SetGitAuthorEmailMessageSchema,
+    SetGitWorktreeSupportMessageSchema,
     // Approval settings messages
     GetApprovalSettingsMessageSchema,
     SetBashApprovalEnabledMessageSchema,

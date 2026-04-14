@@ -14,52 +14,103 @@ import { ToolError, type ToolFileAttachment } from '@tools/result';
 // Local imports - core utilities
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS, getMimeType } from '@utils/files';
+import { locatePathInRoot } from '@utils/files/workspaceRoot';
 import { toPosixPath } from '@utils/core/pathCore';
 
 export interface WorkspacePathResolution {
   relative: string;
   absolute: string;
+  /**
+   * The path to pass to filesystem operations.
+   * Absolute when operating outside the workspace (e.g. a worktree),
+   * workspace-relative otherwise (for WorkspaceFS compatibility).
+   */
+  fsPath: string;
+}
+
+/** Trim and validate a working_directory value. Must be absolute if provided. */
+export function parseWorkingDirectory(
+  raw: string | null | undefined,
+): string | undefined {
+  const trimmed = raw?.trim() || undefined;
+  if (trimmed && !path.isAbsolute(trimmed)) {
+    throw new ToolError(
+      `working_directory must be an absolute path, got: ${trimmed}`,
+    );
+  }
+  return trimmed;
 }
 
 /**
- * Resolve a potentially absolute or relative path against the workspace root.
+ * Resolve a potentially absolute or relative path against a root directory.
  *
- * Thin policy wrapper around WorkspaceFS.locatePath() that throws ToolError
- * when the path is external. Tools use this; non-tool code should call
- * WorkspaceFS.locatePath() directly and handle the discriminated union.
+ * When `root` is provided, paths are resolved against that directory instead
+ * of the workspace root. This supports operating in git worktrees or other
+ * directories outside the main workspace.
+ *
+ * Thin policy wrapper around WorkspaceFS.locatePath() / locatePathInRoot()
+ * that throws ToolError when the path escapes the root. Tools use this;
+ * non-tool code should call WorkspaceFS.locatePath() directly.
  */
 export function resolveWorkspaceRelativePath(
   targetPath?: string,
+  root?: string,
 ): WorkspacePathResolution {
+  const trimmed = targetPath?.trim();
+  const input = !trimmed || trimmed === '.' ? '' : trimmed;
+
+  if (root) {
+    // Absolute paths need special handling — locatePathInRoot only works with relative paths.
+    if (input && path.isAbsolute(input)) {
+      // Normalize to POSIX separators so .relative is consistent across platforms
+      // (locatePathInRoot and WorkspaceFS.locatePath already do this).
+      const relative = path.relative(root, input).replaceAll('\\', '/');
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new ToolError('Path must stay within the working directory.');
+      }
+      return { relative: relative || '.', absolute: input, fsPath: input };
+    }
+    const resolved = locatePathInRoot(root, input);
+    if (resolved.kind === 'external') {
+      throw new ToolError('Path must stay within the working directory.');
+    }
+    const relative = resolved.relativePath || '.';
+    return {
+      relative,
+      absolute: resolved.absolutePath,
+      fsPath: resolved.absolutePath,
+    };
+  }
+
   if (!WorkspaceFS.getPath()) {
     throw new ToolError('Workspace path is not available.');
   }
 
-  const trimmed = targetPath?.trim();
-  const resolved = WorkspaceFS.locatePath(
-    !trimmed || trimmed === '.' ? '' : trimmed,
-  );
+  const resolved = WorkspaceFS.locatePath(input);
 
   if (resolved.kind === 'external') {
     throw new ToolError('Path must stay within the workspace.');
   }
 
-  return {
-    relative: resolved.relativePath || '.',
-    absolute: resolved.absolutePath,
-  };
+  const relative = resolved.relativePath || '.';
+  return { relative, absolute: resolved.absolutePath, fsPath: relative };
 }
 
 /**
  * Join a workspace-relative base path with a child segment and ensure the
- * result stays within the workspace root.
+ * result stays within the root directory.
  */
 export function joinWorkspaceRelativePath(
   baseRelative: string,
   child: string,
+  root?: string,
 ): WorkspacePathResolution {
-  // path.join handles empty/dot bases naturally: join('.', 'x') and join('', 'x') both return 'x'
-  return resolveWorkspaceRelativePath(path.join(baseRelative || '.', child));
+  // Use posix.join since baseRelative and child are POSIX-normalized.
+  // path.join would reintroduce backslashes on Windows.
+  return resolveWorkspaceRelativePath(
+    path.posix.join(baseRelative || '.', child),
+    root,
+  );
 }
 
 /**
@@ -247,14 +298,17 @@ export function formatToolOutput(
 }
 
 /**
- * Common pattern for resolving and formatting workspace paths.
+ * Common pattern for resolving and formatting paths.
  * Returns `path` (resolution with relative/absolute) and `display` (formatted string).
  */
-export function resolveAndFormat(targetPath?: string): {
+export function resolveAndFormat(
+  targetPath?: string,
+  root?: string,
+): {
   path: WorkspacePathResolution;
   display: string;
 } {
-  const path = resolveWorkspaceRelativePath(targetPath);
+  const path = resolveWorkspaceRelativePath(targetPath, root);
   const display = toPosixPath(path.relative);
   return { path, display };
 }
@@ -344,6 +398,14 @@ export interface BuildFileAttachmentOptions {
   includeBase64?: boolean;
   /** Maximum allowed file size in bytes */
   maxBytes?: number;
+  /** Optional root directory override (e.g. a git worktree) */
+  root?: string;
+  /**
+   * Pre-resolved path. When provided, skips the internal resolveAndFormat()
+   * call — use this to avoid double-resolution when the caller already
+   * resolved the path (e.g. ReadTool).
+   */
+  resolved?: WorkspacePathResolution;
 }
 
 const DEFAULT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
@@ -357,19 +419,23 @@ export async function buildFileAttachment({
   mimeType,
   includeBase64 = false,
   maxBytes = DEFAULT_ATTACHMENT_MAX_BYTES,
+  root,
+  resolved,
 }: BuildFileAttachmentOptions): Promise<ToolFileAttachment> {
   if (!isNonEmptyString(filePath)) {
     throw new ToolError('Attachment path must be provided.');
   }
 
-  const { path, display } = resolveAndFormat(filePath);
-  const exists = await WorkspaceFS.exists(path.relative);
+  const { path, display } = resolved
+    ? { path: resolved, display: toPosixPath(resolved.relative) }
+    : resolveAndFormat(filePath, root);
+  const exists = await WorkspaceFS.exists(path.fsPath);
   if (!exists) {
     throw new ToolError(`Attachment not found: ${display}`);
   }
 
   const stats = await wrapApiCall(
-    () => WorkspaceFS.stat(path.relative),
+    () => WorkspaceFS.stat(path.fsPath),
     `Failed to inspect attachment ${display}`,
   );
 
@@ -381,12 +447,12 @@ export async function buildFileAttachment({
   }
 
   const buffer = await wrapApiCall(
-    () => WorkspaceFS.readBytes(path.relative),
+    () => WorkspaceFS.readBytes(path.fsPath),
     `Failed to read attachment ${display}`,
   );
 
   const inferredMime =
-    mimeType ?? getMimeType(path.relative) ?? 'application/octet-stream';
+    mimeType ?? getMimeType(path.fsPath) ?? 'application/octet-stream';
 
   // Strip binary data from oversized images to prevent non-retryable API 400 errors.
   // Downstream handlers see no bytes → metadata-only fallback with read_file hint.
