@@ -151,10 +151,14 @@
               ".mp3",
               ".aiff",
               ".aac",
+              ".opus",
+              ".l16",
+              ".alaw",
+              ".mulaw",
               ".ogg",
               ".flac"
             ],
-            "description": "File extensions to include when searching for figures",
+            "description": "File extensions to include when searching for media files",
             "editPresentation": "multilineText",
             "order": 4
           },
