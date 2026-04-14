@@ -26,6 +26,8 @@ import {
   deriveBaseFileFromLatexDiff,
 } from '@utils/files';
 
+import { getConfig } from '@utils/config';
+
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
@@ -467,10 +469,12 @@ export class FileManager extends BaseWebviewManager {
     });
   }
 
-  /** Post show/hide getting started banner based on condition */
+  /** Post show/hide getting started banner based on condition and setting */
   private postGettingStartedBanner(show: boolean): void {
+    const enabled = show &&
+      getConfig<boolean>('ui.showGettingStartedBanner', true);
     this.postMessage({
-      command: show
+      command: enabled
         ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
         : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
     });

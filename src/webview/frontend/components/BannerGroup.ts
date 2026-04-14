@@ -49,7 +49,7 @@ export class BannerGroup extends LitElement {
 
   @property({ attribute: false }) loginBannerVisible = false;
 
-  @property({ attribute: false }) orchestratorSelected = false;
+  @property({ attribute: false }) orchestratorVisible = false;
 
   override render(): TemplateResult {
     return html`
@@ -63,7 +63,7 @@ export class BannerGroup extends LitElement {
       ></getting-started-banner>
       <login-banner .visible=${this.loginBannerVisible}></login-banner>
       <orchestrator-banner
-        .visible=${this.orchestratorSelected}
+        .visible=${this.orchestratorVisible}
       ></orchestrator-banner>
     `;
   }

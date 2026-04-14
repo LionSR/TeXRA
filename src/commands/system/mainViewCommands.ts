@@ -3,11 +3,15 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { computeAgentOptionsData, refresh } from '@agent/index';
+import { arXivCommands } from '@commands/latex';
+import { gitCommands } from '@commands/git/gitCommands';
 import { toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+
+import { sampleProjectCommands } from './sampleProjectCommands';
 
 const CHANNEL = 'mainViewCommands';
 
@@ -16,6 +20,7 @@ export const mainViewCommands = {
   refreshModelOptions: 'texra.refreshModelOptions',
   refreshAgentOptions: 'texra.refreshAgentOptions',
   refreshAllOptions: 'texra.refreshAllOptions',
+  showImportOptions: 'texra.showImportOptions',
 };
 
 /**
@@ -111,6 +116,40 @@ export function registerMainViewCommands(
           vscode.window.showErrorMessage(
             `Failed to refresh options: ${message}`,
           );
+        }
+      },
+    ),
+
+    vscode.commands.registerCommand(
+      mainViewCommands.showImportOptions,
+      async () => {
+        const picked = await vscode.window.showQuickPick(
+          [
+            {
+              label: '$(repo-clone) Pull from Overleaf',
+              description: 'Import an existing Overleaf/ShareLaTeX project',
+              command: gitCommands.cloneOverleafProject,
+            },
+            {
+              label: '$(cloud-download) Grab from arXiv',
+              description: "Download a paper's source files",
+              command: arXivCommands.downloadArXivSource,
+            },
+            {
+              label: '$(file-add) Try the sample project',
+              description: 'Create a sample project to play around risk-free',
+              command: sampleProjectCommands.createSampleProject,
+            },
+            {
+              label: '$(book) Walk me through setup',
+              description: 'Open the getting started walkthrough',
+              command: 'texra.openGettingStarted',
+            },
+          ],
+          { placeHolder: 'Import or create a LaTeX project' },
+        );
+        if (picked) {
+          await vscode.commands.executeCommand(picked.command);
         }
       },
     ),
