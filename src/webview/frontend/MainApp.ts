@@ -1692,6 +1692,7 @@ export class MainApp extends MainAppBase {
 
   private handleComponentDismissLogin(): void {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
+    this.loginBannerVisible.set(false);
   }
 
   private handleComponentDismissGettingStarted(): void {

@@ -331,21 +331,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           );
         }
       },
-      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
-        await updateConfig('ui.showLoginBanner', false);
-        this.postToActiveView({
-          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-        });
-      },
-      [MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER]: async () => {
-        await updateConfig('ui.showGettingStartedBanner', false);
-        this.postToActiveView({
-          command: MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
-        });
-      },
-      [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: async () => {
-        await updateConfig('ui.showOrchestratorBanner', false);
-      },
+      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: () =>
+        updateConfig('ui.showLoginBanner', false),
+      [MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER]: () =>
+        updateConfig('ui.showGettingStartedBanner', false),
+      [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: () =>
+        updateConfig('ui.showOrchestratorBanner', false),
 
       [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
         this.diffManager.handleRequestRecentCommits(m),
