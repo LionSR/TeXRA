@@ -9,7 +9,7 @@ import {
 
 // Type imports
 import type { ToolDefinition } from '@model';
-import type { Tool as GeminiTool } from '@google/genai/dist/genai';
+import type { Tool as GeminiTool } from '@google/genai';
 import type { FunctionTool } from 'openai/resources/responses/responses';
 
 describe('toOpenAIResponseTools', () => {
