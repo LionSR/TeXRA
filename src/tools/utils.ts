@@ -62,7 +62,9 @@ export function resolveWorkspaceRelativePath(
   if (root) {
     // Absolute paths need special handling — locatePathInRoot only works with relative paths.
     if (input && path.isAbsolute(input)) {
-      const relative = path.relative(root, input);
+      // Normalize to POSIX separators so .relative is consistent across platforms
+      // (locatePathInRoot and WorkspaceFS.locatePath already do this).
+      const relative = path.relative(root, input).replaceAll('\\', '/');
       if (relative.startsWith('..') || path.isAbsolute(relative)) {
         throw new ToolError('Path must stay within the working directory.');
       }
@@ -103,9 +105,10 @@ export function joinWorkspaceRelativePath(
   child: string,
   root?: string,
 ): WorkspacePathResolution {
-  // path.join handles empty/dot bases naturally: join('.', 'x') and join('', 'x') both return 'x'
+  // Use posix.join since baseRelative and child are POSIX-normalized.
+  // path.join would reintroduce backslashes on Windows.
   return resolveWorkspaceRelativePath(
-    path.join(baseRelative || '.', child),
+    path.posix.join(baseRelative || '.', child),
     root,
   );
 }
