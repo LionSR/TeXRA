@@ -151,8 +151,13 @@ export class LatexMediaManager {
       return;
     }
 
+    const texFiles = files.filter((file) =>
+      hasExtension(file.absolutePath, '.tex'),
+    );
+    if (texFiles.length === 0) return;
+
     await pMap(
-      files,
+      texFiles,
       async (file) => {
         try {
           const deps = await extractLatexFileDependencies(file);
