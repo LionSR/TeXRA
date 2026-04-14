@@ -10,6 +10,7 @@ const AUDIO_MIME_TYPE_OVERRIDES: Readonly<Record<string, string>> = {
 };
 
 function getExtension(pathOrExtension: string): string {
+  const hasPathSeparator = /[\\/]/.test(pathOrExtension);
   const fileName = pathOrExtension.split(/[\\/]/).at(-1) ?? pathOrExtension;
   if (fileName.startsWith('.') && !fileName.slice(1).includes('.')) {
     return fileName.toLowerCase();
@@ -18,6 +19,10 @@ function getExtension(pathOrExtension: string): string {
   const dotIndex = fileName.lastIndexOf('.');
   if (dotIndex >= 0) {
     return fileName.slice(dotIndex).toLowerCase();
+  }
+
+  if (hasPathSeparator) {
+    return '';
   }
 
   return `.${fileName.toLowerCase()}`;
@@ -29,7 +34,7 @@ function getExtension(pathOrExtension: string): string {
  */
 export function getMimeType(filePath: string): string | null {
   const extension = getExtension(filePath);
-  if (Object.hasOwn(AUDIO_MIME_TYPE_OVERRIDES, extension)) {
+  if (extension && Object.hasOwn(AUDIO_MIME_TYPE_OVERRIDES, extension)) {
     return AUDIO_MIME_TYPE_OVERRIDES[extension];
   }
 

@@ -13,8 +13,14 @@
  */
 
 import { z } from 'zod';
-
 import latexPreamble from '../../../resources/templates/chatExport.tex';
+import type { Part } from '@google/genai';
+import type { ChatCompletionMessageToolCall } from 'openai/resources/chat/completions';
+import type {
+  ResponseFunctionCallOutputItemList,
+  ResponseFunctionToolCall,
+  ResponseInputItem,
+} from 'openai/resources/responses/responses';
 
 // ============================================================
 // Input schemas (single source of truth)
@@ -202,7 +208,7 @@ function latexListing(text: string): string {
 function extractBlocks(msg: ConversationMessage): ContentBlock[] {
   // Google GenAI: field-based Parts → type-based ContentBlocks
   if (Array.isArray(msg.parts)) {
-    return (msg.parts as Record<string, unknown>[]).flatMap(googlePartToBlocks);
+    return (msg.parts as Part[]).flatMap(googlePartToBlocks);
   }
 
   if (typeof msg.content === 'string') {
@@ -218,7 +224,7 @@ function extractBlocks(msg: ConversationMessage): ContentBlock[] {
 }
 
 /** Convert a Google GenAI Part (field-based discrimination) to type-based ContentBlock(s). */
-function googlePartToBlocks(part: Record<string, unknown>): ContentBlock[] {
+function googlePartToBlocks(part: Part): ContentBlock[] {
   // Google GenAI: thought is a boolean flag; the actual text is in part.text.
   // Must check before the plain text branch to avoid exposing thinking as assistant text.
   if (part.thought === true && typeof part.text === 'string') {
@@ -228,7 +234,7 @@ function googlePartToBlocks(part: Record<string, unknown>): ContentBlock[] {
     return [{ type: 'text', text: part.text }];
   }
   if (part.functionCall && typeof part.functionCall === 'object') {
-    const fc = part.functionCall as { name?: string; args?: unknown };
+    const fc = part.functionCall;
     return [
       {
         type: 'tool_use',
@@ -238,10 +244,7 @@ function googlePartToBlocks(part: Record<string, unknown>): ContentBlock[] {
     ];
   }
   if (part.functionResponse && typeof part.functionResponse === 'object') {
-    const fr = part.functionResponse as {
-      name?: string;
-      response?: unknown;
-    };
+    const fr = part.functionResponse;
     return [
       {
         type: 'tool_result',
@@ -376,12 +379,12 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
     const item = raw as Record<string, unknown>;
 
     // OpenAI Response API: top-level function_call items (not wrapped in a message)
-    if (item.type === 'function_call') {
-      const name = typeof item.name === 'string' ? item.name : 'unknown';
+    if (isResponseFunctionCallItem(item)) {
       const args =
         typeof item.arguments === 'string'
           ? item.arguments
           : JSON.stringify(item.arguments ?? {}, null, 2);
+      const name = item.name ?? 'unknown';
       nodes.push({ kind: 'tool-call', name, input: args });
       lastAssistantHadToolUse = true;
       continue;
@@ -389,10 +392,10 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
 
     // OpenAI Response API: top-level function_call_output items.
     // output can be a string OR an array of input_text/input_file/input_image parts.
-    if (item.type === 'function_call_output') {
+    if (isResponseFunctionCallOutputItem(item)) {
       if (Array.isArray(item.output)) {
         const textParts: string[] = [];
-        for (const part of item.output as Record<string, unknown>[]) {
+        for (const part of item.output as ResponseFunctionCallOutputItemList) {
           if (part.type === 'input_text' && typeof part.text === 'string') {
             textParts.push(part.text);
           } else if (part.type === 'input_image') {
@@ -446,14 +449,12 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
 
       // OpenAI Chat Completions: tool_calls array on assistant messages
       if (Array.isArray(msg.tool_calls)) {
-        for (const tc of msg.tool_calls as Record<string, unknown>[]) {
-          const fn = tc.function as
-            | { name?: string; arguments?: string }
-            | undefined;
-          if (fn) {
+        for (const tc of msg.tool_calls as ChatCompletionMessageToolCall[]) {
+          const fn = tc.type === 'function' ? tc.function : undefined;
+          if (fn?.name) {
             nodes.push({
               kind: 'tool-call',
-              name: fn.name ?? 'unknown',
+              name: fn.name,
               input: fn.arguments ?? '{}',
             });
             lastAssistantHadToolUse = true;
@@ -475,6 +476,28 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
   }
 
   return nodes;
+}
+
+function isResponseFunctionCallItem(
+  item: unknown,
+): item is ResponseFunctionToolCall {
+  return (
+    typeof item === 'object' &&
+    item !== null &&
+    'type' in item &&
+    item.type === 'function_call'
+  );
+}
+
+function isResponseFunctionCallOutputItem(
+  item: unknown,
+): item is ResponseInputItem.FunctionCallOutput {
+  return (
+    typeof item === 'object' &&
+    item !== null &&
+    'type' in item &&
+    item.type === 'function_call_output'
+  );
 }
 
 // ============================================================
