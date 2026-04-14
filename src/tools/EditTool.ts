@@ -107,7 +107,7 @@ export class EditFileTool extends defineTool({
 
     if (!approval.accepted) {
       return buildApprovalRejectedResult(
-        targetPath,
+        displayPath,
         'edit_file',
         approval.userMessage,
       );

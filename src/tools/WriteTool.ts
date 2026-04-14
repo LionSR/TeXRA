@@ -69,7 +69,7 @@ export class WriteFileTool extends defineTool({
 
     if (!approval.accepted) {
       return buildApprovalRejectedResult(
-        filePath,
+        displayPath,
         'write_file',
         approval.userMessage,
       );

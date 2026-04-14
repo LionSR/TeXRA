@@ -304,7 +304,7 @@ export class TextEditorTool extends defineTool({
 
       if (!approval.accepted) {
         return buildApprovalRejectedResult(
-          filePath,
+          displayPath,
           'text_editor:create',
           approval.userMessage,
         );
@@ -401,7 +401,7 @@ export class TextEditorTool extends defineTool({
 
       if (!approval.accepted) {
         return buildApprovalRejectedResult(
-          filePath,
+          displayPath,
           'text_editor:str_replace',
           approval.userMessage,
         );
@@ -494,7 +494,7 @@ export class TextEditorTool extends defineTool({
 
       if (!approval.accepted) {
         return buildApprovalRejectedResult(
-          filePath,
+          displayPath,
           'text_editor:insert',
           approval.userMessage,
         );
@@ -569,7 +569,7 @@ export class TextEditorTool extends defineTool({
 
       if (!approval.accepted) {
         return buildApprovalRejectedResult(
-          filePath,
+          displayPath,
           'text_editor:undo_edit',
           approval.userMessage,
         );
