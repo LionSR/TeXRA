@@ -8,6 +8,7 @@
 
 // Third-party imports
 import { randomUUID } from 'crypto';
+import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -131,6 +132,38 @@ const memoriesField = z
     }
   });
 
+/**
+ * Shared Zod field for the `working_directory` parameter on delegation tools.
+ * Validates at schema parse time: (1) the worktree support workspace setting
+ * is enabled, and (2) the path is absolute. Both checks surface as regular
+ * Zod validation errors to the calling model, so a mis-delegating orchestrator
+ * gets a clean retry signal instead of a silent drop or a delayed runtime crash.
+ */
+const workingDirectoryField = z
+  .string()
+  .nullish()
+  .describe(
+    'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support is enabled on the Multi-Agent settings tab.',
+  )
+  .superRefine((value, ctx) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return;
+    if (!isWorktreeSupportEnabled()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.",
+      });
+      return;
+    }
+    if (!path.isAbsolute(trimmed)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `working_directory must be an absolute path, got: ${trimmed}`,
+      });
+    }
+  });
+
 /** Get required context fields, throwing if unavailable. */
 function getRequiredContext(): ToolFileInteractionContext & {
   streamId: StreamTabId;
@@ -206,6 +239,8 @@ async function executeSubagent(
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   }
 
+  const subagentWorkingDirectory = configPayload.workingDirectory ?? undefined;
+
   const promise = executeAgent(configPayload, executionId, {
     isSubagent: true,
     enforceCategory: true,
@@ -234,7 +269,7 @@ async function executeSubagent(
           executionId,
           streamId: childStreamId,
         },
-        { wallTimeMs },
+        { wallTimeMs, workingDirectory: subagentWorkingDirectory },
       );
       // Best-effort persist — must never block delivery or abort the subagent.
       try {
@@ -272,6 +307,7 @@ async function executeSubagent(
       const msg = formatSubagentDelivery(agentName, result, {
         diffInfos,
         wallTimeMs,
+        workingDirectory: subagentWorkingDirectory,
       });
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
@@ -282,6 +318,7 @@ async function executeSubagent(
       const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentError(executionId, agentName, err, {
         wallTimeMs,
+        workingDirectory: subagentWorkingDirectory,
       });
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
@@ -652,12 +689,7 @@ const DelegateAgentInputSchema = z.object({
       'Plain prose instruction for the agent. For new delegations, include file paths naturally. For resumes, reference previous work freely — the subagent retains its full history.',
     ),
   memories: memoriesField,
-  working_directory: z
-    .string()
-    .nullish()
-    .describe(
-      'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root.',
-    ),
+  working_directory: workingDirectoryField,
   execution_id: z
     .string()
     .optional()
@@ -688,7 +720,13 @@ Model selection: use the largest models for challenging tasks requiring deep rea
 
 Example (new, specialized): agent=research, instruction="Derive the asymptotic expansion of the partition function in appendix_A.tex using saddle-point methods. Verify with Wolfram."
 Example (new, general): agent=chat, instruction="Fix the \\cite commands on slides 3 and 7 in slides/talk.tex using refs.bib."
-Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."`,
+Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."
+
+Git worktree support: ${
+      isWorktreeSupportEnabled()
+        ? 'ENABLED. Pass `working_directory` (absolute path) to run a subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
+        : 'DISABLED in this workspace. Do not pass `working_directory` — it will be rejected at schema validation. Ask the user to enable "Allow agents to work in git worktrees" on the Multi-Agent settings tab if worktree operation is needed.'
+    }`,
   schema: DelegateAgentInputSchema,
 }) {
   protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
@@ -712,16 +750,15 @@ Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliograp
     const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
 
     // Construct tool-use proposal (no file fields)
-    // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
+    // memories and working_directory were already validated at schema parse time
+    // (memoriesField.superRefine, workingDirectoryField.superRefine).
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       agent: input.agent,
       model,
       instruction: input.instruction,
       memories: input.memories,
-      workingDirectory: isWorktreeSupportEnabled()
-        ? input.working_directory?.trim() || undefined
-        : undefined,
+      workingDirectory: input.working_directory?.trim() || undefined,
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);

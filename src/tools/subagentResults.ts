@@ -262,7 +262,11 @@ function agentFriendlyStatus(status: string): string {
 export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
-  options?: { diffInfos?: Map<string, DiffFileInfo>; wallTimeMs?: number },
+  options?: {
+    diffInfos?: Map<string, DiffFileInfo>;
+    wallTimeMs?: number;
+    workingDirectory?: string;
+  },
 ): string {
   const displayStatus = agentFriendlyStatus(result.status);
   const lines = [
@@ -271,6 +275,12 @@ export function formatSubagentDelivery(
 
   if (options?.wallTimeMs !== undefined) {
     lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
+  }
+
+  if (options?.workingDirectory) {
+    lines.push(
+      `<working-directory>${escapeText(options.workingDirectory)}</working-directory>`,
+    );
   }
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
@@ -299,7 +309,7 @@ export function formatSubagentError(
   executionId: string,
   agentName: string,
   err: unknown,
-  options?: { wallTimeMs?: number },
+  options?: { wallTimeMs?: number; workingDirectory?: string },
 ): string {
   const message = err instanceof Error ? err.message : String(err);
   const lines = [
@@ -307,6 +317,11 @@ export function formatSubagentError(
   ];
   if (options?.wallTimeMs !== undefined) {
     lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
+  }
+  if (options?.workingDirectory) {
+    lines.push(
+      `<working-directory>${escapeText(options.workingDirectory)}</working-directory>`,
+    );
   }
   lines.push(`<message>${escapeText(message)}</message>`, '</subagent-error>');
   return lines.join('\n');
