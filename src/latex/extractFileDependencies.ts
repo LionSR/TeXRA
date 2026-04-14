@@ -22,16 +22,8 @@ import {
   BIB_DIRECTIVE_PATTERN,
 } from './latexParsingUtils';
 
-// ---------------------------------------------------------------------------
-// Regex patterns
-// ---------------------------------------------------------------------------
-
 const INPUT_PATTERN = /\\input\s*\{([^}]+)\}/g;
 const INCLUDE_PATTERN = /\\include\s*\{([^}]+)\}/g;
-
-// ---------------------------------------------------------------------------
-// Resolution helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Resolve a TeX input path to an existing absolute path.
@@ -82,10 +74,6 @@ async function resolveBibPath(
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 /**
  * Extract file dependencies (\input, \include, \bibliography, \addbibresource)
  * from a LaTeX file. Returns absolute paths to existing files.
@@ -104,7 +92,6 @@ export async function extractLatexFileDependencies(
   const content = await flexibleFS.read(latexFileLocation);
   const uncommented = stripLatexComments(content);
 
-  // Collect raw paths from all patterns
   const texInputPaths: string[] = [];
   for (const match of uncommented.matchAll(INPUT_PATTERN)) {
     texInputPaths.push(match[1]);
@@ -120,7 +107,6 @@ export async function extractLatexFileDependencies(
     }
   }
 
-  // Resolve all paths in parallel
   const [texResolved, bibResolved] = await Promise.all([
     Promise.all(texInputPaths.map((raw) => resolveTexInputPath(raw, latexDir))),
     Promise.all(bibPaths.map((raw) => resolveBibPath(raw, latexDir))),
