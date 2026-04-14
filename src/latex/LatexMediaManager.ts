@@ -16,6 +16,7 @@ import {
 import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
+import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
 import { tikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
@@ -139,6 +140,55 @@ export class LatexMediaManager {
     }
   }
 
+  /**
+   * Mirror \input, \include, and bibliography dependencies into run storage
+   * so output files can be compiled outside the workspace.
+   */
+  private async mirrorLatexFileDependencies(
+    files: FileLocation[],
+  ): Promise<void> {
+    if (!this.fileService?.hasRunDirectory() || files.length === 0) {
+      return;
+    }
+
+    const texFiles = files.filter((file) =>
+      hasExtension(file.absolutePath, '.tex'),
+    );
+    if (texFiles.length === 0) return;
+
+    await pMap(
+      texFiles,
+      async (file) => {
+        try {
+          const deps = await extractLatexFileDependencies(file);
+          if (deps.length === 0) return;
+
+          await Promise.all(
+            deps.map(async (absolutePath) => {
+              try {
+                await this.fileService!.mirrorWorkspaceFile(
+                  pathToLocation(absolutePath),
+                );
+              } catch (error) {
+                this.logger.debug(
+                  `Unable to mirror LaTeX dependency ${absolutePath}: ${toErrorMessage(error)}`,
+                );
+              }
+            }),
+          );
+          this.logger.debug(
+            `Mirrored ${deps.length} LaTeX file dependencies from ${file.absolutePath}`,
+          );
+        } catch (error) {
+          this.logger.debug(
+            `Unable to extract LaTeX dependencies from ${file.absolutePath}: ${toErrorMessage(error)}`,
+          );
+        }
+      },
+      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
+    );
+  }
+
   private async extractFiguresFromFiles(
     files: FileLocation[],
     workspaceState: AgentWorkspaceState,
@@ -233,12 +283,14 @@ export class LatexMediaManager {
     supportsVision: boolean,
     {
       includeFigureExtraction,
+      mirrorFileDependencies,
       includeTikzCompilation,
       includePdfCompilation,
       extraMediaFiles = [],
       logTikzSummary = false,
     }: {
       includeFigureExtraction: boolean;
+      mirrorFileDependencies: boolean;
       includeTikzCompilation: boolean;
       includePdfCompilation: boolean;
       extraMediaFiles?: PathInput[];
@@ -274,6 +326,10 @@ export class LatexMediaManager {
       await this.extractFiguresFromFiles(existingFiles, workspaceState);
     }
 
+    if (mirrorFileDependencies) {
+      await this.mirrorLatexFileDependencies(existingFiles);
+    }
+
     if (includeTikzCompilation && cfg.autoExtractTikzFigure) {
       await this.compileTikzFigures(
         existingFiles,
@@ -304,6 +360,7 @@ export class LatexMediaManager {
   ): Promise<void> {
     await this.processFiles(inputFiles, workspaceState, cfg, supportsVision, {
       includeFigureExtraction: true,
+      mirrorFileDependencies: true,
       includeTikzCompilation: true,
       includePdfCompilation: true,
       extraMediaFiles,
@@ -322,6 +379,7 @@ export class LatexMediaManager {
   ): Promise<void> {
     await this.processFiles(outputFiles, workspaceState, cfg, supportsVision, {
       includeFigureExtraction: false,
+      mirrorFileDependencies: false,
       includeTikzCompilation: true,
       includePdfCompilation: true,
     });
