@@ -833,10 +833,9 @@ with actionable examples like `'What would you like to do?'`.
 | `src/webview/frontend/components/BannerGroup.ts` | Remove `orchestratorSelected` prop and `<orchestrator-banner>`. |
 | `src/shared/utils/selectTemplates.ts` | Add `renderGroupedAgentOptions()`. |
 | `src/webview/frontend/store.ts` | Update orchestrator placeholder text. |
+| `src/shared/schemas/mainView.ts` | Add `orchestratorTipDismissed` boolean to `MainViewPersistedStateSchema`. |
 
 ## Files NOT Modified
-
-- `src/shared/schemas/mainView.ts` -- persisted state schema unchanged
 - `src/webview/frontend/sessionDefaults.ts` -- per-mode behavior unchanged
 - Backend/agent code -- purely UI/UX changes
 
