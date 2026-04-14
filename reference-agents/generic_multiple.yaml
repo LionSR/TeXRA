@@ -1,4 +1,5 @@
-iname: generic_multiple
+name: generic_multiple
+description: General-purpose LaTeX document editor for multiple documents. Flexibly processes research papers following academic standards while maintaining consistency across document collections.
 inherits: generic
 settings:
   agentCategory: workflow
