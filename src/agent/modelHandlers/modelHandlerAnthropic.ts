@@ -141,6 +141,21 @@ interface UploadedAnthropicAttachment {
   mediaType?: string;
 }
 
+type ErrorWithRequestId = Error & { request_id?: string };
+
+interface StreamWithResponse {
+  response: Promise<Response>;
+}
+
+function hasHttpResponse(value: unknown): value is StreamWithResponse {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'response' in value &&
+    value.response instanceof Promise
+  );
+}
+
 /** Type guard for any thinking-related content block param */
 const isAnyThinkingBlockParam = (
   block: ContentBlockParam,
@@ -837,14 +852,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // detectRequestId() (in sdkErrorUtils) picks it up via the existing
         // ProviderError.requestId path — no duplicate field needed.
         try {
-          const httpResponse = await (
-            stream as unknown as { response: Promise<Response> }
-          ).response;
-          const reqId =
-            httpResponse?.headers?.get?.('request-id') ??
-            httpResponse?.headers?.get?.('x-request-id');
-          if (reqId && streamError instanceof Error) {
-            (streamError as Error & { request_id?: string }).request_id = reqId;
+          if (hasHttpResponse(stream)) {
+            const httpResponse = await stream.response;
+            const reqId =
+              httpResponse.headers.get('request-id') ??
+              httpResponse.headers.get('x-request-id');
+            if (reqId && streamError instanceof Error) {
+              (streamError as ErrorWithRequestId).request_id = reqId;
+            }
           }
         } catch {
           // Response may not be available (e.g. network error before HTTP response)
