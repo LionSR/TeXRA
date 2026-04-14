@@ -13,6 +13,7 @@ import {
   READ_FILE_MAX_LINES,
   resolveAndFormat,
   parseWorkingDirectory,
+  type WorkspacePathResolution,
 } from '@tools/utils';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { recordToolFileRead } from '@tools/fileInteractions';
@@ -76,13 +77,12 @@ export class ReadFileTool extends defineTool({
     );
     const filePath = resolved.fsPath;
 
-    const attachmentConfig = this.getAttachmentConfig(input.path);
+    const attachmentConfig = this.getAttachmentConfig(resolved.absolute);
     if (attachmentConfig) {
       const result = await this.returnBinaryAttachment(
         input,
         attachmentConfig,
-        filePath,
-        root,
+        resolved,
       );
       recordToolFileRead(filePath);
       return result;
@@ -206,14 +206,13 @@ export class ReadFileTool extends defineTool({
   private async returnBinaryAttachment(
     input: ReadInput,
     config: { kind: 'pdf' | 'image' | 'document'; label: string },
-    filePath: string,
-    root?: string,
+    resolved: WorkspacePathResolution,
   ): Promise<ToolResult> {
     const copy = ATTACHMENT_COPY[config.kind];
     const attachment = await buildFileAttachment({
-      filePath,
+      filePath: resolved.fsPath,
       description: `${config.label} returned by read_file tool.`,
-      root,
+      resolved,
     });
 
     const baseSummary = `Attached ${config.label} ${attachment.path}.`;

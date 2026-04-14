@@ -137,8 +137,9 @@ const WORKTREE_DISABLED_MESSAGE =
 
 /**
  * Shared Zod field for the `working_directory` parameter on delegation tools.
- * Validates and normalizes at schema-parse time so a mis-delegating orchestrator
- * gets a clean Zod error instead of a silent drop or a delayed runtime crash.
+ * Validates and normalizes in one step so downstream code always receives the
+ * canonical `string | undefined` value — no trimming or absolute-path checks
+ * needed at the call site.
  */
 const workingDirectoryField = z
   .string()
@@ -146,7 +147,7 @@ const workingDirectoryField = z
   .describe(
     'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support is enabled on the Multi-Agent settings tab.',
   )
-  .superRefine((value, ctx) => {
+  .transform((value, ctx): string | undefined => {
     let trimmed: string | undefined;
     try {
       trimmed = parseWorkingDirectory(value);
@@ -155,14 +156,16 @@ const workingDirectoryField = z
         code: z.ZodIssueCode.custom,
         message: e instanceof Error ? e.message : String(e),
       });
-      return;
+      return z.NEVER;
     }
     if (trimmed && !isWorktreeSupportEnabled()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: WORKTREE_DISABLED_MESSAGE,
       });
+      return z.NEVER;
     }
+    return trimmed;
   });
 
 /** Get required context fields, throwing if unavailable. */
@@ -758,7 +761,7 @@ Git worktree support: ${
       model,
       instruction: input.instruction,
       memories: input.memories,
-      workingDirectory: input.working_directory?.trim() || undefined,
+      workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);

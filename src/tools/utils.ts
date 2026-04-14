@@ -400,6 +400,12 @@ export interface BuildFileAttachmentOptions {
   maxBytes?: number;
   /** Optional root directory override (e.g. a git worktree) */
   root?: string;
+  /**
+   * Pre-resolved path. When provided, skips the internal resolveAndFormat()
+   * call — use this to avoid double-resolution when the caller already
+   * resolved the path (e.g. ReadTool).
+   */
+  resolved?: WorkspacePathResolution;
 }
 
 const DEFAULT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
@@ -414,12 +420,15 @@ export async function buildFileAttachment({
   includeBase64 = false,
   maxBytes = DEFAULT_ATTACHMENT_MAX_BYTES,
   root,
+  resolved,
 }: BuildFileAttachmentOptions): Promise<ToolFileAttachment> {
   if (!isNonEmptyString(filePath)) {
     throw new ToolError('Attachment path must be provided.');
   }
 
-  const { path, display } = resolveAndFormat(filePath, root);
+  const { path, display } = resolved
+    ? { path: resolved, display: toPosixPath(resolved.relative) }
+    : resolveAndFormat(filePath, root);
   const exists = await WorkspaceFS.exists(path.fsPath);
   if (!exists) {
     throw new ToolError(`Attachment not found: ${display}`);
