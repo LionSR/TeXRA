@@ -11,6 +11,12 @@ export { TikzPictureManager, tikzPictureManager } from './TikzPictureManager';
 export { extractFigurePathsFromLatex } from './extractFigure';
 
 // -----------------------------------------------------------------------------
+// File Dependency Extraction
+// -----------------------------------------------------------------------------
+
+export { extractLatexFileDependencies } from './extractFileDependencies';
+
+// -----------------------------------------------------------------------------
 // Bibliography Utilities
 // -----------------------------------------------------------------------------
 
