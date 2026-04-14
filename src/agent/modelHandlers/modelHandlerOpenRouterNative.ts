@@ -45,6 +45,8 @@ import type {
   ChatAssistantMessage,
   ChatToolCall,
   ChatContentItems,
+  ChatRequest,
+  ChatFinishReasonEnum,
   ReasoningDetailUnion,
 } from '@openrouter/sdk/models';
 import type {
@@ -54,6 +56,26 @@ import type {
   OpenRouterToolCall,
 } from './types/IModelHandler';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+
+type OpenRouterReasoningEffort = NonNullable<
+  NonNullable<ChatRequest['reasoning']>['effort']
+>;
+
+function toOpenRouterReasoningEffort(
+  effort: string,
+): OpenRouterReasoningEffort {
+  switch (effort) {
+    case 'xhigh':
+    case 'high':
+    case 'medium':
+    case 'low':
+    case 'minimal':
+    case 'none':
+      return effort;
+    default:
+      return 'low';
+  }
+}
 
 // ============================================================================
 // Streaming aggregator
@@ -75,7 +97,7 @@ class OpenRouterStreamAggregator {
       function: { name: string; arguments: string };
     }
   >();
-  private finishReason: string | null = null;
+  private finishReason: ChatFinishReasonEnum | null = null;
   private usage: ChatUsage | null = null;
   private model = '';
   private id = '';
@@ -101,7 +123,7 @@ class OpenRouterStreamAggregator {
     if (!choice) return { contentDelta: '', reasoningDelta: '' };
 
     if (choice.finishReason != null) {
-      this.finishReason = String(choice.finishReason);
+      this.finishReason = choice.finishReason;
     }
 
     const delta = choice.delta;
@@ -182,7 +204,7 @@ class OpenRouterStreamAggregator {
         {
           index: 0,
           message,
-          finishReason: this.finishReason as any,
+          finishReason: this.finishReason,
         },
       ],
       created: this.created || Math.floor(Date.now() / 1000),
@@ -276,7 +298,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
     const useStreaming = this.getStreamingConfig();
 
-    const params: Record<string, unknown> = {
+    const request: ChatRequest = {
       model: this.config.openrouterFullName,
       messages: messagesToUse,
       maxTokens: this.getEffectiveMaxOutputTokens(),
@@ -292,31 +314,32 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         ? (this.getEffectiveReasoningEffort() ?? 'low')
         : 'low';
       const effort = effective === 'none' ? 'low' : effective;
-      params.reasoning = {
-        effort: this.validateReasoningEffort(effort),
+      request.reasoning = {
+        effort: toOpenRouterReasoningEffort(
+          this.validateReasoningEffort(effort),
+        ),
       };
     }
 
     if (tools && tools.length > 0) {
-      params.tools = toOpenAITools(tools);
-      params.toolChoice = 'auto';
+      request.tools = toOpenAITools(tools) as ChatRequest['tools'];
+      request.toolChoice = 'auto';
     }
 
     if (endTag) {
-      params.stop = [endTag];
+      request.stop = [endTag];
     }
 
     if (useStreaming) {
-      params.stream = true;
-      params.streamOptions = { includeUsage: true };
-
-      const result = await client.chat.send(
-        { chatRequest: params as any },
+      const streamRequest: ChatRequest & { stream: true } = {
+        ...request,
+        stream: true,
+        streamOptions: { includeUsage: true },
+      };
+      const stream = await client.chat.send(
+        { chatRequest: streamRequest },
         { signal },
       );
-
-      // Streaming returns EventStream (AsyncIterable)
-      const stream = result as unknown as AsyncIterable<ChatStreamChunk>;
       const aggregator = new OpenRouterStreamAggregator();
       const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
@@ -356,11 +379,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     // Non-streaming
-    params.stream = false;
-    const response = (await client.chat.send(
-      { chatRequest: params as any },
+    const nonStreamingRequest: ChatRequest & { stream: false } = {
+      ...request,
+      stream: false,
+    };
+    const response = await client.chat.send(
+      { chatRequest: nonStreamingRequest },
       { signal },
-    )) as ChatResult;
+    );
 
     if (response.usage?.promptTokens) {
       this.lastKnownInputTokens = response.usage.promptTokens;
@@ -420,28 +446,27 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     }
 
     try {
-      const summaryResponse = (await client.chat.send(
-        {
-          chatRequest: {
-            model: this.config.openrouterFullName,
-            messages: [
-              {
-                role: 'system',
-                content: COMPACTION_SYSTEM_PROMPT,
-              },
-              ...conversationMessages,
-            ],
-            maxTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-            temperature: 0,
-            stream: false,
-            // Minimize reasoning for summarization — use lowest valid effort
-            ...(this.capabilities.supportsReasoningEffort
-              ? { reasoning: { effort: 'low' } }
-              : {}),
-          } as any,
-        },
+      const summaryRequest: ChatRequest & { stream: false } = {
+        model: this.config.openrouterFullName,
+        messages: [
+          {
+            role: 'system',
+            content: COMPACTION_SYSTEM_PROMPT,
+          },
+          ...conversationMessages,
+        ],
+        maxTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+        temperature: 0,
+        stream: false,
+        // Minimize reasoning for summarization — use lowest valid effort
+        ...(this.capabilities.supportsReasoningEffort
+          ? { reasoning: { effort: 'low' } }
+          : {}),
+      };
+      const summaryResponse = await client.chat.send(
+        { chatRequest: summaryRequest },
         { signal },
-      )) as ChatResult;
+      );
 
       const summaryText = summaryResponse.choices[0]?.message?.content;
       const summary = typeof summaryText === 'string' ? summaryText.trim() : '';

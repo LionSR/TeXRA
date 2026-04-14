@@ -6,12 +6,12 @@ import type { ToolDefinition } from '@model';
 import type {
   Tool as AnthropicTool,
   ToolUnion,
-} from '@anthropic-ai/sdk/resources/messages/messages';
+} from '@anthropic-ai/sdk/resources/messages';
 import type {
   Tool as GeminiTool,
   FunctionDeclaration,
   Schema,
-} from '@google/genai/dist/genai';
+} from '@google/genai';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
