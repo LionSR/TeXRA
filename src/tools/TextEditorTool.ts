@@ -21,6 +21,7 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { toPosixPath } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -116,25 +117,24 @@ export class TextEditorTool extends defineTool({
     const root = parseWorkingDirectory(
       getCurrentToolFileInteractionContext()?.workingDirectory,
     );
-    const resolved = root
-      ? resolveWorkspaceRelativePath(inputPath, root)
-      : undefined;
-    const filePath = resolved?.fsPath ?? inputPath;
+    const resolved = resolveWorkspaceRelativePath(inputPath, root);
+    const filePath = resolved.fsPath;
+    const displayPath = toPosixPath(resolved.relative);
 
-    await this.validatePath(command, filePath);
+    await this.validatePath(command, filePath, displayPath);
 
     switch (command) {
       case 'view':
-        return this.view(filePath, input.view_range ?? undefined);
+        return this.view(filePath, displayPath, input.view_range ?? undefined);
       case 'create': {
         const fileText = requireField(input.file_text, 'file_text', command);
-        logger.info(CHANNEL, `create: ${filePath}`);
-        return this.create(filePath, fileText);
+        logger.info(CHANNEL, `create: ${displayPath}`);
+        return this.create(filePath, displayPath, fileText);
       }
       case 'str_replace': {
         const oldStr = requireField(input.old_str, 'old_str', command);
         logger.info(CHANNEL, `str_replace: ${oldStr} -> ${input.new_str}`);
-        return this.strReplace(filePath, oldStr, input.new_str ?? '');
+        return this.strReplace(filePath, displayPath, oldStr, input.new_str ?? '');
       }
       case 'insert': {
         const insertLine = requireField(
@@ -144,7 +144,7 @@ export class TextEditorTool extends defineTool({
         );
         const newStr = requireField(input.new_str, 'new_str', command);
         logger.info(CHANNEL, `insert: ${insertLine} -> ${newStr}`);
-        return this.insert(filePath, insertLine, newStr);
+        return this.insert(filePath, displayPath, insertLine, newStr);
       }
       case 'undo_edit':
         // Claude 4 models don't support undo_edit command
@@ -153,8 +153,8 @@ export class TextEditorTool extends defineTool({
             `The 'undo_edit' command is not supported in Claude 4 models. Use the str_replace_based_edit_tool with explicit content instead.`,
           );
         }
-        logger.info(CHANNEL, `undo_edit: ${filePath}`);
-        return this.undoEdit(filePath);
+        logger.info(CHANNEL, `undo_edit: ${displayPath}`);
+        return this.undoEdit(filePath, displayPath);
       default:
         throw new ToolError(
           `Unrecognized command ${command}. The allowed commands for the ${this.name} tool are: ${this.getAllowedCommands()}`,
@@ -165,13 +165,14 @@ export class TextEditorTool extends defineTool({
   private async validatePath(
     command: EditorCommand,
     filePath: string,
+    displayPath: string,
   ): Promise<void> {
     const exists = await WorkspaceFS.exists(filePath);
 
     if (!exists) {
       if (command !== 'create') {
         throw new ToolError(
-          `The path ${filePath} does not exist. Please provide a valid path.`,
+          `The path ${displayPath} does not exist. Please provide a valid path.`,
         );
       }
       return; // 'create' on non-existent path is valid — nothing more to check
@@ -179,7 +180,7 @@ export class TextEditorTool extends defineTool({
 
     if (command === 'create') {
       throw new ToolError(
-        `File already exists at: ${filePath}. Cannot overwrite files using command 'create'.`,
+        `File already exists at: ${displayPath}. Cannot overwrite files using command 'create'.`,
       );
     }
 
@@ -188,7 +189,7 @@ export class TextEditorTool extends defineTool({
       const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
       if (isDirectory(stats.type) && command !== 'view') {
         throw new ToolError(
-          `The path ${filePath} is a directory and only the 'view' command can be used on directories`,
+          `The path ${displayPath} is a directory and only the 'view' command can be used on directories`,
         );
       }
     } catch (error) {
@@ -198,6 +199,7 @@ export class TextEditorTool extends defineTool({
 
   private async view(
     filePath: string,
+    displayPath: string,
     viewRange?: number[],
   ): Promise<ToolResult> {
     try {
@@ -219,7 +221,7 @@ export class TextEditorTool extends defineTool({
           .join('\n');
 
         return {
-          summary: `Listed directory: ${filePath}`,
+          summary: `Listed directory: ${displayPath}`,
           output: formattedContents,
         };
       }
@@ -278,17 +280,17 @@ export class TextEditorTool extends defineTool({
       recordToolFileRead(filePath);
 
       return formatFileView({
-        path: filePath,
+        path: displayPath,
         lines,
         viewRange: viewRange ? [viewStartLine, viewEndLine] : null,
         maxLines: Infinity,
       });
     } catch (error) {
-      rethrowWithContext(error, `Error viewing ${filePath}`);
+      rethrowWithContext(error, `Error viewing ${displayPath}`);
     }
   }
 
-  private async create(filePath: string, content: string): Promise<ToolResult> {
+  private async create(filePath: string, displayPath: string, content: string): Promise<ToolResult> {
     try {
       const proposedContent = isTexFile(filePath)
         ? replacementEngine.applyAll(content)
@@ -331,22 +333,23 @@ export class TextEditorTool extends defineTool({
         appliedContent,
       );
       const output = userDiffNote
-        ? `File created successfully at: ${filePath}\n\n${userDiffNote}`
-        : `File created successfully at: ${filePath}`;
+        ? `File created successfully at: ${displayPath}\n\n${userDiffNote}`
+        : `File created successfully at: ${displayPath}`;
 
       return {
-        summary: `Created file ${filePath}`,
+        summary: `Created file ${displayPath}`,
         output,
         userPatch: approval.userPatch,
-        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
+        edits: [{ path: displayPath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
-      throw new ToolError(`Error creating file ${filePath}: ${error}`);
+      throw new ToolError(`Error creating file ${displayPath}: ${error}`);
     }
   }
 
   private async strReplace(
     filePath: string,
+    displayPath: string,
     oldStr: string,
     newStr: string,
   ): Promise<ToolResult> {
@@ -367,7 +370,7 @@ export class TextEditorTool extends defineTool({
 
       if (occurrences === 0) {
         throw new ToolError(
-          `No replacement was performed, old_str \`${oldStr}\` did not appear verbatim in ${filePath}.`,
+          `No replacement was performed, old_str \`${oldStr}\` did not appear verbatim in ${displayPath}.`,
         );
       }
 
@@ -428,7 +431,7 @@ export class TextEditorTool extends defineTool({
       const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
 
       const output = this.formatEditOutput(
-        filePath,
+        displayPath,
         snippet,
         startLine,
         newFileContent,
@@ -437,18 +440,19 @@ export class TextEditorTool extends defineTool({
       );
 
       return {
-        summary: `Updated ${filePath}`,
+        summary: `Updated ${displayPath}`,
         output,
         userPatch: approval.userPatch,
-        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
+        edits: [{ path: displayPath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
-      rethrowWithContext(error, `Error replacing text in ${filePath}`);
+      rethrowWithContext(error, `Error replacing text in ${displayPath}`);
     }
   }
 
   private async insert(
     filePath: string,
+    displayPath: string,
     insertLine: number,
     newStr: string,
   ): Promise<ToolResult> {
@@ -521,7 +525,7 @@ export class TextEditorTool extends defineTool({
       const startLine = snippetStart + 1;
 
       const output = this.formatEditOutput(
-        filePath,
+        displayPath,
         snippetText,
         startLine,
         newFileContent,
@@ -530,21 +534,21 @@ export class TextEditorTool extends defineTool({
       );
 
       return {
-        summary: `Inserted text into ${filePath}`,
+        summary: `Inserted text into ${displayPath}`,
         output,
         userPatch: approval.userPatch,
-        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
+        edits: [{ path: displayPath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
-      rethrowWithContext(error, `Error inserting text in ${filePath}`);
+      rethrowWithContext(error, `Error inserting text in ${displayPath}`);
     }
   }
 
-  private async undoEdit(filePath: string): Promise<ToolResult> {
+  private async undoEdit(filePath: string, displayPath: string): Promise<ToolResult> {
     try {
       const history = this.fileHistory.get(filePath);
       if (!history || history.length === 0) {
-        throw new ToolError(`No edit history found for ${filePath}.`);
+        throw new ToolError(`No edit history found for ${displayPath}.`);
       }
 
       const exists = await WorkspaceFS.exists(filePath);
@@ -590,19 +594,19 @@ export class TextEditorTool extends defineTool({
         previousContent,
         appliedContent,
       );
-      const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(appliedContent)}`;
+      const baseOutput = `Last edit to ${displayPath} undone successfully. ${this.makeOutput(appliedContent)}`;
       const output = userDiffNote
         ? `${baseOutput}\n${userDiffNote}`
         : baseOutput;
 
       return {
-        summary: `Undid edit on ${filePath}`,
+        summary: `Undid edit on ${displayPath}`,
         output,
         userPatch: approval.userPatch,
-        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
+        edits: [{ path: displayPath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
-      rethrowWithContext(error, `Error undoing edit to ${filePath}`);
+      rethrowWithContext(error, `Error undoing edit to ${displayPath}`);
     }
   }
 
