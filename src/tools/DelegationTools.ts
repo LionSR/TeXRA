@@ -268,7 +268,10 @@ async function executeSubagent(
           executionId,
           streamId: childStreamId,
         },
-        { wallTimeMs, workingDirectory: configPayload.workingDirectory ?? undefined },
+        {
+          wallTimeMs,
+          workingDirectory: configPayload.workingDirectory ?? undefined,
+        },
       );
       // Best-effort persist — must never block delivery or abort the subagent.
       try {

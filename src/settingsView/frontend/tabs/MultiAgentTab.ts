@@ -494,7 +494,6 @@ export class MultiAgentTab extends LitElement {
         <div class="setting-block">
           <vscode-checkbox
             ?checked=${this.worktreeSupport}
-            ?disabled=${this.toggleDisabled}
             @change=${this.handleWorktreeSupportToggle}
           >
             Allow agents to work in git worktrees
