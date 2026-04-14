@@ -12,6 +12,7 @@
 
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
@@ -45,6 +46,8 @@ export async function sendFollowUp(
   const flowContext = getToolUseFlowContext(streamId);
   if (flowContext) {
     flowContext.session.appendFollowUp(text);
+    // Notify blocking tools (e.g. ExecutionsTool wait) so they can abort early
+    bus.emit('followUpSent', { streamId });
     return { status: 'sent' };
   }
 

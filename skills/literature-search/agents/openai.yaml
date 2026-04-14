@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Literature Search'
+  short_description: 'Find and verify research sources'
+  default_prompt: 'Use $literature-search to find the most relevant papers and verify the key claims for this topic.'

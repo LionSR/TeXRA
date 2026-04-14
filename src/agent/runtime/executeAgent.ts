@@ -60,7 +60,7 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { TaskRunFileService } from '@utils/files';
-import { agentConfigToTaskState } from '@utils/config/configConversion';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 

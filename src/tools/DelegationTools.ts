@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getExecutionStore, registerExecution } from '@agent/storage';
-import { getAgent, getVisibleAgents } from '@agent/index/agentRegistry';
+import { getVisibleAgents } from '@agent/index/agentRegistry';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -32,7 +32,7 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - logger
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 
 // Local imports - model
 import {
@@ -331,6 +331,19 @@ function formatAgentList(
     .join('\n');
 }
 
+/** Find a visible agent by name or throw with available agents listed. */
+function resolveVisibleAgent(category: 'workflow' | 'toolUse', name: string) {
+  const visible = getVisibleAgents(category);
+  const entry = visible.find((a) => a.name === name);
+  if (!entry) {
+    const available = visible.map((a) => a.name).join(', ');
+    throw new Error(
+      `Unknown ${category} agent '${name}'. Available: ${available}`,
+    );
+  }
+  return entry;
+}
+
 /** Build a concise summary of proposal parameters for rejection echo. */
 function summarizeProposal(
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
@@ -523,6 +536,8 @@ export class WorkflowAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleAgents('workflow'))}
 
+Agent selection: match the task to the most specific agent. Read each agent's description carefully. Do NOT default to correct for everything—correct is strictly for proofreading (typos, grammar, LaTeX formatting). For applying review suggestions use apply; for adding derivations use devise; for instruction-driven rewriting use polish; for critical review use criticize. Use the agent whose description best matches the task.
+
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
@@ -535,23 +550,7 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
-    // Validate agent exists and is a workflow agent
-    const agentEntry = getAgent(input.agent);
-    if (!agentEntry) {
-      const available = getVisibleAgents('workflow')
-        .map((a) => a.name)
-        .join(', ');
-      throw new Error(
-        `Unknown workflow agent '${input.agent}'. Available: ${available}`,
-      );
-    }
-
-    if (agentEntry.category !== AgentCategory.Workflow) {
-      throw new Error(
-        `'${input.agent}' is not a workflow agent. Use delegate_agent for tool-use agents.`,
-      );
-    }
-
+    const agentEntry = resolveVisibleAgent('workflow', input.agent);
     const ctx = getRequiredContext();
 
     // Resolve model: explicit input → parent model → first visible model
@@ -682,10 +681,13 @@ export class DelegateAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
 
+Agent selection: prefer specialized agents over chat (the general-purpose fallback). Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks.
+
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example (new): agent=chat, instruction="Fix the \\cite commands on slides 3 and 7 in slides/talk.tex using refs.bib."
+Example (new, specialized): agent=research, instruction="Derive the asymptotic expansion of the partition function in appendix_A.tex using saddle-point methods. Verify with Wolfram."
+Example (new, general): agent=chat, instruction="Fix the \\cite commands on slides 3 and 7 in slides/talk.tex using refs.bib."
 Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."`,
   schema: DelegateAgentInputSchema,
 }) {
@@ -702,22 +704,7 @@ Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliograp
       );
     }
 
-    // Validate agent exists and is a tool-use agent
-    const agentEntry = getAgent(input.agent);
-    if (!agentEntry) {
-      const available = getVisibleAgents('toolUse')
-        .map((a) => a.name)
-        .join(', ');
-      throw new Error(
-        `Unknown tool-use agent '${input.agent}'. Available: ${available}`,
-      );
-    }
-
-    if (agentEntry.category !== AgentCategory.ToolUse) {
-      throw new Error(
-        `'${input.agent}' is not a tool-use agent. Use delegate_workflow for document processing.`,
-      );
-    }
+    const agentEntry = resolveVisibleAgent('toolUse', input.agent);
 
     const ctx = getRequiredContext();
 

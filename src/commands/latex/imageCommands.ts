@@ -7,7 +7,7 @@ import {
   countPdfPages,
   getBase64EncodedMedia,
   processPdf2Png,
-} from '@frontend/media/img';
+} from '@utils/media/img';
 import * as dialogUtils from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 

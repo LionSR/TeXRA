@@ -55,6 +55,11 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream, finalizeChildStream } from './childStream';
+import {
+  buildCodexCommandToolLog,
+  buildCodexFileChangeToolLog,
+  buildCodexMcpToolLog,
+} from './codexShared';
 
 // Type-only imports (kept separate for bundler efficiency)
 import type {
@@ -264,27 +269,13 @@ function logCodexItem(
 ): void {
   switch (item.type) {
     case 'command_execution': {
-      const exitInfo =
-        item.exit_code === undefined
-          ? item.status
-          : item.exit_code === 0
-            ? 'ok'
-            : `exit ${item.exit_code}`;
-      const output = item.aggregated_output?.trim() || `(${exitInfo})`;
-      logger.logToolUse({
-        toolName: 'bash',
-        input: { command: item.command },
-        output,
-        status: 'completed',
-      });
+      logger.logToolUse(buildCodexCommandToolLog(item));
       break;
     }
     case 'file_change': {
-      const changes = item.changes.map(
-        (c: { kind: string; path: string }) => `${c.kind} ${c.path}`,
-      );
-      if (changes.length > 0) {
-        logger.info(`Files: ${changes.join(', ')}`);
+      const fileLog = buildCodexFileChangeToolLog(item);
+      if (fileLog) {
+        logger.logToolUse(fileLog);
       }
       break;
     }
@@ -295,18 +286,7 @@ function logCodexItem(
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
     case 'mcp_tool_call': {
-      const mcp = item as McpToolCallItem;
-      const output = mcp.error
-        ? `Error: ${mcp.error.message}`
-        : mcp.result?.structured_content
-          ? JSON.stringify(mcp.result.structured_content)
-          : `(${mcp.status})`;
-      logger.logToolUse({
-        toolName: `mcp:${mcp.server}/${mcp.tool}`,
-        input: mcp.arguments,
-        output,
-        status: 'completed',
-      });
+      logger.logToolUse(buildCodexMcpToolLog(item as McpToolCallItem));
       break;
     }
     case 'web_search':
@@ -581,7 +561,7 @@ export class CodexTool extends defineTool({
       ...workspace,
       sandboxMode,
       model: config.CODEX_CLI_MODEL,
-      modelReasoningEffort: config.CODEX_REASONING_EFFORT,
+      modelReasoningEffort: config.getCodexReasoningEffort(),
       skipGitRepoCheck: true as const,
     };
 

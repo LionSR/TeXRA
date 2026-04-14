@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';

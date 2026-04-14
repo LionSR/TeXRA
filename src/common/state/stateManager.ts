@@ -25,8 +25,9 @@ export enum WorkspaceStateKey {
   DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
   CUSTOM_AGENT_PRESETS = 'texra.customAgentPresets',
 
-  // Codex sandbox mode
+  // Codex settings
   CODEX_SANDBOX_MODE = 'texra.codexSandboxMode',
+  CODEX_REASONING_EFFORT = 'texra.codexReasoningEffort',
 
   // Git commit author settings
   GIT_MARK_COMMITS = 'texra.git.markCommits',

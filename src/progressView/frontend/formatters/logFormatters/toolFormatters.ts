@@ -284,6 +284,12 @@ export function formatToolUseTemplate(
       typeof input.prompt === 'string'
     ) {
       headerSummary = truncatePrompt(input.prompt, 60);
+    } else if (
+      toolName === 'bash' &&
+      isPlainObject(input) &&
+      typeof input.command === 'string'
+    ) {
+      headerSummary = truncatePrompt(input.command, 60);
     }
   }
   const titleText = headerSummary
@@ -427,14 +433,13 @@ export function formatToolUseTemplate(
     }
 
     if (action === 'wait') {
-      // wait: show timeout info
+      // wait: show timeout info and a button to break the wait via follow-up
       const timeout = execInput.timeout ?? 300;
-      sections.push(
-        buildToolUseSection(
-          'Action:',
-          wrapInPre(`wait (timeout: ${timeout}s)`),
-        ),
-      );
+      // prettier-ignore
+      const waitContent = isInProgress
+        ? html`<pre>wait (timeout: ${timeout}s)</pre><span class="followup-break-wait" title="Focus the follow-up input to send a message and break this wait"><i class="codicon codicon-comment"></i> Send Follow-up</span>`
+        : wrapInPre(`wait (timeout: ${timeout}s)`);
+      sections.push(buildToolUseSection('Action:', waitContent));
     } else if (action === 'kill') {
       // kill: show action
       sections.push(buildToolUseSection('Action:', wrapInPre('kill')));

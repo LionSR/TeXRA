@@ -10,17 +10,36 @@ import {
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
-import {
-  GlobalStateKey,
-  WorkspaceStateKey,
-  globalSM,
-  workspaceSM,
-} from '@common/state';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
+import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
+import { GlobalStateKey, WorkspaceStateKey } from '@common/state';
 import type { AgentOptionData } from '@shared/schemas';
-import { agentKey as createKey } from '@shared/schemas/agent';
+import { agentKey as createKey, agentName } from '@shared/schemas/agent';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
+
+/** Injectable provider for agent directory paths. */
+export interface AgentDirectories {
+  custom(): Promise<string>;
+  builtIn(): Promise<string>;
+  builtInToolUse(): Promise<string>;
+}
+
+let agentDirectories: AgentDirectories | null = null;
+
+/** Inject the agent directory provider. Called from extension.ts at activation. */
+export function setAgentDirectories(dirs: AgentDirectories): void {
+  agentDirectories = dirs;
+}
+
+function getAgentDirectories(): AgentDirectories {
+  if (!agentDirectories) {
+    throw new Error(
+      'Agent directories not initialized — call setAgentDirectories() first.',
+    );
+  }
+  return agentDirectories;
+}
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
@@ -40,13 +59,11 @@ function isLegacyBuiltInKey(k: string): boolean {
 }
 
 function migrateLegacySourceKeys(): void {
-  if (!workspaceSM) return;
-
   for (const stateKey of [
     WorkspaceStateKey.ENABLED_AGENTS,
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
   ] as const) {
-    const stored = workspaceSM.get<string[]>(stateKey, []);
+    const stored = getWorkspaceState().get<string[]>(stateKey, []);
     if (!stored?.length) continue;
     if (!stored.some(isLegacyBuiltInKey)) continue;
 
@@ -55,7 +72,7 @@ function migrateLegacySourceKeys(): void {
         ? NEW_BUILTIN_PREFIX + k.slice(LEGACY_BUILTIN_PREFIX.length)
         : k,
     );
-    void workspaceSM.update(stateKey, migrated);
+    void getWorkspaceState().update(stateKey, migrated);
     logger.info(CHANNEL, `Migrated legacy builtIn keys in ${stateKey}`);
   }
 }
@@ -107,22 +124,27 @@ const MULTIPLE_SUFFIX = '_multiple';
 /** Source priority for lookups (higher priority first). */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
+  'remote',
   'builtInWorkflow',
   'builtInToolUse',
-  'remote',
 ];
 
-/** Source priority for tool-use sessions (prefers tool-use agents). */
+/** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
 const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
+  'remote',
   'builtInToolUse',
   'builtInWorkflow',
-  'remote',
 ];
 
-/** Default agents for dropdowns. */
+/**
+ * Preferred agents for dropdowns, in priority order.
+ * The first available agent in the list is pre-selected and sorted to the top.
+ * Orchestrator is preferred but requires sign-in (remote agent);
+ * chat is the local fallback.
+ */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
-const DEFAULT_TOOL_USE_AGENT = 'chat';
+const PREFERRED_TOOL_USE_AGENTS = ['orchestrator', 'chat'] as const;
 
 // =============================================================================
 // STATE
@@ -164,10 +186,11 @@ async function doLoad(): Promise<void> {
   migrateLegacySourceKeys();
 
   // Load from all sources in parallel
+  const dirs = getAgentDirectories();
   const [customDir, builtInDir, toolUseDir] = await Promise.all([
-    agentDirectories.custom(),
-    agentDirectories.builtIn(),
-    agentDirectories.builtInToolUse(),
+    dirs.custom(),
+    dirs.builtIn(),
+    dirs.builtInToolUse(),
   ]);
 
   const [customEntries, builtInEntries, toolUseEntries, remoteEntries] =
@@ -188,8 +211,10 @@ async function doLoad(): Promise<void> {
 
   // Apply category overrides from config
   const toolUseOverrides = new Set(
-    workspaceSM?.get<string[]>(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, []) ??
+    getWorkspaceState().get<string[]>(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
       [],
+    ),
   );
 
   for (const entry of allEntries) {
@@ -211,7 +236,7 @@ async function doLoad(): Promise<void> {
  * Supports "source:name" format or just "name" (finds first match by priority).
  *
  * When preferToolUse is true, uses tool-use lookup priority:
- * custom → builtInToolUse → builtInWorkflow → remote
+ * custom → remote → builtInToolUse → builtInWorkflow
  *
  * This handles name collisions where a workflow agent shadows a tool-use agent.
  */
@@ -319,20 +344,23 @@ export function resolveAgent(
   };
 }
 
-/** Get all workflow agents (excludes internal agents by default). */
-export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
-  return [...cache.values()].filter(
-    (e) =>
-      e.category === AgentCategory.Workflow && (includeInternal || !e.internal),
+function getAgentsByCategory(
+  category: AgentCategory,
+  includeInternal: boolean,
+): AgentEntry[] {
+  return deduplicateByName(
+    [...cache.values()].filter(
+      (e) => e.category === category && (includeInternal || !e.internal),
+    ),
   );
 }
 
-/** Get all tool-use agents (excludes internal agents by default). */
+export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
+  return getAgentsByCategory(AgentCategory.Workflow, includeInternal);
+}
+
 export function getToolUseAgents(includeInternal = false): AgentEntry[] {
-  return [...cache.values()].filter(
-    (e) =>
-      e.category === AgentCategory.ToolUse && (includeInternal || !e.internal),
-  );
+  return getAgentsByCategory(AgentCategory.ToolUse, includeInternal);
 }
 
 /** Get agents by source. */
@@ -507,20 +535,19 @@ function persistRemoteAgentMeta(
   agentName: string,
   meta: { tools?: string[]; defaultOutputFiles?: string[] },
 ): void {
-  if (!globalSM) return;
   const stored =
-    globalSM.get<RemoteAgentMetaCache>(
+    getGlobalState().get<RemoteAgentMetaCache>(
       GlobalStateKey.REMOTE_AGENT_META_CACHE,
       {},
     ) ?? {};
   stored[agentName] = { ...stored[agentName], ...meta };
-  void globalSM.update(GlobalStateKey.REMOTE_AGENT_META_CACHE, stored);
+  void getGlobalState().update(GlobalStateKey.REMOTE_AGENT_META_CACHE, stored);
 }
 
 /** Load persisted remote agent metadata from globalState. */
 function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
   return (
-    globalSM?.get<RemoteAgentMetaCache>(
+    getGlobalState().get<RemoteAgentMetaCache>(
       GlobalStateKey.REMOTE_AGENT_META_CACHE,
       {},
     ) ?? {}
@@ -590,7 +617,8 @@ export function resolveAgentKey(
 
 /**
  * Extract the clean agent name from an identifier.
- * Handles source:name format (e.g., "custom:summarize" → "summarize").
+ * Like agentName() but validates the prefix is a known AgentSource first,
+ * so arbitrary strings with colons (e.g. URLs) pass through unchanged.
  */
 export function getCleanAgentName(agentIdentifier: string): string {
   const colonIdx = agentIdentifier.indexOf(':');
@@ -599,7 +627,7 @@ export function getCleanAgentName(agentIdentifier: string): string {
   const source = agentIdentifier.slice(0, colonIdx);
   if (!AgentSource.safeParse(source).success) return agentIdentifier;
 
-  return agentIdentifier.slice(colonIdx + 1);
+  return agentName(agentIdentifier);
 }
 
 // =============================================================================
@@ -634,7 +662,8 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
 // =============================================================================
 
 /**
- * Get visible agents for a category (filtered and deduplicated).
+ * Get visible agents for a category (filtered by user visibility config).
+ * Agents are already deduplicated by name from the getter functions.
  * No default → undefined means "never configured" (show all).
  */
 export function getVisibleAgents(
@@ -645,25 +674,21 @@ export function getVisibleAgents(
   const stateKey = isToolUse
     ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
     : WorkspaceStateKey.ENABLED_AGENTS;
-  const raw = workspaceSM?.get<string[]>(stateKey);
-  return deduplicateByName(filterVisible(entries, raw));
+  const raw = getWorkspaceState().get<string[]>(stateKey);
+  return filterVisible(entries, raw);
 }
 
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
- * Custom agents override built-in agents with the same name.
- * Remote agents use source:name keys to prevent deduplication.
+ * Priority: custom > remote > builtInWorkflow > builtInToolUse.
+ * When the same agent name exists in multiple sources (e.g. local + remote),
+ * only the highest-priority version appears in the dropdown.
  */
-export function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
+function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();
 
   for (const entry of entries) {
-    // Remote agents use source:name key to preserve uniqueness
-    const key =
-      entry.source === 'remote'
-        ? createKey(entry.source, entry.name)
-        : entry.name;
-    const existing = byKey.get(key);
+    const existing = byKey.get(entry.name);
 
     // Keep entry if none exists or if this one has higher priority
     const isHigherPriority =
@@ -672,7 +697,7 @@ export function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
         LOOKUP_PRIORITY.indexOf(existing.source);
 
     if (isHigherPriority) {
-      byKey.set(key, entry);
+      byKey.set(entry.name, entry);
     }
   }
 
@@ -685,15 +710,9 @@ function filterVisible(
 ): AgentEntry[] {
   // undefined = never configured → show all; [] = explicitly empty → show none
   if (configured === undefined) return entries;
-  const configuredSet = new Set(configured);
-
-  // All agents (including remote) are filtered by the configured visibility set.
-  // Remote agents are visible by default when never configured (handled above).
-  return entries.filter(
-    (entry) =>
-      configuredSet.has(createKey(entry.source, entry.name)) ||
-      configuredSet.has(entry.name),
-  );
+  // Match by name so visibility survives when dedup changes the winning source.
+  const enabledNames = new Set(configured.map(agentName));
+  return entries.filter((entry) => enabledNames.has(entry.name));
 }
 
 // =============================================================================
@@ -717,6 +736,7 @@ function entryToOptionData(entry: AgentEntry): AgentOptionData {
     label: entry.name,
     isMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
     isToolUse: entry.category === AgentCategory.ToolUse,
+    isOrchestrator: entry.tools?.some((t) => DELEGATION_TOOLS.has(t)),
     isRemote: entry.source === 'remote',
     isCustom: entry.source === 'custom',
     description: entry.description,
@@ -724,16 +744,23 @@ function entryToOptionData(entry: AgentEntry): AgentOptionData {
 }
 
 /**
- * Sort entries: default agent first, then alphabetically.
+ * Sort entries: preferred agents first (in priority order), then alphabetically.
  */
 function sortAgentEntries(
   entries: AgentEntry[],
-  defaultName: string,
+  preferredNames: readonly string[],
 ): AgentEntry[] {
-  const defaultEntry = entries.find((e) => e.name === defaultName);
+  const preferredSet = new Map(
+    preferredNames
+      .map((name, i) => [entries.find((e) => e.name === name), i] as const)
+      .filter(([entry]) => entry != null),
+  );
   return [...entries].sort((a, b) => {
-    if (a === defaultEntry) return -1;
-    if (b === defaultEntry) return 1;
+    const aIdx = preferredSet.get(a);
+    const bIdx = preferredSet.get(b);
+    if (aIdx != null && bIdx != null) return aIdx - bIdx;
+    if (aIdx != null) return -1;
+    if (bIdx != null) return 1;
     return a.name.localeCompare(b.name);
   });
 }
@@ -748,13 +775,12 @@ export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload
   }
 
   return {
-    workflow: sortAgentEntries(
-      getVisibleAgents('workflow'),
+    workflow: sortAgentEntries(getVisibleAgents('workflow'), [
       DEFAULT_WORKFLOW_AGENT,
-    ).map(entryToOptionData),
+    ]).map(entryToOptionData),
     toolUse: sortAgentEntries(
       getVisibleAgents('toolUse'),
-      DEFAULT_TOOL_USE_AGENT,
+      PREFERRED_TOOL_USE_AGENTS,
     ).map(entryToOptionData),
   };
 }

@@ -150,8 +150,8 @@ const YOLO_TOGGLE_BUTTON = Object.freeze({
   icon: 'shield',
   iconActive: 'flame',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
-  title: 'Enable YOLO mode (skip approval prompts)',
-  titleActive: 'YOLO mode active - click to disable (resume approval prompts)',
+  title: 'Skip edit approvals (auto-accept file changes)',
+  titleActive: 'Edit auto-accept active — click to resume approval prompts',
   className: 'yolo-toggle-button',
   isToggle: true,
 });
@@ -161,8 +161,8 @@ const SUPER_YOLO_TOGGLE_BUTTON = Object.freeze({
   icon: 'rocket',
   iconActive: 'zap',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
-  title: 'Enable Super YOLO (auto-approve agent proposals)',
-  titleActive: 'Super YOLO active - click to disable',
+  title: 'Auto-approve delegated tasks (skip task-by-task approval)',
+  titleActive: 'Auto-approve active — click to resume manual approval',
   className: 'super-yolo-toggle-button',
   isToggle: true,
 });
@@ -231,7 +231,7 @@ export const FILTER_BUTTONS: readonly FilterButton[] = [
   },
   {
     id: ELEMENT_IDS.FILTER_TOOL_BTN,
-    label: 'Chat',
+    label: 'Interactive',
     filter: 'toolUse',
   },
 ];

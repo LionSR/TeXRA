@@ -59,6 +59,7 @@ export const SETTINGS_VIEW_CMD = {
   CUSTOMIZE_AGENT: 'customizeAgent',
   DELETE_CUSTOM_AGENT: 'deleteCustomAgent',
   REVEAL_AGENT_FILE: 'revealAgentFile',
+  VIEW_REMOTE_AGENT_PROMPT: 'viewRemoteAgentPrompt',
   // Custom agent directory commands
   GET_CUSTOM_AGENT_DIR: 'getCustomAgentDir',
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
@@ -76,6 +77,7 @@ export const SETTINGS_VIEW_CMD = {
   GET_APPROVAL_SETTINGS: 'getApprovalSettings',
   SET_BASH_APPROVAL_ENABLED: 'setBashApprovalEnabled',
   SET_CODEX_SANDBOX_MODE: 'setCodexSandboxMode',
+  SET_CODEX_REASONING_EFFORT: 'setCodexReasoningEffort',
   // Tool dashboard commands
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',

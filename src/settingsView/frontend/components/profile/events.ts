@@ -72,5 +72,7 @@ export const AgentSelectionEvents = {
     agentName: string;
     agentSource: AgentSourceType;
   }) => createEvent('agent-reveal-file', detail),
+  viewRemotePrompt: (detail: { agentName: string }) =>
+    createEvent('agent-view-remote-prompt', detail),
   savePreset: () => createEvent('save-agent-mode-preset', undefined),
 } as const;

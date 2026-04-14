@@ -300,11 +300,21 @@ export const CodexSandboxModeSchema = z.enum([
 ]);
 export type CodexSandboxMode = z.infer<typeof CodexSandboxModeSchema>;
 
+/** Valid Codex reasoning effort levels (mirrors CODEX_REASONING_EFFORTS in codexConfig.ts). */
+export const CodexReasoningEffortSchema = z.enum([
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]);
+export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>;
+
 /** Outbound: backend → frontend approval settings */
 export const UpdateApprovalSettingsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
   bashApprovalEnabled: z.boolean(),
   codexSandboxMode: CodexSandboxModeSchema,
+  codexReasoningEffort: CodexReasoningEffortSchema,
 });
 export type UpdateApprovalSettingsMessage = z.infer<
   typeof UpdateApprovalSettingsMessageSchema
@@ -514,6 +524,11 @@ const RevealAgentFileMessageSchema = z.object({
   agentSource: AgentSourceSchema,
 });
 
+const ViewRemoteAgentPromptMessageSchema = z.object({
+  command: z.literal(CMD.VIEW_REMOTE_AGENT_PROMPT),
+  agentName: z.string().min(1),
+});
+
 // Custom agent directory inbound messages
 const GetCustomAgentDirMessageSchema = commandOnly(CMD.GET_CUSTOM_AGENT_DIR);
 const SetCustomAgentDirMessageSchema = commandOnly(CMD.SET_CUSTOM_AGENT_DIR);
@@ -636,6 +651,10 @@ const SetCodexSandboxModeMessageSchema = z.object({
   command: z.literal(CMD.SET_CODEX_SANDBOX_MODE),
   mode: CodexSandboxModeSchema,
 });
+const SetCodexReasoningEffortMessageSchema = z.object({
+  command: z.literal(CMD.SET_CODEX_REASONING_EFFORT),
+  effort: CodexReasoningEffortSchema,
+});
 
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
@@ -707,6 +726,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     CustomizeAgentMessageSchema,
     DeleteCustomAgentMessageSchema,
     RevealAgentFileMessageSchema,
+    ViewRemoteAgentPromptMessageSchema,
     // Custom agent directory messages
     GetCustomAgentDirMessageSchema,
     SetCustomAgentDirMessageSchema,
@@ -726,6 +746,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetApprovalSettingsMessageSchema,
     SetBashApprovalEnabledMessageSchema,
     SetCodexSandboxModeMessageSchema,
+    SetCodexReasoningEffortMessageSchema,
     // Agent mode preset messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,

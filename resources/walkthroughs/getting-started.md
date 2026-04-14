@@ -1,17 +1,24 @@
-# Run your first TeXRA workflow
+# Welcome to TeXRA
 
-This walkthrough mirrors the Quick Start guide so you can stay inside VS Code while you learn the basics.
-Each step links directly to commands in the extension. Screenshots reference existing docs assets for now—
-replace them with higher-fidelity captures once we finalize the walkthrough layout.
+TeXRA helps you write better papers. It uses AI to correct, polish, review, and restructure your LaTeX manuscripts -- right inside VS Code.
 
-1. **Create the sample workspace** – Use the bundled project to explore TeXRA safely.
-2. **Connect your API keys** – Configure Anthropic, OpenAI, Google, or other providers before running agents. Note: chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include API access — you need a separate API key from each provider's developer platform.
-3. **Stage your files** – Choose inputs, references, auxiliary assets, and media from the main view.
-4. **Pick an agent and model** – Match your task to the right persona and model tier.
-5. **Enable automatic figure extraction** – Let TeXRA find figures and TikZ blocks for you before asking agents to edit.
-6. **Execute and follow progress** – Watch runs stream in via the ProgressBoard.
-7. **Review and diff outputs** – Compare generated files before accepting or packaging them.
-8. **Pack and clean up** – Archive outputs into a `History/` folder with Pack, or remove them with Clean. These actions are available in the ProgressBoard toolbar, editor title menu, and right-click context menu.
+**The easiest way to start** is with the **orchestrator**. You give it your paper, it figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.
 
-> **Note:** We are reusing documentation imagery until we capture walkthrough-specific screenshots.
-> Track replacements in the follow-up issue linked to this walkthrough.
+You can also run individual agents yourself if you want to do one specific thing -- fix grammar, draw a diagram, get a review, etc.
+
+## Getting started
+
+Follow the checklist on the left. Each step links to the right command.
+
+1. **Try the sample project** -- A small LaTeX project you can play with safely.
+2. **Add your API key** -- You'll need one from Anthropic, OpenAI, Google, or similar. Chat subscriptions (ChatGPT Plus, Claude Pro) don't include API access.
+3. **Or just sign in** -- The Researcher Access Program gives you free model access, no API key needed. Signing in also unlocks extra agents.
+4. **Pick your files** -- At minimum, just add your manuscript as an Input file.
+5. **Use the orchestrator** -- It'll coordinate everything for you.
+6. **Pick your field** -- Choose a preset (Physicist, Mathematician, Lean) so the orchestrator has the right tools.
+7. **Auto-extract figures** -- Optional. Pulls out figures and TikZ blocks before editing.
+8. **Hit Execute!** -- The orchestrator proposes tasks for you to approve in the Progress view. Press **y** to approve or **n** to reject.
+9. **Check what it did** -- Compare the output against your original with VS Code's diff view.
+10. **Clean up** -- Pack results into History, or delete them to start fresh.
+
+> **Tip:** Reopen this walkthrough anytime: Command Palette > **TeXRA: Open Getting Started**.

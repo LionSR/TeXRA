@@ -75,6 +75,7 @@ export const AgentOptionDataSchema = z.object({
   label: z.string(),
   isMultiple: z.boolean().optional(),
   isToolUse: z.boolean().optional(),
+  isOrchestrator: z.boolean().optional(),
   isRemote: z.boolean().optional(),
   isCustom: z.boolean().optional(),
   description: z.string().optional(),
@@ -91,10 +92,12 @@ export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
 ).extend({
   sessionType: SessionTypeSchema.prefault('toolUse'),
   workflowAgent: z.string().prefault('correct'),
-  toolUseAgent: z.string().prefault('chat'),
+  toolUseAgent: z.string().prefault('orchestrator'),
   model: z.string().prefault('gemini31p'),
   commit: z.string().prefault('HEAD'),
   instruction: z.string().prefault(''),
+  workflowInstruction: z.string().prefault(''),
+  toolUseInstruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
   inputFilesVisible: z.boolean().prefault(false),
   referenceFilesVisible: z.boolean().prefault(false),
@@ -699,6 +702,7 @@ const CommonMessages = [
 const SettingsMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SETTINGS_OPEN),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS),
+  commandOnly(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS),
   z.object({

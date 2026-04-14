@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.37.1",
+  "version": "0.37.2",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.105.0"
@@ -92,19 +92,19 @@
           "texra.model.useOpenAIResponsesAPI": {
             "type": "boolean",
             "default": true,
-            "description": "Use the OpenAI Responses API instead of the Chat Completions API when available.",
+            "description": "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
             "scope": "resource"
           },
           "texra.model.useBackgroundResponses": {
             "type": "boolean",
             "default": false,
-            "description": "Enable background mode for OpenAI Responses API to handle long-running generations (>10mins) more reliably by preventing request timeouts. Adds polling overhead.",
+            "description": "Keep long-running OpenAI requests alive in the background instead of timing out after 10 minutes. Useful for complex tasks but adds slight overhead.",
             "scope": "resource"
           },
           "texra.model.openaiParallelToolCalls": {
             "type": "boolean",
             "default": false,
-            "description": "Allow OpenAI models to call multiple tools in parallel within a single turn. When disabled (default), forces sequential tool calls to preserve existing behavior.",
+            "description": "Let OpenAI models use multiple tools at the same time for faster results. Disabled by default for more predictable behavior.",
             "scope": "resource"
           },
           "texra.model.compactionThresholdPercent": {
@@ -112,13 +112,13 @@
             "default": 75,
             "minimum": 0,
             "maximum": 100,
-            "description": "Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction via /responses/compact. For Anthropic, triggers native server-side compaction on Claude Opus 4.6. Set to 0 to disable.",
+            "description": "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
             "scope": "resource"
           },
           "texra.model.gpt5ReasoningSummary": {
             "type": "boolean",
             "default": false,
-            "description": "Request reasoning summaries from GPT-5 models (requires verified account and appropriate user tier).",
+            "description": "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
             "scope": "resource"
           },
           "texra.model.useCopilot": {
@@ -845,7 +845,7 @@
       },
       {
         "command": "texra.testConnection",
-        "title": "Test Text Connection Methods",
+        "title": "Test API Connection",
         "category": "TeXRA"
       },
       {
@@ -954,7 +954,8 @@
       },
       {
         "command": "texra.mainView.reset",
-        "title": "New",
+        "title": "New Session",
+        "shortTitle": "New",
         "category": "TeXRA",
         "icon": "$(new-file)"
       },
@@ -989,6 +990,12 @@
         "icon": "$(tools)"
       },
       {
+        "command": "texra.showMultiAgent",
+        "title": "Show Multi-Agent Settings",
+        "category": "TeXRA",
+        "icon": "$(organization)"
+      },
+      {
         "command": "texra.openSettings",
         "title": "Open TeXRA Settings",
         "category": "TeXRA",
@@ -1021,7 +1028,8 @@
       },
       {
         "command": "texra.showDashboard",
-        "title": "Show Dashboard",
+        "title": "Show Settings Dashboard",
+        "shortTitle": "Settings",
         "category": "TeXRA",
         "icon": "$(gear)"
       },
@@ -1035,13 +1043,13 @@
     "walkthroughs": [
       {
         "id": "texra.gettingStarted",
-        "title": "Run your first TeXRA workflow",
-        "description": "Complete this checklist to configure TeXRA, run your first agent, and review results without leaving VS Code.",
+        "title": "Get started with TeXRA",
+        "description": "Get TeXRA up and running in a few minutes. Connect your account, pick your field, and run your first paper through the orchestrator.",
         "steps": [
           {
             "id": "texra.gettingStarted.sampleWorkspace",
-            "title": "Seed the sample workspace",
-            "description": "Start with the bundled workspace so you can experiment safely.\n[Create the sample project](command:texra.createSampleProject) and review the README that opens for links back to this checklist.",
+            "title": "Try the sample project",
+            "description": "Not sure where to start? We've bundled a small LaTeX project you can play with.\n\n[Create the sample project](command:texra.createSampleProject)\n\nYou'll get a folder with example `.tex` files and a README that explains the layout.",
             "media": {
               "markdown": "resources/walkthroughs/getting-started.md"
             },
@@ -1051,8 +1059,8 @@
           },
           {
             "id": "texra.gettingStarted.apiKeys",
-            "title": "Connect your API keys",
-            "description": "Register your Anthropic, OpenAI, Google, or other provider keys before running agents.\n[Set API keys](command:texra.setApiKey) and keep the defaults unless you need workspace-specific overrides.",
+            "title": "Add your API key",
+            "description": "You'll need an API key from a provider like Anthropic, OpenAI, or Google. Just one is enough.\n\n[Set API key](command:texra.setApiKey)\n\nHeads up: chat subscriptions (ChatGPT Plus, Claude Pro) don't come with API access. You need a separate key from the provider's developer platform.\n\n**No API key?** No problem -- sign in with the Researcher Access Program in the next step instead.",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the API key configuration view"
@@ -1062,9 +1070,21 @@
             ]
           },
           {
+            "id": "texra.gettingStarted.signIn",
+            "title": "Or just sign in",
+            "description": "The **Researcher Access Program** lets you use AI models and remote agents for free -- no API key needed.\n\n[Sign In](command:texra.auth.signIn)\n\nAlready set an API key? You can skip this, but signing in still unlocks extra agents you can't get with a key alone.",
+            "media": {
+              "image": "resources/walkthroughs/media/api-key-setup.png",
+              "altText": "Screenshot of the sign-in flow"
+            },
+            "completionEvents": [
+              "onCommand:texra.auth.signIn"
+            ]
+          },
+          {
             "id": "texra.gettingStarted.stageFiles",
-            "title": "Stage your files",
-            "description": "Use the Input, Reference, Auxiliary, and Media pickers to tell TeXRA what to read.\n[Open the TeXRA main view](command:texra.showMainView) and choose whether you want a single output or multiple outputs for parallel drafts.",
+            "title": "Pick your files",
+            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Reference** -- papers or notes for context (optional)\n- **Auxiliary** -- bib files, style files, preambles (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
             "media": {
               "image": "resources/walkthroughs/media/file-selection.png",
               "altText": "Screenshot of the file selection interface"
@@ -1075,17 +1095,29 @@
           },
           {
             "id": "texra.gettingStarted.agentModel",
-            "title": "Choose an agent and model",
-            "description": "Match your task to the right persona—`correct` for structural fixes, `polish` for copy edits, or `draw` for diagrams—and pair it with a model tier that balances quality and speed.",
+            "title": "Use the orchestrator",
+            "description": "We recommend starting with the **orchestrator**. It reads your paper, figures out what needs work, and hands each task to the right agent automatically.\n\nJust pick **orchestrator** from the agent dropdown. You'll also want to choose a model -- bigger models give better results, smaller ones are faster and cheaper.\n\nIf you'd rather do one specific thing (just fix grammar, just draw a diagram), you can pick a single agent instead.",
             "media": {
               "image": "resources/walkthroughs/media/agent-model-selection.png",
               "altText": "Screenshot of the agent and model selection UI"
             }
           },
           {
+            "id": "texra.gettingStarted.multiAgent",
+            "title": "Pick your field",
+            "description": "We have presets for different disciplines that give the orchestrator the right set of tools for your work:\n\n- **Physicist** -- derivations, literature, presentations\n- **Mathematician** -- proofs, formalization, research\n- **Lean Project** -- Lean 4 with theorem search and blueprints\n\n[Open Settings](command:texra.showDashboard) and go to the **Multi-Agent** tab to pick one. You can always tweak it or make your own later.",
+            "media": {
+              "image": "resources/walkthroughs/media/agent-model-selection.png",
+              "altText": "Screenshot of mode preset selection"
+            },
+            "completionEvents": [
+              "onCommand:texra.showDashboard"
+            ]
+          },
+          {
             "id": "texra.gettingStarted.autoExtract",
-            "title": "Enable automatic figure extraction",
-            "description": "Toggle **Auto-extract figures** and **Auto-extract TikZ blocks** before you run so TeXRA gathers assets for you. You can also try the standalone commands: [Extract figure paths](command:texra.extractFigurePaths) or [Extract TikZ figures](command:texra.extractTikzFigures).",
+            "title": "Auto-extract figures (optional)",
+            "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run them manually:\n\n[Extract figure paths](command:texra.extractFigurePaths) | [Extract TikZ figures](command:texra.extractTikzFigures)",
             "media": {
               "image": "resources/walkthroughs/media/auto-extract-options.png",
               "altText": "Screenshot showing auto-extraction options"
@@ -1097,8 +1129,8 @@
           },
           {
             "id": "texra.gettingStarted.progress",
-            "title": "Execute and watch progress",
-            "description": "Kick off your run and watch logs, tool calls, and outputs stream into Progress.\n[Execute the agent](command:texra.execute) and keep an eye on [Show Progress](command:texra.showProgressView) for status updates.",
+            "title": "Hit Execute!",
+            "description": "You're all set. Click Execute and the orchestrator will start working through your paper.\n\n[Execute](command:texra.execute)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.showProgressView) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot of the Progress view"
@@ -1109,8 +1141,8 @@
           },
           {
             "id": "texra.gettingStarted.review",
-            "title": "Review and diff outputs",
-            "description": "Open the generated files, compare them against your sources, and accept or iterate. Use VS Code's diff view to see every change before you commit.",
+            "title": "Check what it did",
+            "description": "Your originals are safe -- TeXRA writes edits to new files. Open them up and use VS Code's diff view to see exactly what changed. Accept what you like, ignore what you don't.",
             "media": {
               "image": "resources/walkthroughs/media/vscode-compare.png",
               "altText": "Screenshot of the VS Code diff view"
@@ -1118,8 +1150,8 @@
           },
           {
             "id": "texra.gettingStarted.housekeeping",
-            "title": "Pack and clean up",
-            "description": "After reviewing, use **Pack** $(archive) to archive outputs into a timestamped `History/` folder, or **Clean** $(trash) to delete generated files.\n\nFind these actions in:\n- The **Progress toolbar** on each completed run\n- The **editor title menu** (overflow `...`) when editing a `.tex` file\n- The **right-click context menu** on `.tex` files\n\nOr try the workspace-wide commands: [Clean all LLM outputs](command:texra.cleanOutput) | [Clean all build files](command:texra.cleanBuild)",
+            "title": "Clean up when you're done",
+            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar, or right-click any `.tex` file.\n\n[Clean all outputs](command:texra.cleanOutput) | [Clean build files](command:texra.cleanBuild)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot showing pack and clean buttons in the Progress toolbar"
@@ -1241,6 +1273,40 @@
           "command": "texra.cleanBuild",
           "group": "z_texra@2"
         }
+      ],
+      "commandPalette": [
+        {
+          "command": "texra.testConnection",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.testAgentLoading",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.loadSpecificAgent",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.testTextEditor",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.parseXml",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.parseYaml",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.showLinterMessages",
+          "when": "config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.countLinterMessages",
+          "when": "config.texra.logger.debugMode"
+        }
       ]
     },
     "keybindings": [
@@ -1320,18 +1386,18 @@
     "@types/sortablejs": "^1.15.9",
     "@types/turndown": "^5.0.6",
     "@types/vscode": "^1.105.0",
-    "@typescript-eslint/eslint-plugin": "^8.58.0",
-    "@typescript-eslint/parser": "^8.58.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.1",
+    "@typescript-eslint/parser": "^8.58.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "concurrently": "^9.1.2",
     "css-loader": "^7.1.4",
-    "esbuild": "^0.27.7",
+    "esbuild": "^0.28.0",
     "eslint": "^9.39.4",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-unicorn": "^64.0.0",
     "globals": "^17.4.0",
-    "jsdom": "^29.0.1",
+    "jsdom": "^29.0.2",
     "node-loader": "^2.1.0",
     "nunjucks": "^3.2.4",
     "path-browserify": "^1.0.1",
@@ -1340,11 +1406,11 @@
     "terser-webpack-plugin": "^5.4.0",
     "ts-loader": "^9.5.7",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.58.0",
-    "vite": "^8.0.3",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.1",
+    "vite": "^8.0.8",
     "vscode-languageserver-protocol": "^3.17.5",
-    "webpack": "^5.105.4",
+    "webpack": "^5.106.0",
     "webpack-cli": "^7.0.2",
     "zod-v3-to-v4": "^1.20.0"
   },
@@ -1377,7 +1443,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.82.0",
+    "@anthropic-ai/sdk": "^0.85.0",
     "@cantoo/pdf-lib": "^2.6.5",
     "@google/genai": "^1.48.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
@@ -1387,21 +1453,21 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/codex-sdk": "^0.118.0",
     "@openrouter/sdk": "^0.11.2",
-    "@supabase/supabase-js": "^2.101.1",
+    "@supabase/supabase-js": "^2.102.1",
     "@vscode-elements/elements": "^2.5.1",
     "@vscode/codicons": "^0.0.45",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "arxiv-client": "^0.0.9",
-    "axios": "^1.14.0",
+    "axios": "^1.15.0",
     "bibtex": "^0.9.0",
     "deepmerge": "^4.3.1",
     "delay": "^7.0.0",
     "diff-match-patch": "^1.0.5",
-    "dotenv": "^17.4.0",
+    "dotenv": "^17.4.1",
     "execa": "^9.6.1",
     "fast-json-stable-stringify": "^2.1.0",
-    "fast-xml-parser": "^5.5.10",
+    "fast-xml-parser": "^5.5.11",
     "fs-extra": "^11.3.4",
     "glob": "^13.0.6",
     "he": "^1.2.0",
@@ -1409,7 +1475,7 @@
     "highlightjs-lean": "^1.2.0",
     "http-status-codes": "^2.3.0",
     "identifiers-arxiv": "^0.1.1",
-    "katex": "^0.16.44",
+    "katex": "^0.16.45",
     "lit": "^3.3.2",
     "llm-zoo": "^1.2.1",
     "mark.js": "^8.11.1",
@@ -1420,7 +1486,7 @@
     "mutative": "^1.3.0",
     "nanoid": "^5.1.7",
     "node-pandoc": "^0.3.0",
-    "openai": "^6.33.0",
+    "openai": "^6.34.0",
     "p-map": "^7.0.4",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",

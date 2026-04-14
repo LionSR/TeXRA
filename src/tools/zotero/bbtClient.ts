@@ -14,7 +14,7 @@ import axios from 'axios';
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { isTimeoutErrorCode } from '@tools/timeouts';
-import { getConfig } from '@utils/config';
+import { getConfig } from '@agent/core/config';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 

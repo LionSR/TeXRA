@@ -7,7 +7,7 @@ import { z } from 'zod';
 // Local imports - tool definitions
 import { isDirectory } from '@common/files/fsEntryType';
 import { isTexFile } from '@common/files/fileTypeUtils';
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import replacementEngine from '@replacement/engine';
 import {
   recordToolFileRead,

@@ -41,6 +41,9 @@ import {
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
 
+// Local imports - progress view events
+import { ProgressEvents } from '../events';
+
 // Local imports - progress view formatters
 import { getCopyContent } from '../formatters/copyContentStore';
 import { getProposalInput } from '../formatters/proposalInputStore';
@@ -259,6 +262,18 @@ export class LogList extends LitElement {
           proposal,
         });
       }
+      return;
+    }
+
+    // Handle "Send Follow-up" button in executions wait entries
+    const breakWaitBtn = this.findTargetInPath<HTMLElement>(
+      event,
+      '.followup-break-wait',
+    );
+    if (breakWaitBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.dispatchEvent(ProgressEvents.followupFocusRequest());
       return;
     }
 

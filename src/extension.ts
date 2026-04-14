@@ -6,8 +6,9 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
-import { loadAgents } from '@agent/index';
+import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
+import { initPlatform } from '@platform/platform';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
@@ -42,21 +43,25 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
+import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
-import {
-  parseCodexSandboxMode,
-  setCodexSandboxModeGetter,
-} from '@tools/codexConfig';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
+import { setLinterProvider } from '@tools/DiagnosticsTool';
+import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
+import { getLinterMessages } from '@frontend/latex/linter';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
-import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
+import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
+import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
+import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
+import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -120,11 +125,21 @@ export async function activate(context: vscode.ExtensionContext) {
   await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
 
   SecretManager.initialize(context);
-  StorageFS.initialize(context);
   agentDirectories.initialize(context);
+  setAgentDirectories(agentDirectories);
   initializePolishModel(context.extensionPath);
-  await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
+  initPlatform({
+    config: { get: getConfig },
+    globalState: context.globalState,
+    workspaceState: context.workspaceState,
+    log: logger,
+    fs: new VscodeFileSystem(),
+    workspace: new VscodeWorkspace(),
+    storage: new VscodeStorage(context),
+    secrets: new VscodeSecrets(context),
+  });
+  await StorageFS.ensureDir(TASK_RUNS_DIR);
   FileLister.initialize(context);
   initializeServerSideKeyAccess(context, {
     isAuthenticated: () => SupabaseClient.isAuthenticated(),
@@ -210,15 +225,8 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
-  setCodexSandboxModeGetter(() =>
-    parseCodexSandboxMode(
-      workspaceSM.get<string>(
-        WorkspaceStateKey.CODEX_SANDBOX_MODE,
-        'workspace-write',
-      ) ?? 'workspace-write',
-    ),
-  );
-
+  setLinterProvider(getLinterMessages);
+  setOpenBuildDisplay(openBuildDisplayIfTex);
   applyGitAuthorConfig();
 
   setToolNotificationHandler((message, actionCommand) => {
@@ -323,7 +331,7 @@ export async function activate(context: vscode.ExtensionContext) {
     void vscode.commands.executeCommand('texra.openGettingStarted');
     void showInstructionWithSuppress(
       'welcome',
-      'Welcome to TeXRA! The new "Run your first TeXRA workflow" walkthrough will guide you through seeding the sample project, configuring API keys, staging files, enabling automatic figure/TikZ extraction, and executing your first run.',
+      'Welcome to TeXRA! It helps you write better LaTeX papers using AI. Quickest way to start: add an API key (or sign in), open a LaTeX file, choose an agent, and hit Execute.',
       [
         {
           title: 'Open Walkthrough',

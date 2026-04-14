@@ -13,9 +13,10 @@ import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { GlobalStateKey, globalSM } from '@common/state';
-import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
+import * as logger from '@agent/core/logger';
+import { getGlobalState } from '@agent/core/stateStore';
+import { getConfig } from '@agent/core/config';
+import { GlobalStateKey } from '@common/state';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'ModelFactory';
@@ -56,7 +57,7 @@ export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
 function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   if (!handler.capabilities.supportsReasoningEffort) return handler;
 
-  const level = globalSM.get<Record<string, string>>(
+  const level = getGlobalState().get<Record<string, string>>(
     GlobalStateKey.REASONING_LEVELS,
     {},
   )[handler.config.name];
@@ -94,7 +95,12 @@ function shouldUseResponsesAPI(
  * that only accept unpinned model identifiers.
  */
 function withShortModelName(config: ModelConfig): ModelConfig {
-  if (!globalSM.get<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES, false)) {
+  if (
+    !getGlobalState().get<boolean>(
+      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+      false,
+    )
+  ) {
     return config;
   }
   const short = config.shortName;

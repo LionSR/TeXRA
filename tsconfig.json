@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "module": "commonjs",
     "target": "ES2022",
     "lib": ["ES2023", "DOM"],
@@ -32,6 +33,8 @@
       "@types/*": ["src/types/*"],
       "@eventBus/*": ["src/eventBus/*"],
       "@auth/*": ["src/auth/*"],
+      "@platform": ["src/platform"],
+      "@platform/*": ["src/platform/*"],
       "@openrouter/sdk": ["node_modules/@openrouter/sdk/esm/index.d.ts"],
       "@openrouter/sdk/models": [
         "node_modules/@openrouter/sdk/esm/models/index.d.ts"
@@ -40,7 +43,8 @@
     "moduleResolution": "node",
     "strict": true /* enable all strict type-checking options */,
     "skipLibCheck": true,
-    "esModuleInterop": true /* Enables emit interoperability between CommonJS and ES Modules */
+    "esModuleInterop": true /* Enables emit interoperability between CommonJS and ES Modules */,
+    "types": ["node", "mocha", "vscode"]
     /* Additional Checks */
     // "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
     // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */

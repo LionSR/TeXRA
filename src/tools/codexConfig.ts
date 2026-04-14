@@ -4,6 +4,7 @@ import * as path from 'path';
 // Local imports - agent config
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { getWorkspaceState } from '@agent/core/stateStore';
 import { WorkspaceFS } from '@utils/files';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
@@ -14,42 +15,58 @@ import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 /** Short model name passed to the Codex CLI via --model. */
 export const CODEX_CLI_MODEL = 'gpt-5.4';
 
-/** Default reasoning effort passed to the Codex CLI. */
-export const CODEX_REASONING_EFFORT = 'high' as const;
-
 // ============================================================================
-// Sandbox mode config (injectable — VS Code layer sets the real getter)
+// Reasoning effort
 // ============================================================================
 
-export const CODEX_SANDBOX_MODES = [
+const REASONING_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
+export const CODEX_REASONING_EFFORTS = REASONING_EFFORTS;
+export type CodexReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
+const REASONING_EFFORT_KEY = 'texra.codexReasoningEffort';
+const REASONING_EFFORT_DEFAULT: CodexReasoningEffort = 'high';
+
+export function parseCodexReasoningEffort(raw: string): CodexReasoningEffort {
+  return (REASONING_EFFORTS as readonly string[]).includes(raw)
+    ? (raw as CodexReasoningEffort)
+    : REASONING_EFFORT_DEFAULT;
+}
+
+export function getCodexReasoningEffort(): CodexReasoningEffort {
+  const raw = getWorkspaceState().get<string>(
+    REASONING_EFFORT_KEY,
+    REASONING_EFFORT_DEFAULT,
+  );
+  return parseCodexReasoningEffort(raw);
+}
+
+// ============================================================================
+// Sandbox mode
+// ============================================================================
+
+const SANDBOX_MODES = [
   'read-only',
   'workspace-write',
   'danger-full-access',
 ] as const;
+export const CODEX_SANDBOX_MODES = SANDBOX_MODES;
+export type CodexSandboxMode = (typeof SANDBOX_MODES)[number];
 
-export type CodexSandboxMode = (typeof CODEX_SANDBOX_MODES)[number];
+const SANDBOX_MODE_KEY = 'texra.codexSandboxMode';
+const SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';
 
-const DEFAULT_SANDBOX_MODE: CodexSandboxMode = 'workspace-write';
-
-/** Validate a raw string into a sandbox mode, falling back to the default. */
 export function parseCodexSandboxMode(raw: string): CodexSandboxMode {
-  return CODEX_SANDBOX_MODES.includes(raw as CodexSandboxMode)
+  return (SANDBOX_MODES as readonly string[]).includes(raw)
     ? (raw as CodexSandboxMode)
-    : DEFAULT_SANDBOX_MODE;
+    : SANDBOX_MODE_DEFAULT;
 }
 
-let sandboxModeGetter: () => CodexSandboxMode = () => DEFAULT_SANDBOX_MODE;
-
-/** Register a platform-specific getter for the configured sandbox mode. */
-export function setCodexSandboxModeGetter(
-  getter: () => CodexSandboxMode,
-): void {
-  sandboxModeGetter = getter;
-}
-
-/** Read the user-configured default sandbox mode. */
 export function getCodexSandboxMode(): CodexSandboxMode {
-  return sandboxModeGetter();
+  const raw = getWorkspaceState().get<string>(
+    SANDBOX_MODE_KEY,
+    SANDBOX_MODE_DEFAULT,
+  );
+  return parseCodexSandboxMode(raw);
 }
 
 /**

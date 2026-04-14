@@ -17,12 +17,16 @@ import type {
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 
-// Local imports - frontend
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
+// Local imports - platform
+import { platform } from '@platform/platform';
+
+// Local imports - model
+import { getApiKey, type ApiProvider } from '@model/apiProviders';
 
 // Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
@@ -32,7 +36,6 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { K_SLICE } from '@utils/config';
 import type { FileLocation } from '@utils/files';
 import {
   getProviderStreaming,
@@ -286,7 +289,7 @@ export abstract class ModelHandler<
     errorMessage: string,
   ): Promise<string> {
     try {
-      return await SecretManager.getApiKey(provider);
+      return await getApiKey(platform().secrets, provider);
     } catch {
       throw new Error(errorMessage);
     }

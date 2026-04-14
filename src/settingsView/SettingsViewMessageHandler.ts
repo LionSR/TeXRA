@@ -23,6 +23,7 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { getHelperModelName } from '@agent/runtime/helperModel';
 import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -92,6 +93,10 @@ import {
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import {
+  parseCodexSandboxMode,
+  parseCodexReasoningEffort,
+} from '@tools/codexConfig';
+import {
   MEMORY_STORAGE_ROOT,
   MAX_PINNED_MEMORIES,
 } from '@tools/memory/constants';
@@ -102,14 +107,9 @@ import {
   countPinnedMemories,
 } from '@tools/memory/memoryMeta';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
-import { parseCodexSandboxMode } from '@tools/codexConfig';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
-import { agentConfigToTaskState } from '@utils/config/configConversion';
-import {
-  getToolUseMemoryEnabled,
-  setToolUseMemoryEnabled,
-} from '@utils/config/constants';
+import { setToolUseMemoryEnabled } from '@utils/config/constants';
 import {
   getGlobalStreaming,
   setGlobalStreaming,
@@ -430,6 +430,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.agentHandlers.handleDeleteCustomAgent(data),
       [SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE]: (data) =>
         this.agentHandlers.handleRevealAgentFile(data),
+      [SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT]: (data) =>
+        this.agentHandlers.handleViewRemoteAgentPrompt(data),
 
       // Custom agent directory
       [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () =>
@@ -494,7 +496,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED]: (data) =>
         this.handleSetApprovalEnabled(BASH_APPROVAL_CONFIG_KEY, data.enabled),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (data) =>
-        this.handleSetCodexSandboxMode(data.mode),
+        this.updateCodexSetting(
+          WorkspaceStateKey.CODEX_SANDBOX_MODE,
+          data.mode,
+        ),
+      [SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT]: (data) =>
+        this.updateCodexSetting(
+          WorkspaceStateKey.CODEX_REASONING_EFFORT,
+          data.effort,
+        ),
 
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
@@ -593,7 +603,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    const enabled = getToolUseMemoryEnabled();
+    const enabled =
+      globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true;
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
       enabled,
@@ -826,6 +837,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           'workspace-write',
         ) ?? 'workspace-write',
       ),
+      codexReasoningEffort: parseCodexReasoningEffort(
+        workspaceSM.get<string>(
+          WorkspaceStateKey.CODEX_REASONING_EFFORT,
+          'high',
+        ) ?? 'high',
+      ),
     });
   }
 
@@ -838,8 +855,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
-  private async handleSetCodexSandboxMode(mode: string): Promise<void> {
-    await workspaceSM.update(WorkspaceStateKey.CODEX_SANDBOX_MODE, mode);
+  private async updateCodexSetting(
+    key: WorkspaceStateKey,
+    value: string,
+  ): Promise<void> {
+    await workspaceSM.update(key, value);
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 

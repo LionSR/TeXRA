@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Lean Proof Assistant'
+  short_description: 'Develop and debug Lean proofs'
+  default_prompt: 'Use $lean-proof-assistant to prove or repair this Lean theorem and iterate until the file is clean.'

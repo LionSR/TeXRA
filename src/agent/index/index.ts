@@ -9,8 +9,10 @@ export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
+  type AgentDirectories,
   // Core functions
   loadAgents,
+  setAgentDirectories,
   getAgent,
   resolveAgent,
   getWorkflowAgents,
@@ -30,8 +32,6 @@ export {
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)
   getVisibleAgents,
-  // Deduplication
-  deduplicateByName,
   // Description update (for remote agent loading)
   updateAgentDescription,
 } from './agentRegistry';

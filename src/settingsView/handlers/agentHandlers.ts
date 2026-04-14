@@ -12,13 +12,15 @@ import { z } from 'zod';
 import {
   type AgentEntry,
   createKey,
-  deduplicateByName,
   getAgent,
   getVisibleAgents,
   getWorkflowAgents,
   getToolUseAgents,
   loadAgents,
 } from '@agent/index';
+import { EdgeFunctionResponseSchema } from '@agent/remote/types';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
@@ -118,7 +120,7 @@ export class AgentHandlers {
       const entry = getAgent(key);
       if (!entry) {
         await vscode.window.showErrorMessage(
-          `Agent not found: ${data.agentName} (${data.agentSource})`,
+          `Agent "${data.agentName}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`,
         );
         return;
       }
@@ -127,7 +129,7 @@ export class AgentHandlers {
         data.variant === 'multiple' ? entry.multiplePath : entry.path;
       if (!agentPath) {
         await vscode.window.showErrorMessage(
-          `No ${data.variant} YAML path for agent: ${data.agentName}`,
+          `No configuration file found for agent "${data.agentName}". The agent definition may be incomplete — try re-creating it from the Agents tab.`,
         );
         return;
       }
@@ -290,6 +292,61 @@ export class AgentHandlers {
       await showLoggedErrorMessage(
         this.ctx.channel,
         'Failed to reveal agent file',
+        error,
+      );
+    }
+  }
+
+  async handleViewRemoteAgentPrompt(
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.VIEW_REMOTE_AGENT_PROMPT>,
+  ): Promise<void> {
+    try {
+      const tier = await SupabaseClient.getUserTier();
+      if (tier !== ULTRA_TIER) {
+        await vscode.window.showErrorMessage(
+          'Viewing remote agent prompts requires an Ultra plan.',
+        );
+        return;
+      }
+
+      const token = await SupabaseClient.getAccessToken();
+      if (!token) {
+        await vscode.window.showErrorMessage(
+          'Authentication required. Sign in using "TeXRA: Sign In".',
+        );
+        return;
+      }
+
+      const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ agentName: data.agentName }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        await vscode.window.showErrorMessage(
+          `Failed to fetch agent prompt: ${errorText}`,
+        );
+        return;
+      }
+
+      const responseData = EdgeFunctionResponseSchema.parse(
+        await response.json(),
+      );
+
+      const doc = await vscode.workspace.openTextDocument({
+        content: responseData.config,
+        language: 'yaml',
+      });
+      await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Failed to view remote agent prompt',
         error,
       );
     }
@@ -725,9 +782,8 @@ prompts:
     category: 'workflow' | 'toolUse',
     names: Set<string>,
   ): string[] {
-    const entries = deduplicateByName(
-      category === 'workflow' ? getWorkflowAgents() : getToolUseAgents(),
-    );
+    const entries =
+      category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
     return entries
       .filter((e) => names.has(e.name))
       .map((e) => createKey(e.source, e.name));

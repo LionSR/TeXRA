@@ -46,6 +46,7 @@ import {
   type SessionTypeChangeDetail,
 } from '@shared/schemas';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
+import { agentName } from '@shared/schemas/agent';
 import { capitalize } from '@shared/utils/string';
 
 import './components/FileSelectGroup';
@@ -143,6 +144,12 @@ export class MainApp extends MainAppBase {
   private readonly model = signal(DEFAULT_STATE.model);
   private readonly commit = signal(DEFAULT_STATE.commit);
   private readonly instruction = signal(DEFAULT_STATE.instruction);
+  private readonly workflowInstruction = signal(
+    DEFAULT_STATE.workflowInstruction,
+  );
+  private readonly toolUseInstruction = signal(
+    DEFAULT_STATE.toolUseInstruction,
+  );
   private readonly singleFiles = signal<SingleFiles>({
     ...DEFAULT_SINGLE_FILES,
   });
@@ -399,6 +406,8 @@ export class MainApp extends MainAppBase {
       model: this.model.get(),
       commit: this.commit.get(),
       instruction: this.instruction.get(),
+      workflowInstruction: this.workflowInstruction.get(),
+      toolUseInstruction: this.toolUseInstruction.get(),
       inputFile: sf.inputFile,
       referenceFile: sf.referenceFile,
       auxiliaryFile: sf.auxiliaryFile,
@@ -437,7 +446,8 @@ export class MainApp extends MainAppBase {
     this.toolUseAgent.set(state.toolUseAgent);
     this.model.set(state.model);
     this.commit.set(state.commit);
-    this.instruction.set(state.instruction);
+
+    this.restorePerModeInstructions(state);
     this.singleFiles.set({
       inputFile: state.inputFile,
       referenceFile: state.referenceFile,
@@ -504,6 +514,48 @@ export class MainApp extends MainAppBase {
     }
   }
 
+  private setInstruction(value: string): void {
+    this.instruction.set(value);
+    if (this.sessionType.get() === SESSION_TYPES.WORKFLOW) {
+      this.workflowInstruction.set(value);
+    } else {
+      this.toolUseInstruction.set(value);
+    }
+  }
+
+  /** Stash instruction for the mode being left, restore for the mode being entered. */
+  private swapModeInstruction(from: SessionType, to: SessionType): void {
+    if (from === to) return;
+    if (from === SESSION_TYPES.WORKFLOW) {
+      this.workflowInstruction.set(this.instruction.get());
+    } else {
+      this.toolUseInstruction.set(this.instruction.get());
+    }
+    this.instruction.set(
+      to === SESSION_TYPES.WORKFLOW
+        ? this.workflowInstruction.get()
+        : this.toolUseInstruction.get(),
+    );
+  }
+
+  /**
+   * Restore per-mode instructions from persisted state, migrating the legacy
+   * single `instruction` field for users who haven't saved per-mode fields yet.
+   */
+  private restorePerModeInstructions(state: MainViewPersistedState): void {
+    const wf =
+      state.workflowInstruction ||
+      (state.sessionType === SESSION_TYPES.WORKFLOW ? state.instruction : '');
+    const tu =
+      state.toolUseInstruction ||
+      (state.sessionType !== SESSION_TYPES.WORKFLOW ? state.instruction : '');
+    this.workflowInstruction.set(wf);
+    this.toolUseInstruction.set(tu);
+    this.instruction.set(
+      state.sessionType === SESSION_TYPES.WORKFLOW ? wf : tu,
+    );
+  }
+
   /**
    * Validates that a selection exists in options.
    * Returns current value if found, otherwise falls back to first available option.
@@ -549,10 +601,9 @@ export class MainApp extends MainAppBase {
     if (optionsData.workflow) {
       this.workflowAgentOptions.set(optionsData.workflow);
       this.workflowAgent.set(
-        this.validateSelection(
+        this.validateAgentSelection(
           optionsData.workflow,
           this.workflowAgent.get(),
-          true, // preferEnabled for consistency (agents don't have disabled, but future-proof)
         ),
       );
     }
@@ -560,13 +611,32 @@ export class MainApp extends MainAppBase {
     if (optionsData.toolUse) {
       this.toolUseAgentOptions.set(optionsData.toolUse);
       this.toolUseAgent.set(
-        this.validateSelection(
+        this.validateAgentSelection(
           optionsData.toolUse,
           this.toolUseAgent.get(),
-          true,
         ),
       );
     }
+  }
+
+  /**
+   * No silent fallback — if the agent is gone, keeps the stale value
+   * so the dropdown shows no selection and execution errors explicitly.
+   */
+  private validateAgentSelection(
+    options: AgentOptionData[],
+    currentValue: string,
+  ): string {
+    if (options.some((opt) => opt.value === currentValue)) {
+      return currentValue;
+    }
+    // Match by name: handles source changes and plain-name defaults
+    const name = agentName(currentValue);
+    const byName = options.find((opt) => opt.label === name);
+    if (byName) return byName.value;
+    // No match — keep stale value so the UI shows no selection.
+    // Execution will error with "unknown agent" if the user proceeds.
+    return currentValue;
   }
 
   private handleSetSingleFileOptions(
@@ -792,7 +862,7 @@ export class MainApp extends MainAppBase {
   ): void {
     this.isPolishing.set(false);
     if (message.text.trim()) {
-      this.instruction.set(message.text);
+      this.setInstruction(message.text);
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Instruction text has been polished!',
       });
@@ -824,7 +894,7 @@ export class MainApp extends MainAppBase {
 
     const current = this.instruction.get();
     const updated = current ? `${current} ${message.text}` : message.text;
-    this.instruction.set(updated);
+    this.setInstruction(updated);
     this.isRecording.set(false);
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
       text: 'Instruction text transcribed!',
@@ -861,7 +931,7 @@ export class MainApp extends MainAppBase {
       this.toolUseAgent.set(state.toolUseAgent);
       this.model.set(state.model);
       this.commit.set(state.commit);
-      this.instruction.set(state.instruction);
+      this.restorePerModeInstructions(state);
       this.singleFiles.set({
         inputFile: state.inputFile,
         referenceFile: state.referenceFile,
@@ -917,6 +987,8 @@ export class MainApp extends MainAppBase {
 
   private clearForNewSession(): void {
     this.instruction.set('');
+    this.workflowInstruction.set('');
+    this.toolUseInstruction.set('');
     const defaults = SESSION_DEFAULTS[this.sessionType.get()];
     if (defaults.resetFiles) {
       this.singleFiles.set({
@@ -1108,8 +1180,12 @@ export class MainApp extends MainAppBase {
 
   private handleSessionTypeChange(value: string): void {
     const parsed = parseSessionType(value) ?? SESSION_TYPES.WORKFLOW;
-    if (parsed === this.sessionType.get()) return;
+    const prev = this.sessionType.get();
+    if (parsed === prev) return;
+
+    this.swapModeInstruction(prev, parsed);
     this.sessionType.set(parsed);
+    this.refreshInstructionPlaceholder(false);
     if (parsed === SESSION_TYPES.TOOL_USE) {
       this.outputFilesActive.set(false);
       this.multiFilesVisible.set({
@@ -1127,7 +1203,9 @@ export class MainApp extends MainAppBase {
     } else {
       this.toolUseAgent.set(value);
     }
+    this.swapModeInstruction(this.sessionType.get(), sessionType);
     this.sessionType.set(sessionType);
+    this.refreshInstructionPlaceholder(false);
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
     postMessage(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE);
@@ -1182,6 +1260,7 @@ export class MainApp extends MainAppBase {
   ): void {
     const sessionType = parseSessionType(message.sessionType ?? undefined);
     if (sessionType) {
+      this.swapModeInstruction(this.sessionType.get(), sessionType);
       this.sessionType.set(sessionType);
     }
     if (message.agentId) {
@@ -1191,6 +1270,7 @@ export class MainApp extends MainAppBase {
         this.workflowAgent.set(message.agentId);
       }
     }
+    this.refreshInstructionPlaceholder(false);
     this.saveState();
   }
 
@@ -1215,15 +1295,28 @@ export class MainApp extends MainAppBase {
     }
   }
 
+  private isSelectedAgentOrchestrator(): boolean {
+    if (this.sessionType.get() !== SESSION_TYPES.TOOL_USE) return false;
+    const agentId = this.toolUseAgent.get();
+    const opt = this.toolUseAgentOptions.get().find((o) => o.value === agentId);
+    return opt?.isOrchestrator ?? false;
+  }
+
+  private getPlaceholderKey(): keyof typeof ONBOARDING_PLACEHOLDERS {
+    return this.isSelectedAgentOrchestrator()
+      ? 'orchestrator'
+      : this.sessionType.get();
+  }
+
   private refreshInstructionPlaceholder(advance: boolean): void {
-    const placeholders = ONBOARDING_PLACEHOLDERS[this.sessionType.get()];
+    const placeholders = ONBOARDING_PLACEHOLDERS[this.getPlaceholderKey()];
     if (!placeholders.length) return;
     const current = this.instructionPlaceholder.get();
     const currentIndex = placeholders.indexOf(current);
     if (advance) {
       const nextIndex = (currentIndex + 1) % placeholders.length;
       this.instructionPlaceholder.set(placeholders[nextIndex]);
-    } else if (!current) {
+    } else if (!current || currentIndex === -1) {
       this.instructionPlaceholder.set(placeholders[0]);
     }
   }
@@ -1686,7 +1779,7 @@ export class MainApp extends MainAppBase {
   private handleComponentInstructionInput(
     e: CustomEvent<InstructionChangeDetail>,
   ): void {
-    this.instruction.set(e.detail.value);
+    this.setInstruction(e.detail.value);
     this.scheduleInstructionSave();
   }
 
@@ -1705,7 +1798,7 @@ export class MainApp extends MainAppBase {
         this.handleRecordingToggle();
         break;
       case 'erase':
-        this.instruction.set('');
+        this.setInstruction('');
         this.saveState();
         break;
     }
@@ -1888,6 +1981,7 @@ export class MainApp extends MainAppBase {
             }}
             .gettingStartedVisible=${this.gettingStartedVisible.get()}
             .loginBannerVisible=${this.loginBannerVisible.get()}
+            .orchestratorSelected=${this.isSelectedAgentOrchestrator()}
             @api-key-action=${this.handleComponentApiKeyAction}
             @agent-config-action=${this.handleComponentAgentConfigAction}
             @dependency-dismiss=${this.handleComponentDependencyDismiss}
