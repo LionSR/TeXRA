@@ -8,6 +8,8 @@ export const BaseProposalFieldsSchema = z.object({
   instruction: z.string(),
   /** Memory file paths (display paths like /memories/foo.md) attached to this delegation. */
   memories: z.array(z.string()).prefault([]),
+  /** Working directory override (e.g. a git worktree path). */
+  workingDirectory: z.string().nullish(),
 });
 
 const FileFieldsSchema = z.object({
