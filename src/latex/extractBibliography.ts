@@ -8,6 +8,9 @@ import { BibEntry, parseBibFile } from 'bibtex';
 import { WorkspaceFS } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
+// Local file imports
+import { stripLatexComments, BIB_DIRECTIVE_PATTERN } from './latexParsingUtils';
+
 const CITE_COMMANDS = [
   'cite',
   'citet',
@@ -26,17 +29,10 @@ const CITE_COMMANDS = [
 ];
 
 // Compiled regex patterns (matchAll clones the regex, so module-level is safe)
-const DIRECTIVE_PATTERN = new RegExp(
-  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}',
-  'g',
-);
-
 const CITATION_PATTERN = new RegExp(
   `\\\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\\{([^}]*)\\}`,
   'g',
 );
-
-const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
 
 export interface BibliographyReferenceResult {
   /** Paths to bibliography files that exist, relative to the workspace. */
@@ -54,10 +50,6 @@ export interface BibliographyEntriesResult {
   missingKeys: string[];
 }
 
-function stripComments(content: string): string {
-  return content.replaceAll(COMMENT_PATTERN, '$1');
-}
-
 function normalizeBibPath(baseDir: string, target: string): string {
   const trimmed = target.trim();
   if (!trimmed) {
@@ -69,7 +61,7 @@ function normalizeBibPath(baseDir: string, target: string): string {
 function collectBibliographyPaths(baseDir: string, content: string): string[] {
   const paths = new Set<string>();
 
-  for (const match of content.matchAll(DIRECTIVE_PATTERN)) {
+  for (const match of content.matchAll(BIB_DIRECTIVE_PATTERN)) {
     const block = match[1];
     for (const raw of block.split(',')) {
       const normalized = normalizeBibPath(baseDir, raw);
@@ -103,7 +95,7 @@ export async function extractBibliographyContext(
 ): Promise<BibliographyReferenceResult> {
   const texDir = path.dirname(texPath);
   const content = await WorkspaceFS.read(texPath);
-  const uncommented = stripComments(content);
+  const uncommented = stripLatexComments(content);
 
   const referencedPaths = collectBibliographyPaths(texDir, uncommented);
   const existing: string[] = [];
