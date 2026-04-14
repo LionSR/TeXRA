@@ -195,6 +195,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly gitMarkCommits = signal(false);
   private readonly gitAuthorName = signal(DEFAULT_GIT_AUTHOR_NAME);
   private readonly gitAuthorEmail = signal(DEFAULT_GIT_AUTHOR_EMAIL);
+  private readonly gitWorktreeSupport = signal(false);
   private readonly gitSettingsLoaded = signal(false);
 
   // LaTeX settings state
@@ -379,6 +380,7 @@ export class SettingsApp extends SettingsAppBase {
         this.gitMarkCommits.set(data.markCommits);
         this.gitAuthorName.set(data.authorName);
         this.gitAuthorEmail.set(data.authorEmail);
+        this.gitWorktreeSupport.set(data.worktreeSupport);
         this.gitSettingsLoaded.set(true);
         return;
       }
@@ -631,6 +633,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL,
   );
 
+  private handleWorktreeSupportToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT,
+  );
+
   // LaTeX settings event handlers
   private handleApplyLatexSettings = forwardDetail(
     SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS,
@@ -822,11 +828,14 @@ export class SettingsApp extends SettingsAppBase {
               .customPresets=${this.customPresets.get()}
               .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
               .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
+              .worktreeSupport=${this.gitWorktreeSupport.get()}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @allow-orchestrator-kill-toggle=${this
                 .handleAllowOrchestratorKillToggle}
               @detach-subagents-on-stop-toggle=${this
                 .handleDetachSubagentsOnStopToggle}
+              @worktree-support-toggle=${this
+                .handleWorktreeSupportToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}

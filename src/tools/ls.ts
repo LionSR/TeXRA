@@ -14,7 +14,9 @@ import {
   resolveAndFormat,
   formatToolOutput,
   pluralize,
+  parseWorkingDirectory,
 } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
@@ -56,7 +58,10 @@ export class LsTool extends defineTool({
   schema: LsInputSchema,
 }) {
   protected async execute(input: LsInput): Promise<ToolResult> {
-    const { path: resolved, display } = resolveAndFormat(input.path);
+    const root = parseWorkingDirectory(
+      getCurrentToolFileInteractionContext()?.workingDirectory,
+    );
+    const { path: resolved, display } = resolveAndFormat(input.path, root);
     const gitignore = await getGitignoreMatcher();
     const header = `Listing for ${display}`;
 
@@ -70,7 +75,7 @@ export class LsTool extends defineTool({
 
     let statType: number;
     try {
-      const stats = await WorkspaceFS.stat(resolved.relative);
+      const stats = await WorkspaceFS.stat(resolved.fsPath);
       statType = stats.type;
     } catch (err) {
       const message = toErrorMessage(err);
@@ -101,12 +106,16 @@ export class LsTool extends defineTool({
       return makeResult(null);
     }
 
-    const entries = await WorkspaceFS.readDir(resolved.relative);
+    const entries = await WorkspaceFS.readDir(resolved.fsPath);
     const filtered = entries.filter(([name]) => {
       if (isDefaultHiddenName(name)) {
         return false;
       }
-      const resolvedChild = joinWorkspaceRelativePath(resolved.relative, name);
+      const resolvedChild = joinWorkspaceRelativePath(
+        resolved.relative,
+        name,
+        root,
+      );
       const entryPath = toPosixPath(resolvedChild.relative);
       return (
         !gitignore.ignores(resolvedChild.relative) &&
