@@ -1,6 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
-import type { MessageParam } from '@anthropic-ai/sdk/resources/messages/messages';
+import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import type { Content } from '@google/genai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
