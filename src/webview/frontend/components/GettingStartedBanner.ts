@@ -3,6 +3,8 @@
  *
  * Displays an info banner with links to various getting started
  * actions when no files are found in the workspace.
+ *
+ * @fires dismiss-getting-started - When dismiss button is clicked
  */
 
 // Third-party imports
@@ -14,6 +16,9 @@ import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
 
 // Local imports - shared utilities
 import { COMMAND_LINKS } from '@shared/utils/uiConstants';
+
+// Local imports - main view events
+import { MainViewEvents } from '../events';
 
 @customElement('getting-started-banner')
 export class GettingStartedBanner extends LitElement {
@@ -35,6 +40,7 @@ export class GettingStartedBanner extends LitElement {
         border: var(--border-thin) solid
           var(--vscode-inputValidation-infoBorder);
         line-height: var(--line-height-relaxed);
+        position: relative;
       }
 
       .getting-started-banner a {
@@ -51,20 +57,38 @@ export class GettingStartedBanner extends LitElement {
         padding-left: var(--spacing-large);
         line-height: var(--line-height-relaxed);
       }
+
+      .getting-started-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
     `,
   ];
 
   @property({ type: Boolean }) visible = false;
+
+  private handleDismiss(): void {
+    this.dispatchEvent(MainViewEvents.dismissGettingStarted());
+  }
 
   override render(): TemplateResult | typeof nothing {
     if (!this.visible) return nothing;
 
     return html`
       <div id="gettingStartedBanner" class="getting-started-banner">
-        <span class="getting-started-text">
-          <strong>Welcome to TeXRA!</strong> Open a workspace with LaTeX files,
-          or get started with one of these:
-        </span>
+        <div class="getting-started-header">
+          <span class="getting-started-text">
+            <strong>Welcome to TeXRA!</strong> Open a workspace with LaTeX
+            files, or get started with one of these:
+          </span>
+          <vscode-toolbar-button
+            icon="close"
+            title="Dismiss (can be re-enabled in settings)"
+            aria-label="Dismiss getting started banner"
+            @click=${this.handleDismiss}
+          ></vscode-toolbar-button>
+        </div>
         <ul class="getting-started-list">
           <li>
             <a href=${COMMAND_LINKS.GETTING_STARTED}>Walk me through setup</a>

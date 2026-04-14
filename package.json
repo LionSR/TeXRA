@@ -66,6 +66,18 @@
             "description": "Show login banner prompting users to sign in for access to remote agents",
             "scope": "resource"
           },
+          "texra.ui.showGettingStartedBanner": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show getting started banner with import options when no LaTeX files are found",
+            "scope": "resource"
+          },
+          "texra.ui.showOrchestratorBanner": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show orchestrator workflow explanation when the orchestrator agent is selected",
+            "scope": "resource"
+          },
           "texra.auth.enableVSCodeGitHub": {
             "type": "boolean",
             "default": false,
@@ -866,6 +878,12 @@
         "command": "texra.downloadArXivSource",
         "title": "Download arXiv Source",
         "category": "TeXRA"
+      },
+      {
+        "command": "texra.showImportOptions",
+        "title": "Import or Create LaTeX Project",
+        "category": "TeXRA",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "texra.parseXml",

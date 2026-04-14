@@ -4,6 +4,7 @@ export const COMMAND_LINKS = {
   CREATE_SAMPLE_PROJECT: 'command:texra.createSampleProject',
   CLONE_OVERLEAF: 'command:texra.cloneOverleafProject',
   DOWNLOAD_ARXIV: 'command:texra.downloadArXivSource',
+  SHOW_IMPORT_OPTIONS: 'command:texra.showImportOptions',
 } as const;
 
 export const PERMISSION_KIND = {
