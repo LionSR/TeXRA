@@ -438,7 +438,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       );
       if (!showOrchestratorBanner) {
         webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER,
+          command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
         });
       }
     } catch (error) {

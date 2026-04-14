@@ -90,6 +90,7 @@ export const MAIN_VIEW_COMMANDS = {
   DISMISS_LOGIN_BANNER: 'dismissLoginBanner',
   DISMISS_GETTING_STARTED_BANNER: 'dismissGettingStartedBanner',
   DISMISS_ORCHESTRATOR_BANNER: 'dismissOrchestratorBanner',
+  HIDE_ORCHESTRATOR_BANNER: 'hideOrchestratorBanner',
 
   // Extension response events
   INSTRUCTION_TEXT_POLISHED: 'instructionTextPolished',

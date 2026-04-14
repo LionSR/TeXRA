@@ -40,7 +40,6 @@ export class GettingStartedBanner extends LitElement {
         border: var(--border-thin) solid
           var(--vscode-inputValidation-infoBorder);
         line-height: var(--line-height-relaxed);
-        position: relative;
       }
 
       .getting-started-banner a {

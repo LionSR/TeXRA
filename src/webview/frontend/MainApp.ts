@@ -335,7 +335,7 @@ export class MainApp extends MainAppBase {
     [MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER]: () => {
       this.gettingStartedVisible.set(false);
     },
-    [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: () => {
+    [MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER]: () => {
       this.orchestratorBannerDismissed.set(true);
     },
     [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: () => {

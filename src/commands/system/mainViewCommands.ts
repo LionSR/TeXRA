@@ -3,11 +3,15 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { computeAgentOptionsData, refresh } from '@agent/index';
+import { arXivCommands } from '@commands/latex';
+import { gitCommands } from '@commands/git/gitCommands';
 import { toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+
+import { sampleProjectCommands } from './sampleProjectCommands';
 
 const CHANNEL = 'mainViewCommands';
 
@@ -124,17 +128,17 @@ export function registerMainViewCommands(
             {
               label: '$(repo-clone) Pull from Overleaf',
               description: 'Import an existing Overleaf/ShareLaTeX project',
-              command: 'texra.cloneOverleafProject',
+              command: gitCommands.cloneOverleafProject,
             },
             {
               label: '$(cloud-download) Grab from arXiv',
               description: "Download a paper's source files",
-              command: 'texra.downloadArXivSource',
+              command: arXivCommands.downloadArXivSource,
             },
             {
               label: '$(file-add) Try the sample project',
               description: 'Create a sample project to play around risk-free',
-              command: 'texra.createSampleProject',
+              command: sampleProjectCommands.createSampleProject,
             },
             {
               label: '$(book) Walk me through setup',
