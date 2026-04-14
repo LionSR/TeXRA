@@ -8,6 +8,7 @@ import {
   ChatCompletionContentPart,
   ChatCompletionContentPartInputAudio,
   ChatCompletionAssistantMessageParam,
+  ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
@@ -80,6 +81,12 @@ type ChatCompletionRequestBase = Omit<
   ChatCompletionCreateParamsStreaming,
   'stream' | 'stream_options'
 >;
+type ChatCompletionRequestWithThinking = ChatCompletionRequestBase & {
+  thinking?: { type: 'enabled' | 'disabled' };
+};
+type ChatCompletionSummaryParams = ChatCompletionCreateParamsNonStreaming & {
+  thinking?: { type: 'disabled' };
+};
 
 // Reasoning content type for DeepSeek, o1 models (not in SDK)
 type ReasoningContent = string | Array<{ type: string; text?: string }>;
@@ -232,7 +239,7 @@ export class ModelHandlerOpenAI<
       : conversationMessages;
 
     try {
-      const summaryParams: Record<string, unknown> = {
+      const summaryParams: ChatCompletionSummaryParams = {
         model: this.config.fullName,
         messages: [
           { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
@@ -247,12 +254,10 @@ export class ModelHandlerOpenAI<
       if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
         summaryParams.thinking = { type: 'disabled' };
       }
-      const summaryResponse = (await client.chat.completions.create(
-        summaryParams as unknown as Parameters<
-          typeof client.chat.completions.create
-        >[0],
+      const summaryResponse = await client.chat.completions.create(
+        summaryParams,
         { signal },
-      )) as ChatCompletion;
+      );
 
       const summaryText = summaryResponse.choices[0]?.message?.content?.trim();
       if (!summaryText) {
@@ -352,10 +357,10 @@ export class ModelHandlerOpenAI<
     systemPrompt?: string,
     endTag?: string,
     tools?: ToolDefinition[],
-  ): ChatCompletionRequestBase {
+  ): ChatCompletionRequestWithThinking {
     const effectiveMaxTokens = this.getEffectiveMaxOutputTokens();
 
-    const baseParams: ChatCompletionRequestBase = {
+    const baseParams: ChatCompletionRequestWithThinking = {
       model: this.config.fullName,
       messages,
       ...(this.isOReasoningModel
@@ -382,7 +387,7 @@ export class ModelHandlerOpenAI<
     // Add thinking parameter if specified by subclass (Kimi K2.5, DeepSeek)
     const thinking = this.getThinkingParameter();
     if (thinking) {
-      (baseParams as Record<string, unknown>).thinking = thinking;
+      baseParams.thinking = thinking;
     }
 
     if (tools?.length) {
@@ -631,9 +636,10 @@ export class ModelHandlerOpenAI<
         const maxTokensKey = this.isOReasoningModel
           ? 'max_completion_tokens'
           : 'max_tokens';
-        const currentMaxTokens = (baseParams as Record<string, unknown>)[
-          maxTokensKey
-        ] as number;
+        const currentMaxTokens = this.isOReasoningModel
+          ? (baseParams.max_completion_tokens ??
+            this.getEffectiveMaxOutputTokens())
+          : (baseParams.max_tokens ?? this.getEffectiveMaxOutputTokens());
         const tokenBuffer = this.isToolUseMode()
           ? TOOL_USE_SAFETY_BUFFER
           : undefined;
@@ -659,8 +665,11 @@ export class ModelHandlerOpenAI<
               details: `OpenAI: ${maxTokensKey} reduced to fit context window`,
             },
           );
-          (baseParams as Record<string, unknown>)[maxTokensKey] =
-            validation.adjustedMaxTokens;
+          if (this.isOReasoningModel) {
+            baseParams.max_completion_tokens = validation.adjustedMaxTokens;
+          } else {
+            baseParams.max_tokens = validation.adjustedMaxTokens;
+          }
         }
       } catch (err) {
         if (isContextWindowError(err)) throw err;

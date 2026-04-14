@@ -139,6 +139,10 @@ interface WebSocketExecutionResult {
   state: StreamingEventState;
 }
 
+interface RequestIdTaggedError extends Error {
+  request_id?: string;
+}
+
 /**
  * MIME types that the OpenAI Responses API accepts as `input_file` content.
  * Composed from the shared OFFICE_MIME_TYPES plus PDF.
@@ -173,6 +177,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   private isOpenRouterRoutingEnabled(): boolean {
     return this.config.openRouterOnly || getUseOpenRouter();
+  }
+
+  private getEventResponseId(event: ResponseStreamEvent): string | undefined {
+    return 'response_id' in event && typeof event.response_id === 'string'
+      ? event.response_id
+      : undefined;
   }
 
   /**
@@ -502,11 +512,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (!currentResponseId) return;
 
         // Filter events by response ID: skip events from stale responses
-        if (
-          'response_id' in e &&
-          typeof (e as Record<string, unknown>).response_id === 'string' &&
-          (e as Record<string, unknown>).response_id !== currentResponseId
-        ) {
+        const eventResponseId = this.getEventResponseId(e);
+        if (eventResponseId && eventResponseId !== currentResponseId) {
           return;
         }
 
@@ -1338,11 +1345,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         continue;
       }
 
-      const contentList = (
-        item as ResponseInputItem & {
-          content?: ResponseInputMessageContentList;
-        }
-      ).content;
+      const contentList = item.content;
 
       if (!Array.isArray(contentList)) {
         continue;
@@ -2229,7 +2232,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // non-retryable classification) work correctly with full HTTP metadata.
         const statusCode = (err as { status?: number }).status;
         if (statusCode === 404) {
-          const pollingError = new Error(
+          const pollingError: RequestIdTaggedError = new Error(
             `Background response polling failed for ${responseId}: ${getSdkErrorMessage(err)}`,
             { cause: err },
           );
@@ -2237,8 +2240,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           // logging diagnostics (detectRequestId doesn't follow the cause chain)
           const origRequestId = (err as { request_id?: string }).request_id;
           if (origRequestId) {
-            (pollingError as unknown as Record<string, unknown>).request_id =
-              origRequestId;
+            pollingError.request_id = origRequestId;
           }
           throw pollingError;
         }
@@ -2952,9 +2954,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     item?: ResponseInputItem,
   ): item is EasyInputMessage | ResponseInputItem.Message {
     if (!item || typeof item !== 'object') return false;
-    const { role, type, content } = item as unknown as Record<string, unknown>;
-    if (typeof role !== 'string') return false;
-    if (typeof type === 'string' && type !== 'message') return false;
+    if (!('role' in item) || typeof item.role !== 'string') return false;
+    if (
+      'type' in item &&
+      typeof item.type === 'string' &&
+      item.type !== 'message'
+    ) {
+      return false;
+    }
+    if (!('content' in item)) return false;
+    const { content } = item;
     return typeof content === 'string' || Array.isArray(content);
   }
 
