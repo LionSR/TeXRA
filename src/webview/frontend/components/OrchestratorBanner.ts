@@ -3,17 +3,22 @@
  *
  * Appears when the orchestrator is selected in the agent dropdown
  * to help users understand the delegation-based workflow.
- * Dismissable via a "Got it" button.
+ * Dismissable via a "Got it" button; dismissal persists to settings.
+ *
+ * @fires dismiss-orchestrator - When dismiss button is clicked
  */
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 
 // Local imports
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
 import { postMessage } from '@shared/vscode';
+
+// Local imports - main view events
+import { MainViewEvents } from '../events';
 
 @customElement('orchestrator-banner')
 export class OrchestratorBanner extends LitElement {
@@ -92,10 +97,9 @@ export class OrchestratorBanner extends LitElement {
   ];
 
   @property({ type: Boolean }) visible = false;
-  @state() private dismissed = false;
 
   private handleDismiss(): void {
-    this.dismissed = true;
+    this.dispatchEvent(MainViewEvents.dismissOrchestrator());
   }
 
   private handleOpenMultiAgentSettings(): void {
@@ -103,7 +107,7 @@ export class OrchestratorBanner extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    if (!this.visible || this.dismissed) return nothing;
+    if (!this.visible) return nothing;
 
     return html`
       <div class="orchestrator-banner">
@@ -121,7 +125,11 @@ export class OrchestratorBanner extends LitElement {
               Multi-Agent settings</button
             >.</span
           >
-          <button class="got-it-btn" @click=${this.handleDismiss}>
+          <button
+            class="got-it-btn"
+            title="Dismiss (can be re-enabled in settings)"
+            @click=${this.handleDismiss}
+          >
             Got it
           </button>
         </div>

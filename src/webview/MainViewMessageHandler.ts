@@ -331,12 +331,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           );
         }
       },
-      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
-        await updateConfig('ui.showLoginBanner', false);
-        this.postToActiveView({
-          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-        });
-      },
+      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: () =>
+        updateConfig('ui.showLoginBanner', false),
+      [MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER]: () =>
+        updateConfig('ui.showGettingStartedBanner', false),
+      [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: () =>
+        updateConfig('ui.showOrchestratorBanner', false),
 
       [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
         this.diffManager.handleRequestRecentCommits(m),
@@ -414,14 +414,24 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         optionsData: agentOptions,
       });
 
-      const showBanner =
+      const showLoginBanner =
         !authStatus.authenticated &&
         getConfig<boolean>('ui.showLoginBanner', true);
       webviewView.webview.postMessage({
-        command: showBanner
+        command: showLoginBanner
           ? MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER
           : MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
       });
+
+      const showOrchestratorBanner = getConfig<boolean>(
+        'ui.showOrchestratorBanner',
+        true,
+      );
+      if (!showOrchestratorBanner) {
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
+        });
+      }
     } catch (error) {
       this.logger.error(
         this.channel,
