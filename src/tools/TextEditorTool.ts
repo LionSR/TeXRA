@@ -328,7 +328,7 @@ export class TextEditorTool extends defineTool({
       recordToolFileRead(filePath);
 
       const userDiffNote = formatUnifiedApprovalUserDiff(
-        filePath,
+        displayPath,
         proposedContent,
         appliedContent,
       );
@@ -590,7 +590,7 @@ export class TextEditorTool extends defineTool({
       }
 
       const userDiffNote = formatUnifiedApprovalUserDiff(
-        filePath,
+        displayPath,
         previousContent,
         appliedContent,
       );

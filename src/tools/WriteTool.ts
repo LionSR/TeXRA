@@ -85,7 +85,7 @@ export class WriteFileTool extends defineTool({
     recordToolFileRead(filePath);
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
-      filePath,
+      displayPath,
       proposedContent,
       appliedContent,
     );

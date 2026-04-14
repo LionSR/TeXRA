@@ -127,7 +127,7 @@ export class EditFileTool extends defineTool({
     const summary = `Edited ${displayPath}: replaced ${count} ${pluralize(count, 'occurrence')}`;
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
-      targetPath,
+      displayPath,
       updatedContent,
       appliedContent,
     );
