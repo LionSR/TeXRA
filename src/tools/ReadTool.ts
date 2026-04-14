@@ -11,7 +11,11 @@ import {
   buildFileAttachment,
   formatFileView,
   READ_FILE_MAX_LINES,
+  resolveAndFormat,
+  parseWorkingDirectory,
+  type WorkspacePathResolution,
 } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml } from '@tools/emlParser';
 import {
@@ -64,35 +68,47 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    const attachmentConfig = this.getAttachmentConfig(input.path);
+    const root = parseWorkingDirectory(
+      getCurrentToolFileInteractionContext()?.workingDirectory,
+    );
+    const { path: resolved, display: displayPath } = resolveAndFormat(
+      input.path,
+      root,
+    );
+    const filePath = resolved.fsPath;
+
+    const attachmentConfig = this.getAttachmentConfig(resolved.absolute);
     if (attachmentConfig) {
-      const result = await this.returnBinaryAttachment(input, attachmentConfig);
-      recordToolFileRead(input.path);
+      const result = await this.returnBinaryAttachment(
+        input,
+        attachmentConfig,
+        resolved,
+      );
+      recordToolFileRead(filePath);
       return result;
     }
 
-    // EML files are text-based but use complex MIME encoding (multipart,
-    // base64 attachments, quoted-printable). Parse them into readable text
-    // and extract image attachments so vision-capable models can inspect them.
+    // EML files use complex MIME encoding (multipart, base64, quoted-printable).
+    // Parse into readable text and extract image attachments for vision models.
     let emlImages: Awaited<ReturnType<typeof parseEml>>['images'] = [];
     let lines: string[];
 
     if (path.extname(input.path).toLowerCase() === '.eml') {
-      const stats = await WorkspaceFS.stat(input.path);
+      const stats = await WorkspaceFS.stat(filePath);
       if (stats.size > MAX_EML_BYTES) {
         throw new ToolError(
           `EML file exceeds maximum size of ${MAX_EML_BYTES / (1024 * 1024)} MiB.`,
         );
       }
-      const raw = await WorkspaceFS.read(input.path);
+      const raw = await WorkspaceFS.read(filePath);
       const { text, images } = await parseEml(raw);
       lines = splitContentLines(text);
       emlImages = images;
     } else {
-      lines = splitContentLines(await WorkspaceFS.read(input.path));
+      lines = splitContentLines(await WorkspaceFS.read(filePath));
     }
 
-    recordToolFileRead(input.path);
+    recordToolFileRead(filePath);
 
     const totalLines = lines.length;
     const requestedStartLine = input.range?.start ?? 1;
@@ -118,7 +134,7 @@ export class ReadFileTool extends defineTool({
       : '';
 
     const result = formatFileView({
-      path: input.path,
+      path: displayPath,
       lines,
       viewRange: input.range ? [startLine, endLine] : null,
       summarySuffix: suffix,
@@ -190,11 +206,13 @@ export class ReadFileTool extends defineTool({
   private async returnBinaryAttachment(
     input: ReadInput,
     config: { kind: 'pdf' | 'image' | 'document'; label: string },
+    resolved: WorkspacePathResolution,
   ): Promise<ToolResult> {
     const copy = ATTACHMENT_COPY[config.kind];
     const attachment = await buildFileAttachment({
-      filePath: input.path,
+      filePath: resolved.fsPath,
       description: `${config.label} returned by read_file tool.`,
+      resolved,
     });
 
     const baseSummary = `Attached ${config.label} ${attachment.path}.`;

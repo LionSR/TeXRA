@@ -11,12 +11,14 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
 } from '@shared/constants/git';
 import { setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
+import { setWorktreeSupportEnabled } from '@tools/worktreeConfig';
 
 /** Read the current git author settings from workspace state with defaults. */
 export function readGitAuthorSettings(): {
   markCommits: boolean;
   authorName: string;
   authorEmail: string;
+  worktreeSupport: boolean;
 } {
   return {
     markCommits: workspaceSM.get<boolean>(
@@ -29,6 +31,10 @@ export function readGitAuthorSettings(): {
     authorEmail:
       workspaceSM.get<string>(WorkspaceStateKey.GIT_AUTHOR_EMAIL) ||
       DEFAULT_GIT_AUTHOR_EMAIL,
+    worktreeSupport: workspaceSM.get<boolean>(
+      WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+      false,
+    ),
   };
 }
 
@@ -48,5 +54,6 @@ export function applyGitAuthorConfig(): ReturnType<
       GIT_COMMITTER_EMAIL: authorEmail,
     });
   }
+  setWorktreeSupportEnabled(settings.worktreeSupport);
   return settings;
 }

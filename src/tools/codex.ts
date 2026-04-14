@@ -41,6 +41,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
+import { parseWorkingDirectory } from '@tools/utils';
 import { escapeAttr, escapeText } from '@tools/subagentResults';
 import {
   requestBashApproval,
@@ -100,10 +101,6 @@ async function getCodexConfig(): Promise<typeof import('./codexConfig')> {
 
 const CodexInputSchema = z.strictObject({
   prompt: z.string().describe('Instruction for the Codex agent'),
-  working_directory: z
-    .string()
-    .nullish()
-    .describe('Directory to run in (defaults to workspace root)'),
   sandbox_mode: z
     .enum(CODEX_SANDBOX_MODES)
     .nullish()
@@ -517,7 +514,8 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-    const thread = await this.resolveThread(input);
+    const workingDir = parseWorkingDirectory(ctx?.workingDirectory);
+    const thread = await this.resolveThread(input, workingDir);
 
     if (input.run_in_background) {
       return this.executeBackground(
@@ -532,7 +530,10 @@ export class CodexTool extends defineTool({
   }
 
   /** Resolve thread — resume existing or start new. */
-  private async resolveThread(input: CodexInput): Promise<Thread> {
+  private async resolveThread(
+    input: CodexInput,
+    workingDir?: string,
+  ): Promise<Thread> {
     if (input.thread_id) {
       const stored = threadRegistry.get(input.thread_id);
       if (stored) {
@@ -554,8 +555,8 @@ export class CodexTool extends defineTool({
     // Only compute workspace for new threads — resumed threads keep their
     // stored workspace unless the caller explicitly overrides.
     const workspace =
-      input.working_directory || !input.thread_id
-        ? config.buildCodexWorkspaceOptions(input.working_directory)
+      workingDir || !input.thread_id
+        ? config.buildCodexWorkspaceOptions(workingDir)
         : {};
     const threadOptions = {
       ...workspace,

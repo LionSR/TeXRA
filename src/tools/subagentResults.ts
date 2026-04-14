@@ -259,10 +259,20 @@ function agentFriendlyStatus(status: string): string {
  * /executions/{id}/files/{diffRelPath} — the delivery only includes
  * the path reference, not the diff content itself.
  */
+function workingDirectoryElement(value: string | undefined): string | null {
+  return value
+    ? `<working-directory>${escapeText(value)}</working-directory>`
+    : null;
+}
+
 export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
-  options?: { diffInfos?: Map<string, DiffFileInfo>; wallTimeMs?: number },
+  options?: {
+    diffInfos?: Map<string, DiffFileInfo>;
+    wallTimeMs?: number;
+    workingDirectory?: string;
+  },
 ): string {
   const displayStatus = agentFriendlyStatus(result.status);
   const lines = [
@@ -272,6 +282,9 @@ export function formatSubagentDelivery(
   if (options?.wallTimeMs !== undefined) {
     lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
   }
+
+  const wdElement = workingDirectoryElement(options?.workingDirectory);
+  if (wdElement) lines.push(wdElement);
 
   if (result.category === 'workflow' && result.outputs.length > 0) {
     lines.push(...formatWorkflowOutputs(result.outputs, options?.diffInfos));
@@ -299,7 +312,7 @@ export function formatSubagentError(
   executionId: string,
   agentName: string,
   err: unknown,
-  options?: { wallTimeMs?: number },
+  options?: { wallTimeMs?: number; workingDirectory?: string },
 ): string {
   const message = err instanceof Error ? err.message : String(err);
   const lines = [
@@ -308,6 +321,8 @@ export function formatSubagentError(
   if (options?.wallTimeMs !== undefined) {
     lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
   }
+  const wdElement = workingDirectoryElement(options?.workingDirectory);
+  if (wdElement) lines.push(wdElement);
   lines.push(`<message>${escapeText(message)}</message>`, '</subagent-error>');
   return lines.join('\n');
 }

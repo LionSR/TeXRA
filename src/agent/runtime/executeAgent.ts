@@ -289,6 +289,7 @@ async function resolveAgentBase(
     storageKey,
     userVarChannels,
     usageMonitor,
+    workingDirectory: configPayload.workingDirectory?.trim() || undefined,
   };
 }
 
