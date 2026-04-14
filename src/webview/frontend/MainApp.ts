@@ -178,6 +178,12 @@ export class MainApp extends MainAppBase {
     visible: false,
   });
   private readonly gettingStartedVisible = signal(false);
+  private readonly orchestratorBannerDismissed = signal(false);
+  private readonly orchestratorBannerVisible$ = new Signal.Computed(() =>
+    this.isSelectedAgentOrchestrator()
+      ? !this.orchestratorBannerDismissed.get()
+      : false,
+  );
   private readonly loginBannerVisible = signal(false);
   private readonly instructionPlaceholder = signal(
     ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
@@ -328,6 +334,9 @@ export class MainApp extends MainAppBase {
     },
     [MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER]: () => {
       this.gettingStartedVisible.set(false);
+    },
+    [MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER]: () => {
+      this.orchestratorBannerDismissed.set(true);
     },
     [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: () => {
       this.loginBannerVisible.set(true);
@@ -1683,6 +1692,17 @@ export class MainApp extends MainAppBase {
 
   private handleComponentDismissLogin(): void {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
+    this.loginBannerVisible.set(false);
+  }
+
+  private handleComponentDismissGettingStarted(): void {
+    postMessage(MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER);
+    this.gettingStartedVisible.set(false);
+  }
+
+  private handleComponentDismissOrchestrator(): void {
+    postMessage(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER);
+    this.orchestratorBannerDismissed.set(true);
   }
 
   private handleComponentLatexDiffsToggle(
@@ -1981,7 +2001,7 @@ export class MainApp extends MainAppBase {
             }}
             .gettingStartedVisible=${this.gettingStartedVisible.get()}
             .loginBannerVisible=${this.loginBannerVisible.get()}
-            .orchestratorSelected=${this.isSelectedAgentOrchestrator()}
+            .orchestratorVisible=${this.orchestratorBannerVisible$.get()}
             @api-key-action=${this.handleComponentApiKeyAction}
             @agent-config-action=${this.handleComponentAgentConfigAction}
             @dependency-dismiss=${this.handleComponentDependencyDismiss}
@@ -1989,6 +2009,8 @@ export class MainApp extends MainAppBase {
             @open-install-guide=${this.handleComponentOpenInstallGuide}
             @sign-in=${this.handleComponentSignIn}
             @dismiss-login=${this.handleComponentDismissLogin}
+            @dismiss-getting-started=${this.handleComponentDismissGettingStarted}
+            @dismiss-orchestrator=${this.handleComponentDismissOrchestrator}
           ></banner-group>
         </div>
 
