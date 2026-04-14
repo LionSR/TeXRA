@@ -21,7 +21,6 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import { toPosixPath } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -31,7 +30,7 @@ import {
   formatFileView,
   formatLinesWithNumbers,
   requireField,
-  resolveWorkspaceRelativePath,
+  resolveAndFormat,
   parseWorkingDirectory,
 } from './utils';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
@@ -117,9 +116,11 @@ export class TextEditorTool extends defineTool({
     const root = parseWorkingDirectory(
       getCurrentToolFileInteractionContext()?.workingDirectory,
     );
-    const resolved = resolveWorkspaceRelativePath(inputPath, root);
+    const { path: resolved, display: displayPath } = resolveAndFormat(
+      inputPath,
+      root,
+    );
     const filePath = resolved.fsPath;
-    const displayPath = toPosixPath(resolved.relative);
 
     await this.validatePath(command, filePath, displayPath);
 

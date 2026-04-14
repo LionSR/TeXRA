@@ -10,10 +10,9 @@ import {
 import {
   countOccurrences,
   pluralize,
-  resolveWorkspaceRelativePath,
+  resolveAndFormat,
   parseWorkingDirectory,
 } from '@tools/utils';
-import { toPosixPath } from '@utils/core/pathCore';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   buildApprovalRejectedResult,
@@ -47,9 +46,11 @@ export class EditFileTool extends defineTool({
     const root = parseWorkingDirectory(
       getCurrentToolFileInteractionContext()?.workingDirectory,
     );
-    const resolved = resolveWorkspaceRelativePath(input.path, root);
+    const { path: resolved, display: displayPath } = resolveAndFormat(
+      input.path,
+      root,
+    );
     const targetPath = resolved.fsPath;
-    const displayPath = toPosixPath(resolved.relative);
 
     if (old_str.length === 0) {
       throw new ToolError(

@@ -11,7 +11,7 @@ import {
   buildFileAttachment,
   formatFileView,
   READ_FILE_MAX_LINES,
-  resolveWorkspaceRelativePath,
+  resolveAndFormat,
   parseWorkingDirectory,
 } from '@tools/utils';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
@@ -23,7 +23,6 @@ import {
   OFFICE_EXTENSIONS,
   OFFICE_MIME_TYPES,
 } from '@utils/files';
-import { toPosixPath } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -71,9 +70,11 @@ export class ReadFileTool extends defineTool({
     const root = parseWorkingDirectory(
       getCurrentToolFileInteractionContext()?.workingDirectory,
     );
-    const resolved = resolveWorkspaceRelativePath(input.path, root);
+    const { path: resolved, display: displayPath } = resolveAndFormat(
+      input.path,
+      root,
+    );
     const filePath = resolved.fsPath;
-    const displayPath = toPosixPath(resolved.relative);
 
     const attachmentConfig = this.getAttachmentConfig(input.path);
     if (attachmentConfig) {

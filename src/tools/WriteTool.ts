@@ -9,11 +9,7 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
-import {
-  resolveWorkspaceRelativePath,
-  parseWorkingDirectory,
-} from '@tools/utils';
-import { toPosixPath } from '@utils/core/pathCore';
+import { resolveAndFormat, parseWorkingDirectory } from '@tools/utils';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   buildApprovalRejectedResult,
@@ -44,9 +40,11 @@ export class WriteFileTool extends defineTool({
     const root = parseWorkingDirectory(
       getCurrentToolFileInteractionContext()?.workingDirectory,
     );
-    const resolved = resolveWorkspaceRelativePath(input.path, root);
+    const { path: resolved, display: displayPath } = resolveAndFormat(
+      input.path,
+      root,
+    );
     const filePath = resolved.fsPath;
-    const displayPath = toPosixPath(resolved.relative);
 
     const exists = await WorkspaceFS.exists(filePath);
     const readGate = requireFileReadForEdit(filePath, exists);
