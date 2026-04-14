@@ -125,8 +125,10 @@ export async function bestConnectionMethodAnthropic(
             messages: [{ role: 'user', content: prompt }],
           })
           .then((response) => {
-            const content = response.content[0];
-            return 'text' in content ? content.text.trim() : 'B';
+            const textBlock = response.content.find(
+              (block) => block.type === 'text',
+            );
+            return textBlock?.text.trim() || 'B';
           }),
       ),
     );
