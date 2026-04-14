@@ -10,7 +10,9 @@ import {
   resolveAndFormat,
   formatToolOutput,
   pluralize,
+  parseWorkingDirectory,
 } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
@@ -37,7 +39,10 @@ export class GlobTool extends defineTool({
   schema: GlobInputSchema,
 }) {
   protected async execute(input: GlobInput): Promise<ToolResult> {
-    const { path, display } = resolveAndFormat(input.path ?? undefined);
+    const root = parseWorkingDirectory(
+      getCurrentToolFileInteractionContext()?.workingDirectory,
+    );
+    const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
 
     let matches: string[];
@@ -61,10 +66,10 @@ export class GlobTool extends defineTool({
       async (match): Promise<GlobMatchInfo | null> => {
         let resolved;
         try {
-          resolved = joinWorkspaceRelativePath(path.relative, match);
+          resolved = joinWorkspaceRelativePath(path.relative, match, root);
         } catch (err) {
           throw new ToolError(
-            `Match resolved outside the workspace: ${match} (${toErrorMessage(err)})`,
+            `Match resolved outside the working directory: ${match} (${toErrorMessage(err)})`,
           );
         }
 
@@ -73,7 +78,7 @@ export class GlobTool extends defineTool({
           return null;
         }
 
-        const stat = await WorkspaceFS.stat(relativePath).catch(() => null);
+        const stat = await WorkspaceFS.stat(resolved.fsPath).catch(() => null);
         return { relativePath, mtime: stat?.mtime ?? 0 };
       },
     );

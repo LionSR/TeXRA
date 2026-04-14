@@ -268,6 +268,7 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) allowOrchestratorKill = true;
   @property({ attribute: false }) detachSubagentsOnStop = false;
+  @property({ attribute: false }) worktreeSupport = false;
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
@@ -290,6 +291,10 @@ export class MultiAgentTab extends LitElement {
 
   private handleDetachToggle(event: Event): void {
     this.emitToggle('detach-subagents-on-stop-toggle', event);
+  }
+
+  private handleWorktreeSupportToggle(event: Event): void {
+    this.emitToggle('worktree-support-toggle', event);
   }
 
   private handlePresetClick(preset: AgentModePreset): void {
@@ -483,6 +488,20 @@ export class MultiAgentTab extends LitElement {
           <p class="text-secondary setting-description">
             Normally everything stops when you stop the orchestrator. Turn this
             on to let agents that are mid-task finish on their own.
+          </p>
+        </div>
+
+        <div class="setting-block">
+          <vscode-checkbox
+            ?checked=${this.worktreeSupport}
+            @change=${this.handleWorktreeSupportToggle}
+          >
+            Allow agents to work in git worktrees
+          </vscode-checkbox>
+          <p class="text-secondary setting-description">
+            When enabled, delegated agents can operate in git worktrees outside
+            the main workspace. All tool calls within the subagent automatically
+            use the worktree as their root directory.
           </p>
         </div>
 

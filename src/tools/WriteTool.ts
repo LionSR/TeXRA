@@ -9,6 +9,8 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
+import { resolveAndFormat, parseWorkingDirectory } from '@tools/utils';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -35,20 +37,29 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    const exists = await WorkspaceFS.exists(input.path);
-    const readGate = requireFileReadForEdit(input.path, exists);
+    const root = parseWorkingDirectory(
+      getCurrentToolFileInteractionContext()?.workingDirectory,
+    );
+    const { path: resolved, display: displayPath } = resolveAndFormat(
+      input.path,
+      root,
+    );
+    const filePath = resolved.fsPath;
+
+    const exists = await WorkspaceFS.exists(filePath);
+    const readGate = requireFileReadForEdit(filePath, exists);
     if (readGate) {
       return readGate;
     }
 
-    const originalContent = exists ? await WorkspaceFS.read(input.path) : '';
+    const originalContent = exists ? await WorkspaceFS.read(filePath) : '';
 
-    const proposedContent = isTexFile(input.path)
+    const proposedContent = isTexFile(filePath)
       ? replacementEngine.applyAll(input.content)
       : input.content;
 
     const approval = await requestToolEditApproval({
-      path: input.path,
+      path: filePath,
       originalContent,
       proposedContent,
       sourceTool: 'write_file',
@@ -56,7 +67,7 @@ export class WriteFileTool extends defineTool({
 
     if (!approval.accepted) {
       return buildApprovalRejectedResult(
-        input.path,
+        displayPath,
         'write_file',
         approval.userMessage,
       );
@@ -64,15 +75,15 @@ export class WriteFileTool extends defineTool({
 
     const finalContent = getApprovedContent(approval, proposedContent);
     const { appliedContent } = await writeApprovedContent(
-      input.path,
+      filePath,
       originalContent,
       finalContent,
     );
 
-    recordToolFileRead(input.path);
+    recordToolFileRead(filePath);
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
-      input.path,
+      displayPath,
       proposedContent,
       appliedContent,
     );
@@ -81,7 +92,7 @@ export class WriteFileTool extends defineTool({
     const originalLineCount = originalContent.split('\n').length;
     const newLineCount = appliedContent.split('\n').length;
     const action = exists ? 'Overwrote' : 'Created';
-    const summary = `${action} ${input.path} (${newLineCount} lines)`;
+    const summary = `${action} ${displayPath} (${newLineCount} lines)`;
     const userInstruction =
       exists && originalLineCount > 0
         ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
@@ -93,7 +104,7 @@ export class WriteFileTool extends defineTool({
       userPatch: approval.userPatch,
       edits: [
         {
-          path: input.path,
+          path: displayPath,
           lineChanges: approval.lineChanges,
           startLine: approval.startLine,
         },
