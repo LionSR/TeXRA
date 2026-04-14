@@ -131,7 +131,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'elevate',
-  'Elevates academic writing to be more compelling and publication-ready. Leaves \criticize{}{}{} comments for writing strategy issues.',
+  'Two-phase writing strategist that elevates academic papers for publication. Diagnoses multi-audience impact (editor, expert reviewer, broad peer), optimizes persuasive arc and rhetorical rhythm, and sharpens precision. Makes confident improvements directly (marked with \criticize{Comment text}{S}{C}) and leaves strategic decisions as \criticize{}{}{} comments for author review.',
   'workflow/elevate.yaml',
   ARRAY['researcher'],
   'workflow',
@@ -144,7 +144,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'elevate_multiple',
-  'Multi-document writing elevation agent. Elevates academic writing across paper collections to be more compelling and publication-ready.',
+  'Two-phase writing strategist that elevates multiple academic paper documents for publication. Diagnoses multi-audience impact (editor, expert reviewer, broad peer), optimizes persuasive arc and rhetorical rhythm, and sharpens precision across document collections. Makes confident improvements directly (marked with \criticize{Comment text}{S}{C}) and leaves strategic decisions as \criticize{}{}{} comments for author review.',
   'workflow/elevate_multiple.yaml',
   ARRAY['researcher'],
   'workflow',
@@ -170,7 +170,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'generic_multiple',
-  'General-purpose LaTeX document editor for multiple documents. Flexibly processes research papers following academic standards while maintaining consistency.',
+  'General-purpose LaTeX document editor for multiple documents. Flexibly processes research papers following academic standards while maintaining consistency across document collections.',
   'workflow/generic_multiple.yaml',
   ARRAY['researcher'],
   'workflow',
@@ -265,11 +265,11 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'orchestrator',
-  'AI scientist that analyzes documents, tracks progress, and proposes agent tasks.',
+  'Reads your paper, figures out what needs work, and hands each task to the right agent. You approve proposals as they come in.',
   'tool_use/orchestrator.yaml',
   ARRAY['researcher'],
   'toolUse',
-  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'todo_write', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount', 'external_inquiry', 'codex']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -319,17 +319,23 @@ ON CONFLICT (name) DO UPDATE SET
   tools          = EXCLUDED.tools;
 
 -- ---------------------------------------------------------------------------
+-- Cleanup: remove retired agents
+-- ---------------------------------------------------------------------------
+
+DELETE FROM remote_agents WHERE name = 'lean';
+
+-- ---------------------------------------------------------------------------
 -- Tool-use agents (Lean — stored in tool-use-lean/)
 -- ---------------------------------------------------------------------------
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
-  'lean',
-  'Lean 4 proof assistant with VS Code integration and CLI fallback.',
-  'tool-use-lean/lean.yaml',
+  'leanOrchestrator',
+  'Lean 4 project orchestrator — coordinates formalization, delegates to specialized Lean agents, and manages proof development workflow.',
+  'tool-use-lean/leanOrchestrator.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'codex', 'lean_diagnostics', 'lean_inspect', 'lean_loogle', 'lean_file', 'lean_project']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
