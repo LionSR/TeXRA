@@ -15,6 +15,8 @@ export interface AgentCore<C = unknown> {
   streamId: StreamTabId;
   executionId: ExecutionId;
   userVarChannels: UserVariableChannels;
+  /** Working directory override for subagent tool calls (e.g. a git worktree). */
+  workingDirectory?: string;
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {

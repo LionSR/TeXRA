@@ -35,7 +35,6 @@ const CodexInputDisplaySchema = z.object({
   prompt: z.string().optional().default(''),
   sandbox_mode: z.string().optional(),
   run_in_background: z.boolean().optional(),
-  working_directory: z.string().optional(),
 });
 
 type CodexInputDisplay = z.infer<typeof CodexInputDisplaySchema>;
@@ -106,15 +105,6 @@ function renderCodexModeSection(input: CodexInputDisplay): RenderableSection {
   return renderBadgeSection('Mode:', badges);
 }
 
-function renderCodexDirectorySection(
-  input: CodexInputDisplay,
-): RenderableSection {
-  const workingDirectory = input.working_directory ?? '';
-  return when(workingDirectory.length > 0, () =>
-    buildToolUseSection('Directory:', wrapInPre(workingDirectory)),
-  );
-}
-
 function renderCodexInputContent(
   input: unknown,
 ): TemplateResult | typeof nothing {
@@ -124,7 +114,6 @@ function renderCodexInputContent(
   return renderSectionGroup([
     renderCodexPromptSection(parsed.data),
     renderCodexModeSection(parsed.data),
-    renderCodexDirectorySection(parsed.data),
   ]);
 }
 

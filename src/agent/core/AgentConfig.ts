@@ -15,6 +15,8 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   toolConfig: ToolConfigSchema,
   /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
   memories: z.array(z.string()).prefault([]),
+  /** Working directory override for subagent tool calls (e.g. a git worktree). */
+  workingDirectory: z.string().nullish(),
 });
 
 /** Lift legacy session.agentCategory to top level for backward compatibility. */
