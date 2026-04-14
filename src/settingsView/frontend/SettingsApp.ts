@@ -633,7 +633,7 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL,
   );
 
-  private handleGitWorktreeSupportToggle = forwardDetail(
+  private handleWorktreeSupportToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT,
   );
 
@@ -828,11 +828,14 @@ export class SettingsApp extends SettingsAppBase {
               .customPresets=${this.customPresets.get()}
               .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
               .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
+              .worktreeSupport=${this.gitWorktreeSupport.get()}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @allow-orchestrator-kill-toggle=${this
                 .handleAllowOrchestratorKillToggle}
               @detach-subagents-on-stop-toggle=${this
                 .handleDetachSubagentsOnStopToggle}
+              @worktree-support-toggle=${this
+                .handleWorktreeSupportToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
@@ -862,13 +865,10 @@ export class SettingsApp extends SettingsAppBase {
               .markCommits=${this.gitMarkCommits.get()}
               .authorName=${this.gitAuthorName.get()}
               .authorEmail=${this.gitAuthorEmail.get()}
-              .worktreeSupport=${this.gitWorktreeSupport.get()}
               .toggleDisabled=${!this.gitSettingsLoaded.get()}
               @git-mark-commits-toggle=${this.handleGitMarkCommitsToggle}
               @git-author-name-change=${this.handleGitAuthorNameChange}
               @git-author-email-change=${this.handleGitAuthorEmailChange}
-              @git-worktree-support-toggle=${this
-                .handleGitWorktreeSupportToggle}
             ></git-tab>
           </vscode-tab-panel>
 

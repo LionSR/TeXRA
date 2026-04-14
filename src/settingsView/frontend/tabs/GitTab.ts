@@ -69,7 +69,6 @@ export class GitTab extends LitElement {
   @property({ attribute: false }) markCommits = false;
   @property({ attribute: false }) authorName = DEFAULT_GIT_AUTHOR_NAME;
   @property({ attribute: false }) authorEmail = DEFAULT_GIT_AUTHOR_EMAIL;
-  @property({ attribute: false }) worktreeSupport = false;
   @property({ attribute: false }) toggleDisabled = true;
 
   private handleMarkCommitsToggle(event: Event): void {
@@ -97,15 +96,6 @@ export class GitTab extends LitElement {
     }
   }
 
-  private handleWorktreeSupportToggle(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
-    this.dispatchEvent(
-      createEvent('git-worktree-support-toggle', {
-        enabled: Boolean(target?.checked),
-      }),
-    );
-  }
-
   override render(): TemplateResult {
     return html`
       <div class="git-container">
@@ -123,19 +113,6 @@ export class GitTab extends LitElement {
           </p>
         </div>
 
-        <div class="setting-block">
-          <vscode-checkbox
-            ?checked=${this.worktreeSupport}
-            ?disabled=${this.toggleDisabled}
-            @change=${this.handleWorktreeSupportToggle}
-          >
-            Enable git worktree support for tool-use agents
-          </vscode-checkbox>
-          <p class="setting-description">
-            When enabled, tool-use agents can operate in git worktrees outside
-            the main workspace via the <code>working_directory</code> parameter.
-          </p>
-        </div>
 
         ${this.markCommits
           ? html`
