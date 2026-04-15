@@ -834,8 +834,7 @@ export class SettingsApp extends SettingsAppBase {
                 .handleAllowOrchestratorKillToggle}
               @detach-subagents-on-stop-toggle=${this
                 .handleDetachSubagentsOnStopToggle}
-              @worktree-support-toggle=${this
-                .handleWorktreeSupportToggle}
+              @worktree-support-toggle=${this.handleWorktreeSupportToggle}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}

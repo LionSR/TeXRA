@@ -113,7 +113,6 @@ export class GitTab extends LitElement {
           </p>
         </div>
 
-
         ${this.markCommits
           ? html`
               <div class="setting-block">

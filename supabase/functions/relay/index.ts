@@ -75,7 +75,7 @@ import {
 // Constants
 // =============================================================================
 
-const RELAY_VERSION = '1.8.2';
+const RELAY_VERSION = '1.9.0';
 
 // Tier constants imported from models.ts (single source of truth)
 // CROSS-REFERENCE: Keep models.ts in sync with:
