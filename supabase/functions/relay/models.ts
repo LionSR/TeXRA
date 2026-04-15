@@ -184,7 +184,7 @@ export function isModelAllowedForTier(
   modelName: string | null,
 ): boolean {
   if (tier === ULTRA_TIER) return true;
-  if (!modelName) return true;
+  if (!modelName) return false;
   return !ULTRA_ONLY_PATTERN.test(modelName);
 }
 
