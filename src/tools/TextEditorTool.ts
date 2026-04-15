@@ -135,7 +135,12 @@ export class TextEditorTool extends defineTool({
       case 'str_replace': {
         const oldStr = requireField(input.old_str, 'old_str', command);
         logger.info(CHANNEL, `str_replace: ${oldStr} -> ${input.new_str}`);
-        return this.strReplace(filePath, displayPath, oldStr, input.new_str ?? '');
+        return this.strReplace(
+          filePath,
+          displayPath,
+          oldStr,
+          input.new_str ?? '',
+        );
       }
       case 'insert': {
         const insertLine = requireField(
@@ -291,7 +296,11 @@ export class TextEditorTool extends defineTool({
     }
   }
 
-  private async create(filePath: string, displayPath: string, content: string): Promise<ToolResult> {
+  private async create(
+    filePath: string,
+    displayPath: string,
+    content: string,
+  ): Promise<ToolResult> {
     try {
       const proposedContent = isTexFile(filePath)
         ? replacementEngine.applyAll(content)
@@ -545,7 +554,10 @@ export class TextEditorTool extends defineTool({
     }
   }
 
-  private async undoEdit(filePath: string, displayPath: string): Promise<ToolResult> {
+  private async undoEdit(
+    filePath: string,
+    displayPath: string,
+  ): Promise<ToolResult> {
     try {
       const history = this.fileHistory.get(filePath);
       if (!history || history.length === 0) {

@@ -76,6 +76,19 @@ const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
   .filter((m) => !m.openRouterOnly) // Exclude OpenRouter-only models
   .map(toRelayModel);
 
+/**
+ * Ultra-only models: reserved for Ultra-tier users even during the
+ * sponsor-credit promotion. Matches gpt-5-pro, gpt-5.2-pro, gpt-5.4-pro, etc.
+ */
+const ULTRA_ONLY_PATTERN = /^gpt-5(\.\d+)?-pro/i;
+
+const isUltraOnlyModel = (model: RelayModel): boolean =>
+  model.apiPatterns.some((p) => ULTRA_ONLY_PATTERN.test(p));
+
+const NON_ULTRA_ONLY_SHORT_NAMES = RELAY_MODELS.filter(
+  (m) => !isUltraOnlyModel(m),
+).map((m) => m.shortName);
+
 // =============================================================================
 // Derived Arrays
 // =============================================================================
@@ -119,8 +132,8 @@ const ALL_PROVIDERS = [
 export const TIER_CONFIG: TierModelConfig = {
   providers: [...ALL_PROVIDERS],
   tiers: {
-    free: { models: FREE_TIER_SHORT_NAMES },
-    Max: { models: MAX_TIER_SHORT_NAMES },
+    free: { models: NON_ULTRA_ONLY_SHORT_NAMES },
+    Max: { models: NON_ULTRA_ONLY_SHORT_NAMES },
     Ultra: { models: '*' },
   },
 };
@@ -129,11 +142,12 @@ export const TIER_CONFIG: TierModelConfig = {
  * Monthly spending limits by tier (in USD).
  *
  * These limits apply to relay usage only. Users can always use their own
- * API keys without any limits. Adjust these values based on fair use policy.
+ * API keys without any limits. Current values reflect the sponsor-credit
+ * promotion: free and Max tiers are bumped while the donated credits last.
  */
 export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
-  free: 10, // $10/month - trial/evaluation access (temporarily increased)
-  Max: 50, // $50/month - researcher access
+  free: 20, // $20/month - promo (bumped from $10)
+  Max: 100, // $100/month - promo (bumped from $50)
   Ultra: 1500, // $1500/month - sponsor access
 };
 
@@ -162,8 +176,8 @@ export function getSpendingLimit(tier: string): number {
 
 /**
  * Check if a model is allowed for a given tier.
- * Uses PREFIX pattern matching to handle version suffixes.
- * E.g., "gpt-4.1-mini-2025-04-14" matches pattern "gpt-4.1-mini"
+ * During the sponsor-credit promotion, all models are open to every tier
+ * EXCEPT the gpt-5 "pro" variants, which remain reserved for Ultra users.
  */
 export function isModelAllowedForTier(
   tier: string,
@@ -171,16 +185,7 @@ export function isModelAllowedForTier(
 ): boolean {
   if (tier === ULTRA_TIER) return true;
   if (!modelName) return false;
-
-  const normalizedModel = modelName.toLowerCase();
-  const patterns =
-    tier === MAX_TIER
-      ? MAX_TIER_API_PATTERNS
-      : tier === FREE_TIER
-        ? FREE_TIER_API_PATTERNS
-        : [];
-
-  return patterns.some((pattern) => normalizedModel.startsWith(pattern));
+  return !ULTRA_ONLY_PATTERN.test(modelName);
 }
 
 // =============================================================================
