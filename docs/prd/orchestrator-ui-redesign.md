@@ -241,12 +241,14 @@ agent hides them. The textarea is the hero element.
 ```
 
 **Pros:**
+
 - Cleanest UI, zero jargon, mode is implicit from agent choice
 - Closest to Claude Code / ChatGPT feel
 - Education tip is inline, contextual, dismissable
 - Single dropdown is simpler to reason about
 
 **Cons:**
+
 - Users might not discover workflow agents (buried in dropdown)
 - Grouped dropdown (`<optgroup>`-style) is non-standard for @vscode-elements
 - No visual separation between modes -- could confuse power users who think in "chat vs document"
@@ -389,6 +391,7 @@ Education tip lives inside the Chat tab.
 ```
 
 **Pros:**
+
 - "Chat" vs "Document" is immediately clear -- no jargon
 - Familiar tab pattern (VS Code users know tabs)
 - Each tab shows only relevant agents -- no mixed dropdown
@@ -396,6 +399,7 @@ Education tip lives inside the Chat tab.
 - Smallest conceptual change from current radio toggle
 
 **Cons:**
+
 - Still a mode switch -- user must understand two modes exist
 - Two agent dropdowns still exist in code (one per tab)
 - Tabs add vertical space above the textarea
@@ -562,6 +566,7 @@ through a centered hero card on first visit.
 ```
 
 **Pros:**
+
 - Most minimal, maximum focus on the input
 - Feels exactly like Claude Code / ChatGPT
 - Hero welcome card teaches all capabilities at once
@@ -569,6 +574,7 @@ through a centered hero card on first visit.
 - Toolbar is compact: everything in one row
 
 **Cons:**
+
 - Biggest redesign effort (new toolbar component, file chips, hero card)
 - Loses structured file-type separation (input/ref/aux/media) in chip mode
 - TeXRA power features harder to discover
@@ -713,6 +719,7 @@ expand the workflow section.
 ```
 
 **Pros:**
+
 - Both modes always visible -- zero discovery problem
 - No toggle, no mode confusion
 - Orchestrator hero is the obvious default for new users
@@ -720,6 +727,7 @@ expand the workflow section.
 - Least disruptive to existing code structure (collapsible = existing pattern)
 
 **Cons:**
+
 - Two textareas, two execute buttons, two model dropdowns -- duplication
 - Uses more vertical space when both sections open
 - Users might be confused about which section to use
@@ -825,17 +833,18 @@ with actionable examples like `'What would you like to do?'`.
 
 ## Files Modified
 
-| File | What Changes |
-|------|-------------|
-| `src/webview/frontend/MainApp.ts` | Reorder render. Add `isOrchestratorSelected` to session context. |
+| File                                                  | What Changes                                                                                     |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `src/webview/frontend/MainApp.ts`                     | Reorder render. Add `isOrchestratorSelected` to session context.                                 |
 | `src/webview/frontend/components/InstructionPanel.ts` | Remove radio toggle. Textarea first. Unify agent dropdowns. Inline orchestrator tip. Ctrl+Enter. |
-| `src/webview/frontend/styles.ts` | Animated collapse for file-selection-group. |
-| `src/webview/frontend/components/BannerGroup.ts` | Remove `orchestratorSelected` prop and `<orchestrator-banner>`. |
-| `src/shared/utils/selectTemplates.ts` | Add `renderGroupedAgentOptions()`. |
-| `src/webview/frontend/store.ts` | Update orchestrator placeholder text. |
-| `src/shared/schemas/mainView.ts` | Add `orchestratorTipDismissed` boolean to `MainViewPersistedStateSchema`. |
+| `src/webview/frontend/styles.ts`                      | Animated collapse for file-selection-group.                                                      |
+| `src/webview/frontend/components/BannerGroup.ts`      | Remove `orchestratorSelected` prop and `<orchestrator-banner>`.                                  |
+| `src/shared/utils/selectTemplates.ts`                 | Add `renderGroupedAgentOptions()`.                                                               |
+| `src/webview/frontend/store.ts`                       | Update orchestrator placeholder text.                                                            |
+| `src/shared/schemas/mainView.ts`                      | Add `orchestratorTipDismissed` boolean to `MainViewPersistedStateSchema`.                        |
 
 ## Files NOT Modified
+
 - `src/webview/frontend/sessionDefaults.ts` -- per-mode behavior unchanged
 - Backend/agent code -- purely UI/UX changes
 
