@@ -2009,7 +2009,8 @@ export class MainApp extends MainAppBase {
             @open-install-guide=${this.handleComponentOpenInstallGuide}
             @sign-in=${this.handleComponentSignIn}
             @dismiss-login=${this.handleComponentDismissLogin}
-            @dismiss-getting-started=${this.handleComponentDismissGettingStarted}
+            @dismiss-getting-started=${this
+              .handleComponentDismissGettingStarted}
             @dismiss-orchestrator=${this.handleComponentDismissOrchestrator}
           ></banner-group>
         </div>

@@ -103,7 +103,10 @@ function placementFor(agent) {
       `Agent "${agent.name}" placement is missing a "folder" string.`,
     );
   }
-  if (!Array.isArray(placement.visibility) || placement.visibility.length === 0) {
+  if (
+    !Array.isArray(placement.visibility) ||
+    placement.visibility.length === 0
+  ) {
     throw new Error(
       `Agent "${agent.name}" placement is missing a non-empty "visibility" array.`,
     );
