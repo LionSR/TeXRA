@@ -48,6 +48,22 @@ export const profileViewStyles: CSSResult = css`
     font-weight: var(--font-weight-semibold);
   }
 
+  .profile-notice {
+    margin: var(--spacing-small) 0 var(--spacing-medium);
+    color: var(--vscode-descriptionForeground, var(--color-text-secondary));
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    max-width: 640px;
+  }
+
+  .profile-notice code {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 0.95em;
+    padding: 0 var(--spacing-tiny);
+    border-radius: var(--border-radius-small);
+    background: var(--vscode-textBlockQuote-background);
+  }
+
   .tier-badge.free {
     background: var(--vscode-inputValidation-warningBackground);
     color: var(--vscode-inputValidation-warningForeground);
