@@ -5,11 +5,10 @@
  * Usage:
  *   node scripts/sync-remote-agents.mjs
  *   node scripts/sync-remote-agents.mjs -o docs/supabase/SYNC_REFERENCE_AGENTS.sql
- *   node scripts/sync-remote-agents.mjs --check docs/supabase/SYNC_REFERENCE_AGENTS.sql
- *   node scripts/sync-remote-agents.mjs --exec
+ *   node scripts/sync-remote-agents.mjs --check
+ *   node scripts/sync-remote-agents.mjs --check path/to/other.sql
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,10 +19,23 @@ import YAML from 'yaml';
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(scriptDir, '..');
 const referenceAgentsDir = resolve(rootDir, 'reference-agents');
+const configPath = resolve(rootDir, 'docs/supabase/remote-agents.config.json');
+const defaultOutputPath = 'docs/supabase/SYNC_REFERENCE_AGENTS.sql';
 
-// Keep destructive cleanup explicit. The remote_agents table can contain agents
-// that are not managed by reference-agents/.
-const RETIRED_AGENT_NAMES = ['lean'];
+// Placement and visibility for each agent in reference-agents/. The YAML files
+// are the source of truth for description / tools / agentCategory; folder and
+// visibility live in docs/supabase/remote-agents.config.json so the generated
+// SQL stays aligned with production without editing every YAML.
+const { agents: AGENT_PLACEMENT, retired: RETIRED_AGENT_NAMES } =
+  loadPlacementConfig();
+
+function loadPlacementConfig() {
+  const raw = JSON.parse(readFileSync(configPath, 'utf8'));
+  return {
+    agents: raw.agents ?? {},
+    retired: Array.isArray(raw.retired) ? raw.retired : [],
+  };
+}
 
 function discoverYamlFiles(dir) {
   const files = [];
@@ -45,19 +57,16 @@ function readAgentYaml(filePath) {
   const parsed = YAML.parse(text) ?? {};
   const settings = parsed.settings ?? {};
   const name = parsed.name ?? basename(filePath, '.yaml');
-  const agentCategory =
-    settings.agentCategory ?? parsed.agentCategory ?? 'workflow';
-  const relativePath = relative(referenceAgentsDir, filePath);
-  const relativeParts = relativePath.split(/[\\/]/);
-  const subdir = relativeParts.length > 1 ? relativeParts.at(0) : '';
+  const explicitCategory =
+    settings.agentCategory ?? parsed.agentCategory ?? undefined;
 
   return {
     name,
     description: parsed.description,
     inherits: parsed.inherits,
-    agentCategory,
+    agentCategory: explicitCategory ?? 'workflow',
+    explicitCategory: explicitCategory !== undefined,
     tools: normalizeTools(settings.tools),
-    subdir,
   };
 }
 
@@ -81,43 +90,64 @@ function normalizeTools(tools) {
   return names.length > 0 ? names : undefined;
 }
 
-function storagePath(agent) {
-  if (agent.subdir === 'Lean4') {
-    return `tool-use-lean/${agent.name}.yaml`;
+function placementFor(agent) {
+  const placement = AGENT_PLACEMENT[agent.name];
+  if (!placement) {
+    throw new Error(
+      `Agent "${agent.name}" has no placement entry in ${relative(rootDir, configPath)}. ` +
+        `Add { "folder": "...", "visibility": [...] } for it.`,
+    );
   }
-  if (agent.agentCategory === 'toolUse') {
-    return `tool_use/${agent.name}.yaml`;
+  if (typeof placement.folder !== 'string' || !placement.folder) {
+    throw new Error(
+      `Agent "${agent.name}" placement is missing a "folder" string.`,
+    );
   }
-  return `workflow/${agent.name}.yaml`;
+  if (!Array.isArray(placement.visibility) || placement.visibility.length === 0) {
+    throw new Error(
+      `Agent "${agent.name}" placement is missing a non-empty "visibility" array.`,
+    );
+  }
+  return placement;
 }
 
-function visibility(agent) {
-  if (agent.subdir === 'Lean4') {
-    return ['researcher', 'lean'];
-  }
-  return ['researcher'];
+function storagePath(agent, placement) {
+  return `${placement.folder}/${agent.name}.yaml`;
 }
 
 function resolveInheritedFields(agents) {
   const byName = new Map(agents.map((agent) => [agent.name, agent]));
 
-  function resolveDescription(agent, seen = new Set()) {
-    if (agent.description || !agent.inherits || seen.has(agent.name)) {
-      return agent.description;
+  function walkParents(agent, visit, seen = new Set()) {
+    if (seen.has(agent.name)) {
+      return;
     }
-
     seen.add(agent.name);
-    const parent = byName.get(agent.inherits);
-    if (!parent) {
-      return agent.description;
-    }
 
-    agent.description = resolveDescription(parent, seen);
-    return agent.description;
+    visit(agent);
+
+    if (!agent.inherits) {
+      return;
+    }
+    const parent = byName.get(agent.inherits);
+    if (parent) {
+      walkParents(parent, visit, seen);
+    }
   }
 
   for (const agent of agents) {
-    resolveDescription(agent);
+    walkParents(agent, (current) => {
+      if (!agent.description && current.description) {
+        agent.description = current.description;
+      }
+      if (!agent.tools && current.tools) {
+        agent.tools = current.tools;
+      }
+      if (!agent.explicitCategory && current.explicitCategory) {
+        agent.agentCategory = current.agentCategory;
+        agent.explicitCategory = true;
+      }
+    });
   }
 }
 
@@ -132,27 +162,45 @@ function loadAgents() {
   resolveInheritedFields(agents);
 
   return agents
-    .map((agent) => ({
-      ...agent,
-      storagePath: storagePath(agent),
-      visibility: visibility(agent),
-    }))
+    .map((agent) => {
+      const placement = placementFor(agent);
+      return {
+        ...agent,
+        storagePath: storagePath(agent, placement),
+        visibility: placement.visibility,
+        folder: placement.folder,
+      };
+    })
     .sort(compareAgents);
 }
 
 function compareAgents(a, b) {
-  const byGroup = agentGroup(a) - agentGroup(b);
+  const byGroup = groupOrder(a) - groupOrder(b);
   if (byGroup !== 0) {
     return byGroup;
   }
   return a.name.localeCompare(b.name);
 }
 
-function agentGroup(agent) {
+function groupKey(agent) {
   if (agent.agentCategory !== 'toolUse') {
-    return 0;
+    return 'workflow';
   }
-  return agent.subdir === 'Lean4' ? 2 : 1;
+  return agent.folder;
+}
+
+function groupOrder(agent) {
+  const key = groupKey(agent);
+  if (key === 'workflow') return 0;
+  if (key === 'tool-use') return 1;
+  return 2;
+}
+
+function groupSectionTitle(key) {
+  if (key === 'workflow') return 'Workflow agents';
+  if (key === 'tool-use') return 'Tool-use agents';
+  if (key === 'tool-use-lean') return 'Tool-use agents (Lean)';
+  return `Tool-use agents (${key})`;
 }
 
 function sqlString(value) {
@@ -165,19 +213,6 @@ function sqlArray(values) {
 
 function toolsValue(agent) {
   return agent.tools ? sqlArray(agent.tools) : 'NULL';
-}
-
-function sectionTitle(group) {
-  switch (group) {
-    case 0:
-      return 'Workflow agents';
-    case 1:
-      return 'Tool-use agents';
-    case 2:
-      return 'Tool-use agents (Lean)';
-    default:
-      return 'Agents';
-  }
 }
 
 function buildInsert(agent) {
@@ -213,23 +248,31 @@ function buildSql(agents) {
 
   const groups = new Map();
   for (const agent of agents) {
-    const group = agentGroup(agent);
-    const items = groups.get(group) ?? [];
+    const key = groupKey(agent);
+    const items = groups.get(key) ?? [];
     items.push(agent);
-    groups.set(group, items);
+    groups.set(key, items);
   }
 
-  for (const group of [...groups.keys()].sort()) {
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    if (a === 'workflow') return -1;
+    if (b === 'workflow') return 1;
+    if (a === 'tool-use') return -1;
+    if (b === 'tool-use') return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const key of sortedKeys) {
     lines.push(
       '-- ---------------------------------------------------------------------------',
     );
-    lines.push(`-- ${sectionTitle(group)}`);
+    lines.push(`-- ${groupSectionTitle(key)}`);
     lines.push(
       '-- ---------------------------------------------------------------------------',
     );
     lines.push('');
 
-    for (const agent of groups.get(group)) {
+    for (const agent of groups.get(key)) {
       lines.push(buildInsert(agent));
       lines.push('');
     }
@@ -267,27 +310,23 @@ function checkOutput(path, sql) {
   console.log(`${path} is up to date.`);
 }
 
-const { values: flags } = parseArgs({
+const { values: flags, positionals } = parseArgs({
   options: {
-    check: { type: 'string' },
-    exec: { type: 'boolean', default: false },
+    check: { type: 'boolean', default: false },
     output: { type: 'string', short: 'o' },
   },
+  allowPositionals: true,
 });
 
 const sql = buildSql(loadAgents());
 
 if (flags.check) {
-  checkOutput(resolve(rootDir, flags.check), sql);
+  const target = positionals[0] ?? defaultOutputPath;
+  checkOutput(resolve(rootDir, target), sql);
 } else if (flags.output) {
   const outputPath = resolve(rootDir, flags.output);
   writeFileSync(outputPath, sql);
   console.log(`Wrote ${relative(rootDir, outputPath)}`);
-} else if (flags.exec) {
-  execFileSync('supabase', ['db', 'execute', '--stdin'], {
-    input: sql,
-    stdio: ['pipe', 'inherit', 'inherit'],
-  });
 } else {
   process.stdout.write(sql);
 }

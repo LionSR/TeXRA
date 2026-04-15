@@ -13,8 +13,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'apply',
   'Implements suggestions from review agents (criticize, enhance, logic, notation, etc.). Reads inline annotations, works through the issues, and applies corrections.',
-  'workflow/apply.yaml',
-  ARRAY['researcher'],
+  'researcher/apply.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -29,8 +29,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'apply_multiple',
   'Implements suggestions from review agents across multiple documents. Reads inline annotations, works through issues, and applies corrections while maintaining cross-document consistency.',
-  'workflow/apply_multiple.yaml',
-  ARRAY['researcher'],
+  'researcher/apply_multiple.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -45,8 +45,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'criticize',
   'Critical reviewer for mathematical physics papers. Inserts inline comments using \criticize{}{severity}{confidence} without modifying original content.',
-  'workflow/criticize.yaml',
-  ARRAY['researcher'],
+  'QITBench/criticize.yaml',
+  ARRAY['whitelist', 'QITBench', 'researcher', 'public'],
   'workflow',
   NULL
 )
@@ -61,8 +61,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'criticize_multiple',
   'Critical reviewer for multiple related documents. Inserts inline comments using \criticize{}{severity}{confidence} across papers without modifying original content.',
-  'workflow/criticize_multiple.yaml',
-  ARRAY['researcher'],
+  'QITBench/criticize_multiple.yaml',
+  ARRAY['whitelist', 'QITBench', 'researcher', 'public'],
   'workflow',
   NULL
 )
@@ -77,8 +77,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'devise',
   'Mathematical paper enhancer with two-phase workflow. Rewrites document by first adding rigorous derivations then revising to publication-ready scientific style.',
-  'workflow/devise.yaml',
-  ARRAY['researcher'],
+  'QITBench/devise.yaml',
+  ARRAY['researcher', 'QITBench'],
   'workflow',
   NULL
 )
@@ -93,8 +93,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'devise_multiple',
   'Multi-paper enhancement workflow with derivation and revision phases. Rewrites documents through two-phase process ensuring consistent notation and rigor across collections.',
-  'workflow/devise_multiple.yaml',
-  ARRAY['researcher'],
+  'QITBench/devise_multiple.yaml',
+  ARRAY['researcher', 'QITBench'],
   'workflow',
   NULL
 )
@@ -109,7 +109,7 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'elevate',
   'Two-phase writing strategist that elevates academic papers for publication. Diagnoses multi-audience impact (editor, expert reviewer, broad peer), optimizes persuasive arc and rhetorical rhythm, and sharpens precision. Makes confident improvements directly (marked with \criticize{Comment text}{S}{C}) and leaves strategic decisions as \criticize{}{}{} comments for author review.',
-  'workflow/elevate.yaml',
+  'researcher/elevate.yaml',
   ARRAY['researcher'],
   'workflow',
   NULL
@@ -125,7 +125,7 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'elevate_multiple',
   'Two-phase writing strategist that elevates multiple academic paper documents for publication. Diagnoses multi-audience impact (editor, expert reviewer, broad peer), optimizes persuasive arc and rhetorical rhythm, and sharpens precision across document collections. Makes confident improvements directly (marked with \criticize{Comment text}{S}{C}) and leaves strategic decisions as \criticize{}{}{} comments for author review.',
-  'workflow/elevate_multiple.yaml',
+  'researcher/elevate_multiple.yaml',
   ARRAY['researcher'],
   'workflow',
   NULL
@@ -141,8 +141,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'enhance',
   'Mathematical substance enhancer for research papers. Identifies elegant proofs and stronger results.',
-  'workflow/enhance.yaml',
-  ARRAY['researcher'],
+  'whitelist/enhance.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -157,8 +157,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'enhance_multiple',
   'Multi-document mathematical enhancer for research papers. Improves proofs and results across paper collections.',
-  'workflow/enhance_multiple.yaml',
-  ARRAY['researcher'],
+  'whitelist/enhance_multiple.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -173,8 +173,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'generic',
   'General-purpose LaTeX document editor. Flexibly processes research papers following academic standards and user instructions. Detects and uses existing comment styles (\todo, \comment, %).',
-  'workflow/generic.yaml',
-  ARRAY['researcher'],
+  'public/generic.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -189,8 +189,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'generic_multiple',
   'General-purpose LaTeX document editor for multiple documents. Flexibly processes research papers following academic standards while maintaining consistency across document collections.',
-  'workflow/generic_multiple.yaml',
-  ARRAY['researcher'],
+  'public/generic_multiple.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -205,8 +205,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'logic',
   'Logical flow analyzer for research papers. Improves argument structure and coherence.',
-  'workflow/logic.yaml',
-  ARRAY['researcher'],
+  'researcher/logic.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -221,8 +221,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'logic_multiple',
   'Multi-document logical flow analyzer for research papers. Ensures coherent argumentation across paper collections.',
-  'workflow/logic_multiple.yaml',
-  ARRAY['researcher'],
+  'researcher/logic_multiple.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -237,8 +237,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'notation',
   'Notation consistency checker for research papers. Ensures consistent symbol usage throughout documents.',
-  'workflow/notation.yaml',
-  ARRAY['researcher'],
+  'researcher/notation.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -253,8 +253,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'notation_multiple',
   'Multi-document notation checker for research papers. Ensures consistent symbols across paper collections.',
-  'workflow/notation_multiple.yaml',
-  ARRAY['researcher'],
+  'researcher/notation_multiple.yaml',
+  ARRAY['public'],
   'workflow',
   NULL
 )
@@ -269,7 +269,7 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'verifyFix',
   'Three-phase verification and fix agent for research papers. Expands, critiques with verification, then fixes with documentation.',
-  'workflow/verifyFix.yaml',
+  'researcher/verifyFix.yaml',
   ARRAY['researcher'],
   'workflow',
   NULL
@@ -285,7 +285,7 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'verifyFix_multiple',
   'Multi-document verification and fix agent for research papers. Comprehensive three-phase review across paper collections.',
-  'workflow/verifyFix_multiple.yaml',
+  'researcher/verifyFix_multiple.yaml',
   ARRAY['researcher'],
   'workflow',
   NULL
@@ -305,8 +305,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'orchestrator',
   'Reads your paper, figures out what needs work, and hands each task to the right agent. You approve proposals as they come in.',
-  'tool_use/orchestrator.yaml',
-  ARRAY['researcher'],
+  'tool-use/orchestrator.yaml',
+  ARRAY['public'],
   'toolUse',
   ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount', 'external_inquiry', 'codex']
 )
@@ -321,8 +321,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'presenter',
   'Interactive scientific presentation builder with visual QA.',
-  'tool_use/presenter.yaml',
-  ARRAY['researcher'],
+  'tool-use/presenter.yaml',
+  ARRAY['public'],
   'toolUse',
   ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'wolfram', 'arxiv_search', 'arxiv_metadata', 'web_search', 'web_fetch']
 )
@@ -337,8 +337,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'search',
   'Research assistant with web search and literature discovery tools.',
-  'tool_use/search.yaml',
-  ARRAY['researcher'],
+  'tool-use/search.yaml',
+  ARRAY['public'],
   'toolUse',
   ARRAY['bash', 'read_file', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'extract_tikz_figures', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export', 'web_search', 'web_fetch']
 )
@@ -353,8 +353,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, agent_ca
 VALUES (
   'simplifier',
   'Simplifies scientific code and LaTeX for clarity and maintainability while preserving all functionality.',
-  'tool_use/simplifier.yaml',
-  ARRAY['researcher'],
+  'tool-use/simplifier.yaml',
+  ARRAY['public'],
   'toolUse',
   ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'diagnostics', 'extract_figures', 'extract_tikz_figures', 'memory']
 )
@@ -368,6 +368,22 @@ ON CONFLICT (name) DO UPDATE SET
 -- ---------------------------------------------------------------------------
 -- Tool-use agents (Lean)
 -- ---------------------------------------------------------------------------
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'lean',
+  'Lean 4 proof assistant with VS Code integration and CLI fallback.',
+  'tool-use-lean/lean.yaml',
+  ARRAY['researcher', 'lean'],
+  'toolUse',
+  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  storage_path   = EXCLUDED.storage_path,
+  visibility     = EXCLUDED.visibility,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
@@ -432,12 +448,6 @@ ON CONFLICT (name) DO UPDATE SET
   visibility     = EXCLUDED.visibility,
   agent_category = EXCLUDED.agent_category,
   tools          = EXCLUDED.tools;
-
--- ---------------------------------------------------------------------------
--- Cleanup stale entries (renamed/removed agents)
--- ---------------------------------------------------------------------------
-
-DELETE FROM remote_agents WHERE name IN ('lean');
 
 -- Verify
 SELECT name, description, agent_category, tools, visibility
