@@ -17,10 +17,7 @@ import type { FileLocation } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 // Local file imports
-import {
-  stripLatexComments,
-  BIB_DIRECTIVE_PATTERN,
-} from './latexParsingUtils';
+import { stripLatexComments, BIB_DIRECTIVE_PATTERN } from './latexParsingUtils';
 
 const INPUT_PATTERN = /\\input\s*\{([^}]+)\}/g;
 const INCLUDE_PATTERN = /\\include\s*\{([^}]+)\}/g;
@@ -37,9 +34,7 @@ async function resolveTexInputPath(
   if (!trimmed) return null;
 
   const absolute = joinLatexPath(baseDir, trimmed);
-  if (
-    await flexibleFS.exists({ kind: 'external', absolutePath: absolute })
-  ) {
+  if (await flexibleFS.exists({ kind: 'external', absolutePath: absolute })) {
     return absolute;
   }
 
@@ -65,9 +60,7 @@ async function resolveBibPath(
   if (!trimmed) return null;
 
   const absolute = joinLatexPath(baseDir, ensureExtension(trimmed, '.bib'));
-  if (
-    await flexibleFS.exists({ kind: 'external', absolutePath: absolute })
-  ) {
+  if (await flexibleFS.exists({ kind: 'external', absolutePath: absolute })) {
     return absolute;
   }
 

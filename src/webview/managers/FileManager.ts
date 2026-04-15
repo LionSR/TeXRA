@@ -471,8 +471,8 @@ export class FileManager extends BaseWebviewManager {
 
   /** Post show/hide getting started banner based on condition and setting */
   private postGettingStartedBanner(show: boolean): void {
-    const enabled = show &&
-      getConfig<boolean>('ui.showGettingStartedBanner', true);
+    const enabled =
+      show && getConfig<boolean>('ui.showGettingStartedBanner', true);
     this.postMessage({
       command: enabled
         ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER

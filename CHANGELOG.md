@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.37.3] - 2026-04-15
+
+### Features
+
+- **Workflow agents compile multi-file papers** — if your paper pulls in other files via `\input`, `\include`, or a bibliography, workflow agents can now compile it to PDF successfully. Previously the compile step would fail because the referenced files weren't available.
+- **Pick where arXiv papers are downloaded** — downloading a paper from arXiv now asks whether to save it at the top of your workspace or inside a `References/` folder, so your project stays organized your way.
+- **View the prompt sent to remote agents** (Ultra tier) — open any remote agent action to see the exact prompt that was sent, making it easier to understand and debug what the agent received.
+- **Import settings from a file** — new command to load a saved settings file, making it easy to share configurations between machines or teammates.
+
+### Improvements
+
+- **Handles long papers more reliably** — the orchestrator now automatically splits long documents into smaller chunks when revising them, so edits on full papers complete end-to-end instead of getting truncated.
+- **Asks before guessing** — the orchestrator now asks a clarifying question when your request is ambiguous, instead of picking an interpretation and running with it.
+- **Dismissed banners stay dismissed** — onboarding and info banners you've closed no longer reappear the next time you open the extension.
+- Updated dependencies and agent metadata.
+
+### Bug Fixes
+
+- Fixed leftover state from previous runs occasionally interfering with new runs, which could cause agents to start from outdated versions of your files.
+
 ## [0.37.2] - 2026-04-09
 
 ### Features
