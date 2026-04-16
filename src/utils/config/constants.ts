@@ -38,6 +38,14 @@ export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched
 const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 336; // 2 weeks
 const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 
+// Tool group IDs disabled by default for new users. These opt-in workflows
+// can be enabled from the Tools settings tab. Seeded into global state only
+// on first install via `initializeToolDefaults()` — existing profiles keep
+// whatever they had (empty == all tools enabled).
+export const DEFAULT_DISABLED_TOOL_IDS: readonly string[] = [
+  'external-inquiry',
+];
+
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
   return getConfig<boolean>('texra.toolUse.persistence.enabled', true);

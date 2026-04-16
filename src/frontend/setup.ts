@@ -12,6 +12,7 @@ import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/computeModelOptions';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { GlobalStorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
+import { DEFAULT_DISABLED_TOOL_IDS } from '@utils/config/constants';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 /**
@@ -28,6 +29,34 @@ const LEGACY_AGENT_FILES = [
   'agents/generic.yaml',
   'agents/generic_multiple.yaml',
 ];
+
+/**
+ * Seed the disabled-tool list for first-time users only.
+ *
+ * Runs before `copyDefaultAgents`, which writes `LAST_KNOWN_VERSION`. We use
+ * that key's absence, combined with an unset `DISABLED_TOOLS`, as the signal
+ * that this is a truly new install — existing upgrading users keep their
+ * current (usually empty) list, so we don't silently disable tools they
+ * already had available.
+ */
+export async function initializeToolDefaults(): Promise<void> {
+  const lastKnownVersion = globalSM.get<string>(
+    GlobalStateKey.LAST_KNOWN_VERSION,
+  );
+  const disabledTools = globalSM.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
+
+  if (lastKnownVersion !== undefined || disabledTools !== undefined) {
+    return;
+  }
+
+  await globalSM.update(GlobalStateKey.DISABLED_TOOLS, [
+    ...DEFAULT_DISABLED_TOOL_IDS,
+  ]);
+  logger.info(
+    'extension',
+    `First install — seeded default-disabled tools: ${DEFAULT_DISABLED_TOOL_IDS.join(', ')}`,
+  );
+}
 
 /**
  * Copies default agent files from the extension resources to the global storage directory
