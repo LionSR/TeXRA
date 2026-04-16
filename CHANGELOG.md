@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Improvements
+
+- **No more `latexindent` install popup on first use** — the missing-`latexindent` warning is now off by default, so first-time users no longer see an unexpected install prompt after running an agent. Re-enable it with `texra.latex.showLatexindentWarning` if you want the reminder.
+
 ## [0.37.3] - 2026-04-15
 
 ### Features
