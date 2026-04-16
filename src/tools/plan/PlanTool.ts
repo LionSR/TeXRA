@@ -29,6 +29,10 @@ import {
   countByStatus,
   type Plan,
 } from '@shared/schemas';
+import {
+  isProposalBypassedForStream,
+  isSuperYoloFeatureEnabled,
+} from '@tools/approval';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
@@ -127,6 +131,16 @@ Best practices:
         logger.warn(
           'New plan created without streamId — skipping approval gate',
         );
+      } else if (
+        isSuperYoloFeatureEnabled() &&
+        isProposalBypassedForStream(context.streamId)
+      ) {
+        logger.info('Plan auto-approved via Super YOLO mode');
+        return {
+          summary: 'Plan auto-approved (Super YOLO) — proceed with implementation',
+          output:
+            'Plan auto-approved via Super YOLO mode. You may now begin implementing the plan steps. Update step statuses as you work through them.',
+        };
       } else {
         return this.requestApproval(
           input.plan,
