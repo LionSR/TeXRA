@@ -135,12 +135,8 @@ Best practices:
         isSuperYoloFeatureEnabled() &&
         isProposalBypassedForStream(context.streamId)
       ) {
-        logger.info('Plan auto-approved via Super YOLO mode');
-        return {
-          summary: 'Plan auto-approved (Super YOLO) — proceed with implementation',
-          output:
-            'Plan auto-approved via Super YOLO mode. You may now begin implementing the plan steps. Update step statuses as you work through them.',
-        };
+        logger.info('Plan auto-approved (Super YOLO bypass active)');
+        return this.buildApprovedResult();
       } else {
         return this.requestApproval(
           input.plan,
@@ -173,11 +169,7 @@ Best practices:
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');
-      return {
-        summary: 'Plan approved — proceed with implementation',
-        output:
-          'Plan approved by the user. You may now begin implementing the plan steps. Update step statuses as you work through them.',
-      };
+      return this.buildApprovedResult();
     }
 
     // Rejected or timed out — clear the plan from UI
@@ -205,6 +197,14 @@ Best practices:
       output: `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
       isError: true,
       ...(feedback ? { userInstruction: feedback } : {}),
+    };
+  }
+
+  private buildApprovedResult(): ToolResult {
+    return {
+      summary: 'Plan approved — proceed with implementation',
+      output:
+        'Plan approved by the user. You may now begin implementing the plan steps. Update step statuses as you work through them.',
     };
   }
 
