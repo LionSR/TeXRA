@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - **No more `latexindent` install popup on first use** — the missing-`latexindent` warning is now off by default, so first-time users no longer see an unexpected install prompt after running an agent. Re-enable it with `texra.latex.showLatexindentWarning` if you want the reminder.
+- **External Inquiry is off by default** — the copy-to-ChatGPT/Claude/Gemini workflow is now opt-in for new users. Turn it on from the Tools settings tab when you want agents to ask you to relay questions to another chat model.
 
 ## [0.37.3] - 2026-04-15
 

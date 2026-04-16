@@ -38,6 +38,10 @@ export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched
 const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 336; // 2 weeks
 const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 
+// Tool group IDs disabled by default for new users. These opt-in workflows
+// can be enabled from the Tools settings tab.
+const DEFAULT_DISABLED_TOOL_IDS: readonly string[] = ['external-inquiry'];
+
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
   return getConfig<boolean>('texra.toolUse.persistence.enabled', true);
@@ -67,8 +71,8 @@ export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
 
 /** Get the set of tool group IDs disabled by the user. */
 export function getDisabledToolIds(): ReadonlySet<string> {
-  const raw = globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
-  return new Set(raw);
+  const raw = globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
+  return new Set(raw ?? DEFAULT_DISABLED_TOOL_IDS);
 }
 
 /** Toggle a tool group's enabled/disabled state. */
@@ -76,9 +80,8 @@ export async function setToolEnabled(
   toolId: string,
   enabled: boolean,
 ): Promise<void> {
-  const current =
-    globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
-  const set = new Set(current);
+  const current = globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
+  const set = new Set(current ?? DEFAULT_DISABLED_TOOL_IDS);
   if (enabled) {
     set.delete(toolId);
   } else {
