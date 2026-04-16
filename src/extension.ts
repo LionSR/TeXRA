@@ -33,6 +33,7 @@ import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
   configureLatexSettings,
+  initializeToolDefaults,
   refreshModelListIfNeeded,
 } from '@frontend/setup';
 import { agentDirectories } from '@frontend/agents';
@@ -146,6 +147,10 @@ export async function activate(context: vscode.ExtensionContext) {
     getUserTier: () => SupabaseClient.getUserTier(),
     getAccessToken: () => SupabaseClient.getAccessToken(),
   });
+
+  // Seed first-install defaults (e.g. disabled tools) before anything writes
+  // LAST_KNOWN_VERSION, so upgrading users are not affected.
+  await initializeToolDefaults();
 
   // Copy default agents before loading the agent index so built-in agents
   // are available when the index scans directories

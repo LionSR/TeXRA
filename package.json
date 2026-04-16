@@ -420,7 +420,7 @@
           },
           "texra.latex.showLatexindentWarning": {
             "type": "boolean",
-            "default": true,
+            "default": false,
             "description": "Show warning when latexindent is not installed",
             "order": 2
           },
