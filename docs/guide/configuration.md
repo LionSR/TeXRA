@@ -204,7 +204,7 @@ Configure LaTeX formatting behavior:
 ```
 
 - `formatter`: Choose between `latexindent`, `tex-fmt`, or `none` to disable formatting.
-- `showLatexindentWarning`: Set to `false` to suppress missing `latexindent` warnings.
+- `showLatexindentWarning`: Disabled by default. Set to `true` to show a popup when `latexindent` is missing.
 - `latexindentConfig`: Path to a `latexindent` configuration file.
 - `texfmtConfig`: Path to a `tex-fmt` configuration file.
 
