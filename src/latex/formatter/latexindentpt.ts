@@ -58,7 +58,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
     const showWarning = getConfig<boolean>(
       'texra.latex.showLatexindentWarning',
-      true,
+      false,
     );
 
     // Resolve workspace-relative paths to absolute so cleanup works correctly.
