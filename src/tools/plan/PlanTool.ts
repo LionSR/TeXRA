@@ -136,7 +136,7 @@ Best practices:
         isProposalBypassedForStream(context.streamId)
       ) {
         logger.info('Plan auto-approved (Super YOLO bypass active)');
-        return this.buildApprovedResult();
+        return this.buildApprovedResult({ autoApproved: true });
       } else {
         return this.requestApproval(
           input.plan,
@@ -169,7 +169,7 @@ Best practices:
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');
-      return this.buildApprovedResult();
+      return this.buildApprovedResult({ autoApproved: false });
     }
 
     // Rejected or timed out — clear the plan from UI
@@ -200,11 +200,19 @@ Best practices:
     };
   }
 
-  private buildApprovedResult(): ToolResult {
+  private buildApprovedResult({
+    autoApproved,
+  }: {
+    autoApproved: boolean;
+  }): ToolResult {
+    const prefix = autoApproved
+      ? 'Plan auto-approved (Super YOLO bypass active — user did not review).'
+      : 'Plan approved by the user.';
     return {
-      summary: 'Plan approved — proceed with implementation',
-      output:
-        'Plan approved by the user. You may now begin implementing the plan steps. Update step statuses as you work through them.',
+      summary: autoApproved
+        ? 'Plan auto-approved — proceed with implementation'
+        : 'Plan approved — proceed with implementation',
+      output: `${prefix} You may now begin implementing the plan steps. Update step statuses as you work through them.`,
     };
   }
 
