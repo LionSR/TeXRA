@@ -39,8 +39,12 @@ const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 336; // 2 weeks
 const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 
 // Tool group IDs disabled by default for new users. These opt-in workflows
-// can be enabled from the Tools settings tab.
-const DEFAULT_DISABLED_TOOL_IDS: readonly string[] = ['external-inquiry'];
+// can be enabled from the Tools settings tab. Seeded into global state only
+// on first install via `initializeToolDefaults()` — existing profiles keep
+// whatever they had (empty == all tools enabled).
+export const DEFAULT_DISABLED_TOOL_IDS: readonly string[] = [
+  'external-inquiry',
+];
 
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
@@ -71,8 +75,8 @@ export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
 
 /** Get the set of tool group IDs disabled by the user. */
 export function getDisabledToolIds(): ReadonlySet<string> {
-  const raw = globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
-  return new Set(raw ?? DEFAULT_DISABLED_TOOL_IDS);
+  const raw = globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+  return new Set(raw);
 }
 
 /** Toggle a tool group's enabled/disabled state. */
@@ -80,8 +84,9 @@ export async function setToolEnabled(
   toolId: string,
   enabled: boolean,
 ): Promise<void> {
-  const current = globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
-  const set = new Set(current ?? DEFAULT_DISABLED_TOOL_IDS);
+  const current =
+    globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+  const set = new Set(current);
   if (enabled) {
     set.delete(toolId);
   } else {
