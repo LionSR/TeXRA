@@ -29,6 +29,10 @@ import {
   countByStatus,
   type Plan,
 } from '@shared/schemas';
+import {
+  isProposalBypassedForStream,
+  isSuperYoloFeatureEnabled,
+} from '@tools/approval';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
@@ -127,6 +131,12 @@ Best practices:
         logger.warn(
           'New plan created without streamId — skipping approval gate',
         );
+      } else if (
+        isSuperYoloFeatureEnabled() &&
+        isProposalBypassedForStream(context.streamId)
+      ) {
+        logger.info('Plan auto-approved (Super YOLO bypass active)');
+        return this.buildApprovedResult({ autoApproved: true });
       } else {
         return this.requestApproval(
           input.plan,
@@ -159,11 +169,7 @@ Best practices:
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');
-      return {
-        summary: 'Plan approved — proceed with implementation',
-        output:
-          'Plan approved by the user. You may now begin implementing the plan steps. Update step statuses as you work through them.',
-      };
+      return this.buildApprovedResult({ autoApproved: false });
     }
 
     // Rejected or timed out — clear the plan from UI
@@ -191,6 +197,22 @@ Best practices:
       output: `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
       isError: true,
       ...(feedback ? { userInstruction: feedback } : {}),
+    };
+  }
+
+  private buildApprovedResult({
+    autoApproved,
+  }: {
+    autoApproved: boolean;
+  }): ToolResult {
+    const prefix = autoApproved
+      ? 'Plan auto-approved (Super YOLO bypass active — user did not review).'
+      : 'Plan approved by the user.';
+    return {
+      summary: autoApproved
+        ? 'Plan auto-approved — proceed with implementation'
+        : 'Plan approved — proceed with implementation',
+      output: `${prefix} You may now begin implementing the plan steps. Update step statuses as you work through them.`,
     };
   }
 
