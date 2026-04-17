@@ -562,7 +562,7 @@ export class CodexTool extends defineTool({
       ...workspace,
       sandboxMode,
       model: config.CODEX_CLI_MODEL,
-      modelReasoningEffort: config.getCodexReasoningEffort(),
+      modelReasoningEffort: config.getCodexCliReasoningEffort(),
       skipGitRepoCheck: true as const,
     };
 
