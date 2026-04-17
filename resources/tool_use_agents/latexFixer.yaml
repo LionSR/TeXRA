@@ -3,7 +3,6 @@ description: Diagnoses and fixes LaTeX compilation errors, warnings, and bad box
 
 settings:
   agentCategory: toolUse
-  internal: true
   tools:
     - bash
     - read_file
