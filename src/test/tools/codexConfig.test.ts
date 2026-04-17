@@ -7,6 +7,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   buildCodexConfig,
   buildCodexWorkspaceOptions,
+  toCodexCliReasoningEffort,
 } from '@tools/codexConfig';
 import {
   buildCodexCommandToolLog,
@@ -33,6 +34,21 @@ describe('buildCodexConfig', () => {
     assert.equal(config.model, CODEX_DISPLAY_MODEL);
     assert.equal(config.agentCategory, AgentCategory.ToolUse);
     assert.equal(config.instruction, 'Inspect the failing CI job');
+  });
+});
+
+describe('toCodexCliReasoningEffort', () => {
+  it('passes CLI-compatible tiers through unchanged', () => {
+    assert.equal(toCodexCliReasoningEffort('low'), 'low');
+    assert.equal(toCodexCliReasoningEffort('medium'), 'medium');
+    assert.equal(toCodexCliReasoningEffort('high'), 'high');
+  });
+
+  it("caps 'xhigh' to 'high' so the Codex CLI config deserializer accepts it", () => {
+    // Regression: the Codex CLI's Rust-side config deserializer rejects
+    // 'xhigh' with `unknown variant 'xhigh', expected one of 'minimal',
+    // 'low', 'medium', 'high' in 'model_reasoning_effort'`.
+    assert.equal(toCodexCliReasoningEffort('xhigh'), 'high');
   });
 });
 
