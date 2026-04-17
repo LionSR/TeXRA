@@ -29,8 +29,6 @@ export const DEFAULT_MODELS = [
   'gpt54',
   'deepseekT',
   'kimi25T',
-  'minimaxM27',
-  'glm47',
 ];
 
 /**
@@ -39,7 +37,7 @@ export const DEFAULT_MODELS = [
  * to get the updated defaults. A simple integer avoids hash-collision risks
  * and doesn't trigger on harmless reordering.
  */
-export const MODEL_LIST_VERSION = 10;
+export const MODEL_LIST_VERSION = 11;
 
 /**
  * Get the list of visible models from extension global state.
