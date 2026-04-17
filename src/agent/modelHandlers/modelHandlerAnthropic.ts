@@ -178,13 +178,14 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 const COMPACTION_BETA: AnthropicBeta = 'compact-2026-01-12';
 
 const OPUS_46_FULLNAME = 'claude-opus-4-6';
+const OPUS_47_FULLNAME = 'claude-opus-4-7';
 const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 
 /** Compaction must be triggered at or above this minimum input token threshold. */
 const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 
 /**
- * 1M context window is available natively for Opus 4.6 and Sonnet 4.6
+ * 1M context window is available natively for Opus 4.6, Opus 4.7, and Sonnet 4.6
  * at standard pricing (no beta header needed). Context window sizes
  * are provided directly by llm-zoo. Other Claude models use 200K.
  */
@@ -284,6 +285,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return this.config.fullName.startsWith(OPUS_46_FULLNAME);
   }
 
+  private isClaudeOpus47(): boolean {
+    return this.config.fullName.startsWith(OPUS_47_FULLNAME);
+  }
+
   private isClaudeSonnet46(): boolean {
     return this.config.fullName.startsWith(SONNET_46_FULLNAME);
   }
@@ -295,17 +300,22 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /**
    * Whether this model supports adaptive thinking with the effort parameter.
-   * Per Anthropic docs, only Opus 4.6 and Sonnet 4.6 support adaptive thinking.
+   * Per Anthropic docs, Opus 4.6, Opus 4.7, and Sonnet 4.6 support adaptive thinking.
+   * Opus 4.7 only accepts adaptive thinking — manual budget_tokens returns 400.
    */
   private supportsAdaptiveThinking(): boolean {
-    return this.isClaudeOpus46() || this.isClaudeSonnet46();
+    return (
+      this.isClaudeOpus46() ||
+      this.isClaudeOpus47() ||
+      this.isClaudeSonnet46()
+    );
   }
 
   /**
    * Returns the Anthropic effort level for the current model.
    * Maps the llm-zoo ReasoningEffort enum to Anthropic's effort levels.
    * Falls back to 'high' (the API default) when no specific effort is configured.
-   * 'max' is only valid for Opus 4.6.
+   * 'max' is only valid for Opus-tier models (Opus 4.6 and Opus 4.7).
    */
   private getAnthropicEffort(): BetaOutputConfig['effort'] {
     const reasoningEffort = this.getEffectiveReasoningEffort();
@@ -315,8 +325,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     switch (reasoningEffort) {
       case 'xhigh':
-        // 'max' is only supported on Opus 4.6
-        return this.isClaudeOpus46() ? 'max' : 'high';
+        // 'max' is supported on Opus 4.6 and Opus 4.7
+        return this.isClaudeOpus46() || this.isClaudeOpus47()
+          ? 'max'
+          : 'high';
       case 'high':
         return 'high';
       case 'medium':
@@ -332,7 +344,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /** Whether this model supports Anthropic's native server-side context compaction. */
   private isCompactionEligibleModel(): boolean {
-    return this.isClaudeOpus46() || this.isClaudeSonnet46();
+    return (
+      this.isClaudeOpus46() ||
+      this.isClaudeOpus47() ||
+      this.isClaudeSonnet46()
+    );
   }
 
   override get supportsManualCompaction(): boolean {
@@ -614,7 +630,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.debug('Enabling thinking for model with reasoning support');
 
       if (this.supportsAdaptiveThinking()) {
-        // Opus 4.6 and Sonnet 4.6: use adaptive thinking with effort parameter.
+        // Opus 4.6, Opus 4.7, and Sonnet 4.6: use adaptive thinking with effort parameter.
         // Adaptive thinking lets the model decide when and how much to think,
         // and automatically enables interleaved thinking between tool calls.
         // budget_tokens is deprecated on these models.

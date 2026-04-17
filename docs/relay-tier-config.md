@@ -196,14 +196,18 @@ Available to Max tier subscribers (includes all free tier models).
 Available to Ultra tier subscribers (includes all lower tier models).
 
 | Model Name | Full Name                  | Provider  | Pricing (in/out per 1M) |
-| ---------- | -------------------------- | --------- | ----------------------- | --- |
+| ---------- | -------------------------- | --------- | ----------------------- |
+| `opus47`   | claude-opus-4-7            | Anthropic | $5.00/$25.00            |
+| `opus47T`  | claude-opus-4-7 (Thinking) | Anthropic | $5.00/$25.00            |
+| `opus46`   | claude-opus-4-6            | Anthropic | $5.00/$25.00            |
+| `opus46T`  | claude-opus-4-6 (Thinking) | Anthropic | $5.00/$25.00            |
 | `opus45`   | claude-opus-4-5            | Anthropic | $15.00/$75.00           |
 | `opus45T`  | claude-opus-4-5 (Thinking) | Anthropic | $15.00/$75.00           |
 | `gpt5pro`  | gpt-5-pro                  | OpenAI    | $15.00/$120.00          |
 | `gpt52pro` | gpt-5.2-pro                | OpenAI    | $21.00/$168.00          |
 | `gpt5`     | gpt-5                      | OpenAI    | $1.25/$10.00            |
 | `gpt51`    | gpt-5.1                    | OpenAI    | $1.25/$10.00            |
-| `gpt52`    | gpt-5.2                    | OpenAI    | $1.75/$14.00            |     |
+| `gpt52`    | gpt-5.2                    | OpenAI    | $1.75/$14.00            |
 | `grok4`    | grok-4-0709                | xAI       | $3.00/$15.00            |
 
 ## Implementation Details
