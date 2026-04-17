@@ -100,23 +100,6 @@ export function ensureAgentCategoryForSource<
   return settings;
 }
 
-/**
- * YAML settings fields that are registry metadata (read by scanYaml)
- * and not part of the runtime AgentSettingSchema.
- * Add new YAML-only metadata fields here to prevent z.strictObject rejection.
- */
-const YAML_METADATA_FIELDS: ReadonlySet<string> = new Set(['internal']);
-
-function stripYamlMetadata(
-  raw: Record<string, unknown>,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (!YAML_METADATA_FIELDS.has(k)) result[k] = v;
-  }
-  return result;
-}
-
 export async function loadAgentSettingAndPrompts(
   resolution: ResolvedAgent,
   options?: AgentLoadOptions,
@@ -145,13 +128,8 @@ export async function loadAgentSettingAndPrompts(
     const rawConfig = await loadYaml(resolution.definitionPath);
     const config = AgentDefinitionSchema.parse(rawConfig);
 
-    // Strip YAML-only metadata that scanYaml already reads during registry
-    // scanning but that isn't part of AgentSettingSchema (z.strictObject
-    // rejects unknown keys). Strip once before settings enter the pipeline.
-    const rawSettings = stripYamlMetadata(config.settings);
-
     // Initialize with own settings/prompts (spread creates a mutable copy)
-    let settings: Partial<AgentSetting> = { ...rawSettings };
+    let settings: Partial<AgentSetting> = { ...config.settings };
     let prompts: Partial<AgentPrompt> = { ...config.prompts };
 
     // Merge with parent if inheritance is specified
@@ -168,7 +146,7 @@ export async function loadAgentSettingAndPrompts(
         await loadAgentSettingAndPrompts(parentResolution);
 
       // Parent provides defaults, child overrides
-      settings = deepmerge(parentSettings, rawSettings, {
+      settings = deepmerge(parentSettings, config.settings, {
         arrayMerge: (_d, s) => s,
       });
       prompts = deepmerge(parentPrompts, config.prompts, {

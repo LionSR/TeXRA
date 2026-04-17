@@ -91,6 +91,43 @@ describe('loadAgentSettingAndPrompts', () => {
     assert.strictEqual(prompts.userRequest, 'multiple variant');
   });
 
+  it('accepts the internal registry-metadata field in agent settings', async () => {
+    const agentPath = path.join('/', 'tmp', 'agents');
+    const definitionPath = path.join(agentPath, 'latexFixer.yaml');
+    const resolution: ResolvedAgent = {
+      entry: {
+        source: 'builtInToolUse',
+        name: 'latexFixer',
+        path: definitionPath,
+        category: AgentCategory.ToolUse,
+        internal: true,
+      },
+      definitionPath,
+      resolvedName: 'latexFixer',
+      usedFallback: false,
+    };
+
+    fileContents.set(
+      normalize(definitionPath),
+      [
+        'name: latexFixer',
+        'settings:',
+        '  agentCategory: toolUse',
+        '  internal: true',
+        'prompts:',
+        '  userRequest: fix it',
+        '',
+      ].join('\n'),
+    );
+
+    const [settings] = await loadAgentSettingAndPrompts(resolution);
+    assert.strictEqual(
+      (settings as { internal?: boolean }).internal,
+      true,
+      'internal: true should round-trip through AgentSettingSchema',
+    );
+  });
+
   it('falls back to the base definition when _multiple is missing', async () => {
     const agentPath = path.join('/', 'tmp', 'agents');
     const baseDefinitionPath = path.join(agentPath, 'summarize.yaml');
