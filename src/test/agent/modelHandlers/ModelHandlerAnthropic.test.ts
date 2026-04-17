@@ -7,6 +7,7 @@ import {
   type ModelCapabilities,
   type ModelConfig,
   ModelProvider,
+  ReasoningEffort,
 } from 'llm-zoo';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
@@ -983,14 +984,17 @@ describe('ModelHandlerAnthropic message guards', () => {
       (edit: { type: string }) => edit.type === 'compact_20260112',
     );
     assert.ok(compactionEdit, 'should configure compact_20260112 context edit');
+    assert.equal(compactionEdit.pause_after_compaction, false);
     assert.equal(compactionEdit.trigger?.type, 'input_tokens');
+    assert.equal(compactionEdit.trigger?.value, 150000);
+    assert.equal(compactionEdit.instructions, undefined);
   });
 
   it('uses adaptive thinking with max effort for Opus 4.7 xhigh reasoning', async () => {
     const handler = createAnthropicHandler({
       supportsReasoning: true,
       supportsReasoningEffort: true,
-      reasoningEffort: 'xhigh' as any,
+      reasoningEffort: ReasoningEffort.XHIGH,
     });
     handler.config.fullName = 'claude-opus-4-7';
 
