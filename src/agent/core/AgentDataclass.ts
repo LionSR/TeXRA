@@ -32,6 +32,8 @@ export const AgentSettingBaseSchema = z.strictObject({
     )
     .prefault([]),
   tools: z.array(ToolDefinitionSchema).prefault([]),
+  /** Registry metadata: hides the agent from default launcher listings. */
+  internal: z.boolean().optional(),
 });
 
 const XmlStructureMode = z.enum(['never', 'scratchpadOnly', 'always']);
