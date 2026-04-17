@@ -96,11 +96,10 @@ describe('loadAgentSettingAndPrompts', () => {
     const definitionPath = path.join(agentPath, 'latexFixer.yaml');
     const resolution: ResolvedAgent = {
       entry: {
-        source: 'builtInToolUse',
+        source: 'custom',
         name: 'latexFixer',
         path: definitionPath,
         category: AgentCategory.ToolUse,
-        internal: true,
       },
       definitionPath,
       resolvedName: 'latexFixer',
@@ -122,7 +121,7 @@ describe('loadAgentSettingAndPrompts', () => {
 
     const [settings] = await loadAgentSettingAndPrompts(resolution);
     assert.strictEqual(
-      (settings as { internal?: boolean }).internal,
+      settings.internal,
       true,
       'internal: true should round-trip through AgentSettingSchema',
     );
