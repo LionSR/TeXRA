@@ -40,6 +40,24 @@ export function getCodexReasoningEffort(): CodexReasoningEffort {
   return parseCodexReasoningEffort(raw);
 }
 
+/**
+ * Codex CLI's Rust-side config deserializer only accepts a subset of the
+ * reasoning effort tiers TeXRA exposes. TeXRA's 'xhigh' tier is a UI-only
+ * extension used by providers like Anthropic Opus 'max'; cap it to 'high'
+ * before handing the value to the Codex SDK.
+ */
+export type CodexCliReasoningEffort = 'low' | 'medium' | 'high';
+
+export function toCodexCliReasoningEffort(
+  effort: CodexReasoningEffort,
+): CodexCliReasoningEffort {
+  return effort === 'xhigh' ? 'high' : effort;
+}
+
+export function getCodexCliReasoningEffort(): CodexCliReasoningEffort {
+  return toCodexCliReasoningEffort(getCodexReasoningEffort());
+}
+
 // ============================================================================
 // Sandbox mode
 // ============================================================================
