@@ -25,16 +25,10 @@ export const DEFAULT_MODELS = [
   'gemini31p',
   'gemini3f',
   'sonnet46T',
-  'opus46T',
+  'opus47T',
   'gpt54',
-  'gpt54pro',
-  'gpt53codex',
-  'gpt41',
   'deepseekT',
   'kimi25T',
-  'grok4',
-  'minimaxM27',
-  'glm47',
 ];
 
 /**
@@ -43,7 +37,7 @@ export const DEFAULT_MODELS = [
  * to get the updated defaults. A simple integer avoids hash-collision risks
  * and doesn't trigger on harmless reordering.
  */
-export const MODEL_LIST_VERSION = 8;
+export const MODEL_LIST_VERSION = 11;
 
 /**
  * Get the list of visible models from extension global state.
