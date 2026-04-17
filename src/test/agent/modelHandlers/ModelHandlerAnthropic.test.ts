@@ -7,6 +7,7 @@ import {
   type ModelCapabilities,
   type ModelConfig,
   ModelProvider,
+  ReasoningEffort,
 } from 'llm-zoo';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
@@ -917,6 +918,126 @@ describe('ModelHandlerAnthropic message guards', () => {
       compactionEdit.instructions,
       undefined,
       'should rely on Anthropic default compaction instructions',
+    );
+  });
+
+  it('adds native compaction context edit for Claude Opus 4.7 tool-use runs', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-7';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+
+    stubHandlerForTest(handler, { logContextManagement: () => {} });
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-7',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const originalGetConfig = configModule.getConfig;
+    try {
+      (configModule as any).getConfig = (
+        path: string,
+        defaultValue?: unknown,
+      ) => {
+        if (path === 'texra.model.compactionThresholdPercent') return 75;
+        return defaultValue as unknown;
+      };
+
+      await handler.createResponse({ client, messages, temperature: 0 });
+    } finally {
+      (configModule as any).getConfig = originalGetConfig;
+    }
+
+    const options = messageOptions[0] ?? {};
+    const betas: string[] = options.betas ?? [];
+    assert.ok(
+      betas.includes('compact-2026-01-12'),
+      'should include compaction beta header',
+    );
+
+    const edits = options.context_management?.edits ?? [];
+    const compactionEdit = edits.find(
+      (edit: { type: string }) => edit.type === 'compact_20260112',
+    );
+    assert.ok(compactionEdit, 'should configure compact_20260112 context edit');
+    assert.equal(compactionEdit.pause_after_compaction, false);
+    assert.equal(compactionEdit.trigger?.type, 'input_tokens');
+    assert.equal(compactionEdit.trigger?.value, 150000);
+    assert.equal(compactionEdit.instructions, undefined);
+  });
+
+  it('uses adaptive thinking with max effort for Opus 4.7 xhigh reasoning', async () => {
+    const handler = createAnthropicHandler({
+      supportsReasoning: true,
+      supportsReasoningEffort: true,
+      reasoningEffort: ReasoningEffort.XHIGH,
+    });
+    handler.config.fullName = 'claude-opus-4-7';
+
+    stubHandlerForTest(handler, { logContextManagement: () => {} });
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-7',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    await handler.createResponse({ client, messages, temperature: 0 });
+
+    const options = messageOptions[0] ?? {};
+    assert.deepEqual(
+      options.thinking,
+      { type: 'adaptive' },
+      'Opus 4.7 should request adaptive thinking (budget_tokens is rejected)',
+    );
+    assert.equal(
+      options.output_config?.effort,
+      'max',
+      'xhigh reasoning effort should map to max on Opus 4.7',
     );
   });
 
