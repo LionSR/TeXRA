@@ -67,6 +67,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands, getMainViewProvider } from './commands';
+import { registerFileDecorations } from './fileDecorations';
 import { registerWelcomeView } from './welcomeView';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -221,6 +222,7 @@ export async function activate(context: vscode.ExtensionContext) {
   await progressViewProvider.cleanupTasksAfterRestart();
   configureLatexSettings();
   registerCommands(context);
+  registerFileDecorations(context);
 
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);

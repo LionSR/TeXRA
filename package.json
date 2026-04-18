@@ -21,6 +21,12 @@
     "onColorTheme"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "TeXRA runs AI agents that read workspace files and execute shell commands (LaTeX compilation, bash tools, external MCP tools). Open trusted workspaces only."
+    }
+  },
   "contributes": {
     "authentication": [
       {
