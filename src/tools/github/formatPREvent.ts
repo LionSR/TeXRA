@@ -20,28 +20,36 @@ const CLOSE_TAG = '</github-webhook-activity>';
 const MAX_BODY = 500;
 
 /**
- * Remove anything that could close or re-open our wrapper tag. Untrusted
- * GitHub content (comment/review bodies, usernames) is interpolated inside
- * `<github-webhook-activity>…</github-webhook-activity>`; without this, a
- * commenter could inject `</github-webhook-activity>` to break out of the
- * wrapper and feed arbitrary text to the agent as if it weren't webhook
- * activity. Neutralize the angle brackets around our tag keywords.
+ * Remove anything that could close or re-open our wrapper tag. Every string
+ * interpolated inside `<github-webhook-activity>…</github-webhook-activity>`
+ * flows through `wrap` and therefore through this sanitizer. That includes
+ * comment/review bodies, usernames, CI check names (configurable in workflow
+ * YAML — attacker-controlled by the PR author), file paths, and URLs.
+ * Without this, any of those fields could inject `</github-webhook-activity>`
+ * and escape the wrapper, feeding arbitrary text to the agent as if it were
+ * direct user input. Neutralize the angle brackets around our tag keywords.
  */
-function sanitize(s: string | null | undefined): string {
-  return (s ?? '').replaceAll(
+function sanitize(s: string): string {
+  return s.replaceAll(
     /<(\/?github-webhook-activity)>/gi,
     '\u200B$1\u200B', // zero-width-space guards, visually identical
   );
 }
 
 function truncate(s: string | null | undefined): string {
-  const body = sanitize(s).trim();
+  const body = (s ?? '').trim();
   if (body.length <= MAX_BODY) return body;
   return body.slice(0, MAX_BODY) + '…';
 }
 
+/**
+ * Sanitize every field by sanitizing the fully-assembled inner text before
+ * wrapping. Per-field sanitization is easy to forget when a new formatter is
+ * added; doing it at the wrap boundary closes the whole attack surface by
+ * construction.
+ */
 function wrap(inner: string): string {
-  return `${OPEN_TAG}\n${inner}\n${CLOSE_TAG}`;
+  return `${OPEN_TAG}\n${sanitize(inner)}\n${CLOSE_TAG}`;
 }
 
 export function formatIssueComment(
