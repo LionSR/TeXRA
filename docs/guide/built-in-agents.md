@@ -6,12 +6,12 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
 
 | Agent              | Type     | Purpose                                  |
 | ------------------ | -------- | ---------------------------------------- |
-| `chat`             | Tool-use | General assistance, file editing         |
 | `ask`              | Tool-use | Read-only questions and exploration      |
 | `research`         | Tool-use | Computational verification with Wolfram  |
 | `review`           | Tool-use | Mathematical and manuscript verification |
 | `lean`             | Tool-use | Lean 4 proof development                 |
 | `presenter`        | Tool-use | Interactive presentation builder         |
+| `chat`             | Tool-use | General assistance, file editing (opt-in; not in any default team preset) |
 | `correct`          | Workflow | Fix errors without style changes         |
 | `polish`           | Workflow | Improve writing quality                  |
 | `paper2slide`      | Workflow | Convert papers to beamer slides          |
@@ -31,7 +31,11 @@ For details on the underlying structure and execution flow common to all agents,
 
 ### `chat`
 
-Your go-to research companion. It can read your project, edit files, run shell commands, and search through your workspace—all in a back-and-forth conversation.
+::: tip Opt-in
+`chat` is no longer included in any of the built-in team presets (Lean Project, Physicist, Mathematician). Enable it from the **Agents** tab if you want to use it.
+:::
+
+A general research companion. It can read your project, edit files, run shell commands, and search through your workspace—all in a back-and-forth conversation.
 
 > **User story:** You just got reviewer comments back. Instead of manually hunting through a 40-page paper, you open `chat` and paste the reviewer's feedback: "Address comment 3 about missing error bars in Table 2—add them and update the caption." The agent reads your files, makes the edits, and shows you a diff to approve.
 
