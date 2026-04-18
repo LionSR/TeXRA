@@ -14,6 +14,11 @@
  *
  * `mini` requires a non-letter on both sides so that provider names like
  * `gemini*` and `minimax*` (which contain the substring `mini`) don't match.
+ *
+ * The trailing `[fmn]` rule covers llm-zoo's short-name conventions for
+ * flash / mini / nano variants (e.g. `gemini3f`, `gpt5m`, `gpt5n`). The
+ * preceding non-letter requirement avoids matching unrelated short names
+ * that happen to end in those letters mid-word (e.g. `glm`, `claudeXm`).
  */
 const FAST_NAME_PATTERNS: readonly RegExp[] = [
   /flash/i,
@@ -21,6 +26,7 @@ const FAST_NAME_PATTERNS: readonly RegExp[] = [
   /(^|[^a-z])mini([^a-z]|$)/i,
   /nano/i,
   /lite/i,
+  /[^a-z][fmn]$/i,
 ];
 
 /**
