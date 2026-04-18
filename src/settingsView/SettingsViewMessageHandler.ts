@@ -78,6 +78,7 @@ import {
   PROVIDER_URLS,
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
+import { isFastFirstResponseModel } from '@shared/constants/fastModels';
 import type {
   RemoteAgent,
   ProviderKeyStatus,
@@ -264,6 +265,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
       deprecated: config.deprecated ?? false,
       contextWindow: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
+      isFast: isFastFirstResponseModel(config.inputPrice),
     };
 
     if (supportsReasoningEffort) {

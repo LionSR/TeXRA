@@ -173,6 +173,8 @@ export const ModelSelectionItemSchema = z.object({
   defaultReasoningLevel: ReasoningLevelSchema.optional(),
   /** The user's chosen reasoning level override (undefined = use default). */
   reasoningLevel: ReasoningLevelSchema.optional(),
+  /** Whether this model qualifies as a "fast first response" pick (price-based). */
+  isFast: z.boolean().optional(),
 });
 export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
 
