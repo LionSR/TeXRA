@@ -226,13 +226,14 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Poll GitHub pull requests and deliver new comments, reviews, line comments, and failed CI checks into the current stream as follow-up messages.',
     installGuide:
       'No software install required. You need a GitHub personal access token:\n\n' +
-      '  1. Create a token at https://github.com/settings/tokens\n' +
-      '  2. Scopes: "repo" for private repositories, or "public_repo" for public only\n' +
-      '  3. Paste it into the TeXRA setting `texra.github.token`\n\n' +
+      '  1. Open TeXRA settings → Git tab\n' +
+      '  2. Click "Create on GitHub…" (opens the token page with the right scopes pre-filled)\n' +
+      '  3. Scopes: "repo" for private repositories, "public_repo" for public only\n' +
+      '  4. Copy the token back into TeXRA via "Set token"\n\n' +
       'Alternatively, export GITHUB_TOKEN in the environment VS Code is launched from.',
     installUrl: 'https://github.com/settings/tokens',
     configNotes:
-      'Requires texra.github.token (or GITHUB_TOKEN env). Polls every 30s; subscription cap: 10 concurrent PRs.',
+      'Token stored in VS Code SecretStorage (managed from Git tab). Polls every 30s; subscription cap: 10 concurrent PRs.',
     authNote: 'Uses personal access token',
     toggleable: true,
     check: async () => getGitHubToken() !== undefined,

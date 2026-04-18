@@ -49,8 +49,25 @@ export class SecretManager {
     'glm',
   ] as const;
 
+  public static readonly GITHUB_TOKEN_KEY = 'github.token';
+
   public static getApiKeySecretName(provider: ApiProvider): string {
     return `apiKey.${provider}`;
+  }
+
+  /** Read the GitHub personal access token from secret storage, env fallback. */
+  public static async getGitHubToken(): Promise<string | undefined> {
+    const stored = await this.get(this.GITHUB_TOKEN_KEY);
+    return stored ?? process.env.GITHUB_TOKEN ?? undefined;
+  }
+
+  public static async gitHubTokenExists(): Promise<
+    'secret' | 'env' | 'none'
+  > {
+    const stored = await this.get(this.GITHUB_TOKEN_KEY);
+    if (stored) return 'secret';
+    if (process.env.GITHUB_TOKEN) return 'env';
+    return 'none';
   }
 
   /**

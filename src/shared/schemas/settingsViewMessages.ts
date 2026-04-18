@@ -340,6 +340,16 @@ export type UpdateGitAuthorSettingsMessage = z.infer<
   typeof UpdateGitAuthorSettingsMessageSchema
 >;
 
+/** Outbound: backend → frontend GitHub token status. */
+export const UpdateGitHubTokenStatusMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS),
+  /** 'secret' = stored in SecretStorage; 'env' = GITHUB_TOKEN env var; 'none' = missing. */
+  status: z.enum(['secret', 'env', 'none']),
+});
+export type UpdateGitHubTokenStatusMessage = z.infer<
+  typeof UpdateGitHubTokenStatusMessageSchema
+>;
+
 // ============================================================
 // LaTeX settings data schemas
 // ============================================================
@@ -637,6 +647,17 @@ const SetGitWorktreeSupportMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+// GitHub token messages (for PR subscription tool)
+const GetGitHubTokenStatusMessageSchema = commandOnly(
+  CMD.GET_GITHUB_TOKEN_STATUS,
+);
+
+const SetGitHubTokenMessageSchema = commandOnly(CMD.SET_GITHUB_TOKEN);
+
+const RemoveGitHubTokenMessageSchema = commandOnly(CMD.REMOVE_GITHUB_TOKEN);
+
+const OpenGitHubTokenUrlMessageSchema = commandOnly(CMD.OPEN_GITHUB_TOKEN_URL);
+
 // LaTeX settings inbound messages
 const GetLatexSettingsStatusMessageSchema = commandOnly(
   CMD.GET_LATEX_SETTINGS_STATUS,
@@ -756,6 +777,11 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetGitAuthorNameMessageSchema,
     SetGitAuthorEmailMessageSchema,
     SetGitWorktreeSupportMessageSchema,
+    // GitHub token messages
+    GetGitHubTokenStatusMessageSchema,
+    SetGitHubTokenMessageSchema,
+    RemoveGitHubTokenMessageSchema,
+    OpenGitHubTokenUrlMessageSchema,
     // Approval settings messages
     GetApprovalSettingsMessageSchema,
     SetBashApprovalEnabledMessageSchema,

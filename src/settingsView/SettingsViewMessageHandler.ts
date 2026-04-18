@@ -480,6 +480,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           data.enabled,
         ),
 
+      // GitHub token handlers
+      [SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS]: () =>
+        this.withActiveWebview((w) => this.sendGitHubTokenStatus(w)),
+      [SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN]: () =>
+        this.handleSetGitHubToken(),
+      [SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN]: () =>
+        this.handleRemoveGitHubToken(),
+      [SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL]: async () => {
+        await vscode.env.openExternal(
+          vscode.Uri.parse(
+            'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo',
+          ),
+        );
+      },
+
       // ── Delegated to LatexSettingsHandlers ──
 
       [SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS]: () =>
@@ -611,6 +626,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendSuperYoloEnabled(webview),
       this.agentHandlers.sendAgentModePresets(webview),
       this.sendGitAuthorSettings(webview),
+      this.sendGitHubTokenStatus(webview),
       this.sendApprovalSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
     ]);
@@ -843,6 +859,53 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) =>
       this.sendGitAuthorSettings(w, settings),
     );
+  }
+
+  // ============================================================
+  // GitHub token handler implementations
+  // ============================================================
+
+  private async sendGitHubTokenStatus(webview: vscode.Webview): Promise<void> {
+    const status = await SecretManager.gitHubTokenExists();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
+      status,
+    });
+  }
+
+  private async handleSetGitHubToken(): Promise<void> {
+    const token = await vscode.window.showInputBox({
+      prompt: 'Paste a GitHub personal access token (repo or public_repo scope)',
+      password: true,
+      placeHolder: 'ghp_…',
+      ignoreFocusOut: true,
+    });
+    if (!token) return;
+    try {
+      await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
+      void vscode.window.showInformationMessage('GitHub token saved.');
+      await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to save GitHub token',
+        error,
+      );
+    }
+  }
+
+  private async handleRemoveGitHubToken(): Promise<void> {
+    try {
+      await SecretManager.delete(SecretManager.GITHUB_TOKEN_KEY);
+      void vscode.window.showInformationMessage('GitHub token removed.');
+      await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to remove GitHub token',
+        error,
+      );
+    }
   }
 
   // ============================================================

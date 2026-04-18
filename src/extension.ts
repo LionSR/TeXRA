@@ -228,10 +228,21 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
-  setGitHubTokenProvider(() =>
-    vscode.workspace.getConfiguration('texra.github').get<string>('token') ||
-    process.env.GITHUB_TOKEN ||
-    undefined,
+  // GitHub token lives in SecretStorage (managed via the Git settings tab).
+  // The tool layer only supports a synchronous token lookup, so we cache here
+  // and refresh on secret changes.
+  let cachedGitHubToken: string | undefined;
+  const refreshGitHubToken = async () => {
+    cachedGitHubToken = await SecretManager.getGitHubToken();
+  };
+  setGitHubTokenProvider(() => cachedGitHubToken);
+  void refreshGitHubToken();
+  context.subscriptions.push(
+    context.secrets.onDidChange((e) => {
+      if (e.key === SecretManager.GITHUB_TOKEN_KEY) {
+        void refreshGitHubToken();
+      }
+    }),
   );
   setLinterProvider(getLinterMessages);
   setOpenBuildDisplay(openBuildDisplayIfTex);

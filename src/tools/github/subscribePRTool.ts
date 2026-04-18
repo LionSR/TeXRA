@@ -31,13 +31,13 @@ type SubscribePRInput = z.infer<typeof SubscribePRInputSchema>;
 export class SubscribePRTool extends defineTool({
   name: 'subscribe_pr_activity',
   description:
-    'Subscribe this stream to GitHub pull request activity. Delivers new comments, reviews, line comments, and failed CI checks as follow-up messages. Auto-unsubscribes when the PR is closed or merged. Requires texra.github.token to be configured.',
+    'Subscribe this stream to GitHub pull request activity. Delivers new comments, reviews, line comments, and failed CI checks as follow-up messages. Auto-unsubscribes when the PR is closed or merged. Requires a GitHub token — set it in TeXRA settings → Git tab, or via the GITHUB_TOKEN environment variable.',
   schema: SubscribePRInputSchema,
 }) {
   protected async execute(input: SubscribePRInput): Promise<ToolResult> {
     if (!getGitHubToken()) {
       throw new ToolError(
-        'No GitHub token configured. Set `texra.github.token` in settings (needs `repo` scope for private PRs, `public_repo` for public).',
+        'No GitHub token configured. Open TeXRA settings → Git tab → "Set token" (or export GITHUB_TOKEN). Needs `repo` scope for private PRs, `public_repo` for public.',
       );
     }
     const streamId = getCurrentToolFileInteractionContext()?.streamId;

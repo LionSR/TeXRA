@@ -91,6 +91,12 @@ export const SETTINGS_VIEW_CMD = {
   SET_GIT_AUTHOR_NAME: 'setGitAuthorName',
   SET_GIT_AUTHOR_EMAIL: 'setGitAuthorEmail',
   SET_GIT_WORKTREE_SUPPORT: 'setGitWorktreeSupport',
+  // GitHub token commands (for PR subscription tool)
+  GET_GITHUB_TOKEN_STATUS: 'getGitHubTokenStatus',
+  UPDATE_GITHUB_TOKEN_STATUS: 'updateGitHubTokenStatus',
+  SET_GITHUB_TOKEN: 'setGitHubToken',
+  REMOVE_GITHUB_TOKEN: 'removeGitHubToken',
+  OPEN_GITHUB_TOKEN_URL: 'openGitHubTokenUrl',
   // LaTeX settings commands
   GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
