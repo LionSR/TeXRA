@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Features
+
+- **Claude Opus 4.7 support** — pick `opus47` or `opus47T` as your model for Anthropic's most capable generally available model. Opus 4.7 is particularly strong at long-horizon agentic coding, knowledge work, and vision-heavy tasks, and includes the full 1M context window at standard pricing. High-resolution image input (up to 2576px / 3.75MP) improves figure, chart, and screenshot understanding. `opus47T` is now the default Anthropic thinking model for new users.
+
 ### Improvements
 
 - **No more `latexindent` install popup on first use** — the missing-`latexindent` warning is now off by default, so first-time users no longer see an unexpected install prompt after running an agent. Re-enable it with `texra.latex.showLatexindentWarning` if you want the reminder.

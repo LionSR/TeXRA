@@ -86,7 +86,9 @@ Configure how TeXRA connects to AI model providers:
 
 ### Anthropic 1M Context Window
 
-Claude Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing. No opt-in setting or beta header is required — 1M context is enabled automatically. Up to 600 PDF pages per request are supported (100 for models with a 200K context window). Other Claude models use a 200K context window.
+Claude Opus 4.7, Opus 4.6, and Sonnet 4.6 include the full 1M context window at standard pricing. No opt-in setting or beta header is required — 1M context is enabled automatically. Up to 600 PDF pages per request are supported (100 for models with a 200K context window). Other Claude models use a 200K context window.
+
+Opus 4.7 uses adaptive thinking only — manual thinking budgets are not supported. TeXRA selects the appropriate thinking mode automatically based on the reasoning-effort level you pick in the Models tab (Low / Medium / High / Extra High). Extra High maps to Anthropic's `max` effort on Opus-tier models.
 
 ### Bibliography Settings
 
