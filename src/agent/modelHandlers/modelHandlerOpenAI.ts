@@ -1,5 +1,5 @@
 // Third-party imports
-import OpenAI from 'openai';
+import OpenAI, { APIUserAbortError as OpenAIUserAbortError } from 'openai';
 
 // Local imports - core utilities
 import {
@@ -35,6 +35,7 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   isMissingFinishReasonError,
+  attachPartialText,
 } from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
@@ -115,6 +116,21 @@ function extractReasoningDelta(chunk: ChatCompletionChunk): string {
     | undefined;
   if (!delta || !('reasoning_content' in delta)) return '';
   return extractReasoningText(delta.reasoning_content);
+}
+
+/**
+ * Extracts a capped tail of the assistant content accumulated by the SDK's
+ * ChatCompletionStream in its currentChatCompletionSnapshot. Returns the
+ * suffix because continuation prompts reference the tail of the response.
+ */
+function extractOpenAIPartialTail(
+  snapshot: { choices?: Array<{ message?: { content?: string | null } }> } | undefined,
+  maxChars: number,
+): string {
+  const content = snapshot?.choices?.[0]?.message?.content ?? '';
+  return content.length <= maxChars
+    ? content
+    : content.slice(content.length - maxChars);
 }
 
 /**
@@ -490,6 +506,26 @@ export class ModelHandlerOpenAI<
 
       this.finalizeStreams(thinking, output, finalResponse);
       return finalResponse;
+    } catch (streamError) {
+      // On mid-stream failure, lift the partial content the SDK already
+      // accumulated (currentChatCompletionSnapshot) onto the error so the
+      // retry UI can show it and future continuation logic can reference
+      // the tail. Aborts are control flow; log at debug, skip warn.
+      const isAbort = streamError instanceof OpenAIUserAbortError;
+      const partialText = extractOpenAIPartialTail(
+        stream.currentChatCompletionSnapshot,
+        4096,
+      );
+      if (partialText) {
+        attachPartialText(streamError, partialText);
+      }
+      if (!isAbort) {
+        this.logger.warn(
+          `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
+          { data: { model: this.config.fullName, partialTextLength: partialText.length } },
+        );
+      }
+      throw streamError;
     } finally {
       cleanup();
     }

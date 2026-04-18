@@ -23,6 +23,7 @@ import {
   isContextWindowError,
   isPreviousResponseIdError,
   isRetryableStatusCode,
+  attachPartialText,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -1764,6 +1765,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Wrap execution in try-catch to handle previousResponseId errors
     // When an error indicates the response ID is invalid, we clear it so
     // the retry logic can recover by starting a fresh conversation.
+    //
+    // Text accumulated from `response.output_text.delta` events during
+    // streaming. Hoisted here so the catch block can surface it as
+    // partial text on mid-stream failures. ResponseStream has no native
+    // currentMessage accessor (unlike ChatCompletionStream), so we
+    // accumulate manually from the events we already iterate.
+    let streamedText = '';
     try {
       // Try to resume a pending background response (for retry after connection error)
       if (useBackgroundResponses && this.pendingBackgroundResponseId) {
@@ -1830,6 +1838,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         for await (const event of stream) {
           this.processStreamingEvent(event, state);
+          if (event.type === 'response.output_text.delta') {
+            streamedText += event.delta;
+          }
         }
 
         let response = await stream.finalResponse();
@@ -1983,6 +1994,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       // Clear diagnostic state to avoid stale comparison on retry
       this._diagPreFlightTokens = null;
+
+      // Attach a 4KB tail of any streamed text to the error so the retry UI
+      // can surface progress. No-op when nothing was streamed.
+      if (streamedText) {
+        const tail =
+          streamedText.length > 4096
+            ? streamedText.slice(streamedText.length - 4096)
+            : streamedText;
+        attachPartialText(error, tail);
+      }
 
       throw error;
     }
