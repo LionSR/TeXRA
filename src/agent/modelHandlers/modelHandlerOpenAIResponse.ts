@@ -476,6 +476,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const state = this.createStreamingEventState();
+    // Accumulate text deltas so we can attach a tail to the error on reject,
+    // mirroring the HTTP streaming path. Without this, a WebSocket failure
+    // mid-response would lose any text that had already been generated.
+    let streamedText = '';
 
     return new Promise<WebSocketExecutionResult>((resolve, reject) => {
       let settled = false;
@@ -500,7 +504,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // events (including response.created) from the prior response, causing
         // the new request to resolve with the wrong response.
         this.closeWebSocket();
-        reject(new DOMException('The operation was aborted', 'AbortError'));
+        rejectWithPartial(
+          new DOMException('The operation was aborted', 'AbortError'),
+        );
       };
       signal?.addEventListener('abort', onAbort, { once: true });
 
@@ -526,6 +532,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         }
 
         this.processStreamingEvent(e, state);
+        if (this.isTextDeltaEvent(e)) {
+          streamedText += e.delta;
+        }
+      };
+
+      /** Attach partial-text tail to an error before rejecting with it. */
+      const rejectWithPartial = (err: unknown): void => {
+        if (streamedText) {
+          attachPartialText(err, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
+        }
+        reject(err);
       };
 
       const finalizeSuccess = (response: Response): void => {
@@ -548,7 +565,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         cleanup();
         const errorMsg =
           event.response.error?.message ?? 'Response failed without details';
-        reject(new Error(`OpenAI WebSocket response failed: ${errorMsg}`));
+        rejectWithPartial(
+          new Error(`OpenAI WebSocket response failed: ${errorMsg}`),
+        );
       };
 
       // Incomplete responses are resolved (not rejected) to match the HTTP
@@ -566,7 +585,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // The server may close the socket after sending the error, but the close event
         // fires after this handler and would be a no-op (settled=true).
         this.closeWebSocket();
-        reject(error);
+        rejectWithPartial(error);
       };
 
       // Handle unexpected socket close during a request
@@ -575,7 +594,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         settled = true;
         cleanup();
         this.closeWebSocket();
-        reject(
+        rejectWithPartial(
           new Error(
             `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
           ),

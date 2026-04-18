@@ -843,18 +843,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // returning truncated output.
         const diagnostics = streamHandler.getDiagnostics();
         if (!diagnostics.messageStopReceived) {
-          const truncatedError = new Error(
+          // The catch block below will read current diagnostics, attach them
+          // to the enriched error, and log at warn — no inner attach/log
+          // here, otherwise one truncation event produces two warns and
+          // two diagnostics snapshots (with drifting elapsedSecs).
+          throw new Error(
             `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
               `(${diagnostics.eventsProcessed} events, ` +
               `${diagnostics.thinkingChars} thinking chars, ` +
               `${diagnostics.textChars} text chars). ` +
               `Stream truncated, likely proxy idle timeout during extended thinking.`,
           );
-          attachStreamDiagnostics(truncatedError, diagnostics);
-          // The catch block below will log this at warn with full diagnostics
-          // in the log data — no inner log here, otherwise one truncation
-          // event produces two warn entries.
-          throw truncatedError;
         }
 
         // Store thinking blocks for API conversation continuation
