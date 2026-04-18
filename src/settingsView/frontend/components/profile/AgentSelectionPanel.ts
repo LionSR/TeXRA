@@ -303,7 +303,7 @@ export class AgentSelectionPanel extends LitElement {
         font-weight: var(--font-weight-medium);
         border-radius: var(--border-radius);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
-        color: var(--color-text-secondary);
+        color: var(--vscode-badge-foreground);
       }
 
       .agent-detail-path {

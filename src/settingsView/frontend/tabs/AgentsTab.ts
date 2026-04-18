@@ -141,7 +141,7 @@ export class AgentsTab extends LitElement {
         flex-shrink: 0;
         padding: 0 var(--spacing-small);
         font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
+        color: var(--vscode-badge-foreground);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);
       }
