@@ -67,6 +67,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands, getMainViewProvider } from './commands';
+import { registerNoWorkspaceView } from './noWorkspaceView';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
@@ -104,18 +105,13 @@ export async function activate(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {
-    const message = !workspaceFolders?.length
-      ? 'TeXRA requires an open workspace. Please open a folder to enable the extension.'
-      : 'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.';
-    void vscode.window
-      .showInformationMessage(message, 'Open Folder')
-      .then((choice) => {
-        if (choice === 'Open Folder') {
-          void vscode.commands.executeCommand(
-            'workbench.action.files.openFolder',
-          );
-        }
-      });
+    if (workspaceFolders && workspaceFolders.length > 1) {
+      void vscode.window.showInformationMessage(
+        'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.',
+      );
+      return;
+    }
+    registerNoWorkspaceView(context);
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
