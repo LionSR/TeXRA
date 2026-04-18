@@ -10,9 +10,9 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/computeModelOptions';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
+import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { GlobalStorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
-import { DEFAULT_DISABLED_TOOL_IDS } from '@utils/config/constants';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 /**
@@ -33,11 +33,11 @@ const LEGACY_AGENT_FILES = [
 /**
  * Seed the disabled-tool list for first-time users only.
  *
- * Runs before `copyDefaultAgents`, which writes `LAST_KNOWN_VERSION`. We use
- * that key's absence, combined with an unset `DISABLED_TOOLS`, as the signal
- * that this is a truly new install — existing upgrading users keep their
- * current (usually empty) list, so we don't silently disable tools they
- * already had available.
+ * Every tool group flagged `toggleable: true` in EXTERNAL_TOOL_DEFS is
+ * treated as opt-in and seeded as disabled on a fresh install. Runs before
+ * `copyDefaultAgents` (which writes `LAST_KNOWN_VERSION`); the combined
+ * absence of that key and `DISABLED_TOOLS` is how we detect a new install
+ * — existing upgrading users keep their list.
  */
 export async function initializeToolDefaults(): Promise<void> {
   const lastKnownVersion = globalSM.get<string>(
@@ -49,12 +49,13 @@ export async function initializeToolDefaults(): Promise<void> {
     return;
   }
 
-  await globalSM.update(GlobalStateKey.DISABLED_TOOLS, [
-    ...DEFAULT_DISABLED_TOOL_IDS,
-  ]);
+  const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
+    (def) => def.id,
+  );
+  await globalSM.update(GlobalStateKey.DISABLED_TOOLS, defaults);
   logger.info(
     'extension',
-    `First install — seeded default-disabled tools: ${DEFAULT_DISABLED_TOOL_IDS.join(', ')}`,
+    `First install — default-disabled toggleable tools: ${defaults.join(', ')}`,
   );
 }
 
