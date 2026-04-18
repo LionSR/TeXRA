@@ -12,7 +12,10 @@ import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
-import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
+import type {
+  ToolCommandKind,
+  ToolDashboardItem,
+} from '@shared/schemas/settingsViewMessages';
 
 @customElement('tool-card')
 export class ToolCard extends LitElement {
@@ -248,6 +251,15 @@ export class ToolCard extends LitElement {
 
   @state() private guideExpanded = false;
 
+  /** Reveal the install buttons immediately when a tool first reports missing. */
+  override willUpdate(changed: Map<string, unknown>): void {
+    if (!changed.has('item')) return;
+    const prev = changed.get('item') as ToolDashboardItem | undefined;
+    if (prev?.status !== 'not-found' && this.item.status === 'not-found') {
+      this.guideExpanded = true;
+    }
+  }
+
   private toggleGuide(): void {
     this.guideExpanded = !this.guideExpanded;
   }
@@ -268,6 +280,20 @@ export class ToolCard extends LitElement {
         }),
       );
     }
+  }
+
+  private runCommand(kind: ToolCommandKind): void {
+    this.dispatchEvent(
+      createEvent('tool-run-command', { toolId: this.item.id, kind }),
+    );
+  }
+
+  private handleRunInstallCommand(): void {
+    this.runCommand('install');
+  }
+
+  private handleRunAuthCommand(): void {
+    this.runCommand('auth');
   }
 
   private handleToggle(e: Event): void {
@@ -313,7 +339,11 @@ export class ToolCard extends LitElement {
   private renderGuide(): TemplateResult | typeof nothing {
     if (!this.item.requiresSetup) return nothing;
 
-    const hasGuide = this.item.installGuide || this.item.installUrl;
+    const hasGuide =
+      this.item.installGuide ||
+      this.item.installUrl ||
+      this.item.installCommand ||
+      this.item.authCommand;
     if (!hasGuide) return nothing;
 
     return html`
@@ -327,8 +357,37 @@ export class ToolCard extends LitElement {
       </button>
       ${this.guideExpanded
         ? html`
-            <div class="tool-guide">${this.item.installGuide}</div>
+            ${this.item.installGuide
+              ? html`<div class="tool-guide">${this.item.installGuide}</div>`
+              : nothing}
             <div class="tool-guide-actions">
+              ${this.item.installCommand
+                ? html`
+                    <button
+                      class="tool-action-btn"
+                      @click=${this.handleRunInstallCommand}
+                      title=${this.item.installCommand}
+                    >
+                      <span class="codicon codicon-terminal"></span>
+                      Install in Terminal
+                    </button>
+                  `
+                : nothing}
+              ${this.item.authCommand
+                ? html`
+                    <button
+                      class="tool-action-btn ${this.item.installCommand ||
+                      this.item.installExtensionId
+                        ? 'tool-action-btn--secondary'
+                        : ''}"
+                      @click=${this.handleRunAuthCommand}
+                      title=${this.item.authCommand}
+                    >
+                      <span class="codicon codicon-sign-in"></span>
+                      Sign in
+                    </button>
+                  `
+                : nothing}
               ${this.item.installExtensionId
                 ? html`
                     <button
@@ -343,9 +402,7 @@ export class ToolCard extends LitElement {
               ${this.item.installUrl
                 ? html`
                     <button
-                      class="tool-action-btn ${this.item.installExtensionId
-                        ? 'tool-action-btn--secondary'
-                        : ''}"
+                      class="tool-action-btn tool-action-btn--secondary"
                       @click=${this.handleInstallUrl}
                     >
                       <span class="codicon codicon-link-external"></span>
