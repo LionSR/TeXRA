@@ -22,6 +22,7 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
+  isRetryableStatusCode,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -688,25 +689,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.clearPendingBackgroundResponse();
         throw err;
       }
-      // Transient failures (network, 5xx, 429, 408) — the background response
-      // is likely still alive server-side, so retain the ID and rethrow. The
-      // outer retry will resume the same ID instead of duplicating work.
-      // Definitive failures (404 expired, 401/403 auth, other 4xx) — clear
-      // the ID and signal that a new request is needed.
+      // Transient failures (no status / 5xx / 429 / 408) — the background
+      // response is likely still alive server-side, so retain the ID and
+      // rethrow so the outer retry resumes the same ID. Definitive failures
+      // (4xx, notably 404 expired) — clear the ID and create a new request.
+      //
+      // Check statusCode directly rather than formatted.retryable: the latter
+      // is force-true for relay errors, which would incorrectly retain the ID
+      // on a relay-wrapped 404 and loop until retries are exhausted.
       const formatted = formatProviderHttpError(err);
-      if (formatted.retryable) {
+      const code = formatted.statusCode;
+      if (code === undefined || isRetryableStatusCode(code)) {
         throw err;
       }
       this.logger.warn(
         `Failed to retrieve pending background response ${pendingId}: ${formatted.message}. ` +
           'Will create new request.',
-        {
-          data: {
-            responseId: pendingId,
-            error: formatted.message,
-            statusCode: formatted.statusCode,
-          },
-        },
+        { data: { responseId: pendingId, error: formatted.message, statusCode: code } },
       );
       this.clearPendingBackgroundResponse();
       return null;
