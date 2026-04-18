@@ -305,9 +305,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
    */
   private supportsAdaptiveThinking(): boolean {
     return (
-      this.isClaudeOpus46() ||
-      this.isClaudeOpus47() ||
-      this.isClaudeSonnet46()
+      this.isClaudeOpus46() || this.isClaudeOpus47() || this.isClaudeSonnet46()
     );
   }
 
@@ -326,9 +324,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     switch (reasoningEffort) {
       case 'xhigh':
         // 'max' is supported on Opus 4.6 and Opus 4.7
-        return this.isClaudeOpus46() || this.isClaudeOpus47()
-          ? 'max'
-          : 'high';
+        return this.isClaudeOpus46() || this.isClaudeOpus47() ? 'max' : 'high';
       case 'high':
         return 'high';
       case 'medium':
@@ -345,9 +341,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Whether this model supports Anthropic's native server-side context compaction. */
   private isCompactionEligibleModel(): boolean {
     return (
-      this.isClaudeOpus46() ||
-      this.isClaudeOpus47() ||
-      this.isClaudeSonnet46()
+      this.isClaudeOpus46() || this.isClaudeOpus47() || this.isClaudeSonnet46()
     );
   }
 
