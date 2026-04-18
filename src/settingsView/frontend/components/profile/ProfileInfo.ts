@@ -61,13 +61,8 @@ export class ProfileInfo extends LitElement {
           </span>
         </div>
         <div class="profile-notice">
-          ${PROMO_NOTICE_LONG.promoLead}<code
-            >${PROMO_NOTICE_LONG.promoCode}</code
-          >${PROMO_NOTICE_LONG.promoTail} ${PROMO_NOTICE_LONG.privacyLead}<strong
-            >${PROMO_NOTICE_LONG.privacyNot}</strong
-          >${PROMO_NOTICE_LONG.privacyMiddle}<strong
-            >${PROMO_NOTICE_LONG.privacyNever}</strong
-          >${PROMO_NOTICE_LONG.privacyTrailing}
+          ${PROMO_NOTICE_LONG.promoLead}<code>${PROMO_NOTICE_LONG.promoCode}</code>${PROMO_NOTICE_LONG.promoTail}
+          ${PROMO_NOTICE_LONG.privacyLead}<strong>${PROMO_NOTICE_LONG.privacyNot}</strong>${PROMO_NOTICE_LONG.privacyMiddle}<strong>${PROMO_NOTICE_LONG.privacyNever}</strong>${PROMO_NOTICE_LONG.privacyTrailing}
         </div>
         ${expiration
           ? html`
