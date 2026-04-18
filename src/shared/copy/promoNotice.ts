@@ -17,8 +17,9 @@ export const PROMO_NOTICE_SHORT =
 
 /**
  * Structured fragments for the full Settings → Profile notice. Strings are
- * DOM-agnostic; the caller wraps `*Emphasized` and `*Code` fragments in its
- * own `<strong>` / `<code>` elements rather than rendering raw HTML.
+ * DOM-agnostic; the caller wraps `promoCode` in a `<code>` element and
+ * `privacyNot`/`privacyNever` in `<strong>` elements. Only "not" (not the
+ * full "does not") is bolded — matching the original markup.
  */
 export const PROMO_NOTICE_LONG = {
   promoLead:
@@ -27,8 +28,8 @@ export const PROMO_NOTICE_LONG = {
   promoCode: 'gpt-5-pro',
   promoTail: ' series, which stays reserved for Ultra.',
   privacyLead:
-    'Your conversations are sent directly to the model provider: TeXRA ',
-  privacyDoesNot: 'does not',
+    'Your conversations are sent directly to the model provider: TeXRA does ',
+  privacyNot: 'not',
   privacyMiddle: ' store your prompts or responses, and they are ',
   privacyNever: 'never',
   privacyTrailing: ' used for training.',

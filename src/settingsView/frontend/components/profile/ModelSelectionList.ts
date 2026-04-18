@@ -15,7 +15,6 @@ import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_PROVIDERS_ORDER,
 } from '@shared/constants/providers';
-import { isFastFirstResponseModel } from '@shared/constants/fastModels';
 
 // Local imports - profile view styles and events
 import {
@@ -46,8 +45,8 @@ interface ProviderGroup {
 /** Stable sort: fast-first-response models bubble to the top of their provider. */
 function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
   return [...items].sort((a, b) => {
-    const aFast = isFastFirstResponseModel(a.name) ? 0 : 1;
-    const bFast = isFastFirstResponseModel(b.name) ? 0 : 1;
+    const aFast = a.isFast ? 0 : 1;
+    const bFast = b.isFast ? 0 : 1;
     return aFast - bFast;
   });
 }

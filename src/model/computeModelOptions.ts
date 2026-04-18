@@ -88,11 +88,11 @@ export function formatCost(
 
 /**
  * Build the model tooltip string, prepending the "fast first response" nudge
- * for small/non-reasoning variants so free-tier users can spot snappy options.
+ * for cheap non-reasoning variants so free-tier users can spot snappy options.
  */
-function buildModelHint(modelName: string, config: ModelConfig): string {
+function buildModelHint(config: ModelConfig): string {
   const base = hint(config);
-  if (!isFastFirstResponseModel(modelName)) return base;
+  if (!isFastFirstResponseModel(config.inputPrice)) return base;
   return base ? `${FAST_FIRST_RESPONSE_HINT} | ${base}` : FAST_FIRST_RESPONSE_HINT;
 }
 
@@ -210,9 +210,10 @@ async function buildModelOptionData(
     provider: config.provider,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
-    hint: buildModelHint(model, config),
+    hint: buildModelHint(config),
     requiresKey: !available,
     disabled: !available,
+    isFast: isFastFirstResponseModel(config.inputPrice),
   };
 }
 
@@ -231,7 +232,8 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
       provider: config.provider,
       context: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
-      hint: buildModelHint(model, config),
+      hint: buildModelHint(config),
+      isFast: isFastFirstResponseModel(config.inputPrice),
     };
   });
 }

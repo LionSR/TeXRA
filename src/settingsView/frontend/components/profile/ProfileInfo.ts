@@ -64,7 +64,7 @@ export class ProfileInfo extends LitElement {
           ${PROMO_NOTICE_LONG.promoLead}<code
             >${PROMO_NOTICE_LONG.promoCode}</code
           >${PROMO_NOTICE_LONG.promoTail} ${PROMO_NOTICE_LONG.privacyLead}<strong
-            >${PROMO_NOTICE_LONG.privacyDoesNot}</strong
+            >${PROMO_NOTICE_LONG.privacyNot}</strong
           >${PROMO_NOTICE_LONG.privacyMiddle}<strong
             >${PROMO_NOTICE_LONG.privacyNever}</strong
           >${PROMO_NOTICE_LONG.privacyTrailing}
