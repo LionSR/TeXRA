@@ -2233,16 +2233,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.clearPendingBackgroundResponse();
           throw err;
         }
-        // Only wrap 404 "response not found" errors. These are retryable because
-        // the response existed but disappeared during polling, and a retry will
-        // create a new request. Wrapping strips the 404 status code so
-        // formatProviderHttpError classifies it as a network-like error (retryable).
+        // 404 "response not found" during polling means the response is truly
+        // gone server-side. Clear the pending ID so the next retry creates a
+        // fresh background request instead of routing through
+        // tryResumeBackgroundResponse to rediscover the 404. The wrapping
+        // below strips the 404 status so formatProviderHttpError classifies
+        // the error as retryable (network-like), which keeps the retry loop
+        // engaged rather than bailing out on a non-retryable 4xx.
         //
         // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
         // so downstream handlers (relay 401 token refresh, retryability checks,
         // non-retryable classification) work correctly with full HTTP metadata.
         const statusCode = (err as { status?: number }).status;
         if (statusCode === 404) {
+          this.clearPendingBackgroundResponse();
           const pollingError: RequestIdTaggedError = new Error(
             `Background response polling failed for ${responseId}: ${getSdkErrorMessage(err)}`,
             { cause: err },
