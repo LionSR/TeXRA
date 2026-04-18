@@ -1224,7 +1224,7 @@
     "viewsWelcome": [
       {
         "view": "texra.welcomeView",
-        "contents": "TeXRA is a multi-agent AI system for theorists — built around arXiv workflows. Specialized agents handle drafting, figures, bibliographies, and formal verification, each grounded in real tools and producing auditable output.\nOpen a folder to begin.\n[Open Folder](command:workbench.action.files.openFolder)\n[Clone Repository](command:git.clone)\nNew to TeXRA? [Take the tour](command:workbench.action.openWalkthrough?%22texra.gettingStarted%22) or [read the docs](https://github.com/LionSR/TeXRA#readme).",
+        "contents": "TeXRA is a multi-agent AI system for theorists — built around LaTeX workflows. Specialized agents handle drafting, figures, bibliographies, and formal verification, each grounded in real tools and producing auditable output.\nOpen a folder to begin.\n[Open Folder](command:workbench.action.files.openFolder)\n[Clone Repository](command:git.clone)\nNew to TeXRA? [Take the tour](command:workbench.action.openWalkthrough?%22texra.gettingStarted%22) or [read the docs](https://github.com/LionSR/TeXRA#readme).",
         "when": "workbenchState == empty"
       },
       {
