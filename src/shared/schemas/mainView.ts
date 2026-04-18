@@ -67,8 +67,6 @@ export const ModelOptionDataSchema = z.object({
   hint: z.string().optional(),
   requiresKey: z.boolean().optional(),
   disabled: z.boolean().optional(),
-  /** Whether this model qualifies as a "fast first response" pick (price-based). */
-  isFast: z.boolean().optional(),
 });
 export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
 

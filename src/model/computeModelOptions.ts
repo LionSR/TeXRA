@@ -213,7 +213,6 @@ async function buildModelOptionData(
     hint: buildModelHint(config),
     requiresKey: !available,
     disabled: !available,
-    isFast: isFastFirstResponseModel(config.inputPrice),
   };
 }
 
@@ -233,7 +232,6 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
       context: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
       hint: buildModelHint(config),
-      isFast: isFastFirstResponseModel(config.inputPrice),
     };
   });
 }
