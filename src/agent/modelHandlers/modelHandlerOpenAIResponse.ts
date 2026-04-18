@@ -28,6 +28,8 @@ import {
   isPreviousResponseIdError,
   isRetryableStatusCode,
   attachPartialText,
+  takeTail,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -2003,14 +2005,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Clear diagnostic state to avoid stale comparison on retry
       this._diagPreFlightTokens = null;
 
-      // Attach a 4KB tail of any streamed text to the error so the retry UI
-      // can surface progress. No-op when nothing was streamed.
+      // Attach a capped tail of any streamed text to the error so the retry
+      // UI can surface progress. No-op when nothing was streamed.
       if (streamedText) {
-        const tail =
-          streamedText.length > 4096
-            ? streamedText.slice(streamedText.length - 4096)
-            : streamedText;
-        attachPartialText(error, tail);
+        attachPartialText(error, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
       }
 
       throw error;

@@ -46,6 +46,8 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   attachPartialText,
+  takeTail,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -712,16 +714,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           `Content blocked by safety filter: ${JSON.stringify(errorWithResponse.response?.promptFeedback)}`,
         );
       }
-      // If the stream produced any text before failing, attach a 4KB tail to
-      // the error so the retry UI can show progress and future continuation
-      // logic can reference it. Google's SDK has no currentMessage accessor,
-      // so we rely on the manually accumulated buffer above.
+      // If the stream produced any text before failing, attach a tail to the
+      // error so the retry UI can show progress and future continuation logic
+      // can reference it. Google's SDK has no currentMessage accessor, so we
+      // rely on the manually accumulated buffer above.
       if (aggregatedText) {
-        const tail =
-          aggregatedText.length > 4096
-            ? aggregatedText.slice(aggregatedText.length - 4096)
-            : aggregatedText;
-        attachPartialText(error, tail);
+        attachPartialText(
+          error,
+          takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX),
+        );
       }
       throw error;
     }

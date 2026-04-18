@@ -1,5 +1,5 @@
 // Third-party imports
-import OpenAI, { APIUserAbortError as OpenAIUserAbortError } from 'openai';
+import OpenAI from 'openai';
 
 // Local imports - core utilities
 import {
@@ -36,6 +36,9 @@ import {
   isContextWindowError,
   isMissingFinishReasonError,
   attachPartialText,
+  takeTail,
+  isUserAbort,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
@@ -128,9 +131,7 @@ function extractOpenAIPartialTail(
   maxChars: number,
 ): string {
   const content = snapshot?.choices?.[0]?.message?.content ?? '';
-  return content.length <= maxChars
-    ? content
-    : content.slice(content.length - maxChars);
+  return takeTail(content, maxChars);
 }
 
 /**
@@ -511,15 +512,14 @@ export class ModelHandlerOpenAI<
       // accumulated (currentChatCompletionSnapshot) onto the error so the
       // retry UI can show it and future continuation logic can reference
       // the tail. Aborts are control flow; log at debug, skip warn.
-      const isAbort = streamError instanceof OpenAIUserAbortError;
       const partialText = extractOpenAIPartialTail(
         stream.currentChatCompletionSnapshot,
-        4096,
+        PARTIAL_TEXT_TAIL_MAX,
       );
       if (partialText) {
         attachPartialText(streamError, partialText);
       }
-      if (!isAbort) {
+      if (!isUserAbort(streamError)) {
         this.logger.warn(
           `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
           { data: { model: this.config.fullName, partialTextLength: partialText.length } },

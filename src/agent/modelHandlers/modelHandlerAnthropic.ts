@@ -38,6 +38,9 @@ import {
   isContextWindowError,
   attachStreamDiagnostics,
   attachPartialText,
+  takeTail,
+  isUserAbort,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 
 // Local imports - replacement
@@ -163,9 +166,7 @@ function extractPartialTextTail(
     )
     .map((block) => block.text)
     .join('');
-  return text.length <= maxChars
-    ? text
-    : text.slice(text.length - maxChars);
+  return takeTail(text, maxChars);
 }
 
 /** Type guard for any thinking-related content block param */
@@ -866,9 +867,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.processThinkingBlock(response);
       } catch (streamError) {
         const diagnostics = streamHandler.getDiagnostics();
-        // 4KB is enough for a "continue from [tail]" prompt and UI display,
-        // and keeps error payloads small enough for webview messaging.
-        const partialText = extractPartialTextTail(stream.currentMessage, 4096);
+        const partialText = extractPartialTextTail(
+          stream.currentMessage,
+          PARTIAL_TEXT_TAIL_MAX,
+        );
         const requestId = stream.request_id;
 
         // Wrap only non-APIError stream failures. APIError subclasses carry
@@ -895,7 +897,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           (enrichedError as ErrorWithRequestId).request_id = requestId;
         }
 
-        const isAbort = streamError instanceof AnthropicUserAbortError;
+        const isAbort = isUserAbort(streamError);
         const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}: ${enrichedError instanceof Error ? enrichedError.message : String(enrichedError)}`;
         const logData = {
           data: {

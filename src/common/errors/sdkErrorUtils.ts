@@ -329,45 +329,75 @@ function detectRawErrorBody(err: unknown): unknown {
   return undefined;
 }
 
-const STREAM_DIAGNOSTICS_KEY = Symbol.for('texra.streamDiagnostics');
-const PARTIAL_TEXT_KEY = Symbol.for('texra.partialText');
+/** Max tail size (chars) for partial text attached to streaming errors.
+ *  4KB is enough for a "continue from [tail]" prompt and UI display,
+ *  while staying well under webview message-size limits. */
+export const PARTIAL_TEXT_TAIL_MAX = 4096;
+
+/** Returns the last `maxChars` of `text`. If `text` is shorter, returns it
+ *  as-is. Used by streaming handlers to cap partial output on error. */
+export function takeTail(text: string, maxChars: number): string {
+  return text.length <= maxChars ? text : text.slice(text.length - maxChars);
+}
+
+/** True if `err` is an SDK user-abort error (OpenAI or Anthropic). */
+export function isUserAbort(err: unknown): boolean {
+  return (
+    err instanceof OpenAIUserAbortError ||
+    err instanceof AnthropicUserAbortError
+  );
+}
+
+/** Factory for symbol-keyed error metadata. Creates matched attach/detect
+ *  accessors that share a single Symbol.for key. The optional typeGuard
+ *  validates the value on retrieval; without it, raw retrieval is returned. */
+function createErrorMetadata<T>(
+  name: string,
+  typeGuard?: (v: unknown) => v is T,
+): {
+  attach: (err: unknown, value: T) => void;
+  detect: (err: unknown) => T | undefined;
+} {
+  const key = Symbol.for(`texra.${name}`);
+  return {
+    attach: (err, value) => {
+      if (isObject(err)) {
+        (err as Record<symbol, unknown>)[key] = value;
+      }
+    },
+    detect: (err) => {
+      if (!isObject(err)) return undefined;
+      const value = (err as Record<symbol, unknown>)[key];
+      if (typeGuard) {
+        return typeGuard(value) ? value : undefined;
+      }
+      return value as T | undefined;
+    },
+  };
+}
+
+const streamDiagnosticsMetadata = createErrorMetadata<StreamDiagnostics>(
+  'streamDiagnostics',
+  (v): v is StreamDiagnostics => isObject(v) && 'eventsProcessed' in v,
+);
 
 /** Attaches stream diagnostics to an error before rethrowing. */
-export function attachStreamDiagnostics(
-  err: unknown,
-  diagnostics: StreamDiagnostics,
-): void {
-  if (isObject(err)) {
-    (err as Record<symbol, unknown>)[STREAM_DIAGNOSTICS_KEY] = diagnostics;
-  }
-}
+export const attachStreamDiagnostics = streamDiagnosticsMetadata.attach;
+const detectStreamDiagnostics = streamDiagnosticsMetadata.detect;
 
-function detectStreamDiagnostics(err: unknown): StreamDiagnostics | undefined {
-  if (!isObject(err)) {
-    return undefined;
-  }
-  const diagnostics = (err as Record<symbol, unknown>)[STREAM_DIAGNOSTICS_KEY];
-  // Basic type check - diagnostics should be an object with expected fields
-  if (isObject(diagnostics) && 'eventsProcessed' in diagnostics) {
-    return diagnostics as StreamDiagnostics;
-  }
-  return undefined;
-}
+const partialTextMetadata = createErrorMetadata<string>(
+  'partialText',
+  (v): v is string => isString(v) && v.length > 0,
+);
 
 /** Attaches partial text (generated before a stream failure) to an error.
  *  Lets the caller surface the partial content to the user or use it as the
  *  basis for a continuation prompt on retry. No-op if the text is empty. */
 export function attachPartialText(err: unknown, text: string): void {
-  if (text && isObject(err)) {
-    (err as Record<symbol, unknown>)[PARTIAL_TEXT_KEY] = text;
-  }
+  if (text) partialTextMetadata.attach(err, text);
 }
 
-function detectPartialText(err: unknown): string | undefined {
-  if (!isObject(err)) return undefined;
-  const text = (err as Record<symbol, unknown>)[PARTIAL_TEXT_KEY];
-  return isString(text) && text.length > 0 ? text : undefined;
-}
+const detectPartialText = partialTextMetadata.detect;
 
 /**
  * Maps Anthropic error type strings to their corresponding HTTP status codes.
