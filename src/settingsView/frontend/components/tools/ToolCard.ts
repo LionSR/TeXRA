@@ -288,8 +288,13 @@ export class ToolCard extends LitElement {
     );
   }
 
-  private handleRunInstallCommand = (): void => this.runCommand('install');
-  private handleRunAuthCommand = (): void => this.runCommand('auth');
+  private handleRunInstallCommand(): void {
+    this.runCommand('install');
+  }
+
+  private handleRunAuthCommand(): void {
+    this.runCommand('auth');
+  }
 
   private handleToggle(e: Event): void {
     const target = e.currentTarget as HTMLInputElement | null;

@@ -11,7 +11,7 @@ import type {
   ToolDashboardItem,
   ToolInfo,
 } from '@shared/schemas/settingsViewMessages';
-import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
+import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
   getDefaultToolRegistry,
   type RegisteredToolName,
@@ -167,7 +167,7 @@ export async function buildToolDashboardItems(
     ? (lastDetailResults ?? results.map(() => undefined))
     : await Promise.all(
         results.map(async ({ id }) => {
-          const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);
+          const def = findExternalToolDef(id);
           if (!def?.detailCheck) return undefined;
           try {
             return await def.detailCheck();
@@ -178,12 +178,11 @@ export async function buildToolDashboardItems(
       );
   lastDetailResults = detailResults;
 
-  // Merge check results with UI metadata from EXTERNAL_TOOL_DEFS
   const disabledIds = getDisabledToolIds();
   const externalItems: ToolDashboardItem[] = [];
   for (let i = 0; i < results.length; i++) {
     const { id, tools, status } = results[i];
-    const def = EXTERNAL_TOOL_DEFS.find((c) => c.id === id);
+    const def = findExternalToolDef(id);
     if (!def || def.hideFromDashboard) continue;
     externalItems.push({
       id: def.id,
