@@ -181,7 +181,7 @@ You don't need to configure this yourself; it happens automatically when an agen
 
 Tool-use agents are interactive: instead of producing a single polished file, they hold a conversation and take actions on your behalf—reading and editing files, searching the web, looking up papers, and more.
 
-**Typical user story:** You're writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than switching between browser tabs and terminal windows, you open a `chat` agent and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files—all in one session.
+**Typical user story:** You're writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than switching between browser tabs and terminal windows, you open a `research` agent and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files—all in one session.
 
 To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA provides tools in several categories:
 
@@ -195,7 +195,7 @@ To create your own tool-use agent, set `agentCategory: toolUse` and list the too
 | **Figures**        | Extract and compile figures and TikZ diagrams               |
 | **Memory & tasks** | Remember context across sessions; track multi-step progress |
 
-For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `chat`, `search`, or `ask`) in the **Agents** tab—their `tools:` array shows exactly which tools are available.
+For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `search`, or `ask`) in the **Agents** tab—their `tools:` array shows exactly which tools are available.
 
 Example skeleton:
 

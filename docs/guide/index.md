@@ -48,7 +48,7 @@ graph TB
 3. Optionally reflect on their output and iterate
 4. Produce versioned output files (`*_r0_*`, `*_r1_*`) with diffs
 
-**Interactive agents** (`chat`, `ask`, `research`, `review`, `lean`, `presenter`) operate conversationally with tool access:
+**Interactive agents** (`ask`, `research`, `review`, `lean`, `presenter`) operate conversationally with tool access:
 
 - Read and edit files across your entire workspace
 - Search arXiv, Crossref, and Zotero for references with verified BibTeX
