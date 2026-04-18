@@ -15,6 +15,9 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
 
+// Local imports - shared copy
+import { PROMO_NOTICE_SHORT } from '@shared/copy/promoNotice';
+
 // Local imports - main view events
 import { MainViewEvents } from '../events';
 
@@ -116,8 +119,7 @@ export class LoginBanner extends LitElement {
           <div class="login-banner-text">
             <span class="login-banner-title">Researcher Access Program</span>
             <span class="login-banner-description">
-              Sign in to access AI models and remote agents without your own API
-              keys.
+              ${PROMO_NOTICE_SHORT}
             </span>
           </div>
         </div>
