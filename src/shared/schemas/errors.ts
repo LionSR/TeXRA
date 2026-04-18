@@ -34,10 +34,15 @@ const ProviderErrorSchema = z.object({
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
-  /** Tail of text generated before a streaming failure (capped). Present when
-   *  the stream produced any text before dying — lets the caller show it to
-   *  the user or construct a continuation prompt on retry. */
-  partialText: z.string().optional(),
+  /** Tail of text generated before a streaming failure (capped to 64KB).
+   *  Present when the stream produced any text before dying — lets the
+   *  caller show it to the user or construct a continuation prompt on retry.
+   *  Schema-level max enforces the bound in case an upstream source
+   *  misbehaves; producers are expected to truncate before attaching. */
+  partialText: z
+    .string()
+    .max(64 * 1024)
+    .optional(),
 });
 export type ProviderError = z.infer<typeof ProviderErrorSchema>;
 

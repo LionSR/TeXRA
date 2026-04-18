@@ -5,6 +5,7 @@ import { basename } from 'node:path';
 // Third-party imports
 import {
   Anthropic,
+  APIError as AnthropicAPIError,
   APIUserAbortError as AnthropicUserAbortError,
   toFile,
 } from '@anthropic-ai/sdk';
@@ -882,11 +883,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // message_start event. Mirror the messageStop validation above with a
         // message that carries diagnostics, so logs and retry UI surface the
         // actual timing rather than the opaque SDK string.
+        //
+        // Only wrap non-APIError stream failures: AnthropicAPIError instances
+        // (HTTP 4xx/5xx, rate limits, auth, connection) already carry status,
+        // headers, requestID, and body metadata that formatProviderHttpError
+        // relies on for retry classification. Replacing them with a plain
+        // Error would hide that info and misclassify e.g. 401 as generic.
         let enrichedError: unknown = streamError;
         if (
           !stream.currentMessage &&
           streamError instanceof Error &&
-          !(streamError instanceof AnthropicUserAbortError)
+          !(streamError instanceof AnthropicAPIError)
         ) {
           const wrapper = new Error(
             `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
@@ -918,10 +925,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
           },
         );
 
-        // Attach diagnostics and partial text to the error for retry UI display
-        // and future continuation-on-retry support.
+        // Attach diagnostics and a bounded tail of partial text to the error
+        // for retry UI display and future continuation-on-retry support.
+        // A 4KB tail is plenty for a "your response ended with [X], continue
+        // from there" prompt and for UI display, while keeping the error
+        // small enough to round-trip through webview messages without bloat.
+        const ATTACHED_PARTIAL_TEXT_MAX = 4096;
+        const attachedPartialText =
+          partialText.length > ATTACHED_PARTIAL_TEXT_MAX
+            ? partialText.slice(partialText.length - ATTACHED_PARTIAL_TEXT_MAX)
+            : partialText;
         attachStreamDiagnostics(enrichedError, diagnostics);
-        attachPartialText(enrichedError, partialText);
+        attachPartialText(enrichedError, attachedPartialText);
         throw enrichedError;
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
