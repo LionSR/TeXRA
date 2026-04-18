@@ -9,11 +9,16 @@
  * model as fast) are worse than false negatives.
  */
 
-/** Short-name patterns that strongly imply a small/fast variant. */
+/**
+ * Short-name patterns that strongly imply a small/fast variant.
+ *
+ * `mini` requires a non-letter on both sides so that provider names like
+ * `gemini*` and `minimax*` (which contain the substring `mini`) don't match.
+ */
 const FAST_NAME_PATTERNS: readonly RegExp[] = [
   /flash/i,
   /haiku/i,
-  /mini/i,
+  /(^|[^a-z])mini([^a-z]|$)/i,
   /nano/i,
   /lite/i,
 ];
@@ -35,7 +40,6 @@ const FAST_EXPLICIT_NAMES: ReadonlySet<string> = new Set([
   'gpt5',
   'sonnet46',
   'sonnet45',
-  'gemini31p',
 ]);
 
 /** Returns true when the given model short name is a "fast first response" pick. */
