@@ -50,6 +50,7 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
+import { setGitHubTokenProvider } from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { setLinterProvider } from '@tools/DiagnosticsTool';
@@ -227,6 +228,11 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  setGitHubTokenProvider(() =>
+    vscode.workspace.getConfiguration('texra.github').get<string>('token') ||
+    process.env.GITHUB_TOKEN ||
+    undefined,
+  );
   setLinterProvider(getLinterMessages);
   setOpenBuildDisplay(openBuildDisplayIfTex);
   applyGitAuthorConfig();

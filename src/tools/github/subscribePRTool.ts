@@ -1,0 +1,60 @@
+/**
+ * Subscribe the current agent stream to GitHub PR activity.
+ *
+ * Polls GitHub REST every 30s and emits new comments, reviews, line comments,
+ * and failed CI checks as follow-ups into this stream's queue. Wraps each
+ * event in a `<github-webhook-activity>` tag so the agent recognizes the
+ * source. Auto-unsubscribes on PR close/merge.
+ */
+
+import { z } from 'zod';
+
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { ToolError, type ToolResult } from '@tools/result';
+
+import { defineTool } from '../core/define';
+import { bindPRSubscription } from './PRSubscriptionBinder';
+import { getGitHubToken } from './githubAuth';
+
+const SubscribePRInputSchema = z.strictObject({
+  owner: z.string().min(1).describe('Repository owner (user or org)'),
+  repo: z.string().min(1).describe('Repository name'),
+  pullNumber: z
+    .number()
+    .int()
+    .positive()
+    .describe('Pull request number'),
+});
+
+type SubscribePRInput = z.infer<typeof SubscribePRInputSchema>;
+
+export class SubscribePRTool extends defineTool({
+  name: 'subscribe_pr_activity',
+  description:
+    'Subscribe this stream to GitHub pull request activity. Delivers new comments, reviews, line comments, and failed CI checks as follow-up messages. Auto-unsubscribes when the PR is closed or merged. Requires texra.github.token to be configured.',
+  schema: SubscribePRInputSchema,
+}) {
+  protected async execute(input: SubscribePRInput): Promise<ToolResult> {
+    if (!getGitHubToken()) {
+      throw new ToolError(
+        'No GitHub token configured. Set `texra.github.token` in settings (needs `repo` scope for private PRs, `public_repo` for public).',
+      );
+    }
+    const streamId = getCurrentToolFileInteractionContext()?.streamId;
+    if (!streamId) {
+      throw new ToolError(
+        'subscribe_pr_activity must be called from within an agent stream.',
+      );
+    }
+    const { alreadySubscribed } = bindPRSubscription(streamId, input);
+    const slug = `${input.owner}/${input.repo}#${input.pullNumber}`;
+    return {
+      summary: alreadySubscribed
+        ? `Already subscribed to ${slug}`
+        : `Subscribed to ${slug}`,
+      output: alreadySubscribed
+        ? `Already subscribed to ${slug}. You will continue to receive PR activity as follow-up messages until the PR closes or you call unsubscribe_pr_activity.`
+        : `Subscribed to ${slug}. New comments, reviews, line comments, and failed CI checks will arrive as follow-up messages wrapped in <github-webhook-activity>. Poll interval ≈ 30s. Auto-unsubscribes on close/merge.`,
+    };
+  }
+}

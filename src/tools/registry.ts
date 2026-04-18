@@ -51,6 +51,7 @@ import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ExternalInquiryTool } from './inquiry';
+import { SubscribePRTool, UnsubscribePRTool } from './github';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -108,6 +109,8 @@ function createDefaultTools() {
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
     external_inquiry: new ExternalInquiryTool(),
+    subscribe_pr_activity: new SubscribePRTool(),
+    unsubscribe_pr_activity: new UnsubscribePRTool(),
   } satisfies Record<string, ITool>;
 }
 
