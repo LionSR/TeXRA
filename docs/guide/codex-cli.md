@@ -1,53 +1,37 @@
 # Connecting to the Codex CLI
 
-TeXRA can hand off tasks to [OpenAI Codex](https://developers.openai.com/codex/cli) — a sandboxed coding agent that runs locally, reads files, runs commands, and edits code. Once connected, any TeXRA tool-use agent can delegate to it via the `codex` tool and keep your ChatGPT Plus / Pro plan paying for the compute.
+TeXRA can hand off tasks to [OpenAI Codex](https://developers.openai.com/codex/cli) — a sandboxed coding agent that runs locally, reads files, runs commands, and edits code. Once connected, any TeXRA tool-use agent can delegate to it via the `codex` tool and let your ChatGPT Plus / Pro plan cover the compute.
 
 ## Quick Start
 
-Three steps, about two minutes.
+Set everything up from the TeXRA Dashboard — no terminal copy-paste.
 
-### 1. Install the CLI
+1. Open **TeXRA: Show Dashboard** (`Ctrl+Shift+P`) → **Tools** tab (<i class="codicon codicon-tools"></i>) → **Computation** (<i class="codicon codicon-symbol-operator"></i>).
+2. Find the **OpenAI Codex CLI** card. When it's **Not Found**, the setup actions expand automatically.
+3. Click the two buttons in order:
+   - <i class="codicon codicon-terminal"></i> **Install in Terminal** — opens an integrated terminal and runs `npm install -g @openai/codex`.
+   - <i class="codicon codicon-sign-in"></i> **Sign in** — runs `codex login`, which completes the OAuth flow in your browser using your ChatGPT Plus / Pro account.
+4. After both finish, click the card's **Recheck** action. The status flips to <i class="codicon codicon-check"></i> **Available** and the `codex` tool is ready.
 
-```bash
-npm install -g @openai/codex
-```
+That's it — any tool-use agent with the `codex` tool enabled can now delegate to Codex.
 
-- macOS users can also `brew install codex`.
-- **Windows:** install inside WSL and launch VS Code with the WSL remote — Codex has no native Windows binary.
+::: tip Prefer API-key billing?
+Skip **Sign in** and export `OPENAI_API_KEY` in the shell you launch VS Code from. Codex picks it up automatically. You can also use the <i class="codicon codicon-link-external"></i> **Open Install Page** button on the card for the official installer if you'd rather do it outside VS Code.
+:::
 
-Check it installed:
-
-```bash
-codex --version
-```
-
-### 2. Sign in
-
-```bash
-codex login
-```
-
-This opens a browser and stores credentials at `~/.codex/auth.json`. Your ChatGPT Plus / Pro plan covers the compute.
-
-Prefer API billing? Export `OPENAI_API_KEY` in the shell that launches VS Code instead — Codex picks it up automatically.
-
-### 3. Verify in TeXRA
-
-Open **TeXRA: Show Dashboard** (`Ctrl+Shift+P`) → **Tools** (<i class="codicon codicon-tools"></i>) → **Computation** (<i class="codicon codicon-symbol-operator"></i>). The **OpenAI Codex CLI** card should read <i class="codicon codicon-check"></i> **Available**.
-
-If it doesn't, jump to [Troubleshooting](#troubleshooting).
-
-That's the whole setup — any tool-use agent with the `codex` tool enabled can now delegate to Codex.
+::: warning Windows
+Codex has no native Windows binary. Open TeXRA inside a **WSL** remote window before clicking **Install in Terminal** — otherwise the install runs in PowerShell and VS Code won't find the binary.
+:::
 
 ## Settings
 
 All Codex options live on the Codex card in **Dashboard → Tools** and are scoped to the current workspace.
 
-| Setting              | Options                                                                       | Default             | What it controls                                                         |
-| -------------------- | ----------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------ |
-| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                          | `workspace-write`   | File-system access. Agents may override per call via `sandbox_mode`.     |
+| Setting              | Options                                                                       | Default             | What it controls                                                           |
+| -------------------- | ----------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------- |
+| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                          | `workspace-write`   | File-system access. Agents may override per call via `sandbox_mode`.       |
 | **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                              | `high`              | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
-| **Require approval** | checkbox under *Approval & Safety* (<i class="codicon codicon-shield"></i>)   | on                  | Show a confirmation prompt before every Codex call.                      |
+| **Require approval** | checkbox under *Approval & Safety* (<i class="codicon codicon-shield"></i>)   | on                  | Show a confirmation prompt before every Codex call.                        |
 
 TeXRA always drives Codex with the short model name `gpt-5.4`. Everything else (providers, MCP servers, custom instructions) comes from Codex's own `~/.codex/config.toml`.
 
@@ -70,19 +54,17 @@ Agents can pass `run_in_background: true` to get the execution ID immediately an
 
 ## Troubleshooting
 
-**Tools card shows <i class="codicon codicon-warning"></i> Not Found.** Hover the card for the exact message:
+**Card shows <i class="codicon codicon-warning"></i> Not Found after install.** Hover the card for the exact message:
 
-| Message                                         | Fix                                                                          |
-| ----------------------------------------------- | ---------------------------------------------------------------------------- |
-| `@openai/codex-sdk not found`                   | `npm install -g @openai/codex`, then reload VS Code.                         |
-| `Codex SDK loaded but native binary not found`  | Reinstall — the platform binary didn't ship. On Windows, install inside WSL. |
-| `Platform not supported`                        | Unsupported OS/arch. Use WSL on Windows or a supported Linux/macOS host.     |
+| Message                                         | Fix                                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------- |
+| `@openai/codex-sdk not found`                   | Click **Install in Terminal** again, then **Recheck**.                            |
+| `Codex SDK loaded but native binary not found`  | Reinstall — the platform binary didn't ship. On Windows, open TeXRA in WSL first. |
+| `Platform not supported`                        | Unsupported OS/arch. Use WSL on Windows or a supported Linux/macOS host.          |
 
-**Card is still Not Found after installing.** Reload the window (`Developer: Reload Window`) so the extension re-checks for the binary.
+**Still Not Found after everything ran.** Reload the window (`Developer: Reload Window`) so the extension re-checks for the binary.
 
-**Auth prompts keep appearing.** Run `codex login` in the shell VS Code inherits its environment from. On macOS, launching VS Code from Finder can strip exported variables — start it from a terminal instead.
-
-**`codex login` fails in WSL.** Install `wslu` so Codex can open URLs in your host browser, or paste the login URL into a browser manually.
+**`codex login` opens a terminal but nothing happens.** The button runs `codex login` in a fresh integrated terminal. Focus the terminal and press **Enter** if the browser didn't open, or paste the login URL manually.
 
 **Session stuck in WAITING after a reload.** TeXRA interrupts Codex threads when the extension reloads. Close the tab and start a new turn — pass the previous `thread_id` if you want to continue where you left off.
 

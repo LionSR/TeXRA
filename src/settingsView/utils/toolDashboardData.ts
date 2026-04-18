@@ -196,6 +196,8 @@ export async function buildToolDashboardItems(
       installGuide: def.installGuide,
       installUrl: def.installUrl,
       installExtensionId: def.installExtensionId,
+      installCommand: def.installCommand,
+      authCommand: def.authCommand,
       configNotes: def.configNotes,
       statusDetail: detailResults[i],
       authNote: def.authNote,

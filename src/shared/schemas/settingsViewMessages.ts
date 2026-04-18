@@ -273,6 +273,8 @@ export const ToolDashboardItemSchema = z.object({
   installGuide: z.string().optional(),
   installUrl: z.string().optional(),
   installExtensionId: z.string().optional(),
+  installCommand: z.string().optional(),
+  authCommand: z.string().optional(),
   configNotes: z.string().optional(),
   statusDetail: z.string().optional(),
   authNote: z.string().optional(),
@@ -601,6 +603,12 @@ const ToggleToolMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+const RunToolCommandMessageSchema = z.object({
+  command: z.literal(CMD.RUN_TOOL_COMMAND),
+  toolId: z.string().min(1),
+  kind: z.enum(['install', 'auth']),
+});
+
 // Git author settings inbound messages
 const GetGitAuthorSettingsMessageSchema = commandOnly(
   CMD.GET_GIT_AUTHOR_SETTINGS,
@@ -676,6 +684,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     InstallToolExtensionMessageSchema,
     RecheckToolStatusMessageSchema,
     ToggleToolMessageSchema,
+    RunToolCommandMessageSchema,
     // LaTeX settings messages
     GetLatexSettingsStatusMessageSchema,
     ApplyLatexSettingsMessageSchema,
