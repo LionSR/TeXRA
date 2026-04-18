@@ -40,7 +40,6 @@ import { agentDirectories } from '@frontend/agents';
 import { FileLister } from '@frontend/files';
 import { killActiveRecording } from '@frontend/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
@@ -364,32 +363,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
-    void vscode.commands.executeCommand('texra.openGettingStarted');
-    void showInstructionWithSuppress(
-      'welcome',
-      'Welcome to TeXRA! It helps you write better LaTeX papers using AI. Quickest way to start: add an API key (or sign in), open a LaTeX file, choose an agent, and hit Execute.',
-      [
-        {
-          title: 'Open Walkthrough',
-          callback: async () => {
-            await vscode.commands.executeCommand('texra.openGettingStarted');
-          },
-        },
-        {
-          title: 'Create Sample Project',
-          callback: async () => {
-            await vscode.commands.executeCommand('texra.createSampleProject');
-          },
-        },
-      ],
-    )
-      .then(() => context.globalState.update(welcomeKey, true))
-      .catch((err) =>
-        logger.error(
-          'extension',
-          `Welcome instruction failed: ${toErrorMessage(err)}`,
-        ),
-      );
+    // Opening the VS Code walkthrough is enough — don't double up with a
+    // popup asking the user to open the walkthrough they just saw.
+    void vscode.commands
+      .executeCommand('texra.openGettingStarted')
+      .then(() => context.globalState.update(welcomeKey, true));
   }
 }
 

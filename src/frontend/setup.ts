@@ -216,7 +216,13 @@ export async function configureLatexSettings(): Promise<void> {
     const latexWorkshop = vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID);
 
     if (!latexWorkshop) {
-      await promptLatexWorkshopInstall();
+      // Only nag if the workspace actually contains LaTeX files; a user
+      // evaluating TeXRA or using it on a non-LaTeX project should not be
+      // prompted to install a TeX extension they don't need. They'll still
+      // discover it via the LaTeX settings tab or compile errors later.
+      if (await workspaceContainsLatexFiles()) {
+        await promptLatexWorkshopInstall();
+      }
       return;
     }
 
@@ -343,6 +349,19 @@ async function resetLegacyLatexSettings(): Promise<void> {
       await cfg.update(langKey, newValue, GLOBAL);
       logger.info('extension', `Cleaned legacy keys from ${langKey}`);
     }
+  }
+}
+
+async function workspaceContainsLatexFiles(): Promise<boolean> {
+  try {
+    const hits = await vscode.workspace.findFiles(
+      '**/*.tex',
+      '**/node_modules/**',
+      1,
+    );
+    return hits.length > 0;
+  } catch {
+    return false;
   }
 }
 
