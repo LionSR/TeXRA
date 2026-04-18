@@ -64,7 +64,7 @@ project/
 ### Staged Approach
 
 1. **Research**: `search` or `research` to find papers and verify ideas
-2. **Writing**: `chat` to draft LaTeX content interactively
+2. **Writing**: `research` or `orchestrator` to draft LaTeX content interactively
 3. **Development**: `polish` for clarity and style
 4. **Visualization**: `draw` for figures, `presenter` for slides
 5. **Finalization**: `correct` for proofreading
