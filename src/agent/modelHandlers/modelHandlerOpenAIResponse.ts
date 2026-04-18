@@ -1413,12 +1413,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         delete content.filename;
       }
     } catch (err) {
-      const errorMessage = getSdkErrorMessage(err);
-
-      if (
-        err instanceof APIConnectionTimeoutError ||
-        errorMessage.includes('Request timed out')
-      ) {
+      // APIConnectionTimeoutError is the SDK's native timeout signal — no
+      // need for a message-substring fallback; the class check covers both
+      // client-side (SDK timeout) and server-side (408) timeout cases.
+      if (err instanceof APIConnectionTimeoutError) {
         this.logger.warn(
           `Timed out uploading file ${filename}. Falling back to inline payload.`,
         );
@@ -1426,7 +1424,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       this.logger.logError(
-        `Failed to upload file ${filename}: ${errorMessage}`,
+        `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
         err,
         { operation: 'upload file' },
       );

@@ -144,17 +144,27 @@ interface UploadedAnthropicAttachment {
 
 type ErrorWithRequestId = Error & { request_id?: string };
 
-interface StreamWithResponse {
-  response: Promise<Response>;
-}
-
-function hasHttpResponse(value: unknown): value is StreamWithResponse {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'response' in value &&
-    value.response instanceof Promise
-  );
+/**
+ * Extracts the tail of text content from a (possibly partial) BetaMessage,
+ * concatenating all text blocks and capping at maxChars by keeping the
+ * suffix — which is what a continuation prompt references.
+ * The SDK's stream.currentMessage exposes exactly the accumulated state
+ * we need, so no custom buffering is required.
+ */
+function extractPartialText(
+  message: BetaMessage | undefined,
+  maxChars = 65536,
+): string {
+  if (!message?.content) return '';
+  const text = message.content
+    .filter((block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+      block.type === 'text',
+    )
+    .map((block) => block.text)
+    .join('');
+  return text.length <= maxChars
+    ? text
+    : text.slice(text.length - maxChars);
 }
 
 /** Type guard for any thinking-related content block param */
@@ -854,27 +864,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } catch (streamError) {
-        // Log enhanced diagnostics for stream failures, especially useful for relay debugging
         const baseUrl = this.getBaseUrl();
         const isUsingRelay = this.shouldUseServerSideKeys();
         const diagnostics = streamHandler.getDiagnostics();
-        const partialText = streamHandler.getPartialText();
-
-        // Enrich error with request ID from stream response headers so
-        // detectRequestId() (in sdkErrorUtils) picks it up via the existing
-        // ProviderError.requestId path — no duplicate field needed.
-        try {
-          if (hasHttpResponse(stream)) {
-            const httpResponse = await stream.response;
-            const reqId =
-              httpResponse.headers.get('request-id') ??
-              httpResponse.headers.get('x-request-id');
-            if (reqId && streamError instanceof Error) {
-              (streamError as ErrorWithRequestId).request_id = reqId;
-            }
-          }
-        } catch {
-          // Response may not be available (e.g. network error before HTTP response)
+        // Native SDK primitives: stream.currentMessage holds whatever the SDK
+        // accumulated before the error (undefined if no message_start arrived),
+        // and stream.request_id exposes the response header synchronously — no
+        // need to await stream.response or parse headers ourselves.
+        const partialText = extractPartialText(stream.currentMessage);
+        const requestId = stream.request_id;
+        if (requestId && streamError instanceof Error) {
+          (streamError as ErrorWithRequestId).request_id = requestId;
         }
 
         // Enrich the "stream ended without producing a Message with role=assistant"
@@ -884,24 +884,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // actual timing rather than the opaque SDK string.
         let enrichedError: unknown = streamError;
         if (
-          !diagnostics.messageStartReceived &&
+          !stream.currentMessage &&
           streamError instanceof Error &&
           !(streamError instanceof AnthropicUserAbortError)
         ) {
           const wrapper = new Error(
             `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
-              `(${diagnostics.eventsProcessed} events${
-                streamHandler.wasSseErrorReceived()
-                  ? ', SSE error event received'
-                  : ''
-              }). Likely connection dropped before the API responded.`,
+              `(${diagnostics.eventsProcessed} events). ` +
+              `Likely connection dropped before the API responded.`,
             { cause: streamError },
           );
-          // Preserve the request_id so downstream detection still works
-          const originalRequestId = (streamError as ErrorWithRequestId)
-            .request_id;
-          if (originalRequestId) {
-            (wrapper as ErrorWithRequestId).request_id = originalRequestId;
+          if (requestId) {
+            (wrapper as ErrorWithRequestId).request_id = requestId;
           }
           enrichedError = wrapper;
         }
