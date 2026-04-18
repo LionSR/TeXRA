@@ -112,23 +112,20 @@ async function compileOne(
     return;
   }
 
-  const outcome = await compileWithTimeout(
-    outputFile.location,
-    buildDir,
-    ctx.streamId,
-    opts.timeoutMs,
-  );
+  // execa's timeout option kills the child process on expiry, so we don't
+  // orphan hanging latexmk/pdflatex runs.
+  const ok = await compileLatex2Pdf(outputFile.location, {
+    channel: ctx.streamId,
+    outputDirectory: buildDir,
+    timeout: opts.timeoutMs,
+  });
 
-  if (outcome === 'ok') {
+  if (ok) {
     ctx.logger.debug(`Compile check: ${displayName} built successfully`);
     return;
   }
 
-  const tail =
-    outcome === 'timeout'
-      ? `Compile timeout after ${opts.timeoutMs}ms\n`
-      : await readLogTail(buildDir, displayName);
-
+  const tail = await readLogTail(buildDir, displayName);
   await flexibleFS.write(
     logDest,
     `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${tail}\n`,
@@ -136,29 +133,6 @@ async function compileOne(
   ctx.logger.warn(
     `Compile check: ${displayName} failed — wrote ${path.relative(opts.runDirectory, logDest.absolutePath)}`,
   );
-}
-
-type CompileOutcome = 'ok' | 'failed' | 'timeout';
-
-async function compileWithTimeout(
-  location: Parameters<typeof compileLatex2Pdf>[0],
-  outputDirectory: string,
-  channel: string,
-  timeoutMs: number,
-): Promise<CompileOutcome> {
-  let handle: NodeJS.Timeout | undefined;
-  try {
-    const result = await Promise.race<boolean | 'timeout'>([
-      compileLatex2Pdf(location, { channel, outputDirectory }),
-      new Promise<'timeout'>((resolve) => {
-        handle = setTimeout(() => resolve('timeout'), timeoutMs);
-      }),
-    ]);
-    if (result === 'timeout') return 'timeout';
-    return result ? 'ok' : 'failed';
-  } finally {
-    if (handle) clearTimeout(handle);
-  }
 }
 
 async function readLogTail(

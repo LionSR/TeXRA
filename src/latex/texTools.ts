@@ -35,7 +35,7 @@ export async function compileLatex2Pdf(
   // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
   const channel = parsed.channel ?? CHANNEL;
-  const { outputDirectory, compiler } = parsed;
+  const { outputDirectory, compiler, timeout } = parsed;
   try {
     const latexFile = latexLocation.absolutePath;
     const outDir = outputDirectory ?? path.dirname(latexFile);
@@ -95,6 +95,7 @@ export async function compileLatex2Pdf(
       result = await runToolWithCheck('latexmk', latexmkArgs, {
         channel,
         env,
+        timeout,
         showError: false, // Suppress error for latexmk to try pdflatex as fallback
       });
       if (!result) {
@@ -106,6 +107,7 @@ export async function compileLatex2Pdf(
         result = await runToolWithCheck('pdflatex', pdflatexArgs, {
           channel,
           env,
+          timeout,
           showError: true, // Show error if pdflatex also fails
         });
       }
@@ -113,6 +115,7 @@ export async function compileLatex2Pdf(
       result = await runToolWithCheck('pdflatex', pdflatexArgs, {
         channel,
         env,
+        timeout,
         showError: true, // Show error for missing pdflatex
       });
     }
