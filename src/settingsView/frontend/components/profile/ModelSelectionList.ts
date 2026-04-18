@@ -42,6 +42,15 @@ interface ProviderGroup {
   deprecated: ModelSelectionItem[];
 }
 
+/** Stable sort: fast-first-response models bubble to the top of their provider. */
+function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
+  return [...items].sort((a, b) => {
+    const aFast = a.isFast ? 0 : 1;
+    const bFast = b.isFast ? 0 : 1;
+    return aFast - bFast;
+  });
+}
+
 @customElement('model-selection-list')
 export class ModelSelectionList extends LitElement {
   static override styles = [designTokens, codiconStyles, profileViewStyles];
@@ -73,7 +82,7 @@ export class ModelSelectionList extends LitElement {
         return {
           provider,
           displayName: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-          current: models.filter((m) => !m.deprecated),
+          current: sortFastFirst(models.filter((m) => !m.deprecated)),
           deprecated: models.filter((m) => m.deprecated),
         };
       },
