@@ -23,7 +23,7 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 
 Opus 4.7, Opus 4.6, and Sonnet 4.6 include the full 1M context window at standard pricing — no opt-in or beta header required. Other Claude models use a 200K context window.
 
-Claude Opus 4.7 uses adaptive thinking only (extended thinking with a manual `budget_tokens` is no longer accepted). TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically — pick `opus47T` with Extra High effort for the strongest agentic coding and long-horizon tasks. Opus 4.7 also supports high-resolution images (up to 2576px / 3.75MP) for better figure, chart, and screenshot understanding.
+Claude Opus 4.7 uses adaptive thinking only (extended thinking with a manual `budget_tokens` is no longer accepted). TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically — pick `opus47T` with Extra High effort for the strongest agentic coding and long-horizon tasks. Opus 4.7 also supports high-resolution images (up to 2576px / 3.75MP) for better figure, chart, and screenshot understanding; note that TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending, so raise that setting if you want to take full advantage of Opus 4.7's higher limit.
 
 ## OpenAI Models
 
