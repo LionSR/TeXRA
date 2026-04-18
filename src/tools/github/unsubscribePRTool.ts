@@ -32,10 +32,10 @@ export class UnsubscribePRTool extends defineTool({
         'unsubscribe_pr_activity must be called from within an agent stream.',
       );
     }
-    const { wasSubscribed } = unbindPRSubscription(streamId, input);
+    const removed = unbindPRSubscription(streamId, input);
     const slug = `${input.owner}/${input.repo}#${input.pullNumber}`;
     return {
-      summary: wasSubscribed
+      summary: removed
         ? `Unsubscribed from ${slug}`
         : `Was not subscribed to ${slug}`,
     };

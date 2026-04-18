@@ -46,15 +46,13 @@ export class SubscribePRTool extends defineTool({
         'subscribe_pr_activity must be called from within an agent stream.',
       );
     }
-    const { alreadySubscribed } = bindPRSubscription(streamId, input);
+    const created = bindPRSubscription(streamId, input);
     const slug = `${input.owner}/${input.repo}#${input.pullNumber}`;
     return {
-      summary: alreadySubscribed
-        ? `Already subscribed to ${slug}`
-        : `Subscribed to ${slug}`,
-      output: alreadySubscribed
-        ? `Already subscribed to ${slug}. You will continue to receive PR activity as follow-up messages until the PR closes or you call unsubscribe_pr_activity.`
-        : `Subscribed to ${slug}. New comments, reviews, line comments, and failed CI checks will arrive as follow-up messages wrapped in <github-webhook-activity>. Poll interval ≈ 30s. Auto-unsubscribes on close/merge.`,
+      summary: created ? `Subscribed to ${slug}` : `Already subscribed to ${slug}`,
+      output: created
+        ? `Subscribed to ${slug}. New comments, reviews, line comments, and failed CI checks will arrive as follow-up messages wrapped in <github-webhook-activity>. Poll interval ≈ 30s. Auto-unsubscribes on close/merge.`
+        : `Already subscribed to ${slug}. You will continue to receive PR activity as follow-up messages until the PR closes or you call unsubscribe_pr_activity.`,
     };
   }
 }

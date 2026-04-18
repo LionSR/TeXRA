@@ -47,10 +47,11 @@ function ensureReleaseHook(): void {
   releaseHookRegistered = true;
 }
 
+/** Returns true if a new subscription was created, false if it already existed. */
 export function bindPRSubscription(
   streamId: StreamTabId,
   pr: PRKey,
-): { alreadySubscribed: boolean } {
+): boolean {
   ensureReleaseHook();
   const key = prKeyToString(pr);
   let bound = perStream.get(streamId);
@@ -58,9 +59,7 @@ export function bindPRSubscription(
     bound = new Map();
     perStream.set(streamId, bound);
   }
-  if (bound.has(key)) {
-    return { alreadySubscribed: true };
-  }
+  if (bound.has(key)) return false;
   const disposable = prPollingSource.subscribe(key, (text) => {
     void sendFollowUp(streamId, text).then((result) => {
       if (result.status === 'sent' || result.status === 'queued') {
@@ -70,17 +69,18 @@ export function bindPRSubscription(
   });
   bound.set(key, disposable);
   logger.info(`Bound PR subscription ${key} → stream ${streamId}`);
-  return { alreadySubscribed: false };
+  return true;
 }
 
+/** Returns true if a subscription existed and was removed. */
 export function unbindPRSubscription(
   streamId: StreamTabId,
   pr: PRKey,
-): { wasSubscribed: boolean } {
+): boolean {
   const key = prKeyToString(pr);
   const bound = perStream.get(streamId);
   const d = bound?.get(key);
-  if (!bound || !d) return { wasSubscribed: false };
+  if (!bound || !d) return false;
   try {
     d.dispose();
   } catch (err) {
@@ -88,11 +88,5 @@ export function unbindPRSubscription(
   }
   bound.delete(key);
   if (bound.size === 0) perStream.delete(streamId);
-  return { wasSubscribed: true };
-}
-
-export function listStreamSubscriptions(
-  streamId: StreamTabId,
-): readonly string[] {
-  return [...(perStream.get(streamId)?.keys() ?? [])];
+  return true;
 }

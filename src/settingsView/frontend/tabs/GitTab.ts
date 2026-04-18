@@ -8,7 +8,12 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, designTokens, commonViewStyles } from '@shared/styles';
+import {
+  codiconStyles,
+  commonViewStyles,
+  designTokens,
+  tintedBadgeStyles,
+} from '@shared/styles';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
@@ -25,6 +30,7 @@ export class GitTab extends LitElement {
     designTokens,
     codiconStyles,
     commonViewStyles,
+    tintedBadgeStyles,
     css`
       :host {
         display: block;
@@ -77,23 +83,17 @@ export class GitTab extends LitElement {
         flex-wrap: wrap;
       }
 
-      .badge {
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: var(--font-size-xs);
-        font-weight: 600;
+      .tinted-badge--ok {
+        --_tint: var(
+          --vscode-testing-iconPassed,
+          var(--vscode-terminal-ansiGreen)
+        );
       }
-      .badge-ok {
-        background: var(--vscode-testing-iconPassed, #16825d);
-        color: var(--vscode-editor-background);
+      .tinted-badge--warn {
+        --_tint: var(--vscode-editorWarning-foreground, #cca700);
       }
-      .badge-info {
-        background: var(--vscode-badge-background);
-        color: var(--vscode-badge-foreground);
-      }
-      .badge-warn {
-        background: var(--vscode-editorWarning-foreground, #cca700);
-        color: var(--vscode-editor-background);
+      .tinted-badge--info {
+        --_tint: var(--vscode-badge-background);
       }
 
       .instructions {
@@ -163,12 +163,12 @@ export class GitTab extends LitElement {
 
   private renderTokenStatusBadge(): TemplateResult {
     if (this.githubTokenStatus === 'secret') {
-      return html`<span class="badge badge-ok">Set</span>`;
+      return html`<span class="tinted-badge tinted-badge--ok">Set</span>`;
     }
     if (this.githubTokenStatus === 'env') {
-      return html`<span class="badge badge-info">Env</span>`;
+      return html`<span class="tinted-badge tinted-badge--info">Env</span>`;
     }
-    return html`<span class="badge badge-warn">Not set</span>`;
+    return html`<span class="tinted-badge tinted-badge--warn">Not set</span>`;
   }
 
   override render(): TemplateResult {

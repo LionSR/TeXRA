@@ -39,6 +39,9 @@ const POLL_INTERVAL_MS = 30_000;
 const MAX_CONCURRENT_SUBSCRIPTIONS = 10;
 // Coalesce this many same-kind events in a single tick into a summary.
 const COALESCE_THRESHOLD = 3;
+// Per-resource id history is trimmed to this many entries so long-running
+// subscriptions don't grow the state map unboundedly.
+const MAX_SEEN_IDS = 1000;
 
 export interface PRKey {
   owner: string;
@@ -83,6 +86,8 @@ interface SubscriptionState {
     checkRuns?: string;
   };
   consecutiveFailures: number;
+  /** Epoch-ms until which this subscription skips polling (rate-limit backoff). */
+  skipPollUntilMs: number;
 }
 
 export class PRPollingSource implements AsyncEventSource {
@@ -115,6 +120,7 @@ export class PRPollingSource implements AsyncEventSource {
         merged: false,
         etags: {},
         consecutiveFailures: 0,
+        skipPollUntilMs: 0,
       };
       this.subscriptions.set(key, state);
       this.logger.info(`Subscribed to ${key}`);
@@ -159,35 +165,50 @@ export class PRPollingSource implements AsyncEventSource {
   }
 
   private async tick(): Promise<void> {
-    for (const [key, state] of this.subscriptions) {
-      try {
-        await this.pollOne(state);
-        state.consecutiveFailures = 0;
-      } catch (err) {
-        state.consecutiveFailures += 1;
-        if (err instanceof GitHubAuthError) {
-          this.logger.warn(
-            `Auth error for ${key}; stopping subscription. ${err.message}`,
-          );
-          this.emit(state, err.message);
-          this.subscriptions.delete(key);
-        } else if (err instanceof GitHubRateLimitError) {
-          this.logger.warn(`Rate limited while polling ${key}: ${err.message}`);
-        } else {
-          this.logger.warn(
-            `Poll failed for ${key} (${state.consecutiveFailures} in a row): ${String(err)}`,
-          );
-          if (state.consecutiveFailures >= 5) {
-            this.emit(
-              state,
-              `PR subscription to ${key} halted after repeated failures: ${String(err)}`,
+    const now = Date.now();
+    const entries = [...this.subscriptions.entries()];
+    await Promise.allSettled(
+      entries.map(async ([key, state]) => {
+        if (state.skipPollUntilMs > now) return;
+        try {
+          await this.pollOne(state);
+          state.consecutiveFailures = 0;
+        } catch (err) {
+          state.consecutiveFailures += 1;
+          if (err instanceof GitHubAuthError) {
+            this.logger.warn(
+              `Auth error for ${key}; stopping subscription. ${err.message}`,
             );
+            this.emit(state, err.message);
             this.subscriptions.delete(key);
+          } else if (err instanceof GitHubRateLimitError) {
+            state.skipPollUntilMs = err.resetAt * 1000;
+            this.logger.warn(
+              `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
+            );
+          } else {
+            this.logger.warn(
+              `Poll failed for ${key} (${state.consecutiveFailures} in a row): ${String(err)}`,
+            );
+            if (state.consecutiveFailures >= 5) {
+              this.emit(
+                state,
+                `PR subscription to ${key} halted after repeated failures: ${String(err)}`,
+              );
+              this.subscriptions.delete(key);
+            }
           }
         }
-      }
-    }
+      }),
+    );
     if (this.subscriptions.size === 0) this.stopTimer();
+  }
+
+  private trimSet<T>(set: Set<T>): void {
+    const excess = set.size - MAX_SEEN_IDS;
+    if (excess <= 0) return;
+    const iter = set.values();
+    for (let i = 0; i < excess; i += 1) set.delete(iter.next().value as T);
   }
 
   private emit(state: SubscriptionState, text: string): void {
@@ -291,6 +312,7 @@ export class PRPollingSource implements AsyncEventSource {
           this.emit(state, formatIssueComment(state.slug, pr.pullNumber, c));
         }
       }
+      this.trimSet(state.seenIssueCommentIds);
     }
 
     if (reviewCommentsRes.status === 200) {
@@ -301,6 +323,7 @@ export class PRPollingSource implements AsyncEventSource {
           this.emit(state, formatReviewComment(state.slug, pr.pullNumber, c));
         }
       }
+      this.trimSet(state.seenReviewCommentIds);
     }
 
     if (reviewsRes.status === 200) {
@@ -311,6 +334,7 @@ export class PRPollingSource implements AsyncEventSource {
           this.emit(state, formatReview(state.slug, pr.pullNumber, r));
         }
       }
+      this.trimSet(state.seenReviewIds);
     }
 
     if (checksRes.status === 200) {
