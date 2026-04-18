@@ -25,7 +25,7 @@ TeXRA uses formatters to keep LaTeX code consistent and readable.
 - **`latexindent`** — the default formatter; highly configurable
 - **`tex-fmt`** — a faster alternative with simpler configuration
 
-Formatting runs automatically after agent execution and is also available via the Command Palette (`Ctrl+Shift+P`) → **TeXRA: Format Document**.
+Formatting runs automatically after agent execution and is also available via the Command Palette (`Ctrl+Shift+P`) → **TeXRA: Indent Current TeX** (or **Indent All LaTeX Files** for the whole workspace).
 
 **Configuration:** Formatter selection and installation live on the **LaTeX** tab (<i class="codicon codicon-file-code"></i>) of the TeXRA Dashboard. See [Configuration](./configuration.md#latex-configuration) for the full set of settings.
 
@@ -73,7 +73,7 @@ The `extract_figures` tool finds `\includegraphics` references and returns the i
 
 The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output.
 
-**Requirements (all checked on the Tools dashboard):**
+**Requirements (all checked on Dashboard → Tools):**
 
 - `latexmk` (preferred) or `pdflatex`
 - `GraphicsMagick` or `ImageMagick` for conversion

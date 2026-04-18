@@ -73,7 +73,7 @@ Set `texra.bib.defaultPath` in your VS Code settings (<i class="codicon codicon-
 
 ### <i class="codicon codicon-symbol-operator"></i> Verify Math with Wolfram
 
-The `research` agent can call `wolfram` to run Wolfram Language code and check symbolic algebra, integrals, or limits before you commit them to the manuscript. Requires a local [Wolfram Engine](https://www.wolfram.com/engine/); status shows on **Dashboard → Tools → Computation**.
+The `research` agent can call `wolfram` to run Wolfram Language code and check symbolic algebra, integrals, or limits before you commit them to the manuscript. Requires a local [Wolfram Engine](https://www.wolfram.com/engine/); status shows on **Dashboard → Tools** (<i class="codicon codicon-tools"></i>) → **Computation** (<i class="codicon codicon-symbol-operator"></i>).
 
 ### <i class="codicon codicon-comment-discussion"></i> Ask Another Model for a Second Opinion
 

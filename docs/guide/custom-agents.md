@@ -125,7 +125,7 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 - &#123;&#123; AUXILIARY_CONTENT &#125;&#125;: Content of the primary auxiliary file.
 - &#123;&#123; EDITED_FILE &#125;&#125;: Path of the edited file (used in `merge`).
 - &#123;&#123; EDITED_CONTENT &#125;&#125;: Content of the edited file.
-- &#123;&#123; MEDIA*FILE &#125;&#125;: Path of the primary media file.
+- &#123;&#123; MEDIA_FILE &#125;&#125;: Path of the primary media file.
   \_Note: Media content itself isn't directly inserted as text; it's handled separately for multimodal models. See [Working with Figures](./working-with-figures.md).*
 
 **Multiple File Variables:**
