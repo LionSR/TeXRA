@@ -298,3 +298,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   // System dependencies (latexindent, image processing) have moved to the
   // LaTeX settings tab — see LaTeXTab.ts and SettingsViewMessageHandler.ts.
 ];
+
+/** Look up a tool definition by id. */
+export function findExternalToolDef(id: string): ExternalToolDef | undefined {
+  return EXTERNAL_TOOL_DEFS.find((d) => d.id === id);
+}

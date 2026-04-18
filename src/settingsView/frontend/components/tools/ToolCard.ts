@@ -12,7 +12,10 @@ import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
-import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
+import type {
+  ToolCommandKind,
+  ToolDashboardItem,
+} from '@shared/schemas/settingsViewMessages';
 
 @customElement('tool-card')
 export class ToolCard extends LitElement {
@@ -248,7 +251,7 @@ export class ToolCard extends LitElement {
 
   @state() private guideExpanded = false;
 
-  /** Auto-expand the guide once when the tool lands in a not-found state. */
+  /** Reveal the install buttons immediately when a tool first reports missing. */
   override willUpdate(changed: Map<string, unknown>): void {
     if (!changed.has('item')) return;
     const prev = changed.get('item') as ToolDashboardItem | undefined;
@@ -279,23 +282,14 @@ export class ToolCard extends LitElement {
     }
   }
 
-  private handleRunInstallCommand(): void {
+  private runCommand(kind: ToolCommandKind): void {
     this.dispatchEvent(
-      createEvent('tool-run-command', {
-        toolId: this.item.id,
-        kind: 'install',
-      }),
+      createEvent('tool-run-command', { toolId: this.item.id, kind }),
     );
   }
 
-  private handleRunAuthCommand(): void {
-    this.dispatchEvent(
-      createEvent('tool-run-command', {
-        toolId: this.item.id,
-        kind: 'auth',
-      }),
-    );
-  }
+  private handleRunInstallCommand = (): void => this.runCommand('install');
+  private handleRunAuthCommand = (): void => this.runCommand('auth');
 
   private handleToggle(e: Event): void {
     const target = e.currentTarget as HTMLInputElement | null;
@@ -347,9 +341,6 @@ export class ToolCard extends LitElement {
       this.item.authCommand;
     if (!hasGuide) return nothing;
 
-    const primaryAction =
-      this.item.installExtensionId || this.item.installCommand;
-
     return html`
       <button class="tool-guide-toggle" @click=${this.toggleGuide}>
         <span
@@ -380,7 +371,8 @@ export class ToolCard extends LitElement {
               ${this.item.authCommand
                 ? html`
                     <button
-                      class="tool-action-btn ${primaryAction
+                      class="tool-action-btn ${this.item.installCommand ||
+                      this.item.installExtensionId
                         ? 'tool-action-btn--secondary'
                         : ''}"
                       @click=${this.handleRunAuthCommand}

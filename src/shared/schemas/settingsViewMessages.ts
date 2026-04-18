@@ -608,6 +608,9 @@ const RunToolCommandMessageSchema = z.object({
   toolId: z.string().min(1),
   kind: z.enum(['install', 'auth']),
 });
+export type ToolCommandKind = z.infer<
+  typeof RunToolCommandMessageSchema
+>['kind'];
 
 // Git author settings inbound messages
 const GetGitAuthorSettingsMessageSchema = commandOnly(

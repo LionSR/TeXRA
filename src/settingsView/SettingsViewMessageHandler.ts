@@ -97,7 +97,7 @@ import {
   parseCodexSandboxMode,
   parseCodexReasoningEffort,
 } from '@tools/codexConfig';
-import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
+import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
   MEMORY_STORAGE_ROOT,
   MAX_PINNED_MEMORIES,
@@ -535,7 +535,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private handleRunToolCommand(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND>,
   ): void {
-    const def = EXTERNAL_TOOL_DEFS.find((d) => d.id === data.toolId);
+    const def = findExternalToolDef(data.toolId);
     const command =
       data.kind === 'install' ? def?.installCommand : def?.authCommand;
     if (!command) {
