@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Welcome sidebar when no folder is open** — opening VS Code without a folder used to leave the TeXRA sidebar blank. Now the sidebar shows a friendly welcome with Open Folder / Clone Repository buttons, a brief intro to multi-agent orchestration, and links to the Getting Started tour and docs. Multi-root workspaces get matching copy explaining the single-folder requirement.
+- **File badges for agent-touched files** — a "T" badge appears in the Explorer next to files agents have written during the current session (including the originals of files agents have edited), similar to how git marks modified files. Session-scoped; clears on window reload.
 - **Claude Opus 4.7 support** — pick `opus47` or `opus47T` as your model for Anthropic's most capable generally available model. Opus 4.7 is particularly strong at long-horizon agentic coding, knowledge work, and vision-heavy tasks, and includes the full 1M context window at standard pricing. The model supports high-resolution image input (up to 2576px / 3.75MP) for better figure, chart, and screenshot understanding, though TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending — raise that setting to pass through larger images. `opus47T` is now the default Anthropic thinking model for new users.
 - **Refreshed default model list** — new installs get one frontier model per provider (`gemini31p`, `gemini3f`, `sonnet46T`, `opus47T`, `gpt54`, `deepseekT`, `kimi25T`). Existing users keep their current selections; you can add or remove models any time from Dashboard → Models.
 - **Git worktree support for delegated subagents** — orchestrators can now point subagents at a git worktree or alternate directory via `working_directory` on `delegate_agent`, so parallel agent runs no longer step on each other. Turn it on in Dashboard → Multi-Agent; tool-use agents (bash, read, write, edit, grep, glob, ls, text_editor, codex) respect the target directory automatically.
@@ -13,6 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
+- **Untrusted-workspace guard** — TeXRA now declares itself incompatible with untrusted workspaces, so opening an untrusted folder shows VS Code's standard trust prompt with a clear rationale (agents read files and execute shell commands). Previously the extension could activate silently in untrusted mode.
 - **No more `latexindent` install popup on first use** — the missing-`latexindent` warning is now off by default, so first-time users no longer see an unexpected install prompt after running an agent. Re-enable it with `texra.latex.showLatexindentWarning` if you want the reminder.
 - **External Inquiry is off by default for new users** — the copy-to-ChatGPT/Claude/Gemini workflow is now opt-in on first install only. Existing users keep their current setting; new users can turn it on from the Tools settings tab when they want agents to ask them to relay questions to another chat model.
 - Updated dependencies: `@anthropic-ai/sdk` 0.90.0 (adds typed `claude-opus-4-7` support), `fast-xml-parser` 5.7.1, and patch-level bumps across `openrouter`, `codex`, and `supabase` SDKs.
