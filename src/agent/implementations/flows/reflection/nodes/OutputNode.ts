@@ -1,14 +1,8 @@
-import * as path from 'path';
-
 import { Node } from '@agent/node';
-import { getConfig } from '@agent/core/config';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import {
-  hasRoundOutputs,
-  getStorageKey,
-  getOutputFilesByRound,
-} from '@agent/output/outputState';
+import { hasRoundOutputs, getStorageKey } from '@agent/output/outputState';
+import { runCompileCheck } from '@agent/output/compileCheck';
 import { extractFilesFromXml } from '@agent/output/xmlExtraction';
 import { traceFileLineage } from '@agent/output/lineageMapping';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
@@ -20,10 +14,9 @@ import {
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
-import { compileLatex2Pdf } from '@latex/texTools';
 import type { RoundOutput } from '@shared/schemas';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
-import { flexibleFS, getComparablePath, pathToLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
@@ -134,7 +127,7 @@ export class OutputNode<C = unknown> extends Node<
 
         await tryOperation(
           'Compile check',
-          () => this.handleCompileCheck(currentRound),
+          () => runCompileCheck(this.services, currentRound),
           logger,
         );
       }
@@ -279,136 +272,5 @@ export class OutputNode<C = unknown> extends Node<
     }
 
     await diffManager.handleLatexdiffofOutput(currentRound, mapping);
-  }
-
-  /**
-   * Attempt to compile each .tex output so the orchestrator (or user) knows
-   * whether the workflow produced a buildable document. On failure, the last
-   * 200 lines of the LaTeX log are written to
-   * `<runDir>/compile/<name>.log`; on success no log file is written.
-   *
-   * Missing toolchains, empty run directories, and non-root fragments all
-   * short-circuit to a debug log and skip the file gracefully.
-   */
-  private async handleCompileCheck(currentRound: number): Promise<void> {
-    const { fileService, outputState, logger, streamId } = this.services;
-
-    if (!getConfig<boolean>('texra.workflow.autoCompileAfterOutput', true)) {
-      return;
-    }
-
-    const runDirectory = fileService.metadata.runDirectory;
-    if (!runDirectory) {
-      logger.debug('Compile check skipped: no run directory for this execution');
-      return;
-    }
-
-    const outputs = getOutputFilesByRound(outputState)[currentRound] ?? [];
-    const texOutputs = outputs.filter((f) =>
-      f.location.absolutePath.toLowerCase().endsWith('.tex'),
-    );
-    if (texOutputs.length === 0) {
-      return;
-    }
-
-    const timeoutMs = Math.max(
-      10000,
-      getConfig<number>('texra.workflow.autoCompileTimeoutMs', 120000),
-    );
-    const compileRoot = path.join(runDirectory, 'compile');
-    await flexibleFS.ensureDir(pathToLocation(compileRoot));
-
-    for (const outputFile of texOutputs) {
-      const displayName = path.basename(outputFile.location.absolutePath);
-      // Derive a unique identifier from the full relative (or absolute) path so
-      // two outputs sharing a basename (e.g. ch1/main.tex and ch2/main.tex)
-      // don't clobber each other's build dirs and log files.
-      const safeName = getComparablePath(outputFile.location).replaceAll(
-        /[^a-zA-Z0-9._-]/g,
-        '_',
-      );
-      const buildDir = path.join(
-        compileRoot,
-        'build',
-        `r${currentRound}`,
-        safeName,
-      );
-      const logDest = pathToLocation(path.join(compileRoot, `${safeName}.log`));
-
-      await flexibleFS.delete(logDest).catch(() => undefined);
-
-      let content: string;
-      try {
-        content = await flexibleFS.read(outputFile.location);
-      } catch (err) {
-        logger.debug(
-          `Compile check: cannot read ${displayName}: ${toErrorMessage(err)}`,
-        );
-        continue;
-      }
-      if (!/\\documentclass/.test(content)) {
-        logger.debug(
-          `Compile check: ${displayName} has no \\documentclass, skipping fragment`,
-        );
-        continue;
-      }
-
-      let ok = false;
-      let timeoutHandle: NodeJS.Timeout | undefined;
-      try {
-        const compile = compileLatex2Pdf(outputFile.location, {
-          channel: streamId,
-          outputDirectory: buildDir,
-        });
-        const timeout = new Promise<boolean>((_, reject) => {
-          timeoutHandle = setTimeout(
-            () => reject(new Error(`compile timeout after ${timeoutMs}ms`)),
-            timeoutMs,
-          );
-        });
-        ok = await Promise.race<boolean>([compile, timeout]);
-      } catch (err) {
-        const message = toErrorMessage(err);
-        logger.warn(`Compile check: ${displayName} aborted — ${message}`);
-        await flexibleFS.write(
-          logDest,
-          `Compile check aborted for ${displayName}: ${message}\n`,
-        );
-        continue;
-      } finally {
-        if (timeoutHandle) clearTimeout(timeoutHandle);
-      }
-
-      if (ok) {
-        logger.debug(`Compile check: ${displayName} built successfully`);
-        continue;
-      }
-
-      // Latex engines write `<basename-without-ext>.log` in the build dir.
-      // Strip the extension case-insensitively so `.TEX`/`.Tex` inputs resolve
-      // to the same log path as `.tex` ones.
-      const latexLogAbs = path.join(
-        buildDir,
-        `${displayName.replace(/\.tex$/i, '')}.log`,
-      );
-      let tail: string;
-      try {
-        const full = await flexibleFS.read(pathToLocation(latexLogAbs));
-        tail = full.split('\n').slice(-200).join('\n');
-      } catch {
-        tail =
-          '(no LaTeX log produced — toolchain may be missing or failed before writing a log)';
-      }
-
-      const header =
-        `Compile check failed for ${displayName}\n` +
-        `Build directory: ${buildDir}\n` +
-        `Last 200 lines of the LaTeX log follow:\n` +
-        `${'-'.repeat(60)}\n`;
-      await flexibleFS.write(logDest, `${header}${tail}\n`);
-      logger.warn(
-        `Compile check: ${displayName} failed — wrote ${path.relative(runDirectory, logDest.absolutePath)}`,
-      );
-    }
   }
 }
