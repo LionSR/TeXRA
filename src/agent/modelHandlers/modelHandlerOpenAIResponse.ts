@@ -684,37 +684,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal ? { signal } : undefined,
       );
     } catch (err) {
-      // User cancellation - clear pending ID and propagate
       if (err instanceof DOMException && err.name === 'AbortError') {
         this.clearPendingBackgroundResponse();
         throw err;
       }
-      // Transient failures (network errors with no status, 5xx, 429, 408) are
-      // classified retryable by formatProviderHttpError. The background response
-      // is likely still alive server-side in these cases, so retain the pending
-      // ID and rethrow — the outer retry will attempt to resume the same ID on
-      // the next pass instead of starting a duplicate background job.
+      // Transient failures (network, 5xx, 429, 408) — the background response
+      // is likely still alive server-side, so retain the ID and rethrow. The
+      // outer retry will resume the same ID instead of duplicating work.
+      // Definitive failures (404 expired, 401/403 auth, other 4xx) — clear
+      // the ID and signal that a new request is needed.
       const formatted = formatProviderHttpError(err);
       if (formatted.retryable) {
-        this.logger.warn(
-          `Transient failure retrieving pending background response ${pendingId}: ${formatted.message}. ` +
-            'Retaining ID so next retry resumes the same response.',
-          {
-            data: {
-              responseId: pendingId,
-              error: formatted.message,
-              statusCode: formatted.statusCode,
-            },
-          },
-        );
         throw err;
       }
-      // Definitive failures (404 expired/deleted, 401/403 auth, other 4xx) -
-      // clear and signal that a new request is needed
       this.logger.warn(
-        `Failed to retrieve pending background response ${pendingId}: ${getSdkErrorMessage(err)}. ` +
+        `Failed to retrieve pending background response ${pendingId}: ${formatted.message}. ` +
           'Will create new request.',
-        { data: { responseId: pendingId, error: getSdkErrorMessage(err) } },
+        {
+          data: {
+            responseId: pendingId,
+            error: formatted.message,
+            statusCode: formatted.statusCode,
+          },
+        },
       );
       this.clearPendingBackgroundResponse();
       return null;
@@ -1982,9 +1974,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
-      // Log info about pending background response for retry logic
-      // Note: We intentionally keep pendingBackgroundResponseId for connection errors
-      // so that retry logic can resume polling the same response
+      // Retention of pendingBackgroundResponseId is decided at the point of
+      // failure (tryResumeBackgroundResponse and waitForBackgroundCompletion).
+      // If it survived to here, the next retry will try to resume the same ID.
       if (this.pendingBackgroundResponseId) {
         this.logger.info(
           `Retaining pendingBackgroundResponseId=${this.pendingBackgroundResponseId} for retry - ` +
