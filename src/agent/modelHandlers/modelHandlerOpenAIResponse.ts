@@ -689,21 +689,28 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.clearPendingBackgroundResponse();
         throw err;
       }
-      // Network-level failure (no HTTP status): the retrieve never reached the
-      // server or got no response. The background response may still be alive
-      // remotely, so retain the pending ID and rethrow — the outer retry will
-      // attempt to resume the same ID on the next pass.
+      // Transient failures (network errors with no status, 5xx, 429, 408) are
+      // classified retryable by formatProviderHttpError. The background response
+      // is likely still alive server-side in these cases, so retain the pending
+      // ID and rethrow — the outer retry will attempt to resume the same ID on
+      // the next pass instead of starting a duplicate background job.
       const formatted = formatProviderHttpError(err);
-      if (formatted.retryable && formatted.statusCode === undefined) {
+      if (formatted.retryable) {
         this.logger.warn(
-          `Network failure retrieving pending background response ${pendingId}: ${formatted.message}. ` +
+          `Transient failure retrieving pending background response ${pendingId}: ${formatted.message}. ` +
             'Retaining ID so next retry resumes the same response.',
-          { data: { responseId: pendingId, error: formatted.message } },
+          {
+            data: {
+              responseId: pendingId,
+              error: formatted.message,
+              statusCode: formatted.statusCode,
+            },
+          },
         );
         throw err;
       }
-      // Other failures (404 expired/deleted, auth, etc.) - clear and signal
-      // that a new request is needed
+      // Definitive failures (404 expired/deleted, 401/403 auth, other 4xx) -
+      // clear and signal that a new request is needed
       this.logger.warn(
         `Failed to retrieve pending background response ${pendingId}: ${getSdkErrorMessage(err)}. ` +
           'Will create new request.',
