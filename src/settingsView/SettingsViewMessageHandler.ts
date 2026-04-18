@@ -97,6 +97,7 @@ import {
   parseCodexSandboxMode,
   parseCodexReasoningEffort,
 } from '@tools/codexConfig';
+import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
   MEMORY_STORAGE_ROOT,
   MAX_PINNED_MEMORIES,
@@ -526,7 +527,26 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.sendToolDashboardData(w, { skipChecks: true }),
         );
       },
+      [SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND]: (data) =>
+        this.handleRunToolCommand(data),
     };
+  }
+
+  private handleRunToolCommand(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND>,
+  ): void {
+    const def = findExternalToolDef(data.toolId);
+    const command =
+      data.kind === 'install' ? def?.installCommand : def?.authCommand;
+    if (!command) {
+      this.logger.debug(this.channel, 'No command for tool', { data });
+      return;
+    }
+    const terminal = vscode.window.createTerminal({
+      name: `TeXRA: ${def?.name ?? data.toolId}`,
+    });
+    terminal.show();
+    terminal.sendText(command);
   }
 
   public override async handleMessage(
