@@ -16,10 +16,10 @@ import axios from 'axios';
 
 // Local imports
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
+import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import type { RegisteredToolName } from '@tools/registry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import { isWSL } from '@utils/system/wslDetect';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
@@ -59,6 +59,10 @@ export interface ExternalToolDef {
   readonly installUrl?: string;
   /** VS Code extension ID — when present, the dashboard offers a direct "Install" button. */
   readonly installExtensionId?: string;
+  /** Shell command the dashboard can run in an integrated terminal to install the tool. */
+  readonly installCommand?: string;
+  /** Shell command the dashboard can run to sign the user in (e.g. `codex login`). */
+  readonly authCommand?: string;
   readonly configNotes?: string;
   /** When true, the tool is checked for availability but not shown in the Tools tab dashboard. */
   readonly hideFromDashboard?: boolean;
@@ -243,6 +247,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  • codex login        — sign in with ChatGPT account (recommended)\n' +
       '  • OPENAI_API_KEY     — environment variable with API key',
     installUrl: 'https://github.com/openai/codex',
+    installCommand: 'npm install -g @openai/codex',
+    authCommand: 'codex login',
     configNotes:
       'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk. ' +
       'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
@@ -292,3 +298,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   // System dependencies (latexindent, image processing) have moved to the
   // LaTeX settings tab — see LaTeXTab.ts and SettingsViewMessageHandler.ts.
 ];
+
+/** Look up a tool definition by id. */
+export function findExternalToolDef(id: string): ExternalToolDef | undefined {
+  return EXTERNAL_TOOL_DEFS.find((d) => d.id === id);
+}
