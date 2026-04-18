@@ -140,11 +140,11 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
 /**
  * Preferred agents for dropdowns, in priority order.
  * The first available agent in the list is pre-selected and sorted to the top.
- * Orchestrator is preferred but requires sign-in (remote agent);
- * chat is the local fallback.
+ * Orchestrator is preferred but requires sign-in (remote agent); when
+ * unavailable, the next enabled tool-use agent is used.
  */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
-const PREFERRED_TOOL_USE_AGENTS = ['orchestrator', 'chat'] as const;
+const PREFERRED_TOOL_USE_AGENTS = ['orchestrator'] as const;
 
 // =============================================================================
 // STATE
