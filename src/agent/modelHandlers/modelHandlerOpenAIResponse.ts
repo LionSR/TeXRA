@@ -3,7 +3,11 @@ import { Buffer } from 'node:buffer';
 import * as path from 'path';
 
 // Third-party imports
-import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+import OpenAI, {
+  APIConnectionTimeoutError,
+  APIError as OpenAIAPIError,
+  toFile,
+} from 'openai';
 import { ResponsesWS } from 'openai/resources/responses/ws';
 import { WebSocketError } from 'openai/resources/responses/internal-base';
 
@@ -1414,10 +1418,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         delete content.filename;
       }
     } catch (err) {
-      // APIConnectionTimeoutError is the SDK's native timeout signal — no
-      // need for a message-substring fallback; the class check covers both
-      // client-side (SDK timeout) and server-side (408) timeout cases.
-      if (err instanceof APIConnectionTimeoutError) {
+      // Two native SDK timeout signals: APIConnectionTimeoutError (client-side
+      // SDK timeout) and APIError with status 408 (server-side Request Timeout).
+      // Status 408 is NOT mapped to APIConnectionTimeoutError by the SDK —
+      // it falls through to a bare APIError — so both must be checked.
+      const isTimeout =
+        err instanceof APIConnectionTimeoutError ||
+        (err instanceof OpenAIAPIError && err.status === 408);
+      if (isTimeout) {
         this.logger.warn(
           `Timed out uploading file ${filename}. Falling back to inline payload.`,
         );
