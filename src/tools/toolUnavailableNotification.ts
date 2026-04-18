@@ -51,6 +51,11 @@ const DEFAULT_ACTION_LABEL = 'Open Tools Dashboard';
  * (e.g. GitHub PR Activity Subscription points to the Git tab where the
  * token is configured).
  *
+ * Groups that share the same action target (e.g. all the default
+ * "Open Tools Dashboard" ones) are coalesced into a single toast so an
+ * upgrading user with several unmet dependencies doesn't get flooded
+ * with one popup per group.
+ *
  * Each group is only notified once per session.
  */
 export function notifyUnavailableTools(excludedToolNames: string[]): void {
@@ -59,18 +64,36 @@ export function notifyUnavailableTools(excludedToolNames: string[]): void {
   if (fresh.length === 0) return;
   for (const g of fresh) notifiedGroups.add(g.name);
 
+  // Coalesce hidden-from-dashboard groups (no action).
+  const hiddenGroups = fresh.filter((g) => g.hideFromDashboard);
+  if (hiddenGroups.length > 0) {
+    const label = formatGroupLabel(hiddenGroups.map((g) => g.name));
+    notificationHandler(
+      `${label} excluded — external dependencies not installed.`,
+    );
+  }
+
+  // Coalesce dashboard-visible groups by their action target. Groups with
+  // the default target share one toast; a group with an override (e.g.
+  // github-pr-subscription → Git tab) gets its own.
+  const byAction = new Map<string, typeof fresh>();
   for (const g of fresh) {
-    const label = formatGroupLabel([g.name]);
-    const message = `${label} excluded — external dependencies not installed.`;
-    if (g.hideFromDashboard) {
-      notificationHandler(message);
-    } else {
-      notificationHandler(
-        message,
-        g.installActionCommand ?? DEFAULT_ACTION_COMMAND,
-        g.installActionLabel ?? DEFAULT_ACTION_LABEL,
-      );
-    }
+    if (g.hideFromDashboard) continue;
+    const cmd = g.installActionCommand ?? DEFAULT_ACTION_COMMAND;
+    const label = g.installActionLabel ?? DEFAULT_ACTION_LABEL;
+    const bucketKey = `${cmd}\0${label}`;
+    const bucket = byAction.get(bucketKey);
+    if (bucket) bucket.push(g);
+    else byAction.set(bucketKey, [g]);
+  }
+  for (const [bucketKey, bucket] of byAction) {
+    const [cmd, label] = bucketKey.split('\0');
+    const names = formatGroupLabel(bucket.map((g) => g.name));
+    notificationHandler(
+      `${names} excluded — external dependencies not installed.`,
+      cmd,
+      label,
+    );
   }
 }
 
