@@ -93,12 +93,12 @@ export class ToolCard extends LitElement {
       }
 
       .tool-badge--unknown {
-        color: var(--color-text-secondary);
+        color: var(--vscode-badge-foreground);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
       }
 
       .tool-badge--disabled {
-        color: var(--color-text-secondary);
+        color: var(--vscode-badge-foreground);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
       }
 
@@ -121,7 +121,7 @@ export class ToolCard extends LitElement {
         font-size: var(--font-size-xs, 11px);
         padding: var(--border-thin) var(--border-radius-large);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
-        color: var(--color-text-secondary);
+        color: var(--vscode-badge-foreground);
         border-radius: var(--border-radius);
       }
 
