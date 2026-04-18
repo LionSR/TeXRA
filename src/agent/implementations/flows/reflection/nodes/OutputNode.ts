@@ -23,7 +23,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { RoundOutput } from '@shared/schemas';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
-import { flexibleFS, pathToLocation } from '@utils/files';
+import { flexibleFS, getComparablePath, pathToLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
@@ -320,7 +320,13 @@ export class OutputNode<C = unknown> extends Node<
 
     for (const outputFile of texOutputs) {
       const displayName = path.basename(outputFile.location.absolutePath);
-      const safeName = displayName.replaceAll(/[^a-zA-Z0-9._-]/g, '_');
+      // Derive a unique identifier from the full relative (or absolute) path so
+      // two outputs sharing a basename (e.g. ch1/main.tex and ch2/main.tex)
+      // don't clobber each other's build dirs and log files.
+      const safeName = getComparablePath(outputFile.location).replaceAll(
+        /[^a-zA-Z0-9._-]/g,
+        '_',
+      );
       const buildDir = path.join(
         compileRoot,
         'build',
@@ -378,9 +384,12 @@ export class OutputNode<C = unknown> extends Node<
         continue;
       }
 
+      // Latex engines write `<basename-without-ext>.log` in the build dir.
+      // Strip the extension case-insensitively so `.TEX`/`.Tex` inputs resolve
+      // to the same log path as `.tex` ones.
       const latexLogAbs = path.join(
         buildDir,
-        `${path.basename(displayName, '.tex')}.log`,
+        `${displayName.replace(/\.tex$/i, '')}.log`,
       );
       let tail: string;
       try {
