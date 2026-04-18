@@ -870,9 +870,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // and keeps error payloads small enough for webview messaging.
         const partialText = extractPartialTextTail(stream.currentMessage, 4096);
         const requestId = stream.request_id;
-        if (requestId && streamError instanceof Error) {
-          (streamError as ErrorWithRequestId).request_id = requestId;
-        }
 
         // Wrap only non-APIError stream failures. APIError subclasses carry
         // status/headers/requestID/type that formatProviderHttpError needs
@@ -884,16 +881,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
           streamError instanceof Error &&
           !(streamError instanceof AnthropicAPIError)
         ) {
-          const wrapper = new Error(
+          enrichedError = new Error(
             `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
               `(${diagnostics.eventsProcessed} events). ` +
               `Likely connection dropped before the API responded.`,
             { cause: streamError },
           );
-          if (requestId) {
-            (wrapper as ErrorWithRequestId).request_id = requestId;
-          }
-          enrichedError = wrapper;
+        }
+
+        // detectRequestId() reads .request_id off the thrown error, so set it
+        // on whichever object we're throwing (the wrapper or the original).
+        if (requestId && enrichedError instanceof Error) {
+          (enrichedError as ErrorWithRequestId).request_id = requestId;
         }
 
         const isAbort = streamError instanceof AnthropicUserAbortError;
