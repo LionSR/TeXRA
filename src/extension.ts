@@ -105,16 +105,18 @@ export async function activate(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {
-    if (workspaceFolders && workspaceFolders.length > 1) {
-      void vscode.window.showInformationMessage(
-        'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.',
-      );
-      return;
-    }
-    registerNoWorkspaceView(context);
+    registerNoWorkspaceView(
+      context,
+      workspaceFolders && workspaceFolders.length > 1 ? 'multi-root' : 'empty',
+    );
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
+  await vscode.commands.executeCommand(
+    'setContext',
+    'texra.activated',
+    true,
+  );
 
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),

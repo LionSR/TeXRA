@@ -1243,32 +1243,32 @@
       "view/title": [
         {
           "command": "texra.indentTeX",
-          "when": "view == texra.mainView && texra.activeView == 'progress'",
+          "when": "view == texra.mainView && texra.activated && texra.activeView == 'progress'",
           "group": "navigation@1"
         },
         {
           "command": "texra.cleanOutput",
-          "when": "view == texra.mainView && texra.activeView == 'progress'",
+          "when": "view == texra.mainView && texra.activated && texra.activeView == 'progress'",
           "group": "navigation@2"
         },
         {
           "command": "texra.cleanBuild",
-          "when": "view == texra.mainView && texra.activeView == 'progress'",
+          "when": "view == texra.mainView && texra.activated && texra.activeView == 'progress'",
           "group": "navigation@3"
         },
         {
           "command": "texra.showDashboard",
-          "when": "view == texra.mainView && texra.activeView == 'progress'",
+          "when": "view == texra.mainView && texra.activated && texra.activeView == 'progress'",
           "group": "navigation@4"
         },
         {
           "command": "texra.mainView.reset",
-          "when": "view == texra.mainView && texra.activeView != 'progress'",
+          "when": "view == texra.mainView && texra.activated && texra.activeView != 'progress'",
           "group": "navigation@0"
         },
         {
           "command": "texra.showDashboard",
-          "when": "view == texra.mainView && texra.activeView != 'progress'",
+          "when": "view == texra.mainView && texra.activated && texra.activeView != 'progress'",
           "group": "navigation@1"
         }
       ],

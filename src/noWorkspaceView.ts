@@ -2,20 +2,48 @@ import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
 // Reuses the `texra.mainView` slot declared in package.json so the TeXRA
-// sidebar icon shows the welcome UI instead of nothing when no folder is open.
-// The real MainViewProvider is only registered by registerCommands() when a
-// single-folder workspace is open, so the two registrations never collide.
+// sidebar icon shows the welcome UI instead of nothing when the extension
+// can't fully activate. The real MainViewProvider is only registered by
+// registerCommands() in the single-folder path, so the two registrations
+// never collide. The `texra.activated` context key gates view/title menu
+// contributions so their commands (registered only after full activation)
+// don't leak into the welcome toolbar.
 const VIEW_ID = 'texra.mainView';
 
-function getHtml(webview: vscode.Webview, nonce: string): string {
+export type NoWorkspaceReason = 'empty' | 'multi-root';
+
+const COPY: Record<NoWorkspaceReason, { heading: string; body: string }> = {
+  empty: {
+    heading: 'Welcome to TeXRA',
+    body: 'Open a folder to start using TeXRA, your AI-powered LaTeX research assistant.',
+  },
+  'multi-root': {
+    heading: 'Single-folder workspace required',
+    body: 'TeXRA supports one folder at a time. Open a single folder to continue.',
+  },
+};
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function getHtml(
+  webview: vscode.Webview,
+  nonce: string,
+  reason: NoWorkspaceReason,
+): string {
   const cspSource = webview.cspSource;
+  const { heading, body } = COPY[reason];
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:; img-src ${cspSource} vscode-resource: data:;"
     />
     <title>TeXRA</title>
     <style nonce="${nonce}">
@@ -59,8 +87,8 @@ function getHtml(webview: vscode.Webview, nonce: string): string {
     </style>
   </head>
   <body>
-    <h2>Welcome to TeXRA</h2>
-    <p>Open a folder to start using TeXRA. The extension works on a single-folder workspace.</p>
+    <h2>${escapeHtml(heading)}</h2>
+    <p>${escapeHtml(body)}</p>
     <button id="open">Open Folder</button>
     <button id="clone" class="secondary">Clone Repository</button>
     <script nonce="${nonce}">
@@ -78,11 +106,16 @@ function getHtml(webview: vscode.Webview, nonce: string): string {
 
 export function registerNoWorkspaceView(
   context: vscode.ExtensionContext,
+  reason: NoWorkspaceReason,
 ): void {
   const provider: vscode.WebviewViewProvider = {
     resolveWebviewView(webviewView) {
       webviewView.webview.options = { enableScripts: true };
-      webviewView.webview.html = getHtml(webviewView.webview, nanoid(32));
+      webviewView.webview.html = getHtml(
+        webviewView.webview,
+        nanoid(32),
+        reason,
+      );
       webviewView.webview.onDidReceiveMessage(
         (message: { type?: string }) => {
           if (message?.type === 'openFolder') {
@@ -102,7 +135,7 @@ export function registerNoWorkspaceView(
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(VIEW_ID, provider),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      if (vscode.workspace.workspaceFolders?.length) {
+      if (vscode.workspace.workspaceFolders?.length === 1) {
         void vscode.commands.executeCommand('workbench.action.reloadWindow');
       }
     }),
