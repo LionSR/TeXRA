@@ -146,15 +146,15 @@ interface UploadedAnthropicAttachment {
 type ErrorWithRequestId = Error & { request_id?: string };
 
 /**
- * Extracts the tail of text content from a (possibly partial) BetaMessage,
- * concatenating all text blocks and capping at maxChars by keeping the
- * suffix — which is what a continuation prompt references.
- * The SDK's stream.currentMessage exposes exactly the accumulated state
- * we need, so no custom buffering is required.
+ * Extracts the tail of text content from a (possibly partial) BetaMessage.
+ * The SDK's stream.currentMessage accumulates all content blocks as they
+ * arrive, so on a stream failure this already holds whatever text was
+ * generated — no custom buffering required. Returns the suffix because
+ * continuation prompts only reference the last few hundred chars.
  */
-function extractPartialText(
+function extractPartialTextTail(
   message: BetaMessage | undefined,
-  maxChars = 65536,
+  maxChars: number,
 ): string {
   if (!message?.content) return '';
   const text = message.content
@@ -865,30 +865,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } catch (streamError) {
-        const baseUrl = this.getBaseUrl();
-        const isUsingRelay = this.shouldUseServerSideKeys();
         const diagnostics = streamHandler.getDiagnostics();
-        // Native SDK primitives: stream.currentMessage holds whatever the SDK
-        // accumulated before the error (undefined if no message_start arrived),
-        // and stream.request_id exposes the response header synchronously — no
-        // need to await stream.response or parse headers ourselves.
-        const partialText = extractPartialText(stream.currentMessage);
+        // 4KB is enough for a "continue from [tail]" prompt and UI display,
+        // and keeps error payloads small enough for webview messaging.
+        const partialText = extractPartialTextTail(stream.currentMessage, 4096);
         const requestId = stream.request_id;
         if (requestId && streamError instanceof Error) {
           (streamError as ErrorWithRequestId).request_id = requestId;
         }
 
-        // Enrich the "stream ended without producing a Message with role=assistant"
-        // SDK error — it's raised when the connection closes before any
-        // message_start event. Mirror the messageStop validation above with a
-        // message that carries diagnostics, so logs and retry UI surface the
-        // actual timing rather than the opaque SDK string.
-        //
-        // Only wrap non-APIError stream failures: AnthropicAPIError instances
-        // (HTTP 4xx/5xx, rate limits, auth, connection) already carry status,
-        // headers, requestID, and body metadata that formatProviderHttpError
-        // relies on for retry classification. Replacing them with a plain
-        // Error would hide that info and misclassify e.g. 401 as generic.
+        // Wrap only non-APIError stream failures. APIError subclasses carry
+        // status/headers/requestID/type that formatProviderHttpError needs
+        // for retry classification; replacing them loses that metadata and
+        // misclassifies e.g. 401 as generic retryable.
         let enrichedError: unknown = streamError;
         if (
           !stream.currentMessage &&
@@ -907,36 +896,27 @@ export class ModelHandlerAnthropic extends ModelHandler<
           enrichedError = wrapper;
         }
 
-        // User aborts are expected control flow, not failures — log at debug.
-        // Everything else warrants a warning so silent proxy drops are visible.
         const isAbort = streamError instanceof AnthropicUserAbortError;
-        const logFn = isAbort ? this.logger.debug : this.logger.warn;
-        logFn.call(
-          this.logger,
-          `Stream ${isAbort ? 'aborted' : 'failed'}: ${enrichedError instanceof Error ? enrichedError.message : String(enrichedError)}`,
-          {
-            data: {
-              isUsingRelay,
-              baseUrl: baseUrl ?? 'default',
-              model: this.config.fullName,
-              streamDiagnostics: diagnostics,
-              partialTextLength: partialText.length,
-            },
+        const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}: ${enrichedError instanceof Error ? enrichedError.message : String(enrichedError)}`;
+        const logData = {
+          data: {
+            isUsingRelay: this.shouldUseServerSideKeys(),
+            baseUrl: this.getBaseUrl() ?? 'default',
+            model: this.config.fullName,
+            streamDiagnostics: diagnostics,
+            partialTextLength: partialText.length,
           },
-        );
+        };
+        // Aborts are control flow, not failures. Everything else is a warn
+        // so silent proxy drops surface without debug logging enabled.
+        if (isAbort) {
+          this.logger.debug(logMessage, logData);
+        } else {
+          this.logger.warn(logMessage, logData);
+        }
 
-        // Attach diagnostics and a bounded tail of partial text to the error
-        // for retry UI display and future continuation-on-retry support.
-        // A 4KB tail is plenty for a "your response ended with [X], continue
-        // from there" prompt and for UI display, while keeping the error
-        // small enough to round-trip through webview messages without bloat.
-        const ATTACHED_PARTIAL_TEXT_MAX = 4096;
-        const attachedPartialText =
-          partialText.length > ATTACHED_PARTIAL_TEXT_MAX
-            ? partialText.slice(partialText.length - ATTACHED_PARTIAL_TEXT_MAX)
-            : partialText;
         attachStreamDiagnostics(enrichedError, diagnostics);
-        attachPartialText(enrichedError, attachedPartialText);
+        attachPartialText(enrichedError, partialText);
         throw enrichedError;
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
