@@ -11,6 +11,7 @@ import {
   pathToLocation,
   type TaskRunFileService,
 } from '@utils/files';
+import { checkToolInstalled } from '@utils/system';
 
 import { getOutputFilesByRound, type OutputState } from './outputState';
 
@@ -49,12 +50,27 @@ export async function runCompileCheck(
   ).filter((f) => f.location.absolutePath.toLowerCase().endsWith('.tex'));
   if (texOutputs.length === 0) return;
 
+  // Skip gracefully when no LaTeX toolchain is installed so the run doesn't
+  // leave stray `compile/<name>.log` artifacts that the orchestrator would
+  // misread as real compile failures.
+  const hasToolchain =
+    (await checkToolInstalled('latexmk', false)) ||
+    (await checkToolInstalled('pdflatex', false));
+  if (!hasToolchain) {
+    ctx.logger.debug(
+      'Compile check skipped: neither latexmk nor pdflatex is installed',
+    );
+    return;
+  }
+
   const timeoutMs = Math.max(
     MIN_TIMEOUT_MS,
     getConfig<number>('texra.workflow.autoCompileTimeoutMs', 120000),
   );
+  // compileRoot is created lazily on first failure so successful rounds leave
+  // no trace — the orchestrator can use "no compile/*.log entries" as proof
+  // the build succeeded.
   const compileRoot = path.join(runDirectory, 'compile');
-  await flexibleFS.ensureDir(pathToLocation(compileRoot));
 
   for (const outputFile of texOutputs) {
     const displayName = path.basename(outputFile.location.absolutePath);
@@ -101,7 +117,7 @@ async function compileOne(
     path.join(opts.compileRoot, `${safeName}.log`),
   );
 
-  // Clear stale logs so "no log = success" holds across rounds.
+  // Clear any stale log from a previous round so "no log = success" holds.
   await flexibleFS.delete(logDest).catch(() => undefined);
 
   const content = await flexibleFS.read(outputFile.location);
@@ -126,6 +142,7 @@ async function compileOne(
   }
 
   const tail = await readLogTail(buildDir, displayName);
+  await flexibleFS.ensureDir(pathToLocation(opts.compileRoot));
   await flexibleFS.write(
     logDest,
     `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${tail}\n`,
