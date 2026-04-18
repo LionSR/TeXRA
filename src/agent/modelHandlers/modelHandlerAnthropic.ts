@@ -851,15 +851,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
               `Stream truncated, likely proxy idle timeout during extended thinking.`,
           );
           attachStreamDiagnostics(truncatedError, diagnostics);
-          this.logger.warn(
-            'Stream truncated: response received without message_stop',
-            {
-              data: {
-                model: this.config.fullName,
-                streamDiagnostics: diagnostics,
-              },
-            },
-          );
+          // The catch block below will log this at warn with full diagnostics
+          // in the log data — no inner log here, otherwise one truncation
+          // event produces two warn entries.
           throw truncatedError;
         }
 
