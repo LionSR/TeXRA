@@ -27,12 +27,19 @@ const MAX_BODY = 500;
  * YAML — attacker-controlled by the PR author), file paths, and URLs.
  * Without this, any of those fields could inject `</github-webhook-activity>`
  * and escape the wrapper, feeding arbitrary text to the agent as if it were
- * direct user input. Neutralize the angle brackets around our tag keywords.
+ * direct user input.
+ *
+ * Matches liberally (whitespace inside the tag, case-insensitive) because
+ * LLMs and HTML parsers both accept `</github-webhook-activity >`,
+ * `< / github-webhook-activity >`, and similar variants as closing tags.
+ * The replacement injects a zero-width space into the tag *name* so no
+ * re-parser can reconstruct it — not just guards on the outside, which
+ * left the middle structurally intact.
  */
 function sanitize(s: string): string {
   return s.replaceAll(
-    /<(\/?github-webhook-activity)>/gi,
-    '\u200B$1\u200B', // zero-width-space guards, visually identical
+    /<\s*\/?\s*github-webhook-activity\s*>/gi,
+    (match) => match.replace(/github-webhook-activity/i, 'github-\u200Bwebhook-activity'),
   );
 }
 
