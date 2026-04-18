@@ -9,6 +9,9 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 import { badgeStyles, designTokens } from '@shared/styles';
 
+// Local imports - shared copy
+import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
+
 // Local imports - profile view styles
 import { profileViewStyles } from './styles';
 
@@ -58,11 +61,13 @@ export class ProfileInfo extends LitElement {
           </span>
         </div>
         <div class="profile-notice">
-          Thanks to sponsor credits, every tier currently has access to all
-          models — except the <code>gpt-5-pro</code> series, which stays
-          reserved for Ultra. Your conversations are sent directly to the model
-          provider: TeXRA does <strong>not</strong> store your prompts or
-          responses, and they are <strong>never</strong> used for training.
+          ${PROMO_NOTICE_LONG.promoLead}<code
+            >${PROMO_NOTICE_LONG.promoCode}</code
+          >${PROMO_NOTICE_LONG.promoTail} ${PROMO_NOTICE_LONG.privacyLead}<strong
+            >${PROMO_NOTICE_LONG.privacyDoesNot}</strong
+          >${PROMO_NOTICE_LONG.privacyMiddle}<strong
+            >${PROMO_NOTICE_LONG.privacyNever}</strong
+          >${PROMO_NOTICE_LONG.privacyTrailing}
         </div>
         ${expiration
           ? html`

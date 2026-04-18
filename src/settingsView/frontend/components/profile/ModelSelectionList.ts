@@ -15,6 +15,7 @@ import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_PROVIDERS_ORDER,
 } from '@shared/constants/providers';
+import { isFastFirstResponseModel } from '@shared/constants/fastModels';
 
 // Local imports - profile view styles and events
 import {
@@ -40,6 +41,15 @@ interface ProviderGroup {
   displayName: string;
   current: ModelSelectionItem[];
   deprecated: ModelSelectionItem[];
+}
+
+/** Stable sort: fast-first-response models bubble to the top of their provider. */
+function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
+  return [...items].sort((a, b) => {
+    const aFast = isFastFirstResponseModel(a.name) ? 0 : 1;
+    const bFast = isFastFirstResponseModel(b.name) ? 0 : 1;
+    return aFast - bFast;
+  });
 }
 
 @customElement('model-selection-list')
@@ -73,7 +83,7 @@ export class ModelSelectionList extends LitElement {
         return {
           provider,
           displayName: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-          current: models.filter((m) => !m.deprecated),
+          current: sortFastFirst(models.filter((m) => !m.deprecated)),
           deprecated: models.filter((m) => m.deprecated),
         };
       },
