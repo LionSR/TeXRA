@@ -46,6 +46,7 @@ import {
   globalSM,
   workspaceSM,
 } from '@common/state';
+import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import {
@@ -98,6 +99,8 @@ import {
   parseCodexReasoningEffort,
 } from '@tools/codexConfig';
 import { findExternalToolDef } from '@tools/externalToolDefs';
+import { prPollingSource, unbindAllForPR } from '@tools/github';
+import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import {
   MEMORY_STORAGE_ROOT,
   MAX_PINNED_MEMORIES,
@@ -108,7 +111,6 @@ import {
   setPinnedMeta,
   countPinnedMemories,
 } from '@tools/memory/memoryMeta';
-import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { setToolUseMemoryEnabled } from '@utils/config/constants';
@@ -314,6 +316,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.latexHandlers = new LatexSettingsHandlers(ctx);
 
     this.handlerRegistry = this.createHandlerRegistry();
+
+    // Lifetime == extension; bus is process-global so no dispose needed.
+    bus.on('prSubscriptionsChanged', ({ keys }) => {
+      void this.withActiveWebview((w) => this.sendPRSubscriptions(w, keys));
+    });
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
@@ -494,6 +501,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           ),
         );
       },
+      [SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS]: () =>
+        this.withActiveWebview((w) => this.sendPRSubscriptions(w)),
+      [SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR]: (data) => {
+        const removed = unbindAllForPR(data.key);
+        if (removed === 0) {
+          void vscode.window.showInformationMessage(
+            `No active subscription for ${data.key}.`,
+          );
+        }
+      },
 
       // ── Delegated to LatexSettingsHandlers ──
 
@@ -627,6 +644,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.agentHandlers.sendAgentModePresets(webview),
       this.sendGitAuthorSettings(webview),
       this.sendGitHubTokenStatus(webview),
+      this.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
     ]);
@@ -906,6 +924,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         error,
       );
     }
+  }
+
+  private async sendPRSubscriptions(
+    webview: vscode.Webview,
+    keys?: readonly string[],
+  ): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
+      keys: [...(keys ?? prPollingSource.activeKeys())],
+    });
   }
 
   // ============================================================

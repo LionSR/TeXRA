@@ -350,6 +350,15 @@ export type UpdateGitHubTokenStatusMessage = z.infer<
   typeof UpdateGitHubTokenStatusMessageSchema
 >;
 
+/** Outbound: backend → frontend active PR subscription keys. */
+export const UpdatePRSubscriptionsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS),
+  keys: z.array(z.string()),
+});
+export type UpdatePRSubscriptionsMessage = z.infer<
+  typeof UpdatePRSubscriptionsMessageSchema
+>;
+
 // ============================================================
 // LaTeX settings data schemas
 // ============================================================
@@ -658,6 +667,13 @@ const RemoveGitHubTokenMessageSchema = commandOnly(CMD.REMOVE_GITHUB_TOKEN);
 
 const OpenGitHubTokenUrlMessageSchema = commandOnly(CMD.OPEN_GITHUB_TOKEN_URL);
 
+const GetPRSubscriptionsMessageSchema = commandOnly(CMD.GET_PR_SUBSCRIPTIONS);
+
+const UnsubscribePRMessageSchema = z.object({
+  command: z.literal(CMD.UNSUBSCRIBE_PR),
+  key: z.string().min(1),
+});
+
 // LaTeX settings inbound messages
 const GetLatexSettingsStatusMessageSchema = commandOnly(
   CMD.GET_LATEX_SETTINGS_STATUS,
@@ -782,6 +798,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetGitHubTokenMessageSchema,
     RemoveGitHubTokenMessageSchema,
     OpenGitHubTokenUrlMessageSchema,
+    GetPRSubscriptionsMessageSchema,
+    UnsubscribePRMessageSchema,
     // Approval settings messages
     GetApprovalSettingsMessageSchema,
     SetBashApprovalEnabledMessageSchema,

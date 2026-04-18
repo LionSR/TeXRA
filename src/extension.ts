@@ -244,6 +244,22 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     }),
   );
+  const disposeGitHubAuthListener = bus.on(
+    'githubTokenInvalid',
+    ({ message }) => {
+      void vscode.window
+        .showErrorMessage(
+          `GitHub token rejected: ${message}`,
+          'Open Git settings',
+        )
+        .then((choice) => {
+          if (choice === 'Open Git settings') {
+            void vscode.commands.executeCommand('texra.showDashboard');
+          }
+        });
+    },
+  );
+  context.subscriptions.push({ dispose: disposeGitHubAuthListener });
   setLinterProvider(getLinterMessages);
   setOpenBuildDisplay(openBuildDisplayIfTex);
   applyGitAuthorConfig();

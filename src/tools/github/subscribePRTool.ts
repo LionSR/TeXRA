@@ -30,8 +30,14 @@ type SubscribePRInput = z.infer<typeof SubscribePRInputSchema>;
 
 export class SubscribePRTool extends defineTool({
   name: 'subscribe_pr_activity',
-  description:
-    'Subscribe this stream to GitHub pull request activity. Delivers new comments, reviews, line comments, and failed CI checks as follow-up messages. Auto-unsubscribes when the PR is closed or merged. Requires a GitHub token — set it in TeXRA settings → Git tab, or via the GITHUB_TOKEN environment variable.',
+  description: [
+    'Subscribe this stream to GitHub pull request activity.',
+    'Every new comment, review, line comment, and failed CI check will arrive as a follow-up message wrapped in <github-webhook-activity> tags, exactly as if the user had typed it.',
+    'When such a follow-up arrives, treat it like user input: investigate what it refers to, fix it if the action is small and unambiguous, ask the user if the change is architecturally significant or the request is ambiguous, or skip the event if no action is needed.',
+    'Do NOT re-post the event text as a comment on GitHub — that would create a self-loop; your job is to react to events, not echo them.',
+    'The subscription is scoped to the current stream: sub-agents spawned via delegate_agent do not inherit it. Delegation results come through their own follow-up channel.',
+    'Subscriptions auto-terminate when the PR is closed or merged. Poll interval ≈ 30s. Up to 10 concurrent PRs. Requires a GitHub token — set it in TeXRA settings → Git tab, or via the GITHUB_TOKEN environment variable.',
+  ].join(' '),
   schema: SubscribePRInputSchema,
 }) {
   protected async execute(input: SubscribePRInput): Promise<ToolResult> {

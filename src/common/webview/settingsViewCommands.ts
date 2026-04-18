@@ -97,6 +97,9 @@ export const SETTINGS_VIEW_CMD = {
   SET_GITHUB_TOKEN: 'setGitHubToken',
   REMOVE_GITHUB_TOKEN: 'removeGitHubToken',
   OPEN_GITHUB_TOKEN_URL: 'openGitHubTokenUrl',
+  GET_PR_SUBSCRIPTIONS: 'getPRSubscriptions',
+  UPDATE_PR_SUBSCRIPTIONS: 'updatePRSubscriptions',
+  UNSUBSCRIBE_PR: 'unsubscribePR',
   // LaTeX settings commands
   GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',

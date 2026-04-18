@@ -114,6 +114,25 @@ export class GitTab extends LitElement {
         border-radius: 3px;
         font-size: 0.9em;
       }
+
+      .subscriptions-list {
+        list-style: none;
+        padding: 0;
+        margin: var(--spacing-small) 0 0 0;
+      }
+      .subscriptions-list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-small);
+        padding: var(--spacing-xs) 0;
+      }
+      .subscriptions-list code {
+        background: var(--vscode-textBlockQuote-background);
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 0.9em;
+      }
     `,
   ];
 
@@ -123,6 +142,7 @@ export class GitTab extends LitElement {
   @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) githubTokenStatus: 'secret' | 'env' | 'none' =
     'none';
+  @property({ attribute: false }) prSubscriptions: readonly string[] = [];
 
   private handleMarkCommitsToggle(event: Event): void {
     const target = event.target as HTMLInputElement | null;
@@ -159,6 +179,10 @@ export class GitTab extends LitElement {
 
   private handleOpenGitHubTokenUrl(): void {
     this.dispatchEvent(createEvent('github-token-open-url', {}));
+  }
+
+  private handleUnsubscribePR(key: string): void {
+    this.dispatchEvent(createEvent('unsubscribe-pr', { key }));
   }
 
   private renderTokenStatusBadge(): TemplateResult {
@@ -235,6 +259,34 @@ export class GitTab extends LitElement {
               : nothing}
           </div>
         </div>
+
+        ${this.prSubscriptions.length > 0
+          ? html`
+              <div class="setting-block">
+                <p class="section-title">Active PR subscriptions</p>
+                <p class="setting-description">
+                  Each subscription polls GitHub every 30s. Click
+                  <em>Stop</em> to cancel; the current agent task will
+                  keep running but no new PR events will arrive.
+                </p>
+                <ul class="subscriptions-list">
+                  ${this.prSubscriptions.map(
+                    (key) => html`
+                      <li>
+                        <code>${key}</code>
+                        <vscode-button
+                          appearance="secondary"
+                          @click=${() => this.handleUnsubscribePR(key)}
+                        >
+                          Stop
+                        </vscode-button>
+                      </li>
+                    `,
+                  )}
+                </ul>
+              </div>
+            `
+          : nothing}
 
         <div class="setting-block">
           <vscode-checkbox

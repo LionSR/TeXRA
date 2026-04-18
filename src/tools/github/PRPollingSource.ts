@@ -11,6 +11,7 @@
  * layer above.
  */
 
+import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 
 import {
@@ -93,7 +94,32 @@ interface SubscriptionState {
 export class PRPollingSource implements AsyncEventSource {
   private readonly logger = new AgentLogger('PRPollingSource');
   private readonly subscriptions = new Map<string, SubscriptionState>();
+  private readonly changeListeners = new Set<(keys: readonly string[]) => void>();
   private timer: ReturnType<typeof setInterval> | undefined;
+
+  /**
+   * Register a callback fired whenever the set of active PR keys changes
+   * (subscription added, removed, auto-unsubscribed on close, etc.). Used by
+   * the settings UI to keep its active-subscriptions list in sync.
+   */
+  onKeysChanged(listener: (keys: readonly string[]) => void): () => void {
+    this.changeListeners.add(listener);
+    return () => {
+      this.changeListeners.delete(listener);
+    };
+  }
+
+  private notifyKeysChanged(): void {
+    const snapshot = [...this.subscriptions.keys()];
+    bus.emit('prSubscriptionsChanged', { keys: snapshot });
+    for (const cb of this.changeListeners) {
+      try {
+        cb(snapshot);
+      } catch (err) {
+        this.logger.warn(`Change listener threw: ${String(err)}`);
+      }
+    }
+  }
 
   subscribe(key: string, onEvent: (text: string) => void): Disposable {
     const pr = parsePRKey(key);
@@ -124,6 +150,7 @@ export class PRPollingSource implements AsyncEventSource {
       };
       this.subscriptions.set(key, state);
       this.logger.info(`Subscribed to ${key}`);
+      this.notifyKeysChanged();
     }
     state.listeners.add(onEvent);
     this.ensureTimer();
@@ -144,6 +171,7 @@ export class PRPollingSource implements AsyncEventSource {
     if (state.listeners.size === 0) {
       this.subscriptions.delete(key);
       this.logger.info(`Unsubscribed from ${key}`);
+      this.notifyKeysChanged();
     }
     if (this.subscriptions.size === 0) this.stopTimer();
   }
@@ -181,6 +209,8 @@ export class PRPollingSource implements AsyncEventSource {
             );
             this.emit(state, err.message);
             this.subscriptions.delete(key);
+            this.notifyKeysChanged();
+            bus.emit('githubTokenInvalid', { message: err.message });
           } else if (err instanceof GitHubRateLimitError) {
             state.skipPollUntilMs = err.resetAt * 1000;
             this.logger.warn(
@@ -196,6 +226,7 @@ export class PRPollingSource implements AsyncEventSource {
                 `PR subscription to ${key} halted after repeated failures: ${String(err)}`,
               );
               this.subscriptions.delete(key);
+              this.notifyKeysChanged();
             }
           }
         }
@@ -241,6 +272,7 @@ export class PRPollingSource implements AsyncEventSource {
         );
         // Auto-unsubscribe.
         this.subscriptions.delete(prKeyToString(pr));
+        this.notifyKeysChanged();
         return;
       }
       state.state = newState;
@@ -375,6 +407,7 @@ export class PRPollingSource implements AsyncEventSource {
   disposeAll(): void {
     this.subscriptions.clear();
     this.stopTimer();
+    this.notifyKeysChanged();
   }
 }
 

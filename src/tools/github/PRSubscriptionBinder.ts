@@ -90,3 +90,26 @@ export function unbindPRSubscription(
   if (bound.size === 0) perStream.delete(streamId);
   return true;
 }
+
+/**
+ * Dispose every binding of `key` across all streams. Used by the settings UI
+ * to let the user cancel a subscription globally (e.g. from the Git tab's
+ * active-subscriptions list) without needing to know which stream owns it.
+ * Returns the number of bindings removed.
+ */
+export function unbindAllForPR(key: string): number {
+  let removed = 0;
+  for (const [streamId, bound] of [...perStream]) {
+    const d = bound.get(key);
+    if (!d) continue;
+    try {
+      d.dispose();
+    } catch (err) {
+      logger.warn(`Disposer threw during unbindAllForPR: ${String(err)}`);
+    }
+    bound.delete(key);
+    removed += 1;
+    if (bound.size === 0) perStream.delete(streamId);
+  }
+  return removed;
+}

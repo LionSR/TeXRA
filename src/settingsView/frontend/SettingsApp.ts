@@ -46,6 +46,7 @@ import {
   UpdateToolDashboardMessageSchema,
   UpdateGitAuthorSettingsMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,
+  UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
   type AgentSelectionItem,
   type NumberVscodeSetting,
@@ -201,6 +202,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly githubTokenStatus = signal<'secret' | 'env' | 'none'>(
     'none',
   );
+  private readonly prSubscriptions = signal<readonly string[]>([]);
 
   // LaTeX settings state
   private readonly latexSettingsStatus = signal({
@@ -396,6 +398,16 @@ export class SettingsApp extends SettingsAppBase {
         );
         if (!data) return;
         this.githubTokenStatus.set(data.status);
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS: {
+        const data = this.parseMessage(
+          raw,
+          UpdatePRSubscriptionsMessageSchema,
+        );
+        if (!data) return;
+        this.prSubscriptions.set(data.keys);
         return;
       }
 
@@ -668,6 +680,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
   );
 
+  private handleUnsubscribePR = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR,
+  );
+
   // LaTeX settings event handlers
   private handleApplyLatexSettings = forwardDetail(
     SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS,
@@ -903,7 +919,9 @@ export class SettingsApp extends SettingsAppBase {
               @github-token-set=${this.handleGitHubTokenSet}
               @github-token-remove=${this.handleGitHubTokenRemove}
               @github-token-open-url=${this.handleGitHubTokenOpenUrl}
-              .githubTokenStatus=${this.githubTokenStatus}
+              @unsubscribe-pr=${this.handleUnsubscribePR}
+              .githubTokenStatus=${this.githubTokenStatus.get()}
+              .prSubscriptions=${this.prSubscriptions.get()}
             ></git-tab>
           </vscode-tab-panel>
 
