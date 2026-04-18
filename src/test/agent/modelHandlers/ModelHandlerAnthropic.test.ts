@@ -1031,8 +1031,8 @@ describe('ModelHandlerAnthropic message guards', () => {
     const options = messageOptions[0] ?? {};
     assert.deepEqual(
       options.thinking,
-      { type: 'adaptive' },
-      'Opus 4.7 should request adaptive thinking (budget_tokens is rejected)',
+      { type: 'adaptive', display: 'summarized' },
+      'Opus 4.7 should request adaptive thinking with display: summarized so reasoning still streams',
     );
     assert.equal(
       options.output_config?.effort,
