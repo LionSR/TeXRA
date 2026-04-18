@@ -16,7 +16,6 @@ import axios from 'axios';
 
 // Local imports
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
-import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import { getGitHubToken } from '@tools/github/githubAuth';
