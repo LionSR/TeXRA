@@ -84,6 +84,7 @@ export const SETTINGS_VIEW_CMD = {
   INSTALL_TOOL_EXTENSION: 'installToolExtension',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
   TOGGLE_TOOL: 'toggleTool',
+  RUN_TOOL_COMMAND: 'runToolCommand',
   // Git settings commands
   GET_GIT_AUTHOR_SETTINGS: 'getGitAuthorSettings',
   SET_GIT_MARK_COMMITS: 'setGitMarkCommits',

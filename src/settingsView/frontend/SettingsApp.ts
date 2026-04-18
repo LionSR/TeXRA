@@ -607,6 +607,10 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleToolToggle = forwardDetail(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL);
 
+  private handleToolRunCommand = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
+  );
+
   // Approval settings event handlers
   private handleBashApprovalToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED,
@@ -850,6 +854,7 @@ export class SettingsApp extends SettingsAppBase {
               .codexReasoningEffort=${this.codexReasoningEffort.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
+              @tool-run-command=${this.handleToolRunCommand}
               @tool-recheck=${this.handleToolRecheck}
               @tool-toggle=${this.handleToolToggle}
               @bash-approval-toggle=${this.handleBashApprovalToggle}
