@@ -18,6 +18,8 @@ import axios from 'axios';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import type { RegisteredToolName } from '@tools/registry';
+import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
+import { getGitHubToken } from '@tools/github/githubAuth';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { isWSL } from '@utils/system/wslDetect';
@@ -215,6 +217,33 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes: 'Lean 4 VS Code extension must be installed and active.',
     check: async () => extensionChecker(LEAN4_EXT_ID),
   },
+  {
+    id: 'github-pr-subscription',
+    tools: ['subscribe_pr_activity', 'unsubscribe_pr_activity'],
+    name: 'GitHub PR Activity Subscription',
+    category: 'workflow',
+    description:
+      'Poll GitHub pull requests and deliver new comments, reviews, line comments, and failed CI checks into the current stream as follow-up messages.',
+    installGuide:
+      'No software install required. You need a GitHub personal access token:\n\n' +
+      '  1. Create a token at https://github.com/settings/tokens\n' +
+      '  2. Scopes: "repo" for private repositories, or "public_repo" for public only\n' +
+      '  3. Paste it into the TeXRA setting `texra.github.token`\n\n' +
+      'Alternatively, export GITHUB_TOKEN in the environment VS Code is launched from.',
+    installUrl: 'https://github.com/settings/tokens',
+    configNotes:
+      'Requires texra.github.token (or GITHUB_TOKEN env). Polls every 30s; subscription cap: 10 concurrent PRs.',
+    authNote: 'Uses personal access token',
+    toggleable: true,
+    check: async () => getGitHubToken() !== undefined,
+    detailCheck: async () => {
+      if (getGitHubToken()) {
+        return 'GitHub token detected. Ready to subscribe to PR activity.';
+      }
+      return 'No GitHub token configured. Set texra.github.token in settings.';
+    },
+  },
+
   {
     id: 'external-inquiry',
     tools: ['external_inquiry'],
