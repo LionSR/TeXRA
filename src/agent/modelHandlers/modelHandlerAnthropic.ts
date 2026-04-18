@@ -629,7 +629,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // and automatically enables interleaved thinking between tool calls.
         // budget_tokens is deprecated on these models.
         const effort = this.getAnthropicEffort();
-        options.thinking = { type: 'adaptive' };
+        // Opus 4.7 defaults display to 'omitted', which suppresses reasoning
+        // output. Request 'summarized' so thinking tokens still stream to the
+        // user — older adaptive-thinking models already emit reasoning by
+        // default and are unaffected.
+        options.thinking = this.isClaudeOpus47()
+          ? { type: 'adaptive', display: 'summarized' }
+          : { type: 'adaptive' };
         options.output_config = {
           ...options.output_config,
           effort,
