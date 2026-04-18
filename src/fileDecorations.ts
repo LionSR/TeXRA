@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 
 import { bus } from '@eventBus/ProgressEventBus';
-import type { FileLocation, OutputFileInfo } from '@shared/schemas';
+import type { OutputFileInfo } from '@shared/schemas';
 
-// Surfaces files agents write during this session as a badge in the Explorer,
-// similar to how the built-in Git provider decorates modified files. Session-
-// scoped only — the set is not persisted across window reloads.
+// Session-scoped: the touched set is not persisted across window reloads so
+// the badges clear on restart and track only the current session's activity.
 class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
   private readonly touched = new Set<string>();
   private readonly _onDidChange = new vscode.EventEmitter<
@@ -13,7 +12,7 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
   >();
   readonly onDidChangeFileDecorations = this._onDidChange.event;
 
-  markTouched(absolutePaths: readonly string[]): void {
+  markTouched(absolutePaths: Iterable<string>): void {
     const newly: vscode.Uri[] = [];
     for (const p of absolutePaths) {
       if (!this.touched.has(p)) {
@@ -42,15 +41,25 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
   }
 }
 
-function collectWorkspacePaths(files: readonly OutputFileInfo[]): string[] {
-  const paths: string[] = [];
-  for (const file of files) {
-    const loc: FileLocation = file.location;
-    if (loc.kind === 'workspace') {
-      paths.push(loc.absolutePath);
+// Mirrors `OutputFilesManager.collectPaths` so an edit workflow's original
+// workspace file (stored in `lineage.original`) is decorated, not just the
+// agent's staged output which is often under runStorage.
+function collectWorkspacePaths(
+  target: Set<string>,
+  info: OutputFileInfo,
+): void {
+  const { lineage } = info;
+  const locations = [
+    info.location,
+    lineage?.original,
+    lineage?.diffBase,
+    lineage?.diffFile,
+  ];
+  for (const loc of locations) {
+    if (loc?.kind === 'workspace') {
+      target.add(loc.absolutePath);
     }
   }
-  return paths;
 }
 
 export function registerFileDecorations(
@@ -59,11 +68,13 @@ export function registerFileDecorations(
   const provider = new TeXRAFileDecorationProvider();
 
   const unsubscribe = bus.on('addOutputFiles', ({ filesByRound }) => {
-    const paths: string[] = [];
+    const paths = new Set<string>();
     for (const roundFiles of Object.values(filesByRound)) {
-      paths.push(...collectWorkspacePaths(roundFiles));
+      for (const info of roundFiles) {
+        collectWorkspacePaths(paths, info);
+      }
     }
-    if (paths.length > 0) {
+    if (paths.size > 0) {
       provider.markTouched(paths);
     }
   });
