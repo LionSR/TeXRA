@@ -22,6 +22,7 @@ import { parseWorkingDirectory } from '@tools/utils';
 
 import { defineTool } from '../core/define';
 import { ghGet } from './githubClient';
+import { getGitHubToken } from './githubAuth';
 import type { GhPullRequest } from './prTypes';
 
 const execFileAsync = promisify(execFile);
@@ -72,6 +73,11 @@ export class FindCurrentPRTool extends defineTool({
   schema: FindCurrentPRInputSchema,
 }) {
   protected async execute(input: FindCurrentPRInput): Promise<ToolResult> {
+    if (!getGitHubToken()) {
+      throw new ToolError(
+        'No GitHub token configured. Open TeXRA settings → Git tab → "Set token" (or export GITHUB_TOKEN). Needs `repo` scope for private PRs, `public_repo` for public.',
+      );
+    }
     const cwd =
       parseWorkingDirectory(input.working_directory) ??
       getCurrentToolFileInteractionContext()?.workingDirectory;
