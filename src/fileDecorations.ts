@@ -15,9 +15,13 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
   markTouched(absolutePaths: Iterable<string>): void {
     const newly: vscode.Uri[] = [];
     for (const p of absolutePaths) {
-      if (!this.touched.has(p)) {
-        this.touched.add(p);
-        newly.push(vscode.Uri.file(p));
+      // Round-trip through Uri.file so storage and lookup use the same
+      // canonical form (Windows drive letters are normalized differently
+      // by Uri.file vs. raw fs paths).
+      const uri = vscode.Uri.file(p);
+      if (!this.touched.has(uri.fsPath)) {
+        this.touched.add(uri.fsPath);
+        newly.push(uri);
       }
     }
     if (newly.length > 0) {
