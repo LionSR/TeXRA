@@ -1224,7 +1224,7 @@
     "viewsWelcome": [
       {
         "view": "texra.welcomeView",
-        "contents": "TeXRA is your AI-powered LaTeX research assistant. Open a folder to get started.\n[Open Folder](command:workbench.action.files.openFolder)\n[Clone Repository](command:git.clone)\nTo learn more about how to use TeXRA in VS Code [read our docs](https://github.com/LionSR/TeXRA#readme).",
+        "contents": "TeXRA is a multi-agent AI system for LaTeX research. It orchestrates specialized agents for writing, figures, bibliographies, and verification — each grounded in real tools and producing auditable output.\nOpen a folder to begin.\n[Open Folder](command:workbench.action.files.openFolder)\n[Clone Repository](command:git.clone)\nNew to TeXRA? [Take the tour](command:workbench.action.openWalkthrough?%22texra.gettingStarted%22) or [read the docs](https://github.com/LionSR/TeXRA#readme).",
         "when": "workbenchState == empty"
       },
       {
