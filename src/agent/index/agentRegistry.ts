@@ -139,12 +139,20 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
 
 /**
  * Preferred agents for dropdowns, in priority order.
- * The first available agent in the list is pre-selected and sorted to the top.
- * Orchestrator is preferred but requires sign-in (remote agent);
- * chat is the local fallback.
+ * Preferred agents present in the workspace are sorted to the top of the
+ * dropdown (in the order listed here); all others follow alphabetically.
+ * The remote orchestrators come first (they need sign-in); `research`/`review`
+ * are local general-purpose fallbacks so signed-out users in presets like
+ * Physicist/Mathematician don't land on task-specific agents (e.g. `presenter`)
+ * by alphabetical accident.
  */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
-const PREFERRED_TOOL_USE_AGENTS = ['orchestrator', 'chat'] as const;
+const PREFERRED_TOOL_USE_AGENTS = [
+  'orchestrator',
+  'leanOrchestrator',
+  'research',
+  'review',
+] as const;
 
 // =============================================================================
 // STATE
