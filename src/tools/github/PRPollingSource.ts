@@ -21,6 +21,7 @@ import {
   formatPRClosed,
   formatReview,
   formatReviewComment,
+  formatSubscriptionError,
 } from './formatPREvent';
 import {
   GitHubAuthError,
@@ -242,7 +243,10 @@ export class PRPollingSource implements AsyncEventSource {
               this.logger.warn(
                 `Auth error for ${key}; stopping subscription. ${err.message}`,
               );
-              this.emit(state, err.message);
+              this.emit(
+                state,
+                formatSubscriptionError(state.slug, state.pr.pullNumber, err.message),
+              );
               this.subscriptions.delete(key);
               this.notifyKeysChanged();
               bus.emit('githubTokenInvalid', { message: err.message });
@@ -262,7 +266,11 @@ export class PRPollingSource implements AsyncEventSource {
               if (state.consecutiveFailures >= 5) {
                 this.emit(
                   state,
-                  `PR subscription to ${key} halted after repeated failures: ${String(err)}`,
+                  formatSubscriptionError(
+                    state.slug,
+                    state.pr.pullNumber,
+                    `repeated failures: ${String(err)}`,
+                  ),
                 );
                 this.subscriptions.delete(key);
                 this.notifyKeysChanged();

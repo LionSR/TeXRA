@@ -138,3 +138,20 @@ export function formatPRClosed(
     `${slug}#${prNumber} was ${verb}. Subscription ended.`,
   );
 }
+
+/**
+ * Error events delivered into the follow-up queue when the poller hits an
+ * unrecoverable condition (auth rejected, repeated failures). Same
+ * `<github-webhook-activity>` envelope + sanitize path as every other event
+ * so agents can't mistake these for direct user input and so an adversarial
+ * GitHub error payload can't inject tag-shaped content unsanitized.
+ */
+export function formatSubscriptionError(
+  slug: string,
+  prNumber: number,
+  detail: string,
+): string {
+  return wrap(
+    `PR subscription to ${slug}#${prNumber} halted: ${detail}`,
+  );
+}
