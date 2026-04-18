@@ -39,6 +39,14 @@
       "visibility": ["researcher"]
     },
     "orchestrator": { "folder": "tool-use", "visibility": ["public"] },
+    "latexFixer": {
+      "folder": "tool-use",
+      "visibility": ["whitelist", "QITBench", "researcher", "lean", "public"]
+    },
+    "latexDiff": {
+      "folder": "tool-use",
+      "visibility": ["whitelist", "QITBench", "researcher", "lean", "public"]
+    },
     "presenter": { "folder": "tool-use", "visibility": ["public"] },
     "search": { "folder": "tool-use", "visibility": ["public"] },
     "simplifier": { "folder": "tool-use", "visibility": ["public"] },

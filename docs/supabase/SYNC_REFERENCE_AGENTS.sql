@@ -303,6 +303,38 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
+  'latexDiff',
+  'Generates a visual diff PDF between two LaTeX versions using latexdiff.',
+  'tool-use/latexDiff.yaml',
+  ARRAY['whitelist', 'QITBench', 'researcher', 'lean', 'public'],
+  'toolUse',
+  ARRAY['bash', 'read_file', 'edit_file', 'glob', 'grep', 'ls']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  storage_path   = EXCLUDED.storage_path,
+  visibility     = EXCLUDED.visibility,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
+  'latexFixer',
+  'Diagnoses and fixes LaTeX compilation errors, warnings, and bad boxes.',
+  'tool-use/latexFixer.yaml',
+  ARRAY['whitelist', 'QITBench', 'researcher', 'lean', 'public'],
+  'toolUse',
+  ARRAY['bash', 'read_file', 'edit_file', 'glob', 'grep', 'ls', 'diagnostics']
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  storage_path   = EXCLUDED.storage_path,
+  visibility     = EXCLUDED.visibility,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
   'orchestrator',
   'Reads your paper, figures out what needs work, and hands each task to the right agent. You approve proposals as they come in.',
   'tool-use/orchestrator.yaml',
