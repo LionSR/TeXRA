@@ -29,6 +29,7 @@ interface AnthropicMessageStream {
     event: 'streamEvent',
     callback: (event: BetaRawMessageStreamEvent) => void,
   ): void;
+  on(event: 'error', callback: (err: unknown) => void): void;
 }
 
 /**
@@ -36,6 +37,15 @@ interface AnthropicMessageStream {
  * Prevents memory growth for very long queries/URLs.
  */
 const MAX_SERVER_TOOL_INPUT_SIZE = 65536;
+
+/**
+ * Maximum size for the accumulated partial-text buffer (64KB).
+ * Used to preserve generated text when a stream fails mid-response,
+ * so the caller can surface it to the user or use it for continuation.
+ * When exceeded, only the tail (the last 64KB) is kept — continuation
+ * prompts only need the final few hundred chars anyway.
+ */
+const MAX_PARTIAL_TEXT_SIZE = 65536;
 
 /**
  * State tracked during Anthropic streaming.
@@ -132,6 +142,14 @@ export class AnthropicStreamHandler {
     stopReason: null,
     anthropicMessageId: null,
   };
+  /** Rolling buffer of accumulated text deltas, capped at MAX_PARTIAL_TEXT_SIZE.
+   *  Preserved across block boundaries so a continuation prompt can reference
+   *  the actual tail of generated text when a stream fails. */
+  private partialText = '';
+  /** True when an SSE `event: error` was dispatched by the SDK before the
+   *  stream promise rejected. Lets the catch path report the API-level cause
+   *  (e.g. overloaded_error) instead of a generic connection failure. */
+  private sseErrorReceived = false;
 
   constructor(
     private readonly logger: AgentLogger,
@@ -145,6 +163,14 @@ export class AnthropicStreamHandler {
   attachToStream(stream: AnthropicMessageStream): void {
     stream.on('streamEvent', (event: BetaRawMessageStreamEvent) => {
       this.handleStreamEvent(event);
+    });
+    // The SDK surfaces SSE `event: error` (e.g. overloaded_error) via the
+    // 'error' channel and rejects the stream promise with the same error.
+    // We register a no-op listener so Node doesn't log an unhandled 'error'
+    // event warning, and flag it so the catch path can distinguish
+    // "API returned an error mid-stream" from "connection dropped".
+    stream.on('error', () => {
+      this.sseErrorReceived = true;
     });
   }
 
@@ -160,6 +186,25 @@ export class AnthropicStreamHandler {
    */
   getEmittedFetchIds(): Set<string> {
     return this.state.emittedFetchIds;
+  }
+
+  /**
+   * Returns the accumulated text received so far (capped at MAX_PARTIAL_TEXT_SIZE).
+   * When a stream fails mid-response, this preserves the generated content
+   * for the caller — either to show the user what was produced, or to build
+   * a continuation prompt on retry. Returns empty string if no text was received.
+   */
+  getPartialText(): string {
+    return this.partialText;
+  }
+
+  /**
+   * True if the SDK dispatched an SSE `event: error` during streaming.
+   * Distinguishes API-level errors (e.g. overloaded_error) from transport-level
+   * failures (network drops, proxy timeouts).
+   */
+  wasSseErrorReceived(): boolean {
+    return this.sseErrorReceived;
   }
 
   /**
@@ -328,6 +373,7 @@ export class AnthropicStreamHandler {
       case 'text_delta':
         this.diagnostics.textChars += event.delta.text.length;
         this.state.outputStream?.append(event.delta.text);
+        this.appendPartialText(event.delta.text);
         break;
       case 'input_json_delta':
         this.diagnostics.toolInputChars += event.delta.partial_json.length;
@@ -425,6 +471,20 @@ export class AnthropicStreamHandler {
 
     // Clean up
     this.state.pendingFetches.delete(block.tool_use_id);
+  }
+
+  /**
+   * Appends a text delta to the partial-text buffer, capped at
+   * MAX_PARTIAL_TEXT_SIZE by keeping the tail (which is what continuation
+   * prompts reference — "your response ended with [X]").
+   */
+  private appendPartialText(text: string): void {
+    if (!text) return;
+    const combined = this.partialText + text;
+    this.partialText =
+      combined.length <= MAX_PARTIAL_TEXT_SIZE
+        ? combined
+        : combined.slice(combined.length - MAX_PARTIAL_TEXT_SIZE);
   }
 
   /**

@@ -142,6 +142,20 @@ export class RetryRequestPanel extends BaseRequestPanel {
       lines.push('--- Stream Diagnostics ---', ...entries);
     }
 
+    // Show the tail of text that was generated before the failure — useful
+    // both for diagnostics and for letting the user see progress wasn't lost.
+    const partialText = details.partialText;
+    if (partialText) {
+      const tail =
+        partialText.length > 1024
+          ? '…' + partialText.slice(partialText.length - 1024)
+          : partialText;
+      lines.push(
+        `--- Partial Output (${partialText.length} chars) ---`,
+        tail,
+      );
+    }
+
     return lines.length > 0 ? lines.join('\n') : null;
   }
 }

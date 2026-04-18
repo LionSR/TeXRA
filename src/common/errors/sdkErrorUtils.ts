@@ -330,6 +330,7 @@ function detectRawErrorBody(err: unknown): unknown {
 }
 
 const STREAM_DIAGNOSTICS_KEY = Symbol.for('texra.streamDiagnostics');
+const PARTIAL_TEXT_KEY = Symbol.for('texra.partialText');
 
 /** Attaches stream diagnostics to an error before rethrowing. */
 export function attachStreamDiagnostics(
@@ -351,6 +352,21 @@ function detectStreamDiagnostics(err: unknown): StreamDiagnostics | undefined {
     return diagnostics as StreamDiagnostics;
   }
   return undefined;
+}
+
+/** Attaches partial text (generated before a stream failure) to an error.
+ *  Lets the caller surface the partial content to the user or use it as the
+ *  basis for a continuation prompt on retry. No-op if the text is empty. */
+export function attachPartialText(err: unknown, text: string): void {
+  if (text && isObject(err)) {
+    (err as Record<symbol, unknown>)[PARTIAL_TEXT_KEY] = text;
+  }
+}
+
+function detectPartialText(err: unknown): string | undefined {
+  if (!isObject(err)) return undefined;
+  const text = (err as Record<symbol, unknown>)[PARTIAL_TEXT_KEY];
+  return isString(text) && text.length > 0 ? text : undefined;
 }
 
 /**
@@ -411,6 +427,7 @@ function isRelayError(rawErrorBody: unknown): boolean {
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const streamDiagnostics = detectStreamDiagnostics(err);
+  const partialText = detectPartialText(err);
   const isRelay = isRelayError(rawErrorBody);
 
   // Handle DOMException AbortError (from AbortController.abort())
@@ -421,6 +438,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       isRelayError: false,
       rawErrorBody,
       streamDiagnostics,
+      partialText,
     };
   }
 
@@ -433,6 +451,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       isRelayError: isRelay,
       rawErrorBody,
       streamDiagnostics,
+      partialText,
     };
   }
 
@@ -470,6 +489,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     requestId,
     rawErrorBody,
     streamDiagnostics,
+    partialText,
   };
 }
 

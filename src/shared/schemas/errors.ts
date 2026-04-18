@@ -34,6 +34,10 @@ const ProviderErrorSchema = z.object({
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
+  /** Tail of text generated before a streaming failure (capped). Present when
+   *  the stream produced any text before dying — lets the caller show it to
+   *  the user or construct a continuation prompt on retry. */
+  partialText: z.string().optional(),
 });
 export type ProviderError = z.infer<typeof ProviderErrorSchema>;
 

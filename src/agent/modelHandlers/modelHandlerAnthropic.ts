@@ -36,6 +36,7 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   attachStreamDiagnostics,
+  attachPartialText,
 } from '@common/errors/sdkErrorUtils';
 
 // Local imports - replacement
@@ -857,6 +858,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const baseUrl = this.getBaseUrl();
         const isUsingRelay = this.shouldUseServerSideKeys();
         const diagnostics = streamHandler.getDiagnostics();
+        const partialText = streamHandler.getPartialText();
 
         // Enrich error with request ID from stream response headers so
         // detectRequestId() (in sdkErrorUtils) picks it up via the existing
@@ -875,21 +877,58 @@ export class ModelHandlerAnthropic extends ModelHandler<
           // Response may not be available (e.g. network error before HTTP response)
         }
 
-        this.logger.debug(
-          `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
+        // Enrich the "stream ended without producing a Message with role=assistant"
+        // SDK error — it's raised when the connection closes before any
+        // message_start event. Mirror the messageStop validation above with a
+        // message that carries diagnostics, so logs and retry UI surface the
+        // actual timing rather than the opaque SDK string.
+        let enrichedError: unknown = streamError;
+        if (
+          !diagnostics.messageStartReceived &&
+          streamError instanceof Error &&
+          !(streamError instanceof AnthropicUserAbortError)
+        ) {
+          const wrapper = new Error(
+            `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
+              `(${diagnostics.eventsProcessed} events${
+                streamHandler.wasSseErrorReceived()
+                  ? ', SSE error event received'
+                  : ''
+              }). Likely connection dropped before the API responded.`,
+            { cause: streamError },
+          );
+          // Preserve the request_id so downstream detection still works
+          const originalRequestId = (streamError as ErrorWithRequestId)
+            .request_id;
+          if (originalRequestId) {
+            (wrapper as ErrorWithRequestId).request_id = originalRequestId;
+          }
+          enrichedError = wrapper;
+        }
+
+        // User aborts are expected control flow, not failures — log at debug.
+        // Everything else warrants a warning so silent proxy drops are visible.
+        const isAbort = streamError instanceof AnthropicUserAbortError;
+        const logFn = isAbort ? this.logger.debug : this.logger.warn;
+        logFn.call(
+          this.logger,
+          `Stream ${isAbort ? 'aborted' : 'failed'}: ${enrichedError instanceof Error ? enrichedError.message : String(enrichedError)}`,
           {
             data: {
               isUsingRelay,
               baseUrl: baseUrl ?? 'default',
               model: this.config.fullName,
               streamDiagnostics: diagnostics,
+              partialTextLength: partialText.length,
             },
           },
         );
 
-        // Attach diagnostics to error for retry UI display
-        attachStreamDiagnostics(streamError, diagnostics);
-        throw streamError;
+        // Attach diagnostics and partial text to the error for retry UI display
+        // and future continuation-on-retry support.
+        attachStreamDiagnostics(enrichedError, diagnostics);
+        attachPartialText(enrichedError, partialText);
+        throw enrichedError;
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
         streamHandler.finalize();
