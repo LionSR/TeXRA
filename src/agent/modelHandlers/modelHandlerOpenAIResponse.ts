@@ -22,6 +22,7 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
+  isRetryableStatusCode,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -684,17 +685,27 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal ? { signal } : undefined,
       );
     } catch (err) {
-      // User cancellation - clear pending ID and propagate
       if (err instanceof DOMException && err.name === 'AbortError') {
         this.clearPendingBackgroundResponse();
         throw err;
       }
-      // Failed to retrieve - could be network error or 404 (expired/deleted)
-      // Clear and signal that a new request is needed
+      // Transient failures (no status / 5xx / 429 / 408) — the background
+      // response is likely still alive server-side, so retain the ID and
+      // rethrow so the outer retry resumes the same ID. Definitive failures
+      // (4xx, notably 404 expired) — clear the ID and create a new request.
+      //
+      // Check statusCode directly rather than formatted.retryable: the latter
+      // is force-true for relay errors, which would incorrectly retain the ID
+      // on a relay-wrapped 404 and loop until retries are exhausted.
+      const formatted = formatProviderHttpError(err);
+      const code = formatted.statusCode;
+      if (code === undefined || isRetryableStatusCode(code)) {
+        throw err;
+      }
       this.logger.warn(
-        `Failed to retrieve pending background response ${pendingId}: ${getSdkErrorMessage(err)}. ` +
+        `Failed to retrieve pending background response ${pendingId}: ${formatted.message}. ` +
           'Will create new request.',
-        { data: { responseId: pendingId, error: getSdkErrorMessage(err) } },
+        { data: { responseId: pendingId, error: formatted.message, statusCode: code } },
       );
       this.clearPendingBackgroundResponse();
       return null;
@@ -1962,9 +1973,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
-      // Log info about pending background response for retry logic
-      // Note: We intentionally keep pendingBackgroundResponseId for connection errors
-      // so that retry logic can resume polling the same response
+      // Retention of pendingBackgroundResponseId is decided at the point of
+      // failure (tryResumeBackgroundResponse and waitForBackgroundCompletion).
+      // If it survived to here, the next retry will try to resume the same ID.
       if (this.pendingBackgroundResponseId) {
         this.logger.info(
           `Retaining pendingBackgroundResponseId=${this.pendingBackgroundResponseId} for retry - ` +
@@ -2222,16 +2233,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.clearPendingBackgroundResponse();
           throw err;
         }
-        // Only wrap 404 "response not found" errors. These are retryable because
-        // the response existed but disappeared during polling, and a retry will
-        // create a new request. Wrapping strips the 404 status code so
-        // formatProviderHttpError classifies it as a network-like error (retryable).
+        // 404 "response not found" during polling means the response is truly
+        // gone server-side. Clear the pending ID so the next retry creates a
+        // fresh background request instead of routing through
+        // tryResumeBackgroundResponse to rediscover the 404. The wrapping
+        // below strips the 404 status so formatProviderHttpError classifies
+        // the error as retryable (network-like), which keeps the retry loop
+        // engaged rather than bailing out on a non-retryable 4xx.
         //
         // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
         // so downstream handlers (relay 401 token refresh, retryability checks,
         // non-retryable classification) work correctly with full HTTP metadata.
         const statusCode = (err as { status?: number }).status;
         if (statusCode === 404) {
+          this.clearPendingBackgroundResponse();
           const pollingError: RequestIdTaggedError = new Error(
             `Background response polling failed for ${responseId}: ${getSdkErrorMessage(err)}`,
             { cause: err },
