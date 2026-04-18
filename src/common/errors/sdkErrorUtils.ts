@@ -124,7 +124,7 @@ const SDK_ERRORS: SdkErrorEntry[] = [
 
 /** Server errors (5xx), rate limits (429), and request timeouts (408) are retryable
  *  — these are transient. Other client errors (4xx) are deterministic. */
-function isRetryableStatusCode(statusCode?: number): boolean {
+export function isRetryableStatusCode(statusCode?: number): boolean {
   if (statusCode === undefined) return false;
   if (statusCode >= 500) return true;
   return (
