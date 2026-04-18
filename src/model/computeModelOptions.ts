@@ -93,7 +93,9 @@ export function formatCost(
 function buildModelHint(config: ModelConfig): string {
   const base = hint(config);
   if (!isFastFirstResponseModel(config.inputPrice)) return base;
-  return base ? `${FAST_FIRST_RESPONSE_HINT} | ${base}` : FAST_FIRST_RESPONSE_HINT;
+  return base
+    ? `${FAST_FIRST_RESPONSE_HINT} | ${base}`
+    : FAST_FIRST_RESPONSE_HINT;
 }
 
 /** Check if a model is available via personal API keys. */
