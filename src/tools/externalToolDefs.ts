@@ -21,6 +21,7 @@ import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import { getGitHubToken } from '@tools/github/githubAuth';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
+import { isGitRepository } from '@utils/system/isGitRepository';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { isWSL } from '@utils/system/wslDetect';
 
@@ -219,29 +220,45 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   },
   {
     id: 'github-pr-subscription',
-    tools: ['subscribe_pr_activity', 'unsubscribe_pr_activity'],
+    tools: [
+      'subscribe_pr_activity',
+      'unsubscribe_pr_activity',
+      'find_current_pr',
+    ],
     name: 'GitHub PR Activity Subscription',
     category: 'workflow',
     description:
       'Poll GitHub pull requests and deliver new comments, reviews, line comments, and failed CI checks into the current stream as follow-up messages.',
     installGuide:
-      'No software install required. You need a GitHub personal access token:\n\n' +
-      '  1. Open TeXRA settings → Git tab\n' +
-      '  2. Click "Create on GitHub…" (opens the token page with the right scopes pre-filled)\n' +
-      '  3. Scopes: "repo" for private repositories, "public_repo" for public only\n' +
-      '  4. Copy the token back into TeXRA via "Set token"\n\n' +
+      'Requires a git-tracked workspace and a GitHub personal access token:\n\n' +
+      '  1. Open the folder as a git repo (or `git init` + set a github.com remote).\n' +
+      '  2. In TeXRA settings → Git tab, click "Create on GitHub…"\n' +
+      '     (opens the token page with the right scopes pre-filled).\n' +
+      '  3. Scopes: "repo" for private repositories, "public_repo" for public only.\n' +
+      '  4. Copy the token back into TeXRA via "Set token".\n\n' +
       'Alternatively, export GITHUB_TOKEN in the environment VS Code is launched from.',
     installUrl: 'https://github.com/settings/tokens',
     configNotes:
-      'Token stored in VS Code SecretStorage (managed from Git tab). Polls every 30s; subscription cap: 10 concurrent PRs.',
+      'Token stored in VS Code SecretStorage (managed from Git tab). Requires a git repository in the workspace. Polls every 30s; subscription cap: 10 concurrent PRs.',
     authNote: 'Uses personal access token',
     toggleable: true,
-    check: async () => getGitHubToken() !== undefined,
+    check: async () => {
+      if (!getGitHubToken()) return false;
+      return await isGitRepository();
+    },
     detailCheck: async () => {
-      if (getGitHubToken()) {
-        return 'GitHub token detected. Ready to subscribe to PR activity.';
+      const tokenPresent = getGitHubToken() !== undefined;
+      const inGitRepo = await isGitRepository();
+      if (tokenPresent && inGitRepo) {
+        return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
       }
-      return 'No GitHub token configured. Set texra.github.token in settings.';
+      if (!tokenPresent && !inGitRepo) {
+        return 'Workspace is not a git repo and no GitHub token is configured. Open a git-tracked folder and set a token in the Git tab.';
+      }
+      if (!tokenPresent) {
+        return 'Workspace is a git repo, but no GitHub token is configured. Set one in the Git tab.';
+      }
+      return 'GitHub token is set, but the workspace is not a git repo. Open a git-tracked folder to use PR subscriptions.';
     },
   },
 
