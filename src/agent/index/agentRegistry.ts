@@ -139,9 +139,9 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
 
 /**
  * Preferred agents for dropdowns, in priority order.
- * The first available agent in the list is pre-selected and sorted to the top.
- * Orchestrator is preferred but requires sign-in (remote agent); when
- * unavailable, the next enabled tool-use agent is used.
+ * Preferred agents present in the workspace are sorted to the top of the
+ * dropdown (in the order listed here); all others follow alphabetically.
+ * Orchestrator is preferred but requires sign-in (remote agent).
  */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
 const PREFERRED_TOOL_USE_AGENTS = ['orchestrator'] as const;
