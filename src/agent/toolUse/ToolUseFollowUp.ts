@@ -10,6 +10,7 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
+import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -22,7 +23,10 @@ import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
  */
 export type SendFollowUpResult =
   | { status: 'sent' }
-  | { status: 'queued'; reason: 'resuming' | 'waiting' }
+  | {
+      status: 'queued';
+      reason: 'resuming' | 'waiting' | 'subagent_running';
+    }
   | { status: 'error'; message: string }
   | { status: 'no_session'; streamStatus: string | undefined };
 
@@ -62,6 +66,17 @@ export async function sendFollowUp(
   if (status === STREAM_STATUS.WAITING) {
     ToolUseFollowUpQueue.enqueue(streamId, text);
     return { status: 'queued', reason: 'waiting' };
+  }
+
+  // Queue if subagents/processes are still running under this stream.
+  // The orchestrator's flow context may have exited before its children
+  // finished (subagents execute asynchronously). The child results arrive
+  // via the same queue, so the user's message rides along and will be
+  // drained when the parent resumes.
+  const { subagents, processes } = getActiveChildren(streamId);
+  if (subagents.length > 0 || processes.length > 0) {
+    ToolUseFollowUpQueue.enqueue(streamId, text);
+    return { status: 'queued', reason: 'subagent_running' };
   }
 
   // No active/waiting session found - caller should handle UI notification

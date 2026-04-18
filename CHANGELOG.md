@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Follow-up messages are queued while subagents finish** — sending a message from the orchestrator tab no longer shows "No active session" when a delegated subagent is still running. The message is queued and picked up when the orchestrator resumes to process the subagent's result.
 - **Opus 4.7 thinking models show reasoning again** — Anthropic flipped the Opus 4.7 adaptive-thinking default so reasoning is omitted from responses unless the caller opts in. TeXRA now asks for `display: summarized` on `opus47`/`opus47T`, restoring visible chain-of-thought in the UI. Opus 4.6 and Sonnet 4.6 are unchanged.
 - **Codex CLI no longer fails on Extra High effort** — TeXRA's `xhigh` reasoning tier now maps to `high` when handed off to the Codex CLI, which only accepts `minimal | low | medium | high`. Previously Codex sessions died with `unknown variant 'xhigh'` on deserialization.
 - **`latexFixer` and similar internal agents load again** — the agent YAML schema now accepts the `internal: true` flag instead of rejecting it via `z.strictObject`, so agents that mark themselves internal no longer fail validation.

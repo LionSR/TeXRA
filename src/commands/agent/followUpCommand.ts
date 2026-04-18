@@ -118,9 +118,12 @@ async function handleFollowUpResult(
       break;
     case 'queued':
       bus.emit('updateQueuedFollowUps', { streamId });
-      if (result.reason === 'waiting') {
+      if (result.reason === 'waiting' || result.reason === 'subagent_running') {
+        // 'subagent_running': orchestrator's flow context has exited but a
+        // child is still running. Try to resume so the parent can process
+        // the queued message alongside the subagent's eventual result.
         const resumed = await tryAutoResume(streamId);
-        if (!resumed) {
+        if (!resumed && result.reason === 'waiting') {
           await vscode.window.showInformationMessage(
             'Message queued. Auto-resume failed — start a new agent task to continue.',
           );

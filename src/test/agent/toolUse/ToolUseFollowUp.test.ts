@@ -5,7 +5,13 @@ import { strict as assert } from 'assert';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { createRunState } from '@agent/core/AgentState';
+import {
+  AgentExecutionHandle,
+  trackExecution,
+  untrackExecution,
+} from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
@@ -58,6 +64,39 @@ describe('ToolUseFollowUp', () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0], 'hello');
     assert.deepEqual(result, { status: 'sent' });
+  });
+
+  it('queues follow-ups when subagents are still running', async () => {
+    // No active flow context — parent's flow has exited.
+    (AgentRegistry as any).getToolUseFlowContext = () => undefined;
+
+    const parentStreamId = 'parent-stream-subagent' as StreamTabId;
+    const childStreamId = 'child-stream-subagent' as StreamTabId;
+    const executionId = 'exec-subagent-running';
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+    );
+    trackExecution(handle);
+
+    try {
+      const result = await sendFollowUp(parentStreamId, 'hello while running');
+
+      assert.deepEqual(result, {
+        status: 'queued',
+        reason: 'subagent_running',
+      });
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+        'hello while running',
+      ]);
+    } finally {
+      untrackExecution(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
   });
 
   it('creates valid snapshot structure', () => {
