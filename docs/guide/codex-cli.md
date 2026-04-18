@@ -76,10 +76,10 @@ Codex manages its own auth state — TeXRA never reads or stores your ChatGPT cr
 ## 3. Verify the Connection in TeXRA
 
 1. Open the TeXRA Dashboard: `Ctrl+Shift+P` → **TeXRA: Show Dashboard**.
-2. Go to the **Tools** tab.
-3. Under **Computation**, find the **OpenAI Codex CLI** card.
+2. Go to the **Tools** tab (<i class="codicon codicon-tools"></i>).
+3. Under **Computation** (<i class="codicon codicon-symbol-operator"></i>), find the **OpenAI Codex CLI** card.
 
-If the card shows a green check, the SDK loaded and the Codex binary was discovered. If it shows an error, hover for the detail message:
+If the card shows <i class="codicon codicon-check"></i> **Available**, the SDK loaded and the Codex binary was discovered. If it shows <i class="codicon codicon-warning"></i> **Not Found**, hover for the detail message:
 
 | Detail message                                                     | What to do                                                                                        |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
@@ -87,6 +87,8 @@ If the card shows a green check, the SDK loaded and the Codex binary was discove
 | `Codex SDK loaded but native binary not found`                     | The SDK installed without its platform binary — reinstall with `npm install -g @openai/codex`.    |
 | `Platform not supported`                                           | You're on an unsupported OS/arch. Use WSL on Windows or a supported Linux/macOS host.             |
 | `Codex CLI ready. Binary: /…/codex`                                | All set.                                                                                          |
+
+The card also exposes an <i class="codicon codicon-link-external"></i> link to the Codex project page and a <i class="codicon codicon-cloud-download"></i> install guide button for quick reference.
 
 ## 4. Configure Codex
 
@@ -117,11 +119,11 @@ TeXRA drives Codex with the short model name `gpt-5.4`; it is not a dropdown bec
 
 ### Approval prompts
 
-The **Require approval for shell commands & Codex sessions** checkbox (same **Tools** tab, under *Approval & Safety*) applies to every Codex invocation. With it enabled, TeXRA shows a confirmation prompt before each Codex call and includes the prompt preview plus the sandbox mode. Disable it only for trusted autonomous flows.
+The **Require approval for shell commands & Codex sessions** checkbox (same **Tools** tab, under *Approval & Safety* <i class="codicon codicon-shield"></i>) applies to every Codex invocation. With it enabled, TeXRA shows a confirmation prompt before each Codex call and includes the prompt preview plus the sandbox mode. Disable it only for trusted autonomous flows.
 
 ## 5. Run Your First Codex Turn
 
-Any tool-use agent with `codex` in its allowed tools can delegate to Codex. The built-in `plan`, `draft`, and `code` agents include it by default. Try:
+Any tool-use agent with `codex` in its allowed tools can delegate to Codex — check the agent's definition in the **Agents** tab (<i class="codicon codicon-sparkle"></i>) or enable it for a custom agent. Try:
 
 ```
 Use codex to sketch a minimal FastAPI server that returns a JSON healthcheck.
@@ -129,9 +131,9 @@ Use codex to sketch a minimal FastAPI server that returns a JSON healthcheck.
 
 What to expect:
 
-1. A child stream tab opens with the prefix `codex@codex-sdk`.
-2. The stream shows Codex's reasoning, command executions, file diffs, web searches, and todo list in real time.
-3. When the turn finishes, the tab stays in **WAITING** state — type a follow-up in the tab's input to keep the same thread going.
+1. A child stream tab opens with the prefix `codex@codex-sdk` — visible on the ProgressBoard (<i class="codicon codicon-type-hierarchy"></i>).
+2. The stream shows Codex's reasoning, command executions, file diffs, web searches (<i class="codicon codicon-globe"></i>), and todo list in real time.
+3. When the turn finishes, the tab stays in **WAITING** state — type a follow-up in the tab's input to keep the same thread going. Use <i class="codicon codicon-debug-stop"></i> **Stop** to interrupt it.
 4. The agent that invoked Codex receives a compact result with the final response, token usage, and a `thread_id` it can pass back to resume the conversation later.
 
 ### Background mode
@@ -140,7 +142,7 @@ Agents can pass `run_in_background: true` when they don't need to block on the r
 
 ## Troubleshooting
 
-**Codex card stays red after installing.** Reload the VS Code window (`Developer: Reload Window`) so the extension re-checks for the binary.
+**Codex card stays <i class="codicon codicon-warning"></i> Not Found after installing.** Reload the VS Code window (`Developer: Reload Window`) so the extension re-checks for the binary.
 
 **Authentication prompts keep appearing.** Run `codex login` in the terminal VS Code is launched from — environment variables set in a GUI session may not reach the Codex binary. On macOS, make sure you're not launching VS Code from Finder with a clean environment.
 
