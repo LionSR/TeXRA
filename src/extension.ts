@@ -67,7 +67,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands, getMainViewProvider } from './commands';
-import { registerNoWorkspaceView } from './noWorkspaceView';
+import { registerWelcomeView } from './welcomeView';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
@@ -105,10 +105,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {
-    registerNoWorkspaceView(
-      context,
-      workspaceFolders && workspaceFolders.length > 1 ? 'multi-root' : 'empty',
-    );
+    registerWelcomeView(context);
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;

@@ -1200,13 +1200,33 @@
     "views": {
       "texra": [
         {
+          "type": "tree",
+          "id": "texra.welcomeView",
+          "name": "TeXRA",
+          "contextualTitle": "TeXRA",
+          "when": "!texra.activated"
+        },
+        {
           "type": "webview",
           "id": "texra.mainView",
           "name": "TeXRA",
-          "contextualTitle": "TeXRA"
+          "contextualTitle": "TeXRA",
+          "when": "texra.activated"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "texra.welcomeView",
+        "contents": "TeXRA is your AI-powered LaTeX research assistant. Open a folder to get started.\n[Open Folder](command:workbench.action.files.openFolder)\n[Clone Repository](command:git.clone)\nTo learn more about how to use TeXRA in VS Code [read our docs](https://github.com/LionSR/TeXRA#readme).",
+        "when": "workbenchState == empty"
+      },
+      {
+        "view": "texra.welcomeView",
+        "contents": "TeXRA supports one folder at a time. Open a single folder to continue.\n[Open Folder](command:workbench.action.files.openFolder)",
+        "when": "workbenchState == workspace"
+      }
+    ],
     "menus": {
       "editor/title": [
         {
@@ -1243,32 +1263,32 @@
       "view/title": [
         {
           "command": "texra.indentTeX",
-          "when": "view == texra.mainView && texra.activated && texra.activeView == 'progress'",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@1"
         },
         {
           "command": "texra.cleanOutput",
-          "when": "view == texra.mainView && texra.activated && texra.activeView == 'progress'",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@2"
         },
         {
           "command": "texra.cleanBuild",
-          "when": "view == texra.mainView && texra.activated && texra.activeView == 'progress'",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@3"
         },
         {
           "command": "texra.showDashboard",
-          "when": "view == texra.mainView && texra.activated && texra.activeView == 'progress'",
+          "when": "view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@4"
         },
         {
           "command": "texra.mainView.reset",
-          "when": "view == texra.mainView && texra.activated && texra.activeView != 'progress'",
+          "when": "view == texra.mainView && texra.activeView != 'progress'",
           "group": "navigation@0"
         },
         {
           "command": "texra.showDashboard",
-          "when": "view == texra.mainView && texra.activated && texra.activeView != 'progress'",
+          "when": "view == texra.mainView && texra.activeView != 'progress'",
           "group": "navigation@1"
         }
       ],
