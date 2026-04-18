@@ -10,16 +10,20 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 
 ## Anthropic Models
 
-| Model ID    | Use Case                     | Cost | Speed  |
-| :---------- | :--------------------------- | :--- | :----- |
-| `opus46T`   | Complex tasks with reasoning | $$$$ | Slow   |
-| `opus46`    | High quality, complex tasks  | $$$$ | Slow   |
-| `sonnet46T` | All-rounder with reasoning   | $$$  | Medium |
-| `sonnet46`  | Strong all-rounder           | $$$  | Medium |
-| `haiku45T`  | Fast with reasoning          | $$   | Fast   |
-| `haiku45`   | Fast responses               | $$   | Fast   |
+| Model ID    | Use Case                              | Cost | Speed  |
+| :---------- | :------------------------------------ | :--- | :----- |
+| `opus47T`   | Top-tier reasoning, long-horizon work | $$$$ | Slow   |
+| `opus47`    | Most capable for agentic coding       | $$$$ | Slow   |
+| `opus46T`   | Complex tasks with reasoning          | $$$$ | Slow   |
+| `opus46`    | High quality, complex tasks           | $$$$ | Slow   |
+| `sonnet46T` | All-rounder with reasoning            | $$$  | Medium |
+| `sonnet46`  | Strong all-rounder                    | $$$  | Medium |
+| `haiku45T`  | Fast with reasoning                   | $$   | Fast   |
+| `haiku45`   | Fast responses                        | $$   | Fast   |
 
-Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing — no opt-in or beta header required. Other Claude models use a 200K context window.
+Opus 4.7, Opus 4.6, and Sonnet 4.6 include the full 1M context window at standard pricing — no opt-in or beta header required. Other Claude models use a 200K context window.
+
+Claude Opus 4.7 uses adaptive thinking only (extended thinking with a manual `budget_tokens` is no longer accepted). TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically — pick `opus47T` with Extra High effort for the strongest agentic coding and long-horizon tasks. Opus 4.7 also supports high-resolution images (up to 2576px / 3.75MP) for better figure, chart, and screenshot understanding; note that TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending, so raise that setting if you want to take full advantage of Opus 4.7's higher limit.
 
 ## OpenAI Models
 
@@ -106,9 +110,9 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 ## Choosing a Model
 
 - **Simple tasks**: Fast, cheap models (`gemini3f`, `gpt5-`, `haiku45`)
-- **Complex tasks**: Powerful models (`opus46`, `gpt54pro`)
-- **Code-heavy / LaTeX editing**: Coding models (`gpt53codex`)
-- **Reasoning-heavy**: Thinking models (`sonnet46T`, `opus46T`, `deepseekT`)
+- **Complex tasks**: Powerful models (`opus47`, `opus46`, `gpt54pro`)
+- **Code-heavy / LaTeX editing**: Coding models (`gpt53codex`, `opus47T`)
+- **Reasoning-heavy**: Thinking models (`opus47T`, `sonnet46T`, `opus46T`, `deepseekT`)
 - **Large documents**: High-context models (`gemini*`, `gpt41`)
 
 ## Configuration
@@ -119,7 +123,7 @@ Customize available models in VS Code Settings under `texra.models`:
 "texra.models": [
   "gemini31p",
   "sonnet46T",
-  "opus46T",
+  "opus47T",
   "gpt54",
   "deepseekT"
 ]
