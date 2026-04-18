@@ -156,7 +156,7 @@ export class MultiAgentTab extends LitElement {
         display: inline-block;
         padding: var(--border-thin) var(--border-radius-large);
         font-size: var(--font-size-xs, 10px);
-        color: var(--color-text-secondary);
+        color: var(--vscode-badge-foreground);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);
       }
