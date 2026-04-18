@@ -322,8 +322,21 @@ export class PRPollingSource implements AsyncEventSource {
       state.headSha = newHead;
     }
 
-    // If the PR is closed and we have no prior state, skip the rest.
+    // Bail cleanly if the PR is already closed. On the first (initialization)
+    // tick this prevents a zombie subscription: without this branch the
+    // subscription would stay in the map forever, burning an API call every
+    // 30s and a slot in the concurrent-subscription cap, because the
+    // open→closed auto-unsubscribe transition above never fires for a PR
+    // that was closed before we started watching.
     if (state.state === 'closed') {
+      if (!state.initialized) {
+        this.emit(
+          state,
+          formatPRClosed(state.slug, pr.pullNumber, state.merged),
+        );
+        this.subscriptions.delete(prKeyToString(pr));
+        this.notifyKeysChanged();
+      }
       state.initialized = true;
       return;
     }
