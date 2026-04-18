@@ -612,6 +612,24 @@
         }
       },
       {
+        "title": "Workflow Output",
+        "properties": {
+          "texra.workflow.autoCompileAfterOutput": {
+            "type": "boolean",
+            "default": true,
+            "description": "After a workflow writes .tex outputs, attempt to compile each root document (latexmk, falling back to pdflatex) in run storage to verify the build. On failure the last 200 lines of the LaTeX log are written to /executions/<id>/compile/<name>.log so the orchestrator can react to genuine errors. When no LaTeX toolchain is installed, the check is skipped gracefully.",
+            "order": 1
+          },
+          "texra.workflow.autoCompileTimeoutMs": {
+            "type": "number",
+            "default": 120000,
+            "minimum": 10000,
+            "description": "Timeout in milliseconds for each per-file compile attempt during the post-workflow compile check.",
+            "order": 2
+          }
+        }
+      },
+      {
         "title": "Git",
         "properties": {
           "texra.git.numberOfCommitsToShow": {
