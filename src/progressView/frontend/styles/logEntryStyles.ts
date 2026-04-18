@@ -74,7 +74,7 @@ export const logEntryStyles = css`
   }
 
   .file-list-content .file-source {
-    opacity: var(--opacity-disabled);
+    opacity: var(--opacity-subtle);
     font-size: 0.85em;
     font-style: italic;
   }
@@ -149,7 +149,7 @@ export const logEntryStyles = css`
   }
 
   .memory-path .file-source {
-    opacity: var(--opacity-disabled);
+    opacity: var(--opacity-subtle);
     font-size: 0.85em;
   }
 
