@@ -337,12 +337,18 @@ export class PRPollingSource implements AsyncEventSource {
     // open→closed auto-unsubscribe transition above never fires for a PR
     // that was closed before we started watching.
     if (state.state === 'closed') {
-      if (!state.initialized) {
+      // Defense-in-depth: auto-unsubscribe whenever we land here while
+      // still tracked, not only on `!initialized`. The open→closed
+      // transition above is the primary path, but this covers any edge
+      // (future refactors, unexpected state) where we could otherwise
+      // return early every tick without ever cleaning up.
+      const prKey = prKeyToString(pr);
+      if (this.subscriptions.has(prKey)) {
         this.emit(
           state,
           formatPRClosed(state.slug, pr.pullNumber, state.merged),
         );
-        this.subscriptions.delete(prKeyToString(pr));
+        this.subscriptions.delete(prKey);
         this.notifyKeysChanged();
       }
       state.initialized = true;
