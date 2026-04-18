@@ -80,11 +80,26 @@ export async function ghGet<T>(
     const ax = err as AxiosError;
     const status = ax.response?.status;
     if (status === 401 || status === 403) {
-      // 403 can also mean rate-limit; distinguish via header.
-      const remaining = ax.response?.headers?.['x-ratelimit-remaining'];
-      const reset = ax.response?.headers?.['x-ratelimit-reset'];
+      const headers = ax.response?.headers;
+      // Primary rate limit: x-ratelimit-remaining hits 0 with an epoch-seconds
+      // reset timestamp. Only applies when credentials were otherwise valid.
+      const remaining = headers?.['x-ratelimit-remaining'];
+      const reset = headers?.['x-ratelimit-reset'];
       if (remaining === '0' && typeof reset === 'string') {
         throw new GitHubRateLimitError(Number(reset));
+      }
+      // Secondary / abuse rate limit: 403 with a Retry-After header (seconds
+      // from now). Primary-limit headers may still read "non-zero remaining".
+      // Without this branch we'd misclassify as an auth error and stop the
+      // subscription permanently.
+      const retryAfter = headers?.['retry-after'];
+      if (status === 403 && typeof retryAfter === 'string') {
+        const secs = Number(retryAfter);
+        if (Number.isFinite(secs) && secs > 0) {
+          throw new GitHubRateLimitError(
+            Math.floor(Date.now() / 1000) + Math.ceil(secs),
+          );
+        }
       }
       throw new GitHubAuthError(
         `GitHub returned ${status}: ${extractApiMessage(ax.response?.data, ax.message)}`,
