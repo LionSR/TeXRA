@@ -73,6 +73,14 @@ export interface ExternalToolDef {
   readonly authNote?: string;
   /** When true, the dashboard shows an enable/disable toggle for this tool group. */
   readonly toggleable?: boolean;
+  /**
+   * VS Code command ID invoked by the "fix this" action button in the
+   * "tools were excluded" notification. Overrides the default Tools tab
+   * link — use this when real setup lives elsewhere (e.g. Git tab for a
+   * GitHub token). The label for that button is `installActionLabel`.
+   */
+  readonly installActionCommand?: string;
+  readonly installActionLabel?: string;
 }
 
 // ============================================================
@@ -243,6 +251,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Token stored in VS Code SecretStorage (managed from Git tab). Requires a git repository in the workspace. Polls every 30s; subscription cap: 10 concurrent PRs.',
     authNote: 'Uses personal access token',
     toggleable: true,
+    installActionCommand: 'texra.showGitSettings',
+    installActionLabel: 'Open Git settings',
     check: async () => {
       if (!getGitHubToken()) return false;
       return await isGitRepository();

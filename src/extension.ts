@@ -264,12 +264,13 @@ export async function activate(context: vscode.ExtensionContext) {
   setOpenBuildDisplay(openBuildDisplayIfTex);
   applyGitAuthorConfig();
 
-  setToolNotificationHandler((message, actionCommand) => {
+  setToolNotificationHandler((message, actionCommand, actionLabel) => {
     if (actionCommand) {
+      const label = actionLabel ?? 'Open Tools Dashboard';
       void vscode.window
-        .showInformationMessage(message, 'Open Tools Dashboard')
+        .showInformationMessage(message, label)
         .then((choice) => {
-          if (choice === 'Open Tools Dashboard') {
+          if (choice === label) {
             void vscode.commands.executeCommand(actionCommand);
           }
         });
