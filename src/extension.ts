@@ -67,6 +67,8 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands, getMainViewProvider } from './commands';
+import { registerFileDecorations } from './fileDecorations';
+import { registerWelcomeView } from './welcomeView';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
@@ -104,21 +106,15 @@ export async function activate(context: vscode.ExtensionContext) {
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {
-    const message = !workspaceFolders?.length
-      ? 'TeXRA requires an open workspace. Please open a folder to enable the extension.'
-      : 'TeXRA supports only a single-folder workspace. Please open one folder to enable the extension.';
-    void vscode.window
-      .showInformationMessage(message, 'Open Folder')
-      .then((choice) => {
-        if (choice === 'Open Folder') {
-          void vscode.commands.executeCommand(
-            'workbench.action.files.openFolder',
-          );
-        }
-      });
+    registerWelcomeView(context);
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
+  await vscode.commands.executeCommand(
+    'setContext',
+    'texra.activated',
+    true,
+  );
 
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
@@ -226,6 +222,7 @@ export async function activate(context: vscode.ExtensionContext) {
   await progressViewProvider.cleanupTasksAfterRestart();
   configureLatexSettings();
   registerCommands(context);
+  registerFileDecorations(context);
 
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
