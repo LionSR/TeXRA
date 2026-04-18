@@ -7,11 +7,20 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - **Claude Opus 4.7 support** — pick `opus47` or `opus47T` as your model for Anthropic's most capable generally available model. Opus 4.7 is particularly strong at long-horizon agentic coding, knowledge work, and vision-heavy tasks, and includes the full 1M context window at standard pricing. High-resolution image input (up to 2576px / 3.75MP) improves figure, chart, and screenshot understanding. `opus47T` is now the default Anthropic thinking model for new users.
+- **Refreshed default model list** — new installs get one frontier model per provider (`gemini31p`, `gemini3f`, `sonnet46T`, `opus47T`, `gpt54`, `deepseekT`, `kimi25T`). Existing users keep their current selections; you can add or remove models any time from Dashboard → Models.
+- **Git worktree support for delegated subagents** — orchestrators can now point subagents at a git worktree or alternate directory via `working_directory` on `delegate_agent`, so parallel agent runs no longer step on each other. Turn it on in Dashboard → Multi-Agent; tool-use agents (bash, read, write, edit, grep, glob, ls, text_editor, codex) respect the target directory automatically.
+- **Auto-approve plans under Super YOLO** — when Super YOLO is enabled, the plan-approval gate is skipped along with delegation approvals, so execution proceeds straight through. The result text distinguishes auto-approved plans from user-approved ones for agent context.
 
 ### Improvements
 
 - **No more `latexindent` install popup on first use** — the missing-`latexindent` warning is now off by default, so first-time users no longer see an unexpected install prompt after running an agent. Re-enable it with `texra.latex.showLatexindentWarning` if you want the reminder.
 - **External Inquiry is off by default for new users** — the copy-to-ChatGPT/Claude/Gemini workflow is now opt-in on first install only. Existing users keep their current setting; new users can turn it on from the Tools settings tab when they want agents to ask them to relay questions to another chat model.
+- Updated dependencies: `@anthropic-ai/sdk` 0.90.0 (adds typed `claude-opus-4-7` support), `fast-xml-parser` 5.7.1, and patch-level bumps across `openrouter`, `codex`, and `supabase` SDKs.
+
+### Bug Fixes
+
+- **Codex CLI no longer fails on Extra High effort** — TeXRA's `xhigh` reasoning tier now maps to `high` when handed off to the Codex CLI, which only accepts `minimal | low | medium | high`. Previously Codex sessions died with `unknown variant 'xhigh'` on deserialization.
+- **`latexFixer` and similar internal agents load again** — the agent YAML schema now accepts the `internal: true` flag instead of rejecting it via `z.strictObject`, so agents that mark themselves internal no longer fail validation.
 
 ## [0.37.3] - 2026-04-15
 
