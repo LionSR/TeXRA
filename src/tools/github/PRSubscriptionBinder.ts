@@ -44,6 +44,19 @@ function ensureReleaseHook(): void {
     }
     perStream.delete(streamId);
   });
+  // PRPollingSource can delete subscriptions unilaterally (PR closed/merged,
+  // auth error, repeated failures). Without this prune the binder's
+  // `perStream` map would keep stale disposables and re-subscribe calls
+  // would incorrectly short-circuit as "already subscribed".
+  bus.on('prSubscriptionsChanged', ({ keys }) => {
+    const active = new Set(keys);
+    for (const [streamId, bound] of [...perStream]) {
+      for (const key of [...bound.keys()]) {
+        if (!active.has(key)) bound.delete(key);
+      }
+      if (bound.size === 0) perStream.delete(streamId);
+    }
+  });
   releaseHookRegistered = true;
 }
 

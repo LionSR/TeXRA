@@ -64,6 +64,24 @@ export function parsePRKey(key: string): PRKey {
   };
 }
 
+function withSince(url: string, since: string | undefined): string {
+  if (!since) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}since=${encodeURIComponent(since)}`;
+}
+
+/** Return the newest `updated_at` (falling back to `created_at`) in the batch. */
+function newestTimestamp(
+  items: ReadonlyArray<{ created_at?: string | null; updated_at?: string | null }>,
+): string | undefined {
+  let best: string | undefined;
+  for (const it of items) {
+    const t = it.updated_at ?? it.created_at ?? undefined;
+    if (t && (!best || t > best)) best = t;
+  }
+  return best;
+}
+
 interface SubscriptionState {
   pr: PRKey;
   slug: string;
@@ -85,6 +103,14 @@ interface SubscriptionState {
     reviewComments?: string;
     reviews?: string;
     checkRuns?: string;
+  };
+  // ISO `since` cursors for server-side filtering on the comments endpoints.
+  // Advance to the newest seen item's timestamp so PRs with >100 comments
+  // still surface new activity (default sort is oldest-first; without
+  // `since` the recent items fall off the first page).
+  sinceCursors: {
+    issueComments?: string;
+    reviewComments?: string;
   };
   consecutiveFailures: number;
   /** Epoch-ms until which this subscription skips polling (rate-limit backoff). */
@@ -145,6 +171,7 @@ export class PRPollingSource implements AsyncEventSource {
         state: undefined,
         merged: false,
         etags: {},
+        sinceCursors: {},
         consecutiveFailures: 0,
         skipPollUntilMs: 0,
       };
@@ -192,47 +219,62 @@ export class PRPollingSource implements AsyncEventSource {
     this.timer = undefined;
   }
 
+  private tickInFlight = false;
+
   private async tick(): Promise<void> {
-    const now = Date.now();
-    const entries = [...this.subscriptions.entries()];
-    await Promise.allSettled(
-      entries.map(async ([key, state]) => {
-        if (state.skipPollUntilMs > now) return;
-        try {
-          await this.pollOne(state);
-          state.consecutiveFailures = 0;
-        } catch (err) {
-          state.consecutiveFailures += 1;
-          if (err instanceof GitHubAuthError) {
-            this.logger.warn(
-              `Auth error for ${key}; stopping subscription. ${err.message}`,
-            );
-            this.emit(state, err.message);
-            this.subscriptions.delete(key);
-            this.notifyKeysChanged();
-            bus.emit('githubTokenInvalid', { message: err.message });
-          } else if (err instanceof GitHubRateLimitError) {
-            state.skipPollUntilMs = err.resetAt * 1000;
-            this.logger.warn(
-              `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
-            );
-          } else {
-            this.logger.warn(
-              `Poll failed for ${key} (${state.consecutiveFailures} in a row): ${String(err)}`,
-            );
-            if (state.consecutiveFailures >= 5) {
-              this.emit(
-                state,
-                `PR subscription to ${key} halted after repeated failures: ${String(err)}`,
+    // setInterval fires every POLL_INTERVAL_MS regardless of prior
+    // completion; with N subscriptions and 15s per-request timeouts a tick
+    // can outlast the interval. Without this guard overlapping ticks would
+    // double-emit events for the same new items.
+    if (this.tickInFlight) return;
+    this.tickInFlight = true;
+    try {
+      const now = Date.now();
+      const entries = [...this.subscriptions.entries()];
+      await Promise.allSettled(
+        entries.map(async ([key, state]) => {
+          if (state.skipPollUntilMs > now) return;
+          try {
+            await this.pollOne(state);
+            state.consecutiveFailures = 0;
+          } catch (err) {
+            if (err instanceof GitHubAuthError) {
+              this.logger.warn(
+                `Auth error for ${key}; stopping subscription. ${err.message}`,
               );
+              this.emit(state, err.message);
               this.subscriptions.delete(key);
               this.notifyKeysChanged();
+              bus.emit('githubTokenInvalid', { message: err.message });
+            } else if (err instanceof GitHubRateLimitError) {
+              // Rate limiting is a transient, expected condition; don't let
+              // it inflate consecutiveFailures (which trips the
+              // "halted after repeated failures" auto-unsubscribe).
+              state.skipPollUntilMs = err.resetAt * 1000;
+              this.logger.warn(
+                `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
+              );
+            } else {
+              state.consecutiveFailures += 1;
+              this.logger.warn(
+                `Poll failed for ${key} (${state.consecutiveFailures} in a row): ${String(err)}`,
+              );
+              if (state.consecutiveFailures >= 5) {
+                this.emit(
+                  state,
+                  `PR subscription to ${key} halted after repeated failures: ${String(err)}`,
+                );
+                this.subscriptions.delete(key);
+                this.notifyKeysChanged();
+              }
             }
           }
-        }
-      }),
-    );
-    if (this.subscriptions.size === 0) this.stopTimer();
+        }),
+      );
+      if (this.subscriptions.size === 0) this.stopTimer();
+    } finally {
+      this.tickInFlight = false;
+    }
   }
 
   private trimSet<T>(set: Set<T>): void {
@@ -286,14 +328,22 @@ export class PRPollingSource implements AsyncEventSource {
       return;
     }
 
+    const issueCommentsUrl = withSince(
+      `${issuePath}/comments?per_page=100`,
+      state.sinceCursors.issueComments,
+    );
+    const reviewCommentsUrl = withSince(
+      `${prPath}/comments?per_page=100`,
+      state.sinceCursors.reviewComments,
+    );
     const [commentsRes, reviewCommentsRes, reviewsRes, checksRes] =
       await Promise.all([
         ghGet<GhIssueComment[]>(
-          `${issuePath}/comments?per_page=100`,
+          issueCommentsUrl,
           state.etags.issueComments,
         ),
         ghGet<GhReviewComment[]>(
-          `${prPath}/comments?per_page=100`,
+          reviewCommentsUrl,
           state.etags.reviewComments,
         ),
         ghGet<GhReview[]>(
@@ -313,11 +363,15 @@ export class PRPollingSource implements AsyncEventSource {
       if (commentsRes.status === 200) {
         state.etags.issueComments = commentsRes.etag;
         for (const c of commentsRes.data) state.seenIssueCommentIds.add(c.id);
+        state.sinceCursors.issueComments = newestTimestamp(commentsRes.data);
       }
       if (reviewCommentsRes.status === 200) {
         state.etags.reviewComments = reviewCommentsRes.etag;
         for (const c of reviewCommentsRes.data)
           state.seenReviewCommentIds.add(c.id);
+        state.sinceCursors.reviewComments = newestTimestamp(
+          reviewCommentsRes.data,
+        );
       }
       if (reviewsRes.status === 200) {
         state.etags.reviews = reviewsRes.etag;
@@ -344,6 +398,8 @@ export class PRPollingSource implements AsyncEventSource {
           this.emit(state, formatIssueComment(state.slug, pr.pullNumber, c));
         }
       }
+      state.sinceCursors.issueComments =
+        newestTimestamp(commentsRes.data) ?? state.sinceCursors.issueComments;
       this.trimSet(state.seenIssueCommentIds);
     }
 
@@ -355,6 +411,9 @@ export class PRPollingSource implements AsyncEventSource {
           this.emit(state, formatReviewComment(state.slug, pr.pullNumber, c));
         }
       }
+      state.sinceCursors.reviewComments =
+        newestTimestamp(reviewCommentsRes.data) ??
+        state.sinceCursors.reviewComments;
       this.trimSet(state.seenReviewCommentIds);
     }
 

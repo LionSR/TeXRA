@@ -34,6 +34,25 @@ export class GitHubRateLimitError extends Error {
   }
 }
 
+/**
+ * GitHub error responses are `{ message, documentation_url, ... }` JSON
+ * objects. Raw `String(obj)` would render as `[object Object]`; extract the
+ * message field if present, otherwise fall back to a JSON-stringified form.
+ */
+function extractApiMessage(data: unknown, fallback: string): string {
+  if (typeof data === 'string' && data.trim()) return data;
+  if (data && typeof data === 'object') {
+    const rec = data as { message?: unknown };
+    if (typeof rec.message === 'string' && rec.message.trim()) return rec.message;
+    try {
+      return JSON.stringify(data);
+    } catch {
+      /* fall through */
+    }
+  }
+  return fallback;
+}
+
 export async function ghGet<T>(
   path: string,
   etag?: string,
@@ -68,7 +87,7 @@ export async function ghGet<T>(
         throw new GitHubRateLimitError(Number(reset));
       }
       throw new GitHubAuthError(
-        `GitHub returned ${status}: ${String(ax.response?.data ?? ax.message)}`,
+        `GitHub returned ${status}: ${extractApiMessage(ax.response?.data, ax.message)}`,
       );
     }
     throw err;

@@ -12,6 +12,7 @@ export interface GhIssueComment {
   body: string | null;
   user: GhUser | null;
   created_at: string;
+  updated_at?: string;
   html_url: string;
 }
 
@@ -24,6 +25,7 @@ export interface GhReviewComment {
   original_line?: number | null;
   html_url: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface GhReview {

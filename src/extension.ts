@@ -253,7 +253,7 @@ export async function activate(context: vscode.ExtensionContext) {
         )
         .then((choice) => {
           if (choice === 'Open Git settings') {
-            void vscode.commands.executeCommand('texra.showDashboard');
+            void vscode.commands.executeCommand('texra.showGitSettings');
           }
         });
     },

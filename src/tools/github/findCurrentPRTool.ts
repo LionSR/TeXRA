@@ -37,9 +37,10 @@ const FindCurrentPRInputSchema = z.strictObject({
 
 type FindCurrentPRInput = z.infer<typeof FindCurrentPRInputSchema>;
 
-// GitHub SSH/HTTPS URL → { owner, repo }. Handles `.git` suffix.
+// GitHub SSH/HTTPS URL → { owner, repo }. Handles `.git` suffix, and repo
+// names that themselves contain dots (e.g. `org.github.io`, `my.config`).
 const GITHUB_URL_RE =
-  /^(?:git@github\.com:|https:\/\/github\.com\/)([^/]+)\/([^/.]+?)(?:\.git)?$/;
+  /^(?:git@github\.com:|https:\/\/github\.com\/)([^/]+)\/(.+?)(?:\.git)?\/?$/;
 
 function parseGitHubRemote(
   remoteUrl: string,
