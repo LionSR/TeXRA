@@ -42,8 +42,16 @@ const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 // can be enabled from the Tools settings tab. Seeded into global state only
 // on first install via `initializeToolDefaults()` — existing profiles keep
 // whatever they had (empty == all tools enabled).
+//
+// Codex and Zotero are default-off because they rely on external software
+// (the Codex CLI / a running Zotero + Better BibTeX) that most first-time
+// users haven't installed. Leaving them enabled shows a scary "tools
+// excluded — dependencies not installed" notification on the first agent
+// run, which is confusing when the user never intended to use them.
 export const DEFAULT_DISABLED_TOOL_IDS: readonly string[] = [
   'external-inquiry',
+  'codex',
+  'zotero',
 ];
 
 /** Determine whether tool-use session persistence is enabled. */
