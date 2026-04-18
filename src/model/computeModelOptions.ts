@@ -9,13 +9,19 @@ import { GlobalStateKey, globalSM } from '@common/state';
 
 // Local imports - platform
 import { platform } from '@platform/platform';
-import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
 
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared constants
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import {
+  FAST_FIRST_RESPONSE_HINT,
+  isFastFirstResponseModel,
+} from '@shared/constants/fastModels';
+
+// Local imports - sibling
+import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
 
 /**
  * Default models that should be present in every user's model list.
@@ -78,6 +84,16 @@ export function formatCost(
 ): string | undefined {
   if (inputPrice === undefined || outputPrice === undefined) return undefined;
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
+}
+
+/**
+ * Build the model tooltip string, prepending the "fast first response" nudge
+ * for cheap non-reasoning variants so free-tier users can spot snappy options.
+ */
+function buildModelHint(config: ModelConfig): string {
+  const base = hint(config);
+  if (!isFastFirstResponseModel(config.inputPrice)) return base;
+  return base ? `${FAST_FIRST_RESPONSE_HINT} | ${base}` : FAST_FIRST_RESPONSE_HINT;
 }
 
 /** Check if a model is available via personal API keys. */
@@ -194,7 +210,7 @@ async function buildModelOptionData(
     provider: config.provider,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
-    hint: hint(config),
+    hint: buildModelHint(config),
     requiresKey: !available,
     disabled: !available,
   };
@@ -215,7 +231,7 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
       provider: config.provider,
       context: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
-      hint: hint(config),
+      hint: buildModelHint(config),
     };
   });
 }
