@@ -1,156 +1,90 @@
 # Connecting to the Codex CLI
 
-TeXRA can spin off an [OpenAI Codex](https://developers.openai.com/codex/cli) agent as a local tool. Codex is a sandboxed coding agent that reads files, runs commands, and edits code inside your workspace. Once connected, any TeXRA tool-use agent can delegate work to it via the `codex` tool — useful for long-running code tasks, scripted verifications, or offloading heavy reasoning to a ChatGPT subscription.
+TeXRA can hand off tasks to [OpenAI Codex](https://developers.openai.com/codex/cli) — a sandboxed coding agent that runs locally, reads files, runs commands, and edits code. Once connected, any TeXRA tool-use agent can delegate to it via the `codex` tool and keep your ChatGPT Plus / Pro plan paying for the compute.
 
-## Why Use Codex From TeXRA?
+## Quick Start
 
-- **Subscription reuse:** Codex authenticates with your ChatGPT Plus / Pro account, so the compute is covered by your existing plan instead of per-token API billing.
-- **Sandboxed execution:** Commands and file writes happen under Codex's sandbox — you pick the access level.
-- **Multi-turn threads:** Each Codex run opens a dedicated stream tab. You can send follow-ups without starting a new session, and the agent can resume a thread by ID.
-- **Background mode:** Launch Codex asynchronously; TeXRA delivers the result back to the parent agent when the turn completes.
+Three steps, about two minutes.
 
-## Prerequisites
+### 1. Install the CLI
 
-- Node.js and `npm` on your PATH (used by the Codex CLI installer).
-- A ChatGPT account (Plus or Pro recommended) **or** an `OPENAI_API_KEY` with Codex access.
-- TeXRA installed in VS Code ([Installation Guide](./installation.md)).
-
-## 1. Install the Codex CLI
-
-Pick whichever installer fits your platform. TeXRA's `codex` tool uses the binary from `@openai/codex` via the `@openai/codex-sdk` Node package.
-
-::: code-group
-
-```bash [npm (all platforms)]
+```bash
 npm install -g @openai/codex
 ```
 
-```bash [Homebrew (macOS)]
-brew install codex
-```
+- macOS users can also `brew install codex`.
+- **Windows:** install inside WSL and launch VS Code with the WSL remote — Codex has no native Windows binary.
 
-```bash [Windows / WSL]
-# Install inside the WSL environment, not on the Windows side.
-wsl
-npm install -g @openai/codex
-```
-
-:::
-
-Verify the install:
+Check it installed:
 
 ```bash
 codex --version
 ```
 
-::: warning Windows users
-Codex does not ship a native Windows binary. Install it inside **WSL** (and run VS Code's WSL remote) or use the standalone Codex desktop app. TeXRA discovers the binary via the SDK's platform-specific package, so a Windows-side install will not be detected.
-:::
-
-## 2. Authenticate
-
-Choose one of the following.
-
-### Option A — ChatGPT login (recommended)
+### 2. Sign in
 
 ```bash
 codex login
 ```
 
-This opens a browser window and stores credentials at `~/.codex/auth.json`. It is the right choice if you already pay for ChatGPT Plus / Pro.
+This opens a browser and stores credentials at `~/.codex/auth.json`. Your ChatGPT Plus / Pro plan covers the compute.
 
-### Option B — API key
+Prefer API billing? Export `OPENAI_API_KEY` in the shell that launches VS Code instead — Codex picks it up automatically.
 
-Export an API key with Codex access:
+### 3. Verify in TeXRA
 
-```bash
-export OPENAI_API_KEY="sk-..."
-```
+Open **TeXRA: Show Dashboard** (`Ctrl+Shift+P`) → **Tools** (<i class="codicon codicon-tools"></i>) → **Computation** (<i class="codicon codicon-symbol-operator"></i>). The **OpenAI Codex CLI** card should read <i class="codicon codicon-check"></i> **Available**.
 
-Add it to your shell profile (`~/.zshrc`, `~/.bashrc`, etc.) so VS Code inherits the variable. On Windows + WSL, export inside the WSL shell that launches `code .`.
+If it doesn't, jump to [Troubleshooting](#troubleshooting).
 
-::: tip
-Codex manages its own auth state — TeXRA never reads or stores your ChatGPT credentials. You can switch accounts any time with `codex logout` followed by `codex login`.
+That's the whole setup — any tool-use agent with the `codex` tool enabled can now delegate to Codex.
+
+## Settings
+
+All Codex options live on the Codex card in **Dashboard → Tools** and are scoped to the current workspace.
+
+| Setting              | Options                                                                       | Default             | What it controls                                                         |
+| -------------------- | ----------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------ |
+| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                          | `workspace-write`   | File-system access. Agents may override per call via `sandbox_mode`.     |
+| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                              | `high`              | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
+| **Require approval** | checkbox under *Approval & Safety* (<i class="codicon codicon-shield"></i>)   | on                  | Show a confirmation prompt before every Codex call.                      |
+
+TeXRA always drives Codex with the short model name `gpt-5.4`. Everything else (providers, MCP servers, custom instructions) comes from Codex's own `~/.codex/config.toml`.
+
+## Running Codex
+
+Check which agents have the `codex` tool enabled on the **Agents** tab (<i class="codicon codicon-sparkle"></i>), then prompt one of them:
+
+> Use codex to sketch a minimal FastAPI server that returns a JSON healthcheck.
+
+When it fires:
+
+1. A child stream tab `codex@codex-sdk` opens on the ProgressBoard (<i class="codicon codicon-type-hierarchy"></i>).
+2. Reasoning, commands, file diffs, web searches (<i class="codicon codicon-globe"></i>), and todos stream in live.
+3. When the turn ends, the tab sits in **WAITING**. Type a follow-up to continue the thread, or press <i class="codicon codicon-debug-stop"></i> **Stop** to end it.
+4. The calling agent gets back the final response, token usage, and a `thread_id` it can resume later.
+
+::: tip Background mode
+Agents can pass `run_in_background: true` to get the execution ID immediately and receive the result as a follow-up when Codex finishes. Good for long refactors that shouldn't block the parent.
 :::
-
-## 3. Verify the Connection in TeXRA
-
-1. Open the TeXRA Dashboard: `Ctrl+Shift+P` → **TeXRA: Show Dashboard**.
-2. Go to the **Tools** tab (<i class="codicon codicon-tools"></i>).
-3. Under **Computation** (<i class="codicon codicon-symbol-operator"></i>), find the **OpenAI Codex CLI** card.
-
-If the card shows <i class="codicon codicon-check"></i> **Available**, the SDK loaded and the Codex binary was discovered. If it shows <i class="codicon codicon-warning"></i> **Not Found**, hover for the detail message:
-
-| Detail message                                                     | What to do                                                                                        |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `@openai/codex-sdk not found`                                      | Run `npm install -g @openai/codex` and reload VS Code.                                            |
-| `Codex SDK loaded but native binary not found`                     | The SDK installed without its platform binary — reinstall with `npm install -g @openai/codex`.    |
-| `Platform not supported`                                           | You're on an unsupported OS/arch. Use WSL on Windows or a supported Linux/macOS host.             |
-| `Codex CLI ready. Binary: /…/codex`                                | All set.                                                                                          |
-
-The card also exposes an <i class="codicon codicon-link-external"></i> link to the Codex project page and a <i class="codicon codicon-cloud-download"></i> install guide button for quick reference.
-
-## 4. Configure Codex
-
-Codex-specific settings live directly on the Codex card in **Dashboard → Tools**. They are scoped to the current workspace.
-
-### Sandbox mode
-
-| Mode                 | What Codex can do                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------- |
-| `read-only`          | Read files and run read-only commands. No writes, no network side effects.            |
-| `workspace-write`    | Read + write inside the workspace directory. **Default.**                             |
-| `danger-full-access` | No sandbox — Codex can touch anything the user can. Use only when you trust the task. |
-
-The orchestrating agent may override this per call via the tool's `sandbox_mode` parameter, but the dashboard value is the default.
-
-### Reasoning effort
-
-Controls how much the model deliberates before responding.
-
-| Effort   | Behavior                                                                 |
-| -------- | ------------------------------------------------------------------------ |
-| `low`    | Fast, shallow.                                                           |
-| `medium` | Balanced.                                                                |
-| `high`   | Deeper reasoning. **Default.**                                           |
-| `xhigh`  | TeXRA-only UI tier. Capped to `high` when handed to the Codex CLI.       |
-
-TeXRA drives Codex with the short model name `gpt-5.4`; it is not a dropdown because the Codex CLI selects its own model family internally.
-
-### Approval prompts
-
-The **Require approval for shell commands & Codex sessions** checkbox (same **Tools** tab, under *Approval & Safety* <i class="codicon codicon-shield"></i>) applies to every Codex invocation. With it enabled, TeXRA shows a confirmation prompt before each Codex call and includes the prompt preview plus the sandbox mode. Disable it only for trusted autonomous flows.
-
-## 5. Run Your First Codex Turn
-
-Any tool-use agent with `codex` in its allowed tools can delegate to Codex — check the agent's definition in the **Agents** tab (<i class="codicon codicon-sparkle"></i>) or enable it for a custom agent. Try:
-
-```
-Use codex to sketch a minimal FastAPI server that returns a JSON healthcheck.
-```
-
-What to expect:
-
-1. A child stream tab opens with the prefix `codex@codex-sdk` — visible on the ProgressBoard (<i class="codicon codicon-type-hierarchy"></i>).
-2. The stream shows Codex's reasoning, command executions, file diffs, web searches (<i class="codicon codicon-globe"></i>), and todo list in real time.
-3. When the turn finishes, the tab stays in **WAITING** state — type a follow-up in the tab's input to keep the same thread going. Use <i class="codicon codicon-debug-stop"></i> **Stop** to interrupt it.
-4. The agent that invoked Codex receives a compact result with the final response, token usage, and a `thread_id` it can pass back to resume the conversation later.
-
-### Background mode
-
-Agents can pass `run_in_background: true` when they don't need to block on the result. TeXRA immediately returns the execution ID and stream tab, then delivers the completed output as a follow-up message once Codex finishes. Handy for long refactors while the parent agent keeps working.
 
 ## Troubleshooting
 
-**Codex card stays <i class="codicon codicon-warning"></i> Not Found after installing.** Reload the VS Code window (`Developer: Reload Window`) so the extension re-checks for the binary.
+**Tools card shows <i class="codicon codicon-warning"></i> Not Found.** Hover the card for the exact message:
 
-**Authentication prompts keep appearing.** Run `codex login` in the terminal VS Code is launched from — environment variables set in a GUI session may not reach the Codex binary. On macOS, make sure you're not launching VS Code from Finder with a clean environment.
+| Message                                         | Fix                                                                          |
+| ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| `@openai/codex-sdk not found`                   | `npm install -g @openai/codex`, then reload VS Code.                         |
+| `Codex SDK loaded but native binary not found`  | Reinstall — the platform binary didn't ship. On Windows, install inside WSL. |
+| `Platform not supported`                        | Unsupported OS/arch. Use WSL on Windows or a supported Linux/macOS host.     |
 
-**`codex login` fails in WSL.** Make sure the WSL distro can open URLs in your host browser (`wslu` or `wslview`). Alternatively, copy the login URL and paste it into a browser manually.
+**Card is still Not Found after installing.** Reload the window (`Developer: Reload Window`) so the extension re-checks for the binary.
 
-**The session is stuck in WAITING after a reload.** TeXRA interrupts Codex threads on extension reload. Close the stream tab and start a new turn — threads are cached to disk, so pass the previous `thread_id` if you want to continue where you left off.
+**Auth prompts keep appearing.** Run `codex login` in the shell VS Code inherits its environment from. On macOS, launching VS Code from Finder can strip exported variables — start it from a terminal instead.
 
-**Custom Codex config.** Codex reads its own config from `~/.codex/config.toml`. TeXRA only overrides `model`, `modelReasoningEffort`, `sandboxMode`, and the workspace directories — everything else (providers, MCP servers, custom instructions) comes from Codex's config and is respected as-is.
+**`codex login` fails in WSL.** Install `wslu` so Codex can open URLs in your host browser, or paste the login URL into a browser manually.
+
+**Session stuck in WAITING after a reload.** TeXRA interrupts Codex threads when the extension reloads. Close the tab and start a new turn — pass the previous `thread_id` if you want to continue where you left off.
 
 ## Next Steps
 
