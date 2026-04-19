@@ -17,42 +17,40 @@ export const syncHandlers: HandlerRegistry = {
     if (!data.stream || data.action === 'clear') return;
 
     const hasWorkflowData =
-      data.workflowInstruction !== undefined ||
       data.workflowUsage !== undefined ||
       data.workflowFiles !== undefined ||
-      data.workflowMissingOutputs !== undefined ||
-      data.contextState !== undefined;
+      data.workflowMissingOutputs !== undefined;
     const hasTaskData =
       data.todos !== undefined ||
       data.plan !== undefined ||
       data.queuedFollowUps !== undefined;
-    const hasInstruction = data.instruction !== undefined;
     const hasMeta =
       data.conversationProgress !== undefined || data.badges !== undefined;
     const hasToolUseUsage = data.runUsage !== undefined;
+    const hasContext = data.contextState !== undefined;
 
     if (
       hasWorkflowData ||
       hasTaskData ||
-      hasInstruction ||
       hasMeta ||
-      hasToolUseUsage
+      hasToolUseUsage ||
+      hasContext
     ) {
       ctx.setStreamState(data.stream, (prev) =>
         create(prev, (draft) => {
+          // contextState is a base field shared by workflow and tool-use.
+          if (hasContext) {
+            draft.contextState = data.contextState;
+          }
+
           if (hasWorkflowData && isWorkflowState(prev)) {
             const d = draft as WorkflowStreamState;
-            if (data.workflowInstruction !== undefined)
-              d.instruction = data.workflowInstruction;
             if (data.workflowUsage !== undefined)
               d.usage = data.workflowUsage;
             if (data.workflowFiles)
               Object.assign(d.files, data.workflowFiles);
             if (data.workflowMissingOutputs) {
               Object.assign(d.missingOutputs, data.workflowMissingOutputs);
-            }
-            if (data.contextState) {
-              d.contextState = data.contextState;
             }
           }
 
@@ -76,10 +74,6 @@ export const syncHandlers: HandlerRegistry = {
               d.toolEditBypass = data.toolEditBypass;
             if (data.superYoloBypass !== undefined)
               d.superYoloBypass = data.superYoloBypass;
-          }
-          if (isWorkflowState(prev) && hasInstruction) {
-            const d = draft as WorkflowStreamState;
-            d.instruction = data.instruction ?? null;
           }
 
           if (data.conversationProgress) {

@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import type { TaskState } from '@logger/TaskState';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
   ProgressViewState,
@@ -12,7 +11,6 @@ import type {
   AgentCategoryFilter,
   ConversationProgress,
   ContextState,
-  InstructionUpdate,
   OutputFileInfo,
   PermissionPayload,
   ProgressPermissionKind,
@@ -60,7 +58,6 @@ export interface SyncStreamContentPayload {
   todos: TodoItem[];
   plan: Plan | null;
   queuedFollowUps: string[];
-  instruction: InstructionUpdate | null;
   agentCategory?: string;
   /** Tab-switch state previously sent by syncActiveStreamState (R2). */
   conversationProgress?: ConversationProgress;
@@ -95,24 +92,6 @@ export class WebviewUpdater {
         webview.postMessage(message);
       }
     }
-  }
-
-  static createInstructionUpdate(
-    taskState?: TaskState,
-    existingTimestamp?: number,
-  ): InstructionUpdate | undefined {
-    const text = taskState?.agentConfig?.instruction?.trim();
-    if (!text) {
-      return undefined;
-    }
-
-    const lineCount = text.split(/\r?\n/).length;
-    const timestamp = existingTimestamp ?? Date.now();
-    const showToggle = lineCount > 6 || text.length > 600;
-    if (showToggle) {
-      return { text, metadata: { showToggle: true }, timestamp };
-    }
-    return { text, timestamp };
   }
 
   /**
@@ -203,23 +182,6 @@ export class WebviewUpdater {
       stream,
       runId,
       usage,
-    });
-  }
-
-  /**
-   * Update or clear instruction panel content.
-   * Pass null for instruction to clear the panel.
-   */
-  updateInstruction(
-    stream: StreamTabId | '',
-    instruction: InstructionUpdate | null,
-    agentCategory?: string,
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION,
-      stream,
-      instruction,
-      agentCategory,
     });
   }
 

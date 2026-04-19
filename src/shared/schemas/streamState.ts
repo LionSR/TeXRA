@@ -6,7 +6,7 @@ import {
   type AgentCategory,
 } from './agent';
 import { OutputFileInfoSchema } from './output';
-import { InstructionUpdateSchema, StreamStatusSchema } from './stream';
+import { StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
@@ -131,7 +131,6 @@ function RoundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.WORKFLOW),
   // Frontend-owned fields updated by targeted progress-view messages
-  instruction: InstructionUpdateSchema.nullable().prefault(null),
   usage: TokenUsageStatsSchema.nullable().prefault(null),
   files: RoundIndexedRecord(OutputFileInfoSchema),
   missingOutputs: RoundIndexedRecord(z.string()),

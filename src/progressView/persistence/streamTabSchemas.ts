@@ -2,21 +2,22 @@
  * Zod schemas for stream-tab persistence.
  *
  * Single source of truth for all data shapes read from / written to disk
- * by StreamTabStore, OutputFilesManager, and InstructionManager.
+ * by StreamTabStore, OutputFilesManager, and UsageStatsManager.
  *
- * Workflow streams hold one run per tab. Legacy disk data (from before the
- * one-run-per-tab refactor) was keyed by runId; union schemas here accept
- * both shapes and flatten legacy → new by picking the most recent run.
+ * Legacy data (from before the one-run-per-tab refactor) was keyed by runId:
+ *   - outputFiles.json / missingOutputs.json used `{ runId: { round: … } }`
+ *   - usageStats.json used `{ runId: TokenUsageStats }` (still the stored shape)
+ *
+ * The preprocess helpers below detect the legacy nested shape and flatten
+ * it to the new format by picking the most recent run (last-inserted key).
  */
 
 import { z } from 'zod';
 
 import { TaskStateSchema } from '@logger/TaskState';
 import {
-  InstructionUpdateSchema,
   OutputFileInfoSchema,
   TokenUsageStatsSchema,
-  type InstructionUpdate,
   type OutputFileInfo,
   type TokenUsageStats,
 } from '@shared/schemas';
@@ -33,7 +34,7 @@ export const RoundKeySchema = z.coerce.number().int();
 // ============================================================================
 
 export const StreamTabMetaSchema = z.object({
-  /** Legacy field — no longer read/written; tolerated on read so we can skip it. */
+  /** Legacy field — no longer written, tolerated on read so we can skip it. */
   activeRunId: z.string().nullable().optional(),
   parentStreamId: z.string().optional(),
   executionId: z.string().optional(),
@@ -43,6 +44,43 @@ export const StreamTabMetaSchema = z.object({
 });
 
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
+
+// ============================================================================
+// Legacy detection + flattening
+// ============================================================================
+
+/**
+ * Detects whether a record is the legacy nested shape
+ * (`{ runId: { round: items[] } }`) rather than the flat shape
+ * (`{ round: items[] }`). Legacy wrappers have object values whose inner
+ * values are arrays; flat records have arrays directly as values.
+ */
+function isLegacyNested(raw: unknown): raw is Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  const values = Object.values(raw as Record<string, unknown>);
+  if (values.length === 0) return false;
+  // Flat shape: all values are arrays. Legacy: at least one value is an
+  // object-like (non-array, non-null) nested map.
+  return values.some(
+    (v) => v !== null && typeof v === 'object' && !Array.isArray(v),
+  );
+}
+
+/**
+ * Flatten a legacy nested record to the latest run's round-keyed map.
+ * Preserves JS insertion order to select the most recently written run.
+ */
+function flattenLegacyRuns(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
+  let latest: Record<string, unknown> | null = null;
+  for (const value of Object.values(raw)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      latest = value as Record<string, unknown>;
+    }
+  }
+  return latest ?? {};
+}
 
 // ============================================================================
 // Shared transform helpers
@@ -60,23 +98,9 @@ function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
   return map;
 }
 
-/**
- * Pick the last entry from a legacy run-keyed record, filtering out empty
- * values. Returns null/empty when no runs contain data.
- */
-function pickLatestRunEntries<T>(
-  record: Record<string, T>,
-  isEmpty: (value: T) => boolean,
-): T | null {
-  let latest: T | null = null;
-  for (const [, value] of Object.entries(record)) {
-    if (!isEmpty(value)) latest = value;
-  }
-  return latest;
-}
-
 // ============================================================================
-// Output files: { round: OutputFileInfo[] } (new) or { runId: { round: … } } (legacy)
+// Output files: { round: OutputFileInfo[] } (new); legacy nested is flattened
+// before schema validation.
 // ============================================================================
 
 const OutputFileListSchema = z
@@ -86,44 +110,29 @@ const OutputFileListSchema = z
   )
   .catch([]);
 
-/** New flat shape: { roundKey: OutputFileInfo[] } → Map<round, files>. */
-const OutputFilesFlatSchema = z
-  .record(z.string(), OutputFileListSchema)
-  .transform(recordToRoundMap);
-
-/** Legacy: { runId: { roundKey: OutputFileInfo[] } } → pick latest run's map. */
-const OutputFilesLegacySchema = z
-  .record(z.string(), OutputFilesFlatSchema.catch(new Map()))
-  .transform((record): Map<number, OutputFileInfo[]> => {
-    const latest = pickLatestRunEntries(record, (m) => m.size === 0);
-    return latest ?? new Map();
-  });
-
-export const OutputFilesDataSchema = z
-  .union([OutputFilesFlatSchema, OutputFilesLegacySchema])
-  .catch(new Map()) as z.ZodType<Map<number, OutputFileInfo[]>>;
+export const OutputFilesDataSchema = z.preprocess(
+  (raw) => (isLegacyNested(raw) ? flattenLegacyRuns(raw) : raw),
+  z
+    .record(z.string(), OutputFileListSchema)
+    .transform(recordToRoundMap)
+    .catch(new Map()),
+) as z.ZodType<Map<number, OutputFileInfo[]>>;
 
 // ============================================================================
-// Missing outputs: { round: string[] } (new) or { runId: { round: … } } (legacy)
+// Missing outputs: { round: string[] } (new); legacy nested flattened first.
 // ============================================================================
 
-const MissingOutputsFlatSchema = z
-  .record(z.string(), z.array(z.string()).catch([]))
-  .transform(recordToRoundMap);
-
-const MissingOutputsLegacySchema = z
-  .record(z.string(), MissingOutputsFlatSchema.catch(new Map()))
-  .transform((record): Map<number, string[]> => {
-    const latest = pickLatestRunEntries(record, (m) => m.size === 0);
-    return latest ?? new Map();
-  });
-
-export const MissingOutputsDataSchema = z
-  .union([MissingOutputsFlatSchema, MissingOutputsLegacySchema])
-  .catch(new Map()) as z.ZodType<Map<number, string[]>>;
+export const MissingOutputsDataSchema = z.preprocess(
+  (raw) => (isLegacyNested(raw) ? flattenLegacyRuns(raw) : raw),
+  z
+    .record(z.string(), z.array(z.string()).catch([]))
+    .transform(recordToRoundMap)
+    .catch(new Map()),
+) as z.ZodType<Map<number, string[]>>;
 
 // ============================================================================
-// Usage stats
+// Usage stats — per-run map kept (tool-use can resume → multiple runs).
+// Workflow consumers collapse to a single value via sumUsageStats.
 // ============================================================================
 
 /** Coerces input to number, defaulting non-finite values to 0 */
@@ -181,8 +190,8 @@ export function isEmptyUsage(usage: TokenUsageStats): boolean {
 
 /**
  * Per-run usage map: { runId: TokenUsageStats } → Map<runId, stats>.
- * Used for both workflow (one entry per tab) and tool-use (multiple entries
- * via resume). Workflow consumers compute a single accumulated value.
+ * Used by both workflow and tool-use streams. Workflow has one entry per
+ * run (= one entry per tab); tool-use can accumulate multiple via resume.
  */
 export const UsageDataSchema = z
   .record(z.string(), TokenUsageStatsParsingSchema)
@@ -195,31 +204,10 @@ export const UsageDataSchema = z
   })
   .catch(new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
 
-/** Per-run usage record (write side). */
-export type UsageStatsRecord = Record<string, TokenUsageStats>;
-
-// ============================================================================
-// Instruction
-// ============================================================================
-
-/** New flat shape: a single InstructionUpdate (or null). */
-const InstructionFlatSchema = InstructionUpdateSchema.nullable();
-
-/** Legacy: { runId: InstructionUpdate } → pick latest run's instruction. */
-const InstructionLegacySchema = z
-  .record(z.string(), InstructionUpdateSchema)
-  .transform((record): InstructionUpdate | null => {
-    return pickLatestRunEntries(record, () => false);
-  });
-
-export const InstructionRecordSchema = z
-  .union([InstructionFlatSchema, InstructionLegacySchema])
-  .nullable()
-  .catch(null) as z.ZodType<InstructionUpdate | null>;
-
 // ============================================================================
 // Write-side types — shape contracts for data written to disk
 // ============================================================================
 
 export type OutputFilesRecord = Record<string, OutputFileInfo[]>;
 export type MissingOutputsRecord = Record<string, string[]>;
+export type UsageStatsRecord = Record<string, TokenUsageStats>;

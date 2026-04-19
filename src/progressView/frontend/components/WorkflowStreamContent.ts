@@ -27,7 +27,6 @@ import type { PermissionState } from './PermissionCard';
 
 // Side-effect imports - sibling components
 import './StreamHeader';
-import './InstructionPanel';
 import './TaskGroupList';
 import './LogList';
 import './UsagePanel';
@@ -90,8 +89,6 @@ export class WorkflowStreamContent extends LitElement {
         .progress=${state.conversationProgress}
         .yoloActive=${false}
       ></stream-header>
-
-      <instruction-panel .instruction=${state.instruction}></instruction-panel>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
 

@@ -292,11 +292,10 @@ export class ProgressEventHandler {
     } else if (shouldSwitch) {
       this.webviewUpdater.setActiveStream(streamId);
     }
-    // Always sync content for the new stream so instruction/badges/parent
-    // info reaches the webview — even when we suppress the view switch.
-    // includeActiveState is only relevant when this IS the active stream.
+    // Always sync content for the new stream so badges/parent info reaches
+    // the webview — even when we suppress the view switch. includeActiveState
+    // is only relevant when this IS the active stream.
     this.syncStreamContent(streamId, {
-      updateInstruction: true,
       includeActiveState: shouldSwitch && wasKnownStream && !filterChanged,
     });
   }
@@ -322,17 +321,6 @@ export class ProgressEventHandler {
 
     if (executionId) {
       this.state.meta.setExecutionId(streamId, executionId);
-    }
-
-    // Instruction panel is only rendered for workflow streams.
-    if (category !== AgentCategory.ToolUse) {
-      if (isActiveStream) {
-        this.sendInstructionUpdate(streamId);
-      } else {
-        // Non-active stream (e.g. subagent while orchestrator is active):
-        // persist so the instruction is available when the user switches tabs.
-        this.prepareInstructionUpdate(streamId);
-      }
     }
 
     if (this.webviewUpdater.isAvailable()) {
@@ -432,30 +420,16 @@ export class ProgressEventHandler {
     }
   }
 
-  private sendInstructionUpdate(stream: StreamTabId | ''): void {
-    if (!this.webviewUpdater.isAvailable()) return;
-
-    if (!stream) {
-      this.webviewUpdater.updateInstruction('', null);
-      return;
-    }
-
-    const { instruction, agentCategory } = this.prepareInstructionUpdate(stream);
-
-    this.webviewUpdater.updateInstruction(stream, instruction, agentCategory);
-  }
-
   public syncStreamContent(
     stream: ActiveStreamId,
     options: {
-      updateInstruction?: boolean;
       /** Include conversation progress, badges, and parent stream in the batch. */
       includeActiveState?: boolean;
     } = {},
   ): void {
     if (!this.webviewUpdater.isAvailable()) return;
 
-    const { updateInstruction = true, includeActiveState = false } = options;
+    const { includeActiveState = false } = options;
 
     if (!stream) {
       // Clear the stream surface when no stream is active.
@@ -465,7 +439,6 @@ export class ProgressEventHandler {
         todos: [],
         plan: null,
         queuedFollowUps: [],
-        instruction: null,
       });
       return;
     }
@@ -476,12 +449,7 @@ export class ProgressEventHandler {
     const todos = this.state.getTodos(stream);
     const plan = this.state.getPlan(stream);
     const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
-
-    let instruction: import('@shared/schemas').InstructionUpdate | null = null;
-    let agentCategory: string | undefined;
-    if (updateInstruction) {
-      ({ instruction, agentCategory } = this.prepareInstructionUpdate(stream));
-    }
+    const agentCategory = this.getStreamCategory(stream);
 
     // Optionally include active-stream state (replaces syncActiveStreamState).
     let conversationProgress:
@@ -514,7 +482,6 @@ export class ProgressEventHandler {
       todos,
       plan,
       queuedFollowUps,
-      instruction,
       agentCategory,
       conversationProgress,
       badges,
@@ -549,29 +516,6 @@ export class ProgressEventHandler {
         runUsage,
         contextState,
       },
-    };
-  }
-
-  /** Gather instruction update data without sending. Used by batched hydration. */
-  private prepareInstructionUpdate(stream: StreamTabId): {
-    instruction: import('@shared/schemas').InstructionUpdate | null;
-    agentCategory?: string;
-  } {
-    const taskState = this.state.meta.getTaskState(stream);
-    const category = this.getStreamCategory(stream);
-
-    const existingInstruction = this.state.instructions.get(stream);
-    const instructionUpdate = WebviewUpdater.createInstructionUpdate(
-      taskState,
-      existingInstruction?.timestamp,
-    );
-
-    // Persist instruction
-    this.state.instructions.set(stream, instructionUpdate ?? null);
-
-    return {
-      instruction: instructionUpdate ?? null,
-      agentCategory: category,
     };
   }
 

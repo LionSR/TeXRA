@@ -19,19 +19,20 @@ export function getOutputFileName(
 
 /**
  * Generates an output path for an extracted document from multi-document XML
- * output. The extracted doc is placed in the same round directory as the
- * parent output file.
+ * output. The extracted doc is placed under the round directory, preserving
+ * any subdirectory in the source path (e.g. `chapters/main.tex` and
+ * `appendix/main.tex` produce distinct files under the same round dir).
  *
- * @param source Source document name from XML (e.g. "chapter1.tex")
+ * @param source Source document name from XML (e.g. "chapters/main.tex")
  * @param roundDir The round directory (already includes `r{round}`)
  */
 export function getExtractedDocOutputFileName(
   source: string,
   roundDir: string,
 ): string {
-  const { name: sourceName, ext } = path.parse(source);
-  const extension = ext.replace('.', '') || 'tex';
-  return path.join(roundDir, `${sourceName}.${extension}`);
+  const parsed = path.parse(source);
+  const extension = parsed.ext.replace('.', '') || 'tex';
+  return path.join(roundDir, parsed.dir, `${parsed.name}.${extension}`);
 }
 
 /**

@@ -2,10 +2,11 @@
 import { strict as assert } from 'assert';
 
 // Local imports
+import type { ExecutionId } from '@shared/schemas';
 import { getStreamTabId } from '@/logger/streamUtils';
 
 describe('getStreamTabId', () => {
-  const EXEC_ID = 'abcdef012345' as const;
+  const EXEC_ID = 'abcdef012345' as ExecutionId;
 
   it('builds an identifier from agent, model, and executionId', () => {
     const id = getStreamTabId('polish', 'sonnet', { executionId: EXEC_ID });
@@ -21,16 +22,11 @@ describe('getStreamTabId', () => {
 
   it('gives each execution a unique tab id', () => {
     const id1 = getStreamTabId('polish', 'sonnet', {
-      executionId: 'aaaaaaaaaaaa',
+      executionId: 'aaaaaaaaaaaa' as ExecutionId,
     });
     const id2 = getStreamTabId('polish', 'sonnet', {
-      executionId: 'bbbbbbbbbbbb',
+      executionId: 'bbbbbbbbbbbb' as ExecutionId,
     });
     assert.notEqual(id1, id2);
-  });
-
-  it('generates a fresh executionId when none is provided', () => {
-    const id = getStreamTabId('polish', 'sonnet');
-    assert.match(id, /^polish@sonnet#[0-9a-f]{12}$/);
   });
 });

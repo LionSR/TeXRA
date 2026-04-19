@@ -220,17 +220,17 @@ async function resolveAgentBase(
     hasMultipleOutputs: useMultipleOutputs,
   });
 
-  const toolUseInstruction =
-    setting.agentCategory === AgentCategory.ToolUse &&
-    config.instruction?.trim() &&
-    !options?.streamTabIdOverride
+  // Log the initial instruction as a user message so both workflow and
+  // tool-use tabs display it inline with the stream log (no separate panel).
+  const initialInstruction =
+    config.instruction?.trim() && !options?.streamTabIdOverride
       ? config.instruction.trim()
       : undefined;
 
   const parentStage = await beginRunStage(
     agentLogger,
     `Run: ${config.agent}`,
-    toolUseInstruction,
+    initialInstruction,
   );
   const storageKey: StorageKey = parentStage.id
     ? normalizeRunId(parentStage.id)
@@ -489,16 +489,17 @@ async function resolveAndAcquireStream(
   if (!configPayload.agent || !configPayload.model) {
     throw new Error('Missing required fields: model and/or agent');
   }
+  const resolvedExecutionId = executionId ?? generateExecutionId();
   const preliminaryStreamId = getStreamTabId(
     configPayload.agent,
     configPayload.model,
-    { executionId },
+    { executionId: resolvedExecutionId },
   );
   acquireStreamOrThrow(preliminaryStreamId, options?.taskType);
 
   let ctx: ResolvedAgentBase;
   try {
-    ctx = await resolveAgentBase(configPayload, executionId, {
+    ctx = await resolveAgentBase(configPayload, resolvedExecutionId, {
       onBeforeActivation: options?.onBeforeActivation,
       enforceCategory: options?.enforceCategory,
     });

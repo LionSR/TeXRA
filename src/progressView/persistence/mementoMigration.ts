@@ -9,7 +9,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 import {
   StorageRecordSchema,
-  type InstructionUpdate,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
@@ -274,19 +273,8 @@ async function migrateStreamToStore(
     );
   }
 
-  // Legacy run instructions: { runId: InstructionUpdate } — Zod union on read
-  // picks the latest entry. Write as-is.
-  const runInstructionsData = extractFromRecord(
-    data.runInstructionsRaw,
-    streamId,
-  );
-  if (isNonNullObject(runInstructionsData)) {
-    writes.push(
-      store.writeInstruction(
-        runInstructionsData as unknown as InstructionUpdate,
-      ),
-    );
-  }
+  // Legacy run instructions are dropped — instructions are now rendered as
+  // user-message log entries at runtime, not persisted alongside task state.
 
   await Promise.all(writes);
 }

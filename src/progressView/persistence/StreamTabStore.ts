@@ -8,14 +8,12 @@
  *       meta.json              → StreamTabMeta
  *       outputFiles.json       → round → OutputFileInfo[]
  *       missingOutputs.json    → round → string[]
- *       usageStats.json        → TokenUsageStats | null
- *       instruction.json       → InstructionUpdate | null
- *
- * Follows the ExecutionKVStore pattern: KVStore per entity, typed accessors
- * with Zod validation, LRU cache of store instances.
+ *       usageStats.json        → runId → TokenUsageStats
  *
  * Legacy data shapes (from before one-run-per-tab refactor) are transparently
- * migrated on read via Zod union schemas in streamTabSchemas.ts.
+ * migrated on read via preprocess helpers in streamTabSchemas.ts.
+ * Instructions are rendered as user-message log entries now, so they are
+ * stored in the log stream, not in this store.
  */
 
 import * as path from 'path';
@@ -23,7 +21,6 @@ import * as path from 'path';
 import { KVStore } from '@common/storage';
 
 import type {
-  InstructionUpdate,
   OutputFileInfo,
   StreamTabId,
   TokenUsageStats,
@@ -33,7 +30,6 @@ import {
   OutputFilesDataSchema,
   MissingOutputsDataSchema,
   UsageDataSchema,
-  InstructionRecordSchema,
   type StreamTabMeta,
   type OutputFilesRecord,
   type MissingOutputsRecord,
@@ -49,9 +45,6 @@ const KEYS = {
   OUTPUT_FILES: 'outputFiles',
   MISSING_OUTPUTS: 'missingOutputs',
   USAGE_STATS: 'usageStats',
-  /** Legacy (multi-run) filename kept for read-side backward compat. */
-  LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
-  INSTRUCTION: 'instruction',
 } as const;
 
 export const STREAM_DATA_DIR = 'streamData';
@@ -62,8 +55,7 @@ export const STREAM_DATA_DIR = 'streamData';
 
 /**
  * Encode a stream tab ID for safe use as a filesystem directory name.
- * Stream IDs can contain `:`, `/`, and other unsafe characters
- * (e.g. `agent@model: path/to/file.tex`).
+ * Stream IDs can contain `:`, `/`, `#`, and other unsafe characters.
  */
 function encodeStreamId(id: string): string {
   return encodeURIComponent(id);
@@ -132,27 +124,6 @@ class StreamTabKVStore extends KVStore {
 
   async writeUsageStats(data: UsageStatsRecord): Promise<void> {
     await this.write(KEYS.USAGE_STATS, data);
-  }
-
-  // -- Instruction ----------------------------------------------------------
-
-  async readInstruction(): Promise<InstructionUpdate | null> {
-    // Prefer the new flat file; fall back to the legacy per-run file.
-    const newRaw = await this.read(KEYS.INSTRUCTION);
-    if (newRaw) {
-      const r = InstructionRecordSchema.safeParse(newRaw);
-      if (r.success) return r.data;
-    }
-    const legacyRaw = await this.read(KEYS.LEGACY_RUN_INSTRUCTIONS);
-    if (legacyRaw) {
-      const r = InstructionRecordSchema.safeParse(legacyRaw);
-      if (r.success) return r.data;
-    }
-    return null;
-  }
-
-  async writeInstruction(data: InstructionUpdate | null): Promise<void> {
-    await this.write(KEYS.INSTRUCTION, data);
   }
 
   // -- Lifecycle ------------------------------------------------------------

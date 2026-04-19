@@ -1,10 +1,9 @@
 /**
- * Run tracking handlers: UPDATE_FILES, UPDATE_MISSING_OUTPUTS,
- * UPDATE_INSTRUCTION, UPDATE_RUN_USAGE.
+ * Run tracking handlers: UPDATE_FILES, UPDATE_MISSING_OUTPUTS, UPDATE_RUN_USAGE.
  *
- * Workflow streams are one run per tab — file/missing/instruction updates
- * always target the single active run. Tool-use streams keep their own
- * per-run usage map (resume produces multiple runs in one tab).
+ * Workflow streams are one run per tab. Tool-use streams keep their own
+ * per-run usage map (resume produces multiple runs in one tab). Instructions
+ * are rendered as user messages in the log stream, not as a separate panel.
  */
 
 import { create } from 'mutative';
@@ -34,17 +33,6 @@ export const runTrackingHandlers: HandlerRegistry = {
           rounds,
           reset,
         });
-      }),
-    );
-  },
-
-  [PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION]: (data, ctx) => {
-    const { stream, instruction } = data;
-    if (!stream) return;
-
-    updateWorkflowState(ctx, stream, (prev) =>
-      create(prev, (draft) => {
-        draft.instruction = instruction ?? null;
       }),
     );
   },

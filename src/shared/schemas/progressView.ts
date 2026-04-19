@@ -30,7 +30,6 @@ import {
   ToolEditPermissionSchema,
 } from './prompts';
 import {
-  InstructionUpdateSchema,
   StreamStatusSchema,
   StreamTabInfoSchema,
 } from './stream';
@@ -201,14 +200,6 @@ export const UpdateMissingOutputsMessageSchema = z.object({
   reset: z.boolean().optional(),
 });
 
-export const UpdateInstructionMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION),
-  stream: z.union([StreamTabIdSchema, z.literal('')]),
-  instruction: InstructionUpdateSchema.nullable(),
-  agentCategory: z.string().optional(),
-  runId: z.string().nullish(),
-});
-
 export const UpdateTodosMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
   stream: StreamTabIdSchema,
@@ -335,7 +326,6 @@ export const SyncStreamContentMessageSchema = z.object({
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   action: z.enum(['render', 'clear']).optional(),
   // Workflow flat fields (one run per tab)
-  workflowInstruction: InstructionUpdateSchema.nullable().optional(),
   workflowUsage: TokenUsageStatsSchema.nullable().optional(),
   workflowFiles: z
     .record(z.string(), z.array(OutputFileInfoSchema))
@@ -349,7 +339,6 @@ export const SyncStreamContentMessageSchema = z.object({
   todos: z.array(TodoItemSchema).optional(),
   plan: PlanSchema.nullable().optional(),
   queuedFollowUps: z.array(z.string()).optional(),
-  instruction: InstructionUpdateSchema.nullable().optional(),
   agentCategory: z.string().optional(),
   // Tab-switch state (R2: replaces separate syncActiveStreamState messages)
   conversationProgress: ConversationProgressSchema.optional(),
@@ -400,7 +389,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     LogDeltaMessageSchema,
     UpdateFilesMessageSchema,
     UpdateMissingOutputsMessageSchema,
-    UpdateInstructionMessageSchema,
     UpdateTodosMessageSchema,
     UpdatePlanMessageSchema,
     UpdateRunUsageMessageSchema,
