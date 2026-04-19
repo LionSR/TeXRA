@@ -8,7 +8,12 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, designTokens, commonViewStyles } from '@shared/styles';
+import {
+  codiconStyles,
+  commonViewStyles,
+  designTokens,
+  tintedBadgeStyles,
+} from '@shared/styles';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
@@ -25,6 +30,7 @@ export class GitTab extends LitElement {
     designTokens,
     codiconStyles,
     commonViewStyles,
+    tintedBadgeStyles,
     css`
       :host {
         display: block;
@@ -63,6 +69,70 @@ export class GitTab extends LitElement {
       .input-row vscode-textfield {
         flex: 1;
       }
+
+      .section-title {
+        font-weight: 600;
+        margin: 0;
+      }
+
+      .token-row {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-small);
+        flex-wrap: wrap;
+      }
+
+      .tinted-badge--ok {
+        --_tint: var(
+          --vscode-testing-iconPassed,
+          var(--vscode-terminal-ansiGreen)
+        );
+      }
+      .tinted-badge--warn {
+        --_tint: var(--vscode-editorWarning-foreground, #cca700);
+      }
+      .tinted-badge--info {
+        --_tint: var(--vscode-badge-background);
+      }
+
+      .instructions {
+        margin: var(--spacing-small) 0 0 0;
+        font-size: var(--font-size-sm);
+        color: var(--vscode-descriptionForeground);
+      }
+      .instructions ol {
+        margin: var(--spacing-xs) 0 0 0;
+        padding-left: 1.25em;
+      }
+      .instructions li {
+        margin: 2px 0;
+      }
+      .instructions code {
+        background: var(--vscode-textBlockQuote-background);
+        padding: 0 4px;
+        border-radius: 3px;
+        font-size: 0.9em;
+      }
+
+      .subscriptions-list {
+        list-style: none;
+        padding: 0;
+        margin: var(--spacing-small) 0 0 0;
+      }
+      .subscriptions-list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-small);
+        padding: var(--spacing-xs) 0;
+      }
+      .subscriptions-list code {
+        background: var(--vscode-textBlockQuote-background);
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 0.9em;
+      }
     `,
   ];
 
@@ -70,6 +140,9 @@ export class GitTab extends LitElement {
   @property({ attribute: false }) authorName = DEFAULT_GIT_AUTHOR_NAME;
   @property({ attribute: false }) authorEmail = DEFAULT_GIT_AUTHOR_EMAIL;
   @property({ attribute: false }) toggleDisabled = true;
+  @property({ attribute: false }) githubTokenStatus: 'secret' | 'env' | 'none' =
+    'none';
+  @property({ attribute: false }) prSubscriptions: readonly string[] = [];
 
   private handleMarkCommitsToggle(event: Event): void {
     const target = event.target as HTMLInputElement | null;
@@ -96,9 +169,125 @@ export class GitTab extends LitElement {
     }
   }
 
+  private handleSetGitHubToken(): void {
+    this.dispatchEvent(createEvent('github-token-set', {}));
+  }
+
+  private handleRemoveGitHubToken(): void {
+    this.dispatchEvent(createEvent('github-token-remove', {}));
+  }
+
+  private handleOpenGitHubTokenUrl(): void {
+    this.dispatchEvent(createEvent('github-token-open-url', {}));
+  }
+
+  private handleUnsubscribePR(key: string): void {
+    this.dispatchEvent(createEvent('unsubscribe-pr', { key }));
+  }
+
+  private renderTokenStatusBadge(): TemplateResult {
+    if (this.githubTokenStatus === 'secret') {
+      return html`<span class="tinted-badge tinted-badge--ok">Set</span>`;
+    }
+    if (this.githubTokenStatus === 'env') {
+      return html`<span class="tinted-badge tinted-badge--info">Env</span>`;
+    }
+    return html`<span class="tinted-badge tinted-badge--warn">Not set</span>`;
+  }
+
   override render(): TemplateResult {
+    const tokenIsSet = this.githubTokenStatus !== 'none';
     return html`
       <div class="git-container">
+        <div class="setting-block">
+          <p class="section-title">GitHub personal access token</p>
+          <p class="setting-description">
+            Used by the <code>subscribe_pr_activity</code> tool to poll
+            GitHub for pull request events (comments, reviews, failed CI).
+            Stored in VS Code SecretStorage — never written to
+            <code>settings.json</code>.
+          </p>
+          <div class="token-row">
+            Status: ${this.renderTokenStatusBadge()}
+            <vscode-button
+              appearance="primary"
+              @click=${this.handleSetGitHubToken}
+            >
+              ${tokenIsSet ? 'Replace token' : 'Set token'}
+            </vscode-button>
+            ${this.githubTokenStatus === 'secret'
+              ? html`<vscode-button
+                  appearance="secondary"
+                  @click=${this.handleRemoveGitHubToken}
+                  >Remove</vscode-button
+                >`
+              : nothing}
+            <vscode-button
+              appearance="secondary"
+              @click=${this.handleOpenGitHubTokenUrl}
+              >Create on GitHub…</vscode-button
+            >
+          </div>
+          <div class="instructions">
+            <strong>How to get a token:</strong>
+            <ol>
+              <li>
+                Click <em>Create on GitHub…</em> (opens the token-creation
+                page in your browser, pre-filled for TeXRA PR subscription
+                use).
+              </li>
+              <li>
+                Choose scopes: <code>repo</code> for private repos or
+                <code>public_repo</code> for public only. Read-only usage;
+                no write scopes needed.
+              </li>
+              <li>
+                Pick an expiration (90 days is common) and click
+                <em>Generate token</em>.
+              </li>
+              <li>
+                Copy the token (shown only once) and paste it here via
+                <em>Set token</em>.
+              </li>
+            </ol>
+            ${this.githubTokenStatus === 'env'
+              ? html`<p>
+                  A token is currently being read from the
+                  <code>GITHUB_TOKEN</code> environment variable. Setting
+                  one above will override it.
+                </p>`
+              : nothing}
+          </div>
+        </div>
+
+        ${this.prSubscriptions.length > 0
+          ? html`
+              <div class="setting-block">
+                <p class="section-title">Active PR subscriptions</p>
+                <p class="setting-description">
+                  Each subscription polls GitHub every 30s. Click
+                  <em>Stop</em> to cancel; the current agent task will
+                  keep running but no new PR events will arrive.
+                </p>
+                <ul class="subscriptions-list">
+                  ${this.prSubscriptions.map(
+                    (key) => html`
+                      <li>
+                        <code>${key}</code>
+                        <vscode-button
+                          appearance="secondary"
+                          @click=${() => this.handleUnsubscribePR(key)}
+                        >
+                          Stop
+                        </vscode-button>
+                      </li>
+                    `,
+                  )}
+                </ul>
+              </div>
+            `
+          : nothing}
+
         <div class="setting-block">
           <vscode-checkbox
             ?checked=${this.markCommits}
