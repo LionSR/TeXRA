@@ -54,15 +54,21 @@ export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
  * (`{ runId: { round: items[] } }`) rather than the flat shape
  * (`{ round: items[] }`).
  *
- * Round keys are integers (e.g. "0", "1", "2"); runIds are non-numeric
- * identifiers. If every top-level key parses as an integer, the record is
- * already in the new flat shape; otherwise it's legacy.
+ * Flat records satisfy BOTH properties:
+ *   - every top-level key parses as an integer (round number)
+ *   - every top-level value is an array (the items list for that round)
+ *
+ * If either property fails on any entry, the record is treated as legacy.
+ * This guards against a numeric-only runId sneaking through the key check
+ * and against a legacy record whose inner maps happen to be arrays.
  */
 function isLegacyNested(raw: unknown): raw is Record<string, unknown> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
-  const keys = Object.keys(raw as Record<string, unknown>);
-  if (keys.length === 0) return false;
-  return keys.some((key) => !/^-?\d+$/.test(key));
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length === 0) return false;
+  return entries.some(
+    ([key, value]) => !/^-?\d+$/.test(key) || !Array.isArray(value),
+  );
 }
 
 /**
