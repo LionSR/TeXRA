@@ -145,6 +145,15 @@ export function getUnavailableToolNamesCached(): ReadonlySet<string> {
 export interface UnavailableGroupInfo {
   readonly name: string;
   readonly hideFromDashboard: boolean;
+  /**
+   * Command to execute when the user clicks the "fix this" button in the
+   * notification. Overrides the default Tools-Dashboard action so groups
+   * whose real configuration lives elsewhere (e.g. GitHub token in the Git
+   * tab) can point the user to the right place.
+   */
+  readonly installActionCommand?: string;
+  /** Label for the custom action button (falls back to a sensible default). */
+  readonly installActionLabel?: string;
 }
 
 /**
@@ -165,6 +174,8 @@ export function mapToolNamesToGroups(
       groups.push({
         name: def.name,
         hideFromDashboard: def.hideFromDashboard ?? false,
+        installActionCommand: def.installActionCommand,
+        installActionLabel: def.installActionLabel,
       });
     }
   }
