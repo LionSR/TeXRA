@@ -106,7 +106,10 @@ export class WorkflowStreamContent extends LitElement {
         .contextState=${state.contextState ?? null}
       ></usage-panel>
 
-      <file-list .filesByRound=${state.files} .showRoundHeaders=${true}></file-list>
+      <file-list
+        .filesByRound=${state.files}
+        .showRoundHeaders=${true}
+      ></file-list>
 
       <followup-section
         .agentCategory=${streamInfo.agentCategory}

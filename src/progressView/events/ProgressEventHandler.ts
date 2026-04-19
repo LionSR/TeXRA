@@ -158,9 +158,7 @@ export class ProgressEventHandler {
           const targets: StreamTabId[] = payload.streamId
             ? [payload.streamId]
             : payload.streamConfig
-              ? ctx.state.meta.findWorkflowStreamsMatching(
-                  payload.streamConfig,
-                )
+              ? ctx.state.meta.findWorkflowStreamsMatching(payload.streamConfig)
               : [];
           for (const streamId of targets) {
             await ctx.state.outputFiles.clearMissingOutputs(streamId);

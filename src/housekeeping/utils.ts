@@ -65,11 +65,7 @@ export function getFilePatterns(
     // New round-subfolder layout:
     //   `r{round}/<base>_<cleanAgent>_<model>.*`
     const newPrefix = workflowOutputGlobPrefix({ base, agent, model, round });
-    patterns.push(
-      newPrefix,
-      `${newPrefix}_diff`,
-      `${newPrefix}_thinking`,
-    );
+    patterns.push(newPrefix, `${newPrefix}_diff`, `${newPrefix}_thinking`);
     if (round > 0) {
       const diffSuffix = `_diffr${round}r${round - 1}`;
       patterns.push(`${newPrefix}${diffSuffix}`);
@@ -86,8 +82,7 @@ export function getFilePatterns(
   // Emit both raw and normalized-model variants so legacy merge files
   // written with the dot-stripped model token (`paper_full_gpt45`) are
   // discovered alongside current files (`paper_full_gpt-4.5`).
-  const mergeModels =
-    legacyModel === model ? [model] : [model, legacyModel];
+  const mergeModels = legacyModel === model ? [model] : [model, legacyModel];
   for (const m of mergeModels) {
     const stem = workflowMergeFilenameStem(base, m);
     patterns.push(
