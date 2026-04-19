@@ -2,6 +2,7 @@ import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import { hasRoundOutputs, getStorageKey } from '@agent/output/outputState';
+import { runCompileCheck } from '@agent/output/compileCheck';
 import { extractFilesFromXml } from '@agent/output/xmlExtraction';
 import { traceFileLineage } from '@agent/output/lineageMapping';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
@@ -121,6 +122,12 @@ export class OutputNode<C = unknown> extends Node<
               mapping!,
               diffManager,
             ),
+          logger,
+        );
+
+        await tryOperation(
+          'Compile check',
+          () => runCompileCheck(this.services, currentRound),
           logger,
         );
       }
