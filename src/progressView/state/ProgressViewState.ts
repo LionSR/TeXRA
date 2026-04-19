@@ -376,6 +376,20 @@ export class ProgressViewState {
       await this.loadManagers(streamIds);
     }
 
+    // Promote any pre-existing `runInstructions.json` disk files (from the
+    // earlier memento→StreamTabStore migration) to the archival
+    // `legacyInstructions.json` so the instruction text survives on disk
+    // even though the new UI no longer displays it.
+    await Promise.all(
+      this.streamLogs
+        .keys()
+        .map((id) =>
+          getStreamTabStore(id)
+            .migrateOnDiskRunInstructions()
+            .catch(() => {}),
+        ),
+    );
+
     this.logger.info('[Persistence] Managers loaded');
 
     this.validateActiveStream();

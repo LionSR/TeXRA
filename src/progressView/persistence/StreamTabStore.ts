@@ -47,6 +47,8 @@ const KEYS = {
   USAGE_STATS: 'usageStats',
   /** Legacy per-run instruction text preserved from pre-refactor memento. */
   LEGACY_INSTRUCTIONS: 'legacyInstructions',
+  /** On-disk key used by the pre-refactor store; read-only fallback. */
+  LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
 } as const;
 
 export const STREAM_DATA_DIR = 'streamData';
@@ -138,6 +140,21 @@ class StreamTabKVStore extends KVStore {
    */
   async writeLegacyInstructions(data: unknown): Promise<void> {
     await this.write(KEYS.LEGACY_INSTRUCTIONS, data);
+  }
+
+  /**
+   * One-time disk migration: users who already completed the earlier
+   * memento→StreamTabStore migration may have `runInstructions.json` in
+   * their stream directory. Move that content under `legacyInstructions`
+   * so the data is preserved under the canonical archival key.
+   */
+  async migrateOnDiskRunInstructions(): Promise<void> {
+    const existingLegacy = await this.read(KEYS.LEGACY_INSTRUCTIONS);
+    if (existingLegacy) return;
+    const oldData = await this.read(KEYS.LEGACY_RUN_INSTRUCTIONS);
+    if (!oldData) return;
+    await this.write(KEYS.LEGACY_INSTRUCTIONS, oldData);
+    await this.delete(KEYS.LEGACY_RUN_INSTRUCTIONS);
   }
 
   // -- Lifecycle ------------------------------------------------------------
