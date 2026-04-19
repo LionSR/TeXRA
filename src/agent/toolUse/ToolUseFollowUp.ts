@@ -25,7 +25,7 @@ export type SendFollowUpResult =
   | { status: 'sent' }
   | {
       status: 'queued';
-      reason: 'resuming' | 'waiting' | 'subagent_running';
+      reason: 'resuming' | 'waiting' | 'children_running';
     }
   | { status: 'error'; message: string }
   | { status: 'no_session'; streamStatus: string | undefined };
@@ -73,10 +73,15 @@ export async function sendFollowUp(
   // finished (subagents execute asynchronously). The child results arrive
   // via the same queue, so the user's message rides along and will be
   // drained when the parent resumes.
+  //
+  // `acquire` clears any prior "released" mark left by sessionLifecycle
+  // disposal — otherwise the subsequent `enqueue` would silently drop
+  // the message (along with any still-pending child deliveries).
   const { subagents, processes } = getActiveChildren(streamId);
   if (subagents.length > 0 || processes.length > 0) {
+    ToolUseFollowUpQueue.acquire(streamId);
     ToolUseFollowUpQueue.enqueue(streamId, text);
-    return { status: 'queued', reason: 'subagent_running' };
+    return { status: 'queued', reason: 'children_running' };
   }
 
   // No active/waiting session found - caller should handle UI notification

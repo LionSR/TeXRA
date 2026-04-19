@@ -66,13 +66,13 @@ describe('ToolUseFollowUp', () => {
     assert.deepEqual(result, { status: 'sent' });
   });
 
-  it('queues follow-ups when subagents are still running', async () => {
+  it('queues follow-ups when children are still running', async () => {
     // No active flow context — parent's flow has exited.
     (AgentRegistry as any).getToolUseFlowContext = () => undefined;
 
-    const parentStreamId = 'parent-stream-subagent' as StreamTabId;
-    const childStreamId = 'child-stream-subagent' as StreamTabId;
-    const executionId = 'exec-subagent-running';
+    const parentStreamId = 'parent-stream-children' as StreamTabId;
+    const childStreamId = 'child-stream-children' as StreamTabId;
+    const executionId = 'exec-children-running';
 
     const handle = new AgentExecutionHandle(
       executionId,
@@ -88,10 +88,48 @@ describe('ToolUseFollowUp', () => {
 
       assert.deepEqual(result, {
         status: 'queued',
-        reason: 'subagent_running',
+        reason: 'children_running',
       });
       assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
         'hello while running',
+      ]);
+    } finally {
+      untrackExecution(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
+  });
+
+  it('survives prior queue release when children are running', async () => {
+    // Simulates the orchestrator's flow having just disposed its session
+    // (sessionLifecycle.dispose → ToolUseFollowUpQueue.release) while a
+    // subagent is still running. Without the fix, enqueue would silently
+    // drop the message because the stream is marked as released.
+    (AgentRegistry as any).getToolUseFlowContext = () => undefined;
+
+    const parentStreamId = 'parent-stream-released' as StreamTabId;
+    const childStreamId = 'child-stream-released' as StreamTabId;
+    const executionId = 'exec-released';
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+    );
+    trackExecution(handle);
+    // Mark the queue as released, mirroring sessionLifecycle.dispose().
+    ToolUseFollowUpQueue.release(parentStreamId);
+
+    try {
+      const result = await sendFollowUp(parentStreamId, 'after release');
+
+      assert.deepEqual(result, {
+        status: 'queued',
+        reason: 'children_running',
+      });
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+        'after release',
       ]);
     } finally {
       untrackExecution(executionId);
