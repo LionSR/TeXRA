@@ -23,11 +23,7 @@ import {
   formatReviewComment,
   formatSubscriptionError,
 } from './formatPREvent';
-import {
-  GitHubAuthError,
-  GitHubRateLimitError,
-  ghGet,
-} from './githubClient';
+import { GitHubAuthError, GitHubRateLimitError, ghGet } from './githubClient';
 import type { AsyncEventSource, Disposable } from './AsyncEventSource';
 import type {
   GhCheckRun,
@@ -73,7 +69,10 @@ function withSince(url: string, since: string | undefined): string {
 
 /** Return the newest `updated_at` (falling back to `created_at`) in the batch. */
 function newestTimestamp(
-  items: ReadonlyArray<{ created_at?: string | null; updated_at?: string | null }>,
+  items: ReadonlyArray<{
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>,
 ): string | undefined {
   let best: string | undefined;
   for (const it of items) {
@@ -121,7 +120,9 @@ interface SubscriptionState {
 export class PRPollingSource implements AsyncEventSource {
   private readonly logger = new AgentLogger('PRPollingSource');
   private readonly subscriptions = new Map<string, SubscriptionState>();
-  private readonly changeListeners = new Set<(keys: readonly string[]) => void>();
+  private readonly changeListeners = new Set<
+    (keys: readonly string[]) => void
+  >();
   private timer: ReturnType<typeof setInterval> | undefined;
 
   /**
@@ -245,7 +246,11 @@ export class PRPollingSource implements AsyncEventSource {
               );
               this.emit(
                 state,
-                formatSubscriptionError(state.slug, state.pr.pullNumber, err.message),
+                formatSubscriptionError(
+                  state.slug,
+                  state.pr.pullNumber,
+                  err.message,
+                ),
               );
               this.subscriptions.delete(key);
               this.notifyKeysChanged();
@@ -297,7 +302,9 @@ export class PRPollingSource implements AsyncEventSource {
       try {
         cb(text);
       } catch (err) {
-        this.logger.warn(`Listener threw for ${prKeyToString(state.pr)}: ${String(err)}`);
+        this.logger.warn(
+          `Listener threw for ${prKeyToString(state.pr)}: ${String(err)}`,
+        );
       }
     }
   }
@@ -315,11 +322,12 @@ export class PRPollingSource implements AsyncEventSource {
       const newMerged = prRes.data.merged;
 
       // Detect close/merge on initialized subscriptions.
-      if (state.initialized && state.state === 'open' && newState === 'closed') {
-        this.emit(
-          state,
-          formatPRClosed(state.slug, pr.pullNumber, newMerged),
-        );
+      if (
+        state.initialized &&
+        state.state === 'open' &&
+        newState === 'closed'
+      ) {
+        this.emit(state, formatPRClosed(state.slug, pr.pullNumber, newMerged));
         // Auto-unsubscribe.
         this.subscriptions.delete(prKeyToString(pr));
         this.notifyKeysChanged();
@@ -365,14 +373,8 @@ export class PRPollingSource implements AsyncEventSource {
     );
     const [commentsRes, reviewCommentsRes, reviewsRes, checksRes] =
       await Promise.all([
-        ghGet<GhIssueComment[]>(
-          issueCommentsUrl,
-          state.etags.issueComments,
-        ),
-        ghGet<GhReviewComment[]>(
-          reviewCommentsUrl,
-          state.etags.reviewComments,
-        ),
+        ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
+        ghGet<GhReviewComment[]>(reviewCommentsUrl, state.etags.reviewComments),
         ghGet<GhReview[]>(
           `${prPath}/reviews?per_page=100`,
           state.etags.reviews,
