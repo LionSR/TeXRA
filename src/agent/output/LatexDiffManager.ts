@@ -307,9 +307,16 @@ export class LatexDiffManager {
       path.dirname(diffLocation.absolutePath),
       'build',
     );
+    // Reuse the workflow compile-check timeout so a hanging diff build
+    // gets killed by execa instead of orphaning latexmk/pdflatex.
+    const timeoutMs = Math.max(
+      10000,
+      getConfig<number>('texra.workflow.autoCompileTimeoutMs', 120000),
+    );
     await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
+      timeout: timeoutMs,
     });
 
     return diffLocation;
