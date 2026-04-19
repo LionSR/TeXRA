@@ -893,7 +893,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async handleSetGitHubToken(): Promise<void> {
     const token = await vscode.window.showInputBox({
-      prompt: 'Paste a GitHub personal access token (repo or public_repo scope)',
+      prompt:
+        'Paste a GitHub personal access token (repo or public_repo scope)',
       password: true,
       placeHolder: 'ghp_…',
       ignoreFocusOut: true,

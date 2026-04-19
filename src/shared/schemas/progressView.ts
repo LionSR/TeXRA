@@ -29,10 +29,7 @@ import {
   RetryPermissionSchema,
   ToolEditPermissionSchema,
 } from './prompts';
-import {
-  StreamStatusSchema,
-  StreamTabInfoSchema,
-} from './stream';
+import { StreamStatusSchema, StreamTabInfoSchema } from './stream';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
@@ -324,12 +321,8 @@ export const SyncStreamContentMessageSchema = z.object({
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   action: z.enum(['render', 'clear']).optional(),
   // Workflow flat files (one run per tab)
-  workflowFiles: z
-    .record(z.string(), z.array(OutputFileInfoSchema))
-    .optional(),
-  workflowMissingOutputs: z
-    .record(z.string(), z.array(z.string()))
-    .optional(),
+  workflowFiles: z.record(z.string(), z.array(OutputFileInfoSchema)).optional(),
+  workflowMissingOutputs: z.record(z.string(), z.array(z.string())).optional(),
   // Per-run usage map — used by both workflow and tool-use so resume
   // correctly accumulates. Frontend derives sessionUsage as the sum.
   runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),

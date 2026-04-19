@@ -19,11 +19,7 @@ import { getGitHubToken } from './githubAuth';
 const SubscribePRInputSchema = z.strictObject({
   owner: z.string().min(1).describe('Repository owner (user or org)'),
   repo: z.string().min(1).describe('Repository name'),
-  pullNumber: z
-    .number()
-    .int()
-    .positive()
-    .describe('Pull request number'),
+  pullNumber: z.number().int().positive().describe('Pull request number'),
 });
 
 type SubscribePRInput = z.infer<typeof SubscribePRInputSchema>;
@@ -55,7 +51,9 @@ export class SubscribePRTool extends defineTool({
     const created = bindPRSubscription(streamId, input);
     const slug = `${input.owner}/${input.repo}#${input.pullNumber}`;
     return {
-      summary: created ? `Subscribed to ${slug}` : `Already subscribed to ${slug}`,
+      summary: created
+        ? `Subscribed to ${slug}`
+        : `Already subscribed to ${slug}`,
       output: created
         ? `Subscribed to ${slug}. New comments, reviews, line comments, and failed CI checks will arrive as follow-up messages wrapped in <github-webhook-activity>. Poll interval ≈ 30s. Auto-unsubscribes on close/merge.`
         : `Already subscribed to ${slug}. You will continue to receive PR activity as follow-up messages until the PR closes or you call unsubscribe_pr_activity.`,

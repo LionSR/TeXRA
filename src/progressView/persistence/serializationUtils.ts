@@ -10,7 +10,5 @@
 export function mapToRecord<K extends string | number, V>(
   map: Map<K, V>,
 ): Record<string, V> {
-  return Object.fromEntries(
-    Array.from(map, ([k, v]) => [String(k), v]),
-  );
+  return Object.fromEntries(Array.from(map, ([k, v]) => [String(k), v]));
 }
