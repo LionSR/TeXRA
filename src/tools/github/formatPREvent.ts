@@ -37,9 +37,8 @@ const MAX_BODY = 500;
  * left the middle structurally intact.
  */
 function sanitize(s: string): string {
-  return s.replaceAll(
-    /<\s*\/?\s*github-webhook-activity\s*>/gi,
-    (match) => match.replace(/github-webhook-activity/i, 'github-\u200Bwebhook-activity'),
+  return s.replaceAll(/<\s*\/?\s*github-webhook-activity\s*>/gi, (match) =>
+    match.replace(/github-webhook-activity/i, 'github-\u200Bwebhook-activity'),
   );
 }
 
@@ -134,9 +133,7 @@ export function formatPRClosed(
   merged: boolean,
 ): string {
   const verb = merged ? 'merged' : 'closed';
-  return wrap(
-    `${slug}#${prNumber} was ${verb}. Subscription ended.`,
-  );
+  return wrap(`${slug}#${prNumber} was ${verb}. Subscription ended.`);
 }
 
 /**
@@ -151,7 +148,5 @@ export function formatSubscriptionError(
   prNumber: number,
   detail: string,
 ): string {
-  return wrap(
-    `PR subscription to ${slug}#${prNumber} halted: ${detail}`,
-  );
+  return wrap(`PR subscription to ${slug}#${prNumber} halted: ${detail}`);
 }
