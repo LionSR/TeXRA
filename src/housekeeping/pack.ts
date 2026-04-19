@@ -9,6 +9,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { getCleanAgentName } from '@agent/index';
 
 // Local file imports
 import {
@@ -56,10 +57,11 @@ export async function runPackSingle(
     `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
   );
 
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
   const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
+  // Pass the raw agent; getFilePatterns derives both the legacy chunk and
+  // the new clean-agent forms internally so both disk layouts are matched.
   const filePatterns = [
-    ...getFilePatterns(baseName, model, agentFirstNameChunk, maxRounds),
+    ...getFilePatterns(baseName, model, agent, maxRounds),
     baseName,
   ];
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
@@ -262,22 +264,33 @@ async function packAdditionalXmlFiles(
   outputFolderExists: boolean,
 ): Promise<boolean> {
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+  const cleanAgent = getCleanAgentName(agent);
   const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
 
   let anyPacked = false;
   for (let i = 0; i < maxRounds; i++) {
-    const pattern = `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`;
-    const filePath = path.join(outputDir, pattern);
+    // Both layouts: legacy flat `<base>_<chunk>_r{round}_<model>.xml` and
+    // new round-subfolder `r{round}/<base>_<cleanAgent>_<model>.xml`.
+    const candidates = [
+      {
+        rel: `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`,
+        dest: `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`,
+      },
+      {
+        rel: path.join(`r${i}`, `${baseName}_${cleanAgent}_${model}.xml`),
+        dest: `${baseName}_${cleanAgent}_r${i}_${model}.xml`,
+      },
+    ];
 
-    if (await WorkspaceFS.exists(filePath)) {
+    for (const { rel, dest } of candidates) {
+      const filePath = path.join(outputDir, rel);
+      if (!(await WorkspaceFS.exists(filePath))) continue;
+
       if (!outputFolderExists && !anyPacked) {
         await WorkspaceFS.createDir(commonOutputFolder);
       }
       logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
-      await WorkspaceFS.rename(
-        filePath,
-        path.join(commonOutputFolder, pattern),
-      );
+      await WorkspaceFS.rename(filePath, path.join(commonOutputFolder, dest));
       anyPacked = true;
     }
   }

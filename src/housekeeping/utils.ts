@@ -24,6 +24,14 @@ export function getAgentFirstNameChunk(agent: string): string {
   return cleanAgent.split('-')[0];
 }
 
+/**
+ * Build glob patterns that match workflow output filenames in both layouts.
+ *
+ * Pass the raw agent identifier (with any source prefix) — this function
+ * derives both the legacy "first-name chunk" and the new "clean agent" forms
+ * internally so the result includes patterns that match what
+ * `getOutputFileName` writes today and what older runs left on disk.
+ */
 export function getFilePatterns(
   base: string,
   model: string,
