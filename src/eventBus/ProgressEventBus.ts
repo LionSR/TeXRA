@@ -124,6 +124,15 @@ export interface ProgressEventPayloads {
 
   extensionDeactivating: undefined;
 
+  /**
+   * Emitted when PR-activity polling is rejected by GitHub (401/403 auth).
+   * The frontend shows a toast prompting the user to replace the token.
+   */
+  githubTokenInvalid: { message: string };
+
+  /** Active PR-activity subscription keys changed; frontends refresh their list. */
+  prSubscriptionsChanged: { keys: readonly string[] };
+
   // ── Frontend-bound events ──
   // Emitted by agent core/runtime; consumed by frontend listeners.
   // Keeps @agent/ free of @frontend/ imports.

@@ -46,6 +46,7 @@ import {
   globalSM,
   workspaceSM,
 } from '@common/state';
+import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import {
@@ -98,6 +99,8 @@ import {
   parseCodexReasoningEffort,
 } from '@tools/codexConfig';
 import { findExternalToolDef } from '@tools/externalToolDefs';
+import { prPollingSource, unbindAllForPR } from '@tools/github';
+import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import {
   MEMORY_STORAGE_ROOT,
   MAX_PINNED_MEMORIES,
@@ -108,7 +111,6 @@ import {
   setPinnedMeta,
   countPinnedMemories,
 } from '@tools/memory/memoryMeta';
-import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { setToolUseMemoryEnabled } from '@utils/config/constants';
@@ -314,6 +316,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.latexHandlers = new LatexSettingsHandlers(ctx);
 
     this.handlerRegistry = this.createHandlerRegistry();
+
+    // Lifetime == extension; bus is process-global so no dispose needed.
+    bus.on('prSubscriptionsChanged', ({ keys }) => {
+      void this.withActiveWebview((w) => this.sendPRSubscriptions(w, keys));
+    });
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
@@ -480,6 +487,31 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           data.enabled,
         ),
 
+      // GitHub token handlers
+      [SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS]: () =>
+        this.withActiveWebview((w) => this.sendGitHubTokenStatus(w)),
+      [SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN]: () =>
+        this.handleSetGitHubToken(),
+      [SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN]: () =>
+        this.handleRemoveGitHubToken(),
+      [SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL]: async () => {
+        await vscode.env.openExternal(
+          vscode.Uri.parse(
+            'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo',
+          ),
+        );
+      },
+      [SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS]: () =>
+        this.withActiveWebview((w) => this.sendPRSubscriptions(w)),
+      [SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR]: (data) => {
+        const removed = unbindAllForPR(data.key);
+        if (removed === 0) {
+          void vscode.window.showInformationMessage(
+            `No active subscription for ${data.key}.`,
+          );
+        }
+      },
+
       // ── Delegated to LatexSettingsHandlers ──
 
       [SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS]: () =>
@@ -611,6 +643,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendSuperYoloEnabled(webview),
       this.agentHandlers.sendAgentModePresets(webview),
       this.sendGitAuthorSettings(webview),
+      this.sendGitHubTokenStatus(webview),
+      this.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
     ]);
@@ -843,6 +877,63 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) =>
       this.sendGitAuthorSettings(w, settings),
     );
+  }
+
+  // ============================================================
+  // GitHub token handler implementations
+  // ============================================================
+
+  private async sendGitHubTokenStatus(webview: vscode.Webview): Promise<void> {
+    const status = await SecretManager.gitHubTokenExists();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
+      status,
+    });
+  }
+
+  private async handleSetGitHubToken(): Promise<void> {
+    const token = await vscode.window.showInputBox({
+      prompt: 'Paste a GitHub personal access token (repo or public_repo scope)',
+      password: true,
+      placeHolder: 'ghp_…',
+      ignoreFocusOut: true,
+    });
+    if (!token) return;
+    try {
+      await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
+      void vscode.window.showInformationMessage('GitHub token saved.');
+      await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to save GitHub token',
+        error,
+      );
+    }
+  }
+
+  private async handleRemoveGitHubToken(): Promise<void> {
+    try {
+      await SecretManager.delete(SecretManager.GITHUB_TOKEN_KEY);
+      void vscode.window.showInformationMessage('GitHub token removed.');
+      await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to remove GitHub token',
+        error,
+      );
+    }
+  }
+
+  private async sendPRSubscriptions(
+    webview: vscode.Webview,
+    keys?: readonly string[],
+  ): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
+      keys: [...(keys ?? prPollingSource.activeKeys())],
+    });
   }
 
   // ============================================================
