@@ -305,11 +305,23 @@ async function packAdditionalXmlFiles(
       const filePath = path.join(outputDir, rel);
       if (!(await WorkspaceFS.exists(filePath))) continue;
 
+      const destPath = path.join(commonOutputFolder, dest);
+      if (await WorkspaceFS.exists(destPath)) {
+        // Legacy and new layouts can yield identical destination names
+        // (when `agentFirstNameChunk === cleanAgent`). Skip the second
+        // candidate rather than failing the rename onto an existing file.
+        logger.debug(
+          CHANNEL,
+          `Skipping ${filePath}: destination ${destPath} already exists`,
+        );
+        continue;
+      }
+
       if (!outputFolderExists && !anyPacked) {
         await WorkspaceFS.createDir(commonOutputFolder);
       }
       logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
-      await WorkspaceFS.rename(filePath, path.join(commonOutputFolder, dest));
+      await WorkspaceFS.rename(filePath, destPath);
       anyPacked = true;
     }
   }

@@ -273,8 +273,18 @@ async function migrateStreamToStore(
     );
   }
 
-  // Legacy run instructions are dropped — instructions are now rendered as
-  // user-message log entries at runtime, not persisted alongside task state.
+  // The new UI renders instructions as user-message log entries at run
+  // start, but pre-refactor workflow runs never logged them — the text
+  // only lived in this legacy memento record. Persist it verbatim as a
+  // `legacyInstructions.json` side file so no user-visible data is lost
+  // on upgrade; it isn't read by the UI but remains accessible on disk.
+  const runInstructionsData = extractFromRecord(
+    data.runInstructionsRaw,
+    streamId,
+  );
+  if (isNonNullObject(runInstructionsData)) {
+    writes.push(store.writeLegacyInstructions(runInstructionsData));
+  }
 
   await Promise.all(writes);
 }

@@ -45,6 +45,8 @@ const KEYS = {
   OUTPUT_FILES: 'outputFiles',
   MISSING_OUTPUTS: 'missingOutputs',
   USAGE_STATS: 'usageStats',
+  /** Legacy per-run instruction text preserved from pre-refactor memento. */
+  LEGACY_INSTRUCTIONS: 'legacyInstructions',
 } as const;
 
 export const STREAM_DATA_DIR = 'streamData';
@@ -124,6 +126,18 @@ class StreamTabKVStore extends KVStore {
 
   async writeUsageStats(data: UsageStatsRecord): Promise<void> {
     await this.write(KEYS.USAGE_STATS, data);
+  }
+
+  // -- Legacy per-run instructions (preserved from pre-refactor memento) ---
+
+  /**
+   * Persist legacy `{ runId: InstructionUpdate }` data verbatim so migrated
+   * users don't lose the instruction text of older workflow tabs. The new
+   * UI logs instructions as user-message entries at run start, so this
+   * file is write-only here — readers must inspect it manually on disk.
+   */
+  async writeLegacyInstructions(data: unknown): Promise<void> {
+    await this.write(KEYS.LEGACY_INSTRUCTIONS, data);
   }
 
   // -- Lifecycle ------------------------------------------------------------

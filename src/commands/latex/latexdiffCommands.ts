@@ -704,9 +704,9 @@ async function runLatexdiffViaWorkspaceScan(params: {
     const roundOutputsMap = new Map<number, string>();
 
     // Escape regex metacharacters in user-provided values so filenames
-    // containing `(`, `)`, `+`, `.`, etc. match literally.
+    // containing `(`, `)`, `+`, `*`, `.`, etc. match literally.
     const escapeRe = (s: string): string =>
-      s.replaceAll(/[.+?^${}()|[\]\\]/g, '\\$&');
+      s.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const escBase = escapeRe(baseInputName);
     const escChunk = escapeRe(agentNameChunk);
     const escCleanAgent = escapeRe(cleanAgent);
