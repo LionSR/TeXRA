@@ -110,11 +110,7 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
-  await vscode.commands.executeCommand(
-    'setContext',
-    'texra.activated',
-    true,
-  );
+  await vscode.commands.executeCommand('setContext', 'texra.activated', true);
 
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
