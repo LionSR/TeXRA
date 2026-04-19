@@ -94,7 +94,6 @@ export class OutputFileProcessor {
     outputLocation: FileLocation,
     currRound: number,
     rawLocation: FileLocation,
-    storageKey: StorageKey,
   ): Promise<void> {
     const { agentSetting, logger } = this.ctx;
 
@@ -150,7 +149,6 @@ export class OutputFileProcessor {
       logger.missingOutputs(missingOutputsData);
       bus.emit('updateMissingOutputs', {
         streamId: this.ctx.streamId,
-        storageKey,
         filesByRound: { [currRound]: [] },
       });
       await this.handleEmptyOutput(currRound, rawLocation);

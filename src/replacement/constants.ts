@@ -1,5 +1,7 @@
 // Shared constants for replacement engine
 
+import { escapeRegExp } from '@utils/core/stringCore';
+
 // Greek letters used for pattern generation
 // prettier-ignore
 export const GREEK_LETTERS = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega'.split(' ');
@@ -47,10 +49,6 @@ export const MATH_OPERATORS = [
   'dim',
   'liminf',
 ];
-
-function escapeRegExp(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 export const FENCED_LATEX_ENVIRONMENTS = [
   'align',

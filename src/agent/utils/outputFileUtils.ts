@@ -1,78 +1,106 @@
 import * as path from 'path';
 
-import { getAgentFirstNameChunk } from '@housekeeping/utils';
+import {
+  workflowMergeOutputPath,
+  workflowOutputFilenameStem,
+  workflowOutputPath,
+} from '@agent/output/workflowOutputLayout';
 import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
-import { parseFilenameParts, extractLastRoundMatch } from './mergeFileUtils';
 
 /**
- * Generates an output filename incorporating model and round information.
+ * Generates an output path under a round subfolder. The filename preserves
+ * the input's basename plus agent and model tokens so different tabs that
+ * process the same input (different agent or model) don't clobber each
+ * other when writing to workspace storage, and so downstream
+ * basename-containment mapping (follow-up setup, merge) still resolves
+ * outputs back to their originals:
  *
- * @param inputFile The input file path
- * @param agent Agent name (may include source: prefix which will be stripped)
- * @param model Model name
- * @param outputExt Extension for the output file
- * @param currRound Current round number
- * @param editedFile Optional previously edited file for round detection
+ *   `<inputDir>/r{round}/<inputName>_<agent>_<model>.{ext}`
+ *
+ * The round subfolder groups all artifacts from a single round. Source
+ * prefixes (`builtin:polish`) are stripped from the agent token.
  */
 export function getOutputFileName(
   inputFile: string,
   agent: string,
   model: string,
   outputExt: string,
-  currRound: number,
-  editedFile?: string,
-  options?: {
-    outputDir?: string;
-  },
+  round: number,
 ): string {
-  const { dir, name: fileName } = path.parse(inputFile);
-  // Extract agent first name chunk (handles source: prefix and write- agents)
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+  return workflowOutputPath({ inputFile, agent, model, ext: outputExt, round });
+}
 
-  let newRound = currRound;
-  if (editedFile) {
-    const lastMatch = extractLastRoundMatch(editedFile);
-    const editedRound = lastMatch ? parseInt(lastMatch[1]) : 0;
-    newRound += editedRound + 1;
-  }
-
-  const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
-  const targetDir = options?.outputDir ?? dir;
-  return path.join(targetDir, outputBaseName);
+/**
+ * Generates an output path for an extracted document from multi-document XML
+ * output. The extracted doc is placed under the round directory, preserving
+ * any subdirectory in the source path (e.g. `chapters/main.tex` and
+ * `appendix/main.tex` produce distinct files under the same round dir).
+ *
+ * Like the primary output filename, the extracted filename includes agent
+ * and model tokens so two tabs on the same input (different agent/model)
+ * don't collide on extracted-doc paths in workspace storage mode.
+ *
+ * Guards against path traversal: absolute paths, drive letters, and `..`
+ * segments in the model-produced `source` are stripped so the output
+ * always lands inside `roundDir`.
+ *
+ * @param source Source document name from XML (e.g. "chapters/main.tex")
+ * @param roundDir The round directory (already includes `r{round}`)
+ * @param agent Clean agent identifier (source prefixes stripped)
+ * @param model Model name (dots preserved)
+ */
+export function getExtractedDocOutputFileName(
+  source: string,
+  roundDir: string,
+  agent: string,
+  model: string,
+): string {
+  const parsed = path.parse(source);
+  const extension = parsed.ext.replace('.', '') || 'tex';
+  // Strip absolute prefixes, drive-letter segments, and traversal segments
+  // so a malicious or malformed source cannot escape roundDir via
+  // path.join's absolute-override or parent-directory semantics.
+  const safeDir = parsed.dir
+    .split(/[\\/]+/)
+    .filter(
+      (seg) => seg && seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
+    )
+    .join(path.sep);
+  const safeName = path.basename(parsed.name) || 'output';
+  const stem = workflowOutputFilenameStem(safeName, agent, model);
+  return path.join(roundDir, safeDir, `${stem}.${extension}`);
 }
 
 /**
  * Creates a merge-specific output file location getter.
  *
- * Merge operations use specialized naming: `{base}_{agent}_r{round}_full_{model}.tex`
- * This extracts agent/round/model from the edited file name and creates a "full" merged output.
+ * Merge is a single-output workflow: the round number is not reflected in
+ * the filename and the same location is returned for every round. The
+ * output name includes the edited file's basename so two merges of
+ * different edited files (e.g. `paper_polish_gpt4.tex` vs
+ * `paper_criticize_gpt4.tex`) produce distinct files instead of
+ * overwriting each other. Model is kept as a discriminator so re-running
+ * the merge with a different model also doesn't clobber.
  *
  * @param inputFile Original input file path
- * @param editedFile The edited file being merged (required for merge operations)
+ * @param editedFile The edited file being merged (supplies the discriminator)
+ * @param model Model used for the merge
  * @param fileService File service for creating locations
- * @returns A function that generates output file locations for each round
  * @throws Error if editedFile is not provided
  */
 export function createMergeOutputFileLocationGetter(
   inputFile: string,
   editedFile: string | undefined,
+  model: string,
   fileService: TaskRunFileService,
 ): (round: number) => AgentFileLocation {
   if (!editedFile) {
     throw new Error('editedFile must be specified for merge handler');
   }
 
-  const inputDir = path.dirname(inputFile);
-  const inputBase = path.parse(inputFile).name;
   const editedBase = path.parse(editedFile).name;
+  const outputPath = workflowMergeOutputPath({ inputFile, editedBase, model });
 
-  // Parse filename parts from edited file to preserve agent/round/model info
-  const { base, agent, roundNum, model } = parseFilenameParts(editedBase);
-  const finalBase = inputBase !== base ? inputBase : base;
-  const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
-  const outputPath = path.join(inputDir, outputFile);
-
-  // Pre-compute location (merge is single-output, always the same location)
   const location = fileService.createLocation(outputPath) as AgentFileLocation;
   return (_round: number): AgentFileLocation => location;
 }

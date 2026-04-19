@@ -27,7 +27,6 @@ import type {
   FollowupModeDetail,
   PermissionActionDetail,
   ProgressFileActionDetail,
-  RunSelectedDetail,
   SortEventDetail,
   StreamEventDetail,
   ToolbarCommandDetail,
@@ -136,20 +135,6 @@ export function handleToolbarCommand(
   const streamId = ctx.getState().activeStreamId;
   if (!streamId) return;
   postMessage(command, { stream: streamId });
-}
-
-export function handleRunSelected(
-  event: CustomEvent<RunSelectedDetail>,
-  ctx: FrontendEventHandlerContext,
-): void {
-  const streamId = ctx.getState().activeStreamId;
-  if (!streamId) return;
-
-  updateWorkflowState(ctx, streamId, (prev) =>
-    create(prev, (draft) => {
-      draft.ui.selectedRunId = event.detail.runId;
-    }),
-  );
 }
 
 export function handleFileAction(
