@@ -179,13 +179,20 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { shouldEnsureXmlStructure, totalRounds, outputExt } =
+  const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
       const fileName = getOutputFileName(config.inputFile, outputExt, round);
+      // Raw XML scratchpad files are intermediate artifacts — keep them out
+      // of the user's workspace regardless of the configured storage mode.
+      if (useScratchpad) {
+        return fileService.createRawOutputLocation(
+          fileName,
+        ) as AgentFileLocation;
+      }
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 

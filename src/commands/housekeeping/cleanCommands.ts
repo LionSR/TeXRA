@@ -150,7 +150,11 @@ export async function handleClean(config: unknown): Promise<void> {
       : await runCleanSingle(model, inputFile, agent);
   showCleanResult(result, inputFile);
 
-  if (!skipProgressViewClear && streamId) {
-    emitClearMissingOutputs({ streamIdOverride: streamId });
+  if (!skipProgressViewClear) {
+    emitClearMissingOutputs(
+      streamId
+        ? { streamIdOverride: streamId }
+        : { streamConfig: { agent, model, inputFile } },
+    );
   }
 }
