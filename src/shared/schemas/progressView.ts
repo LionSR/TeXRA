@@ -334,22 +334,23 @@ export const SyncStreamContentMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   action: z.enum(['render', 'clear']).optional(),
-  runInstructions: z.record(z.string(), InstructionUpdateSchema).optional(),
-  activeRunId: z.string().nullable().optional(),
+  // Workflow flat fields (one run per tab)
+  workflowInstruction: InstructionUpdateSchema.nullable().optional(),
+  workflowUsage: TokenUsageStatsSchema.nullable().optional(),
+  workflowFiles: z
+    .record(z.string(), z.array(OutputFileInfoSchema))
+    .optional(),
+  workflowMissingOutputs: z
+    .record(z.string(), z.array(z.string()))
+    .optional(),
+  // Tool-use per-run usage map (kept; tool-use can have multiple runs via resume)
   runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
-  runFiles: z
-    .record(z.string(), z.record(z.string(), z.array(OutputFileInfoSchema)))
-    .optional(),
-  runMissingOutputs: z
-    .record(z.string(), z.record(z.string(), z.array(z.string())))
-    .optional(),
   contextState: ContextStateSchema.optional(),
   todos: z.array(TodoItemSchema).optional(),
   plan: PlanSchema.nullable().optional(),
   queuedFollowUps: z.array(z.string()).optional(),
   instruction: InstructionUpdateSchema.nullable().optional(),
   agentCategory: z.string().optional(),
-  runId: z.string().nullish(),
   // Tab-switch state (R2: replaces separate syncActiveStreamState messages)
   conversationProgress: ConversationProgressSchema.optional(),
   badges: z

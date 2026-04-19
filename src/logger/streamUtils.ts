@@ -14,14 +14,17 @@ export function getStreamTabId(
   } = {},
 ): StreamTabId {
   const cleanAgent = getCleanAgentName(agent);
+  const shortId = options.executionId ?? generateExecutionId();
 
   if (options.agentCategory === AgentCategory.ToolUse) {
-    const shortId = options.executionId ?? generateExecutionId();
     return `${cleanAgent}@${model}#${shortId}`;
   }
 
   const agentName = options.useMultipleOutputs
     ? getMultipleName(cleanAgent)
     : cleanAgent;
-  return `${agentName}@${model}: ${inputFile.replaceAll('\\', '/')}`;
+  const inputPart = inputFile
+    ? `: ${inputFile.replaceAll('\\', '/')}`
+    : '';
+  return `${agentName}@${model}#${shortId}${inputPart}`;
 }

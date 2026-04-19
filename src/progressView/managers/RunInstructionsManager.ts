@@ -1,56 +1,38 @@
 import { AgentLogger } from '@logger/AgentLogger';
-import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
-import type {
-  InstructionUpdate,
-  StorageKey,
-  StreamTabId,
-} from '@shared/schemas';
+import type { InstructionUpdate, StreamTabId } from '@shared/schemas';
 
 /**
- * Manages per-stream run instructions with disk-backed persistence.
+ * Manages per-stream instruction with disk-backed persistence.
+ *
+ * One instruction per stream tab — each workflow tab is a single run, so
+ * instructions don't need a run dimension.
  *
  * Disk writes happen per-stream on mutation. Disk deletion is owned by
  * ProgressViewState (via store.clear() / deleteAllStreamData()).
  */
-export class RunInstructionsManager {
-  private items = new Map<StreamTabId, Map<string, InstructionUpdate>>();
+export class InstructionManager {
+  private items = new Map<StreamTabId, InstructionUpdate>();
   private loaded = false;
   private readonly logger: AgentLogger;
   private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
 
   constructor() {
-    this.logger = new AgentLogger('RunInstructionsManager');
+    this.logger = new AgentLogger('InstructionManager');
   }
 
-  /** Get all instructions for a stream (returns a copy). */
-  getAll(stream: StreamTabId): Map<string, InstructionUpdate> {
-    return new Map(this.items.get(stream) ?? []);
+  /** Get the instruction for a stream. */
+  get(stream: StreamTabId): InstructionUpdate | undefined {
+    return this.items.get(stream);
   }
 
-  /** Get instruction for a specific run. */
-  get(stream: StreamTabId, runId: StorageKey): InstructionUpdate | undefined {
-    return this.items.get(stream)?.get(runId);
-  }
-
-  /** Set or delete an instruction for a specific run. */
-  set(
-    stream: StreamTabId,
-    runId: StorageKey,
-    instruction: InstructionUpdate | null,
-  ): void {
-    const existing = this.items.get(stream) ?? new Map();
-
+  /** Set or clear the instruction for a stream. */
+  set(stream: StreamTabId, instruction: InstructionUpdate | null): void {
     if (instruction) {
-      existing.set(runId, instruction);
-      this.items.set(stream, existing);
+      this.items.set(stream, instruction);
     } else {
-      existing.delete(runId);
-      if (existing.size === 0) {
-        this.items.delete(stream);
-      }
+      this.items.delete(stream);
     }
-
     this.save(stream);
   }
 
@@ -66,16 +48,16 @@ export class RunInstructionsManager {
     this.pendingWrites.clear();
   }
 
-  /** Load run instructions from disk-backed StreamTabStore. */
+  /** Load instruction from disk-backed StreamTabStore. */
   async load(streamIds: StreamTabId[]): Promise<void> {
     this.items.clear();
 
     await Promise.all(
       streamIds.map(async (streamId) => {
         const store = getStreamTabStore(streamId);
-        const runInstructions = await store.readRunInstructions();
-        if (runInstructions?.size) {
-          this.items.set(streamId, runInstructions);
+        const instruction = await store.readInstruction();
+        if (instruction) {
+          this.items.set(streamId, instruction);
         }
       }),
     );
@@ -84,7 +66,7 @@ export class RunInstructionsManager {
 
     if (this.items.size > 0) {
       this.logger.debug(
-        `Loaded run instructions for ${this.items.size} streams`,
+        `Loaded instructions for ${this.items.size} streams`,
       );
     }
   }
@@ -103,7 +85,7 @@ export class RunInstructionsManager {
       if (!this.pendingWrites.has(stream)) return;
       const data = this.items.get(stream);
       const store = getStreamTabStore(stream);
-      return store.writeRunInstructions(data?.size ? mapToRecord(data) : {});
+      return store.writeInstruction(data ?? null);
     });
     this.pendingWrites.set(
       stream,
@@ -111,3 +93,7 @@ export class RunInstructionsManager {
     );
   }
 }
+
+// Back-compat re-export (renamed class) — kept so existing imports stay stable
+// until all references are updated.
+export { InstructionManager as RunInstructionsManager };

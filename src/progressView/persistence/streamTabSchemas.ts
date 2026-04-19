@@ -2,10 +2,11 @@
  * Zod schemas for stream-tab persistence.
  *
  * Single source of truth for all data shapes read from / written to disk
- * by StreamTabStore, OutputFilesManager, and UsageStatsManager.
+ * by StreamTabStore, OutputFilesManager, and InstructionManager.
  *
- * Design: Zod handles structural parsing (records, arrays, coercion).
- * Transforms only convert Record→Map at the boundary. No manual safeParse loops.
+ * Workflow streams hold one run per tab. Legacy disk data (from before the
+ * one-run-per-tab refactor) was keyed by runId; union schemas here accept
+ * both shapes and flatten legacy → new by picking the most recent run.
  */
 
 import { z } from 'zod';
@@ -32,6 +33,7 @@ export const RoundKeySchema = z.coerce.number().int();
 // ============================================================================
 
 export const StreamTabMetaSchema = z.object({
+  /** Legacy field — no longer read/written; tolerated on read so we can skip it. */
   activeRunId: z.string().nullable().optional(),
   parentStreamId: z.string().optional(),
   executionId: z.string().optional(),
@@ -43,10 +45,10 @@ export const StreamTabMetaSchema = z.object({
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 
 // ============================================================================
-// Shared transform helpers for record → Map conversions
+// Shared transform helpers
 // ============================================================================
 
-/** Convert { stringKey: items[] } record to Map<number, items[]>, coercing keys to round numbers. */
+/** Convert { stringKey: items[] } record to Map<number, items[]>, coercing keys. */
 function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
   const map = new Map<number, T[]>();
   for (const [key, items] of Object.entries(record)) {
@@ -58,58 +60,67 @@ function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
   return map;
 }
 
-/** Convert { runId: innerMap } record to Map, filtering out empty inner maps. */
-function recordToRunMap<V>(
-  record: Record<string, Map<number, V>>,
-): Map<string, Map<number, V>> {
-  const map = new Map<string, Map<number, V>>();
-  for (const [runId, rounds] of Object.entries(record)) {
-    if (rounds.size > 0) map.set(runId, rounds);
+/**
+ * Pick the last entry from a legacy run-keyed record, filtering out empty
+ * values. Returns null/empty when no runs contain data.
+ */
+function pickLatestRunEntries<T>(
+  record: Record<string, T>,
+  isEmpty: (value: T) => boolean,
+): T | null {
+  let latest: T | null = null;
+  for (const [, value] of Object.entries(record)) {
+    if (!isEmpty(value)) latest = value;
   }
-  return map;
+  return latest;
 }
 
 // ============================================================================
-// Output files
+// Output files: { round: OutputFileInfo[] } (new) or { runId: { round: … } } (legacy)
 // ============================================================================
 
-/**
- * Round map: { roundNum: OutputFileInfo[] } → Map<number, OutputFileInfo[]>
- *
- * Per-item .catch(null) + .filter ensures one corrupt item doesn't drop the entire round.
- */
-export const OutputFilesRoundMapSchema = z
-  .record(
-    z.string(),
-    z
-      .array(OutputFileInfoSchema.catch(null as unknown as OutputFileInfo))
-      .transform((items) =>
-        items.filter((item): item is OutputFileInfo => item !== null),
-      )
-      .catch([]),
+const OutputFileListSchema = z
+  .array(OutputFileInfoSchema.catch(null as unknown as OutputFileInfo))
+  .transform((items) =>
+    items.filter((item): item is OutputFileInfo => item !== null),
   )
+  .catch([]);
+
+/** New flat shape: { roundKey: OutputFileInfo[] } → Map<round, files>. */
+const OutputFilesFlatSchema = z
+  .record(z.string(), OutputFileListSchema)
   .transform(recordToRoundMap);
 
-/** Run map: { runId: roundMap } → Map<string, Map<number, OutputFileInfo[]>> */
+/** Legacy: { runId: { roundKey: OutputFileInfo[] } } → pick latest run's map. */
+const OutputFilesLegacySchema = z
+  .record(z.string(), OutputFilesFlatSchema.catch(new Map()))
+  .transform((record): Map<number, OutputFileInfo[]> => {
+    const latest = pickLatestRunEntries(record, (m) => m.size === 0);
+    return latest ?? new Map();
+  });
+
 export const OutputFilesDataSchema = z
-  .record(z.string(), OutputFilesRoundMapSchema.catch(new Map()))
-  .transform(recordToRunMap)
-  .catch(new Map()) as z.ZodType<Map<string, Map<number, OutputFileInfo[]>>>;
+  .union([OutputFilesFlatSchema, OutputFilesLegacySchema])
+  .catch(new Map()) as z.ZodType<Map<number, OutputFileInfo[]>>;
 
 // ============================================================================
-// Missing outputs
+// Missing outputs: { round: string[] } (new) or { runId: { round: … } } (legacy)
 // ============================================================================
 
-/** Round map: { roundNum: string[] } → Map<number, string[]> */
-const MissingOutputsRoundMapSchema = z
+const MissingOutputsFlatSchema = z
   .record(z.string(), z.array(z.string()).catch([]))
   .transform(recordToRoundMap);
 
-/** Run map: { runId: roundMap } → Map<string, Map<number, string[]>> */
+const MissingOutputsLegacySchema = z
+  .record(z.string(), MissingOutputsFlatSchema.catch(new Map()))
+  .transform((record): Map<number, string[]> => {
+    const latest = pickLatestRunEntries(record, (m) => m.size === 0);
+    return latest ?? new Map();
+  });
+
 export const MissingOutputsDataSchema = z
-  .record(z.string(), MissingOutputsRoundMapSchema.catch(new Map()))
-  .transform(recordToRunMap)
-  .catch(new Map()) as z.ZodType<Map<string, Map<number, string[]>>>;
+  .union([MissingOutputsFlatSchema, MissingOutputsLegacySchema])
+  .catch(new Map()) as z.ZodType<Map<number, string[]>>;
 
 // ============================================================================
 // Usage stats
@@ -168,10 +179,14 @@ export function isEmptyUsage(usage: TokenUsageStats): boolean {
   );
 }
 
-/** Run map: { runId: TokenUsageStats } → Map<string, TokenUsageStats> */
+/**
+ * Per-run usage map: { runId: TokenUsageStats } → Map<runId, stats>.
+ * Used for both workflow (one entry per tab) and tool-use (multiple entries
+ * via resume). Workflow consumers compute a single accumulated value.
+ */
 export const UsageDataSchema = z
   .record(z.string(), TokenUsageStatsParsingSchema)
-  .transform((record) => {
+  .transform((record): Map<string, TokenUsageStats> => {
     const map = new Map<string, TokenUsageStats>();
     for (const [runId, stats] of Object.entries(record)) {
       if (!isEmptyUsage(stats)) map.set(runId, stats);
@@ -180,23 +195,31 @@ export const UsageDataSchema = z
   })
   .catch(new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
 
+/** Per-run usage record (write side). */
+export type UsageStatsRecord = Record<string, TokenUsageStats>;
+
 // ============================================================================
-// Run instructions
+// Instruction
 // ============================================================================
 
-/** { runId: InstructionUpdate } → Record validated then converted to Map on read. */
-export const RunInstructionsRecordSchema = z
+/** New flat shape: a single InstructionUpdate (or null). */
+const InstructionFlatSchema = InstructionUpdateSchema.nullable();
+
+/** Legacy: { runId: InstructionUpdate } → pick latest run's instruction. */
+const InstructionLegacySchema = z
   .record(z.string(), InstructionUpdateSchema)
-  .catch({});
+  .transform((record): InstructionUpdate | null => {
+    return pickLatestRunEntries(record, () => false);
+  });
+
+export const InstructionRecordSchema = z
+  .union([InstructionFlatSchema, InstructionLegacySchema])
+  .nullable()
+  .catch(null) as z.ZodType<InstructionUpdate | null>;
 
 // ============================================================================
 // Write-side types — shape contracts for data written to disk
 // ============================================================================
 
-export type OutputFilesRecord = Record<
-  string,
-  Record<string, OutputFileInfo[]>
->;
-export type MissingOutputsRecord = Record<string, Record<string, string[]>>;
-export type UsageStatsRecord = Record<string, TokenUsageStats>;
-export type RunInstructionsRecord = Record<string, InstructionUpdate>;
+export type OutputFilesRecord = Record<string, OutputFileInfo[]>;
+export type MissingOutputsRecord = Record<string, string[]>;

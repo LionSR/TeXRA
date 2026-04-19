@@ -23,7 +23,6 @@ import type { PermissionState } from '../components/PermissionCard';
 export interface StreamContextValue {
   streamInfo: StreamTabInfo | null;
   streamState: StreamState | null;
-  runId: string | null;
   followupOptions: FollowupOptionsState | null;
   /** Pre-computed stream type flag - true for tool-use, false for workflow */
   isToolUse: boolean;
@@ -35,7 +34,6 @@ export interface StreamContextValue {
 export const EMPTY_STREAM_CONTEXT: StreamContextValue = {
   streamInfo: null,
   streamState: null,
-  runId: null,
   followupOptions: null,
   isToolUse: false,
   hasStreams: false,
@@ -52,7 +50,6 @@ export const streamStateContext = createContext<StreamContextValue>(
 export interface StreamLogContextValue {
   logs: LogMessageData[];
   taskGroups: TaskGroup[];
-  runId: string | null;
   isToolUse: boolean;
   hasStreams: boolean;
   /** Stream name for switch detection in LogList */
@@ -62,7 +59,6 @@ export interface StreamLogContextValue {
 export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   logs: [],
   taskGroups: [],
-  runId: null,
   isToolUse: false,
   hasStreams: false,
   streamName: null,

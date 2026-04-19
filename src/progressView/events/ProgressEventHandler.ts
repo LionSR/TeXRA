@@ -8,10 +8,7 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
-import {
-  mapToRecord,
-  nestedMapToRecord,
-} from '@progressView/persistence/serializationUtils';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
   ProgressViewState,
   cleanupToolUseAgentRegistry,
@@ -135,43 +132,25 @@ export class ProgressEventHandler {
           }
         },
         extensionDeactivating: () => this.markAllRunningTasksAsCancelled(),
-        // Output events
-        addOutputFiles: async (ctx, { streamId, storageKey, filesByRound }) => {
-          await ctx.state.outputFiles.addFiles(
-            streamId,
-            storageKey,
-            filesByRound,
-          );
+        // Output events — workflow tabs hold one run; ignore the storageKey dim.
+        addOutputFiles: async (ctx, { streamId, filesByRound }) => {
+          await ctx.state.outputFiles.addFiles(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const runFiles = ctx.state.outputFiles
-              .getFiles(streamId)
-              .get(storageKey);
-            const rounds = runFiles?.size ? mapToRecord(runFiles) : undefined;
+            const rounds = ctx.state.outputFiles.getFiles(streamId);
             ctx.webviewUpdater.updateFiles(streamId, {
-              runId: storageKey,
-              rounds,
+              rounds: rounds.size ? mapToRecord(rounds) : undefined,
             });
           });
         },
-        updateMissingOutputs: async (
-          ctx,
-          { streamId, storageKey, filesByRound },
-        ) => {
+        updateMissingOutputs: async (ctx, { streamId, filesByRound }) => {
           await ctx.state.outputFiles.updateMissingOutputs(
             streamId,
-            storageKey,
             filesByRound,
           );
           this.sendIfActive(streamId, () => {
-            const runMissing = ctx.state.outputFiles
-              .getMissingOutputs(streamId)
-              .get(storageKey);
-            const rounds = runMissing?.size
-              ? mapToRecord(runMissing)
-              : undefined;
+            const rounds = ctx.state.outputFiles.getMissingOutputs(streamId);
             ctx.webviewUpdater.updateMissingOutputs(streamId, {
-              runId: storageKey,
-              rounds,
+              rounds: rounds.size ? mapToRecord(rounds) : undefined,
             });
           });
         },
@@ -181,19 +160,14 @@ export class ProgressEventHandler {
             ctx.webviewUpdater.updateMissingOutputs(streamId, { reset: true }),
           );
         },
-        // Usage events
+        // Usage events — workflow tabs collapse to a single accumulated value;
+        // tool-use tabs keep per-run accumulation (resume produces multiple runs).
         updateStreamUsage: async (ctx, { streamId, usage, storageKey }) => {
           const accumulated = await ctx.state.usageStats.setRunUsage(
             streamId,
             storageKey,
             usage,
           );
-          // Workflow streams get activeRunId from handleSetTaskState (fires
-          // before any usage event). This guard only triggers for tool-use
-          // streams, which skip the handleSetTaskState instruction block.
-          if (!ctx.state.meta.getActiveRunId(streamId)) {
-            ctx.state.meta.setActiveRunId(streamId, storageKey);
-          }
           if (accumulated) {
             this.sendIfActive(streamId, () =>
               ctx.webviewUpdater.updateRunUsage(
@@ -330,7 +304,7 @@ export class ProgressEventHandler {
   private handleSetTaskState(
     data: ProgressEventPayloads['setTaskState'],
   ): void {
-    const { streamId, executionId, taskState, storageKey } = data;
+    const { streamId, executionId, taskState } = data;
     const isActiveStream = this.state.activeStream === streamId;
     const category = taskState.agentConfig.agentCategory;
     const previousFilter = this.state.agentCategoryFilter;
@@ -351,18 +325,13 @@ export class ProgressEventHandler {
     }
 
     // Instruction panel is only rendered for workflow streams.
-    // Set activeRunId from storageKey (= root group ID) so the instruction
-    // can be persisted immediately — not after the first usage event.
-    // Without this, subagent instructions were never persisted because
-    // sendInstructionUpdate bailed out on a null runId.
     if (category !== AgentCategory.ToolUse) {
-      this.state.meta.setActiveRunId(streamId, storageKey);
       if (isActiveStream) {
-        this.sendInstructionUpdate(streamId, storageKey);
+        this.sendInstructionUpdate(streamId);
       } else {
         // Non-active stream (e.g. subagent while orchestrator is active):
         // persist so the instruction is available when the user switches tabs.
-        this.prepareInstructionUpdate(streamId, storageKey);
+        this.prepareInstructionUpdate(streamId);
       }
     }
 
@@ -463,10 +432,7 @@ export class ProgressEventHandler {
     }
   }
 
-  private sendInstructionUpdate(
-    stream: StreamTabId | '',
-    runIdHint?: StorageKey | null,
-  ): void {
+  private sendInstructionUpdate(stream: StreamTabId | ''): void {
     if (!this.webviewUpdater.isAvailable()) return;
 
     if (!stream) {
@@ -474,18 +440,9 @@ export class ProgressEventHandler {
       return;
     }
 
-    const { instruction, agentCategory, runId } = this.prepareInstructionUpdate(
-      stream,
-      runIdHint,
-    );
-    if (!runId) return;
+    const { instruction, agentCategory } = this.prepareInstructionUpdate(stream);
 
-    this.webviewUpdater.updateInstruction(
-      stream,
-      instruction,
-      agentCategory,
-      runId,
-    );
+    this.webviewUpdater.updateInstruction(stream, instruction, agentCategory);
   }
 
   public syncStreamContent(
@@ -495,8 +452,8 @@ export class ProgressEventHandler {
       /** Include conversation progress, badges, and parent stream in the batch. */
       includeActiveState?: boolean;
     } = {},
-  ): StorageKey | null {
-    if (!this.webviewUpdater.isAvailable()) return null;
+  ): void {
+    if (!this.webviewUpdater.isAvailable()) return;
 
     const { updateInstruction = true, includeActiveState = false } = options;
 
@@ -505,30 +462,25 @@ export class ProgressEventHandler {
       this.webviewUpdater.sendSyncStreamContent({
         stream: '',
         action: 'clear',
-        activeRunId: null,
         todos: [],
         plan: null,
         queuedFollowUps: [],
         instruction: null,
       });
-      return null;
+      return;
     }
 
     this.webviewBridge.syncStream(stream);
 
-    const { extras, activeRunId } = this.prepareStreamSyncExtras(stream);
+    const { extras } = this.prepareStreamSyncExtras(stream);
     const todos = this.state.getTodos(stream);
     const plan = this.state.getPlan(stream);
     const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
 
     let instruction: import('@shared/schemas').InstructionUpdate | null = null;
     let agentCategory: string | undefined;
-    let runId: StorageKey | null = null;
     if (updateInstruction) {
-      ({ instruction, agentCategory, runId } = this.prepareInstructionUpdate(
-        stream,
-        activeRunId,
-      ));
+      ({ instruction, agentCategory } = this.prepareInstructionUpdate(stream));
     }
 
     // Optionally include active-stream state (replaces syncActiveStreamState).
@@ -564,82 +516,62 @@ export class ProgressEventHandler {
       queuedFollowUps,
       instruction,
       agentCategory,
-      runId,
       conversationProgress,
       badges,
       parentStreamId,
       toolEditBypass,
       superYoloBypass,
     });
-
-    return activeRunId;
   }
 
   private prepareStreamSyncExtras(stream: StreamTabId): {
     extras: import('@progressView/managers/WebviewUpdater').LogContentExtras;
-    activeRunId: StorageKey | null;
   } {
-    const activeRunId = this.state.meta.getActiveRunId(stream);
-
-    const runInstructions = Object.fromEntries(
-      this.state.runInstructions.getAll(stream).entries(),
-    );
-
-    const runFiles = nestedMapToRecord(this.state.outputFiles.getFiles(stream));
-    const runMissingOutputs = nestedMapToRecord(
+    // Workflow flat fields (one run per tab)
+    const workflowFiles = mapToRecord(this.state.outputFiles.getFiles(stream));
+    const workflowMissingOutputs = mapToRecord(
       this.state.outputFiles.getMissingOutputs(stream),
-    ) as Record<string, { [key: number]: string[] }>;
+    );
+    const workflowUsage = this.state.usageStats.getStreamUsage(stream);
+
+    // Tool-use per-run usage (kept; tool-use can resume → multiple runs in one tab)
     const runUsage = Object.fromEntries(
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
+
     const contextState = this.state.getContextState(stream);
 
     return {
       extras: {
-        runInstructions,
-        activeRunId,
+        workflowFiles,
+        workflowMissingOutputs,
+        workflowUsage,
         runUsage,
-        runFiles,
-        runMissingOutputs,
         contextState,
       },
-      activeRunId,
     };
   }
 
   /** Gather instruction update data without sending. Used by batched hydration. */
-  private prepareInstructionUpdate(
-    stream: StreamTabId,
-    runIdHint?: StorageKey | null,
-  ): {
+  private prepareInstructionUpdate(stream: StreamTabId): {
     instruction: import('@shared/schemas').InstructionUpdate | null;
     agentCategory?: string;
-    runId: StorageKey | null;
   } {
     const taskState = this.state.meta.getTaskState(stream);
     const category = this.getStreamCategory(stream);
-    const runId =
-      runIdHint === undefined
-        ? this.state.meta.getActiveRunId(stream)
-        : runIdHint;
 
-    if (!runId) {
-      return { instruction: null, runId: null };
-    }
-
-    const existingInstruction = this.state.runInstructions.get(stream, runId);
+    const existingInstruction = this.state.instructions.get(stream);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(
       taskState,
       existingInstruction?.timestamp,
     );
 
     // Persist instruction
-    this.state.runInstructions.set(stream, runId, instructionUpdate ?? null);
+    this.state.instructions.set(stream, instructionUpdate ?? null);
 
     return {
       instruction: instructionUpdate ?? null,
       agentCategory: category,
-      runId,
     };
   }
 

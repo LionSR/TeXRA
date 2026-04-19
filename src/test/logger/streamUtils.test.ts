@@ -6,16 +6,21 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { getStreamTabId } from '@/logger/streamUtils';
 
 describe('getStreamTabId', () => {
-  it('builds workflow identifiers using workspace-relative file path', () => {
-    const id = getStreamTabId('polish', 'sonnet', 'chapters/paper.tex');
-    assert.equal(id, 'polish@sonnet: chapters/paper.tex');
+  const EXEC_ID = 'abcdef012345' as const;
+
+  it('builds workflow identifiers using executionId and workspace-relative file path', () => {
+    const id = getStreamTabId('polish', 'sonnet', 'chapters/paper.tex', {
+      executionId: EXEC_ID,
+    });
+    assert.equal(id, `polish@sonnet#${EXEC_ID}: chapters/paper.tex`);
   });
 
   it('appends multiple suffix for workflow streams with many outputs', () => {
     const id = getStreamTabId('polish', 'sonnet', 'chapters/paper.tex', {
+      executionId: EXEC_ID,
       useMultipleOutputs: true,
     });
-    assert.equal(id, 'polish_multiple@sonnet: chapters/paper.tex');
+    assert.equal(id, `polish_multiple@sonnet#${EXEC_ID}: chapters/paper.tex`);
   });
 
   it('avoids duplicating the multiple suffix when already present', () => {
@@ -24,31 +29,35 @@ describe('getStreamTabId', () => {
       'sonnet',
       'chapters/paper.tex',
       {
+        executionId: EXEC_ID,
         useMultipleOutputs: true,
       },
     );
-    assert.equal(id, 'polish_multiple@sonnet: chapters/paper.tex');
+    assert.equal(id, `polish_multiple@sonnet#${EXEC_ID}: chapters/paper.tex`);
   });
 
-  it('distinguishes files with same name in different directories', () => {
-    const id1 = getStreamTabId('polish', 'sonnet', 'project1/paper.tex');
-    const id2 = getStreamTabId('polish', 'sonnet', 'project2/paper.tex');
+  it('gives each execution a unique tab id', () => {
+    const id1 = getStreamTabId('polish', 'sonnet', 'paper.tex', {
+      executionId: 'aaaaaaaaaaaa',
+    });
+    const id2 = getStreamTabId('polish', 'sonnet', 'paper.tex', {
+      executionId: 'bbbbbbbbbbbb',
+    });
     assert.notEqual(id1, id2);
-    assert.equal(id1, 'polish@sonnet: project1/paper.tex');
-    assert.equal(id2, 'polish@sonnet: project2/paper.tex');
   });
 
   it('normalizes Windows backslashes to forward slashes', () => {
-    const id = getStreamTabId('polish', 'sonnet', 'C:\\Users\\test\\paper.tex');
-    assert.equal(id, 'polish@sonnet: C:/Users/test/paper.tex');
+    const id = getStreamTabId('polish', 'sonnet', 'C:\\Users\\test\\paper.tex', {
+      executionId: EXEC_ID,
+    });
+    assert.equal(id, `polish@sonnet#${EXEC_ID}: C:/Users/test/paper.tex`);
   });
 
-  it('uses execution id prefix for tool use streams', () => {
-    const executionId = '12345678-9abc-def0-1234-56789abcdef0';
+  it('uses execution id for tool use streams without file suffix', () => {
     const id = getStreamTabId('diagnostics', 'gpt4', '', {
       agentCategory: AgentCategory.ToolUse,
-      executionId,
+      executionId: '12345678abcd',
     });
-    assert.equal(id, 'diagnostics@gpt4#12345678');
+    assert.equal(id, 'diagnostics@gpt4#12345678abcd');
   });
 });

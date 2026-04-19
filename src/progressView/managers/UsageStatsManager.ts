@@ -63,6 +63,17 @@ export class UsageStatsManager {
     return new Map(this.items.get(stream) ?? []);
   }
 
+  /**
+   * Get the accumulated usage for a workflow stream as a single value.
+   * Workflow tabs hold one run per tab; if multiple runs exist (e.g. resume),
+   * sum them.
+   */
+  getStreamUsage(stream: StreamTabId): TokenUsageStats | null {
+    const map = this.items.get(stream);
+    if (!map?.size) return null;
+    return sumUsageStats(Array.from(map.values()));
+  }
+
   /** Remove a stream from in-memory state. Disk cleanup owned by caller. */
   evict(stream: StreamTabId): void {
     this.items.delete(stream);

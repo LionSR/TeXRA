@@ -6,16 +6,16 @@
  *   streamData/
  *     {encoded(streamTabId)}/
  *       meta.json              → StreamTabMeta
- *       outputFiles.json       → run → round → OutputFileInfo[]
- *       missingOutputs.json    → run → round → string[]
- *       usageStats.json        → run → TokenUsageStats
- *       runInstructions.json   → run → InstructionUpdate
+ *       outputFiles.json       → round → OutputFileInfo[]
+ *       missingOutputs.json    → round → string[]
+ *       usageStats.json        → TokenUsageStats | null
+ *       instruction.json       → InstructionUpdate | null
  *
  * Follows the ExecutionKVStore pattern: KVStore per entity, typed accessors
  * with Zod validation, LRU cache of store instances.
  *
- * All schemas live in streamTabSchemas.ts (single source of truth).
- * This file is pure infrastructure: KV operations + typed accessors + cache.
+ * Legacy data shapes (from before one-run-per-tab refactor) are transparently
+ * migrated on read via Zod union schemas in streamTabSchemas.ts.
  */
 
 import * as path from 'path';
@@ -33,12 +33,11 @@ import {
   OutputFilesDataSchema,
   MissingOutputsDataSchema,
   UsageDataSchema,
-  RunInstructionsRecordSchema,
+  InstructionRecordSchema,
   type StreamTabMeta,
   type OutputFilesRecord,
   type MissingOutputsRecord,
   type UsageStatsRecord,
-  type RunInstructionsRecord,
 } from './streamTabSchemas';
 
 // ============================================================================
@@ -50,7 +49,9 @@ const KEYS = {
   OUTPUT_FILES: 'outputFiles',
   MISSING_OUTPUTS: 'missingOutputs',
   USAGE_STATS: 'usageStats',
-  RUN_INSTRUCTIONS: 'runInstructions',
+  /** Legacy (multi-run) filename kept for read-side backward compat. */
+  LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
+  INSTRUCTION: 'instruction',
 } as const;
 
 export const STREAM_DATA_DIR = 'streamData';
@@ -96,10 +97,7 @@ class StreamTabKVStore extends KVStore {
 
   // -- Output files ---------------------------------------------------------
 
-  async readOutputFiles(): Promise<Map<
-    string,
-    Map<number, OutputFileInfo[]>
-  > | null> {
+  async readOutputFiles(): Promise<Map<number, OutputFileInfo[]> | null> {
     const raw = await this.read(KEYS.OUTPUT_FILES);
     if (!raw) return null;
     const result = OutputFilesDataSchema.safeParse(raw);
@@ -112,10 +110,7 @@ class StreamTabKVStore extends KVStore {
 
   // -- Missing outputs ------------------------------------------------------
 
-  async readMissingOutputs(): Promise<Map<
-    string,
-    Map<number, string[]>
-  > | null> {
+  async readMissingOutputs(): Promise<Map<number, string[]> | null> {
     const raw = await this.read(KEYS.MISSING_OUTPUTS);
     if (!raw) return null;
     const result = MissingOutputsDataSchema.safeParse(raw);
@@ -139,19 +134,25 @@ class StreamTabKVStore extends KVStore {
     await this.write(KEYS.USAGE_STATS, data);
   }
 
-  // -- Run instructions -----------------------------------------------------
+  // -- Instruction ----------------------------------------------------------
 
-  async readRunInstructions(): Promise<Map<string, InstructionUpdate> | null> {
-    const raw = await this.read(KEYS.RUN_INSTRUCTIONS);
-    if (!raw) return null;
-    const result = RunInstructionsRecordSchema.safeParse(raw);
-    if (!result.success) return null;
-    const map = new Map(Object.entries(result.data));
-    return map.size > 0 ? map : null;
+  async readInstruction(): Promise<InstructionUpdate | null> {
+    // Prefer the new flat file; fall back to the legacy per-run file.
+    const newRaw = await this.read(KEYS.INSTRUCTION);
+    if (newRaw) {
+      const r = InstructionRecordSchema.safeParse(newRaw);
+      if (r.success) return r.data;
+    }
+    const legacyRaw = await this.read(KEYS.LEGACY_RUN_INSTRUCTIONS);
+    if (legacyRaw) {
+      const r = InstructionRecordSchema.safeParse(legacyRaw);
+      if (r.success) return r.data;
+    }
+    return null;
   }
 
-  async writeRunInstructions(data: RunInstructionsRecord): Promise<void> {
-    await this.write(KEYS.RUN_INSTRUCTIONS, data);
+  async writeInstruction(data: InstructionUpdate | null): Promise<void> {
+    await this.write(KEYS.INSTRUCTION, data);
   }
 
   // -- Lifecycle ------------------------------------------------------------

@@ -121,33 +121,21 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
 
 export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 
-// Workflow UI State (frontend-only, preserved during backend updates)
-
-export const WorkflowUIStateSchema = z.object({
-  selectedRunId: z.string().nullable().prefault(null),
-});
-
-export type WorkflowUIState = z.infer<typeof WorkflowUIStateSchema>;
-
 // Workflow Stream State
+// One run per tab — all run-scoped data is flat, not keyed by runId.
 
-function RoundScopedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z
-    .record(z.string(), z.record(z.string(), z.array(valueSchema)))
-    .prefault({});
+function RoundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
+  return z.record(z.string(), z.array(valueSchema)).prefault({});
 }
 
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.WORKFLOW),
   // Frontend-owned fields updated by targeted progress-view messages
-  runInstructions: RunScopedRecord(InstructionUpdateSchema),
-  runUsage: RunScopedRecord(TokenUsageStatsSchema),
-  runFiles: RoundScopedRecord(OutputFileInfoSchema),
-  runMissingOutputs: RoundScopedRecord(z.string()),
-  activeRunId: z.string().nullable().prefault(null),
+  instruction: InstructionUpdateSchema.nullable().prefault(null),
+  usage: TokenUsageStatsSchema.nullable().prefault(null),
+  files: RoundIndexedRecord(OutputFileInfoSchema),
+  missingOutputs: RoundIndexedRecord(z.string()),
   followupMode: FollowupModeSchema.prefault(FOLLOWUP_MODE.CHAT),
-  // Frontend-owned (nested under ui)
-  ui: WorkflowUIStateSchema.prefault({}),
 });
 
 export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;

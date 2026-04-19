@@ -8,7 +8,7 @@ import { StreamLogStore } from '@logger/StreamLogStore';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
 import { StreamMetaManager } from '@progressView/managers/StreamMetaManager';
-import { RunInstructionsManager } from '@progressView/managers/RunInstructionsManager';
+import { InstructionManager } from '@progressView/managers/RunInstructionsManager';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
   getStreamTabStore,
@@ -103,7 +103,7 @@ export function cleanupToolUseAgentRegistry(meta: StreamMetaManager): void {
  * Core state management for the progress view.
  *
  * Coordinates five persistence managers (streamLogs, outputFiles, usageStats,
- * meta, runInstructions) plus ephemeral in-memory state and preferences.
+ * meta, instructions) plus ephemeral in-memory state and preferences.
  */
 export class ProgressViewState {
   // -- Persistence managers ---------------------------------------------------
@@ -111,7 +111,7 @@ export class ProgressViewState {
   readonly outputFiles: OutputFilesManager;
   readonly usageStats: UsageStatsManager;
   readonly meta: StreamMetaManager;
-  readonly runInstructions: RunInstructionsManager;
+  readonly instructions: InstructionManager;
 
   // -- Preferences ------------------------------------------------------------
   private _prefs!: PersistedState<ProgressViewPrefs>;
@@ -141,7 +141,7 @@ export class ProgressViewState {
     this.outputFiles = new OutputFilesManager();
     this.usageStats = new UsageStatsManager();
     this.meta = new StreamMetaManager();
-    this.runInstructions = new RunInstructionsManager();
+    this.instructions = new InstructionManager();
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -315,7 +315,7 @@ export class ProgressViewState {
     this.outputFiles.evict(stream);
     this.usageStats.evict(stream);
     this.meta.evict(stream);
-    this.runInstructions.evict(stream);
+    this.instructions.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
@@ -343,7 +343,7 @@ export class ProgressViewState {
     this.outputFiles.evictAll();
     this.usageStats.evictAll();
     this.meta.evictAll();
-    this.runInstructions.evictAll();
+    this.instructions.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();
@@ -394,7 +394,7 @@ export class ProgressViewState {
     await Promise.all([
       this.streamLogs.flush(),
       this.meta.flush(),
-      this.runInstructions.flush(),
+      this.instructions.flush(),
       this.outputFiles.flush(),
       this.usageStats.flush(),
     ]);
@@ -407,7 +407,7 @@ export class ProgressViewState {
       this.outputFiles.load(streamIds),
       this.usageStats.load(streamIds),
       this.meta.load(streamIds),
-      this.runInstructions.load(streamIds),
+      this.instructions.load(streamIds),
     ]);
   }
 

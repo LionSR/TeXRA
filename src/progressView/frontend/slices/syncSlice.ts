@@ -16,48 +16,50 @@ export const syncHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data, ctx) => {
     if (!data.stream || data.action === 'clear') return;
 
-    const hasRunData =
-      data.activeRunId !== undefined ||
-      data.runInstructions !== undefined ||
-      data.runUsage !== undefined ||
-      data.runFiles !== undefined ||
-      data.runMissingOutputs !== undefined ||
+    const hasWorkflowData =
+      data.workflowInstruction !== undefined ||
+      data.workflowUsage !== undefined ||
+      data.workflowFiles !== undefined ||
+      data.workflowMissingOutputs !== undefined ||
       data.contextState !== undefined;
     const hasTaskData =
       data.todos !== undefined ||
       data.plan !== undefined ||
       data.queuedFollowUps !== undefined;
-    const hasInstruction = data.instruction !== undefined && !!data.runId;
+    const hasInstruction = data.instruction !== undefined;
     const hasMeta =
       data.conversationProgress !== undefined || data.badges !== undefined;
+    const hasToolUseUsage = data.runUsage !== undefined;
 
-    if (hasRunData || hasTaskData || hasInstruction || hasMeta) {
+    if (
+      hasWorkflowData ||
+      hasTaskData ||
+      hasInstruction ||
+      hasMeta ||
+      hasToolUseUsage
+    ) {
       ctx.setStreamState(data.stream, (prev) =>
         create(prev, (draft) => {
-          if (hasRunData) {
-            if (isWorkflowState(prev)) {
-              const d = draft as WorkflowStreamState;
-              if (data.activeRunId !== undefined)
-                d.activeRunId = data.activeRunId;
-              if (data.runInstructions) {
-                Object.assign(d.runInstructions, data.runInstructions);
-              }
-              if (data.runFiles) Object.assign(d.runFiles, data.runFiles);
-              if (data.runMissingOutputs) {
-                Object.assign(d.runMissingOutputs, data.runMissingOutputs);
-              }
-            }
-            if (data.runUsage) {
-              Object.assign(draft.runUsage, data.runUsage);
-              if (isToolUseState(prev)) {
-                (draft as ToolUseStreamState).sessionUsage = sumUsageStats(
-                  Object.values((draft as ToolUseStreamState).runUsage),
-                );
-              }
+          if (hasWorkflowData && isWorkflowState(prev)) {
+            const d = draft as WorkflowStreamState;
+            if (data.workflowInstruction !== undefined)
+              d.instruction = data.workflowInstruction;
+            if (data.workflowUsage !== undefined)
+              d.usage = data.workflowUsage;
+            if (data.workflowFiles)
+              Object.assign(d.files, data.workflowFiles);
+            if (data.workflowMissingOutputs) {
+              Object.assign(d.missingOutputs, data.workflowMissingOutputs);
             }
             if (data.contextState) {
-              draft.contextState = data.contextState;
+              d.contextState = data.contextState;
             }
+          }
+
+          if (hasToolUseUsage && isToolUseState(prev) && data.runUsage) {
+            const d = draft as ToolUseStreamState;
+            Object.assign(d.runUsage, data.runUsage);
+            d.sessionUsage = sumUsageStats(Object.values(d.runUsage));
           }
 
           if (isToolUseState(prev) && hasTaskData) {
@@ -77,11 +79,7 @@ export const syncHandlers: HandlerRegistry = {
           }
           if (isWorkflowState(prev) && hasInstruction) {
             const d = draft as WorkflowStreamState;
-            if (data.instruction && data.runId) {
-              d.runInstructions[data.runId] = data.instruction;
-            } else if (data.runId) {
-              delete d.runInstructions[data.runId];
-            }
+            d.instruction = data.instruction ?? null;
           }
 
           if (data.conversationProgress) {

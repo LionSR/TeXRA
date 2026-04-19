@@ -23,7 +23,6 @@ export {
   type ToolUseStreamState,
   type ToolUseUIState,
   type WorkflowStreamState,
-  type WorkflowUIState,
 } from '@shared/schemas';
 
 export type StreamFilter = AgentCategoryFilter;

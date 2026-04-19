@@ -11,7 +11,6 @@ export const ELEMENT_IDS = {
   GENERATED_FILES_COLLAPSIBLE: 'generatedFilesCollapsible',
   STREAM_TABS: 'streamTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
-  RUN_SELECTOR_CONTAINER: 'runSelectorRow',
   STATUS_INDICATOR: 'statusIndicator',
   RUN_SUMMARY: 'runSummary',
   CONTEXT_STATE: 'contextState',
