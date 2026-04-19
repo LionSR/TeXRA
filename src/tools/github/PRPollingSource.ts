@@ -17,6 +17,8 @@ import { AgentLogger } from '@logger/AgentLogger';
 import {
   formatCheckFailure,
   formatCheckFailureSummary,
+  formatCIComplete,
+  formatCIPassed,
   formatIssueComment,
   formatPRClosed,
   formatReview,
@@ -94,6 +96,10 @@ interface SubscriptionState {
   seenReviewCommentIds: Set<number>;
   seenReviewIds: Set<number>;
   lastFailedCheckKeys: Set<string>;
+  /** Head SHA of the last tick where we emitted a terminal CI event. */
+  ciTerminalSha: string | undefined;
+  /** Head SHA of the last tick where we emitted a CI-all-passed event. */
+  ciPassedSha: string | undefined;
   headSha: string | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
@@ -168,6 +174,8 @@ export class PRPollingSource implements AsyncEventSource {
         seenReviewCommentIds: new Set(),
         seenReviewIds: new Set(),
         lastFailedCheckKeys: new Set(),
+        ciTerminalSha: undefined,
+        ciPassedSha: undefined,
         headSha: undefined,
         state: undefined,
         merged: false,
@@ -327,6 +335,12 @@ export class PRPollingSource implements AsyncEventSource {
       }
       state.state = newState;
       state.merged = newMerged;
+      // New push invalidates prior CI terminal state — the next completion
+      // on the new SHA should re-emit terminal events.
+      if (state.headSha !== newHead) {
+        state.ciTerminalSha = undefined;
+        state.ciPassedSha = undefined;
+      }
       state.headSha = newHead;
     }
 
@@ -413,10 +427,18 @@ export class PRPollingSource implements AsyncEventSource {
       }
       if (checksRes.status === 200) {
         state.etags.checkRuns = checksRes.etag;
-        for (const r of checksRes.data.check_runs) {
+        const runs = checksRes.data.check_runs;
+        for (const r of runs) {
           if (this.isCheckFailure(r)) {
             state.lastFailedCheckKeys.add(this.checkKey(r));
           }
+        }
+        // Seed terminal-CI flags so a PR whose CI was already complete at
+        // subscribe time doesn't immediately emit a `ci_complete`/`ci_pass`
+        // event on the next tick. We only surface future transitions.
+        if (state.headSha && this.allRunsTerminal(runs)) {
+          state.ciTerminalSha = state.headSha;
+          if (this.allRunsPassing(runs)) state.ciPassedSha = state.headSha;
         }
       }
       state.initialized = true;
@@ -469,9 +491,10 @@ export class PRPollingSource implements AsyncEventSource {
 
     if (checksRes.status === 200) {
       state.etags.checkRuns = checksRes.etag;
+      const runs = checksRes.data.check_runs;
       const newFailures: GhCheckRun[] = [];
       const currentFailureKeys = new Set<string>();
-      for (const r of checksRes.data.check_runs) {
+      for (const r of runs) {
         if (!this.isCheckFailure(r)) continue;
         const key = this.checkKey(r);
         currentFailureKeys.add(key);
@@ -488,7 +511,47 @@ export class PRPollingSource implements AsyncEventSource {
           this.emit(state, formatCheckFailure(state.slug, pr.pullNumber, r));
         }
       }
+
+      // Terminal CI events. Fire once per head SHA when every run has
+      // reached `completed`. Gate on `runs.length > 0` because an empty
+      // array means either no CI is configured or runs haven't registered
+      // yet — either way, there's nothing to signal "done" about.
+      if (
+        state.headSha &&
+        runs.length > 0 &&
+        this.allRunsTerminal(runs) &&
+        state.ciTerminalSha !== state.headSha
+      ) {
+        state.ciTerminalSha = state.headSha;
+        this.emit(
+          state,
+          formatCIComplete(state.slug, pr.pullNumber, state.headSha, runs),
+        );
+        if (
+          this.allRunsPassing(runs) &&
+          state.ciPassedSha !== state.headSha
+        ) {
+          state.ciPassedSha = state.headSha;
+          this.emit(
+            state,
+            formatCIPassed(state.slug, pr.pullNumber, state.headSha, runs),
+          );
+        }
+      }
     }
+  }
+
+  private allRunsTerminal(runs: readonly GhCheckRun[]): boolean {
+    return runs.every((r) => r.status === 'completed');
+  }
+
+  private allRunsPassing(runs: readonly GhCheckRun[]): boolean {
+    return runs.every(
+      (r) =>
+        r.conclusion === 'success' ||
+        r.conclusion === 'neutral' ||
+        r.conclusion === 'skipped',
+    );
   }
 
   private isCheckFailure(r: GhCheckRun): boolean {

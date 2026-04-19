@@ -78,8 +78,12 @@ export function formatReviewComment(
   const author = c.user?.login ?? 'someone';
   const line = c.line ?? c.original_line;
   const loc = line ? `${c.path}:${line}` : c.path;
+  const header =
+    c.in_reply_to_id != null
+      ? `Reply in line review thread on ${slug}#${prNumber} by @${author} at ${loc}`
+      : `New line review comment on ${slug}#${prNumber} by @${author} at ${loc}`;
   return wrap(
-    `New line review comment on ${slug}#${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
+    `${header}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
   );
 }
 
@@ -125,6 +129,47 @@ export function formatCheckFailureSummary(
   );
   return wrap(
     `${runs.length} CI checks on ${slug}#${prNumber} failed:\n${lines.join('\n')}`,
+  );
+}
+
+/**
+ * Terminal CI event: every check run on the head commit has reached
+ * `completed` and they all passed (success/neutral/skipped). Fires once per
+ * head SHA. Paired with `formatCIComplete`, which fires once per SHA when
+ * all runs are terminal regardless of outcome.
+ */
+export function formatCIPassed(
+  slug: string,
+  prNumber: number,
+  sha: string,
+  runs: GhCheckRun[],
+): string {
+  return wrap(
+    `All ${runs.length} CI checks passed on ${slug}#${prNumber} (head ${sha.slice(0, 7)}).`,
+  );
+}
+
+/**
+ * Terminal CI event: every check run on the head commit has reached
+ * `completed`. Fires once per head SHA regardless of outcome. Individual
+ * failures are still emitted separately via `formatCheckFailure`, so this
+ * event is primarily a "CI is done, you can decide" signal for gating logic.
+ */
+export function formatCIComplete(
+  slug: string,
+  prNumber: number,
+  sha: string,
+  runs: GhCheckRun[],
+): string {
+  const passed = runs.filter(
+    (r) =>
+      r.conclusion === 'success' ||
+      r.conclusion === 'neutral' ||
+      r.conclusion === 'skipped',
+  ).length;
+  const failed = runs.length - passed;
+  return wrap(
+    `CI completed on ${slug}#${prNumber} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
   );
 }
 
