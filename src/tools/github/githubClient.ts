@@ -29,7 +29,9 @@ export class GitHubAuthError extends Error {
 
 export class GitHubRateLimitError extends Error {
   constructor(public readonly resetAt: number) {
-    super(`GitHub rate limit exceeded; resets at ${new Date(resetAt * 1000).toISOString()}`);
+    super(
+      `GitHub rate limit exceeded; resets at ${new Date(resetAt * 1000).toISOString()}`,
+    );
     this.name = 'GitHubRateLimitError';
   }
 }
@@ -43,7 +45,8 @@ function extractApiMessage(data: unknown, fallback: string): string {
   if (typeof data === 'string' && data.trim()) return data;
   if (data && typeof data === 'object') {
     const rec = data as { message?: unknown };
-    if (typeof rec.message === 'string' && rec.message.trim()) return rec.message;
+    if (typeof rec.message === 'string' && rec.message.trim())
+      return rec.message;
     try {
       return JSON.stringify(data);
     } catch {

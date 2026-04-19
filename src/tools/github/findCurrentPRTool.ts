@@ -51,10 +51,7 @@ function parseGitHubRemote(
   return { owner: m[1], repo: m[2] };
 }
 
-async function run(
-  args: string[],
-  cwd: string,
-): Promise<string> {
+async function run(args: string[], cwd: string): Promise<string> {
   const { stdout } = await execFileAsync('git', args, {
     cwd,
     timeout: 10_000,
@@ -110,7 +107,10 @@ export class FindCurrentPRTool extends defineTool({
 
     // Query GitHub for an open PR whose head matches owner:branch.
     const path = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
-    const res = await ghGet<Array<{ number: number; html_url: string } & Partial<GhPullRequest>>>(path);
+    const res =
+      await ghGet<
+        Array<{ number: number; html_url: string } & Partial<GhPullRequest>>
+      >(path);
     if (res.status !== 200) {
       throw new ToolError(`Unexpected GitHub response status: ${res.status}`);
     }
