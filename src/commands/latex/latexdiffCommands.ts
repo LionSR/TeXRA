@@ -18,7 +18,8 @@ import {
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
 import { getCleanAgentName } from '@agent/index';
-import { getAgentFirstNameChunk } from '@housekeeping/utils';
+import { getAgentFirstNameChunk, parseRoundFolder } from '@housekeeping/utils';
+import { escapeRegExp } from '@utils/core/stringCore';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,
@@ -703,15 +704,11 @@ async function runLatexdiffViaWorkspaceScan(params: {
 
     const roundOutputsMap = new Map<number, string>();
 
-    // Escape regex metacharacters in user-provided values so filenames
-    // containing `(`, `)`, `+`, `*`, `.`, etc. match literally.
-    const escapeRe = (s: string): string =>
-      s.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const escBase = escapeRe(baseInputName);
-    const escChunk = escapeRe(agentNameChunk);
-    const escCleanAgent = escapeRe(cleanAgent);
-    const escNormalizedModel = escapeRe(normalizedModel);
-    const escModel = escapeRe(model);
+    const escBase = escapeRegExp(baseInputName);
+    const escChunk = escapeRegExp(agentNameChunk);
+    const escCleanAgent = escapeRegExp(cleanAgent);
+    const escNormalizedModel = escapeRegExp(normalizedModel);
+    const escModel = escapeRegExp(model);
 
     // Legacy flat layout: files sit directly under outputDirPath as
     // `<base>_<chunk>_r{round}_<model>.tex`.
@@ -741,10 +738,8 @@ async function runLatexdiffViaWorkspaceScan(params: {
     );
     for (const [subName, subType] of dirEntries) {
       if (subType !== vscode.FileType.Directory) continue;
-      const roundMatch = subName.match(/^r(\d+)$/);
-      if (!roundMatch) continue;
-      const round = RoundKeySchema.safeParse(roundMatch[1]);
-      if (!round.success) continue;
+      const roundIdx = parseRoundFolder(subName);
+      if (roundIdx === null) continue;
 
       const roundDirAbs = path.join(absoluteDir, subName);
       let roundEntries: [string, vscode.FileType][];
@@ -764,7 +759,7 @@ async function runLatexdiffViaWorkspaceScan(params: {
           continue;
         }
         roundOutputsMap.set(
-          round.data,
+          roundIdx,
           path.join(outputDirPath, subName, fileName),
         );
       }

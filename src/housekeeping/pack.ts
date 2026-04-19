@@ -22,6 +22,7 @@ import {
   getAgentFirstNameChunk,
   getFilePatterns,
   findFilesFromPatterns,
+  parseRoundFolder,
 } from './utils';
 
 const CHANNEL = 'Housekeeping';
@@ -223,11 +224,10 @@ function buildFileListLog(movedFiles: string[], copiedFiles: string[]): string {
  */
 function packDestinationName(file: string): string {
   const base = path.basename(file);
-  const dir = path.dirname(file);
-  const segments = dir.split(/[\\/]+/);
+  const segments = path.dirname(file).split(/[\\/]+/);
   for (let i = segments.length - 1; i >= 0; i--) {
-    const match = /^r(\d+)$/.exec(segments[i]);
-    if (match) return `r${match[1]}_${base}`;
+    const round = parseRoundFolder(segments[i]);
+    if (round !== null) return `r${round}_${base}`;
   }
   return base;
 }

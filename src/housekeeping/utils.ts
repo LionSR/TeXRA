@@ -12,6 +12,16 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
+/**
+ * Parse a directory name of the form `r{round}` into its round index.
+ * Returns null if the name doesn't match the round-folder convention used
+ * by the new workflow output layout.
+ */
+export function parseRoundFolder(dirName: string): number | null {
+  const match = /^r(\d+)$/.exec(dirName);
+  return match ? Number(match[1]) : null;
+}
+
 export function getAgentFirstNameChunk(agent: string): string {
   const cleanAgent = getCleanAgentName(agent);
 
@@ -75,8 +85,13 @@ export function getFilePatterns(
       patterns.push(`${newPrefix}_${model}${diffSuffix}`);
     }
   }
-  // Merge output (single, outside the round folders):
-  patterns.push(`${base}_full_${model}`, `${base}_full_${model}_diff`);
+  // Merge output lives next to the input and is named after the edited
+  // file (`<editedBase>_full_<model>.tex`). editedBase typically starts
+  // with the input base (merges usually feed on a prior output of the
+  // same input), so a leading-wildcard glob matches both the simple
+  // `<base>_full_<model>` case and the full `<base>_<…>_full_<model>`
+  // case without knowing editedBase ahead of time.
+  patterns.push(`${base}*_full_${model}`, `${base}*_full_${model}_diff`);
   return patterns;
 }
 
