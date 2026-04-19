@@ -172,11 +172,10 @@ export async function runReflectionFlow<C = unknown>(
   const { shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 
-  const inputDir = path.dirname(config.inputFile);
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
-      const fileName = getOutputFileName(inputDir, outputExt, round);
+      const fileName = getOutputFileName(config.inputFile, outputExt, round);
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 

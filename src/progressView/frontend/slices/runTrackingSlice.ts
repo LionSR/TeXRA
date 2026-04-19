@@ -40,15 +40,10 @@ export const runTrackingHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data, ctx) => {
     const { stream, runId, usage } = data;
     ctx.setStreamState(stream, (prev) => {
-      if (isToolUseState(prev)) {
+      if (isToolUseState(prev) || isWorkflowState(prev)) {
         return create(prev, (draft) => {
           draft.runUsage[runId] = usage;
           draft.sessionUsage = sumUsageStats(Object.values(draft.runUsage));
-        });
-      }
-      if (isWorkflowState(prev)) {
-        return create(prev, (draft) => {
-          draft.usage = usage;
         });
       }
       return prev;

@@ -38,9 +38,7 @@ export interface LogContentExtras {
   workflowFiles?: Record<string, OutputFileInfo[]>;
   /** Workflow missing outputs by round */
   workflowMissingOutputs?: Record<string, string[]>;
-  /** Workflow accumulated usage (one run per tab; sum across resumes) */
-  workflowUsage?: TokenUsageStats | null;
-  /** Tool-use per-run usage map (resume produces multiple runs in one tab) */
+  /** Per-run usage map (both workflow and tool-use; frontend derives sum) */
   runUsage?: Record<string, TokenUsageStats>;
   /** Context window utilization state */
   contextState?: ContextState;
@@ -52,7 +50,6 @@ export interface SyncStreamContentPayload {
   action?: 'render' | 'clear';
   workflowFiles?: Record<string, OutputFileInfo[]>;
   workflowMissingOutputs?: Record<string, string[]>;
-  workflowUsage?: TokenUsageStats | null;
   runUsage?: Record<string, TokenUsageStats>;
   contextState?: ContextState;
   todos: TodoItem[];

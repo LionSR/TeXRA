@@ -210,7 +210,13 @@ export class XmlOutputManager {
     round: number,
   ): Promise<OutputFileInfo[]> {
     const outputFiles: OutputFileInfo[] = [];
-    const roundDir = path.dirname(outputLocation.absolutePath);
+    // Use the workspace-relative round dir (not the absolute run-storage path)
+    // so fileService.createLocation can correctly route to run storage.
+    // ExternalFileLocation lacks relativePath; fall back to the basename dir.
+    const roundDir =
+      outputLocation.kind === 'external'
+        ? path.dirname(outputLocation.absolutePath)
+        : path.dirname(outputLocation.relativePath);
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {

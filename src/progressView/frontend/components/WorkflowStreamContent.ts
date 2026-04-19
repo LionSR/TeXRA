@@ -102,7 +102,7 @@ export class WorkflowStreamContent extends LitElement {
       <log-list></log-list>
 
       <usage-panel
-        .usage=${state.usage}
+        .usage=${state.sessionUsage ?? null}
         .contextState=${state.contextState ?? null}
       ></usage-panel>
 

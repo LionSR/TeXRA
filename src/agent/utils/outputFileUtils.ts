@@ -4,17 +4,22 @@ import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 import { parseFilenameParts } from './mergeFileUtils';
 
 /**
- * Generates an output path under a round subfolder: `r{round}/output.{ext}`.
+ * Generates an output path under a round subfolder, preserving the input
+ * file's basename so downstream basename-based mapping (follow-up setup,
+ * merge) continues to match outputs to their originals:
+ *
+ *   `<inputDir>/r{round}/<inputName>.{ext}`
  *
  * Workflow agent outputs always go to task run storage, which provides
  * execution context. Round subfolders group all artifacts from a single round.
  */
 export function getOutputFileName(
-  outputDir: string,
+  inputFile: string,
   outputExt: string,
   round: number,
 ): string {
-  return path.join(outputDir, `r${round}`, `output.${outputExt}`);
+  const parsed = path.parse(inputFile);
+  return path.join(parsed.dir, `r${round}`, `${parsed.name}.${outputExt}`);
 }
 
 /**

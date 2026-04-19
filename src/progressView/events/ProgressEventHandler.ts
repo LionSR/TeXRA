@@ -494,14 +494,14 @@ export class ProgressEventHandler {
   private prepareStreamSyncExtras(stream: StreamTabId): {
     extras: import('@progressView/managers/WebviewUpdater').LogContentExtras;
   } {
-    // Workflow flat fields (one run per tab)
+    // Workflow files/missing outputs are flat (one run per tab).
     const workflowFiles = mapToRecord(this.state.outputFiles.getFiles(stream));
     const workflowMissingOutputs = mapToRecord(
       this.state.outputFiles.getMissingOutputs(stream),
     );
-    const workflowUsage = this.state.usageStats.getStreamUsage(stream);
 
-    // Tool-use per-run usage (kept; tool-use can resume → multiple runs in one tab)
+    // Per-run usage map — shared by workflow and tool-use. Frontend derives
+    // sessionUsage as the sum so cumulative totals survive resume.
     const runUsage = Object.fromEntries(
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
@@ -512,7 +512,6 @@ export class ProgressEventHandler {
       extras: {
         workflowFiles,
         workflowMissingOutputs,
-        workflowUsage,
         runUsage,
         contextState,
       },

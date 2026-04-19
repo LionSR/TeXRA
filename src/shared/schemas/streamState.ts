@@ -130,8 +130,11 @@ function RoundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
 
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.WORKFLOW),
-  // Frontend-owned fields updated by targeted progress-view messages
-  usage: TokenUsageStatsSchema.nullable().prefault(null),
+  // Frontend-owned fields updated by targeted progress-view messages.
+  // Per-run usage mirrors tool-use so resume correctly accumulates across
+  // the original and resumed runs; sessionUsage is derived as their sum.
+  runUsage: RunScopedRecord(TokenUsageStatsSchema),
+  sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
   files: RoundIndexedRecord(OutputFileInfoSchema),
   missingOutputs: RoundIndexedRecord(z.string()),
   followupMode: FollowupModeSchema.prefault(FOLLOWUP_MODE.CHAT),

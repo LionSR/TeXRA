@@ -16,8 +16,7 @@ export const syncHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data, ctx) => {
     if (!data.stream || data.action === 'clear') return;
 
-    const hasWorkflowData =
-      data.workflowUsage !== undefined ||
+    const hasWorkflowFiles =
       data.workflowFiles !== undefined ||
       data.workflowMissingOutputs !== undefined;
     const hasTaskData =
@@ -26,14 +25,14 @@ export const syncHandlers: HandlerRegistry = {
       data.queuedFollowUps !== undefined;
     const hasMeta =
       data.conversationProgress !== undefined || data.badges !== undefined;
-    const hasToolUseUsage = data.runUsage !== undefined;
+    const hasRunUsage = data.runUsage !== undefined;
     const hasContext = data.contextState !== undefined;
 
     if (
-      hasWorkflowData ||
+      hasWorkflowFiles ||
       hasTaskData ||
       hasMeta ||
-      hasToolUseUsage ||
+      hasRunUsage ||
       hasContext
     ) {
       ctx.setStreamState(data.stream, (prev) =>
@@ -43,10 +42,8 @@ export const syncHandlers: HandlerRegistry = {
             draft.contextState = data.contextState;
           }
 
-          if (hasWorkflowData && isWorkflowState(prev)) {
+          if (hasWorkflowFiles && isWorkflowState(prev)) {
             const d = draft as WorkflowStreamState;
-            if (data.workflowUsage !== undefined)
-              d.usage = data.workflowUsage;
             if (data.workflowFiles)
               Object.assign(d.files, data.workflowFiles);
             if (data.workflowMissingOutputs) {
@@ -54,8 +51,14 @@ export const syncHandlers: HandlerRegistry = {
             }
           }
 
-          if (hasToolUseUsage && isToolUseState(prev) && data.runUsage) {
-            const d = draft as ToolUseStreamState;
+          // runUsage is per-run for both workflow and tool-use; derive the
+          // sum into sessionUsage so the UI always shows cumulative totals.
+          if (
+            hasRunUsage &&
+            data.runUsage &&
+            (isToolUseState(prev) || isWorkflowState(prev))
+          ) {
+            const d = draft as ToolUseStreamState | WorkflowStreamState;
             Object.assign(d.runUsage, data.runUsage);
             d.sessionUsage = sumUsageStats(Object.values(d.runUsage));
           }

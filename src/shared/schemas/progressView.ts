@@ -325,15 +325,15 @@ export const SyncStreamContentMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   action: z.enum(['render', 'clear']).optional(),
-  // Workflow flat fields (one run per tab)
-  workflowUsage: TokenUsageStatsSchema.nullable().optional(),
+  // Workflow flat files (one run per tab)
   workflowFiles: z
     .record(z.string(), z.array(OutputFileInfoSchema))
     .optional(),
   workflowMissingOutputs: z
     .record(z.string(), z.array(z.string()))
     .optional(),
-  // Tool-use per-run usage map (kept; tool-use can have multiple runs via resume)
+  // Per-run usage map — used by both workflow and tool-use so resume
+  // correctly accumulates. Frontend derives sessionUsage as the sum.
   runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
   contextState: ContextStateSchema.optional(),
   todos: z.array(TodoItemSchema).optional(),
