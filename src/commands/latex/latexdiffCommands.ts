@@ -724,10 +724,11 @@ async function runLatexdiffViaWorkspaceScan(params: {
     }
 
     // New layout: files sit under `<outputDirPath>/r{round}/` as
-    // `<base>_<cleanAgent>_<model>.tex`. Iterate the round subfolders and
-    // prefer new-layout entries over legacy ones when both exist.
+    // `<base>_<cleanAgent>_<model>.tex`. The model is written verbatim
+    // (dots preserved), so escape regex metachars rather than stripping.
+    const escapedModel = model.replaceAll(/[.+?^${}()|[\]\\]/g, '\\$&');
     const newLayoutFileName = new RegExp(
-      `^${baseInputName}_${cleanAgent}_${normalizedModel}\\.tex$`,
+      `^${baseInputName}_${cleanAgent}_${escapedModel}\\.tex$`,
     );
     for (const [subName, subType] of dirEntries) {
       if (subType !== vscode.FileType.Directory) continue;
