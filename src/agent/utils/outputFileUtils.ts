@@ -1,44 +1,37 @@
 import * as path from 'path';
 
-import { getAgentFirstNameChunk } from '@housekeeping/utils';
 import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
-import { parseFilenameParts, extractLastRoundMatch } from './mergeFileUtils';
+import { parseFilenameParts } from './mergeFileUtils';
 
 /**
- * Generates an output filename incorporating model and round information.
+ * Generates an output path under a round subfolder: `r{round}/output.{ext}`.
  *
- * @param inputFile The input file path
- * @param agent Agent name (may include source: prefix which will be stripped)
- * @param model Model name
- * @param outputExt Extension for the output file
- * @param currRound Current round number
- * @param editedFile Optional previously edited file for round detection
+ * Workflow agent outputs always go to task run storage, which provides
+ * execution context. Round subfolders group all artifacts from a single round.
  */
 export function getOutputFileName(
-  inputFile: string,
-  agent: string,
-  model: string,
+  outputDir: string,
   outputExt: string,
-  currRound: number,
-  editedFile?: string,
-  options?: {
-    outputDir?: string;
-  },
+  round: number,
 ): string {
-  const { dir, name: fileName } = path.parse(inputFile);
-  // Extract agent first name chunk (handles source: prefix and write- agents)
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+  return path.join(outputDir, `r${round}`, `output.${outputExt}`);
+}
 
-  let newRound = currRound;
-  if (editedFile) {
-    const lastMatch = extractLastRoundMatch(editedFile);
-    const editedRound = lastMatch ? parseInt(lastMatch[1]) : 0;
-    newRound += editedRound + 1;
-  }
-
-  const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
-  const targetDir = options?.outputDir ?? dir;
-  return path.join(targetDir, outputBaseName);
+/**
+ * Generates an output path for an extracted document from multi-document XML
+ * output. The extracted doc is placed in the same round directory as the
+ * parent output file.
+ *
+ * @param source Source document name from XML (e.g. "chapter1.tex")
+ * @param roundDir The round directory (already includes `r{round}`)
+ */
+export function getExtractedDocOutputFileName(
+  source: string,
+  roundDir: string,
+): string {
+  const { name: sourceName, ext } = path.parse(source);
+  const extension = ext.replace('.', '') || 'tex';
+  return path.join(roundDir, `${sourceName}.${extension}`);
 }
 
 /**

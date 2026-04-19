@@ -613,7 +613,6 @@ export async function executeAgent(
         streamId,
         executionId,
         taskState: agentConfigToTaskState(config),
-        storageKey: ctx.storageKey,
       });
       if (config.outputFiles.length > 1 && !config.useMultipleOutputs) {
         logger.warn(
@@ -677,7 +676,6 @@ export async function executeAgent(
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
           onRoundCompleted,
-          isSubagent,
         });
         return {
           category: 'workflow' as const,

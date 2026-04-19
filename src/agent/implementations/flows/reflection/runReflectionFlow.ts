@@ -61,8 +61,6 @@ export interface RunReflectionFlowInput<
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
   onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
-  /** When true, outputs are routed to task-run storage by default. */
-  isSubagent?: boolean;
 }
 
 export interface RunReflectionFlowResult {
@@ -138,8 +136,9 @@ export async function runReflectionFlow<C = unknown>(
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
+  // Workflow outputs always go to run storage, never to the user's workspace.
   const fileService = new TaskRunFileService(executionId, {
-    forceRunStorage: input.isSubagent,
+    forceRunStorage: true,
   });
 
   const baseFiles: WorkspaceFileLocation[] = (
@@ -170,26 +169,14 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
+  const { shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 
-  const modelName = modelHandler.config.name;
+  const inputDir = path.dirname(config.inputFile);
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
-      const fileName = getOutputFileName(
-        config.inputFile,
-        config.agent,
-        modelName,
-        outputExt,
-        round,
-        config.editedFile || undefined,
-      );
-      if (useScratchpad) {
-        return fileService.createRawOutputLocation(
-          fileName,
-        ) as AgentFileLocation;
-      }
+      const fileName = getOutputFileName(inputDir, outputExt, round);
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 

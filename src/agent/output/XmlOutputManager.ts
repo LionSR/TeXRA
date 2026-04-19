@@ -4,7 +4,7 @@ import { XMLParser } from 'fast-xml-parser';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
-import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
@@ -210,9 +210,7 @@ export class XmlOutputManager {
     round: number,
   ): Promise<OutputFileInfo[]> {
     const outputFiles: OutputFileInfo[] = [];
-    const outputParts = path.basename(outputLocation.absolutePath).split('_');
-    const agent = outputParts.at(-3) ?? '';
-    const model = outputParts.at(-1)?.split('.')[0] ?? '';
+    const roundDir = path.dirname(outputLocation.absolutePath);
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
@@ -228,9 +226,7 @@ export class XmlOutputManager {
         continue;
       }
 
-      const { ext } = path.parse(source);
-      const extension = ext.replace('.', '') || 'tex';
-      const texFile = getOutputFileName(source, agent, model, extension, round);
+      const texFile = getExtractedDocOutputFileName(source, roundDir);
       const texLocation = this.fileService.createLocation(texFile);
       const cleanedContent = this.removeTrailingEndDocument(
         doc.content.trim(),
