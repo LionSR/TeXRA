@@ -390,6 +390,14 @@ function startCodexLoop(params: {
   // giving the user a visual cue that the session was interrupted.
   const groupId = logger.startGroup('Codex session');
 
+  // Register resumed threads immediately — without this, a second codex call
+  // with the same thread_id during the first turn would bypass the in-memory
+  // guard and start a concurrent loop. Fresh threads don't have thread.id
+  // yet; they're registered after the first turn completes.
+  if (thread.id) {
+    storeThread(thread.id, { thread, childStreamId, executionId });
+  }
+
   // Seed the initial prompt; the loop drains it as the first turn.
   queue.enqueue(initialPrompt);
   StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
