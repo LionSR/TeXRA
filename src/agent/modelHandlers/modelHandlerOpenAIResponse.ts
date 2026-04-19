@@ -3,7 +3,11 @@ import { Buffer } from 'node:buffer';
 import * as path from 'path';
 
 // Third-party imports
-import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+import OpenAI, {
+  APIConnectionTimeoutError,
+  APIError as OpenAIAPIError,
+  toFile,
+} from 'openai';
 import { ResponsesWS } from 'openai/resources/responses/ws';
 import { WebSocketError } from 'openai/resources/responses/internal-base';
 
@@ -23,6 +27,9 @@ import {
   isContextWindowError,
   isPreviousResponseIdError,
   isRetryableStatusCode,
+  attachPartialText,
+  takeTail,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -469,6 +476,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const state = this.createStreamingEventState();
+    // Accumulate text deltas so we can attach a tail to the error on reject,
+    // mirroring the HTTP streaming path. Without this, a WebSocket failure
+    // mid-response would lose any text that had already been generated.
+    let streamedText = '';
 
     return new Promise<WebSocketExecutionResult>((resolve, reject) => {
       let settled = false;
@@ -493,7 +504,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // events (including response.created) from the prior response, causing
         // the new request to resolve with the wrong response.
         this.closeWebSocket();
-        reject(new DOMException('The operation was aborted', 'AbortError'));
+        rejectWithPartial(
+          new DOMException('The operation was aborted', 'AbortError'),
+        );
       };
       signal?.addEventListener('abort', onAbort, { once: true });
 
@@ -519,6 +532,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         }
 
         this.processStreamingEvent(e, state);
+        if (this.isTextDeltaEvent(e)) {
+          streamedText += e.delta;
+        }
+      };
+
+      /** Attach partial-text tail to an error before rejecting with it. */
+      const rejectWithPartial = (err: unknown): void => {
+        if (streamedText) {
+          attachPartialText(err, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
+        }
+        reject(err);
       };
 
       const finalizeSuccess = (response: Response): void => {
@@ -541,7 +565,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         cleanup();
         const errorMsg =
           event.response.error?.message ?? 'Response failed without details';
-        reject(new Error(`OpenAI WebSocket response failed: ${errorMsg}`));
+        rejectWithPartial(
+          new Error(`OpenAI WebSocket response failed: ${errorMsg}`),
+        );
       };
 
       // Incomplete responses are resolved (not rejected) to match the HTTP
@@ -559,7 +585,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // The server may close the socket after sending the error, but the close event
         // fires after this handler and would be a no-op (settled=true).
         this.closeWebSocket();
-        reject(error);
+        rejectWithPartial(error);
       };
 
       // Handle unexpected socket close during a request
@@ -568,7 +594,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         settled = true;
         cleanup();
         this.closeWebSocket();
-        reject(
+        rejectWithPartial(
           new Error(
             `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
           ),
@@ -1413,12 +1439,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         delete content.filename;
       }
     } catch (err) {
-      const errorMessage = getSdkErrorMessage(err);
-
-      if (
+      // Two native SDK timeout signals: APIConnectionTimeoutError (client-side
+      // SDK timeout) and APIError with status 408 (server-side Request Timeout).
+      // Status 408 is NOT mapped to APIConnectionTimeoutError by the SDK —
+      // it falls through to a bare APIError — so both must be checked.
+      const isTimeout =
         err instanceof APIConnectionTimeoutError ||
-        errorMessage.includes('Request timed out')
-      ) {
+        (err instanceof OpenAIAPIError && err.status === 408);
+      if (isTimeout) {
         this.logger.warn(
           `Timed out uploading file ${filename}. Falling back to inline payload.`,
         );
@@ -1426,7 +1454,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       this.logger.logError(
-        `Failed to upload file ${filename}: ${errorMessage}`,
+        `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
         err,
         { operation: 'upload file' },
       );
@@ -1766,6 +1794,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Wrap execution in try-catch to handle previousResponseId errors
     // When an error indicates the response ID is invalid, we clear it so
     // the retry logic can recover by starting a fresh conversation.
+    //
+    // Text accumulated from `response.output_text.delta` events during
+    // streaming. Hoisted here so the catch block can surface it as
+    // partial text on mid-stream failures. ResponseStream has no native
+    // currentMessage accessor (unlike ChatCompletionStream), so we
+    // accumulate manually from the events we already iterate.
+    let streamedText = '';
     try {
       // Try to resume a pending background response (for retry after connection error)
       if (useBackgroundResponses && this.pendingBackgroundResponseId) {
@@ -1832,6 +1867,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         for await (const event of stream) {
           this.processStreamingEvent(event, state);
+          if (event.type === 'response.output_text.delta') {
+            streamedText += event.delta;
+          }
         }
 
         let response = await stream.finalResponse();
@@ -1985,6 +2023,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       // Clear diagnostic state to avoid stale comparison on retry
       this._diagPreFlightTokens = null;
+
+      // Attach a capped tail of any streamed text to the error so the retry
+      // UI can surface progress. No-op when nothing was streamed.
+      if (streamedText) {
+        attachPartialText(error, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
+      }
 
       throw error;
     }
