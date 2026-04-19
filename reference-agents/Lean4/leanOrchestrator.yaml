@@ -28,10 +28,13 @@ settings:
     - lean_loogle
     - lean_file
     - lean_project
-    # GitHub PR subscription — opt-in (off by default; enable in Dashboard →
-    # Tools and configure a GitHub token in Dashboard → Git). When the
-    # feature is disabled or no git repo / token is available, these are
-    # filtered out before the model sees the tool list.
+    # GitHub PR subscription — opt-in. Disabled by default; enable in
+    # Dashboard → Tools and configure a GitHub token in Dashboard → Git.
+    # When disabled by the user, resolveTools() strips these from the
+    # model's tool list. When enabled but the token/git-repo check has
+    # not yet populated the availability cache (i.e. before the Tools
+    # dashboard has run its checks), the tools may still appear and
+    # calls will fail at runtime with a setup-pointing ToolError.
     - subscribe_pr_activity
     - unsubscribe_pr_activity
     - find_current_pr
