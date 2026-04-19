@@ -1,4 +1,5 @@
 import { getExecutionStore } from '@agent/storage';
+import { getCleanAgentName } from '@agent/index';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TaskStateSchema,
@@ -96,20 +97,28 @@ export class StreamMetaManager {
    * Return workflow stream IDs whose taskState's agentConfig matches the
    * provided config. Used by command-palette pack/clean to clear missing
    * outputs across every tab that surfaced markers for the cleaned files.
+   *
+   * Both sides are canonicalized: agent names are stripped of source
+   * prefixes (`builtin:polish` → `polish`) and input-file paths are
+   * normalized to forward slashes so Windows `\\` vs `/` disagreements
+   * don't cause the match to miss.
    */
   findWorkflowStreamsMatching(match: {
     agent: string;
     model: string;
     inputFile: string;
   }): StreamTabId[] {
+    const wantAgent = getCleanAgentName(match.agent);
+    const wantModel = match.model;
+    const wantFile = match.inputFile.replaceAll('\\', '/');
     const result: StreamTabId[] = [];
     for (const [stream, state] of this.taskStates) {
       if (!isWorkflowTaskState(state)) continue;
       const cfg = state.agentConfig;
       if (
-        cfg.agent === match.agent &&
-        cfg.model === match.model &&
-        cfg.inputFile === match.inputFile
+        getCleanAgentName(cfg.agent) === wantAgent &&
+        cfg.model === wantModel &&
+        cfg.inputFile.replaceAll('\\', '/') === wantFile
       ) {
         result.push(stream);
       }
