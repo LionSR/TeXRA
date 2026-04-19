@@ -55,13 +55,16 @@ export const syncHandlers: HandlerRegistry = {
 
           // runUsage is per-run for both workflow and tool-use; derive the
           // sum into sessionUsage so the UI always shows cumulative totals.
+          // Replace (not merge) so a clean operation that shrinks the backend's
+          // run set is reflected — Object.assign would leak stale entries and
+          // over-count sessionUsage.
           if (
             hasRunUsage &&
             data.runUsage &&
             (isToolUseState(prev) || isWorkflowState(prev))
           ) {
             const d = draft as ToolUseStreamState | WorkflowStreamState;
-            Object.assign(d.runUsage, data.runUsage);
+            d.runUsage = { ...data.runUsage };
             d.sessionUsage = sumUsageStats(Object.values(d.runUsage));
           }
 
