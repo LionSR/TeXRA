@@ -30,10 +30,6 @@ export interface ToolbarCommandDetail {
   command: string;
 }
 
-export interface RunSelectedDetail {
-  runId: string | null;
-}
-
 /** Alias for semantic clarity - uses shared StringValueDetail */
 export type FollowUpChangeDetail = StringValueDetail;
 
@@ -85,9 +81,6 @@ export const ProgressEvents = {
 
   toolbarCommand: (detail: ToolbarCommandDetail) =>
     createEvent('toolbar-command', detail),
-
-  runSelected: (detail: RunSelectedDetail) =>
-    createEvent('run-selected', detail),
 
   fileAction: (detail: ProgressFileActionDetail) =>
     createEvent('file-action', detail),

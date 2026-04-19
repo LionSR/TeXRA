@@ -1,7 +1,7 @@
 /**
  * LogList component - declarative log rendering with per-stream DOM caching.
  *
- * Consumes streamLogContext to get groups, messages, activeRunId, and isToolUse.
+ * Consumes streamLogContext to get groups, messages, and isToolUse.
  * Renders one TaskGroupList per visited stream, hiding inactive ones with
  * display:none. Tab switching toggles visibility — zero DOM re-creation.
  *
@@ -61,7 +61,6 @@ const LogListStateSchema = z
 interface CachedStream {
   groups: TaskGroup[];
   messages: LogMessageData[];
-  activeRunId: string | null;
   isToolUse: boolean;
   toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
@@ -117,7 +116,6 @@ export class LogList extends LitElement {
       const entry = this.getOrCreateEntry(streamId);
       entry.groups = this.streamContext.taskGroups;
       entry.messages = this.streamContext.logs;
-      entry.activeRunId = this.streamContext.runId;
       entry.isToolUse = this.streamContext.isToolUse;
 
       // Evict oldest non-active entries when cache exceeds cap
@@ -141,7 +139,6 @@ export class LogList extends LitElement {
           style=${id === this.activeStreamId ? '' : 'display:none'}
           .groups=${data.groups}
           .messages=${data.messages}
-          .activeRunId=${data.activeRunId}
           .isToolUse=${data.isToolUse}
           .hasStreams=${this.streamContext.hasStreams}
           .toggleStates=${data.toggleStates}
@@ -218,7 +215,6 @@ export class LogList extends LitElement {
     entry = {
       groups: [],
       messages: [],
-      activeRunId: null,
       isToolUse: false,
       toggleStates,
       ref: createRef<TaskGroupList>(),

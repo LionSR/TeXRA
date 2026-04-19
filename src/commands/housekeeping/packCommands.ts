@@ -8,7 +8,10 @@ import { parseWithErrorDisplay } from '@common/errors';
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { emitClearMissingOutputs } from './streamEventUtils';
+import {
+  emitClearMissingOutputs,
+  type ClearMissingOutputsOptions,
+} from './streamEventUtils';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
@@ -76,18 +79,12 @@ interface PackParams {
   inputFile: string;
 }
 
-interface PackClearOptions {
-  streamConfig: PackParams;
-  useMultipleOutputs: boolean;
-  streamIdOverride?: string;
-}
-
 async function executePackOperation<T extends PackParams>(
   schema: z.ZodType<T>,
   input: unknown,
   label: string,
   runOperation: (data: T) => Promise<FileOpResult>,
-  clearOptions: (data: T) => PackClearOptions | null,
+  getClearOptions: (data: T) => ClearMissingOutputsOptions | null,
 ): Promise<void> {
   const data = await parseWithErrorDisplay(CHANNEL, schema, input, label);
   if (!data) return;
@@ -95,9 +92,9 @@ async function executePackOperation<T extends PackParams>(
   const result = await runOperation(data);
   showPackResult(result, data.inputFile);
 
-  const options = clearOptions(data);
-  if (options) {
-    emitClearMissingOutputs(options);
+  const clearOptions = getClearOptions(data);
+  if (clearOptions) {
+    emitClearMissingOutputs(clearOptions);
   }
 }
 
@@ -120,18 +117,18 @@ async function handlePack(config: unknown): Promise<void> {
         data.useMultipleOutputs ? data.outputFiles : [],
       );
     },
-    (data) =>
-      data.skipProgressViewClear
-        ? null
-        : {
-            streamConfig: {
-              agent: data.agent,
-              model: data.model,
-              inputFile: data.inputFile,
-            },
-            useMultipleOutputs: data.useMultipleOutputs,
-            streamIdOverride: data.streamId,
-          },
+    (data) => {
+      if (data.skipProgressViewClear) return null;
+      if (data.streamId) return { streamIdOverride: data.streamId };
+      return {
+        streamConfig: {
+          agent: data.agent,
+          model: data.model,
+          inputFile: data.inputFile,
+          useMultipleOutputs: data.useMultipleOutputs,
+        },
+      };
+    },
   );
 }
 
@@ -150,8 +147,8 @@ async function handlePackSingle(
         agent: data.agent,
         model: data.model,
         inputFile: data.inputFile,
+        useMultipleOutputs: false,
       },
-      useMultipleOutputs: false,
     }),
   );
 }
@@ -173,8 +170,8 @@ async function handlePackMultiple(
         agent: data.agent,
         model: data.model,
         inputFile: data.inputFile,
+        useMultipleOutputs: true,
       },
-      useMultipleOutputs: true,
     }),
   );
 }

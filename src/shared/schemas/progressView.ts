@@ -30,7 +30,6 @@ import {
   ToolEditPermissionSchema,
 } from './prompts';
 import {
-  InstructionUpdateSchema,
   StreamStatusSchema,
   StreamTabInfoSchema,
 } from './stream';
@@ -188,7 +187,6 @@ export const LogDeltaMessageSchema = z.object({
 export const UpdateFilesMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FILES),
   stream: StreamTabIdSchema,
-  runId: z.string().optional(),
   rounds: z.record(z.string(), z.array(OutputFileInfoSchema)).optional(),
   reset: z.boolean().optional(),
 });
@@ -196,17 +194,8 @@ export const UpdateFilesMessageSchema = z.object({
 export const UpdateMissingOutputsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS),
   stream: StreamTabIdSchema,
-  runId: z.string().optional(),
   rounds: z.record(z.string(), z.array(z.string())).optional(),
   reset: z.boolean().optional(),
-});
-
-export const UpdateInstructionMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION),
-  stream: z.union([StreamTabIdSchema, z.literal('')]),
-  instruction: InstructionUpdateSchema.nullable(),
-  agentCategory: z.string().optional(),
-  runId: z.string().nullish(),
 });
 
 export const UpdateTodosMessageSchema = z.object({
@@ -334,22 +323,21 @@ export const SyncStreamContentMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
   stream: z.union([StreamTabIdSchema, z.literal('')]),
   action: z.enum(['render', 'clear']).optional(),
-  runInstructions: z.record(z.string(), InstructionUpdateSchema).optional(),
-  activeRunId: z.string().nullable().optional(),
+  // Workflow flat files (one run per tab)
+  workflowFiles: z
+    .record(z.string(), z.array(OutputFileInfoSchema))
+    .optional(),
+  workflowMissingOutputs: z
+    .record(z.string(), z.array(z.string()))
+    .optional(),
+  // Per-run usage map — used by both workflow and tool-use so resume
+  // correctly accumulates. Frontend derives sessionUsage as the sum.
   runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
-  runFiles: z
-    .record(z.string(), z.record(z.string(), z.array(OutputFileInfoSchema)))
-    .optional(),
-  runMissingOutputs: z
-    .record(z.string(), z.record(z.string(), z.array(z.string())))
-    .optional(),
   contextState: ContextStateSchema.optional(),
   todos: z.array(TodoItemSchema).optional(),
   plan: PlanSchema.nullable().optional(),
   queuedFollowUps: z.array(z.string()).optional(),
-  instruction: InstructionUpdateSchema.nullable().optional(),
   agentCategory: z.string().optional(),
-  runId: z.string().nullish(),
   // Tab-switch state (R2: replaces separate syncActiveStreamState messages)
   conversationProgress: ConversationProgressSchema.optional(),
   badges: z
@@ -399,7 +387,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     LogDeltaMessageSchema,
     UpdateFilesMessageSchema,
     UpdateMissingOutputsMessageSchema,
-    UpdateInstructionMessageSchema,
     UpdateTodosMessageSchema,
     UpdatePlanMessageSchema,
     UpdateRunUsageMessageSchema,
