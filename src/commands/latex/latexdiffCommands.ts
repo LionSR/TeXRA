@@ -703,10 +703,20 @@ async function runLatexdiffViaWorkspaceScan(params: {
 
     const roundOutputsMap = new Map<number, string>();
 
+    // Escape regex metacharacters in user-provided values so filenames
+    // containing `(`, `)`, `+`, `.`, etc. match literally.
+    const escapeRe = (s: string): string =>
+      s.replaceAll(/[.+?^${}()|[\]\\]/g, '\\$&');
+    const escBase = escapeRe(baseInputName);
+    const escChunk = escapeRe(agentNameChunk);
+    const escCleanAgent = escapeRe(cleanAgent);
+    const escNormalizedModel = escapeRe(normalizedModel);
+    const escModel = escapeRe(model);
+
     // Legacy flat layout: files sit directly under outputDirPath as
     // `<base>_<chunk>_r{round}_<model>.tex`.
     const legacyPattern = new RegExp(
-      `${baseInputName}_${agentNameChunk}_r(\\d+)_${normalizedModel}`,
+      `${escBase}_${escChunk}_r(\\d+)_${escNormalizedModel}`,
     );
     for (const [fileName, fileType] of dirEntries) {
       if (
@@ -726,9 +736,8 @@ async function runLatexdiffViaWorkspaceScan(params: {
     // New layout: files sit under `<outputDirPath>/r{round}/` as
     // `<base>_<cleanAgent>_<model>.tex`. The model is written verbatim
     // (dots preserved), so escape regex metachars rather than stripping.
-    const escapedModel = model.replaceAll(/[.+?^${}()|[\]\\]/g, '\\$&');
     const newLayoutFileName = new RegExp(
-      `^${baseInputName}_${cleanAgent}_${escapedModel}\\.tex$`,
+      `^${escBase}_${escCleanAgent}_${escModel}\\.tex$`,
     );
     for (const [subName, subType] of dirEntries) {
       if (subType !== vscode.FileType.Directory) continue;

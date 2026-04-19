@@ -12,6 +12,7 @@ import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { OutputFileInfo } from '@shared/schemas';
 import {
   AbsoluteFS,
+  createExternalLocation,
   getFileDirectory,
   TaskRunFileService,
   type FileLocation,
@@ -210,13 +211,15 @@ export class XmlOutputManager {
     round: number,
   ): Promise<OutputFileInfo[]> {
     const outputFiles: OutputFileInfo[] = [];
-    // Use the workspace-relative round dir (not the absolute run-storage path)
-    // so fileService.createLocation can correctly route to run storage.
-    // ExternalFileLocation lacks relativePath; fall back to the basename dir.
-    const roundDir =
-      outputLocation.kind === 'external'
-        ? path.dirname(outputLocation.absolutePath)
-        : path.dirname(outputLocation.relativePath);
+    // For workspace/runStorage outputs use the workspace-relative round dir
+    // so fileService.createLocation can route through its storage layer.
+    // For external outputs, work in absolute paths directly — an absolute
+    // path passed through createLocation would be re-classified as external
+    // anyway, so skip the round-trip and build the location explicitly.
+    const isExternal = outputLocation.kind === 'external';
+    const roundDir = isExternal
+      ? path.dirname(outputLocation.absolutePath)
+      : path.dirname(outputLocation.relativePath);
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
@@ -233,7 +236,9 @@ export class XmlOutputManager {
       }
 
       const texFile = getExtractedDocOutputFileName(source, roundDir);
-      const texLocation = this.fileService.createLocation(texFile);
+      const texLocation = isExternal
+        ? createExternalLocation(texFile)
+        : this.fileService.createLocation(texFile);
       const cleanedContent = this.removeTrailingEndDocument(
         doc.content.trim(),
         texFile,
