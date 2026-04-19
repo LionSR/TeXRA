@@ -489,8 +489,7 @@ async function createCodexThread(
   const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
   const config = await getCodexConfig();
   const sandboxMode = input.sandbox_mode;
-  // Resumed threads keep their stored workspace unless the caller explicitly
-  // overrides it — compute workspace only for new threads or explicit overrides.
+  // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =
     workingDir || !input.thread_id
       ? config.buildCodexWorkspaceOptions(workingDir)
@@ -543,9 +542,8 @@ export class CodexTool extends defineTool({
     if (input.thread_id && threadRegistry.has(input.thread_id)) {
       return resumeCodexThread(input.thread_id, input.prompt);
     }
-    // Either a fresh session or a thread_id whose in-memory loop is gone
-    // (extension reload, crash). `createCodexThread` resumes via the SDK
-    // when input.thread_id is set, otherwise starts a new thread.
+    // Fall through when the thread's in-memory loop is gone (extension
+    // reload, crash): createCodexThread resumes via the SDK from disk.
     return launchCodexSession(input, ctx?.streamId, ctx?.executionId);
   }
 }

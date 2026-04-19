@@ -79,11 +79,6 @@ export class ToolUseFollowUpQueue {
     return true;
   }
 
-  /** Whether the stream's queue was explicitly released (no consumer). */
-  static isReleased(streamId: StreamTabId): boolean {
-    return this.released.has(streamId);
-  }
-
   static drain(streamId: StreamTabId): string[] {
     return this.queues.get(streamId)?.drain() ?? [];
   }

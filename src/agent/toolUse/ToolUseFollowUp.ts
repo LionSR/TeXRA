@@ -70,9 +70,9 @@ export async function sendFollowUp(
 
   const { subagents, processes } = getActiveChildren(streamId);
   if (subagents.length > 0 || processes.length > 0) {
-    // Force reopens the queue if it was released by sessionLifecycle
-    // disposal. Caller is responsible for auto-resuming the parent or
-    // re-releasing the queue so late child deliveries don't leak across runs.
+    // force:true reopens a queue sealed by sessionLifecycle disposal — the
+    // caller must auto-resume the parent or re-release, or late child
+    // deliveries will leak into the next run on this stream.
     ToolUseFollowUpQueue.enqueue(streamId, text, { force: true });
     return { status: 'queued', reason: 'children_running' };
   }
