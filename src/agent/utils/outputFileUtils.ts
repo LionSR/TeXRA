@@ -40,12 +40,14 @@ export function getExtractedDocOutputFileName(
 ): string {
   const parsed = path.parse(source);
   const extension = parsed.ext.replace('.', '') || 'tex';
-  // Strip absolute prefixes and `..` segments so a malicious or malformed
-  // source cannot escape roundDir via path.join's absolute-override or
-  // parent-directory semantics.
+  // Strip absolute prefixes, drive-letter segments, and traversal segments
+  // so a malicious or malformed source cannot escape roundDir via
+  // path.join's absolute-override or parent-directory semantics.
   const safeDir = parsed.dir
     .split(/[\\/]+/)
-    .filter((seg) => seg && seg !== '..' && seg !== '.')
+    .filter(
+      (seg) => seg && seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
+    )
     .join(path.sep);
   const safeName = path.basename(parsed.name) || 'output';
   return path.join(roundDir, safeDir, `${safeName}.${extension}`);
