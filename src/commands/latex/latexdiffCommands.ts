@@ -17,9 +17,11 @@ import {
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
-import { getCleanAgentName } from '@agent/index';
-import { getAgentFirstNameChunk, parseRoundFolder } from '@housekeeping/utils';
-import { escapeRegExp } from '@utils/core/stringCore';
+import {
+  legacyWorkflowOutputRoundRegex,
+  parseWorkflowOutputRoundDir,
+  workflowOutputTexRegex,
+} from '@agent/output/workflowOutputLayout';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,
@@ -678,11 +680,6 @@ async function runLatexdiffViaWorkspaceScan(params: {
     throw new Error('No workspace path found');
   }
 
-  const agentNameChunk = getAgentFirstNameChunk(agent);
-  const cleanAgent = getCleanAgentName(agent);
-  const normalizedModel = model.replaceAll('.', '');
-  logger.debug(CHANNEL, `Using agent name chunk: ${agentNameChunk}`);
-
   const configuredInputFiles =
     outputFiles && outputFiles.length > 0 ? outputFiles : [inputFile];
 
@@ -704,16 +701,12 @@ async function runLatexdiffViaWorkspaceScan(params: {
 
     const roundOutputsMap = new Map<number, string>();
 
-    const escBase = escapeRegExp(baseInputName);
-    const escChunk = escapeRegExp(agentNameChunk);
-    const escCleanAgent = escapeRegExp(cleanAgent);
-    const escNormalizedModel = escapeRegExp(normalizedModel);
-    const escModel = escapeRegExp(model);
-
     // Legacy flat layout: files sit directly under outputDirPath as
-    // `<base>_<chunk>_r{round}_<model>.tex`.
-    const legacyPattern = new RegExp(
-      `${escBase}_${escChunk}_r(\\d+)_${escNormalizedModel}`,
+    // `<base>_<chunk>_r{round}_<normalizedModel>.tex`.
+    const legacyPattern = legacyWorkflowOutputRoundRegex(
+      baseInputName,
+      agent,
+      model,
     );
     for (const [fileName, fileType] of dirEntries) {
       if (
@@ -731,14 +724,15 @@ async function runLatexdiffViaWorkspaceScan(params: {
     }
 
     // New layout: files sit under `<outputDirPath>/r{round}/` as
-    // `<base>_<cleanAgent>_<model>.tex`. The model is written verbatim
-    // (dots preserved), so escape regex metachars rather than stripping.
-    const newLayoutFileName = new RegExp(
-      `^${escBase}_${escCleanAgent}_${escModel}\\.tex$`,
+    // `<base>_<cleanAgent>_<model>.tex`.
+    const newLayoutFileName = workflowOutputTexRegex(
+      baseInputName,
+      agent,
+      model,
     );
     for (const [subName, subType] of dirEntries) {
       if (subType !== vscode.FileType.Directory) continue;
-      const roundIdx = parseRoundFolder(subName);
+      const roundIdx = parseWorkflowOutputRoundDir(subName);
       if (roundIdx === null) continue;
 
       const roundDirAbs = path.join(absoluteDir, subName);

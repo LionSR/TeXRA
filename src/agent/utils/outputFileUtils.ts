@@ -1,6 +1,10 @@
 import * as path from 'path';
 
-import { getCleanAgentName } from '@agent/index';
+import {
+  workflowMergeOutputPath,
+  workflowOutputFilenameStem,
+  workflowOutputPath,
+} from '@agent/output/workflowOutputLayout';
 import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 
 /**
@@ -23,13 +27,7 @@ export function getOutputFileName(
   outputExt: string,
   round: number,
 ): string {
-  const parsed = path.parse(inputFile);
-  const cleanAgent = getCleanAgentName(agent);
-  return path.join(
-    parsed.dir,
-    `r${round}`,
-    `${parsed.name}_${cleanAgent}_${model}.${outputExt}`,
-  );
+  return workflowOutputPath({ inputFile, agent, model, ext: outputExt, round });
 }
 
 /**
@@ -69,12 +67,8 @@ export function getExtractedDocOutputFileName(
     )
     .join(path.sep);
   const safeName = path.basename(parsed.name) || 'output';
-  const cleanAgent = getCleanAgentName(agent);
-  return path.join(
-    roundDir,
-    safeDir,
-    `${safeName}_${cleanAgent}_${model}.${extension}`,
-  );
+  const stem = workflowOutputFilenameStem(safeName, agent, model);
+  return path.join(roundDir, safeDir, `${stem}.${extension}`);
 }
 
 /**
@@ -104,11 +98,9 @@ export function createMergeOutputFileLocationGetter(
     throw new Error('editedFile must be specified for merge handler');
   }
 
-  const inputDir = path.dirname(inputFile);
   const editedBase = path.parse(editedFile).name;
-  const outputPath = path.join(inputDir, `${editedBase}_full_${model}.tex`);
+  const outputPath = workflowMergeOutputPath({ inputFile, editedBase, model });
 
-  // Pre-compute location (merge is single-output, always the same location)
   const location = fileService.createLocation(outputPath) as AgentFileLocation;
   return (_round: number): AgentFileLocation => location;
 }
