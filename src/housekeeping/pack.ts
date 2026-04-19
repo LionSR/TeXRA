@@ -213,6 +213,25 @@ function buildFileListLog(movedFiles: string[], copiedFiles: string[]): string {
   return parts.join('\n');
 }
 
+/**
+ * Compute a destination basename that preserves round identity.
+ *
+ * Files matched from the new round-subfolder layout (`<dir>/r{round}/<base>.<ext>`)
+ * would otherwise collapse to `<base>.<ext>` and overwrite each other when
+ * multiple rounds exist. Detect an `r{N}/` ancestor in the source path and
+ * prefix the basename with `r{N}_` so each round packs to a distinct entry.
+ */
+function packDestinationName(file: string): string {
+  const base = path.basename(file);
+  const dir = path.dirname(file);
+  const segments = dir.split(/[\\/]+/);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const match = /^r(\d+)$/.exec(segments[i]);
+    if (match) return `r${match[1]}_${base}`;
+  }
+  return base;
+}
+
 async function moveAndCopyFiles(
   movedFiles: string[],
   copiedFiles: string[],
@@ -221,13 +240,13 @@ async function moveAndCopyFiles(
   const operations: string[] = [];
 
   for (const file of movedFiles) {
-    const destination = path.join(outputFolder, path.basename(file));
+    const destination = path.join(outputFolder, packDestinationName(file));
     operations.push(`Moving: ${file} -> ${destination}`);
     await WorkspaceFS.rename(file, destination);
   }
 
   for (const file of copiedFiles) {
-    const destination = path.join(outputFolder, path.basename(file));
+    const destination = path.join(outputFolder, packDestinationName(file));
     operations.push(`Copying: ${file} -> ${destination}`);
     await WorkspaceFS.copy(file, destination);
   }
