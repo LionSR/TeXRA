@@ -301,7 +301,6 @@ export class StreamTab extends LitElement {
 
   // Cached derived values — only recomputed when inputs change
   private _cachedInfo: StreamTabInfo | null = null;
-  private _compactLabel = '';
   private _agentDecorator = getAgentCategoryDecorator('toolUse');
   private _cachedTooltipKey = '';
   private _tooltip = '';
@@ -314,9 +313,6 @@ export class StreamTab extends LitElement {
     if (this._cachedInfo !== stream) {
       this._cachedInfo = stream;
       this._agentDecorator = getAgentCategoryDecorator(stream.agentCategory);
-      const raw =
-        `${stream.parentStreamId ? '↳' : ''}${stream.label || stream.name}`.trim();
-      this._compactLabel = raw.length > 8 ? raw.slice(0, 7) + '…' : raw;
       this._cachedTooltipKey = ''; // invalidate tooltip when info changes
     }
 
@@ -329,7 +325,6 @@ export class StreamTab extends LitElement {
 
     const tooltip = this._tooltip;
     const agentDecorator = this._agentDecorator;
-    const compactLabel = this._compactLabel;
     const hasChildren = this.childCount > 0 && !this.compact;
 
     return html`
@@ -364,11 +359,10 @@ export class StreamTab extends LitElement {
           title=${tooltip}
         >
           <div class="tab-header">
-            <span class="tab-title">
-              ${this.compact
-                ? compactLabel
-                : `${stream.parentStreamId ? '↳ ' : ''}${stream.label || stream.name}`}
-            </span>
+            <span class="tab-title"
+              >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
+              stream.name}</span
+            >
           </div>
           ${this.compact
             ? nothing
