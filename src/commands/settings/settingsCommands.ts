@@ -16,6 +16,7 @@ export const settingsViewCommands = {
   showAgents: 'texra.showAgents',
   showTools: 'texra.showTools',
   showMultiAgent: 'texra.showMultiAgent',
+  showGitSettings: 'texra.showGitSettings',
 } as const;
 
 let settingsViewProvider: SettingsViewProvider | null = null;
@@ -72,6 +73,9 @@ export function registerSettingsViewCommands(
     ),
     vscode.commands.registerCommand(settingsViewCommands.showMultiAgent, () =>
       settingsViewProvider?.showSettingsView(SETTINGS_TAB.MULTI_AGENT),
+    ),
+    vscode.commands.registerCommand(settingsViewCommands.showGitSettings, () =>
+      settingsViewProvider?.showSettingsView(SETTINGS_TAB.GIT),
     ),
   );
 }

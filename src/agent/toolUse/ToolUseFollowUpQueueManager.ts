@@ -20,6 +20,25 @@ export class ToolUseFollowUpQueue {
   /** Streams whose queues were explicitly released (orchestrator disposed). */
   private static readonly released = new Set<StreamTabId>();
   private static readonly RELEASED_CAP = 500;
+  /** Observers notified whenever a stream's queue is released. */
+  private static readonly releaseObservers = new Set<
+    (streamId: StreamTabId) => void
+  >();
+
+  /**
+   * Register a callback fired when any stream's follow-up queue is released.
+   * Returns an unsubscribe function. Used by async event sources (e.g. PR
+   * polling) to tear down stream-scoped subscriptions when the owning stream
+   * goes away.
+   */
+  static onRelease(
+    observer: (streamId: StreamTabId) => void,
+  ): () => void {
+    this.releaseObservers.add(observer);
+    return () => {
+      this.releaseObservers.delete(observer);
+    };
+  }
 
   static acquire(streamId: StreamTabId): FollowUpQueue {
     this.released.delete(streamId);
@@ -42,6 +61,15 @@ export class ToolUseFollowUpQueue {
       this.released.add(streamId);
     }
     logger.debug(`Released follow-up queue for stream ${streamId}.`);
+    for (const observer of this.releaseObservers) {
+      try {
+        observer(streamId);
+      } catch (err) {
+        logger.warn(
+          `Release observer threw for stream ${streamId}: ${String(err)}`,
+        );
+      }
+    }
   }
 
   /**
