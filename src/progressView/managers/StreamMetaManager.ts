@@ -3,6 +3,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import {
   TaskStateSchema,
   isToolUseTaskState,
+  isWorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
@@ -89,6 +90,31 @@ export class StreamMetaManager {
         .filter(([, state]) => isToolUseTaskState(state))
         .map(([stream]) => stream),
     );
+  }
+
+  /**
+   * Return workflow stream IDs whose taskState's agentConfig matches the
+   * provided config. Used by command-palette pack/clean to clear missing
+   * outputs across every tab that surfaced markers for the cleaned files.
+   */
+  findWorkflowStreamsMatching(match: {
+    agent: string;
+    model: string;
+    inputFile: string;
+  }): StreamTabId[] {
+    const result: StreamTabId[] = [];
+    for (const [stream, state] of this.taskStates) {
+      if (!isWorkflowTaskState(state)) continue;
+      const cfg = state.agentConfig;
+      if (
+        cfg.agent === match.agent &&
+        cfg.model === match.model &&
+        cfg.inputFile === match.inputFile
+      ) {
+        result.push(stream);
+      }
+    }
+    return result;
   }
 
   // -- Lifecycle --------------------------------------------------------------

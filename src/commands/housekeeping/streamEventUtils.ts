@@ -1,19 +1,25 @@
 import { bus } from '@eventBus/ProgressEventBus';
 
 export interface ClearMissingOutputsOptions {
-  /** Stream ID of the tab whose missing-outputs marker should be cleared. */
+  /** Clear missing-outputs marker for a specific stream tab. */
   streamIdOverride?: string;
+  /**
+   * Clear missing-outputs marker across every workflow tab whose taskState
+   * matches this config. Used by command-palette pack/clean which has no
+   * stream context — multiple workflow tabs can exist for the same agent
+   * + model + inputFile combination after the one-run-per-tab refactor.
+   */
+  streamConfig?: { agent: string; model: string; inputFile: string };
 }
 
-/**
- * Clear the "missing outputs" marker for a specific stream tab.
- * Each run now has a unique stream tab ID, so a stream ID must be provided
- * — there's no way to derive one from config alone (the executionId is
- * required for uniqueness).
- */
 export function emitClearMissingOutputs(
   options: ClearMissingOutputsOptions,
 ): void {
-  if (!options.streamIdOverride) return;
-  bus.emit('clearMissingOutputs', { streamId: options.streamIdOverride });
+  if (options.streamIdOverride) {
+    bus.emit('clearMissingOutputs', { streamId: options.streamIdOverride });
+    return;
+  }
+  if (options.streamConfig) {
+    bus.emit('clearMissingOutputs', { streamConfig: options.streamConfig });
+  }
 }

@@ -66,7 +66,18 @@ export interface ProgressEventPayloads {
   updateMissingOutputs: StreamScopedPayload & {
     filesByRound: { [key: number]: string[] };
   };
-  clearMissingOutputs: { streamId: StreamTabId };
+  /**
+   * Clear the "missing outputs" marker. Either target a specific tab via
+   * `streamId`, or clear every workflow tab whose taskState matches the
+   * given `streamConfig` (for command-palette pack/clean which has no
+   * stream context).
+   */
+  clearMissingOutputs:
+    | { streamId: StreamTabId; streamConfig?: undefined }
+    | {
+        streamId?: undefined;
+        streamConfig: { agent: string; model: string; inputFile: string };
+      };
   setTaskState: SetTaskStatePayload;
   updateStreamUsage: UsageScopedPayload & {
     usage: TokenUsageStats;

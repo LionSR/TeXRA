@@ -154,11 +154,22 @@ export class ProgressEventHandler {
             });
           });
         },
-        clearMissingOutputs: async (ctx, { streamId }) => {
-          await ctx.state.outputFiles.clearMissingOutputs(streamId);
-          this.sendIfActive(streamId, () =>
-            ctx.webviewUpdater.updateMissingOutputs(streamId, { reset: true }),
-          );
+        clearMissingOutputs: async (ctx, payload) => {
+          const targets: StreamTabId[] = payload.streamId
+            ? [payload.streamId]
+            : payload.streamConfig
+              ? ctx.state.meta.findWorkflowStreamsMatching(
+                  payload.streamConfig,
+                )
+              : [];
+          for (const streamId of targets) {
+            await ctx.state.outputFiles.clearMissingOutputs(streamId);
+            this.sendIfActive(streamId, () =>
+              ctx.webviewUpdater.updateMissingOutputs(streamId, {
+                reset: true,
+              }),
+            );
+          }
         },
         // Usage events — workflow tabs collapse to a single accumulated value;
         // tool-use tabs keep per-run accumulation (resume produces multiple runs).

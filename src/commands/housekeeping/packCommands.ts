@@ -8,7 +8,10 @@ import { parseWithErrorDisplay } from '@common/errors';
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { emitClearMissingOutputs } from './streamEventUtils';
+import {
+  emitClearMissingOutputs,
+  type ClearMissingOutputsOptions,
+} from './streamEventUtils';
 
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
@@ -81,7 +84,13 @@ async function executePackOperation<T extends PackParams>(
   input: unknown,
   label: string,
   runOperation: (data: T) => Promise<FileOpResult>,
-  getClearStreamId?: (data: T) => string | undefined,
+  getClearOptions: (data: T) => ClearMissingOutputsOptions | null = (data) => ({
+    streamConfig: {
+      agent: data.agent,
+      model: data.model,
+      inputFile: data.inputFile,
+    },
+  }),
 ): Promise<void> {
   const data = await parseWithErrorDisplay(CHANNEL, schema, input, label);
   if (!data) return;
@@ -89,9 +98,9 @@ async function executePackOperation<T extends PackParams>(
   const result = await runOperation(data);
   showPackResult(result, data.inputFile);
 
-  const streamId = getClearStreamId?.(data);
-  if (streamId) {
-    emitClearMissingOutputs({ streamIdOverride: streamId });
+  const clearOptions = getClearOptions(data);
+  if (clearOptions) {
+    emitClearMissingOutputs(clearOptions);
   }
 }
 
@@ -114,7 +123,17 @@ async function handlePack(config: unknown): Promise<void> {
         data.useMultipleOutputs ? data.outputFiles : [],
       );
     },
-    (data) => (data.skipProgressViewClear ? undefined : data.streamId),
+    (data) => {
+      if (data.skipProgressViewClear) return null;
+      if (data.streamId) return { streamIdOverride: data.streamId };
+      return {
+        streamConfig: {
+          agent: data.agent,
+          model: data.model,
+          inputFile: data.inputFile,
+        },
+      };
+    },
   );
 }
 

@@ -79,6 +79,13 @@ async function handleCleanSingle(
 
   const result = await runCleanSingle(data.model, data.inputFile, data.agent);
   showCleanResult(result, data.inputFile);
+  emitClearMissingOutputs({
+    streamConfig: {
+      agent: data.agent,
+      model: data.model,
+      inputFile: data.inputFile,
+    },
+  });
 }
 
 async function handleCleanMultiple(
@@ -104,6 +111,13 @@ async function handleCleanMultiple(
     outputFiles,
   );
   showCleanResult(result, data.inputFile);
+  emitClearMissingOutputs({
+    streamConfig: {
+      agent: data.agent,
+      model: data.model,
+      inputFile: data.inputFile,
+    },
+  });
 }
 
 export async function handleClean(config: unknown): Promise<void> {
