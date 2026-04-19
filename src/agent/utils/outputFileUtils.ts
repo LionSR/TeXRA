@@ -1,24 +1,35 @@
 import * as path from 'path';
 
+import { getCleanAgentName } from '@agent/index';
 import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 
 /**
- * Generates an output path under a round subfolder, preserving the input
- * file's basename so downstream basename-based mapping (follow-up setup,
- * merge) continues to match outputs to their originals:
+ * Generates an output path under a round subfolder. The filename preserves
+ * the input's basename plus agent and model tokens so different tabs that
+ * process the same input (different agent or model) don't clobber each
+ * other when writing to workspace storage, and so downstream
+ * basename-containment mapping (follow-up setup, merge) still resolves
+ * outputs back to their originals:
  *
- *   `<inputDir>/r{round}/<inputName>.{ext}`
+ *   `<inputDir>/r{round}/<inputName>_<agent>_<model>.{ext}`
  *
- * Workflow agent outputs always go to task run storage, which provides
- * execution context. Round subfolders group all artifacts from a single round.
+ * The round subfolder groups all artifacts from a single round. Source
+ * prefixes (`builtin:polish`) are stripped from the agent token.
  */
 export function getOutputFileName(
   inputFile: string,
+  agent: string,
+  model: string,
   outputExt: string,
   round: number,
 ): string {
   const parsed = path.parse(inputFile);
-  return path.join(parsed.dir, `r${round}`, `${parsed.name}.${outputExt}`);
+  const cleanAgent = getCleanAgentName(agent);
+  return path.join(
+    parsed.dir,
+    `r${round}`,
+    `${parsed.name}_${cleanAgent}_${model}.${outputExt}`,
+  );
 }
 
 /**
