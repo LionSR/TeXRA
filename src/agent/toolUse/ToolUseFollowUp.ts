@@ -70,10 +70,10 @@ export async function sendFollowUp(
 
   const { subagents, processes } = getActiveChildren(streamId);
   if (subagents.length > 0 || processes.length > 0) {
-    // acquire clears the released flag left by sessionLifecycle disposal,
-    // otherwise enqueue would silently drop.
-    ToolUseFollowUpQueue.acquire(streamId);
-    ToolUseFollowUpQueue.enqueue(streamId, text);
+    // Force reopens the queue if it was released by sessionLifecycle
+    // disposal. Caller is responsible for auto-resuming the parent or
+    // re-releasing the queue so late child deliveries don't leak across runs.
+    ToolUseFollowUpQueue.enqueue(streamId, text, { force: true });
     return { status: 'queued', reason: 'children_running' };
   }
 

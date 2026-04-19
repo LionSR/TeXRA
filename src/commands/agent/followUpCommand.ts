@@ -7,6 +7,7 @@ import {
   sendFollowUp,
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -120,9 +121,14 @@ async function handleFollowUpResult(
       bus.emit('updateQueuedFollowUps', { streamId });
       if (result.reason === 'waiting' || result.reason === 'children_running') {
         const resumed = await tryAutoResume(streamId);
-        // children_running stays silent: a child delivery may still trigger
-        // a resume, so a toast here would be premature.
-        if (!resumed && result.reason === 'waiting') {
+        if (!resumed) {
+          if (result.reason === 'children_running') {
+            // sendFollowUp force-reopened a released queue on behalf of the
+            // auto-resume attempt. Re-release it so late child deliveries
+            // don't leak into the next run on this stream.
+            ToolUseFollowUpQueue.release(streamId);
+            bus.emit('updateQueuedFollowUps', { streamId });
+          }
           await vscode.window.showInformationMessage(
             'Message queued. Auto-resume failed — start a new agent task to continue.',
           );

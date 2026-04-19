@@ -99,7 +99,7 @@ describe('ToolUseFollowUp', () => {
   });
 
   it('survives prior queue release when children are running', async () => {
-    // Regression: without acquire(), enqueue() silently drops messages
+    // Regression: without force:true, enqueue() silently drops messages
     // on streams previously released by sessionLifecycle.dispose().
     (AgentRegistry as any).getToolUseFlowContext = () => undefined;
 

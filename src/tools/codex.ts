@@ -489,7 +489,12 @@ async function createCodexThread(
   const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
   const config = await getCodexConfig();
   const sandboxMode = input.sandbox_mode;
-  const workspace = config.buildCodexWorkspaceOptions(workingDir);
+  // Resumed threads keep their stored workspace unless the caller explicitly
+  // overrides it — compute workspace only for new threads or explicit overrides.
+  const workspace =
+    workingDir || !input.thread_id
+      ? config.buildCodexWorkspaceOptions(workingDir)
+      : {};
   const threadOptions = {
     ...workspace,
     sandboxMode,
@@ -497,7 +502,9 @@ async function createCodexThread(
     modelReasoningEffort: config.getCodexCliReasoningEffort(),
     skipGitRepoCheck: true as const,
   };
-  return codex.startThread(threadOptions);
+  return input.thread_id
+    ? codex.resumeThread(input.thread_id, threadOptions)
+    : codex.startThread(threadOptions);
 }
 
 // ============================================================================
@@ -533,9 +540,12 @@ export class CodexTool extends defineTool({
     const ctx = getCurrentToolFileInteractionContext();
     ctx?.onExecutionReady?.();
 
-    if (input.thread_id) {
+    if (input.thread_id && threadRegistry.has(input.thread_id)) {
       return resumeCodexThread(input.thread_id, input.prompt);
     }
+    // Either a fresh session or a thread_id whose in-memory loop is gone
+    // (extension reload, crash). `createCodexThread` resumes via the SDK
+    // when input.thread_id is set, otherwise starts a new thread.
     return launchCodexSession(input, ctx?.streamId, ctx?.executionId);
   }
 }
@@ -624,9 +634,15 @@ async function resumeCodexThread(
     );
   }
   deliveryState.hasDelivered = false;
-
-  const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
-  queue.enqueue(prompt);
+  try {
+    const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
+    queue.enqueue(prompt);
+  } catch (err) {
+    // Restore the flag so the thread doesn't get permanently locked if the
+    // enqueue path ever starts throwing (mirrors DelegationTools).
+    deliveryState.hasDelivered = true;
+    throw err;
+  }
 
   const preview = truncateWithEllipsis(prompt, 60);
   return {
