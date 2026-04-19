@@ -1,30 +1,19 @@
-import type { StreamConfig } from '@common/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
-import { getStreamTabId } from '@logger/index';
 
 export interface ClearMissingOutputsOptions {
-  /** Stream configuration (agent/model/file) */
-  streamConfig: StreamConfig;
-  /** Whether agent uses multiple outputs */
-  useMultipleOutputs: boolean;
-  /** Override stream ID instead of deriving from config */
+  /** Stream ID of the tab whose missing-outputs marker should be cleared. */
   streamIdOverride?: string;
 }
 
+/**
+ * Clear the "missing outputs" marker for a specific stream tab.
+ * Each run now has a unique stream tab ID, so a stream ID must be provided
+ * — there's no way to derive one from config alone (the executionId is
+ * required for uniqueness).
+ */
 export function emitClearMissingOutputs(
   options: ClearMissingOutputsOptions,
 ): void {
-  const { streamConfig, useMultipleOutputs, streamIdOverride } = options;
-  bus.emit('clearMissingOutputs', {
-    streamId:
-      streamIdOverride ||
-      getStreamTabId(
-        streamConfig.agent,
-        streamConfig.model,
-        streamConfig.inputFile,
-        {
-          useMultipleOutputs,
-        },
-      ),
-  });
+  if (!options.streamIdOverride) return;
+  bus.emit('clearMissingOutputs', { streamId: options.streamIdOverride });
 }

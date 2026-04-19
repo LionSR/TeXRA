@@ -200,11 +200,7 @@ async function resolveAgentBase(
 
   const streamId =
     options?.streamTabIdOverride ??
-    getStreamTabId(config.agent, fullConfig.model, config.inputFile, {
-      agentCategory: setting.agentCategory,
-      executionId,
-      useMultipleOutputs,
-    });
+    getStreamTabId(config.agent, fullConfig.model, { executionId });
 
   const agentLogger = new AgentLogger(streamId, true);
   const usageReporter = new AgentUsageReporter(
@@ -493,16 +489,10 @@ async function resolveAndAcquireStream(
   if (!configPayload.agent || !configPayload.model) {
     throw new Error('Missing required fields: model and/or agent');
   }
-  const agentEntry = getAgent(configPayload.agent);
   const preliminaryStreamId = getStreamTabId(
     configPayload.agent,
     configPayload.model,
-    configPayload.inputFile ?? '',
-    {
-      agentCategory: agentEntry?.category ?? AgentCategory.Workflow,
-      executionId,
-      useMultipleOutputs: configPayload.useMultipleOutputs,
-    },
+    { executionId },
   );
   acquireStreamOrThrow(preliminaryStreamId, options?.taskType);
 

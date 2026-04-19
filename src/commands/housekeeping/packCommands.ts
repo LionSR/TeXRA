@@ -76,18 +76,12 @@ interface PackParams {
   inputFile: string;
 }
 
-interface PackClearOptions {
-  streamConfig: PackParams;
-  useMultipleOutputs: boolean;
-  streamIdOverride?: string;
-}
-
 async function executePackOperation<T extends PackParams>(
   schema: z.ZodType<T>,
   input: unknown,
   label: string,
   runOperation: (data: T) => Promise<FileOpResult>,
-  clearOptions: (data: T) => PackClearOptions | null,
+  getClearStreamId?: (data: T) => string | undefined,
 ): Promise<void> {
   const data = await parseWithErrorDisplay(CHANNEL, schema, input, label);
   if (!data) return;
@@ -95,9 +89,9 @@ async function executePackOperation<T extends PackParams>(
   const result = await runOperation(data);
   showPackResult(result, data.inputFile);
 
-  const options = clearOptions(data);
-  if (options) {
-    emitClearMissingOutputs(options);
+  const streamId = getClearStreamId?.(data);
+  if (streamId) {
+    emitClearMissingOutputs({ streamIdOverride: streamId });
   }
 }
 
@@ -120,18 +114,7 @@ async function handlePack(config: unknown): Promise<void> {
         data.useMultipleOutputs ? data.outputFiles : [],
       );
     },
-    (data) =>
-      data.skipProgressViewClear
-        ? null
-        : {
-            streamConfig: {
-              agent: data.agent,
-              model: data.model,
-              inputFile: data.inputFile,
-            },
-            useMultipleOutputs: data.useMultipleOutputs,
-            streamIdOverride: data.streamId,
-          },
+    (data) => (data.skipProgressViewClear ? undefined : data.streamId),
   );
 }
 
@@ -145,14 +128,6 @@ async function handlePackSingle(
     { inputFile, agent, model },
     'params',
     (data) => runPackSingle(data.model, data.inputFile, data.agent),
-    (data) => ({
-      streamConfig: {
-        agent: data.agent,
-        model: data.model,
-        inputFile: data.inputFile,
-      },
-      useMultipleOutputs: false,
-    }),
   );
 }
 
@@ -168,14 +143,6 @@ async function handlePackMultiple(
     'params',
     (data) =>
       runPackMultiple(data.model, data.inputFile, data.agent, data.outputFiles),
-    (data) => ({
-      streamConfig: {
-        agent: data.agent,
-        model: data.model,
-        inputFile: data.inputFile,
-      },
-      useMultipleOutputs: true,
-    }),
   );
 }
 
