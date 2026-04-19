@@ -40,7 +40,6 @@ import { agentDirectories } from '@frontend/agents';
 import { FileLister } from '@frontend/files';
 import { killActiveRecording } from '@frontend/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
@@ -50,6 +49,7 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
+import { setGitHubTokenProvider, prPollingSource } from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { setLinterProvider } from '@tools/DiagnosticsTool';
@@ -227,16 +227,49 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  // GitHub token lives in SecretStorage (managed via the Git settings tab).
+  // The tool layer only supports a synchronous token lookup, so we cache here
+  // and refresh on secret changes.
+  let cachedGitHubToken: string | undefined;
+  const refreshGitHubToken = async () => {
+    cachedGitHubToken = await SecretManager.getGitHubToken();
+  };
+  setGitHubTokenProvider(() => cachedGitHubToken);
+  void refreshGitHubToken();
+  context.subscriptions.push(
+    context.secrets.onDidChange((e) => {
+      if (e.key === SecretManager.GITHUB_TOKEN_KEY) {
+        void refreshGitHubToken();
+      }
+    }),
+  );
+  const disposeGitHubAuthListener = bus.on(
+    'githubTokenInvalid',
+    ({ message }) => {
+      void vscode.window
+        .showErrorMessage(
+          `GitHub token rejected: ${message}`,
+          'Open Git settings',
+        )
+        .then((choice) => {
+          if (choice === 'Open Git settings') {
+            void vscode.commands.executeCommand('texra.showGitSettings');
+          }
+        });
+    },
+  );
+  context.subscriptions.push({ dispose: disposeGitHubAuthListener });
   setLinterProvider(getLinterMessages);
   setOpenBuildDisplay(openBuildDisplayIfTex);
   applyGitAuthorConfig();
 
-  setToolNotificationHandler((message, actionCommand) => {
+  setToolNotificationHandler((message, actionCommand, actionLabel) => {
     if (actionCommand) {
+      const label = actionLabel ?? 'Open Tools Dashboard';
       void vscode.window
-        .showInformationMessage(message, 'Open Tools Dashboard')
+        .showInformationMessage(message, label)
         .then((choice) => {
-          if (choice === 'Open Tools Dashboard') {
+          if (choice === label) {
             void vscode.commands.executeCommand(actionCommand);
           }
         });
@@ -330,32 +363,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
-    void vscode.commands.executeCommand('texra.openGettingStarted');
-    void showInstructionWithSuppress(
-      'welcome',
-      'Welcome to TeXRA! It helps you write better LaTeX papers using AI. Quickest way to start: add an API key (or sign in), open a LaTeX file, choose an agent, and hit Execute.',
-      [
-        {
-          title: 'Open Walkthrough',
-          callback: async () => {
-            await vscode.commands.executeCommand('texra.openGettingStarted');
-          },
-        },
-        {
-          title: 'Create Sample Project',
-          callback: async () => {
-            await vscode.commands.executeCommand('texra.createSampleProject');
-          },
-        },
-      ],
-    )
-      .then(() => context.globalState.update(welcomeKey, true))
-      .catch((err) =>
-        logger.error(
-          'extension',
-          `Welcome instruction failed: ${toErrorMessage(err)}`,
-        ),
-      );
+    // Opening the VS Code walkthrough is enough — don't double up with a
+    // popup asking the user to open the walkthrough they just saw.
+    void vscode.commands
+      .executeCommand('texra.openGettingStarted')
+      .then(() => context.globalState.update(welcomeKey, true));
   }
 }
 
@@ -369,6 +381,7 @@ export async function deactivate() {
   await progressViewProviderInstance?.flushState();
 
   clearStoreCache();
+  prPollingSource.disposeAll();
   bus.emit('extensionDeactivating', undefined);
 
   statusBarItem?.dispose();

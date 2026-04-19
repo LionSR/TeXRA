@@ -38,13 +38,10 @@ export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched
 const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 336; // 2 weeks
 const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 
-// Tool group IDs disabled by default for new users. These opt-in workflows
-// can be enabled from the Tools settings tab. Seeded into global state only
-// on first install via `initializeToolDefaults()` — existing profiles keep
-// whatever they had (empty == all tools enabled).
-export const DEFAULT_DISABLED_TOOL_IDS: readonly string[] = [
-  'external-inquiry',
-];
+// Tool groups marked `toggleable: true` in EXTERNAL_TOOL_DEFS are treated
+// as opt-in: they're disabled for new users on first install, and the Tools
+// dashboard shows a toggle so the user can turn them on. Seeding happens in
+// `initializeToolDefaults()`; existing profiles are never re-seeded.
 
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {

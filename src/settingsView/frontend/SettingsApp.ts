@@ -45,6 +45,8 @@ import {
   UpdateApprovalSettingsMessageSchema,
   UpdateToolDashboardMessageSchema,
   UpdateGitAuthorSettingsMessageSchema,
+  UpdateGitHubTokenStatusMessageSchema,
+  UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
   type AgentSelectionItem,
   type NumberVscodeSetting,
@@ -197,6 +199,10 @@ export class SettingsApp extends SettingsAppBase {
   private readonly gitAuthorEmail = signal(DEFAULT_GIT_AUTHOR_EMAIL);
   private readonly gitWorktreeSupport = signal(false);
   private readonly gitSettingsLoaded = signal(false);
+  private readonly githubTokenStatus = signal<'secret' | 'env' | 'none'>(
+    'none',
+  );
+  private readonly prSubscriptions = signal<readonly string[]>([]);
 
   // LaTeX settings state
   private readonly latexSettingsStatus = signal({
@@ -382,6 +388,26 @@ export class SettingsApp extends SettingsAppBase {
         this.gitAuthorEmail.set(data.authorEmail);
         this.gitWorktreeSupport.set(data.worktreeSupport);
         this.gitSettingsLoaded.set(true);
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS: {
+        const data = this.parseMessage(
+          raw,
+          UpdateGitHubTokenStatusMessageSchema,
+        );
+        if (!data) return;
+        this.githubTokenStatus.set(data.status);
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS: {
+        const data = this.parseMessage(
+          raw,
+          UpdatePRSubscriptionsMessageSchema,
+        );
+        if (!data) return;
+        this.prSubscriptions.set(data.keys);
         return;
       }
 
@@ -641,6 +667,23 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT,
   );
 
+  // GitHub token handlers
+  private handleGitHubTokenSet = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN,
+  );
+
+  private handleGitHubTokenRemove = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN,
+  );
+
+  private handleGitHubTokenOpenUrl = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
+  );
+
+  private handleUnsubscribePR = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR,
+  );
+
   // LaTeX settings event handlers
   private handleApplyLatexSettings = forwardDetail(
     SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS,
@@ -873,6 +916,12 @@ export class SettingsApp extends SettingsAppBase {
               @git-mark-commits-toggle=${this.handleGitMarkCommitsToggle}
               @git-author-name-change=${this.handleGitAuthorNameChange}
               @git-author-email-change=${this.handleGitAuthorEmailChange}
+              @github-token-set=${this.handleGitHubTokenSet}
+              @github-token-remove=${this.handleGitHubTokenRemove}
+              @github-token-open-url=${this.handleGitHubTokenOpenUrl}
+              @unsubscribe-pr=${this.handleUnsubscribePR}
+              .githubTokenStatus=${this.githubTokenStatus.get()}
+              .prSubscriptions=${this.prSubscriptions.get()}
             ></git-tab>
           </vscode-tab-panel>
 

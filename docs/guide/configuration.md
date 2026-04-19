@@ -14,6 +14,7 @@ The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open i
 - **Agents** - Turn agents on or off for the current workspace. Agents that support multiple output files are marked with a badge.
 - **Multi-Agent** - Configure multi-agent orchestration and presets.
 - **Tools** - Manage tool-use agent capabilities and approval settings.
+- **Git** - Set a GitHub personal access token (required for the `subscribe_pr_activity` tool) and optionally attribute TeXRA commits to a custom author.
 - **LaTeX** - Configure LaTeX formatting, diff, and TikZ settings.
 
 ::: tip
@@ -226,13 +227,37 @@ Configure how TikZ figures are extracted and compiled:
 
 ## Git Integration
 
-Configure Git integration features:
+The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Dashboard` → **Git**) covers two independent features: a GitHub token used by the PR-subscription tool, and optional TeXRA-branded commit authorship for agent-made commits.
+
+### GitHub personal access token
+
+Several tool-use agents can call `subscribe_pr_activity` to watch a pull request and inject new comments, reviews, line comments, and failed CI runs into the current agent stream as follow-up messages — the same mechanism that handles user-typed follow-ups. The tool polls GitHub's REST API every 30 seconds and needs an authenticated token.
+
+Setup:
+
+1. In the Git tab, click **Create on GitHub…**. This opens the GitHub token-creation page with the TeXRA description and `repo` scope pre-filled.
+2. Choose scopes:
+   - `repo` if you want to watch private repositories.
+   - `public_repo` if you only need public repositories.
+   - No write scopes are required — the poller is read-only.
+3. Pick an expiration (90 days is a common choice) and generate the token. GitHub shows it only once.
+4. Back in TeXRA's Git tab, click **Set token** and paste it in.
+
+The token is stored in VS Code's encrypted **Secret Storage** — never written to `settings.json`. Alternatively, export `GITHUB_TOKEN` in the shell VS Code is launched from and the tool will pick it up automatically (the Git tab will show **Env** as the status).
+
+Once a token is configured, an agent can run `subscribe_pr_activity owner=… repo=… pullNumber=…` and every new PR event arrives wrapped in a `<github-webhook-activity>` tag in the follow-up queue. Subscriptions auto-terminate when the PR closes or merges, and up to 10 PRs can be watched concurrently.
+
+### TeXRA commit author
+
+Enable **Mark commits with TeXRA author info** to attribute commits created by TeXRA agents to a distinct identity (useful when sharing a repo with collaborators so you can tell which commits were machine-made). When enabled, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, and `GIT_COMMITTER_EMAIL` are set for every git command an agent runs.
+
+### LaTeX diff commit history
+
+The unrelated setting controlling how many recent commits appear in the LaTeX-diff commit picker is:
 
 ```json
 "texra.git.numberOfCommitsToShow": 20
 ```
-
-This setting controls how many recent commits are shown in the commit selection dropdown for LaTeX diff operations.
 
 ## Custom Agents Directory
 
