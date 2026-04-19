@@ -68,11 +68,10 @@ export async function sendFollowUp(
     return { status: 'queued', reason: 'waiting' };
   }
 
-  // Queue if subagents/processes are still running under this stream.
-  // `acquire` clears any prior "released" mark from sessionLifecycle
-  // disposal, otherwise `enqueue` would silently drop the message.
   const { subagents, processes } = getActiveChildren(streamId);
   if (subagents.length > 0 || processes.length > 0) {
+    // acquire clears the released flag left by sessionLifecycle disposal,
+    // otherwise enqueue would silently drop.
     ToolUseFollowUpQueue.acquire(streamId);
     ToolUseFollowUpQueue.enqueue(streamId, text);
     return { status: 'queued', reason: 'children_running' };

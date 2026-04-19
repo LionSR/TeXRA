@@ -120,9 +120,8 @@ async function handleFollowUpResult(
       bus.emit('updateQueuedFollowUps', { streamId });
       if (result.reason === 'waiting' || result.reason === 'children_running') {
         const resumed = await tryAutoResume(streamId);
-        // Only surface the failure for 'waiting' — for 'children_running'
-        // the message stays queued and a child delivery may still trigger
-        // a resume, so a toast here would be premature and noisy.
+        // children_running stays silent: a child delivery may still trigger
+        // a resume, so a toast here would be premature.
         if (!resumed && result.reason === 'waiting') {
           await vscode.window.showInformationMessage(
             'Message queued. Auto-resume failed — start a new agent task to continue.',

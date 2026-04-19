@@ -67,7 +67,6 @@ describe('ToolUseFollowUp', () => {
   });
 
   it('queues follow-ups when children are still running', async () => {
-    // No active flow context — parent's flow has exited.
     (AgentRegistry as any).getToolUseFlowContext = () => undefined;
 
     const parentStreamId = 'parent-stream-children' as StreamTabId;
@@ -100,10 +99,8 @@ describe('ToolUseFollowUp', () => {
   });
 
   it('survives prior queue release when children are running', async () => {
-    // Simulates the orchestrator's flow having just disposed its session
-    // (sessionLifecycle.dispose → ToolUseFollowUpQueue.release) while a
-    // subagent is still running. Without the fix, enqueue would silently
-    // drop the message because the stream is marked as released.
+    // Regression: without acquire(), enqueue() silently drops messages
+    // on streams previously released by sessionLifecycle.dispose().
     (AgentRegistry as any).getToolUseFlowContext = () => undefined;
 
     const parentStreamId = 'parent-stream-released' as StreamTabId;
@@ -118,7 +115,6 @@ describe('ToolUseFollowUp', () => {
       'toolUse',
     );
     trackExecution(handle);
-    // Mark the queue as released, mirroring sessionLifecycle.dispose().
     ToolUseFollowUpQueue.release(parentStreamId);
 
     try {
