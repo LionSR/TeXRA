@@ -44,10 +44,12 @@ export const syncHandlers: HandlerRegistry = {
 
           if (hasWorkflowFiles && isWorkflowState(prev)) {
             const d = draft as WorkflowStreamState;
-            if (data.workflowFiles)
-              Object.assign(d.files, data.workflowFiles);
+            // Replace (not merge) so a clean operation that shrinks the
+            // backend's set is reflected after a tab switch — Object.assign
+            // would leak stale rounds.
+            if (data.workflowFiles) d.files = { ...data.workflowFiles };
             if (data.workflowMissingOutputs) {
-              Object.assign(d.missingOutputs, data.workflowMissingOutputs);
+              d.missingOutputs = { ...data.workflowMissingOutputs };
             }
           }
 

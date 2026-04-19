@@ -52,18 +52,17 @@ export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 /**
  * Detects whether a record is the legacy nested shape
  * (`{ runId: { round: items[] } }`) rather than the flat shape
- * (`{ round: items[] }`). Legacy wrappers have object values whose inner
- * values are arrays; flat records have arrays directly as values.
+ * (`{ round: items[] }`).
+ *
+ * Round keys are integers (e.g. "0", "1", "2"); runIds are non-numeric
+ * identifiers. If every top-level key parses as an integer, the record is
+ * already in the new flat shape; otherwise it's legacy.
  */
 function isLegacyNested(raw: unknown): raw is Record<string, unknown> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
-  const values = Object.values(raw as Record<string, unknown>);
-  if (values.length === 0) return false;
-  // Flat shape: all values are arrays. Legacy: at least one value is an
-  // object-like (non-array, non-null) nested map.
-  return values.some(
-    (v) => v !== null && typeof v === 'object' && !Array.isArray(v),
-  );
+  const keys = Object.keys(raw as Record<string, unknown>);
+  if (keys.length === 0) return false;
+  return keys.some((key) => !/^-?\d+$/.test(key));
 }
 
 /**
