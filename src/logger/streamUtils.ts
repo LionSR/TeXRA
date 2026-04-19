@@ -1,27 +1,18 @@
-import { getCleanAgentName, getMultipleName } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { getCleanAgentName } from '@agent/index';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core/executionId';
 
+/**
+ * Build a stream tab ID from an agent, model, and executionId.
+ *
+ * `executionId` is required: each run gets a unique tab ID, so callers that
+ * don't know the executionId cannot refer to any existing tab and should pass
+ * an explicit `streamIdOverride` instead of deriving one here.
+ */
 export function getStreamTabId(
   agent: string,
   model: string,
-  inputFile: string,
-  options: {
-    agentCategory?: AgentCategory;
-    executionId?: ExecutionId;
-    useMultipleOutputs?: boolean;
-  } = {},
+  options: { executionId: ExecutionId },
 ): StreamTabId {
   const cleanAgent = getCleanAgentName(agent);
-
-  if (options.agentCategory === AgentCategory.ToolUse) {
-    const shortId = options.executionId ?? generateExecutionId();
-    return `${cleanAgent}@${model}#${shortId}`;
-  }
-
-  const agentName = options.useMultipleOutputs
-    ? getMultipleName(cleanAgent)
-    : cleanAgent;
-  return `${agentName}@${model}: ${inputFile.replaceAll('\\', '/')}`;
+  return `${cleanAgent}@${model}#${options.executionId}`;
 }

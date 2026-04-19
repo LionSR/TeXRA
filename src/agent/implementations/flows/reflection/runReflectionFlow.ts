@@ -61,7 +61,13 @@ export interface RunReflectionFlowInput<
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
   onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
-  /** When true, outputs are routed to task-run storage by default. */
+  /**
+   * When true, route outputs into task-run storage regardless of the user's
+   * `texra.agentOutputs.storageMode` setting. Used for subagent runs so they
+   * don't pollute the user's workspace. User-initiated workflows respect the
+   * configured storage mode (default: workspace) so the progress toolbar's
+   * pack/clean operations can still find them.
+   */
   isSubagent?: boolean;
 }
 
@@ -138,6 +144,9 @@ export async function runReflectionFlow<C = unknown>(
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
+  // Subagent runs always route to task-run storage so their artifacts don't
+  // pollute the user's workspace. Top-level workflow runs respect the user's
+  // configured storage mode (workspace or taskRunStorage).
   const fileService = new TaskRunFileService(executionId, {
     forceRunStorage: input.isSubagent,
   });
@@ -183,8 +192,9 @@ export async function runReflectionFlow<C = unknown>(
         modelName,
         outputExt,
         round,
-        config.editedFile || undefined,
       );
+      // Raw XML scratchpad files are intermediate artifacts — keep them out
+      // of the user's workspace regardless of the configured storage mode.
       if (useScratchpad) {
         return fileService.createRawOutputLocation(
           fileName,

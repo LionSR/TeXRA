@@ -6,16 +6,14 @@
  *   streamData/
  *     {encoded(streamTabId)}/
  *       meta.json              → StreamTabMeta
- *       outputFiles.json       → run → round → OutputFileInfo[]
- *       missingOutputs.json    → run → round → string[]
- *       usageStats.json        → run → TokenUsageStats
- *       runInstructions.json   → run → InstructionUpdate
+ *       outputFiles.json       → round → OutputFileInfo[]
+ *       missingOutputs.json    → round → string[]
+ *       usageStats.json        → runId → TokenUsageStats
  *
- * Follows the ExecutionKVStore pattern: KVStore per entity, typed accessors
- * with Zod validation, LRU cache of store instances.
- *
- * All schemas live in streamTabSchemas.ts (single source of truth).
- * This file is pure infrastructure: KV operations + typed accessors + cache.
+ * Legacy data shapes (from before one-run-per-tab refactor) are transparently
+ * migrated on read via preprocess helpers in streamTabSchemas.ts.
+ * Instructions are rendered as user-message log entries now, so they are
+ * stored in the log stream, not in this store.
  */
 
 import * as path from 'path';
@@ -23,7 +21,6 @@ import * as path from 'path';
 import { KVStore } from '@common/storage';
 
 import type {
-  InstructionUpdate,
   OutputFileInfo,
   StreamTabId,
   TokenUsageStats,
@@ -33,12 +30,12 @@ import {
   OutputFilesDataSchema,
   MissingOutputsDataSchema,
   UsageDataSchema,
-  RunInstructionsRecordSchema,
+  flattenLegacyRuns,
+  isLegacyNested,
   type StreamTabMeta,
   type OutputFilesRecord,
   type MissingOutputsRecord,
   type UsageStatsRecord,
-  type RunInstructionsRecord,
 } from './streamTabSchemas';
 
 // ============================================================================
@@ -50,7 +47,10 @@ const KEYS = {
   OUTPUT_FILES: 'outputFiles',
   MISSING_OUTPUTS: 'missingOutputs',
   USAGE_STATS: 'usageStats',
-  RUN_INSTRUCTIONS: 'runInstructions',
+  /** Legacy per-run instruction text preserved from pre-refactor memento. */
+  LEGACY_INSTRUCTIONS: 'legacyInstructions',
+  /** On-disk key used by the pre-refactor store; read-only fallback. */
+  LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
 } as const;
 
 export const STREAM_DATA_DIR = 'streamData';
@@ -61,8 +61,7 @@ export const STREAM_DATA_DIR = 'streamData';
 
 /**
  * Encode a stream tab ID for safe use as a filesystem directory name.
- * Stream IDs can contain `:`, `/`, and other unsafe characters
- * (e.g. `agent@model: path/to/file.tex`).
+ * Stream IDs can contain `:`, `/`, `#`, and other unsafe characters.
  */
 function encodeStreamId(id: string): string {
   return encodeURIComponent(id);
@@ -96,13 +95,11 @@ class StreamTabKVStore extends KVStore {
 
   // -- Output files ---------------------------------------------------------
 
-  async readOutputFiles(): Promise<Map<
-    string,
-    Map<number, OutputFileInfo[]>
-  > | null> {
+  async readOutputFiles(): Promise<Map<number, OutputFileInfo[]> | null> {
     const raw = await this.read(KEYS.OUTPUT_FILES);
     if (!raw) return null;
-    const result = OutputFilesDataSchema.safeParse(raw);
+    const migrated = await this.preferActiveRunFlattening(raw);
+    const result = OutputFilesDataSchema.safeParse(migrated);
     return result.success && result.data.size > 0 ? result.data : null;
   }
 
@@ -110,15 +107,27 @@ class StreamTabKVStore extends KVStore {
     await this.write(KEYS.OUTPUT_FILES, data);
   }
 
+  /**
+   * Sole owner of legacy-record flattening. When a record is in legacy
+   * nested form (`{ runId: { round: items[] } }`), prefer the run selected
+   * by `meta.activeRunId` so hydration uses the run that was active when
+   * the tab was last viewed. Falls back to insertion order for meta
+   * without activeRunId. Already-flat records pass through unchanged, so
+   * the downstream schema never needs its own preprocess step.
+   */
+  private async preferActiveRunFlattening(raw: unknown): Promise<unknown> {
+    if (!isLegacyNested(raw)) return raw;
+    const meta = await this.readMeta();
+    return flattenLegacyRuns(raw, meta?.activeRunId);
+  }
+
   // -- Missing outputs ------------------------------------------------------
 
-  async readMissingOutputs(): Promise<Map<
-    string,
-    Map<number, string[]>
-  > | null> {
+  async readMissingOutputs(): Promise<Map<number, string[]> | null> {
     const raw = await this.read(KEYS.MISSING_OUTPUTS);
     if (!raw) return null;
-    const result = MissingOutputsDataSchema.safeParse(raw);
+    const migrated = await this.preferActiveRunFlattening(raw);
+    const result = MissingOutputsDataSchema.safeParse(migrated);
     return result.success && result.data.size > 0 ? result.data : null;
   }
 
@@ -139,19 +148,31 @@ class StreamTabKVStore extends KVStore {
     await this.write(KEYS.USAGE_STATS, data);
   }
 
-  // -- Run instructions -----------------------------------------------------
+  // -- Legacy per-run instructions (preserved from pre-refactor memento) ---
 
-  async readRunInstructions(): Promise<Map<string, InstructionUpdate> | null> {
-    const raw = await this.read(KEYS.RUN_INSTRUCTIONS);
-    if (!raw) return null;
-    const result = RunInstructionsRecordSchema.safeParse(raw);
-    if (!result.success) return null;
-    const map = new Map(Object.entries(result.data));
-    return map.size > 0 ? map : null;
+  /**
+   * Persist legacy `{ runId: InstructionUpdate }` data verbatim so migrated
+   * users don't lose the instruction text of older workflow tabs. The new
+   * UI logs instructions as user-message entries at run start, so this
+   * file is write-only here — readers must inspect it manually on disk.
+   */
+  async writeLegacyInstructions(data: unknown): Promise<void> {
+    await this.write(KEYS.LEGACY_INSTRUCTIONS, data);
   }
 
-  async writeRunInstructions(data: RunInstructionsRecord): Promise<void> {
-    await this.write(KEYS.RUN_INSTRUCTIONS, data);
+  /**
+   * One-time disk migration: users who already completed the earlier
+   * memento→StreamTabStore migration may have `runInstructions.json` in
+   * their stream directory. Move that content under `legacyInstructions`
+   * so the data is preserved under the canonical archival key.
+   */
+  async migrateOnDiskRunInstructions(): Promise<void> {
+    const existingLegacy = await this.read(KEYS.LEGACY_INSTRUCTIONS);
+    if (existingLegacy) return;
+    const oldData = await this.read(KEYS.LEGACY_RUN_INSTRUCTIONS);
+    if (!oldData) return;
+    await this.write(KEYS.LEGACY_INSTRUCTIONS, oldData);
+    await this.delete(KEYS.LEGACY_RUN_INSTRUCTIONS);
   }
 
   // -- Lifecycle ------------------------------------------------------------

@@ -6,7 +6,7 @@ import { JSDOM } from 'jsdom';
 
 // Local imports
 import { getComposedPathElement } from '@progressView/frontend/utils';
-import { updateNestedRounds } from '@progressView/frontend/stateUtils';
+import { updateRounds } from '@progressView/frontend/stateUtils';
 
 describe('getComposedPathElement', () => {
   it('returns the first matching element from the composed path', () => {
@@ -63,38 +63,25 @@ describe('getComposedPathElement', () => {
   });
 });
 
-describe('updateNestedRounds', () => {
-  it('clears only the target run when resetting with a runId', () => {
-    const current = {
-      runA: { round1: ['a'] },
-      runB: { round1: ['b'] },
-    };
-
-    const result = updateNestedRounds(current, {
-      runId: 'runA',
+describe('updateRounds', () => {
+  it('replaces all rounds on reset', () => {
+    const current = { round1: ['a'], round2: ['b'] };
+    const result = updateRounds(current, {
       reset: true,
-      rounds: { round2: ['c'] },
+      rounds: { round3: ['c'] },
     });
-
-    assert.deepEqual(result, {
-      runA: { round2: ['c'] },
-      runB: { round1: ['b'] },
-    });
+    assert.deepEqual(result, { round3: ['c'] });
   });
 
-  it('removes a run on reset when no rounds are provided', () => {
-    const current = {
-      runA: { round1: ['a'] },
-      runB: { round1: ['b'] },
-    };
+  it('clears all rounds on reset without rounds', () => {
+    const current = { round1: ['a'], round2: ['b'] };
+    const result = updateRounds(current, { reset: true });
+    assert.deepEqual(result, {});
+  });
 
-    const result = updateNestedRounds(current, {
-      runId: 'runA',
-      reset: true,
-    });
-
-    assert.deepEqual(result, {
-      runB: { round1: ['b'] },
-    });
+  it('merges new rounds into existing ones', () => {
+    const current = { round1: ['a'] };
+    const result = updateRounds(current, { rounds: { round2: ['b'] } });
+    assert.deepEqual(result, { round1: ['a'], round2: ['b'] });
   });
 });

@@ -84,8 +84,8 @@ async function handleCleanSingle(
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
+      useMultipleOutputs: false,
     },
-    useMultipleOutputs: false,
   });
 }
 
@@ -117,8 +117,8 @@ async function handleCleanMultiple(
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
+      useMultipleOutputs: true,
     },
-    useMultipleOutputs: true,
   });
 }
 
@@ -153,10 +153,17 @@ export async function handleClean(config: unknown): Promise<void> {
   showCleanResult(result, inputFile);
 
   if (!skipProgressViewClear) {
-    emitClearMissingOutputs({
-      streamConfig: { agent, model, inputFile },
-      useMultipleOutputs,
-      streamIdOverride: streamId,
-    });
+    emitClearMissingOutputs(
+      streamId
+        ? { streamIdOverride: streamId }
+        : {
+            streamConfig: {
+              agent,
+              model,
+              inputFile,
+              useMultipleOutputs,
+            },
+          },
+    );
   }
 }

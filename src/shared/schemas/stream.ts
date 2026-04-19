@@ -62,15 +62,3 @@ export const StreamTabInfoSchema = z.object({
   description: z.string().optional(),
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
-
-const InstructionMetadataSchema = z.object({
-  showToggle: z.boolean().optional(),
-});
-type InstructionMetadata = z.infer<typeof InstructionMetadataSchema>;
-
-export const InstructionUpdateSchema = z.object({
-  text: z.string(),
-  metadata: InstructionMetadataSchema.optional(),
-  timestamp: z.number().optional(),
-});
-export type InstructionUpdate = z.infer<typeof InstructionUpdateSchema>;
