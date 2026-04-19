@@ -87,7 +87,6 @@ export async function extractFilesFromXml(
       };
 
       const fileProcessor = new OutputFileProcessor(processingContext);
-      const storageKey: StorageKey = getStorageKey(state);
 
       const hasMultipleOutputs =
         deps.config.useMultipleOutputs && deps.config.outputFiles?.length > 0;
@@ -105,7 +104,6 @@ export async function extractFilesFromXml(
         outputLocation,
         currRound,
         rawLocation,
-        storageKey,
       );
     },
   );

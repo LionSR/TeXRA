@@ -74,10 +74,7 @@ export class TaskGroupList extends LitElement {
   /** All log messages to render */
   @property({ attribute: false }) messages: LogMessageData[] = [];
 
-  /** Currently visible run ID (null = show all) */
-  @property({ attribute: false }) activeRunId: string | null = null;
-
-  /** Whether this is a tool-use session (affects run filtering) */
+  /** Whether this is a tool-use session (affects timeline rendering) */
   @property({ attribute: false }) isToolUse = false;
 
   /** Whether there are any streams in the current filter (controls placeholder) */
@@ -95,9 +92,6 @@ export class TaskGroupList extends LitElement {
 
   /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
   private groupNodeIndex = new Map<string, GroupTree>();
-
-  /** Memoized set of root group IDs for isGroupVisible() */
-  private cachedRootGroupIds: Set<string> = new Set();
 
   /** Memoized tool-use timeline (ungrouped msgs + groups sorted chronologically) */
   private cachedTimeline: Array<
@@ -174,15 +168,6 @@ export class TaskGroupList extends LitElement {
         // Messages shrunk (e.g. clear) — full rebuild
         [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
       }
-    }
-
-    // Recompute root group IDs when groups or activeRunId change.
-    // Derive from cachedTree (already contains only root groups) instead of re-filtering.
-    if (
-      changedProperties.has('groups') ||
-      changedProperties.has('activeRunId')
-    ) {
-      this.cachedRootGroupIds = new Set(this.cachedTree.map((t) => t.group.id));
     }
 
     // Recompute tool-use timeline incrementally when possible
@@ -445,22 +430,6 @@ export class TaskGroupList extends LitElement {
     return undefined;
   }
 
-  /** Check if a root group should be visible */
-  private isGroupVisible(groupId: string): boolean {
-    // Tool-use: show all groups (conversation turns are append-only)
-    if (this.isToolUse) return true;
-
-    // No run selected: show all groups
-    if (!this.activeRunId) return true;
-
-    // Fallback: if activeRunId doesn't match any root group, show all
-    // This prevents blank content when run IDs are mismatched
-    if (!this.cachedRootGroupIds.has(this.activeRunId)) return true;
-
-    // Normal case: only show the selected run
-    return groupId === this.activeRunId;
-  }
-
   /** Check if a group is expanded */
   private isExpanded(groupId: string): boolean {
     if (!this.toggleStates) return true;
@@ -525,12 +494,6 @@ export class TaskGroupList extends LitElement {
   /** Render a group node and its children recursively */
   private renderGroupNode(node: GroupTree): TemplateResult | typeof nothing {
     const { group, children, messages } = node;
-
-    // Hide root groups that aren't active
-    if (!group.parentGroupId && !this.isGroupVisible(group.id)) {
-      return nothing;
-    }
-
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 

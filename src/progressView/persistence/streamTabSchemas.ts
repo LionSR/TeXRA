@@ -4,18 +4,20 @@
  * Single source of truth for all data shapes read from / written to disk
  * by StreamTabStore, OutputFilesManager, and UsageStatsManager.
  *
- * Design: Zod handles structural parsing (records, arrays, coercion).
- * Transforms only convert Record→Map at the boundary. No manual safeParse loops.
+ * Legacy data (from before the one-run-per-tab refactor) was keyed by runId:
+ *   - outputFiles.json / missingOutputs.json used `{ runId: { round: … } }`
+ *   - usageStats.json used `{ runId: TokenUsageStats }` (still the stored shape)
+ *
+ * The preprocess helpers below detect the legacy nested shape and flatten
+ * it to the new format by picking the most recent run (last-inserted key).
  */
 
 import { z } from 'zod';
 
 import { TaskStateSchema } from '@logger/TaskState';
 import {
-  InstructionUpdateSchema,
   OutputFileInfoSchema,
   TokenUsageStatsSchema,
-  type InstructionUpdate,
   type OutputFileInfo,
   type TokenUsageStats,
 } from '@shared/schemas';
@@ -32,6 +34,7 @@ export const RoundKeySchema = z.coerce.number().int();
 // ============================================================================
 
 export const StreamTabMetaSchema = z.object({
+  /** Legacy field — no longer written, tolerated on read so we can skip it. */
   activeRunId: z.string().nullable().optional(),
   parentStreamId: z.string().optional(),
   executionId: z.string().optional(),
@@ -43,10 +46,61 @@ export const StreamTabMetaSchema = z.object({
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 
 // ============================================================================
-// Shared transform helpers for record → Map conversions
+// Legacy detection + flattening
 // ============================================================================
 
-/** Convert { stringKey: items[] } record to Map<number, items[]>, coercing keys to round numbers. */
+/**
+ * Detects whether a record is the legacy nested shape
+ * (`{ runId: { round: items[] } }`) rather than the flat shape
+ * (`{ round: items[] }`).
+ *
+ * Flat records satisfy BOTH properties:
+ *   - every top-level key parses as an integer (round number)
+ *   - every top-level value is an array (the items list for that round)
+ *
+ * If either property fails on any entry, the record is treated as legacy.
+ * This guards against a numeric-only runId sneaking through the key check
+ * and against a legacy record whose inner maps happen to be arrays.
+ */
+export function isLegacyNested(raw: unknown): raw is Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length === 0) return false;
+  return entries.some(
+    ([key, value]) => !/^-?\d+$/.test(key) || !Array.isArray(value),
+  );
+}
+
+/**
+ * Flatten a legacy nested record to a single run's round-keyed map.
+ * Prefers the `preferredRunId` when that entry exists (legacy tabs persisted
+ * `activeRunId` in meta.json to mark the selected run); otherwise falls back
+ * to JS insertion order and picks the last-written run.
+ */
+export function flattenLegacyRuns(
+  raw: Record<string, unknown>,
+  preferredRunId?: string | null,
+): Record<string, unknown> {
+  if (preferredRunId) {
+    const picked = raw[preferredRunId];
+    if (picked && typeof picked === 'object' && !Array.isArray(picked)) {
+      return picked as Record<string, unknown>;
+    }
+  }
+  let latest: Record<string, unknown> | null = null;
+  for (const value of Object.values(raw)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      latest = value as Record<string, unknown>;
+    }
+  }
+  return latest ?? {};
+}
+
+// ============================================================================
+// Shared transform helpers
+// ============================================================================
+
+/** Convert { stringKey: items[] } record to Map<number, items[]>, coercing keys. */
 function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
   const map = new Map<number, T[]>();
   for (const [key, items] of Object.entries(record)) {
@@ -58,61 +112,41 @@ function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
   return map;
 }
 
-/** Convert { runId: innerMap } record to Map, filtering out empty inner maps. */
-function recordToRunMap<V>(
-  record: Record<string, Map<number, V>>,
-): Map<string, Map<number, V>> {
-  const map = new Map<string, Map<number, V>>();
-  for (const [runId, rounds] of Object.entries(record)) {
-    if (rounds.size > 0) map.set(runId, rounds);
-  }
-  return map;
-}
+// ============================================================================
+// Output files: { round: OutputFileInfo[] }
+// ============================================================================
 
-// ============================================================================
-// Output files
-// ============================================================================
+const OutputFileListSchema = z
+  .array(OutputFileInfoSchema.catch(null as unknown as OutputFileInfo))
+  .transform((items) =>
+    items.filter((item): item is OutputFileInfo => item !== null),
+  )
+  .catch([]);
 
 /**
- * Round map: { roundNum: OutputFileInfo[] } → Map<number, OutputFileInfo[]>
- *
- * Per-item .catch(null) + .filter ensures one corrupt item doesn't drop the entire round.
+ * Parses a flat round-keyed record to `Map<number, OutputFileInfo[]>`.
+ * Legacy nested records (`{ runId: { round: items[] } }`) must be
+ * pre-flattened by the caller (see `flattenLegacyRuns`) so the
+ * activeRunId hint can be threaded in — the schema itself does not fall
+ * back to insertion order.
  */
-export const OutputFilesRoundMapSchema = z
-  .record(
-    z.string(),
-    z
-      .array(OutputFileInfoSchema.catch(null as unknown as OutputFileInfo))
-      .transform((items) =>
-        items.filter((item): item is OutputFileInfo => item !== null),
-      )
-      .catch([]),
-  )
-  .transform(recordToRoundMap);
-
-/** Run map: { runId: roundMap } → Map<string, Map<number, OutputFileInfo[]>> */
 export const OutputFilesDataSchema = z
-  .record(z.string(), OutputFilesRoundMapSchema.catch(new Map()))
-  .transform(recordToRunMap)
-  .catch(new Map()) as z.ZodType<Map<string, Map<number, OutputFileInfo[]>>>;
+  .record(z.string(), OutputFileListSchema)
+  .transform(recordToRoundMap)
+  .catch(new Map()) as z.ZodType<Map<number, OutputFileInfo[]>>;
 
 // ============================================================================
-// Missing outputs
+// Missing outputs: { round: string[] } (caller pre-flattens legacy input).
 // ============================================================================
 
-/** Round map: { roundNum: string[] } → Map<number, string[]> */
-const MissingOutputsRoundMapSchema = z
-  .record(z.string(), z.array(z.string()).catch([]))
-  .transform(recordToRoundMap);
-
-/** Run map: { runId: roundMap } → Map<string, Map<number, string[]>> */
 export const MissingOutputsDataSchema = z
-  .record(z.string(), MissingOutputsRoundMapSchema.catch(new Map()))
-  .transform(recordToRunMap)
-  .catch(new Map()) as z.ZodType<Map<string, Map<number, string[]>>>;
+  .record(z.string(), z.array(z.string()).catch([]))
+  .transform(recordToRoundMap)
+  .catch(new Map()) as z.ZodType<Map<number, string[]>>;
 
 // ============================================================================
-// Usage stats
+// Usage stats — per-run map kept (tool-use can resume → multiple runs).
+// Workflow consumers collapse to a single value via sumUsageStats.
 // ============================================================================
 
 /** Coerces input to number, defaulting non-finite values to 0 */
@@ -168,10 +202,14 @@ export function isEmptyUsage(usage: TokenUsageStats): boolean {
   );
 }
 
-/** Run map: { runId: TokenUsageStats } → Map<string, TokenUsageStats> */
+/**
+ * Per-run usage map: { runId: TokenUsageStats } → Map<runId, stats>.
+ * Used by both workflow and tool-use streams. Workflow has one entry per
+ * run (= one entry per tab); tool-use can accumulate multiple via resume.
+ */
 export const UsageDataSchema = z
   .record(z.string(), TokenUsageStatsParsingSchema)
-  .transform((record) => {
+  .transform((record): Map<string, TokenUsageStats> => {
     const map = new Map<string, TokenUsageStats>();
     for (const [runId, stats] of Object.entries(record)) {
       if (!isEmptyUsage(stats)) map.set(runId, stats);
@@ -181,22 +219,9 @@ export const UsageDataSchema = z
   .catch(new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
 
 // ============================================================================
-// Run instructions
-// ============================================================================
-
-/** { runId: InstructionUpdate } → Record validated then converted to Map on read. */
-export const RunInstructionsRecordSchema = z
-  .record(z.string(), InstructionUpdateSchema)
-  .catch({});
-
-// ============================================================================
 // Write-side types — shape contracts for data written to disk
 // ============================================================================
 
-export type OutputFilesRecord = Record<
-  string,
-  Record<string, OutputFileInfo[]>
->;
-export type MissingOutputsRecord = Record<string, Record<string, string[]>>;
+export type OutputFilesRecord = Record<string, OutputFileInfo[]>;
+export type MissingOutputsRecord = Record<string, string[]>;
 export type UsageStatsRecord = Record<string, TokenUsageStats>;
-export type RunInstructionsRecord = Record<string, InstructionUpdate>;

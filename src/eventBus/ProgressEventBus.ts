@@ -22,8 +22,14 @@ import type {
   UpdateTodosPayload,
 } from '@shared/schemas';
 
-/** Payload for events scoped to a specific run (stream + storage key). */
-interface RunScopedPayload {
+/** Payload for stream-scoped output events (one run per workflow tab). */
+interface StreamScopedPayload {
+  streamId: StreamTabId;
+  executionId?: ExecutionId;
+}
+
+/** Payload for usage events. Tool-use can resume → multiple runs per tab. */
+interface UsageScopedPayload {
   streamId: StreamTabId;
   storageKey: StorageKey;
   executionId?: ExecutionId;
@@ -42,9 +48,6 @@ interface SetTaskStatePayload {
   streamId: StreamTabId;
   executionId?: ExecutionId;
   taskState: TaskState;
-  /** Storage key for this run (root group ID). Sets activeRunId so instruction
-   *  persistence works immediately, not after the first usage event. */
-  storageKey: StorageKey;
 }
 
 const MAX_BUFFER_SIZE = 1000;
@@ -57,15 +60,33 @@ export interface ProgressEventPayloads {
     /** Previous status before this update, for detecting transitions */
     previousStatus: StreamStatus;
   };
-  addOutputFiles: RunScopedPayload & {
+  addOutputFiles: StreamScopedPayload & {
     filesByRound: { [key: number]: OutputFileInfo[] };
   };
-  updateMissingOutputs: RunScopedPayload & {
+  updateMissingOutputs: StreamScopedPayload & {
     filesByRound: { [key: number]: string[] };
   };
-  clearMissingOutputs: { streamId: StreamTabId };
+  /**
+   * Clear the "missing outputs" marker. Either target a specific tab via
+   * `streamId`, or clear every workflow tab whose taskState matches the
+   * given `streamConfig` (for command-palette pack/clean which has no
+   * stream context). `useMultipleOutputs`, when specified, narrows the
+   * match so single- vs multi-output tabs on the same input aren't cleared
+   * together.
+   */
+  clearMissingOutputs:
+    | { streamId: StreamTabId; streamConfig?: undefined }
+    | {
+        streamId?: undefined;
+        streamConfig: {
+          agent: string;
+          model: string;
+          inputFile: string;
+          useMultipleOutputs?: boolean;
+        };
+      };
   setTaskState: SetTaskStatePayload;
-  updateStreamUsage: RunScopedPayload & {
+  updateStreamUsage: UsageScopedPayload & {
     usage: TokenUsageStats;
   };
   showRetryRequest: RetryPermission;

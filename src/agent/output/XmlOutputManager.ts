@@ -4,7 +4,7 @@ import { XMLParser } from 'fast-xml-parser';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
-import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
@@ -12,6 +12,7 @@ import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { OutputFileInfo } from '@shared/schemas';
 import {
   AbsoluteFS,
+  createExternalLocation,
   getFileDirectory,
   TaskRunFileService,
   type FileLocation,
@@ -210,9 +211,15 @@ export class XmlOutputManager {
     round: number,
   ): Promise<OutputFileInfo[]> {
     const outputFiles: OutputFileInfo[] = [];
-    const outputParts = path.basename(outputLocation.absolutePath).split('_');
-    const agent = outputParts.at(-3) ?? '';
-    const model = outputParts.at(-1)?.split('.')[0] ?? '';
+    // For workspace/runStorage outputs use the workspace-relative round dir
+    // so fileService.createLocation can route through its storage layer.
+    // For external outputs, work in absolute paths directly — an absolute
+    // path passed through createLocation would be re-classified as external
+    // anyway, so skip the round-trip and build the location explicitly.
+    const isExternal = outputLocation.kind === 'external';
+    const roundDir = isExternal
+      ? path.dirname(outputLocation.absolutePath)
+      : path.dirname(outputLocation.relativePath);
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
@@ -228,10 +235,15 @@ export class XmlOutputManager {
         continue;
       }
 
-      const { ext } = path.parse(source);
-      const extension = ext.replace('.', '') || 'tex';
-      const texFile = getOutputFileName(source, agent, model, extension, round);
-      const texLocation = this.fileService.createLocation(texFile);
+      const texFile = getExtractedDocOutputFileName(
+        source,
+        roundDir,
+        this.agentConfig.agent,
+        this.agentConfig.model,
+      );
+      const texLocation = isExternal
+        ? createExternalLocation(texFile)
+        : this.fileService.createLocation(texFile);
       const cleanedContent = this.removeTrailingEndDocument(
         doc.content.trim(),
         texFile,

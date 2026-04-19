@@ -1,30 +1,30 @@
-import type { StreamConfig } from '@common/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
-import { getStreamTabId } from '@logger/index';
 
-export interface ClearMissingOutputsOptions {
-  /** Stream configuration (agent/model/file) */
-  streamConfig: StreamConfig;
-  /** Whether agent uses multiple outputs */
-  useMultipleOutputs: boolean;
-  /** Override stream ID instead of deriving from config */
-  streamIdOverride?: string;
-}
+/**
+ * How to identify the workflow tab(s) whose missing-outputs marker should be
+ * cleared. Exactly one strategy must be specified:
+ * - `streamIdOverride` targets one specific tab (toolbar invocations).
+ * - `streamConfig` broadcasts to every workflow tab whose taskState matches
+ *   the given agent/model/inputFile (command-palette invocations).
+ */
+export type ClearMissingOutputsOptions =
+  | { streamIdOverride: string; streamConfig?: undefined }
+  | {
+      streamIdOverride?: undefined;
+      streamConfig: {
+        agent: string;
+        model: string;
+        inputFile: string;
+        useMultipleOutputs?: boolean;
+      };
+    };
 
 export function emitClearMissingOutputs(
   options: ClearMissingOutputsOptions,
 ): void {
-  const { streamConfig, useMultipleOutputs, streamIdOverride } = options;
-  bus.emit('clearMissingOutputs', {
-    streamId:
-      streamIdOverride ||
-      getStreamTabId(
-        streamConfig.agent,
-        streamConfig.model,
-        streamConfig.inputFile,
-        {
-          useMultipleOutputs,
-        },
-      ),
-  });
+  if (options.streamIdOverride !== undefined) {
+    bus.emit('clearMissingOutputs', { streamId: options.streamIdOverride });
+    return;
+  }
+  bus.emit('clearMissingOutputs', { streamConfig: options.streamConfig });
 }

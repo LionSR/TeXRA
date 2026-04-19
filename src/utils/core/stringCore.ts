@@ -25,6 +25,14 @@ export function isString(value: unknown): value is string {
 }
 
 /**
+ * Escape regular-expression metacharacters in a literal string so it can be
+ * embedded inside a dynamic RegExp without special interpretation.
+ */
+export function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Extract error message from Error objects or strings.
  * Returns undefined if the value is not an Error or non-empty string.
  *

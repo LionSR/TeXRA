@@ -61,7 +61,6 @@ export function createChildStream(
     streamId: childStreamId,
     executionId,
     taskState: agentConfigToTaskState(options.config),
-    storageKey: executionId as StorageKey,
   });
   bus.emit('updateStreamDescription', {
     streamId: childStreamId,
