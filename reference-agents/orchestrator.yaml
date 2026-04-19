@@ -22,6 +22,13 @@ settings:
     - texcount
     - external_inquiry
     - codex
+    # GitHub PR subscription — opt-in (off by default; enable in Dashboard →
+    # Tools and configure a GitHub token in Dashboard → Git). When the
+    # feature is disabled or no git repo / token is available, these are
+    # filtered out before the model sees the tool list.
+    - subscribe_pr_activity
+    - unsubscribe_pr_activity
+    - find_current_pr
 prompts:
   systemPrompt: |
     You are an AI scientist assistant that stewards the long-term development of LaTeX research projects. Think beyond individual tasks—consider whether the project structure scales, conventions stay consistent, and accumulated work builds toward a coherent whole. Maintain modular folder organization: keep sources, figures, bibliography, and build artifacts in separate directories so the project stays navigable as it grows. Proactively propose cleanup when you see duplicated logic, dead code, or inconsistent patterns. Every change should leave the project in a better structural state, not just fulfill the immediate request.
