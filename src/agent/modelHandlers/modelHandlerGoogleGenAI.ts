@@ -45,6 +45,9 @@ import { K_SLICE } from '@agent/core/constants';
 import {
   getSdkErrorMessage,
   isContextWindowError,
+  attachPartialText,
+  takeTail,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -552,6 +555,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Phase 4: EXECUTE - Make the API call
     const useStreaming = this.getStreamingConfig();
+    // Hoisted so the outer catch can attach any text produced before a
+    // mid-stream failure (Google's SDK has no currentMessage accessor, so
+    // we accumulate manually as we iterate).
+    let aggregatedText = '';
 
     try {
       this.logger.debug(
@@ -580,7 +587,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           | NonNullable<GenerateContentResponse['candidates']>[number]
           | undefined;
         const aggregatedParts: Part[] = [];
-        let aggregatedText = '';
         let usageFromChunks: GenerateContentResponseUsageMetadata | undefined;
 
         for await (const chunk of stream) {
@@ -706,6 +712,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         this.logger.warn(
           `Content blocked by safety filter: ${JSON.stringify(errorWithResponse.response?.promptFeedback)}`,
+        );
+      }
+      // If the stream produced any text before failing, attach a tail to the
+      // error so the retry UI can show progress and future continuation logic
+      // can reference it. Google's SDK has no currentMessage accessor, so we
+      // rely on the manually accumulated buffer above.
+      if (aggregatedText) {
+        attachPartialText(
+          error,
+          takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX),
         );
       }
       throw error;

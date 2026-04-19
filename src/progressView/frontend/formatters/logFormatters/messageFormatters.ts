@@ -68,7 +68,11 @@ export function formatProgressStatusTemplate(
       )}</div>`;
 }
 
-// Error detail fields in display order (matches ProviderError schema)
+// Error detail fields to render in the flat banner, in display order.
+// `satisfies` ties each name to ErrorLogData's keys so adding/renaming/removing
+// a schema field becomes a type error here — no silent drift.
+// Fields omitted on purpose: streamDiagnostics and partialText render
+// separately in RetryRequestPanel; cause is not shown in the flat list.
 const ERROR_DETAIL_FIELDS = [
   'message',
   'operation',
@@ -81,7 +85,7 @@ const ERROR_DETAIL_FIELDS = [
   'requestId',
   'rawMessage',
   'rawErrorBody',
-] as const;
+] as const satisfies ReadonlyArray<keyof ErrorLogData>;
 
 /** Format error message as TemplateResult. */
 export function formatErrorTemplate(message: LogMessageData): FormatResult {
