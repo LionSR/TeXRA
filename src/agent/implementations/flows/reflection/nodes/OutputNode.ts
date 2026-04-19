@@ -210,7 +210,6 @@ export class OutputNode<C = unknown> extends Node<
     // Emit output files event
     bus.emit('addOutputFiles', {
       streamId,
-      storageKey: summary.storageKey,
       filesByRound: { [currentRound]: summary.fileInfos },
     });
 
@@ -234,7 +233,6 @@ export class OutputNode<C = unknown> extends Node<
 
           bus.emit('updateMissingOutputs', {
             streamId,
-            storageKey: validationResult.storageKey,
             filesByRound: { [currentRound]: validationResult.missing },
           });
 

@@ -13,11 +13,7 @@ import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 
 // Local imports - progress view
-import {
-  filterPermissionsForStream,
-  getRunGroups,
-  type RunGroup,
-} from '../stateUtils';
+import { filterPermissionsForStream } from '../stateUtils';
 import {
   EMPTY_STREAM_CONTEXT,
   permissionsContext,
@@ -58,17 +54,9 @@ export class ToolUseStreamContent extends LitElement {
   private permissionContext: PermissionState[] = [];
 
   // Derived values - recomputed in willUpdate() before render.
-  // Not @state(): always derived from streamContext/permissionContext (avoids double-render).
   private filteredPermissions: PermissionState[] = [];
-  private runGroups: RunGroup[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
-    if (changedProperties.has('streamContext')) {
-      const currentState = this.currentState;
-      this.runGroups = currentState
-        ? getRunGroups(currentState.taskGroups)
-        : [];
-    }
     if (
       changedProperties.has('streamContext') ||
       changedProperties.has('permissionContext')
@@ -98,8 +86,6 @@ export class ToolUseStreamContent extends LitElement {
         .stream=${streamInfo}
         .status=${currentState.status}
         .progress=${currentState.conversationProgress}
-        .runId=${null}
-        .runs=${this.runGroups}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
         .superYoloActive=${Boolean(currentState.superYoloBypass)}
       ></stream-header>

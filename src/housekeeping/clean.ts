@@ -21,11 +21,7 @@ import {
   PACK_EXTENSIONS,
   DEFAULT_MAX_ROUNDS,
 } from './constants';
-import {
-  getAgentFirstNameChunk,
-  getFilePatterns,
-  findFilesFromPatterns,
-} from './utils';
+import { getFilePatterns, findFilesFromPatterns } from './utils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
@@ -55,14 +51,10 @@ export async function runCleanSingle(
     `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
   );
 
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
   const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
-  const filePatterns = getFilePatterns(
-    baseName,
-    model,
-    agentFirstNameChunk,
-    maxRounds,
-  );
+  // Pass the raw agent; getFilePatterns derives both the legacy chunk and
+  // the new clean-agent forms internally so both disk layouts are matched.
+  const filePatterns = getFilePatterns(baseName, model, agent, maxRounds);
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
 
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];

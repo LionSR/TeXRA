@@ -404,10 +404,6 @@ export class ProgressViewProvider
     );
   }
 
-  public getActiveRunId(stream: StreamTabId): StorageKey | null {
-    return this.state.meta.getActiveRunId(stream);
-  }
-
   private async resetRunningStreamStatuses(
     waitingStreams: Set<StreamTabId>,
   ): Promise<void> {
