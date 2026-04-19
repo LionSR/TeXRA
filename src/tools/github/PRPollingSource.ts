@@ -402,7 +402,14 @@ export class PRPollingSource implements AsyncEventSource {
       }
       if (reviewsRes.status === 200) {
         state.etags.reviews = reviewsRes.etag;
-        for (const r of reviewsRes.data) state.seenReviewIds.add(r.id);
+        // Skip PENDING: these are the authenticated user's own drafts
+        // (only visible via their own token). A review keeps the same ID
+        // when it transitions PENDING → APPROVED/CHANGES_REQUESTED/COMMENTED,
+        // so if we seed the pending id here the actual submission will be
+        // silently deduped later.
+        for (const r of reviewsRes.data) {
+          if (r.state !== 'PENDING') state.seenReviewIds.add(r.id);
+        }
       }
       if (checksRes.status === 200) {
         state.etags.checkRuns = checksRes.etag;
@@ -447,6 +454,11 @@ export class PRPollingSource implements AsyncEventSource {
     if (reviewsRes.status === 200) {
       state.etags.reviews = reviewsRes.etag;
       for (const r of reviewsRes.data) {
+        // Same reasoning as the seeding branch: ignore PENDING drafts —
+        // they keep the same id when submitted, and emitting "reviewed"
+        // on a draft would both be misleading and prevent the real
+        // submission event from firing.
+        if (r.state === 'PENDING') continue;
         if (!state.seenReviewIds.has(r.id)) {
           state.seenReviewIds.add(r.id);
           this.emit(state, formatReview(state.slug, pr.pullNumber, r));
