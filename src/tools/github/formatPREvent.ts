@@ -78,12 +78,12 @@ export function formatReviewComment(
   const author = c.user?.login ?? 'someone';
   const line = c.line ?? c.original_line;
   const loc = line ? `${c.path}:${line}` : c.path;
-  const header =
+  const prefix =
     c.in_reply_to_id != null
-      ? `Reply in line review thread on ${slug}#${prNumber} by @${author} at ${loc}`
-      : `New line review comment on ${slug}#${prNumber} by @${author} at ${loc}`;
+      ? 'Reply in line review thread'
+      : 'New line review comment';
   return wrap(
-    `${header}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
+    `${prefix} on ${slug}#${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
   );
 }
 
@@ -132,12 +132,7 @@ export function formatCheckFailureSummary(
   );
 }
 
-/**
- * A check run conclusion counts as passing if it didn't hold up the merge:
- * `success` obviously, `neutral` (advisory), and `skipped` (didn't run for a
- * reason — typically path/branch filters). Everything else — failure,
- * timed_out, cancelled, action_required, stale — blocks.
- */
+/** Non-blocking conclusions: `success`, `neutral` (advisory), `skipped`. */
 export function isPassingConclusion(conclusion: string | null): boolean {
   return (
     conclusion === 'success' ||

@@ -427,10 +427,9 @@ export class PRPollingSource implements AsyncEventSource {
             state.lastFailedCheckKeys.add(this.checkKey(r));
           }
         }
-        // Seed the terminal-CI flag so a PR whose CI was already complete at
-        // subscribe time doesn't immediately fire a terminal event next tick.
-        // Only future transitions get surfaced.
-        if (state.headSha && this.allRunsTerminal(runs)) {
+        // Seed so pre-existing terminal CI doesn't fire on the next tick —
+        // we only surface transitions that happen after subscribe.
+        if (state.headSha && runs.every((r) => r.status === 'completed')) {
           state.ciTerminalSha = state.headSha;
         }
       }
@@ -505,16 +504,12 @@ export class PRPollingSource implements AsyncEventSource {
         }
       }
 
-      // Terminal CI event. Fires once per head SHA when every run has
-      // reached `completed`. Gate on `runs.length > 0` because an empty
-      // array is ambiguous — no CI is configured, or runs haven't registered
-      // yet — and "done" isn't meaningful either way. We emit one event:
-      // `ci_pass` if all passed, `ci_complete` (with fail count) otherwise.
-      // Per-check failures still fire separately via `formatCheckFailure`.
+      // Gate on `runs.length > 0`: an empty array is ambiguous (no CI
+      // configured vs. runs not yet registered), so "done" isn't meaningful.
       if (
         state.headSha &&
         runs.length > 0 &&
-        this.allRunsTerminal(runs) &&
+        runs.every((r) => r.status === 'completed') &&
         state.ciTerminalSha !== state.headSha
       ) {
         state.ciTerminalSha = state.headSha;
@@ -527,10 +522,6 @@ export class PRPollingSource implements AsyncEventSource {
         );
       }
     }
-  }
-
-  private allRunsTerminal(runs: readonly GhCheckRun[]): boolean {
-    return runs.every((r) => r.status === 'completed');
   }
 
   private isCheckFailure(r: GhCheckRun): boolean {
