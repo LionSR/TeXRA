@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
+- **Codex tool matches the delegate_agent model** — calling `codex` is now async: the tool returns immediately with an execution ID, and each turn's result is delivered as a follow-up message to the orchestrator (response, token usage, and `thread_id`). To continue a running Codex session, pass `thread_id` with a new prompt — it's queued as the next turn instead of interrupting the one in progress, and errors with "still processing" if a turn is mid-flight. The `run_in_background` flag is gone (all codex calls are async now); no changes to how you invoke Codex from the chat.
 - **Untrusted-workspace guard** — TeXRA now declares itself incompatible with untrusted workspaces, so opening an untrusted folder shows VS Code's standard trust prompt with a clear rationale (agents read files and execute shell commands). Previously the extension could activate silently in untrusted mode.
 - **No more `latexindent` install popup on first use** — the missing-`latexindent` warning is now off by default, so first-time users no longer see an unexpected install prompt after running an agent. Re-enable it with `texra.latex.showLatexindentWarning` if you want the reminder.
 - **External Inquiry is off by default for new users** — the copy-to-ChatGPT/Claude/Gemini workflow is now opt-in on first install only. Existing users keep their current setting; new users can turn it on from the Tools settings tab when they want agents to ask them to relay questions to another chat model.

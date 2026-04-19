@@ -46,10 +46,10 @@ When it fires:
 1. A child stream tab `codex@codex-sdk` opens on the ProgressBoard (<i class="codicon codicon-type-hierarchy"></i>).
 2. Reasoning, commands, file diffs, web searches (<i class="codicon codicon-globe"></i>), and todos stream in live.
 3. When the turn ends, the tab sits in **WAITING**. Type a follow-up to continue the thread, or press <i class="codicon codicon-debug-stop"></i> **Stop** to end it.
-4. The calling agent gets back the final response, token usage, and a `thread_id` it can resume later.
+4. Every turn is delivered to the calling agent as a follow-up message (final response, token usage, and `thread_id`). Calls are async — the tool returns immediately with an execution ID.
 
-::: tip Background mode
-Agents can pass `run_in_background: true` to get the execution ID immediately and receive the result as a follow-up when Codex finishes. Good for long refactors that shouldn't block the parent.
+::: tip Follow-up instructions
+To send a follow-up from the calling agent, call `codex` again with `thread_id` set to the ID from the previous delivery. The prompt is queued as the next turn and errors if the thread is still processing — same contract as `delegate_agent(execution_id=…)`.
 :::
 
 ## Troubleshooting
