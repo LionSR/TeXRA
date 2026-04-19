@@ -201,9 +201,7 @@ export class ProgressApp extends ProgressAppBase {
       }
 
       .main-container.narrow stream-tabs {
-        width: 60px;
         min-width: 48px;
-        max-width: 64px;
       }
 
       .content-area {
