@@ -87,11 +87,17 @@ export function getFilePatterns(
   }
   // Merge output lives next to the input and is named after the edited
   // file (`<editedBase>_full_<model>.tex`). editedBase typically starts
-  // with the input base (merges usually feed on a prior output of the
-  // same input), so a leading-wildcard glob matches both the simple
-  // `<base>_full_<model>` case and the full `<base>_<…>_full_<model>`
-  // case without knowing editedBase ahead of time.
-  patterns.push(`${base}*_full_${model}`, `${base}*_full_${model}_diff`);
+  // with the input base plus an agent/model suffix, so we emit two
+  // delimiter-aware patterns: the simple `<base>_full_<model>` case and
+  // the `<base>_<…>_full_<model>` case. Requiring the `_` after `<base>`
+  // keeps siblings like `paper2_…` from matching when the target is
+  // `paper.tex`.
+  patterns.push(
+    `${base}_full_${model}`,
+    `${base}_full_${model}_diff`,
+    `${base}_*_full_${model}`,
+    `${base}_*_full_${model}_diff`,
+  );
   return patterns;
 }
 
