@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import type { TaskState } from '@logger/TaskState';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
   ProgressViewState,
@@ -12,7 +11,6 @@ import type {
   AgentCategoryFilter,
   ConversationProgress,
   ContextState,
-  InstructionUpdate,
   OutputFileInfo,
   PermissionPayload,
   ProgressPermissionKind,
@@ -25,7 +23,6 @@ import type {
   Plan,
   TodoItem,
   TokenUsageStats,
-  StorageKey,
 } from '@shared/schemas';
 
 /**
@@ -37,16 +34,12 @@ import type {
  * potentially large log payloads and provides fault isolation.
  */
 export interface LogContentExtras {
-  /** Instructions by run ID */
-  runInstructions?: Record<string, InstructionUpdate>;
-  /** Currently active run ID */
-  activeRunId?: string | null;
-  /** Usage stats by run ID */
+  /** Workflow output files by round (one run per tab) */
+  workflowFiles?: Record<string, OutputFileInfo[]>;
+  /** Workflow missing outputs by round */
+  workflowMissingOutputs?: Record<string, string[]>;
+  /** Per-run usage map (both workflow and tool-use; frontend derives sum) */
   runUsage?: Record<string, TokenUsageStats>;
-  /** Output files by run ID and round */
-  runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
-  /** Missing outputs by run ID and round (batched with initial render) */
-  runMissingOutputs?: Record<string, { [key: number]: string[] }>;
   /** Context window utilization state */
   contextState?: ContextState;
 }
@@ -55,18 +48,14 @@ export interface LogContentExtras {
 export interface SyncStreamContentPayload {
   stream: StreamTabId | '';
   action?: 'render' | 'clear';
-  runInstructions?: Record<string, InstructionUpdate>;
-  activeRunId?: string | null;
+  workflowFiles?: Record<string, OutputFileInfo[]>;
+  workflowMissingOutputs?: Record<string, string[]>;
   runUsage?: Record<string, TokenUsageStats>;
-  runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
-  runMissingOutputs?: Record<string, { [key: number]: string[] }>;
   contextState?: ContextState;
   todos: TodoItem[];
   plan: Plan | null;
   queuedFollowUps: string[];
-  instruction: InstructionUpdate | null;
   agentCategory?: string;
-  runId?: StorageKey | null;
   /** Tab-switch state previously sent by syncActiveStreamState (R2). */
   conversationProgress?: ConversationProgress;
   badges?: {
@@ -102,24 +91,6 @@ export class WebviewUpdater {
     }
   }
 
-  static createInstructionUpdate(
-    taskState?: TaskState,
-    existingTimestamp?: number,
-  ): InstructionUpdate | undefined {
-    const text = taskState?.agentConfig?.instruction?.trim();
-    if (!text) {
-      return undefined;
-    }
-
-    const lineCount = text.split(/\r?\n/).length;
-    const timestamp = existingTimestamp ?? Date.now();
-    const showToggle = lineCount > 6 || text.length > 600;
-    if (showToggle) {
-      return { text, metadata: { showToggle: true }, timestamp };
-    }
-    return { text, timestamp };
-  }
-
   /**
    * Update stream tabs in the webview.
    * Optionally includes lightweight stream metadata (backend-owned fields only).
@@ -142,7 +113,6 @@ export class WebviewUpdater {
   updateFiles(
     stream: StreamTabId,
     payload: {
-      runId?: string;
       rounds?: { [key: number]: OutputFileInfo[] };
       reset?: boolean;
     },
@@ -157,7 +127,6 @@ export class WebviewUpdater {
   updateMissingOutputs(
     stream: StreamTabId,
     payload: {
-      runId?: string;
       rounds?: { [key: number]: string[] };
       reset?: boolean;
     },
@@ -210,26 +179,6 @@ export class WebviewUpdater {
       stream,
       runId,
       usage,
-    });
-  }
-
-  /**
-   * Update or clear instruction panel content.
-   * Pass null for instruction to clear the panel.
-   * @param runId - When provided, frontend uses this directly instead of resolving from state.
-   */
-  updateInstruction(
-    stream: StreamTabId | '',
-    instruction: InstructionUpdate | null,
-    agentCategory?: string,
-    runId?: string | null,
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_INSTRUCTION,
-      stream,
-      instruction,
-      agentCategory,
-      runId,
     });
   }
 

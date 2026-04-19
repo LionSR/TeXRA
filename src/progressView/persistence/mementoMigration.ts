@@ -9,13 +9,15 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 import {
   StorageRecordSchema,
-  type InstructionUpdate,
-  type OutputFileInfo,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
 import { getStreamTabStore } from './StreamTabStore';
-import type { StreamTabMeta } from './streamTabSchemas';
+import type {
+  StreamTabMeta,
+  OutputFilesRecord,
+  MissingOutputsRecord,
+} from './streamTabSchemas';
 import type { MementoStorage } from './PersistentMapManager';
 
 /**
@@ -209,7 +211,8 @@ async function migrateStreamToStore(
   const store = getStreamTabStore(streamId);
   const writes: Promise<void>[] = [];
 
-  // Meta: taskState + executionId + activeRunId + parentStreamId
+  // Meta: taskState + executionId + parentStreamId.
+  // activeRunId is no longer persisted; one run per workflow tab.
   const taskStateEntry = data.taskStateEntries.find(
     ([key]) => key === streamId,
   );
@@ -217,7 +220,6 @@ async function migrateStreamToStore(
     ? TaskStateSchema.safeParse(taskStateEntry[1])
     : null;
   const executionId = extractFromRecord(data.executionIdsRaw, streamId);
-  const activeRunId = extractFromRecord(data.activeRunIdsRaw, streamId);
   const parentStreamId = extractFromRecord(data.parentStreamIdsRaw, streamId);
 
   const meta: StreamTabMeta = {};
@@ -227,9 +229,6 @@ async function migrateStreamToStore(
   if (typeof executionId === 'string' && executionId.length > 0) {
     meta.executionId = executionId;
   }
-  if (typeof activeRunId === 'string' && activeRunId.length > 0) {
-    meta.activeRunId = activeRunId;
-  }
   if (typeof parentStreamId === 'string' && parentStreamId.length > 0) {
     meta.parentStreamId = parentStreamId;
   }
@@ -237,17 +236,15 @@ async function migrateStreamToStore(
     writes.push(store.writeMeta(meta));
   }
 
-  // Output files
+  // Output files / missing outputs: legacy nested shape is tolerated on read
+  // via Zod union in streamTabSchemas.ts — written as-is.
   const outputFilesData = extractFromRecord(data.outputFilesRaw, streamId);
   if (isNonNullObject(outputFilesData)) {
     writes.push(
-      store.writeOutputFiles(
-        outputFilesData as Record<string, Record<string, OutputFileInfo[]>>,
-      ),
+      store.writeOutputFiles(outputFilesData as unknown as OutputFilesRecord),
     );
   }
 
-  // Missing outputs
   const missingOutputsData = extractFromRecord(
     data.missingOutputsRaw,
     streamId,
@@ -255,7 +252,7 @@ async function migrateStreamToStore(
   if (isNonNullObject(missingOutputsData)) {
     writes.push(
       store.writeMissingOutputs(
-        missingOutputsData as Record<string, Record<string, string[]>>,
+        missingOutputsData as unknown as MissingOutputsRecord,
       ),
     );
   }
@@ -276,17 +273,17 @@ async function migrateStreamToStore(
     );
   }
 
-  // Run instructions
+  // The new UI renders instructions as user-message log entries at run
+  // start, but pre-refactor workflow runs never logged them — the text
+  // only lived in this legacy memento record. Persist it verbatim as a
+  // `legacyInstructions.json` side file so no user-visible data is lost
+  // on upgrade; it isn't read by the UI but remains accessible on disk.
   const runInstructionsData = extractFromRecord(
     data.runInstructionsRaw,
     streamId,
   );
   if (isNonNullObject(runInstructionsData)) {
-    writes.push(
-      store.writeRunInstructions(
-        runInstructionsData as Record<string, InstructionUpdate>,
-      ),
-    );
+    writes.push(store.writeLegacyInstructions(runInstructionsData));
   }
 
   await Promise.all(writes);

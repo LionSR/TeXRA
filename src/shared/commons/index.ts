@@ -109,7 +109,6 @@ export * from '@shared/utils/textarea';
 
 // Shared: Streams
 export * from '@shared/streams/streamSort';
-export * from '@shared/streams/runSelection';
 
 // Shared: Files
 export * from '@shared/files/pastedImageConstants';

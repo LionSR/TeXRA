@@ -85,12 +85,6 @@ function updateTaskGroups(
     } else {
       streamState.taskGroups[groupIndex] = nextGroup;
     }
-
-    // Unconditionally track the latest root-level run so run-scoped
-    // panes (instruction, file context) always reflect the current run.
-    if (!entry.groupId && 'activeRunId' in streamState) {
-      streamState.activeRunId = entry.id;
-    }
     return true;
   }
 
@@ -122,12 +116,6 @@ function updateTaskGroups(
     };
   }
 
-  // Seed activeRunId from root GROUP_END entries during hydration —
-  // completed runs are persisted as GROUP_END (overwritten from GROUP_START),
-  // so without this, activeRunId stays null after reload.
-  if (!entry.groupId && 'activeRunId' in streamState) {
-    streamState.activeRunId = entry.id;
-  }
   return true;
 }
 

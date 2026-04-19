@@ -200,11 +200,7 @@ async function resolveAgentBase(
 
   const streamId =
     options?.streamTabIdOverride ??
-    getStreamTabId(config.agent, fullConfig.model, config.inputFile, {
-      agentCategory: setting.agentCategory,
-      executionId,
-      useMultipleOutputs,
-    });
+    getStreamTabId(config.agent, fullConfig.model, { executionId });
 
   const agentLogger = new AgentLogger(streamId, true);
   const usageReporter = new AgentUsageReporter(
@@ -224,17 +220,17 @@ async function resolveAgentBase(
     hasMultipleOutputs: useMultipleOutputs,
   });
 
-  const toolUseInstruction =
-    setting.agentCategory === AgentCategory.ToolUse &&
-    config.instruction?.trim() &&
-    !options?.streamTabIdOverride
+  // Log the initial instruction as a user message so both workflow and
+  // tool-use tabs display it inline with the stream log (no separate panel).
+  const initialInstruction =
+    config.instruction?.trim() && !options?.streamTabIdOverride
       ? config.instruction.trim()
       : undefined;
 
   const parentStage = await beginRunStage(
     agentLogger,
     `Run: ${config.agent}`,
-    toolUseInstruction,
+    initialInstruction,
   );
   const storageKey: StorageKey = parentStage.id
     ? normalizeRunId(parentStage.id)
@@ -493,22 +489,17 @@ async function resolveAndAcquireStream(
   if (!configPayload.agent || !configPayload.model) {
     throw new Error('Missing required fields: model and/or agent');
   }
-  const agentEntry = getAgent(configPayload.agent);
+  const resolvedExecutionId = executionId ?? generateExecutionId();
   const preliminaryStreamId = getStreamTabId(
     configPayload.agent,
     configPayload.model,
-    configPayload.inputFile ?? '',
-    {
-      agentCategory: agentEntry?.category ?? AgentCategory.Workflow,
-      executionId,
-      useMultipleOutputs: configPayload.useMultipleOutputs,
-    },
+    { executionId: resolvedExecutionId },
   );
   acquireStreamOrThrow(preliminaryStreamId, options?.taskType);
 
   let ctx: ResolvedAgentBase;
   try {
-    ctx = await resolveAgentBase(configPayload, executionId, {
+    ctx = await resolveAgentBase(configPayload, resolvedExecutionId, {
       onBeforeActivation: options?.onBeforeActivation,
       enforceCategory: options?.enforceCategory,
     });
@@ -518,21 +509,6 @@ async function resolveAndAcquireStream(
       bus.emit('requestShowError', { message: toErrorMessage(err) });
     }
     throw err;
-  }
-
-  // Stream ID may change when useMultipleOutputs is resolved from agent settings
-  if (ctx.streamId !== preliminaryStreamId) {
-    logger.debug(
-      `Stream ID changed: preliminary=${preliminaryStreamId}, resolved=${ctx.streamId}. ` +
-        'Corrected useMultipleOutputs based on agent support.',
-    );
-    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
-    try {
-      acquireStreamOrThrow(ctx.streamId);
-    } catch (err) {
-      ctx.parentStage.end(END_GROUP_STATUS.ERROR);
-      throw err;
-    }
   }
 
   return ctx;
@@ -613,7 +589,6 @@ export async function executeAgent(
         streamId,
         executionId,
         taskState: agentConfigToTaskState(config),
-        storageKey: ctx.storageKey,
       });
       if (config.outputFiles.length > 1 && !config.useMultipleOutputs) {
         logger.warn(
@@ -733,6 +708,7 @@ export async function executeMergeAgent(
         getOutputFileLocation: createMergeOutputFileLocationGetter(
           inputFile,
           editedFile,
+          model,
           fileService,
         ),
         parentStage: ctx.parentStage,
