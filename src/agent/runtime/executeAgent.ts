@@ -511,21 +511,6 @@ async function resolveAndAcquireStream(
     throw err;
   }
 
-  // Stream ID may change when useMultipleOutputs is resolved from agent settings
-  if (ctx.streamId !== preliminaryStreamId) {
-    logger.debug(
-      `Stream ID changed: preliminary=${preliminaryStreamId}, resolved=${ctx.streamId}. ` +
-        'Corrected useMultipleOutputs based on agent support.',
-    );
-    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
-    try {
-      acquireStreamOrThrow(ctx.streamId);
-    } catch (err) {
-      ctx.parentStage.end(END_GROUP_STATUS.ERROR);
-      throw err;
-    }
-  }
-
   return ctx;
 }
 
