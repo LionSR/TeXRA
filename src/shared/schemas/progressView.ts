@@ -187,7 +187,6 @@ export const LogDeltaMessageSchema = z.object({
 export const UpdateFilesMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FILES),
   stream: StreamTabIdSchema,
-  runId: z.string().optional(),
   rounds: z.record(z.string(), z.array(OutputFileInfoSchema)).optional(),
   reset: z.boolean().optional(),
 });
@@ -195,7 +194,6 @@ export const UpdateFilesMessageSchema = z.object({
 export const UpdateMissingOutputsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS),
   stream: StreamTabIdSchema,
-  runId: z.string().optional(),
   rounds: z.record(z.string(), z.array(z.string())).optional(),
   reset: z.boolean().optional(),
 });

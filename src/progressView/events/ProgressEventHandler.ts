@@ -117,7 +117,7 @@ export class ProgressEventHandler {
           }
         },
         updateStreamDescription: (_, { streamId, description }) => {
-          this.state.setDescription(streamId, description);
+          this.state.meta.setDescription(streamId, description);
           if (this.webviewUpdater.isAvailable()) {
             this.webviewUpdater.updateStreamDescription(streamId, description);
           }
