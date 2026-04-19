@@ -23,7 +23,6 @@ export interface GhReviewComment {
   path: string;
   line?: number | null;
   original_line?: number | null;
-  /** Present on replies; references the top-level comment that started the thread. */
   in_reply_to_id?: number | null;
   html_url: string;
   created_at: string;

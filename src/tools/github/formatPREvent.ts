@@ -133,11 +133,19 @@ export function formatCheckFailureSummary(
 }
 
 /**
- * Terminal CI event: every check run on the head commit has reached
- * `completed` and they all passed (success/neutral/skipped). Fires once per
- * head SHA. Paired with `formatCIComplete`, which fires once per SHA when
- * all runs are terminal regardless of outcome.
+ * A check run conclusion counts as passing if it didn't hold up the merge:
+ * `success` obviously, `neutral` (advisory), and `skipped` (didn't run for a
+ * reason — typically path/branch filters). Everything else — failure,
+ * timed_out, cancelled, action_required, stale — blocks.
  */
+export function isPassingConclusion(conclusion: string | null): boolean {
+  return (
+    conclusion === 'success' ||
+    conclusion === 'neutral' ||
+    conclusion === 'skipped'
+  );
+}
+
 export function formatCIPassed(
   slug: string,
   prNumber: number,
@@ -149,24 +157,13 @@ export function formatCIPassed(
   );
 }
 
-/**
- * Terminal CI event: every check run on the head commit has reached
- * `completed`. Fires once per head SHA regardless of outcome. Individual
- * failures are still emitted separately via `formatCheckFailure`, so this
- * event is primarily a "CI is done, you can decide" signal for gating logic.
- */
 export function formatCIComplete(
   slug: string,
   prNumber: number,
   sha: string,
   runs: GhCheckRun[],
 ): string {
-  const passed = runs.filter(
-    (r) =>
-      r.conclusion === 'success' ||
-      r.conclusion === 'neutral' ||
-      r.conclusion === 'skipped',
-  ).length;
+  const passed = runs.filter((r) => isPassingConclusion(r.conclusion)).length;
   const failed = runs.length - passed;
   return wrap(
     `CI completed on ${slug}#${prNumber} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
