@@ -69,14 +69,8 @@ export async function sendFollowUp(
   }
 
   // Queue if subagents/processes are still running under this stream.
-  // The orchestrator's flow context may have exited before its children
-  // finished (subagents execute asynchronously). The child results arrive
-  // via the same queue, so the user's message rides along and will be
-  // drained when the parent resumes.
-  //
-  // `acquire` clears any prior "released" mark left by sessionLifecycle
-  // disposal — otherwise the subsequent `enqueue` would silently drop
-  // the message (along with any still-pending child deliveries).
+  // `acquire` clears any prior "released" mark from sessionLifecycle
+  // disposal, otherwise `enqueue` would silently drop the message.
   const { subagents, processes } = getActiveChildren(streamId);
   if (subagents.length > 0 || processes.length > 0) {
     ToolUseFollowUpQueue.acquire(streamId);
