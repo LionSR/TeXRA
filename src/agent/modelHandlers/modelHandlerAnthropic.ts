@@ -161,8 +161,9 @@ function extractPartialTextTail(
 ): string {
   if (!message?.content) return '';
   const text = message.content
-    .filter((block): block is Extract<BetaContentBlock, { type: 'text' }> =>
-      block.type === 'text',
+    .filter(
+      (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+        block.type === 'text',
     )
     .map((block) => block.text)
     .join('');

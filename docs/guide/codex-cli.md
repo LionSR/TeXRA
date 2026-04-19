@@ -27,11 +27,11 @@ Codex has no native Windows binary. Open TeXRA inside a **WSL** remote window be
 
 All Codex options live on the Codex card in **Dashboard → Tools** and are scoped to the current workspace.
 
-| Setting              | Options                                                                       | Default             | What it controls                                                           |
-| -------------------- | ----------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------- |
-| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                          | `workspace-write`   | File-system access. Agents may override per call via `sandbox_mode`.       |
-| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                              | `high`              | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
-| **Require approval** | checkbox under *Approval & Safety* (<i class="codicon codicon-shield"></i>)   | on                  | Show a confirmation prompt before every Codex call.                        |
+| Setting              | Options                                                                     | Default           | What it controls                                                           |
+| -------------------- | --------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------- |
+| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.       |
+| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                            | `high`            | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
+| **Require approval** | checkbox under _Approval & Safety_ (<i class="codicon codicon-shield"></i>) | on                | Show a confirmation prompt before every Codex call.                        |
 
 TeXRA always drives Codex with the short model name `gpt-5.4`. Everything else (providers, MCP servers, custom instructions) comes from Codex's own `~/.codex/config.toml`.
 
@@ -56,11 +56,11 @@ Agents can pass `run_in_background: true` to get the execution ID immediately an
 
 **Card shows <i class="codicon codicon-warning"></i> Not Found after install.** Hover the card for the exact message:
 
-| Message                                         | Fix                                                                               |
-| ----------------------------------------------- | --------------------------------------------------------------------------------- |
-| `@openai/codex-sdk not found`                   | Click **Install in Terminal** again, then **Recheck**.                            |
-| `Codex SDK loaded but native binary not found`  | Reinstall — the platform binary didn't ship. On Windows, open TeXRA in WSL first. |
-| `Platform not supported`                        | Unsupported OS/arch. Use WSL on Windows or a supported Linux/macOS host.          |
+| Message                                        | Fix                                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------------------------- |
+| `@openai/codex-sdk not found`                  | Click **Install in Terminal** again, then **Recheck**.                            |
+| `Codex SDK loaded but native binary not found` | Reinstall — the platform binary didn't ship. On Windows, open TeXRA in WSL first. |
+| `Platform not supported`                       | Unsupported OS/arch. Use WSL on Windows or a supported Linux/macOS host.          |
 
 **Still Not Found after everything ran.** Reload the window (`Developer: Reload Window`) so the extension re-checks for the binary.
 

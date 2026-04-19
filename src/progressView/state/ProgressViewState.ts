@@ -373,13 +373,11 @@ export class ProgressViewState {
     // `legacyInstructions.json` so the instruction text survives on disk
     // even though the new UI no longer displays it.
     await Promise.all(
-      this.streamLogs
-        .keys()
-        .map((id) =>
-          getStreamTabStore(id)
-            .migrateOnDiskRunInstructions()
-            .catch(() => {}),
-        ),
+      this.streamLogs.keys().map((id) =>
+        getStreamTabStore(id)
+          .migrateOnDiskRunInstructions()
+          .catch(() => {}),
+      ),
     );
 
     this.logger.info('[Persistence] Managers loaded');

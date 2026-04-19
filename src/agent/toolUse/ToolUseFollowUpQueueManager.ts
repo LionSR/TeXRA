@@ -31,9 +31,7 @@ export class ToolUseFollowUpQueue {
    * polling) to tear down stream-scoped subscriptions when the owning stream
    * goes away.
    */
-  static onRelease(
-    observer: (streamId: StreamTabId) => void,
-  ): () => void {
+  static onRelease(observer: (streamId: StreamTabId) => void): () => void {
     this.releaseObservers.add(observer);
     return () => {
       this.releaseObservers.delete(observer);

@@ -126,7 +126,7 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 - &#123;&#123; EDITED_FILE &#125;&#125;: Path of the edited file (used in `merge`).
 - &#123;&#123; EDITED_CONTENT &#125;&#125;: Content of the edited file.
 - &#123;&#123; MEDIA_FILE &#125;&#125;: Path of the primary media file.
-  \_Note: Media content itself isn't directly inserted as text; it's handled separately for multimodal models. See [Working with Figures](./working-with-figures.md).*
+  \_Note: Media content itself isn't directly inserted as text; it's handled separately for multimodal models. See [Working with Figures](./working-with-figures.md).\*
 
 **Multiple File Variables:**
 
@@ -185,15 +185,15 @@ Tool-use agents are interactive: instead of producing a single polished file, th
 
 To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by category (matching **Dashboard → Tools** <i class="codicon codicon-tools"></i>):
 
-| Category                                                               | What it lets the agent do                                                      | Example tool names                                           |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| <i class="codicon codicon-files"></i> **File & Shell**                 | Read, write, edit, search, list, and run commands in your project              | `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `ls`, `bash` |
-| <i class="codicon codicon-file-code"></i> **LaTeX**                    | Extract figures, TikZ, and bibliography; report compile diagnostics            | `extract_figures`, `extract_tikz_figures`, `extract_bib_entries`, `diagnostics`, `texcount` |
-| <i class="codicon codicon-mortar-board"></i> **Academic Research**     | Search arXiv and Crossref, resolve DOIs, manage Zotero                         | `arxiv_search`, `arxiv_metadata`, `download_arxiv_source`, `crossref_doi`, `crossref_search`, `zotero_*` |
-| <i class="codicon codicon-globe"></i> **Web**                          | Fetch pages and search the internet                                            | `web_search`, `web_fetch`                                    |
-| <i class="codicon codicon-symbol-operator"></i> **Computation**        | Run Wolfram Language, delegate to Codex, consult another chat model            | `wolfram`, `codex`, `external_inquiry`                       |
-| <i class="codicon codicon-beaker"></i> **Lean 4**                      | Check Lean proofs and search Mathlib                                           | `lean_diagnostics`, `lean_inspect`, `lean_loogle`, `lean_file`, `lean_project` |
-| <i class="codicon codicon-type-hierarchy"></i> **Memory & Workflow**   | Persistent memory, to-do lists, sub-agent delegation                           | `memory`, `todo_write`, `plan`, `delegate_workflow`, `delegate_agent`, `executions`, `accept_run_files` |
+| Category                                                             | What it lets the agent do                                           | Example tool names                                                                                       |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| <i class="codicon codicon-files"></i> **File & Shell**               | Read, write, edit, search, list, and run commands in your project   | `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `ls`, `bash`                                     |
+| <i class="codicon codicon-file-code"></i> **LaTeX**                  | Extract figures, TikZ, and bibliography; report compile diagnostics | `extract_figures`, `extract_tikz_figures`, `extract_bib_entries`, `diagnostics`, `texcount`              |
+| <i class="codicon codicon-mortar-board"></i> **Academic Research**   | Search arXiv and Crossref, resolve DOIs, manage Zotero              | `arxiv_search`, `arxiv_metadata`, `download_arxiv_source`, `crossref_doi`, `crossref_search`, `zotero_*` |
+| <i class="codicon codicon-globe"></i> **Web**                        | Fetch pages and search the internet                                 | `web_search`, `web_fetch`                                                                                |
+| <i class="codicon codicon-symbol-operator"></i> **Computation**      | Run Wolfram Language, delegate to Codex, consult another chat model | `wolfram`, `codex`, `external_inquiry`                                                                   |
+| <i class="codicon codicon-beaker"></i> **Lean 4**                    | Check Lean proofs and search Mathlib                                | `lean_diagnostics`, `lean_inspect`, `lean_loogle`, `lean_file`, `lean_project`                           |
+| <i class="codicon codicon-type-hierarchy"></i> **Memory & Workflow** | Persistent memory, to-do lists, sub-agent delegation                | `memory`, `todo_write`, `plan`, `delegate_workflow`, `delegate_agent`, `executions`, `accept_run_files`  |
 
 For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `search`, `ask`, or `code`) in the **Agents** tab — their `tools:` array shows exactly which tools are wired up.
 
