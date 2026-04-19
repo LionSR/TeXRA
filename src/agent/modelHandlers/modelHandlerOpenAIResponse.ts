@@ -705,7 +705,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.warn(
         `Failed to retrieve pending background response ${pendingId}: ${formatted.message}. ` +
           'Will create new request.',
-        { data: { responseId: pendingId, error: formatted.message, statusCode: code } },
+        {
+          data: {
+            responseId: pendingId,
+            error: formatted.message,
+            statusCode: code,
+          },
+        },
       );
       this.clearPendingBackgroundResponse();
       return null;
