@@ -17,6 +17,7 @@ import {
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
+import { getCleanAgentName } from '@agent/index';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
@@ -677,6 +678,8 @@ async function runLatexdiffViaWorkspaceScan(params: {
   }
 
   const agentNameChunk = getAgentFirstNameChunk(agent);
+  const cleanAgent = getCleanAgentName(agent);
+  const normalizedModel = model.replaceAll('.', '');
   logger.debug(CHANNEL, `Using agent name chunk: ${agentNameChunk}`);
 
   const configuredInputFiles =
@@ -693,37 +696,68 @@ async function runLatexdiffViaWorkspaceScan(params: {
       path.extname(candidateInput),
     );
 
+    const absoluteDir = path.join(workspacePath, outputDirPath);
     const dirEntries = await vscode.workspace.fs.readDirectory(
-      vscode.Uri.file(path.join(workspacePath, outputDirPath)),
+      vscode.Uri.file(absoluteDir),
     );
 
     const roundOutputsMap = new Map<number, string>();
-    const outputFilePattern = new RegExp(
-      `${baseInputName}_${agentNameChunk}_r(\\d+)_${model.replaceAll('.', '')}`,
-    );
 
+    // Legacy flat layout: files sit directly under outputDirPath as
+    // `<base>_<chunk>_r{round}_<model>.tex`.
+    const legacyPattern = new RegExp(
+      `${baseInputName}_${agentNameChunk}_r(\\d+)_${normalizedModel}`,
+    );
     for (const [fileName, fileType] of dirEntries) {
       if (
         fileType !== vscode.FileType.File ||
-        !hasExtension(fileName, '.tex')
+        !hasExtension(fileName, '.tex') ||
+        fileName.includes('_diff')
       ) {
         continue;
       }
+      const match = fileName.match(legacyPattern);
+      if (!match) continue;
+      const round = RoundKeySchema.safeParse(match[1]);
+      if (!round.success) continue;
+      roundOutputsMap.set(round.data, path.join(outputDirPath, fileName));
+    }
 
-      if (fileName.includes('_diff')) {
+    // New layout: files sit under `<outputDirPath>/r{round}/` as
+    // `<base>_<cleanAgent>_<model>.tex`. Iterate the round subfolders and
+    // prefer new-layout entries over legacy ones when both exist.
+    const newLayoutFileName = new RegExp(
+      `^${baseInputName}_${cleanAgent}_${normalizedModel}\\.tex$`,
+    );
+    for (const [subName, subType] of dirEntries) {
+      if (subType !== vscode.FileType.Directory) continue;
+      const roundMatch = subName.match(/^r(\d+)$/);
+      if (!roundMatch) continue;
+      const round = RoundKeySchema.safeParse(roundMatch[1]);
+      if (!round.success) continue;
+
+      const roundDirAbs = path.join(absoluteDir, subName);
+      let roundEntries: [string, vscode.FileType][];
+      try {
+        roundEntries = await vscode.workspace.fs.readDirectory(
+          vscode.Uri.file(roundDirAbs),
+        );
+      } catch {
         continue;
       }
-
-      const match = fileName.match(outputFilePattern);
-      if (!match) {
-        continue;
+      for (const [fileName, fileType] of roundEntries) {
+        if (
+          fileType !== vscode.FileType.File ||
+          fileName.includes('_diff') ||
+          !newLayoutFileName.test(fileName)
+        ) {
+          continue;
+        }
+        roundOutputsMap.set(
+          round.data,
+          path.join(outputDirPath, subName, fileName),
+        );
       }
-
-      const roundResult = RoundKeySchema.safeParse(match[1]);
-      if (!roundResult.success) {
-        continue;
-      }
-      roundOutputsMap.set(roundResult.data, path.join(outputDirPath, fileName));
     }
 
     if (roundOutputsMap.size > 0) {

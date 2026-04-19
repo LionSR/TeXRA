@@ -32,25 +32,43 @@ export function getFilePatterns(
 ): string[] {
   const patterns: string[] = [];
   const chunk = getAgentFirstNameChunk(agent);
+  const cleanAgent = getCleanAgentName(agent);
 
   for (let round = 0; round < numRounds; round++) {
-    const prefix = `${base}_${chunk}_r${round}`;
+    // Legacy flat layout: `<base>_<chunk>_r{round}_<model>.*`
+    const legacyPrefix = `${base}_${chunk}_r${round}`;
     patterns.push(
-      `${prefix}_${model}`,
-      `${prefix}_${model}_diff`,
-      `${prefix}_full_${model}`,
-      `${prefix}_full_${model}_diff`,
-      `${prefix}_${model}_thinking`,
+      `${legacyPrefix}_${model}`,
+      `${legacyPrefix}_${model}_diff`,
+      `${legacyPrefix}_full_${model}`,
+      `${legacyPrefix}_full_${model}_diff`,
+      `${legacyPrefix}_${model}_thinking`,
     );
-
     if (round > 0) {
       const diffSuffix = `_diffr${round}r${round - 1}`;
       patterns.push(
-        `${prefix}_${model}${diffSuffix}`,
-        `${prefix}_full_${model}${diffSuffix}`,
+        `${legacyPrefix}_${model}${diffSuffix}`,
+        `${legacyPrefix}_full_${model}${diffSuffix}`,
       );
     }
+
+    // New round-subfolder layout:
+    //   `r{round}/<base>_<cleanAgent>_<model>.*`
+    // Agent is the clean name (source prefixes stripped) — not the
+    // first-name chunk — so it matches what getOutputFileName produces.
+    const newPrefix = `r${round}/${base}_${cleanAgent}`;
+    patterns.push(
+      `${newPrefix}_${model}`,
+      `${newPrefix}_${model}_diff`,
+      `${newPrefix}_${model}_thinking`,
+    );
+    if (round > 0) {
+      const diffSuffix = `_diffr${round}r${round - 1}`;
+      patterns.push(`${newPrefix}_${model}${diffSuffix}`);
+    }
   }
+  // Merge output (single, outside the round folders):
+  patterns.push(`${base}_full_${model}`, `${base}_full_${model}_diff`);
   return patterns;
 }
 

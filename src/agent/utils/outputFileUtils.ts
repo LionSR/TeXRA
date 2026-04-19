@@ -69,26 +69,23 @@ export function getExtractedDocOutputFileName(
  *
  * Merge is a single-output workflow: the round number is not reflected in
  * the filename and the same location is returned for every round. The
- * output lives next to the input file with a `_full` suffix, matching the
- * convention the user already sees for merged documents.
+ * output lives next to the input file with a `_full_<model>` suffix so
+ * consecutive merges with different models don't clobber each other and
+ * existing housekeeping cleanup (which matches on the model token) still
+ * discovers the artifact.
  *
  * @param inputFile Original input file path
- * @param editedFile The edited file being merged (required for merge operations)
+ * @param model Model used for the merge (discriminator to avoid collisions)
  * @param fileService File service for creating locations
- * @throws Error if editedFile is not provided
  */
 export function createMergeOutputFileLocationGetter(
   inputFile: string,
-  editedFile: string | undefined,
+  model: string,
   fileService: TaskRunFileService,
 ): (round: number) => AgentFileLocation {
-  if (!editedFile) {
-    throw new Error('editedFile must be specified for merge handler');
-  }
-
   const inputDir = path.dirname(inputFile);
   const inputBase = path.parse(inputFile).name;
-  const outputPath = path.join(inputDir, `${inputBase}_full.tex`);
+  const outputPath = path.join(inputDir, `${inputBase}_full_${model}.tex`);
 
   // Pre-compute location (merge is single-output, always the same location)
   const location = fileService.createLocation(outputPath) as AgentFileLocation;

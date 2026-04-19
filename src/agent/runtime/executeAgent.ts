@@ -707,7 +707,7 @@ export async function executeMergeAgent(
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation: createMergeOutputFileLocationGetter(
           inputFile,
-          editedFile,
+          model,
           fileService,
         ),
         parentStage: ctx.parentStage,
