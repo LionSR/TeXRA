@@ -5,6 +5,7 @@ import { basename } from 'node:path';
 // Third-party imports
 import {
   Anthropic,
+  APIError as AnthropicAPIError,
   APIUserAbortError as AnthropicUserAbortError,
   toFile,
 } from '@anthropic-ai/sdk';
@@ -36,6 +37,10 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   attachStreamDiagnostics,
+  attachPartialText,
+  takeTail,
+  isUserAbort,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 
 // Local imports - replacement
@@ -143,17 +148,25 @@ interface UploadedAnthropicAttachment {
 
 type ErrorWithRequestId = Error & { request_id?: string };
 
-interface StreamWithResponse {
-  response: Promise<Response>;
-}
-
-function hasHttpResponse(value: unknown): value is StreamWithResponse {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'response' in value &&
-    value.response instanceof Promise
-  );
+/**
+ * Extracts the tail of text content from a (possibly partial) BetaMessage.
+ * The SDK's stream.currentMessage accumulates all content blocks as they
+ * arrive, so on a stream failure this already holds whatever text was
+ * generated — no custom buffering required. Returns the suffix because
+ * continuation prompts only reference the last few hundred chars.
+ */
+function extractPartialTextTail(
+  message: BetaMessage | undefined,
+  maxChars: number,
+): string {
+  if (!message?.content) return '';
+  const text = message.content
+    .filter((block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+      block.type === 'text',
+    )
+    .map((block) => block.text)
+    .join('');
+  return takeTail(text, maxChars);
 }
 
 /** Type guard for any thinking-related content block param */
@@ -836,66 +849,75 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // returning truncated output.
         const diagnostics = streamHandler.getDiagnostics();
         if (!diagnostics.messageStopReceived) {
-          const truncatedError = new Error(
+          // The catch block below will read current diagnostics, attach them
+          // to the enriched error, and log at warn — no inner attach/log
+          // here, otherwise one truncation event produces two warns and
+          // two diagnostics snapshots (with drifting elapsedSecs).
+          throw new Error(
             `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
               `(${diagnostics.eventsProcessed} events, ` +
               `${diagnostics.thinkingChars} thinking chars, ` +
               `${diagnostics.textChars} text chars). ` +
               `Stream truncated, likely proxy idle timeout during extended thinking.`,
           );
-          attachStreamDiagnostics(truncatedError, diagnostics);
-          this.logger.warn(
-            'Stream truncated: response received without message_stop',
-            {
-              data: {
-                model: this.config.fullName,
-                streamDiagnostics: diagnostics,
-              },
-            },
-          );
-          throw truncatedError;
         }
 
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } catch (streamError) {
-        // Log enhanced diagnostics for stream failures, especially useful for relay debugging
-        const baseUrl = this.getBaseUrl();
-        const isUsingRelay = this.shouldUseServerSideKeys();
         const diagnostics = streamHandler.getDiagnostics();
+        const partialText = extractPartialTextTail(
+          stream.currentMessage,
+          PARTIAL_TEXT_TAIL_MAX,
+        );
+        const requestId = stream.request_id;
 
-        // Enrich error with request ID from stream response headers so
-        // detectRequestId() (in sdkErrorUtils) picks it up via the existing
-        // ProviderError.requestId path — no duplicate field needed.
-        try {
-          if (hasHttpResponse(stream)) {
-            const httpResponse = await stream.response;
-            const reqId =
-              httpResponse.headers.get('request-id') ??
-              httpResponse.headers.get('x-request-id');
-            if (reqId && streamError instanceof Error) {
-              (streamError as ErrorWithRequestId).request_id = reqId;
-            }
-          }
-        } catch {
-          // Response may not be available (e.g. network error before HTTP response)
+        // Wrap only non-APIError stream failures. APIError subclasses carry
+        // status/headers/requestID/type that formatProviderHttpError needs
+        // for retry classification; replacing them loses that metadata and
+        // misclassifies e.g. 401 as generic retryable.
+        let enrichedError: unknown = streamError;
+        if (
+          !stream.currentMessage &&
+          streamError instanceof Error &&
+          !(streamError instanceof AnthropicAPIError)
+        ) {
+          enrichedError = new Error(
+            `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
+              `(${diagnostics.eventsProcessed} events). ` +
+              `Likely connection dropped before the API responded.`,
+            { cause: streamError },
+          );
         }
 
-        this.logger.debug(
-          `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
-          {
-            data: {
-              isUsingRelay,
-              baseUrl: baseUrl ?? 'default',
-              model: this.config.fullName,
-              streamDiagnostics: diagnostics,
-            },
-          },
-        );
+        // detectRequestId() reads .request_id off the thrown error, so set it
+        // on whichever object we're throwing (the wrapper or the original).
+        if (requestId && enrichedError instanceof Error) {
+          (enrichedError as ErrorWithRequestId).request_id = requestId;
+        }
 
-        // Attach diagnostics to error for retry UI display
-        attachStreamDiagnostics(streamError, diagnostics);
-        throw streamError;
+        const isAbort = isUserAbort(streamError);
+        const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}: ${enrichedError instanceof Error ? enrichedError.message : String(enrichedError)}`;
+        const logData = {
+          data: {
+            isUsingRelay: this.shouldUseServerSideKeys(),
+            baseUrl: this.getBaseUrl() ?? 'default',
+            model: this.config.fullName,
+            streamDiagnostics: diagnostics,
+            partialTextLength: partialText.length,
+          },
+        };
+        // Aborts are control flow, not failures. Everything else is a warn
+        // so silent proxy drops surface without debug logging enabled.
+        if (isAbort) {
+          this.logger.debug(logMessage, logData);
+        } else {
+          this.logger.warn(logMessage, logData);
+        }
+
+        attachStreamDiagnostics(enrichedError, diagnostics);
+        attachPartialText(enrichedError, partialText);
+        throw enrichedError;
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
         streamHandler.finalize();
