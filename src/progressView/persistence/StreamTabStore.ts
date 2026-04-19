@@ -30,6 +30,8 @@ import {
   OutputFilesDataSchema,
   MissingOutputsDataSchema,
   UsageDataSchema,
+  flattenLegacyRuns,
+  isLegacyNested,
   type StreamTabMeta,
   type OutputFilesRecord,
   type MissingOutputsRecord,
@@ -96,7 +98,8 @@ class StreamTabKVStore extends KVStore {
   async readOutputFiles(): Promise<Map<number, OutputFileInfo[]> | null> {
     const raw = await this.read(KEYS.OUTPUT_FILES);
     if (!raw) return null;
-    const result = OutputFilesDataSchema.safeParse(raw);
+    const migrated = await this.preferActiveRunFlattening(raw);
+    const result = OutputFilesDataSchema.safeParse(migrated);
     return result.success && result.data.size > 0 ? result.data : null;
   }
 
@@ -104,12 +107,25 @@ class StreamTabKVStore extends KVStore {
     await this.write(KEYS.OUTPUT_FILES, data);
   }
 
+  /**
+   * When a record is in legacy nested form (`{ runId: { round: items[] } }`),
+   * prefer the run selected by `meta.activeRunId` so hydration uses the run
+   * that was active when the tab was last viewed. Falls back to insertion
+   * order for meta without activeRunId or for already-flat records.
+   */
+  private async preferActiveRunFlattening(raw: unknown): Promise<unknown> {
+    if (!isLegacyNested(raw)) return raw;
+    const meta = await this.readMeta();
+    return flattenLegacyRuns(raw, meta?.activeRunId);
+  }
+
   // -- Missing outputs ------------------------------------------------------
 
   async readMissingOutputs(): Promise<Map<number, string[]> | null> {
     const raw = await this.read(KEYS.MISSING_OUTPUTS);
     if (!raw) return null;
-    const result = MissingOutputsDataSchema.safeParse(raw);
+    const migrated = await this.preferActiveRunFlattening(raw);
+    const result = MissingOutputsDataSchema.safeParse(migrated);
     return result.success && result.data.size > 0 ? result.data : null;
   }
 

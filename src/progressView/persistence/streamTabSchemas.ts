@@ -62,7 +62,7 @@ export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
  * This guards against a numeric-only runId sneaking through the key check
  * and against a legacy record whose inner maps happen to be arrays.
  */
-function isLegacyNested(raw: unknown): raw is Record<string, unknown> {
+export function isLegacyNested(raw: unknown): raw is Record<string, unknown> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
   const entries = Object.entries(raw as Record<string, unknown>);
   if (entries.length === 0) return false;
@@ -72,12 +72,21 @@ function isLegacyNested(raw: unknown): raw is Record<string, unknown> {
 }
 
 /**
- * Flatten a legacy nested record to the latest run's round-keyed map.
- * Preserves JS insertion order to select the most recently written run.
+ * Flatten a legacy nested record to a single run's round-keyed map.
+ * Prefers the `preferredRunId` when that entry exists (legacy tabs persisted
+ * `activeRunId` in meta.json to mark the selected run); otherwise falls back
+ * to JS insertion order and picks the last-written run.
  */
-function flattenLegacyRuns(
+export function flattenLegacyRuns(
   raw: Record<string, unknown>,
+  preferredRunId?: string | null,
 ): Record<string, unknown> {
+  if (preferredRunId) {
+    const picked = raw[preferredRunId];
+    if (picked && typeof picked === 'object' && !Array.isArray(picked)) {
+      return picked as Record<string, unknown>;
+    }
+  }
   let latest: Record<string, unknown> | null = null;
   for (const value of Object.values(raw)) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
