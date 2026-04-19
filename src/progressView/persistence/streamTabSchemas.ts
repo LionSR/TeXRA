@@ -113,8 +113,7 @@ function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
 }
 
 // ============================================================================
-// Output files: { round: OutputFileInfo[] } (new); legacy nested is flattened
-// before schema validation.
+// Output files: { round: OutputFileInfo[] }
 // ============================================================================
 
 const OutputFileListSchema = z
@@ -124,25 +123,26 @@ const OutputFileListSchema = z
   )
   .catch([]);
 
-export const OutputFilesDataSchema = z.preprocess(
-  (raw) => (isLegacyNested(raw) ? flattenLegacyRuns(raw) : raw),
-  z
-    .record(z.string(), OutputFileListSchema)
-    .transform(recordToRoundMap)
-    .catch(new Map()),
-) as z.ZodType<Map<number, OutputFileInfo[]>>;
+/**
+ * Parses a flat round-keyed record to `Map<number, OutputFileInfo[]>`.
+ * Legacy nested records (`{ runId: { round: items[] } }`) must be
+ * pre-flattened by the caller (see `flattenLegacyRuns`) so the
+ * activeRunId hint can be threaded in — the schema itself does not fall
+ * back to insertion order.
+ */
+export const OutputFilesDataSchema = z
+  .record(z.string(), OutputFileListSchema)
+  .transform(recordToRoundMap)
+  .catch(new Map()) as z.ZodType<Map<number, OutputFileInfo[]>>;
 
 // ============================================================================
-// Missing outputs: { round: string[] } (new); legacy nested flattened first.
+// Missing outputs: { round: string[] } (caller pre-flattens legacy input).
 // ============================================================================
 
-export const MissingOutputsDataSchema = z.preprocess(
-  (raw) => (isLegacyNested(raw) ? flattenLegacyRuns(raw) : raw),
-  z
-    .record(z.string(), z.array(z.string()).catch([]))
-    .transform(recordToRoundMap)
-    .catch(new Map()),
-) as z.ZodType<Map<number, string[]>>;
+export const MissingOutputsDataSchema = z
+  .record(z.string(), z.array(z.string()).catch([]))
+  .transform(recordToRoundMap)
+  .catch(new Map()) as z.ZodType<Map<number, string[]>>;
 
 // ============================================================================
 // Usage stats — per-run map kept (tool-use can resume → multiple runs).

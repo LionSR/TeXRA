@@ -82,13 +82,21 @@ export function getFilePatterns(
   // the `<base>_<…>_full_<model>` case. Requiring the `_` after `<base>`
   // keeps siblings like `paper2_…` from matching when the target is
   // `paper.tex`.
-  const simpleMerge = workflowMergeFilenameStem(base, model);
-  patterns.push(
-    simpleMerge,
-    `${simpleMerge}_diff`,
-    `${base}_*_full_${model}`,
-    `${base}_*_full_${model}_diff`,
-  );
+  //
+  // Emit both raw and normalized-model variants so legacy merge files
+  // written with the dot-stripped model token (`paper_full_gpt45`) are
+  // discovered alongside current files (`paper_full_gpt-4.5`).
+  const mergeModels =
+    legacyModel === model ? [model] : [model, legacyModel];
+  for (const m of mergeModels) {
+    const stem = workflowMergeFilenameStem(base, m);
+    patterns.push(
+      stem,
+      `${stem}_diff`,
+      `${base}_*_full_${m}`,
+      `${base}_*_full_${m}_diff`,
+    );
+  }
   return patterns;
 }
 

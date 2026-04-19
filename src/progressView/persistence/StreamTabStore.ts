@@ -108,10 +108,12 @@ class StreamTabKVStore extends KVStore {
   }
 
   /**
-   * When a record is in legacy nested form (`{ runId: { round: items[] } }`),
-   * prefer the run selected by `meta.activeRunId` so hydration uses the run
-   * that was active when the tab was last viewed. Falls back to insertion
-   * order for meta without activeRunId or for already-flat records.
+   * Sole owner of legacy-record flattening. When a record is in legacy
+   * nested form (`{ runId: { round: items[] } }`), prefer the run selected
+   * by `meta.activeRunId` so hydration uses the run that was active when
+   * the tab was last viewed. Falls back to insertion order for meta
+   * without activeRunId. Already-flat records pass through unchanged, so
+   * the downstream schema never needs its own preprocess step.
    */
   private async preferActiveRunFlattening(raw: unknown): Promise<unknown> {
     if (!isLegacyNested(raw)) return raw;
