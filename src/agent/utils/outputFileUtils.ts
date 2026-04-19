@@ -38,16 +38,24 @@ export function getOutputFileName(
  * any subdirectory in the source path (e.g. `chapters/main.tex` and
  * `appendix/main.tex` produce distinct files under the same round dir).
  *
- * Guards against path traversal: absolute paths and `..` segments in the
- * model-produced `source` are stripped so the output always lands inside
- * `roundDir`.
+ * Like the primary output filename, the extracted filename includes agent
+ * and model tokens so two tabs on the same input (different agent/model)
+ * don't collide on extracted-doc paths in workspace storage mode.
+ *
+ * Guards against path traversal: absolute paths, drive letters, and `..`
+ * segments in the model-produced `source` are stripped so the output
+ * always lands inside `roundDir`.
  *
  * @param source Source document name from XML (e.g. "chapters/main.tex")
  * @param roundDir The round directory (already includes `r{round}`)
+ * @param agent Clean agent identifier (source prefixes stripped)
+ * @param model Model name (dots preserved)
  */
 export function getExtractedDocOutputFileName(
   source: string,
   roundDir: string,
+  agent: string,
+  model: string,
 ): string {
   const parsed = path.parse(source);
   const extension = parsed.ext.replace('.', '') || 'tex';
@@ -61,7 +69,12 @@ export function getExtractedDocOutputFileName(
     )
     .join(path.sep);
   const safeName = path.basename(parsed.name) || 'output';
-  return path.join(roundDir, safeDir, `${safeName}.${extension}`);
+  const cleanAgent = getCleanAgentName(agent);
+  return path.join(
+    roundDir,
+    safeDir,
+    `${safeName}_${cleanAgent}_${model}.${extension}`,
+  );
 }
 
 /**

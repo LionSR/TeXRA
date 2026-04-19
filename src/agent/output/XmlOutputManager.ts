@@ -235,7 +235,12 @@ export class XmlOutputManager {
         continue;
       }
 
-      const texFile = getExtractedDocOutputFileName(source, roundDir);
+      const texFile = getExtractedDocOutputFileName(
+        source,
+        roundDir,
+        this.agentConfig.agent,
+        this.agentConfig.model,
+      );
       const texLocation = isExternal
         ? createExternalLocation(texFile)
         : this.fileService.createLocation(texFile);
