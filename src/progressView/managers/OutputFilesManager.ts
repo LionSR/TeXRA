@@ -1,28 +1,20 @@
 import { AgentLogger } from '@logger/AgentLogger';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
-import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import {
   OutputFileInfoListSchema,
   type OutputFileInfo,
-  type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
 
 /**
- * Manages output files collection with disk-backed persistence per stream tab.
- * Each stream's data lives in its own directory on disk via StreamTabStore.
- *
- * Disk writes happen per-stream on mutation. Disk deletion is owned by
- * ProgressViewState (via store.clear() / deleteAllStreamData()).
+ * Manages output files per stream tab with disk-backed persistence.
+ * One run per tab — files are indexed by round only, not runId.
  */
 export class OutputFilesManager {
-  private items: Map<StreamTabId, Map<string, Map<number, OutputFileInfo[]>>> =
-    new Map();
-  private _missingOutputs: Map<
-    StreamTabId,
-    Map<string, Map<number, string[]>>
-  > = new Map();
+  private items: Map<StreamTabId, Map<number, OutputFileInfo[]>> = new Map();
+  private _missingOutputs: Map<StreamTabId, Map<number, string[]>> = new Map();
   private loaded = false;
   private readonly logger: AgentLogger;
   private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
@@ -32,33 +24,24 @@ export class OutputFilesManager {
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  private getOrCreateNested<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
+  private getOrCreate<V>(
+    map: Map<StreamTabId, Map<number, V>>,
+    key: StreamTabId,
+  ): Map<number, V> {
     let inner = map.get(key);
     if (!inner) {
-      inner = factory();
+      inner = new Map();
       map.set(key, inner);
     }
     return inner;
   }
 
-  /**
-   * Add output files for a stream and round.
-   */
+  /** Add output files for a stream, keyed by round. */
   async addFiles(
     stream: StreamTabId,
-    storageKey: StorageKey,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
-    const streamRuns = this.getOrCreateNested(
-      this.items,
-      stream,
-      () => new Map(),
-    );
-    const runRounds = this.getOrCreateNested(
-      streamRuns,
-      storageKey,
-      () => new Map(),
-    );
+    const rounds = this.getOrCreate(this.items, stream);
 
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundResult = RoundKeySchema.safeParse(round);
@@ -72,34 +55,22 @@ export class OutputFilesManager {
         Array.isArray(files) ? files : [],
       );
       if (normalizedFiles.length === 0) {
-        runRounds.delete(roundResult.data);
+        rounds.delete(roundResult.data);
         continue;
       }
 
-      runRounds.set(roundResult.data, normalizedFiles);
+      rounds.set(roundResult.data, normalizedFiles);
     }
 
     this.saveStream(stream);
   }
 
-  /**
-   * Update missing outputs for a stream.
-   */
+  /** Update missing outputs for a stream, keyed by round. */
   async updateMissingOutputs(
     stream: StreamTabId,
-    storageKey: StorageKey,
     filesByRound: { [key: number]: string[] },
   ): Promise<void> {
-    const streamMissing = this.getOrCreateNested(
-      this._missingOutputs,
-      stream,
-      () => new Map(),
-    );
-    const runMissing = this.getOrCreateNested(
-      streamMissing,
-      storageKey,
-      () => new Map(),
-    );
+    const rounds = this.getOrCreate(this._missingOutputs, stream);
 
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundResult = RoundKeySchema.safeParse(round);
@@ -109,23 +80,15 @@ export class OutputFilesManager {
         );
         continue;
       }
-      runMissing.set(roundResult.data, files);
+      rounds.set(roundResult.data, files);
     }
 
     this.saveMissingOutputs(stream);
   }
 
-  /** Get output files for a stream */
-  getFiles(stream: StreamTabId): Map<string, Map<number, OutputFileInfo[]>> {
+  /** Get output files for a stream (copy). */
+  getFiles(stream: StreamTabId): Map<number, OutputFileInfo[]> {
     return new Map(this.items.get(stream) ?? []);
-  }
-
-  getRun(
-    stream: StreamTabId,
-    storageKey: StorageKey,
-  ): Map<number, OutputFileInfo[]> | undefined {
-    const target = this.items.get(stream)?.get(storageKey);
-    return target ? new Map(target) : undefined;
   }
 
   /**
@@ -133,24 +96,17 @@ export class OutputFilesManager {
    */
   getKnownFilePaths(
     stream: StreamTabId,
-    options: { storageKey?: StorageKey | null; workspaceOnly?: boolean } = {},
+    options: { workspaceOnly?: boolean } = {},
   ): Set<string> {
     const paths = new Set<string>();
-    const runs = this.items.get(stream);
-    if (!runs) return paths;
+    const rounds = this.items.get(stream);
+    if (!rounds) return paths;
 
-    const targetRunIds =
-      options.storageKey != null ? [options.storageKey] : [...runs.keys()];
     const workspaceOnly = options.workspaceOnly ?? false;
 
-    for (const target of targetRunIds) {
-      const runRounds = runs.get(target);
-      if (!runRounds) continue;
-
-      for (const infos of runRounds.values()) {
-        for (const info of infos) {
-          this.collectPaths(paths, info, workspaceOnly);
-        }
+    for (const infos of rounds.values()) {
+      for (const info of infos) {
+        this.collectPaths(paths, info, workspaceOnly);
       }
     }
     return paths;
@@ -177,7 +133,7 @@ export class OutputFilesManager {
   }
 
   /** Get missing outputs for a stream */
-  getMissingOutputs(stream: StreamTabId): Map<string, Map<number, string[]>> {
+  getMissingOutputs(stream: StreamTabId): Map<number, string[]> {
     if (!this.loaded) {
       throw new Error('Missing outputs requested before load completed');
     }
@@ -246,7 +202,7 @@ export class OutputFilesManager {
     this.chainWrite(stream, this.pendingWrites, () => {
       const data = this.items.get(stream);
       return getStreamTabStore(stream).writeOutputFiles(
-        data ? nestedMapToRecord(data) : {},
+        data ? mapToRecord(data) : {},
       );
     });
   }
@@ -255,15 +211,11 @@ export class OutputFilesManager {
     this.chainWrite(stream, this.pendingMissingWrites, () => {
       const data = this._missingOutputs.get(stream);
       return getStreamTabStore(stream).writeMissingOutputs(
-        data ? nestedMapToRecord(data) : {},
+        data ? mapToRecord(data) : {},
       );
     });
   }
 
-  /**
-   * Chain a write operation after any pending write for the same stream,
-   * skipping if the stream was evicted while queued.
-   */
   private chainWrite(
     stream: StreamTabId,
     writesMap: Map<StreamTabId, Promise<void>>,

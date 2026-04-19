@@ -1,26 +1,26 @@
 import { getExecutionStore } from '@agent/storage';
-import { normalizeRunId } from '@common/constants/runIds';
+import { getCleanAgentName } from '@agent/index';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TaskStateSchema,
   isToolUseTaskState,
+  isWorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import type { StreamTabMeta } from '@progressView/persistence/streamTabSchemas';
-import type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /**
  * Manages per-stream metadata with disk-backed persistence via meta.json.
  *
- * Owns: taskStates, executionIds, activeRunIds, parentStreamIds.
+ * Owns: taskStates, executionIds, parentStreamIds, descriptions.
  * Disk writes happen per-stream on mutation. Disk deletion is owned by
  * ProgressViewState (via store.clear() / deleteAllStreamData()).
  */
 export class StreamMetaManager {
   private taskStates = new Map<StreamTabId, TaskState>();
   private executionIds = new Map<StreamTabId, ExecutionId>();
-  private activeRunIds = new Map<StreamTabId, StorageKey | null>();
   private parentStreamIds = new Map<StreamTabId, StreamTabId>();
   private descriptions = new Map<StreamTabId, string>();
   private loaded = false;
@@ -51,17 +51,6 @@ export class StreamMetaManager {
 
   setExecutionId(stream: StreamTabId, executionId: ExecutionId): void {
     this.executionIds.set(stream, executionId);
-    this.save(stream);
-  }
-
-  // -- Active run IDs ---------------------------------------------------------
-
-  getActiveRunId(stream: StreamTabId): StorageKey | null {
-    return this.activeRunIds.get(stream) ?? null;
-  }
-
-  setActiveRunId(stream: StreamTabId, runId: string | null): void {
-    this.activeRunIds.set(stream, runId ? normalizeRunId(runId) : null);
     this.save(stream);
   }
 
@@ -104,13 +93,55 @@ export class StreamMetaManager {
     );
   }
 
+  /**
+   * Return workflow stream IDs whose taskState's agentConfig matches the
+   * provided config. Used by command-palette pack/clean to clear missing
+   * outputs across every tab that surfaced markers for the cleaned files.
+   *
+   * Both sides are canonicalized: agent names are stripped of source
+   * prefixes (`builtin:polish` → `polish`) and input-file paths are
+   * normalized to forward slashes so Windows `\\` vs `/` disagreements
+   * don't cause the match to miss. `useMultipleOutputs` (optional) further
+   * narrows matches so tabs with different output shapes on the same
+   * input aren't cleared together.
+   */
+  findWorkflowStreamsMatching(match: {
+    agent: string;
+    model: string;
+    inputFile: string;
+    useMultipleOutputs?: boolean;
+  }): StreamTabId[] {
+    const wantAgent = getCleanAgentName(match.agent);
+    const wantModel = match.model;
+    const wantFile = match.inputFile.replaceAll('\\', '/');
+    const result: StreamTabId[] = [];
+    for (const [stream, state] of this.taskStates) {
+      if (!isWorkflowTaskState(state)) continue;
+      const cfg = state.agentConfig;
+      if (
+        getCleanAgentName(cfg.agent) !== wantAgent ||
+        cfg.model !== wantModel ||
+        cfg.inputFile.replaceAll('\\', '/') !== wantFile
+      ) {
+        continue;
+      }
+      if (
+        match.useMultipleOutputs !== undefined &&
+        Boolean(cfg.useMultipleOutputs) !== match.useMultipleOutputs
+      ) {
+        continue;
+      }
+      result.push(stream);
+    }
+    return result;
+  }
+
   // -- Lifecycle --------------------------------------------------------------
 
   /** Remove a stream from in-memory state. Disk cleanup owned by caller. */
   evict(stream: StreamTabId): void {
     this.taskStates.delete(stream);
     this.executionIds.delete(stream);
-    this.activeRunIds.delete(stream);
     this.parentStreamIds.delete(stream);
     this.descriptions.delete(stream);
     this.pendingWrites.delete(stream);
@@ -120,7 +151,6 @@ export class StreamMetaManager {
   evictAll(): void {
     this.taskStates.clear();
     this.executionIds.clear();
-    this.activeRunIds.clear();
     this.parentStreamIds.clear();
     this.descriptions.clear();
     this.pendingWrites.clear();
@@ -158,8 +188,6 @@ export class StreamMetaManager {
       }
       if (meta.executionId)
         this.executionIds.set(streamId, meta.executionId as ExecutionId);
-      if (meta.activeRunId)
-        this.activeRunIds.set(streamId, normalizeRunId(meta.activeRunId));
       if (meta.parentStreamId)
         this.parentStreamIds.set(streamId, meta.parentStreamId as StreamTabId);
       if (meta.description) this.descriptions.set(streamId, meta.description);
@@ -254,14 +282,12 @@ export class StreamMetaManager {
   private buildMeta(stream: StreamTabId): StreamTabMeta {
     const taskState = this.taskStates.get(stream);
     const executionId = this.executionIds.get(stream);
-    const activeRunId = this.activeRunIds.get(stream);
     const parentStreamId = this.parentStreamIds.get(stream);
     const description = this.descriptions.get(stream);
 
     return {
       ...(taskState && { taskState }),
       ...(executionId && { executionId }),
-      ...(activeRunId != null && { activeRunId }),
       ...(parentStreamId && { parentStreamId }),
       ...(description && { description }),
     };
