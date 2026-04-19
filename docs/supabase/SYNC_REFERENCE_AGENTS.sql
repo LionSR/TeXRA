@@ -376,7 +376,7 @@ VALUES (
   'tool-use-lean/lean.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory']
+  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'subscribe_pr_activity', 'unsubscribe_pr_activity', 'find_current_pr']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
