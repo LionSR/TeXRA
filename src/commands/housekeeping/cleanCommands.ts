@@ -84,6 +84,7 @@ async function handleCleanSingle(
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
+      useMultipleOutputs: false,
     },
   });
 }
@@ -116,6 +117,7 @@ async function handleCleanMultiple(
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
+      useMultipleOutputs: true,
     },
   });
 }
@@ -154,7 +156,14 @@ export async function handleClean(config: unknown): Promise<void> {
     emitClearMissingOutputs(
       streamId
         ? { streamIdOverride: streamId }
-        : { streamConfig: { agent, model, inputFile } },
+        : {
+            streamConfig: {
+              agent,
+              model,
+              inputFile,
+              useMultipleOutputs,
+            },
+          },
     );
   }
 }

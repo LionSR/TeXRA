@@ -70,13 +70,20 @@ export interface ProgressEventPayloads {
    * Clear the "missing outputs" marker. Either target a specific tab via
    * `streamId`, or clear every workflow tab whose taskState matches the
    * given `streamConfig` (for command-palette pack/clean which has no
-   * stream context).
+   * stream context). `useMultipleOutputs`, when specified, narrows the
+   * match so single- vs multi-output tabs on the same input aren't cleared
+   * together.
    */
   clearMissingOutputs:
     | { streamId: StreamTabId; streamConfig?: undefined }
     | {
         streamId?: undefined;
-        streamConfig: { agent: string; model: string; inputFile: string };
+        streamConfig: {
+          agent: string;
+          model: string;
+          inputFile: string;
+          useMultipleOutputs?: boolean;
+        };
       };
   setTaskState: SetTaskStatePayload;
   updateStreamUsage: UsageScopedPayload & {

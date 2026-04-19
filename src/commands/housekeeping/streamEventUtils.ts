@@ -8,8 +8,15 @@ export interface ClearMissingOutputsOptions {
    * matches this config. Used by command-palette pack/clean which has no
    * stream context — multiple workflow tabs can exist for the same agent
    * + model + inputFile combination after the one-run-per-tab refactor.
+   * Supply `useMultipleOutputs` to narrow the match so tabs with a
+   * different output shape on the same input aren't cleared together.
    */
-  streamConfig?: { agent: string; model: string; inputFile: string };
+  streamConfig?: {
+    agent: string;
+    model: string;
+    inputFile: string;
+    useMultipleOutputs?: boolean;
+  };
 }
 
 export function emitClearMissingOutputs(

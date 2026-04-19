@@ -84,13 +84,7 @@ async function executePackOperation<T extends PackParams>(
   input: unknown,
   label: string,
   runOperation: (data: T) => Promise<FileOpResult>,
-  getClearOptions: (data: T) => ClearMissingOutputsOptions | null = (data) => ({
-    streamConfig: {
-      agent: data.agent,
-      model: data.model,
-      inputFile: data.inputFile,
-    },
-  }),
+  getClearOptions: (data: T) => ClearMissingOutputsOptions | null,
 ): Promise<void> {
   const data = await parseWithErrorDisplay(CHANNEL, schema, input, label);
   if (!data) return;
@@ -131,6 +125,7 @@ async function handlePack(config: unknown): Promise<void> {
           agent: data.agent,
           model: data.model,
           inputFile: data.inputFile,
+          useMultipleOutputs: data.useMultipleOutputs,
         },
       };
     },
@@ -147,6 +142,14 @@ async function handlePackSingle(
     { inputFile, agent, model },
     'params',
     (data) => runPackSingle(data.model, data.inputFile, data.agent),
+    (data) => ({
+      streamConfig: {
+        agent: data.agent,
+        model: data.model,
+        inputFile: data.inputFile,
+        useMultipleOutputs: false,
+      },
+    }),
   );
 }
 
@@ -162,6 +165,14 @@ async function handlePackMultiple(
     'params',
     (data) =>
       runPackMultiple(data.model, data.inputFile, data.agent, data.outputFiles),
+    (data) => ({
+      streamConfig: {
+        agent: data.agent,
+        model: data.model,
+        inputFile: data.inputFile,
+        useMultipleOutputs: true,
+      },
+    }),
   );
 }
 

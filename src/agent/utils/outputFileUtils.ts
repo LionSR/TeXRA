@@ -1,7 +1,6 @@
 import * as path from 'path';
 
 import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
-import { parseFilenameParts } from './mergeFileUtils';
 
 /**
  * Generates an output path under a round subfolder, preserving the input
@@ -28,6 +27,10 @@ export function getOutputFileName(
  * any subdirectory in the source path (e.g. `chapters/main.tex` and
  * `appendix/main.tex` produce distinct files under the same round dir).
  *
+ * Guards against path traversal: absolute paths and `..` segments in the
+ * model-produced `source` are stripped so the output always lands inside
+ * `roundDir`.
+ *
  * @param source Source document name from XML (e.g. "chapters/main.tex")
  * @param roundDir The round directory (already includes `r{round}`)
  */
@@ -37,19 +40,28 @@ export function getExtractedDocOutputFileName(
 ): string {
   const parsed = path.parse(source);
   const extension = parsed.ext.replace('.', '') || 'tex';
-  return path.join(roundDir, parsed.dir, `${parsed.name}.${extension}`);
+  // Strip absolute prefixes and `..` segments so a malicious or malformed
+  // source cannot escape roundDir via path.join's absolute-override or
+  // parent-directory semantics.
+  const safeDir = parsed.dir
+    .split(/[\\/]+/)
+    .filter((seg) => seg && seg !== '..' && seg !== '.')
+    .join(path.sep);
+  const safeName = path.basename(parsed.name) || 'output';
+  return path.join(roundDir, safeDir, `${safeName}.${extension}`);
 }
 
 /**
  * Creates a merge-specific output file location getter.
  *
- * Merge operations use specialized naming: `{base}_{agent}_r{round}_full_{model}.tex`
- * This extracts agent/round/model from the edited file name and creates a "full" merged output.
+ * Merge is a single-output workflow: the round number is not reflected in
+ * the filename and the same location is returned for every round. The
+ * output lives next to the input file with a `_full` suffix, matching the
+ * convention the user already sees for merged documents.
  *
  * @param inputFile Original input file path
  * @param editedFile The edited file being merged (required for merge operations)
  * @param fileService File service for creating locations
- * @returns A function that generates output file locations for each round
  * @throws Error if editedFile is not provided
  */
 export function createMergeOutputFileLocationGetter(
@@ -63,13 +75,7 @@ export function createMergeOutputFileLocationGetter(
 
   const inputDir = path.dirname(inputFile);
   const inputBase = path.parse(inputFile).name;
-  const editedBase = path.parse(editedFile).name;
-
-  // Parse filename parts from edited file to preserve agent/round/model info
-  const { base, agent, roundNum, model } = parseFilenameParts(editedBase);
-  const finalBase = inputBase !== base ? inputBase : base;
-  const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
-  const outputPath = path.join(inputDir, outputFile);
+  const outputPath = path.join(inputDir, `${inputBase}_full.tex`);
 
   // Pre-compute location (merge is single-output, always the same location)
   const location = fileService.createLocation(outputPath) as AgentFileLocation;
