@@ -27,6 +27,7 @@ import { splitContentLines } from '@utils/text/stringUtils';
 import { defineTool } from './core/define';
 import { ToolResult, ToolError } from './result';
 import {
+  assertWritable,
   formatFileView,
   formatLinesWithNumbers,
   requireField,
@@ -121,6 +122,13 @@ export class TextEditorTool extends defineTool({
       root,
     );
     const filePath = resolved.fsPath;
+
+    // Every command except `view` mutates the target file. Enforce the
+    // external-root writable policy here (workspace paths are always allowed
+    // — assertWritable is a no-op for them).
+    if (command !== 'view') {
+      assertWritable(resolved, displayPath);
+    }
 
     await this.validatePath(command, filePath, displayPath);
 
