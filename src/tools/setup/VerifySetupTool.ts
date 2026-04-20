@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { type ToolResult } from '@tools/result';
 import {
   checkCoreDependencies,
@@ -23,8 +24,6 @@ const VerifySetupInputSchema = z.strictObject({
 
 type VerifySetupInput = z.infer<typeof VerifySetupInputSchema>;
 
-const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
-
 export class VerifySetupTool extends defineTool({
   name: 'verify_setup',
   description: `Verify installation status. With no input, runs a full check of TeXRA's core LaTeX dependencies (pdflatex/latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff) and the LaTeX Workshop extension, returning a short plain-text report. With {"tool": "<name>"}, checks only that tool. Use after running an install command to confirm it worked, or as the final step of a setup session.`,
@@ -44,13 +43,15 @@ export class VerifySetupTool extends defineTool({
       };
     }
 
-    const missingCore = await checkCoreDependencies(false);
+    const [missingCore, anyKey, auth] = await Promise.all([
+      checkCoreDependencies(false),
+      platform.secrets.anyApiKeyExists(),
+      platform.auth.getStatus().catch(() => ({
+        authenticated: false as const,
+      })),
+    ]);
     const latexWorkshopInstalled =
       platform.extensions.isInstalled(LATEX_WORKSHOP_EXT_ID);
-    const anyKey = await platform.secrets.anyApiKeyExists();
-    const auth = await platform.auth.getStatus().catch(() => ({
-      authenticated: false as const,
-    }));
 
     const lines: string[] = [];
     if (missingCore.length === 0) {

@@ -1,10 +1,12 @@
 // Standard library imports
 import * as os from 'os';
+import * as path from 'path';
 
 // Third-party imports
 import { z } from 'zod';
 
 // Local imports
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@tools/result';
 import {
   checkToolInstalled,
@@ -42,8 +44,6 @@ const CORE_TOOLS = [
 
 const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
 
-const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
-
 async function checkTool(name: string): Promise<ToolStatus> {
   const installed = await checkToolInstalled(name, false);
   const resolvedPath = installed ? findToolInCommonPaths(name) : null;
@@ -74,10 +74,28 @@ export class ProbeEnvironmentTool extends defineTool({
     const extendedPath = extendEnvPath();
     const pm = detectPackageManager();
 
-    const [coreTools, optionalTools] = await Promise.all([
-      Promise.all(CORE_TOOLS.map(checkTool)),
-      Promise.all(OPTIONAL_TOOLS.map(checkTool)),
-    ]);
+    const [coreTools, optionalTools, apiKeys, anyKeySet, auth, githubToken] =
+      await Promise.all([
+        Promise.all(CORE_TOOLS.map(checkTool)),
+        Promise.all(OPTIONAL_TOOLS.map(checkTool)),
+        Promise.all(
+          platform.secrets.providers.map(async (provider) => ({
+            provider,
+            hasKey: await platform.secrets
+              .apiKeyExists(provider)
+              .catch(() => false),
+          })),
+        ),
+        platform.secrets.anyApiKeyExists().catch((err) => {
+          throw new ToolError(
+            `Failed to probe API key status: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }),
+        platform.auth.getStatus().catch(() => ({
+          authenticated: false as const,
+        })),
+        platform.secrets.gitHubTokenExists().catch(() => 'none' as const),
+      ]);
 
     const missingCore = coreTools
       .filter((t) => !t.installed && t.name !== 'gm' && t.name !== 'magick')
@@ -86,26 +104,6 @@ export class ProbeEnvironmentTool extends defineTool({
       coreTools.find((t) => t.name === 'gm')?.installed ||
       coreTools.find((t) => t.name === 'magick')?.installed;
     if (!hasImageTool) missingCore.push('gm/magick');
-
-    let apiKeys: Array<{ provider: string; hasKey: boolean }> = [];
-    let anyKeySet = false;
-    try {
-      apiKeys = await Promise.all(
-        platform.secrets.providers.map(async (provider) => ({
-          provider,
-          hasKey: await platform.secrets.apiKeyExists(provider),
-        })),
-      );
-      anyKeySet = await platform.secrets.anyApiKeyExists();
-    } catch (err) {
-      throw new ToolError(
-        `Failed to probe API key status: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-
-    const auth = await platform.auth.getStatus().catch(() => ({
-      authenticated: false as const,
-    }));
 
     const latexWorkshopInstalled =
       platform.extensions.isInstalled(LATEX_WORKSHOP_EXT_ID);
@@ -118,7 +116,7 @@ export class ProbeEnvironmentTool extends defineTool({
       },
       shell: process.env.SHELL ?? process.env.ComSpec ?? 'unknown',
       home: homedir,
-      path: extendedPath.split(':').filter(Boolean),
+      path: extendedPath.split(path.delimiter).filter(Boolean),
       packageManager: pm,
       coreTools,
       optionalTools,
@@ -135,9 +133,7 @@ export class ProbeEnvironmentTool extends defineTool({
           email: auth.authenticated ? auth.email : undefined,
           tier: auth.authenticated ? auth.tier : undefined,
         },
-        githubToken: await platform.secrets
-          .gitHubTokenExists()
-          .catch(() => 'none' as const),
+        githubToken,
       },
     };
 

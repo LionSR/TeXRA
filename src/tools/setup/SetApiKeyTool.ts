@@ -75,12 +75,14 @@ export class SetApiKeyTool extends defineTool({
     await platform.secrets.setApiKey(provider, input.key.trim());
 
     // Refresh the main view so the "no API key" banner disappears immediately.
-    await platform.commands
-      .invoke('texra.refreshApiKeyStatus')
-      .catch(() => undefined);
-    await platform.commands
-      .invoke('texra.refreshAllOptions')
-      .catch(() => undefined);
+    await Promise.all([
+      platform.commands
+        .invoke('texra.refreshApiKeyStatus')
+        .catch(() => undefined),
+      platform.commands
+        .invoke('texra.refreshAllOptions')
+        .catch(() => undefined),
+    ]);
 
     const masked = maskKey(input.key);
     return {

@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
+import { AUTH_COMMANDS } from '@auth/constants';
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local file imports
@@ -18,9 +19,9 @@ const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
   // API keys & auth
   'texra.setApiKey',
   'texra.removeApiKey',
-  'texra.auth.signIn',
-  'texra.auth.signOut',
-  'texra.auth.viewProfile',
+  AUTH_COMMANDS.SIGN_IN,
+  AUTH_COMMANDS.SIGN_OUT,
+  AUTH_COMMANDS.VIEW_PROFILE,
   // Settings dashboard tabs
   'texra.showSettingsView',
   'texra.showDashboard',

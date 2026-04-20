@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local file imports
@@ -13,7 +14,7 @@ import { getSetupPlatform } from './platform';
  * Matches the install flows already surfaced by the LaTeX tab.
  */
 const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
-  'James-Yu.latex-workshop',
+  LATEX_WORKSHOP_EXT_ID,
   'leanprover.lean4',
 ]);
 
