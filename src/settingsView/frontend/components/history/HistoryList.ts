@@ -21,11 +21,10 @@ import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Local imports - shared components & pagination utility
-import {
-  paginate,
-  DEFAULT_PAGE_SIZE,
-  type PageChangeDetail,
-} from '../shared/Pagination';
+import { paginate, type PageChangeDetail } from '../shared/Pagination';
+
+/** History entries are long (instruction + config details), so paginate tighter than the shared default. */
+const HISTORY_PAGE_SIZE = 25;
 
 // Local imports - history view
 import { HistoryViewEvents } from './events';
@@ -96,7 +95,7 @@ export class HistoryList extends LitElement {
     if (changedProperties.has('items') && this.paginated) {
       const totalPages = Math.max(
         1,
-        Math.ceil(this.items.length / DEFAULT_PAGE_SIZE),
+        Math.ceil(this.items.length / HISTORY_PAGE_SIZE),
       );
       if (this.page >= totalPages) {
         this.page = Math.max(0, totalPages - 1);
@@ -235,7 +234,7 @@ export class HistoryList extends LitElement {
 
     // When searching, show all items; otherwise paginate
     const displayItems = this.paginated
-      ? paginate(this.items, this.page, DEFAULT_PAGE_SIZE).paged
+      ? paginate(this.items, this.page, HISTORY_PAGE_SIZE).paged
       : this.items;
 
     return html`
@@ -252,7 +251,7 @@ export class HistoryList extends LitElement {
         ? html`<list-pagination
             .page=${this.page}
             .totalItems=${this.items.length}
-            .pageSize=${DEFAULT_PAGE_SIZE}
+            .pageSize=${HISTORY_PAGE_SIZE}
             @page-change=${this.handlePageChange}
           ></list-pagination>`
         : ''}
@@ -275,7 +274,7 @@ export class HistoryList extends LitElement {
         ? html`<list-pagination
             .page=${this.page}
             .totalItems=${this.items.length}
-            .pageSize=${DEFAULT_PAGE_SIZE}
+            .pageSize=${HISTORY_PAGE_SIZE}
             @page-change=${this.handlePageChange}
           ></list-pagination>`
         : ''}

@@ -10,10 +10,9 @@ export const permissionCardStyles: CSSResult = css`
     z-index: 1000;
     background: color-mix(
       in srgb,
-      var(--vscode-editor-background) 60%,
+      var(--vscode-editor-background) 70%,
       transparent
     );
-    backdrop-filter: blur(4px);
   }
 
   :host([hidden]) {
@@ -29,7 +28,7 @@ export const permissionCardStyles: CSSResult = css`
     width: min(92vw, 600px);
     max-height: min(80vh, 44rem);
     overflow: hidden;
-    box-shadow: 0 6px 24px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.35));
+    box-shadow: 0 2px 8px var(--vscode-widget-shadow, transparent);
   }
 
   .permission-header {
@@ -79,20 +78,31 @@ export const permissionCardStyles: CSSResult = css`
     margin-left: auto;
   }
 
+  /*
+   * .action-button is the local alias for the shared .filled-button look
+   * used elsewhere. Composed locally rather than via commonViewStyles
+   * since this stylesheet is consumed stand-alone by PermissionCard.
+   * Keep values in sync with .filled-button in commonViewStyles.
+   */
   .action-button {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-small);
     padding: var(--spacing-small) var(--spacing-medium);
-    background: var(--vscode-button-background);
+    font-size: var(--font-size);
+    font-family: inherit;
     color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
     border: var(--border-thin) solid var(--vscode-button-border, transparent);
     border-radius: var(--border-radius);
     cursor: pointer;
-    font-size: var(--font-size);
     transition:
       background-color var(--transition-fast),
       opacity var(--transition-fast);
+  }
+
+  .action-button:hover {
+    background: var(--vscode-button-hoverBackground);
   }
 
   .action-button:active {
@@ -105,8 +115,12 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .action-button--secondary {
-    background: var(--vscode-button-secondaryBackground, transparent);
     color: var(--vscode-button-secondaryForeground, inherit);
+    background: var(--vscode-button-secondaryBackground, transparent);
+  }
+
+  .action-button--secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground, transparent);
   }
 
   .file-path {

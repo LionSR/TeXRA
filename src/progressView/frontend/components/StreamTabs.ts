@@ -218,14 +218,24 @@ export class StreamTab extends LitElement {
       }
 
       .tab-container.is-active {
-        background-color: var(--vscode-list-inactiveSelectionBackground);
-      }
-
-      .tab-container.is-active .tab {
+        background-color: var(--vscode-list-activeSelectionBackground);
         color: var(
-          --vscode-list-inactiveSelectionForeground,
+          --vscode-list-activeSelectionForeground,
           var(--vscode-foreground)
         );
+      }
+
+      .tab-container.is-active .tab,
+      .tab-container.is-active .tab-meta,
+      .tab-container.is-active .tab-description,
+      .tab-container.is-active .tab-delete,
+      .tab-container.is-active .tab-expand {
+        color: inherit;
+      }
+
+      .tab-container.is-active .tab-meta,
+      .tab-container.is-active .tab-description {
+        opacity: var(--opacity-full);
       }
 
       .tab-container.is-compact .tab {
