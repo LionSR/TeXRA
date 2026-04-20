@@ -5,8 +5,14 @@ import { z } from 'zod';
 // Local imports
 import type { FileOpResult } from '@agent/types';
 import { parseWithErrorDisplay } from '@common/errors';
-import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
+import {
+  runPack,
+  runPackSingle,
+  runPackMultiple,
+  runPackRunDir,
+} from '@housekeeping';
 import * as logger from '@logger/logUtils';
+import { ExecutionIdSchema } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
 import {
   emitClearMissingOutputs,
@@ -29,6 +35,7 @@ const PackConfigSchema = BasePackSchema.extend({
   outputFiles: z.array(z.string()).prefault([]),
   useMultipleOutputs: z.boolean().optional(),
   streamId: z.string().optional(),
+  executionId: ExecutionIdSchema.optional(),
   skipProgressViewClear: z.boolean().optional(),
 }).transform((c) => ({
   ...c,
@@ -104,6 +111,18 @@ async function handlePack(config: unknown): Promise<void> {
     config,
     'config',
     (data) => {
+      // Toolbar-driven invocations pass an executionId: snapshot the runDir
+      // into workspace/History/ (dereferencing symlinked deps). Legacy
+      // callers without an executionId fall back to the workspace-scan
+      // pack for pre-refactor files still lying in the user's tree.
+      if (data.executionId) {
+        return runPackRunDir(
+          data.executionId,
+          data.agent,
+          data.model,
+          data.inputFile,
+        );
+      }
       if (data.outputFiles.length > 1 && !data.useMultipleOutputs) {
         logger.warn(
           CHANNEL,

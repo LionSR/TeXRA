@@ -10,8 +10,10 @@ import {
   runCleanMultiple,
   runCleanBuild,
   runCleanOutput,
+  runCleanRunDir,
 } from '@housekeeping';
 import * as logger from '@logger/logUtils';
+import { ExecutionIdSchema } from '@shared/schemas';
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'cleanCommands';
@@ -29,6 +31,7 @@ const CleanConfigSchema = CleanParamsSchema.extend({
   outputFiles: z.array(z.string()).prefault([]),
   useMultipleOutputs: z.boolean().optional(),
   streamId: z.string().optional(),
+  executionId: ExecutionIdSchema.optional(),
   skipProgressViewClear: z.boolean().optional(),
 }).transform((c) => ({
   ...c,
@@ -138,6 +141,7 @@ export async function handleClean(config: unknown): Promise<void> {
     outputFiles,
     useMultipleOutputs,
     streamId,
+    executionId,
     skipProgressViewClear,
   } = data;
 
@@ -146,8 +150,12 @@ export async function handleClean(config: unknown): Promise<void> {
     `Clean command called with config: ${JSON.stringify(data)}`,
   );
 
-  const result =
-    useMultipleOutputs && outputFiles.length > 0
+  // Toolbar-driven invocations pass an executionId: delete the run's runDir
+  // directly. Legacy callers without an executionId fall back to the
+  // workspace-scan clean for pre-refactor files.
+  const result = executionId
+    ? await runCleanRunDir(executionId)
+    : useMultipleOutputs && outputFiles.length > 0
       ? await runCleanMultiple(model, inputFile, agent, outputFiles)
       : await runCleanSingle(model, inputFile, agent);
   showCleanResult(result, inputFile);

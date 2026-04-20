@@ -1,0 +1,92 @@
+// Standard library imports
+import * as path from 'path';
+import { promises as fs } from 'fs';
+
+// Local imports
+import type { FileOpResult } from '@agent/types/ResultTypes';
+import { getCleanAgentName } from '@agent/index';
+import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
+import type { ExecutionId } from '@shared/schemas';
+import { WorkspaceFS } from '@utils/files';
+import { getRunDir, resolveRunDir } from '@utils/files/taskRunStorage';
+
+import { HISTORY_DIR } from './constants';
+
+const CHANNEL = 'Housekeeping';
+logger.initialize(CHANNEL);
+
+function generateTimestamp(): string {
+  return new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
+}
+
+/**
+ * Snapshot a completed run's runDir into `workspace/History/`. Symlinks
+ * are dereferenced so the snapshot is a self-contained copy.
+ */
+export async function runPackRunDir(
+  executionId: ExecutionId,
+  agent: string,
+  model: string,
+  inputFile: string,
+): Promise<FileOpResult> {
+  logger.info(
+    CHANNEL,
+    `Packing runDir for execution ${executionId} (agent=${agent}, model=${model}, inputFile=${inputFile})`,
+  );
+
+  const runDirAbsolute = await resolveRunDir(executionId);
+  if (!runDirAbsolute) {
+    logger.warn(CHANNEL, `Run directory not found for execution ${executionId}`);
+    return { status: 'noFiles' };
+  }
+
+  const baseName = inputFile ? path.parse(inputFile).name : 'run';
+  const cleanAgent = getCleanAgentName(agent);
+  const destinationRelative = path.join(
+    HISTORY_DIR,
+    `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}`,
+  );
+  const destinationAbsolute = WorkspaceFS.fullPath(destinationRelative);
+
+  try {
+    await WorkspaceFS.createDir(destinationRelative);
+    await fs.cp(runDirAbsolute, destinationAbsolute, {
+      recursive: true,
+      dereference: true,
+      errorOnExist: false,
+    });
+    logger.info(
+      CHANNEL,
+      `Packed runDir ${runDirAbsolute} -> ${destinationAbsolute}`,
+    );
+    return { status: 'success', outputFolder: destinationRelative };
+  } catch (error) {
+    const message = toErrorMessage(error);
+    logger.error(CHANNEL, `Pack runDir failed: ${message}`, { data: error });
+    return { status: 'error', error: message };
+  }
+}
+
+/**
+ * Delete a run's runDir. Irreversible. Used when the user discards a run
+ * from the progress-view toolbar.
+ */
+export async function runCleanRunDir(
+  executionId: ExecutionId,
+): Promise<FileOpResult> {
+  const runDirAbsolute = getRunDir(executionId);
+  logger.info(
+    CHANNEL,
+    `Removing runDir for execution ${executionId}: ${runDirAbsolute}`,
+  );
+
+  try {
+    await fs.rm(runDirAbsolute, { recursive: true, force: true });
+    return { status: 'success' };
+  } catch (error) {
+    const message = toErrorMessage(error);
+    logger.error(CHANNEL, `Clean runDir failed: ${message}`, { data: error });
+    return { status: 'error', error: message };
+  }
+}
