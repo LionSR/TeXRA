@@ -217,6 +217,14 @@ export class StreamTab extends LitElement {
         background-color: var(--vscode-list-hoverBackground);
       }
 
+      /*
+       * Match VS Code's list-item selection pattern: on active, flip both
+       * background and foreground so every descendant text/icon renders in
+       * the selection foreground. The descendant-wildcard selector guarantees
+       * nested spans (.last-active, .model) and codicon glyphs inherit the
+       * selection color even when intermediate elements (.tab-meta,
+       * .tab-description) define their own color.
+       */
       .tab-container.is-active {
         background-color: var(--vscode-list-activeSelectionBackground);
         color: var(
@@ -225,26 +233,36 @@ export class StreamTab extends LitElement {
         );
       }
 
+      .tab-container.is-active *,
       .tab-container.is-active .tab,
+      .tab-container.is-active .tab-title,
       .tab-container.is-active .tab-meta,
       .tab-container.is-active .tab-description,
       .tab-container.is-active .tab-delete,
       .tab-container.is-active .tab-expand {
-        color: inherit;
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
+        );
       }
 
       /*
        * Preserve the destructive-action hover/focus cue on active tabs.
-       * Without this, the .tab-container.is-active .tab-delete rule above
-       * (specificity 0,3,0) would permanently override the base
-       * .tab-delete:hover rule (0,2,0), leaving the close icon stuck on
-       * the inherited foreground.
+       * The descendant-wildcard selector above would otherwise keep the close
+       * icon stuck on the inherited foreground.
        */
       .tab-container.is-active .tab-delete:hover,
-      .tab-container.is-active .tab-delete:focus-within {
+      .tab-container.is-active .tab-delete:focus-within,
+      .tab-container.is-active .tab-delete:hover *,
+      .tab-container.is-active .tab-delete:focus-within * {
         color: var(--vscode-errorForeground);
       }
 
+      /*
+       * When active, drop the dim-by-default opacity on meta/description so
+       * the flipped foreground renders at full contrast on the blue selection
+       * background.
+       */
       .tab-container.is-active .tab-meta,
       .tab-container.is-active .tab-description {
         opacity: var(--opacity-full);
