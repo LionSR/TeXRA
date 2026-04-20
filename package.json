@@ -45,9 +45,17 @@
               "taskRunStorage"
             ],
             "default": "workspace",
-            "description": "Where agent-generated files are saved. Use 'workspace' to write beside the sources or 'taskRunStorage' to isolate artifacts inside the extension storage.",
+            "description": "Deprecated and ignored. Workflow outputs now always live in task-run storage (executions/{id}/...) and are reachable via the progress-view toolbar (Accept / Pack / Open in task storage).",
+            "deprecationMessage": "Workflow outputs now always live in task-run storage. This setting is ignored.",
             "scope": "resource",
             "order": 50
+          },
+          "texra.agentOutputs.autoOpenFinal": {
+            "type": "boolean",
+            "default": true,
+            "description": "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
+            "scope": "resource",
+            "order": 51
           }
         }
       },
