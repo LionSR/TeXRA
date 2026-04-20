@@ -21,9 +21,9 @@ const UpdateShellRcInputSchema = z.strictObject({
     ),
   marker: z
     .string()
-    .prefault('# added by TeXRA setup assistant')
+    .prefault('added by TeXRA setup assistant')
     .describe(
-      'Comment marker written on the preceding line so the addition is easy to find. Set to empty to skip.',
+      'Short descriptive note written as a comment (`#`) on the preceding line. Set to empty to skip. Any leading `#` or `<#`/`#>` is stripped; newlines are rejected.',
     ),
   profile: z
     .enum(['auto', 'zshrc', 'bashrc', 'profile', 'powershell'])
@@ -35,28 +35,26 @@ const UpdateShellRcInputSchema = z.strictObject({
 
 type UpdateShellRcInput = z.infer<typeof UpdateShellRcInputSchema>;
 
+type Shell = 'posix' | 'powershell';
+
 /**
- * Safe-line validator. Only allows single environment-variable assignments,
- * not arbitrary shell commands — the agent uses this tool specifically for
- * PATH fixes after TeX installs, nothing else.
+ * Safe-line validator, scoped to the resolved target shell. Only allows a
+ * single environment-variable assignment matching that shell's syntax —
+ * the agent uses this tool specifically for PATH fixes after TeX installs,
+ * nothing else.
  *
- * Accepted forms (and which metacharacters are rejected for each):
- *   - POSIX      `export NAME=value` / `NAME=value`
- *       Rejects `;`, `&`, `|`, `<`, `>`, backticks, `$(...)` (all of which
- *       can chain commands in sh/bash/zsh even inside partially-quoted
- *       values).
+ *   - POSIX      `export NAME=value`
+ *       Requires the `export` keyword (bare `NAME=value` is shell-local
+ *       and does not propagate to child processes, so it silently fails
+ *       as a PATH fix).
+ *       Rejects `;`, `&`, `|`, `<`, `>`, backticks, `$(...)` — any of
+ *       which can chain commands in sh/bash/zsh.
  *   - PowerShell `$env:NAME = value` / `[Environment]::SetEnvironmentVariable(...)`
  *       Rejects `&`, `|`, `<`, `>`, backticks, `$(...)`. `;` is
- *       intentionally ALLOWED because it is the Windows PATH separator
- *       (`$env:Path = "C:\texlive\2026\bin\win32;$env:Path"`).
+ *       intentionally allowed inside quoted strings (Windows PATH
+ *       separator) but rejected outside quotes (statement separator).
  *
  * All forms reject newlines.
- */
-/**
- * POSIX pattern requires `export` (and/or the inline
- * `NAME=value command` is disallowed). A bare `PATH=/foo` is a
- * shell-local assignment that would NOT propagate to child processes
- * from an rc file, producing a silent no-op PATH fix, so we reject it.
  */
 const POSIX_SAFE_PATTERNS: readonly RegExp[] = [
   /^\s*export\s+[A-Za-z_][A-Za-z0-9_]*=[^\r\n]*$/,
@@ -95,8 +93,6 @@ const POWERSHELL_FORBIDDEN_SUBSTRINGS: readonly string[] = [
  * string. Used for the PowerShell accept path where `;` is a legitimate
  * PATH separator inside a quoted value (`"C:\foo;$env:Path"`) but also a
  * statement separator outside quotes (`$env:Path = "..."; Remove-Item ...`).
- * Backticks are already rejected by POWERSHELL_FORBIDDEN_SUBSTRINGS so we
- * do not need to handle PowerShell's backtick escape here.
  */
 function hasUnquotedSemicolon(line: string): boolean {
   let inSingle = false;
@@ -110,17 +106,16 @@ function hasUnquotedSemicolon(line: string): boolean {
   return false;
 }
 
-function isSafeLine(line: string): boolean {
-  if (POSIX_SAFE_PATTERNS.some((re) => re.test(line))) {
+function isSafeLineFor(line: string, shell: Shell): boolean {
+  if (shell === 'posix') {
+    if (!POSIX_SAFE_PATTERNS.some((re) => re.test(line))) return false;
     return !POSIX_FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s));
   }
-  if (POWERSHELL_SAFE_PATTERNS.some((re) => re.test(line))) {
-    if (POWERSHELL_FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s))) {
-      return false;
-    }
-    return !hasUnquotedSemicolon(line);
+  if (!POWERSHELL_SAFE_PATTERNS.some((re) => re.test(line))) return false;
+  if (POWERSHELL_FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s))) {
+    return false;
   }
-  return false;
+  return !hasUnquotedSemicolon(line);
 }
 
 function resolveProfilePath(profile: UpdateShellRcInput['profile']): string {
@@ -152,20 +147,51 @@ function resolveProfilePath(profile: UpdateShellRcInput['profile']): string {
   return path.join(home, '.profile');
 }
 
+function shellForProfile(profilePath: string): Shell {
+  return profilePath.endsWith('.ps1') ? 'powershell' : 'posix';
+}
+
+/**
+ * Normalize a user-supplied marker into a single comment line. Strips any
+ * leading `#`, rejects embedded newlines, and rejects PowerShell block-
+ * comment delimiters (`<#` / `#>`) so the marker is always a plain
+ * single-line comment body — the `#` prefix is added by the caller.
+ */
+function normalizeMarker(raw: string): string {
+  const trimmed = raw.trim().replace(/^#+\s*/, '');
+  if (/[\r\n]/.test(trimmed)) {
+    throw new ToolError(
+      'marker must not contain newlines (would smuggle extra commands into the rc file).',
+    );
+  }
+  if (trimmed.includes('<#') || trimmed.includes('#>')) {
+    throw new ToolError(
+      'marker must not contain PowerShell block-comment delimiters (`<#` or `#>`).',
+    );
+  }
+  return trimmed;
+}
+
 /**
  * Append a single environment-variable assignment to the user's shell rc.
  *
  * Intentionally narrow:
  *   - one line, one file;
- *   - input must match an env-var assignment pattern (see `isSafeLine`);
- *   - line-based idempotency (skips if the exact trimmed line already appears).
+ *   - target shell is resolved first, then `line` is validated against
+ *     only that shell's syntax (so a POSIX `export PATH=...` is never
+ *     written to a PowerShell profile and vice versa);
+ *   - marker is always written as a `# ...` comment — the leading `#` is
+ *     added in code, never taken from the user, so a malicious marker
+ *     cannot execute;
+ *   - line-based idempotency (skips if the exact trimmed line already
+ *     appears).
  *
  * The agent uses this specifically for post-install PATH fixes when TeX
  * binaries land outside the default `$PATH`.
  */
 export class UpdateShellRcTool extends defineTool({
   name: 'update_shell_rc',
-  description: `Append a single environment-variable assignment to the user's shell rc (~/.zshrc, ~/.bashrc, ~/.profile, or the PowerShell profile on Windows). Only env-var assignments are accepted — command chaining (;, &&, ||, |), command substitution ($(...), \`...\`), redirection, and multi-line input are rejected. Idempotent: skips if the exact trimmed line already appears. Typical use: add a TeX Live bin directory to PATH after installing MacTeX/TeX Live when VS Code was launched without inheriting the shell PATH.`,
+  description: `Append a single environment-variable assignment to the user's shell rc (~/.zshrc, ~/.bashrc, ~/.profile, or the PowerShell profile on Windows). The target shell is resolved first, then the input line is validated against only that shell's syntax — a POSIX \`export PATH=...\` targeting a PowerShell profile (or vice versa) is rejected. Command chaining (;, &&, ||, |), command substitution ($(...), \`...\`), redirection, and multi-line input are rejected. The marker is always written as a comment (\`#\` prefix added in code); any leading \`#\` in the input is stripped. Idempotent: skips if the exact trimmed line already appears.`,
   schema: UpdateShellRcInputSchema,
 }) {
   protected async execute(input: UpdateShellRcInput): Promise<ToolResult> {
@@ -174,13 +200,18 @@ export class UpdateShellRcTool extends defineTool({
       throw new ToolError('Line cannot be empty or whitespace-only.');
     }
 
-    if (!isSafeLine(line)) {
+    const profilePath = resolveProfilePath(input.profile);
+    const shell = shellForProfile(profilePath);
+
+    if (!isSafeLineFor(line, shell)) {
+      const expected =
+        shell === 'posix'
+          ? '`export NAME=value`'
+          : '`$env:NAME = value` or `[Environment]::SetEnvironmentVariable(...)`';
       throw new ToolError(
-        `Refusing to write "${line.slice(0, 80)}": update_shell_rc only accepts environment-variable assignments (e.g. \`export PATH=...\`, \`$env:Path = ...\`). Command chaining, command substitution, and redirection are rejected.`,
+        `Refusing to write "${line.slice(0, 80)}" to ${path.basename(profilePath)}: expected ${expected}. Command chaining, command substitution, redirection, and cross-shell syntax are rejected.`,
       );
     }
-
-    const profilePath = resolveProfilePath(input.profile);
 
     let existing = '';
     try {
@@ -199,19 +230,14 @@ export class UpdateShellRcTool extends defineTool({
       };
     }
 
+    const markerBody = normalizeMarker(input.marker);
+    const commentLine = markerBody ? `# ${markerBody}` : '';
+
     const needsLeadingNewline = existing.length > 0 && !existing.endsWith('\n');
     const blockParts: string[] = [];
     if (needsLeadingNewline) blockParts.push('\n');
     if (existing.length > 0) blockParts.push('\n');
-    const marker = input.marker.trim();
-    if (marker) {
-      if (/[\r\n]/.test(marker)) {
-        throw new ToolError(
-          'marker must not contain newlines (would let extra commands be smuggled into the rc file).',
-        );
-      }
-      blockParts.push(`${marker}\n`);
-    }
+    if (commentLine) blockParts.push(`${commentLine}\n`);
     blockParts.push(`${line}\n`);
     const block = blockParts.join('');
 
@@ -220,7 +246,7 @@ export class UpdateShellRcTool extends defineTool({
 
     return {
       summary: `Appended to ${path.basename(profilePath)}`,
-      output: `Appended to ${profilePath}:\n${marker ? `  ${marker}\n` : ''}  ${line}\n\nOpen a new terminal (or \`source\` the file) for the change to take effect.`,
+      output: `Appended to ${profilePath}:\n${commentLine ? `  ${commentLine}\n` : ''}  ${line}\n\nOpen a new terminal (or \`source\` the file) for the change to take effect.`,
     };
   }
 }
