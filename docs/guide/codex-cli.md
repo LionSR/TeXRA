@@ -20,8 +20,11 @@ Skip **Sign in** and export `OPENAI_API_KEY` in the shell you launch VS Code fro
 :::
 
 ::: warning Windows
-Codex has no native Windows binary. Open TeXRA inside a **WSL** remote window before clicking **Install in Terminal** — otherwise the install runs in PowerShell and VS Code won't find the binary.
-:::
+TeXRA looks up Codex in the same environment as the VS Code extension host, so install it there:
+
+- **WSL Remote** — open TeXRA inside the WSL window before clicking **Install in Terminal**.
+- **Native Windows** — install Codex on Windows so a real `codex.exe` is on PATH. TeXRA spawns the binary directly and skips `.cmd` / PowerShell shims, so an npm wrapper alone won't be found.
+  :::
 
 ## Settings
 
@@ -56,11 +59,11 @@ To send a follow-up from the calling agent, call `codex` again with `thread_id` 
 
 **Card shows <i class="codicon codicon-warning"></i> Not Found after install.** Hover the card for the exact message:
 
-| Message                                        | Fix                                                                               |
-| ---------------------------------------------- | --------------------------------------------------------------------------------- |
-| `@openai/codex-sdk not found`                  | Click **Install in Terminal** again, then **Recheck**.                            |
-| `Codex SDK loaded but native binary not found` | Reinstall — the platform binary didn't ship. On Windows, open TeXRA in WSL first. |
-| `Platform not supported`                       | Unsupported OS/arch. Use WSL on Windows or a supported Linux/macOS host.          |
+| Message                                        | Fix                                                                                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `@openai/codex-sdk not found`                  | Click **Install in Terminal** again, then **Recheck**.                                                             |
+| `Codex SDK loaded but native binary not found` | Reinstall in the same environment as the extension host. On Windows, see the **Windows** note above for the catch. |
+| `Platform not supported`                       | Codex ships native binaries for Linux, macOS, and Windows (`x64` / `arm64`). On other hosts, fall back to WSL.     |
 
 **Still Not Found after everything ran.** Reload the window (`Developer: Reload Window`) so the extension re-checks for the binary.
 
