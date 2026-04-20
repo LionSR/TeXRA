@@ -27,7 +27,6 @@ export type SendFollowUpResult =
       status: 'queued';
       reason: 'resuming' | 'waiting' | 'children_running';
     }
-  | { status: 'error'; message: string }
   | { status: 'no_session'; streamStatus: string | undefined };
 
 const logger = new AgentLogger('ToolUseFollowUp');
