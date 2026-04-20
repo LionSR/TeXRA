@@ -462,9 +462,9 @@ export function getToolFlags(
     AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
     CODEX_GUIDANCE: agentSetting.tools.some((t) => t.name === 'codex')
       ? 'Choose codex for coding tasks that benefit from a separate OpenAI agent — it runs in its own sandbox with independent tool use. ' +
-        'Codex is multi-turn: each call returns a thread_id. Always pass thread_id back when following up on a previous codex task — ' +
-        'this resumes the same session with full history and file context intact. ' +
-        'Use this to provide feedback, request corrections, or continue iterative work without re-explaining context. ' +
+        'Codex is async and multi-turn, mirroring delegate_agent: each call returns an execution ID, and results arrive as follow-up messages that include a thread_id. ' +
+        'Pass that thread_id back on a later codex call to send a follow-up instruction to the same session — the agent retains full history and file context. ' +
+        'The follow-up errors out if the thread is still processing; wait for its delivery before resuming. ' +
         'When multiple codex agents need to edit the same files, or when you want to isolate experimental changes, ' +
         'use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.'
       : '',
