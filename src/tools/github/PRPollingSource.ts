@@ -421,7 +421,7 @@ export class PRPollingSource implements AsyncEventSource {
       `${prPath}/comments?per_page=100`,
       state.sinceCursors.reviewComments,
     );
-    const [commentsRes, reviewCommentsRes, reviewsRes, checksRes] =
+    const [commentsRes, reviewCommentsRes, reviewsRes, checksOutcome] =
       await Promise.all([
         ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
         ghGet<GhReviewComment[]>(reviewCommentsUrl, state.etags.reviewComments),
@@ -431,8 +431,18 @@ export class PRPollingSource implements AsyncEventSource {
         ),
         state.headSha
           ? this.fetchAllCheckRuns(pr.owner, pr.repo, state.headSha, state)
-          : Promise.resolve({ status: 304 as const }),
+          : Promise.resolve({
+              response: { status: 304 as const },
+              stagedCache: undefined,
+            }),
       ]);
+    // Destructure separately so we can commit `stagedCache` only at the end
+    // of the success path (after the diff branch). If a sibling rejection
+    // had thrown above, the cache would not have been advanced — preventing
+    // a stale cache + 304 next tick from silently swallowing check-run
+    // transitions.
+    const checksRes = checksOutcome.response;
+    const stagedCheckRunsCache = checksOutcome.stagedCache;
 
     // First tick only seeds cursors so we never replay history.
     if (!state.initialized) {
@@ -488,6 +498,11 @@ export class PRPollingSource implements AsyncEventSource {
             state.ciPassedSha = state.headSha;
           }
         }
+      }
+      // Commit the deferred check-runs cache only after successfully
+      // consuming the response. See `fetchAllCheckRuns` for why we defer.
+      if (stagedCheckRunsCache !== undefined) {
+        state.checkRunsCache = stagedCheckRunsCache;
       }
       state.initialized = true;
       return;
@@ -600,6 +615,15 @@ export class PRPollingSource implements AsyncEventSource {
         }
       }
     }
+
+    // Commit the deferred check-runs cache only after successfully consuming
+    // the response (including the diff branch above). See `fetchAllCheckRuns`
+    // for why we defer: this prevents a sibling rejection in the `Promise.all`
+    // from advancing the cache while the diff never ran, which would cause
+    // the next tick to get 304 and silently skip the missed transitions.
+    if (stagedCheckRunsCache !== undefined) {
+      state.checkRunsCache = stagedCheckRunsCache;
+    }
   }
 
   /**
@@ -645,15 +669,29 @@ export class PRPollingSource implements AsyncEventSource {
     repo: string,
     sha: string,
     state: SubscriptionState,
-  ): Promise<
-    ConditionalResponse<{ total_count: number; check_runs: GhCheckRun[] }>
-  > {
+  ): Promise<{
+    response: ConditionalResponse<{
+      total_count: number;
+      check_runs: GhCheckRun[];
+    }>;
+    /**
+     * New per-page cache value to commit only after the caller has
+     * successfully consumed the response. `undefined` means "no change" —
+     * either the single-page 304 fast path (existing cache is still valid)
+     * or this method itself short-circuited before fetching anything.
+     *
+     * Deferring the commit prevents a sibling rejection in `Promise.all`
+     * from advancing the cache while the diff branch never runs: a stale
+     * cache + 304 next tick would silently swallow check-run transitions.
+     */
+    stagedCache?: SubscriptionState['checkRunsCache'];
+  }> {
     const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=${CHECK_RUNS_PAGE_SIZE}`;
     const cache = state.checkRunsCache;
 
-    // Seed scratch caches we'll commit at the end. We rebuild from scratch
-    // each tick (rather than mutating in-place) so any pages dropped on
-    // this tick — e.g. new push reduced page count from 5 to 3 — don't
+    // Seed scratch caches we'll stage on the return value. We rebuild from
+    // scratch each tick (rather than mutating in-place) so any pages dropped
+    // on this tick — e.g. new push reduced page count from 5 to 3 — don't
     // leave stale entries behind.
     const nextEtags = new Map<number, string>();
     const nextPages = new Map<number, GhCheckRun[]>();
@@ -700,14 +738,16 @@ export class PRPollingSource implements AsyncEventSource {
 
     // Single-page fast path. If page 1 was 304 and our last-known total fits
     // in one page, we can short-circuit the whole call without touching any
-    // other state — this is the common steady-state for typical PRs.
+    // other state — this is the common steady-state for typical PRs. No
+    // staged cache: the existing `state.checkRunsCache` is still valid and
+    // we never built a replacement.
     if (
       first.was304 &&
       cache &&
       cache.lastTotalCount <= CHECK_RUNS_PAGE_SIZE &&
       cache.etagsByPage.size === 1
     ) {
-      return { status: 304 };
+      return { response: { status: 304 } };
     }
 
     const allRuns: GhCheckRun[] = [...first.runs];
@@ -752,10 +792,11 @@ export class PRPollingSource implements AsyncEventSource {
       page += 1;
     }
 
-    // Commit the per-page caches. We always overwrite — any pages from a
-    // previous tick that we didn't touch this tick (e.g. page count
-    // shrank) are intentionally evicted.
-    state.checkRunsCache = {
+    // Stage the per-page caches. The caller commits to `state.checkRunsCache`
+    // only after successfully consuming the response — see the type doc above.
+    // We always overwrite on commit: any pages from a previous tick that we
+    // didn't touch this tick (e.g. page count shrank) are intentionally evicted.
+    const stagedCache = {
       etagsByPage: nextEtags,
       pagesByPage: nextPages,
       lastTotalCount: observedTotal,
@@ -763,14 +804,19 @@ export class PRPollingSource implements AsyncEventSource {
 
     // True end-to-end 304: every page came back unchanged. Caller can skip
     // the diff/seed work entirely.
-    if (allPagesUnchanged) return { status: 304 };
+    if (allPagesUnchanged) {
+      return { response: { status: 304 }, stagedCache };
+    }
 
     return {
-      status: 200,
-      data: { total_count: observedTotal, check_runs: allRuns },
-      // No single ETag covers a multi-page response. The per-page cache on
-      // `state.checkRunsCache` is what enables conditional reuse next tick.
-      etag: undefined,
+      response: {
+        status: 200,
+        data: { total_count: observedTotal, check_runs: allRuns },
+        // No single ETag covers a multi-page response. The per-page cache on
+        // `state.checkRunsCache` is what enables conditional reuse next tick.
+        etag: undefined,
+      },
+      stagedCache,
     };
   }
 
