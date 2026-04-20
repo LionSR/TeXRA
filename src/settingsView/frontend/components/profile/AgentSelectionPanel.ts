@@ -127,8 +127,20 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-list-item.selected {
         background: var(--vscode-list-activeSelectionBackground);
-        color: var(--vscode-list-activeSelectionForeground);
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
+        );
         border-left-color: var(--vscode-focusBorder);
+      }
+
+      .agent-list-item.selected .agent-list-item-name,
+      .agent-list-item.selected .agent-list-item-badges {
+        color: inherit;
+      }
+
+      .agent-list-item.selected .agent-list-item-badges {
+        opacity: var(--opacity-full);
       }
 
       .agent-list-item-checkbox {
