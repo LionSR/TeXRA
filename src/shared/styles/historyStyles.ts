@@ -79,11 +79,6 @@ export const historyListStyles: CSSResult = css`
     word-break: break-word;
   }
 
-  .history-item.selected {
-    background-color: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
-  }
-
   .history-item {
     margin-bottom: var(--spacing-medium);
   }

@@ -304,7 +304,7 @@ export class StreamHeader extends LitElement {
       }
 
       .parent-link .codicon {
-        font-size: var(--font-size-xs, 10px);
+        font-size: var(--font-size-xs);
       }
 
       /* Uses shared .tinted-badge base; no --_tint override = inherits text-secondary default */
