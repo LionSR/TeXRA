@@ -97,7 +97,10 @@ interface SubscriptionState {
   seenReviewCommentIds: Set<number>;
   seenReviewIds: Set<number>;
   lastFailedCheckKeys: Set<string>;
-  ciTerminalSha: string | undefined;
+  /** Head SHA for which the one-shot "CI complete" event has been emitted. */
+  ciCompleteSha: string | undefined;
+  /** Head SHA for which the one-shot "CI passed" event has been emitted. */
+  ciPassedSha: string | undefined;
   headSha: string | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
@@ -172,7 +175,8 @@ export class PRPollingSource implements AsyncEventSource {
         seenReviewCommentIds: new Set(),
         seenReviewIds: new Set(),
         lastFailedCheckKeys: new Set(),
-        ciTerminalSha: undefined,
+        ciCompleteSha: undefined,
+        ciPassedSha: undefined,
         headSha: undefined,
         state: undefined,
         merged: false,
@@ -333,8 +337,11 @@ export class PRPollingSource implements AsyncEventSource {
       state.state = newState;
       state.merged = newMerged;
       // New push invalidates prior CI terminal state — the next completion
-      // on the new SHA should re-emit a terminal event.
-      if (state.headSha !== newHead) state.ciTerminalSha = undefined;
+      // on the new SHA should re-emit both terminal events.
+      if (state.headSha !== newHead) {
+        state.ciCompleteSha = undefined;
+        state.ciPassedSha = undefined;
+      }
       state.headSha = newHead;
     }
 
@@ -428,9 +435,19 @@ export class PRPollingSource implements AsyncEventSource {
           }
         }
         // Seed so pre-existing terminal CI doesn't fire on the next tick —
-        // we only surface transitions that happen after subscribe.
-        if (state.headSha && runs.every((r) => r.status === 'completed')) {
-          state.ciTerminalSha = state.headSha;
+        // we only surface transitions that happen after subscribe. Gate on
+        // runs.length > 0: an empty array is ambiguous (no CI configured vs.
+        // runs not yet registered), so "done" isn't meaningful and seeding
+        // would suppress the real terminal event once runs appear.
+        if (
+          state.headSha &&
+          runs.length > 0 &&
+          runs.every((r) => r.status === 'completed')
+        ) {
+          state.ciCompleteSha = state.headSha;
+          if (runs.every((r) => isPassingConclusion(r.conclusion))) {
+            state.ciPassedSha = state.headSha;
+          }
         }
       }
       state.initialized = true;
@@ -504,22 +521,37 @@ export class PRPollingSource implements AsyncEventSource {
         }
       }
 
+      // Emit two one-shot events per head SHA: "CI complete" on first
+      // terminal state (any conclusion), then "CI passed" the first time
+      // all checks pass (which may happen via a later rerun). Each is
+      // deduped against its own marker so a rerun turning red→green still
+      // emits "CI passed" even after "CI complete" already fired.
+      //
       // Gate on `runs.length > 0`: an empty array is ambiguous (no CI
       // configured vs. runs not yet registered), so "done" isn't meaningful.
       if (
         state.headSha &&
         runs.length > 0 &&
-        runs.every((r) => r.status === 'completed') &&
-        state.ciTerminalSha !== state.headSha
+        runs.every((r) => r.status === 'completed')
       ) {
-        state.ciTerminalSha = state.headSha;
-        const allPassed = runs.every((r) => isPassingConclusion(r.conclusion));
-        this.emit(
-          state,
-          allPassed
-            ? formatCIPassed(state.slug, pr.pullNumber, state.headSha, runs)
-            : formatCIComplete(state.slug, pr.pullNumber, state.headSha, runs),
-        );
+        const headSha = state.headSha;
+        if (state.ciCompleteSha !== headSha) {
+          state.ciCompleteSha = headSha;
+          this.emit(
+            state,
+            formatCIComplete(state.slug, pr.pullNumber, headSha, runs),
+          );
+        }
+        if (
+          state.ciPassedSha !== headSha &&
+          runs.every((r) => isPassingConclusion(r.conclusion))
+        ) {
+          state.ciPassedSha = headSha;
+          this.emit(
+            state,
+            formatCIPassed(state.slug, pr.pullNumber, headSha, runs),
+          );
+        }
       }
     }
   }

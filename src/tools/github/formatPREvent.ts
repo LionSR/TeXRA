@@ -80,7 +80,7 @@ export function formatReviewComment(
   const loc = line ? `${c.path}:${line}` : c.path;
   const prefix =
     c.in_reply_to_id != null
-      ? 'Reply in line review thread'
+      ? 'Reply to inline review thread'
       : 'New line review comment';
   return wrap(
     `${prefix} on ${slug}#${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
