@@ -873,13 +873,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
         const requestId = stream.request_id;
 
-        // Wrap only non-APIError stream failures. APIError subclasses carry
-        // status/headers/requestID/type that formatProviderHttpError needs
-        // for retry classification; replacing them loses that metadata and
-        // misclassifies e.g. 401 as generic retryable. User aborts must also
-        // pass through unwrapped: AnthropicUserAbortError extends
-        // AnthropicError directly (sibling of AnthropicAPIError), so the
-        // APIError guard alone would wrap them and break downstream
+        // Wrap only non-APIError, non-abort stream failures. APIError
+        // subclasses carry status/headers/requestID/type needed for retry
+        // classification; AnthropicUserAbortError is a sibling of
+        // AnthropicAPIError, so wrapping it would break downstream
         // `instanceof AnthropicUserAbortError` checks.
         const isAbort = isUserAbort(streamError);
         let enrichedError: unknown = streamError;
