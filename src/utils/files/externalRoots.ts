@@ -181,8 +181,3 @@ export function findExternalRoot(
 export function listExternalRoots(): ExternalRoot[] {
   return [...roots.values()];
 }
-
-/** Clear all registrations. Intended for tests. */
-export function resetExternalRoots(): void {
-  roots.clear();
-}

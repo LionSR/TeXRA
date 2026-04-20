@@ -229,8 +229,10 @@ const TOOL_GROUPS: Record<string, ToolGroup> = {
 
 // ── Infrastructure ──────────────────────────────────────────
 
-/* autoescape off: templates contain Nunjucks/YAML syntax, not HTML */
-const nunjucksEnv = nunjucks.configure({ autoescape: false });
+/* autoescape off: templates contain Nunjucks/YAML syntax, not HTML.
+ * Isolated Environment so the setting does not leak into Nunjucks' shared
+ * singleton used by other renderers in the extension. */
+const nunjucksEnv = new nunjucks.Environment(null, { autoescape: false });
 
 /** Lazily built and cached for the extension host lifetime. Schemas are static. */
 let schemaRefCache: Record<AgentCategory, string> | null = null;

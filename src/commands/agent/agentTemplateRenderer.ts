@@ -38,7 +38,10 @@ export interface AgentTemplateVars {
   outputFilesYaml?: string;
 }
 
-const env = nunjucks.configure({ autoescape: false });
+// Isolated Nunjucks environment so `autoescape: false` does not leak into the
+// shared singleton that `nunjucks.configure` / `nunjucks.renderString` would
+// otherwise set for every other caller in the extension.
+const env = new nunjucks.Environment(null, { autoescape: false });
 
 /**
  * Tokens that the generated agent itself needs to keep literal — they are
