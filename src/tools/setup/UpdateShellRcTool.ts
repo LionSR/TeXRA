@@ -57,8 +57,10 @@ const SAFE_LINE_PATTERNS: readonly RegExp[] = [
 
 const FORBIDDEN_SUBSTRINGS: readonly string[] = [
   ';',
-  '&&',
-  '||',
+  '&',
+  '|',
+  '>',
+  '<',
   '`',
   '$(',
   '\n',

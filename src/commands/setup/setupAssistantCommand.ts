@@ -28,8 +28,8 @@ const SIGNED_IN_SETUP_MODEL = 'gemini31p';
 
 /**
  * Provider → model mapping used when the user only has a direct API key.
- * Picks a capable default per provider so the setup agent can actually
- * start a turn with the credential it's been given.
+ * Each mapping points at a model routed through that same provider, so the
+ * agent can actually authenticate with the key it's been given.
  */
 const API_KEY_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   anthropic: 'opus47T',
@@ -37,11 +37,11 @@ const API_KEY_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   google: 'gemini31p',
   deepseek: 'deepseekT',
   openRouter: 'sonnet46T',
-  xai: 'gpt54',
+  xai: 'grok4',
   moonshot: 'kimi25T',
-  dashscope: 'kimi25T',
-  minimax: 'kimi25T',
-  glm: 'kimi25T',
+  dashscope: 'qwen3max',
+  minimax: 'minimax01',
+  glm: 'glm5',
 };
 
 const SETUP_INSTRUCTION =
