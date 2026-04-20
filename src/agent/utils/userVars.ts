@@ -14,6 +14,7 @@ import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getListOfFiles, getXmlFormatFromFiles } from '@utils/prompt';
+import { listExternalRoots } from '@utils/files/externalRoots';
 import { setVarFromFile } from '@utils/files/varsUtils';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -152,7 +153,37 @@ function getBasicVars(
     TOOL_USE_AGENTS: toolUseAgentsList,
     CWD: workspacePath ?? WorkspaceFS.getPath() ?? '.',
     DEFAULT_BIB_PATH: defaultBibPath,
+    ...getAgentDirectoryVars(),
   };
+}
+
+/**
+ * Inject the absolute paths of registered agent directories as template
+ * variables so agents (notably `creator`) can reference the real paths in
+ * their system prompts. Reads from the external-roots registry populated at
+ * activation — returns empty strings when a root is not registered (e.g.
+ * during tests that don't spin up the VS Code setup).
+ */
+function getAgentDirectoryVars(): UserVars {
+  const LABEL_TO_VAR: Record<string, string> = {
+    'Built-in workflow agents': 'BUILTIN_WORKFLOW_DIR',
+    'Built-in tool-use agents': 'BUILTIN_TOOLUSE_DIR',
+    'Custom agents': 'CUSTOM_AGENTS_DIR',
+    'Agent creation docs': 'AGENT_DOCS_DIR',
+  };
+  const vars: UserVars = {
+    BUILTIN_WORKFLOW_DIR: '',
+    BUILTIN_TOOLUSE_DIR: '',
+    CUSTOM_AGENTS_DIR: '',
+    AGENT_DOCS_DIR: '',
+  };
+  for (const root of listExternalRoots()) {
+    const key = LABEL_TO_VAR[root.label];
+    if (key) {
+      vars[key] = root.absolutePath;
+    }
+  }
+  return vars;
 }
 
 /**

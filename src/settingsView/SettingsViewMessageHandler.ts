@@ -301,12 +301,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
 
-  constructor(_context: vscode.ExtensionContext) {
+  constructor(context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
 
     const ctx: SettingsHandlerContext = {
       channel: this.channel,
       logger: this.logger,
+      extensionContext: context,
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
 

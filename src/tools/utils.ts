@@ -14,6 +14,7 @@ import { ToolError, type ToolFileAttachment } from '@tools/result';
 // Local imports - core utilities
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS, getMimeType } from '@utils/files';
+import { findExternalRoot } from '@utils/files/externalRoots';
 import { locatePathInRoot } from '@utils/files/workspaceRoot';
 import { toPosixPath } from '@utils/core/pathCore';
 
@@ -26,6 +27,12 @@ export interface WorkspacePathResolution {
    * workspace-relative otherwise (for WorkspaceFS compatibility).
    */
   fsPath: string;
+  /**
+   * When the resolved path falls inside a registered external root, this
+   * describes that root (label, writable flag). Undefined for workspace paths
+   * and for any external path outside the allowlist.
+   */
+  external?: { root: string; writable: boolean; label: string };
 }
 
 /** Trim and validate a working_directory value. Must be absolute if provided. */
@@ -66,12 +73,20 @@ export function resolveWorkspaceRelativePath(
       // (locatePathInRoot and WorkspaceFS.locatePath already do this).
       const relative = path.relative(root, input).replaceAll('\\', '/');
       if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        const external = externalAllowance(input);
+        if (external) {
+          return external;
+        }
         throw new ToolError('Path must stay within the working directory.');
       }
       return { relative: relative || '.', absolute: input, fsPath: input };
     }
     const resolved = locatePathInRoot(root, input);
     if (resolved.kind === 'external') {
+      const external = externalAllowance(resolved.absolutePath);
+      if (external) {
+        return external;
+      }
       throw new ToolError('Path must stay within the working directory.');
     }
     const relative = resolved.relativePath || '.';
@@ -83,17 +98,74 @@ export function resolveWorkspaceRelativePath(
   }
 
   if (!WorkspaceFS.getPath()) {
+    // No workspace — fall back to the allowlist so agent-dir calls still work.
+    if (input && path.isAbsolute(input)) {
+      const external = externalAllowance(input);
+      if (external) {
+        return external;
+      }
+    }
     throw new ToolError('Workspace path is not available.');
   }
 
   const resolved = WorkspaceFS.locatePath(input);
 
   if (resolved.kind === 'external') {
+    if (resolved.allowed) {
+      const allowed = resolved.allowed;
+      return {
+        relative: allowed.relative || '.',
+        absolute: resolved.absolutePath,
+        fsPath: resolved.absolutePath,
+        external: {
+          root: allowed.absolutePath,
+          writable: allowed.writable,
+          label: allowed.label,
+        },
+      };
+    }
     throw new ToolError('Path must stay within the workspace.');
   }
 
   const relative = resolved.relativePath || '.';
   return { relative, absolute: resolved.absolutePath, fsPath: relative };
+}
+
+/**
+ * Build a WorkspacePathResolution for an absolute path that sits inside a
+ * registered external root. Returns undefined when no root matches.
+ */
+function externalAllowance(
+  absolutePath: string,
+): WorkspacePathResolution | undefined {
+  const match = findExternalRoot(absolutePath);
+  if (!match) return undefined;
+  return {
+    relative: match.relative || '.',
+    absolute: absolutePath,
+    fsPath: absolutePath,
+    external: {
+      root: match.absolutePath,
+      writable: match.writable,
+      label: match.label,
+    },
+  };
+}
+
+/**
+ * Throw a ToolError when the resolved path points into a read-only external
+ * root. Workspace paths and writable externals pass through. Call this from
+ * write/edit tools immediately before requesting approval.
+ */
+export function assertWritable(
+  resolved: WorkspacePathResolution,
+  displayPath: string,
+): void {
+  if (resolved.external && !resolved.external.writable) {
+    throw new ToolError(
+      `Cannot write ${displayPath}: ${resolved.external.label} is read-only.`,
+    );
+  }
 }
 
 /**

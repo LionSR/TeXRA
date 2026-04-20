@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
+import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
@@ -13,6 +14,10 @@ import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { GlobalStorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
+import {
+  registerExternalRoot,
+  unregisterExternalRoot,
+} from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 /**
@@ -118,6 +123,85 @@ async function deleteLegacyAgentFiles(): Promise<void> {
         `Failed to delete legacy agent file ${legacyFile}: ${toErrorMessage(err)}`,
       );
     }
+  }
+}
+
+/**
+ * Last registered custom-agents path, tracked so we can unregister it when
+ * the user points at a new directory via Settings.
+ */
+let currentCustomAgentRoot: string | undefined;
+
+/**
+ * Register agent directories + bundled reference docs with the external-roots
+ * allowlist so the creator tool-use agent can read/write them through the
+ * standard file tools (read_file, write_file, ls, grep, glob, edit_file).
+ *
+ * Call this after copyDefaultAgents(), which populates the built-in dirs.
+ */
+export async function registerAgentDirectoryRoots(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  try {
+    const [builtIn, builtInToolUse, custom] = await Promise.all([
+      agentDirectories.builtIn(),
+      agentDirectories.builtInToolUse(),
+      agentDirectories.custom(),
+    ]);
+
+    registerExternalRoot(builtIn, {
+      writable: false,
+      label: 'Built-in workflow agents',
+    });
+    registerExternalRoot(builtInToolUse, {
+      writable: false,
+      label: 'Built-in tool-use agents',
+    });
+    registerExternalRoot(custom, {
+      writable: true,
+      label: 'Custom agents',
+    });
+    currentCustomAgentRoot = custom;
+
+    const docsRoot = path.join(
+      context.extensionPath,
+      'resources',
+      'docs',
+      'agent-creation',
+    );
+    registerExternalRoot(docsRoot, {
+      writable: false,
+      label: 'Agent creation docs',
+    });
+  } catch (err) {
+    logger.error(
+      'extension',
+      `Failed to register agent directory roots: ${toErrorMessage(err)}`,
+    );
+  }
+}
+
+/**
+ * Re-register the custom agents directory after the user changes its location
+ * via Settings. Unregisters the previous path first so stale entries do not
+ * linger in the allowlist.
+ */
+export async function refreshCustomAgentRoot(): Promise<void> {
+  try {
+    const custom = await agentDirectories.custom();
+    if (currentCustomAgentRoot && currentCustomAgentRoot !== custom) {
+      unregisterExternalRoot(currentCustomAgentRoot);
+    }
+    registerExternalRoot(custom, {
+      writable: true,
+      label: 'Custom agents',
+    });
+    currentCustomAgentRoot = custom;
+  } catch (err) {
+    logger.error(
+      'extension',
+      `Failed to refresh custom agents root: ${toErrorMessage(err)}`,
+    );
   }
 }
 
