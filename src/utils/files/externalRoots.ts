@@ -16,12 +16,19 @@ import * as path from 'path';
  * --------------
  * - `registerExternalRoot` rejects non-absolute inputs so the registry cannot
  *   be seeded with process-CWD-relative values.
- * - `findExternalRoot` resolves real paths before matching, so a symlink
- *   inside a writable root that points outside the root (e.g. at
- *   `/etc/passwd`) will NOT match and tools will reject it.
+ * - Both register and find canonicalise inputs through the same pipeline
+ *   (resolve → realpath), so symlinks in any registered root component do
+ *   not cause silent matching failures. Canonicalisation is tolerant of
+ *   non-existent trailing segments (essential for writes that create new
+ *   files) and fails closed on permission errors (any EACCES/EPERM makes
+ *   `findExternalRoot` return null rather than admit an un-verifiable path).
+ * - A symlink inside a writable root that resolves outside the root (e.g.
+ *   at `/etc/passwd`) is NOT matched and tools reject it.
  * - Containment is tested via `path.relative`, which works correctly even
  *   for filesystem roots like `/` or `C:\` (where `root + path.sep` would
- *   produce a bad prefix).
+ *   produce a bad prefix). When multiple registered roots could contain a
+ *   path (nested registration), the most specific (longest) wins so
+ *   read-only children defeat writable parents.
  */
 
 /** Stable identifier for each registered root — keyed off by callers that need
@@ -51,33 +58,32 @@ export interface MatchedExternalRoot extends ExternalRoot {
 
 const roots = new Map<string, ExternalRoot>();
 
-function normalise(absolutePath: string): string {
-  return path.resolve(absolutePath);
-}
-
 /**
- * Resolve a path through any intermediate symlinks. Falls back gracefully
- * when the path (or a trailing segment) does not exist yet — essential for
- * write operations that create new files. The longest existing prefix is
- * realpath-resolved; the non-existent tail is re-appended unchanged.
+ * Canonicalise an absolute path: resolve `.`/`..` segments, then walk
+ * symlinks via realpath. When the final segment does not exist yet
+ * (ENOENT / ENOTDIR) we recursively canonicalise the longest existing
+ * prefix and re-append the non-existent tail — writes that create new
+ * files must still match.
+ *
+ * Throws on permission errors (EACCES/EPERM) or any unexpected error so
+ * callers can fail closed: a path we cannot verify must never be admitted
+ * to the allowlist.
  */
-function resolveRealPath(p: string): string {
+function canonicalise(p: string): string {
+  const resolved = path.resolve(p);
   try {
     return fs.realpathSync.native
-      ? fs.realpathSync.native(p)
-      : fs.realpathSync(p);
+      ? fs.realpathSync.native(resolved)
+      : fs.realpathSync(resolved);
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code !== 'ENOENT' && code !== 'ENOTDIR') {
-      // Permissions or other error — fall back to the caller-supplied path so
-      // downstream logic can surface a meaningful error instead of us
-      // silently approving an unresolvable location.
-      return p;
+      throw err;
     }
-    const parent = path.dirname(p);
-    if (parent === p) return p; // reached the filesystem root
-    const base = path.basename(p);
-    return path.join(resolveRealPath(parent), base);
+    const parent = path.dirname(resolved);
+    if (parent === resolved) return resolved; // reached the filesystem root
+    const base = path.basename(resolved);
+    return path.join(canonicalise(parent), base);
   }
 }
 
@@ -91,7 +97,16 @@ export function registerExternalRoot(
       `External root path must be absolute, got: ${absolutePath}`,
     );
   }
-  const key = normalise(absolutePath);
+  // Canonicalise at registration so find-time canonicalisation lands in the
+  // same space. Falls back to path.resolve only on canonicalise failure —
+  // registration is setup-time and the caller already has a try/catch that
+  // will surface a meaningful error.
+  let key: string;
+  try {
+    key = canonicalise(absolutePath);
+  } catch {
+    key = path.resolve(absolutePath);
+  }
   roots.set(key, {
     kind: options.kind,
     absolutePath: key,
@@ -107,24 +122,40 @@ export function unregisterExternalRoot(absolutePath: string): void {
       `External root path must be absolute, got: ${absolutePath}`,
     );
   }
-  roots.delete(normalise(absolutePath));
+  // Try both canonical and raw keys so callers can unregister with the same
+  // path they passed to register, even if canonicalisation was partial.
+  let canonicalKey: string | undefined;
+  try {
+    canonicalKey = canonicalise(absolutePath);
+  } catch {
+    // fall through to raw key only
+  }
+  if (canonicalKey !== undefined) {
+    roots.delete(canonicalKey);
+  }
+  roots.delete(path.resolve(absolutePath));
 }
 
 /**
  * Return the registered root that contains `absolutePath`, or null when no
- * registered root matches. Uses `path.relative` for containment so
- * filesystem-root registrations (e.g. `/` on POSIX) behave correctly, and
- * picks the most-specific registered root when multiple would match.
- *
- * Symlinks are resolved before matching. An allowlisted-looking path that
- * actually symlinks outside the root is rejected.
+ * registered root matches or the path cannot be canonicalised (fail closed).
+ * Uses `path.relative` for containment so filesystem-root registrations
+ * (e.g. `/` on POSIX) behave correctly, and picks the most-specific
+ * registered root when multiple would match.
  */
 export function findExternalRoot(
   absolutePath: string,
 ): MatchedExternalRoot | null {
   if (!path.isAbsolute(absolutePath)) return null;
-  const normalised = normalise(absolutePath);
-  const resolved = resolveRealPath(normalised);
+
+  let resolved: string;
+  try {
+    resolved = canonicalise(absolutePath);
+  } catch {
+    // Permission error or unexpected failure — refuse to admit the path
+    // rather than approve something we cannot verify.
+    return null;
+  }
 
   let best: MatchedExternalRoot | null = null;
   for (const root of roots.values()) {

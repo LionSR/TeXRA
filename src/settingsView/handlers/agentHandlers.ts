@@ -720,8 +720,8 @@ export class AgentHandlers {
       const baseName = name.replace(/\.yaml$/, '');
       const defaultDescription =
         category === 'toolUse'
-          ? `${baseName}: interactive tool-use agent.`
-          : `${baseName}: workflow agent.`;
+          ? `${baseName} — interactive tool-use agent`
+          : `${baseName} — workflow agent`;
 
       const template = await renderAgentTemplateFromBundle(
         this.ctx.extensionContext,
