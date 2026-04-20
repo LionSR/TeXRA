@@ -67,8 +67,8 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands, getMainViewProvider } from './commands';
-import { registerFileDecorations } from './fileDecorations';
-import { registerWelcomeView } from './welcomeView';
+import { registerFileDecorations } from '@frontend/ui/fileDecorations';
+import { registerWelcomeView } from '@frontend/ui/welcomeView';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
