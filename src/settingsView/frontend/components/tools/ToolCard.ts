@@ -346,6 +346,16 @@ export class ToolCard extends LitElement {
       this.item.authCommand;
     if (!hasGuide) return nothing;
 
+    // When a primary install action exists (terminal command or extension
+    // marketplace), demote auxiliary buttons (Sign in, Open Install Page)
+    // to secondary styling.
+    const hasPrimaryInstallAction = Boolean(
+      this.item.installCommand || this.item.installExtensionId,
+    );
+    const secondaryClass = hasPrimaryInstallAction
+      ? 'tool-action-btn--secondary'
+      : '';
+
     return html`
       <button class="tool-guide-toggle" @click=${this.toggleGuide}>
         <span
@@ -376,10 +386,7 @@ export class ToolCard extends LitElement {
               ${this.item.authCommand
                 ? html`
                     <button
-                      class="tool-action-btn ${this.item.installCommand ||
-                      this.item.installExtensionId
-                        ? 'tool-action-btn--secondary'
-                        : ''}"
+                      class="tool-action-btn ${secondaryClass}"
                       @click=${this.handleRunAuthCommand}
                       title=${this.item.authCommand}
                     >
@@ -402,10 +409,7 @@ export class ToolCard extends LitElement {
               ${this.item.installUrl
                 ? html`
                     <button
-                      class="tool-action-btn ${this.item.installCommand ||
-                      this.item.installExtensionId
-                        ? 'tool-action-btn--secondary'
-                        : ''}"
+                      class="tool-action-btn ${secondaryClass}"
                       @click=${this.handleInstallUrl}
                     >
                       <span class="codicon codicon-link-external"></span>
