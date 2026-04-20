@@ -243,6 +243,12 @@ export async function activate(context: vscode.ExtensionContext) {
         ),
       apiKeyExists: (provider) =>
         SecretManager.apiKeyExists(provider as never),
+      storedApiKeyExists: async (provider) => {
+        const stored = await SecretManager.get(
+          SecretManager.getApiKeySecretName(provider as never),
+        );
+        return stored !== undefined;
+      },
       anyApiKeyExists: () => SecretManager.anyApiKeyExists(),
       gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
     },

@@ -62,9 +62,24 @@ export class VerifySetupTool extends defineTool({
           'tool must be a non-empty command name (e.g. "pdflatex"). Call verify_setup with no arguments for a full check.',
         );
       }
+      // Accept `gm/magick` as an alias since that's how the full-check path
+      // reports a missing image tool; the agent naturally reuses that token.
+      if (name === 'gm/magick') {
+        const [gm, magick] = await Promise.all([
+          isToolPresent('gm'),
+          isToolPresent('magick'),
+        ]);
+        const ok = gm || magick;
+        return {
+          summary: `Verify gm/magick: ${ok ? 'ok' : 'missing'}`,
+          output: ok
+            ? `Verified: ${gm ? '"gm"' : '"magick"'} is installed and on PATH.`
+            : `Not found: neither "gm" nor "magick" is on PATH. The install may not have completed, or the shell PATH needs to be refreshed.`,
+        };
+      }
       if (!/^[A-Za-z0-9._+\-]+$/.test(name)) {
         throw new ToolError(
-          `Invalid tool name "${name}". Only alphanumeric characters and \`._+-\` are allowed.`,
+          `Invalid tool name "${name}". Only alphanumeric characters and \`._+-\` are allowed (or the alias "gm/magick").`,
         );
       }
       const ok = await isToolPresent(name);

@@ -13,6 +13,13 @@ export interface SetupSecretsAdapter {
   setApiKey(provider: string, key: string): Promise<void>;
   deleteApiKey(provider: string): Promise<void>;
   apiKeyExists(provider: string): Promise<boolean>;
+  /**
+   * Like `apiKeyExists` but only reports SecretStorage entries — ignores
+   * environment-variable-backed keys. Needed by `unset_api_key` so the
+   * agent doesn't claim to have removed a key that still comes from
+   * `PROVIDER_API_KEY` in the user's shell.
+   */
+  storedApiKeyExists(provider: string): Promise<boolean>;
   anyApiKeyExists(): Promise<boolean>;
   gitHubTokenExists(): Promise<'secret' | 'env' | 'none'>;
   /** List of provider names known to TeXRA (matches SecretManager.API_PROVIDERS). */
