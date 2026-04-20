@@ -187,7 +187,7 @@ export class LaTeXTab extends LitElement {
         padding: var(--spacing-medium);
         margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius-medium);
+        border-radius: var(--border-radius);
         background: var(--vscode-editor-background);
       }
 
@@ -252,7 +252,7 @@ export class LaTeXTab extends LitElement {
           --vscode-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
         );
-        border-radius: var(--border-radius-medium);
+        border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
         color: var(--vscode-foreground);
         line-height: var(--line-height-relaxed);
@@ -280,7 +280,7 @@ export class LaTeXTab extends LitElement {
           --vscode-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
         );
-        border-radius: var(--border-radius-small, 3px);
+        border-radius: var(--border-radius-small);
         font-family: var(--vscode-editor-font-family, monospace);
         font-size: var(--font-size-sm);
         color: var(--vscode-foreground);
@@ -302,7 +302,7 @@ export class LaTeXTab extends LitElement {
         margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid
           var(--vscode-editorInfo-foreground, #3794ff);
-        border-radius: var(--border-radius-medium);
+        border-radius: var(--border-radius);
         background: var(--vscode-editor-background);
       }
 
@@ -357,7 +357,7 @@ export class LaTeXTab extends LitElement {
         padding: var(--spacing-medium);
         margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius-medium);
+        border-radius: var(--border-radius);
         background: var(--vscode-editor-background);
       }
 
@@ -408,9 +408,9 @@ export class LaTeXTab extends LitElement {
 
       .setting-badge {
         flex-shrink: 0;
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         padding: var(--spacing-tiny) var(--border-radius-large);
-        border-radius: var(--border-radius-small, 3px);
+        border-radius: var(--border-radius-small);
         font-weight: var(--font-weight-medium);
       }
 

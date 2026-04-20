@@ -1,6 +1,10 @@
 // Core styles
 export { codiconStyles, codiconIconClasses } from './codiconStyles';
-export { commonViewStyles, focusRingStyles } from './commonViewStyles';
+export {
+  commonViewStyles,
+  filledButtonStyles,
+  focusRingStyles,
+} from './commonViewStyles';
 export { designTokens, animationStyles } from './litStyles';
 
 // Component styles

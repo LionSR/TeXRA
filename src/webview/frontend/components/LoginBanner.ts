@@ -33,16 +33,7 @@ export class LoginBanner extends LitElement {
       }
 
       .login-banner {
-        background: linear-gradient(
-          135deg,
-          var(--vscode-inputValidation-infoBackground) 0%,
-          color-mix(
-              in srgb,
-              var(--vscode-inputValidation-infoBackground) 80%,
-              var(--vscode-button-background)
-            )
-            100%
-        );
+        background: var(--vscode-inputValidation-infoBackground);
         color: var(--vscode-inputValidation-infoForeground);
         border: var(--border-thin) solid
           var(--vscode-inputValidation-infoBorder);
