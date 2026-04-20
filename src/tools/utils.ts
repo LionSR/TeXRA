@@ -79,7 +79,11 @@ export function resolveWorkspaceRelativePath(
         }
         throw new ToolError('Path must stay within the working directory.');
       }
-      return { relative: relative || '.', absolute: input, fsPath: input };
+      return annotateExternalPermission({
+        relative: relative || '.',
+        absolute: input,
+        fsPath: input,
+      });
     }
     const resolved = locatePathInRoot(root, input);
     if (resolved.kind === 'external') {
@@ -91,11 +95,11 @@ export function resolveWorkspaceRelativePath(
       throw new ToolError('Path must stay within the working directory.');
     }
     const relative = resolved.relativePath || '.';
-    return {
+    return annotateExternalPermission({
       relative,
       absolute: resolved.absolutePath,
       fsPath: resolved.absolutePath,
-    };
+    });
   }
 
   if (!WorkspaceFS.getPath()) {
@@ -157,6 +161,34 @@ function externalAllowance(
   const match = findExternalRoot(absolutePath);
   if (!match) return undefined;
   return externalResolution(absolutePath, match);
+}
+
+/**
+ * Attach external-root permission metadata when a resolution (from the
+ * working_directory branch) happens to land inside a registered root.
+ *
+ * Without this, a subagent launched with `working_directory` set to a
+ * read-only external root (e.g. the built-in agents dir) could bypass
+ * `assertWritable` by addressing files with paths relative to `root` —
+ * the in-root branches return without touching the allowlist otherwise.
+ *
+ * Preserves `relative`/`absolute`/`fsPath` as the caller already built
+ * them so display and I/O remain unchanged; only `external` is added.
+ */
+function annotateExternalPermission(
+  resolution: WorkspacePathResolution,
+): WorkspacePathResolution {
+  if (resolution.external) return resolution;
+  const match = findExternalRoot(resolution.absolute);
+  if (!match) return resolution;
+  return {
+    ...resolution,
+    external: {
+      root: match.absolutePath,
+      writable: match.writable,
+      label: match.label,
+    },
+  };
 }
 
 /**

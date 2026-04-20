@@ -133,46 +133,58 @@ async function deleteLegacyAgentFiles(): Promise<void> {
 export async function registerAgentDirectoryRoots(
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  try {
-    const [builtIn, builtInToolUse, custom] = await Promise.all([
-      agentDirectories.builtIn(),
-      agentDirectories.builtInToolUse(),
-      agentDirectories.custom(),
-    ]);
+  // Register each root independently so one failing directory resolution
+  // (e.g. a misconfigured custom agents path) does not take out the others —
+  // the creator agent still needs its reference docs and built-in examples.
+  const registrations: Array<
+    () => Promise<void> | void
+  > = [
+    async () =>
+      registerExternalRoot(await agentDirectories.builtIn(), {
+        kind: 'builtInWorkflow',
+        writable: false,
+        label: 'Built-in workflow agents',
+      }),
+    async () =>
+      registerExternalRoot(await agentDirectories.builtInToolUse(), {
+        kind: 'builtInToolUse',
+        writable: false,
+        label: 'Built-in tool-use agents',
+      }),
+    async () =>
+      registerExternalRoot(await agentDirectories.custom(), {
+        kind: 'custom',
+        writable: true,
+        label: 'Custom agents',
+      }),
+    () =>
+      registerExternalRoot(
+        path.join(
+          context.extensionPath,
+          'resources',
+          'docs',
+          'agent-creation',
+        ),
+        {
+          kind: 'agentDocs',
+          writable: false,
+          label: 'Agent creation docs',
+        },
+      ),
+  ];
 
-    registerExternalRoot(builtIn, {
-      kind: 'builtInWorkflow',
-      writable: false,
-      label: 'Built-in workflow agents',
-    });
-    registerExternalRoot(builtInToolUse, {
-      kind: 'builtInToolUse',
-      writable: false,
-      label: 'Built-in tool-use agents',
-    });
-    registerExternalRoot(custom, {
-      kind: 'custom',
-      writable: true,
-      label: 'Custom agents',
-    });
-
-    const docsRoot = path.join(
-      context.extensionPath,
-      'resources',
-      'docs',
-      'agent-creation',
-    );
-    registerExternalRoot(docsRoot, {
-      kind: 'agentDocs',
-      writable: false,
-      label: 'Agent creation docs',
-    });
-  } catch (err) {
-    logger.error(
-      'extension',
-      `Failed to register agent directory roots: ${toErrorMessage(err)}`,
-    );
-  }
+  await Promise.all(
+    registrations.map(async (register) => {
+      try {
+        await register();
+      } catch (err) {
+        logger.error(
+          'extension',
+          `Failed to register agent directory root: ${toErrorMessage(err)}`,
+        );
+      }
+    }),
+  );
 }
 
 /**
