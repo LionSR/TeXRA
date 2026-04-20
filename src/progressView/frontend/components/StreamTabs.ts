@@ -611,12 +611,20 @@ export class StreamTabs extends LitElement {
               (stream) => stream.name,
               (stream) => {
                 const children = this.childStreamsByParent.get(stream.name);
-                const childCount = children?.length ?? 0;
+                // In compact mode, force childCount to 0 so the entire
+                // <div class="child-streams"> subtree is unmounted (saves
+                // memory on sessions with many child streams). In non-compact
+                // mode, the div always mounts with ?hidden tied to `expanded`
+                // so DOM is preserved across user-driven toggles (the common
+                // case PR #2984 optimized for). Compact toggles come from
+                // sidebar resize, which is infrequent enough that
+                // unmount/remount is acceptable and frees memory.
+                const childCount = !this.compact ? (children?.length ?? 0) : 0;
                 const expanded =
                   childCount > 0 && this.expandedParents.has(stream.name);
 
                 // prettier-ignore
-                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${childCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded || this.compact}>${repeat(children, (child) => child.name, (child) => {
+                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${childCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded}>${repeat(children, (child) => child.name, (child) => {
                   const childStatus = this.getStatus(child.name);
                   const isFinished = !ACTIVE_CHILD_STATUSES.has(childStatus);
                   // prettier-ignore
