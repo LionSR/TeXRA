@@ -611,6 +611,14 @@ export class StreamTabs extends LitElement {
               (stream) => stream.name,
               (stream) => {
                 const children = this.childStreamsByParent.get(stream.name);
+                // In compact mode, force childCount to 0 so the entire
+                // <div class="child-streams"> subtree is unmounted (saves
+                // memory on sessions with many child streams). In non-compact
+                // mode, the div always mounts with ?hidden tied to `expanded`
+                // so DOM is preserved across user-driven toggles (the common
+                // case PR #2984 optimized for). Compact toggles come from
+                // sidebar resize, which is infrequent enough that
+                // unmount/remount is acceptable and frees memory.
                 const childCount = !this.compact ? (children?.length ?? 0) : 0;
                 const expanded =
                   childCount > 0 && this.expandedParents.has(stream.name);
