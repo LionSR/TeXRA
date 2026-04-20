@@ -26,7 +26,12 @@ import {
   formatSubscriptionError,
   isPassingConclusion,
 } from './formatPREvent';
-import { GitHubAuthError, GitHubRateLimitError, ghGet } from './githubClient';
+import {
+  GitHubAuthError,
+  GitHubRateLimitError,
+  type ConditionalResponse,
+  ghGet,
+} from './githubClient';
 import type { AsyncEventSource, Disposable } from './AsyncEventSource';
 import type {
   GhCheckRun,
@@ -395,8 +400,10 @@ export class PRPollingSource implements AsyncEventSource {
           state.etags.reviews,
         ),
         state.headSha
-          ? ghGet<{ total_count: number; check_runs: GhCheckRun[] }>(
-              `/repos/${pr.owner}/${pr.repo}/commits/${state.headSha}/check-runs?per_page=100`,
+          ? this.fetchAllCheckRuns(
+              pr.owner,
+              pr.repo,
+              state.headSha,
               state.etags.checkRuns,
             )
           : Promise.resolve({ status: 304 as const }),
@@ -441,8 +448,8 @@ export class PRPollingSource implements AsyncEventSource {
         // runs.length > 0: an empty array is ambiguous (no CI configured vs.
         // runs not yet registered), so "done" isn't meaningful and seeding
         // would suppress the real terminal event once runs appear. Also
-        // require a complete page — the API caps at per_page=100, so a PR
-        // with more check runs would be evaluated from a truncated list.
+        // require we have the full set (length >= total_count); fetchAllCheckRuns
+        // walks pagination, but a mid-walk addition could still leave us short.
         if (
           state.headSha &&
           runs.length > 0 &&
@@ -534,9 +541,10 @@ export class PRPollingSource implements AsyncEventSource {
       //
       // Gate on `runs.length > 0`: an empty array is ambiguous (no CI
       // configured vs. runs not yet registered), so "done" isn't meaningful.
-      // Also require a complete page (length >= total_count) — the API caps
-      // at per_page=100, so a PR with more check runs would prematurely
-      // emit a terminal event based on the first page alone.
+      // Also require we have the full set (length >= total_count). The API
+      // caps at per_page=100, but `fetchAllCheckRuns` walks pagination so
+      // PRs with >100 check runs do reach this gate; the comparison still
+      // guards against a mid-walk addition that could leave us short.
       if (
         state.headSha &&
         runs.length > 0 &&
@@ -563,6 +571,75 @@ export class PRPollingSource implements AsyncEventSource {
         }
       }
     }
+  }
+
+  /**
+   * Fetch all check-runs for a commit, walking pages when `total_count > 100`.
+   *
+   * The check-runs endpoint caps at `per_page=100`. PRs with more registered
+   * runs (large monorepos, matrix builds) would otherwise have their terminal
+   * gates (`runs.length >= total_count`) stuck false forever, stranding agents
+   * waiting on "CI complete" / "CI passed".
+   *
+   * ETag handling: we send `If-None-Match` only on page 1 and only honor a
+   * 304 short-circuit when page 1 reports a single-page result
+   * (`total_count <= 100`). A 304 on page 1 says nothing about pages 2+,
+   * and we'd need a combined ETag (which GitHub doesn't provide) to safely
+   * cache the multi-page case. Page 1 is also the cheapest probe — if a
+   * later push changed any run on any page, page 1's ETag will rotate and
+   * force a refetch. Subsequent pages are unconditional GETs; they're only
+   * walked when page 1 already returned 200.
+   */
+  private async fetchAllCheckRuns(
+    owner: string,
+    repo: string,
+    sha: string,
+    etag: string | undefined,
+  ): Promise<
+    ConditionalResponse<{ total_count: number; check_runs: GhCheckRun[] }>
+  > {
+    const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=100`;
+    const firstRes = await ghGet<{
+      total_count: number;
+      check_runs: GhCheckRun[];
+    }>(`${basePath}&page=1`, etag);
+
+    if (firstRes.status === 304) return { status: 304 };
+
+    const total = firstRes.data.total_count;
+    const firstRuns = firstRes.data.check_runs;
+
+    // Single-page fast path: keep the page-1 ETag so the next tick can 304.
+    if (firstRuns.length >= total) {
+      return firstRes;
+    }
+
+    // Multi-page: walk remaining pages. Drop the ETag (return undefined) so
+    // a future tick re-fetches page 1 unconditionally — a stale 304 would
+    // skip newer runs that landed on later pages without rotating page 1's
+    // ETag.
+    const allRuns: GhCheckRun[] = [...firstRuns];
+    const totalPages = Math.ceil(total / 100);
+    this.logger.info(
+      `Pagination: ${owner}/${repo}@${sha.slice(0, 7)} check-runs total_count=${total} → ${totalPages} pages`,
+    );
+    for (let page = 2; page <= totalPages; page += 1) {
+      const pageRes = await ghGet<{
+        total_count: number;
+        check_runs: GhCheckRun[];
+      }>(`${basePath}&page=${page}`);
+      if (pageRes.status === 304) continue; // shouldn't happen w/o etag, but be safe
+      allRuns.push(...pageRes.data.check_runs);
+      // total_count can shift across pages if runs are added mid-walk; keep
+      // looping until we've actually collected total_count or run out of
+      // pages relative to the page count we computed.
+    }
+
+    return {
+      status: 200,
+      data: { total_count: total, check_runs: allRuns },
+      etag: undefined,
+    };
   }
 
   private isCheckFailure(r: GhCheckRun): boolean {
