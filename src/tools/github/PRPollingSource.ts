@@ -484,9 +484,11 @@ export class PRPollingSource implements AsyncEventSource {
         // runs.length > 0: an empty array is ambiguous (no CI configured vs.
         // runs not yet registered), so "done" isn't meaningful and seeding
         // would suppress the real terminal event once runs appear. Also
-        // require we have the full set (length >= total_count); fetchAllCheckRuns
-        // returns the latest observed total_count, so this also covers runs
-        // added mid-walk that bumped the page count.
+        // require we have the full set (length >= total_count). The runs
+        // array from fetchAllCheckRuns is deduped by id and total_count is
+        // the latest server-reported value, so this comparison is safe
+        // against mid-walk page shifts that would otherwise let a duplicate-
+        // padded array trip the gate before a newly-registered run was seen.
         if (
           state.headSha &&
           runs.length > 0 &&
@@ -585,10 +587,12 @@ export class PRPollingSource implements AsyncEventSource {
       // Gate on `runs.length > 0`: an empty array is ambiguous (no CI
       // configured vs. runs not yet registered), so "done" isn't meaningful.
       // Also require we have the full set (length >= total_count). The API
-      // caps at per_page=100; `fetchAllCheckRuns` walks pagination AND
-      // returns the most recent `total_count` it observed (not the stale
-      // page-1 value), so this comparison correctly guards against runs
-      // added mid-walk that bumped `total_count` higher than page 1 reported.
+      // caps at per_page=100; `fetchAllCheckRuns` walks pagination, dedupes
+      // runs by id (so page-shift duplicates can't pad the count), AND
+      // returns the latest `total_count` from this tick's 200 responses
+      // (not a stale page-1 snapshot or a stuck monotonic max from a prior
+      // mid-walk inflation). A duplicate-filled buffer can therefore never
+      // trick this gate into firing "CI complete" before every run is seen.
       if (
         state.headSha &&
         runs.length > 0 &&
@@ -634,15 +638,29 @@ export class PRPollingSource implements AsyncEventSource {
    * gates (`runs.length >= total_count`) stuck false forever, stranding agents
    * waiting on "CI complete" / "CI passed".
    *
-   * ## Mid-walk additions
+   * ## Mid-walk churn (additions, removals, dedupe)
    *
-   * `total_count` can grow between pages if GitHub registers new runs while
-   * we're paginating. We re-read `total_count` from every 200 response,
-   * recompute `totalPages` against the maximum we've ever seen, and continue
-   * until we've collected at least that many runs (or hit the safety cap).
-   * The returned `total_count` is the latest observed value, never page 1's
-   * stale snapshot — downstream `runs.length >= total_count` gates can rely
-   * on it.
+   * `total_count` and the per-page set of runs can both shift while we're
+   * paginating: GitHub may register new runs (pushing earlier runs onto a
+   * later page → duplicates across our pages), or runs may be removed/replaced
+   * (a page shrinks). We defend against both:
+   *
+   * - We accumulate runs into a `Map<id, GhCheckRun>` so duplicates collapse.
+   *   The terminal gate downstream (`runs.length >= total_count`) is evaluated
+   *   against the deduped count, not the raw appended count, so a page-shift
+   *   that fills our buffer with duplicates can't trick us into emitting
+   *   "CI complete" before a newly-registered run has actually been seen.
+   *
+   * - We re-read `total_count` from every 200 response and use the LAST seen
+   *   value (not the historical max). The server's `total_count` is its
+   *   current authoritative count at the moment of that page-N fetch; if a
+   *   transient mid-walk inflation later settles back down, taking the max
+   *   would strand the gate forever (`runs.length` can never reach an
+   *   inflated, no-longer-true total).
+   *
+   * The returned `total_count` is the latest observed server value (or, on
+   * a full-304 tick, the previously-committed value carried via cache),
+   * never page 1's stale snapshot.
    *
    * ## ETag caching (multi-page)
    *
@@ -699,11 +717,21 @@ export class PRPollingSource implements AsyncEventSource {
     // We need a place to record whether *every* page returned 304 so we can
     // surface a true 304 to the caller (and skip the seeding/diff work).
     let allPagesUnchanged = true;
-    let observedTotal = 0;
+    // `latestTotal` tracks the most recent 200 response's `total_count`.
+    // Crucially we do NOT carry `cache.lastTotalCount` into this — that
+    // would let a transient prior-tick inflation persist forever once page-1
+    // starts returning 304 against the unchanged content (the cached
+    // `lastTotalCount` would seed the gate every tick and `runs.length`
+    // could never catch up to an inflated, no-longer-true total).
+    let latestTotal: number | undefined;
 
     const fetchPage = async (
       page: number,
-    ): Promise<{ runs: GhCheckRun[]; total: number; was304: boolean }> => {
+    ): Promise<{
+      runs: GhCheckRun[];
+      total: number | undefined;
+      was304: boolean;
+    }> => {
       const pageEtag = cache?.etagsByPage.get(page);
       const res = await ghGet<{
         total_count: number;
@@ -716,8 +744,14 @@ export class PRPollingSource implements AsyncEventSource {
         nextPages.set(page, cachedRuns);
         return {
           runs: cachedRuns,
-          // total_count isn't returned on 304; fall back to last-known.
-          total: cache?.lastTotalCount ?? 0,
+          // total_count isn't returned on 304. We deliberately return
+          // undefined here rather than falling back to `cache.lastTotalCount`,
+          // because that cached value may itself be stale (an inflated value
+          // committed during a prior mid-walk race). The terminal `latestTotal`
+          // is derived from this tick's 200 responses; only when *every* page
+          // is 304 do we reuse the cached total below — and that case
+          // genuinely means "nothing changed since we last committed".
+          total: undefined,
           was304: true,
         };
       }
@@ -734,7 +768,7 @@ export class PRPollingSource implements AsyncEventSource {
     // when nothing changed).
     const first = await fetchPage(1);
     if (!first.was304) allPagesUnchanged = false;
-    observedTotal = Math.max(observedTotal, first.total);
+    if (first.total !== undefined) latestTotal = first.total;
 
     // Single-page fast path. If page 1 was 304 and our last-known total fits
     // in one page, we can short-circuit the whole call without touching any
@@ -750,21 +784,35 @@ export class PRPollingSource implements AsyncEventSource {
       return { response: { status: 304 } };
     }
 
-    const allRuns: GhCheckRun[] = [...first.runs];
+    // Dedupe by run id. Pagination is not transactional on GitHub: when a
+    // new run is registered mid-walk, runs can shift across page boundaries
+    // and we'd otherwise see the same id on two different pages (or miss
+    // one entirely). A `Map<id, run>` collapses duplicates and lets the
+    // downstream `runs.length >= total_count` gate evaluate against the
+    // true unique count.
+    const runsById = new Map<number, GhCheckRun>();
+    for (const r of first.runs) runsById.set(r.id, r);
+
+    // How many pages to walk this tick. We need a starting estimate before
+    // we've seen any 200 with a non-cached total, so we fall back to the
+    // cached `lastTotalCount` when page-1 was 304 (unchanged content → the
+    // server's view almost certainly matches what we last committed). If a
+    // 200 arrives later, `latestTotal` takes precedence and we recompute.
+    const seedTotal = latestTotal ?? cache?.lastTotalCount ?? 0;
     let totalPages = Math.max(
       1,
-      Math.ceil(observedTotal / CHECK_RUNS_PAGE_SIZE),
+      Math.ceil(seedTotal / CHECK_RUNS_PAGE_SIZE),
     );
     if (totalPages > MAX_CHECK_RUNS_PAGES) {
       this.logger.warn(
         `Pagination cap hit for ${owner}/${repo}@${sha.slice(0, 7)} check-runs: ` +
-          `total_count=${observedTotal} would need ${totalPages} pages, capping at ${MAX_CHECK_RUNS_PAGES}.`,
+          `total_count=${seedTotal} would need ${totalPages} pages, capping at ${MAX_CHECK_RUNS_PAGES}.`,
       );
       totalPages = MAX_CHECK_RUNS_PAGES;
     }
     if (totalPages > 1) {
       this.logger.info(
-        `Pagination: ${owner}/${repo}@${sha.slice(0, 7)} check-runs total_count=${observedTotal} → ${totalPages} pages`,
+        `Pagination: ${owner}/${repo}@${sha.slice(0, 7)} check-runs total_count=${seedTotal} → ${totalPages} pages`,
       );
     }
 
@@ -772,17 +820,23 @@ export class PRPollingSource implements AsyncEventSource {
     while (page <= totalPages) {
       const result = await fetchPage(page);
       if (!result.was304) allPagesUnchanged = false;
-      allRuns.push(...result.runs);
+      for (const r of result.runs) runsById.set(r.id, r);
 
-      // total_count can grow if GitHub registers new runs mid-walk. Re-read
-      // it from every 200 response and extend the walk if needed.
-      if (result.total > observedTotal) {
-        observedTotal = result.total;
-        const newTotalPages = Math.ceil(observedTotal / CHECK_RUNS_PAGE_SIZE);
+      // Use the LATEST observed `total_count` (from this page's 200) as the
+      // authoritative server view. Walk-length adapts to it whether it grew
+      // OR shrank: a transient inflation that has since settled back down
+      // must be allowed to take effect, otherwise a max-style monotonic
+      // tracker would strand the terminal gate forever.
+      if (result.total !== undefined) {
+        latestTotal = result.total;
+        const newTotalPages = Math.max(
+          1,
+          Math.ceil(latestTotal / CHECK_RUNS_PAGE_SIZE),
+        );
         if (newTotalPages > MAX_CHECK_RUNS_PAGES) {
           this.logger.warn(
             `Pagination cap hit mid-walk for ${owner}/${repo}@${sha.slice(0, 7)} check-runs: ` +
-              `total_count grew to ${observedTotal} (${newTotalPages} pages), capping at ${MAX_CHECK_RUNS_PAGES}.`,
+              `total_count is ${latestTotal} (${newTotalPages} pages), capping at ${MAX_CHECK_RUNS_PAGES}.`,
           );
           totalPages = MAX_CHECK_RUNS_PAGES;
         } else {
@@ -792,6 +846,15 @@ export class PRPollingSource implements AsyncEventSource {
       page += 1;
     }
 
+    // Resolve the total we'll surface and cache. Priority order:
+    //  1. The last 200's `total_count` (current server-authoritative value).
+    //  2. If every page was 304, the previously-committed `lastTotalCount`
+    //     — nothing actually changed, so the prior commit is still correct.
+    //  3. Fall back to the deduped run count (degenerate case, no 200s and
+    //     no cache; e.g. brand-new subscription with empty results).
+    const reportedTotal =
+      latestTotal ?? cache?.lastTotalCount ?? runsById.size;
+
     // Stage the per-page caches. The caller commits to `state.checkRunsCache`
     // only after successfully consuming the response — see the type doc above.
     // We always overwrite on commit: any pages from a previous tick that we
@@ -799,7 +862,7 @@ export class PRPollingSource implements AsyncEventSource {
     const stagedCache = {
       etagsByPage: nextEtags,
       pagesByPage: nextPages,
-      lastTotalCount: observedTotal,
+      lastTotalCount: reportedTotal,
     };
 
     // True end-to-end 304: every page came back unchanged. Caller can skip
@@ -811,7 +874,10 @@ export class PRPollingSource implements AsyncEventSource {
     return {
       response: {
         status: 200,
-        data: { total_count: observedTotal, check_runs: allRuns },
+        data: {
+          total_count: reportedTotal,
+          check_runs: [...runsById.values()],
+        },
         // No single ETag covers a multi-page response. The per-page cache on
         // `state.checkRunsCache` is what enables conditional reuse next tick.
         etag: undefined,
