@@ -1342,36 +1342,220 @@
       ],
       "commandPalette": [
         {
+          "command": "texra.createSampleProject",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.openGettingStarted",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.cleanOutput",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.cleanBuild",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.indentTeX",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.getRecentCommits",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.cloneOverleafProject",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.refreshCommits",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.indentCurrentTeX",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.resumeAgent",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.applyReplacements",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.fixCompilation",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.getTeXCount",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.countPdfPages",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.encodeImageToBase64",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.convertPdfToImages",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.extractFigurePaths",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.extractTikzFigures",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.compileTikzFigures",
+          "when": "texra.activated"
+        },
+        {
           "command": "texra.testConnection",
-          "when": "config.texra.logger.debugMode"
+          "when": "texra.activated && config.texra.logger.debugMode"
         },
         {
           "command": "texra.testAgentLoading",
-          "when": "config.texra.logger.debugMode"
+          "when": "texra.activated && config.texra.logger.debugMode"
         },
         {
           "command": "texra.loadSpecificAgent",
-          "when": "config.texra.logger.debugMode"
+          "when": "texra.activated && config.texra.logger.debugMode"
         },
         {
-          "command": "texra.testTextEditor",
-          "when": "config.texra.logger.debugMode"
+          "command": "texra.downloadArXivSource",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showImportOptions",
+          "when": "texra.activated"
         },
         {
           "command": "texra.parseXml",
-          "when": "config.texra.logger.debugMode"
+          "when": "texra.activated && config.texra.logger.debugMode"
         },
         {
           "command": "texra.parseYaml",
-          "when": "config.texra.logger.debugMode"
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.stopAgent",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.execute",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.pack",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.clean",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.createAgentWithAI",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.setApiKey",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.removeApiKey",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.auth.signIn",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.auth.signOut",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.auth.viewProfile",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.testTextEditor",
+          "when": "texra.activated && config.texra.logger.debugMode"
         },
         {
           "command": "texra.showLinterMessages",
-          "when": "config.texra.logger.debugMode"
+          "when": "texra.activated && config.texra.logger.debugMode"
         },
         {
           "command": "texra.countLinterMessages",
-          "when": "config.texra.logger.debugMode"
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.openDoc",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.mainView.reset",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showAgentHistory",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showMemory",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showModels",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showAgents",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showTools",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showMultiAgent",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.openSettings",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showMainView",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showProgressView",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.toggleView",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.openProgressViewInTab",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showDashboard",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showSettingsView",
+          "when": "texra.activated"
         }
       ]
     },
