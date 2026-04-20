@@ -153,11 +153,14 @@ export async function handleClean(config: unknown): Promise<void> {
   // Toolbar-driven invocations pass an executionId: delete the run's runDir
   // directly. Legacy callers without an executionId fall back to the
   // workspace-scan clean for pre-refactor files.
-  const result = executionId
-    ? await runCleanRunDir(executionId)
-    : useMultipleOutputs && outputFiles.length > 0
-      ? await runCleanMultiple(model, inputFile, agent, outputFiles)
-      : await runCleanSingle(model, inputFile, agent);
+  let result;
+  if (executionId) {
+    result = await runCleanRunDir(executionId);
+  } else if (useMultipleOutputs && outputFiles.length > 0) {
+    result = await runCleanMultiple(model, inputFile, agent, outputFiles);
+  } else {
+    result = await runCleanSingle(model, inputFile, agent);
+  }
   showCleanResult(result, inputFile);
 
   if (!skipProgressViewClear) {

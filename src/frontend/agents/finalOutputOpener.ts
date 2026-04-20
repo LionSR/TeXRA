@@ -26,10 +26,7 @@ export async function openFinalOutputIfAvailable(
     return;
   }
 
-  const lastRound = result.outputs.reduce(
-    (max, o) => (o.round > max ? o.round : max),
-    0,
-  );
+  const lastRound = Math.max(...result.outputs.map((o) => o.round));
   const primary = result.outputs.find((o) => o.round === lastRound);
   if (!primary) return;
 

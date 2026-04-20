@@ -36,6 +36,7 @@ import {
   WorkspaceFS,
   TaskRunFileService,
   flexibleFS,
+  getComparablePath,
   pathToLocation,
   type FileLocation,
 } from '@utils/files';
@@ -638,12 +639,7 @@ async function runLatexdiffFromMetadata(params: {
   const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
 
   const getFileLabel = (info: OutputFileInfo): string =>
-    info.source ??
-    path.basename(
-      info.location.kind === 'external'
-        ? info.location.absolutePath
-        : info.location.relativePath,
-    );
+    info.source ?? path.basename(getComparablePath(info.location));
 
   const immediateResults: DiffRunResult[] = [];
   const operations: DiffOperation[] = [];
@@ -675,10 +671,7 @@ async function runLatexdiffFromMetadata(params: {
         round,
       });
 
-      const key =
-        info.location.kind === 'external'
-          ? info.location.absolutePath
-          : info.location.relativePath;
+      const key = getComparablePath(info.location);
       if (!groupedByRelative.has(key)) {
         groupedByRelative.set(key, []);
       }

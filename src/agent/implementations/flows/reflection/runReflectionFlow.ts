@@ -61,14 +61,6 @@ export interface RunReflectionFlowInput<
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
   onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
-  /**
-   * When true, route outputs into task-run storage regardless of the user's
-   * `texra.agentOutputs.storageMode` setting. Used for subagent runs so they
-   * don't pollute the user's workspace. User-initiated workflows respect the
-   * configured storage mode (default: workspace) so the progress toolbar's
-   * pack/clean operations can still find them.
-   */
-  isSubagent?: boolean;
 }
 
 export interface RunReflectionFlowResult {
@@ -80,7 +72,6 @@ function deriveConfig(
   setting: AgentWorkflowSetting,
   prompt: RunReflectionFlowInput['prompt'],
 ): {
-  useScratchpad: boolean;
   shouldEnsureXmlStructure: boolean;
   totalRounds: number;
   outputExt: string;
@@ -114,7 +105,6 @@ function deriveConfig(
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
-    useScratchpad,
     shouldEnsureXmlStructure,
     totalRounds,
     outputExt: useScratchpad ? 'xml' : setting.outputExt,
