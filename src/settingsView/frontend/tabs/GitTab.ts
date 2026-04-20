@@ -102,7 +102,7 @@ export class GitTab extends LitElement {
         color: var(--vscode-descriptionForeground);
       }
       .instructions ol {
-        margin: var(--spacing-xs) 0 0 0;
+        margin: var(--spacing-tiny) 0 0 0;
         padding-left: 1.25em;
       }
       .instructions li {
@@ -110,9 +110,9 @@ export class GitTab extends LitElement {
       }
       .instructions code {
         background: var(--vscode-textBlockQuote-background);
-        padding: 0 4px;
-        border-radius: 3px;
-        font-size: 0.9em;
+        padding: 0 var(--spacing-small);
+        border-radius: var(--border-radius);
+        font-size: var(--font-size-sm);
       }
 
       .subscriptions-list {
@@ -125,13 +125,13 @@ export class GitTab extends LitElement {
         align-items: center;
         justify-content: space-between;
         gap: var(--spacing-small);
-        padding: var(--spacing-xs) 0;
+        padding: var(--spacing-tiny) 0;
       }
       .subscriptions-list code {
         background: var(--vscode-textBlockQuote-background);
-        padding: 1px 6px;
-        border-radius: 3px;
-        font-size: 0.9em;
+        padding: var(--border-thin) var(--spacing-medium);
+        border-radius: var(--border-radius);
+        font-size: var(--font-size-sm);
       }
     `,
   ];
