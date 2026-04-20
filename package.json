@@ -18,6 +18,7 @@
     "Data Science"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onColorTheme"
   ],
   "main": "./dist/extension.js",
