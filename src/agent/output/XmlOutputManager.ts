@@ -210,7 +210,7 @@ export class XmlOutputManager {
     round: number,
   ): Promise<OutputFileInfo[]> {
     const outputFiles: OutputFileInfo[] = [];
-    const outputDir = path.dirname(outputLocation.absolutePath);
+    const roundDir = path.dirname(outputLocation.absolutePath);
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
@@ -226,7 +226,7 @@ export class XmlOutputManager {
         continue;
       }
 
-      const texFile = getExtractedDocOutputFileName(source, round, outputDir);
+      const texFile = getExtractedDocOutputFileName(source, roundDir);
       const texLocation = this.fileService.createLocation(texFile);
       const cleanedContent = this.removeTrailingEndDocument(
         doc.content.trim(),

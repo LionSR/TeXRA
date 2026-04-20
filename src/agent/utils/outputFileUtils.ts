@@ -22,24 +22,23 @@ export function getOutputFileName(
 }
 
 /**
- * Generates an output path for an extracted document from multi-document XML output:
- * `r{round}/{sourceName}.{ext}`.
+ * Generates an output path for an extracted document from multi-document XML
+ * output, written as a sibling of the main output file (e.g. inside the same
+ * `r{round}/` subfolder produced by {@link getOutputFileName}).
  *
- * Extracted docs keep their original source name — the round subfolder
- * provides round context, so no round suffix is needed in the filename.
+ * Extracted docs keep their original source name — the surrounding round
+ * folder provides round context, so no round suffix is needed in the filename.
  *
  * @param source Source document name (from XML content, e.g. "chapter1.tex")
- * @param round Current round number
- * @param outputDir Base directory for output
+ * @param roundDir Directory containing the round's outputs
  */
 export function getExtractedDocOutputFileName(
   source: string,
-  round: number,
-  outputDir: string,
+  roundDir: string,
 ): string {
   const { name: sourceName, ext } = path.parse(source);
   const extension = ext.replace('.', '') || 'tex';
-  return path.join(outputDir, `r${round}`, `${sourceName}.${extension}`);
+  return path.join(roundDir, `${sourceName}.${extension}`);
 }
 
 /**
