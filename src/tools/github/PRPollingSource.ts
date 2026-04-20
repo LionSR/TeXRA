@@ -48,6 +48,13 @@ const COALESCE_THRESHOLD = 3;
 // Per-resource id history is trimmed to this many entries so long-running
 // subscriptions don't grow the state map unboundedly.
 const MAX_SEEN_IDS = 1000;
+// GitHub caps the check-runs endpoint at 100 per page.
+const CHECK_RUNS_PAGE_SIZE = 100;
+// Hard ceiling on how many check-runs pages we'll walk in a single fetch.
+// 50 pages = 5,000 runs — well above any realistic monorepo matrix build.
+// Without a cap a malformed/runaway `total_count` could fan out into
+// hundreds of GETs per tick.
+const MAX_CHECK_RUNS_PAGES = 50;
 
 export interface PRKey {
   owner: string;
@@ -114,7 +121,25 @@ interface SubscriptionState {
     issueComments?: string;
     reviewComments?: string;
     reviews?: string;
-    checkRuns?: string;
+  };
+  /**
+   * Per-page cache for the paginated check-runs endpoint.
+   *
+   * Single-page PRs (<=100 runs) only ever touch page 1, so this still gives
+   * us the cheap 304 path. Multi-page PRs (>100 runs) issue conditional GETs
+   * per page; pages that haven't changed return 304 and we reuse the cached
+   * `check_runs` for that page. This is what keeps the polling cost bounded
+   * on large matrix builds — a steady-state tick should be N HEAD-cheap 304s,
+   * not N unconditional full-page GETs.
+   *
+   * `lastTotalCount` is the most recent `total_count` we saw from a 200
+   * response; it lets us decide how many pages to walk on a tick where
+   * page 1 came back 304.
+   */
+  checkRunsCache?: {
+    etagsByPage: Map<number, string>;
+    pagesByPage: Map<number, GhCheckRun[]>;
+    lastTotalCount: number;
   };
   // ISO `since` cursors for server-side filtering on the comments endpoints.
   // Advance to the newest seen item's timestamp so PRs with >100 comments
@@ -350,10 +375,15 @@ export class PRPollingSource implements AsyncEventSource {
       state.state = newState;
       state.merged = newMerged;
       // New push invalidates prior CI terminal state — the next completion
-      // on the new SHA should re-emit both terminal events.
+      // on the new SHA should re-emit both terminal events. Also drop the
+      // per-page check-runs cache: it's keyed only by page number, and the
+      // ETags from the previous SHA can never match the new SHA's responses.
+      // Letting it linger would cost one wasted If-None-Match per page on
+      // the first post-push tick before the cache naturally refreshes.
       if (state.headSha !== newHead) {
         state.ciCompleteSha = undefined;
         state.ciPassedSha = undefined;
+        state.checkRunsCache = undefined;
       }
       state.headSha = newHead;
     }
@@ -400,12 +430,7 @@ export class PRPollingSource implements AsyncEventSource {
           state.etags.reviews,
         ),
         state.headSha
-          ? this.fetchAllCheckRuns(
-              pr.owner,
-              pr.repo,
-              state.headSha,
-              state.etags.checkRuns,
-            )
+          ? this.fetchAllCheckRuns(pr.owner, pr.repo, state.headSha, state)
           : Promise.resolve({ status: 304 as const }),
       ]);
 
@@ -436,7 +461,8 @@ export class PRPollingSource implements AsyncEventSource {
         }
       }
       if (checksRes.status === 200) {
-        state.etags.checkRuns = checksRes.etag;
+        // ETag/page caching is owned by `fetchAllCheckRuns` via
+        // `state.checkRunsCache`; nothing to record on `state.etags` here.
         const runs = checksRes.data.check_runs;
         for (const r of runs) {
           if (this.isCheckFailure(r)) {
@@ -449,7 +475,8 @@ export class PRPollingSource implements AsyncEventSource {
         // runs not yet registered), so "done" isn't meaningful and seeding
         // would suppress the real terminal event once runs appear. Also
         // require we have the full set (length >= total_count); fetchAllCheckRuns
-        // walks pagination, but a mid-walk addition could still leave us short.
+        // returns the latest observed total_count, so this also covers runs
+        // added mid-walk that bumped the page count.
         if (
           state.headSha &&
           runs.length > 0 &&
@@ -511,7 +538,8 @@ export class PRPollingSource implements AsyncEventSource {
     }
 
     if (checksRes.status === 200) {
-      state.etags.checkRuns = checksRes.etag;
+      // ETag/page caching is owned by `fetchAllCheckRuns` via
+      // `state.checkRunsCache`; nothing to record on `state.etags` here.
       const runs = checksRes.data.check_runs;
       const newFailures: GhCheckRun[] = [];
       const currentFailureKeys = new Set<string>();
@@ -542,9 +570,10 @@ export class PRPollingSource implements AsyncEventSource {
       // Gate on `runs.length > 0`: an empty array is ambiguous (no CI
       // configured vs. runs not yet registered), so "done" isn't meaningful.
       // Also require we have the full set (length >= total_count). The API
-      // caps at per_page=100, but `fetchAllCheckRuns` walks pagination so
-      // PRs with >100 check runs do reach this gate; the comparison still
-      // guards against a mid-walk addition that could leave us short.
+      // caps at per_page=100; `fetchAllCheckRuns` walks pagination AND
+      // returns the most recent `total_count` it observed (not the stale
+      // page-1 value), so this comparison correctly guards against runs
+      // added mid-walk that bumped `total_count` higher than page 1 reported.
       if (
         state.headSha &&
         runs.length > 0 &&
@@ -581,63 +610,166 @@ export class PRPollingSource implements AsyncEventSource {
    * gates (`runs.length >= total_count`) stuck false forever, stranding agents
    * waiting on "CI complete" / "CI passed".
    *
-   * ETag handling: we send `If-None-Match` only on page 1 and only honor a
-   * 304 short-circuit when page 1 reports a single-page result
-   * (`total_count <= 100`). A 304 on page 1 says nothing about pages 2+,
-   * and we'd need a combined ETag (which GitHub doesn't provide) to safely
-   * cache the multi-page case. Page 1 is also the cheapest probe — if a
-   * later push changed any run on any page, page 1's ETag will rotate and
-   * force a refetch. Subsequent pages are unconditional GETs; they're only
-   * walked when page 1 already returned 200.
+   * ## Mid-walk additions
+   *
+   * `total_count` can grow between pages if GitHub registers new runs while
+   * we're paginating. We re-read `total_count` from every 200 response,
+   * recompute `totalPages` against the maximum we've ever seen, and continue
+   * until we've collected at least that many runs (or hit the safety cap).
+   * The returned `total_count` is the latest observed value, never page 1's
+   * stale snapshot — downstream `runs.length >= total_count` gates can rely
+   * on it.
+   *
+   * ## ETag caching (multi-page)
+   *
+   * Each page's ETag is cached on the subscription so subsequent ticks can
+   * issue conditional `If-None-Match` requests per page. A 304 means we
+   * reuse the previously-cached page contents; a 200 refreshes them.
+   *
+   * - Single-page (`total_count <= 100`): unchanged fast path — the page-1
+   *   ETag covers the whole result and a 304 short-circuits the entire call.
+   * - Multi-page: each page is independently conditional. In steady state
+   *   (no new push, all runs settled) every page returns 304 and we make
+   *   N HEAD-cheap requests instead of N full-page GETs, keeping the polling
+   *   cost bounded on large matrix builds.
+   *
+   * ## Runaway guard
+   *
+   * `MAX_CHECK_RUNS_PAGES` caps the walk at 50 pages (5,000 runs). If a
+   * misbehaving GitHub response or a runaway matrix would push us past it,
+   * we log a warning and return what we have — better to under-report than
+   * fan out into hundreds of GETs every 30s.
    */
   private async fetchAllCheckRuns(
     owner: string,
     repo: string,
     sha: string,
-    etag: string | undefined,
+    state: SubscriptionState,
   ): Promise<
     ConditionalResponse<{ total_count: number; check_runs: GhCheckRun[] }>
   > {
-    const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=100`;
-    const firstRes = await ghGet<{
-      total_count: number;
-      check_runs: GhCheckRun[];
-    }>(`${basePath}&page=1`, etag);
+    const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=${CHECK_RUNS_PAGE_SIZE}`;
+    const cache = state.checkRunsCache;
 
-    if (firstRes.status === 304) return { status: 304 };
+    // Seed scratch caches we'll commit at the end. We rebuild from scratch
+    // each tick (rather than mutating in-place) so any pages dropped on
+    // this tick — e.g. new push reduced page count from 5 to 3 — don't
+    // leave stale entries behind.
+    const nextEtags = new Map<number, string>();
+    const nextPages = new Map<number, GhCheckRun[]>();
 
-    const total = firstRes.data.total_count;
-    const firstRuns = firstRes.data.check_runs;
+    // We need a place to record whether *every* page returned 304 so we can
+    // surface a true 304 to the caller (and skip the seeding/diff work).
+    let allPagesUnchanged = true;
+    let observedTotal = 0;
 
-    // Single-page fast path: keep the page-1 ETag so the next tick can 304.
-    if (firstRuns.length >= total) {
-      return firstRes;
-    }
-
-    // Multi-page: walk remaining pages. Drop the ETag (return undefined) so
-    // a future tick re-fetches page 1 unconditionally — a stale 304 would
-    // skip newer runs that landed on later pages without rotating page 1's
-    // ETag.
-    const allRuns: GhCheckRun[] = [...firstRuns];
-    const totalPages = Math.ceil(total / 100);
-    this.logger.info(
-      `Pagination: ${owner}/${repo}@${sha.slice(0, 7)} check-runs total_count=${total} → ${totalPages} pages`,
-    );
-    for (let page = 2; page <= totalPages; page += 1) {
-      const pageRes = await ghGet<{
+    const fetchPage = async (
+      page: number,
+    ): Promise<{ runs: GhCheckRun[]; total: number; was304: boolean }> => {
+      const pageEtag = cache?.etagsByPage.get(page);
+      const res = await ghGet<{
         total_count: number;
         check_runs: GhCheckRun[];
-      }>(`${basePath}&page=${page}`);
-      if (pageRes.status === 304) continue; // shouldn't happen w/o etag, but be safe
-      allRuns.push(...pageRes.data.check_runs);
-      // total_count can shift across pages if runs are added mid-walk; keep
-      // looping until we've actually collected total_count or run out of
-      // pages relative to the page count we computed.
+      }>(`${basePath}&page=${page}`, pageEtag);
+      if (res.status === 304) {
+        // Reuse cached page. Carry forward the ETag we sent.
+        const cachedRuns = cache?.pagesByPage.get(page) ?? [];
+        if (pageEtag) nextEtags.set(page, pageEtag);
+        nextPages.set(page, cachedRuns);
+        return {
+          runs: cachedRuns,
+          // total_count isn't returned on 304; fall back to last-known.
+          total: cache?.lastTotalCount ?? 0,
+          was304: true,
+        };
+      }
+      if (res.etag) nextEtags.set(page, res.etag);
+      nextPages.set(page, res.data.check_runs);
+      return {
+        runs: res.data.check_runs,
+        total: res.data.total_count,
+        was304: false,
+      };
+    };
+
+    // Page 1 always runs — we need its `total_count` (or a 304 fast-path
+    // when nothing changed).
+    const first = await fetchPage(1);
+    if (!first.was304) allPagesUnchanged = false;
+    observedTotal = Math.max(observedTotal, first.total);
+
+    // Single-page fast path. If page 1 was 304 and our last-known total fits
+    // in one page, we can short-circuit the whole call without touching any
+    // other state — this is the common steady-state for typical PRs.
+    if (
+      first.was304 &&
+      cache &&
+      cache.lastTotalCount <= CHECK_RUNS_PAGE_SIZE &&
+      cache.etagsByPage.size === 1
+    ) {
+      return { status: 304 };
     }
+
+    const allRuns: GhCheckRun[] = [...first.runs];
+    let totalPages = Math.max(
+      1,
+      Math.ceil(observedTotal / CHECK_RUNS_PAGE_SIZE),
+    );
+    if (totalPages > MAX_CHECK_RUNS_PAGES) {
+      this.logger.warn(
+        `Pagination cap hit for ${owner}/${repo}@${sha.slice(0, 7)} check-runs: ` +
+          `total_count=${observedTotal} would need ${totalPages} pages, capping at ${MAX_CHECK_RUNS_PAGES}.`,
+      );
+      totalPages = MAX_CHECK_RUNS_PAGES;
+    }
+    if (totalPages > 1) {
+      this.logger.info(
+        `Pagination: ${owner}/${repo}@${sha.slice(0, 7)} check-runs total_count=${observedTotal} → ${totalPages} pages`,
+      );
+    }
+
+    let page = 2;
+    while (page <= totalPages) {
+      const result = await fetchPage(page);
+      if (!result.was304) allPagesUnchanged = false;
+      allRuns.push(...result.runs);
+
+      // total_count can grow if GitHub registers new runs mid-walk. Re-read
+      // it from every 200 response and extend the walk if needed.
+      if (result.total > observedTotal) {
+        observedTotal = result.total;
+        const newTotalPages = Math.ceil(observedTotal / CHECK_RUNS_PAGE_SIZE);
+        if (newTotalPages > MAX_CHECK_RUNS_PAGES) {
+          this.logger.warn(
+            `Pagination cap hit mid-walk for ${owner}/${repo}@${sha.slice(0, 7)} check-runs: ` +
+              `total_count grew to ${observedTotal} (${newTotalPages} pages), capping at ${MAX_CHECK_RUNS_PAGES}.`,
+          );
+          totalPages = MAX_CHECK_RUNS_PAGES;
+        } else {
+          totalPages = newTotalPages;
+        }
+      }
+      page += 1;
+    }
+
+    // Commit the per-page caches. We always overwrite — any pages from a
+    // previous tick that we didn't touch this tick (e.g. page count
+    // shrank) are intentionally evicted.
+    state.checkRunsCache = {
+      etagsByPage: nextEtags,
+      pagesByPage: nextPages,
+      lastTotalCount: observedTotal,
+    };
+
+    // True end-to-end 304: every page came back unchanged. Caller can skip
+    // the diff/seed work entirely.
+    if (allPagesUnchanged) return { status: 304 };
 
     return {
       status: 200,
-      data: { total_count: total, check_runs: allRuns },
+      data: { total_count: observedTotal, check_runs: allRuns },
+      // No single ETag covers a multi-page response. The per-page cache on
+      // `state.checkRunsCache` is what enables conditional reuse next tick.
       etag: undefined,
     };
   }
