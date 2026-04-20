@@ -9,6 +9,7 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { getAuthStatus } from '@auth/authCommands';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
+import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
 import * as logger from '@logger/logUtils';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -51,17 +52,31 @@ const SETUP_INSTRUCTION =
  * Pick a model the setup agent can actually call, given the credentials
  * the user currently has. Checks the Researcher Access sign-in first,
  * then falls back to the first provider that has an API key set.
+ *
+ * Side effect: if the user has only an `openRouter` key, the global
+ * `useOpenRouter` routing flag is turned on so that picking `sonnet46T`
+ * (or any default model) actually routes through OpenRouter instead of
+ * failing over to the model's native provider with no API key.
  */
 async function resolveLaunchModel(): Promise<string> {
   const auth = await getAuthStatus().catch(() => ({ authenticated: false }));
   if (auth.authenticated) return SIGNED_IN_SETUP_MODEL;
 
+  const presentProviders: string[] = [];
   for (const provider of SecretManager.API_PROVIDERS) {
     if (await SecretManager.apiKeyExists(provider)) {
-      return API_KEY_MODEL_BY_PROVIDER[provider] ?? SIGNED_IN_SETUP_MODEL;
+      presentProviders.push(provider);
     }
   }
 
+  if (presentProviders.length === 1 && presentProviders[0] === 'openRouter') {
+    await globalSM.update(GlobalStateKey.USE_OPENROUTER, true);
+  }
+
+  const first = presentProviders[0];
+  if (first) {
+    return API_KEY_MODEL_BY_PROVIDER[first] ?? SIGNED_IN_SETUP_MODEL;
+  }
   return SIGNED_IN_SETUP_MODEL;
 }
 

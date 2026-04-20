@@ -40,22 +40,29 @@ type UpdateShellRcInput = z.infer<typeof UpdateShellRcInputSchema>;
  * not arbitrary shell commands — the agent uses this tool specifically for
  * PATH fixes after TeX installs, nothing else.
  *
- * Accepted forms:
- *   - POSIX:      `export NAME=value`   or  `NAME=value`
- *   - PowerShell: `$env:NAME = value`
- *   - PowerShell: `[Environment]::SetEnvironmentVariable(...)`
+ * Accepted forms (and which metacharacters are rejected for each):
+ *   - POSIX      `export NAME=value` / `NAME=value`
+ *       Rejects `;`, `&`, `|`, `<`, `>`, backticks, `$(...)` (all of which
+ *       can chain commands in sh/bash/zsh even inside partially-quoted
+ *       values).
+ *   - PowerShell `$env:NAME = value` / `[Environment]::SetEnvironmentVariable(...)`
+ *       Rejects `&`, `|`, `<`, `>`, backticks, `$(...)`. `;` is
+ *       intentionally ALLOWED because it is the Windows PATH separator
+ *       (`$env:Path = "C:\texlive\2026\bin\win32;$env:Path"`).
  *
- * Rejected: command chaining (`;`, `&&`, `||`, `|`), command substitution
- * (backticks, `$(...)`), redirection (`>`, `<`), and newlines.
+ * All forms reject newlines.
  */
-const SAFE_LINE_PATTERNS: readonly RegExp[] = [
+const POSIX_SAFE_PATTERNS: readonly RegExp[] = [
   /^\s*export\s+[A-Za-z_][A-Za-z0-9_]*=[^\r\n]*$/,
   /^\s*[A-Za-z_][A-Za-z0-9_]*=[^\r\n]*$/,
+];
+
+const POWERSHELL_SAFE_PATTERNS: readonly RegExp[] = [
   /^\s*\$env:[A-Za-z_][A-Za-z0-9_]*\s*=[^\r\n]*$/,
   /^\s*\[Environment\]::SetEnvironmentVariable\([^\r\n]*\)\s*$/,
 ];
 
-const FORBIDDEN_SUBSTRINGS: readonly string[] = [
+const POSIX_FORBIDDEN_SUBSTRINGS: readonly string[] = [
   ';',
   '&',
   '|',
@@ -67,9 +74,25 @@ const FORBIDDEN_SUBSTRINGS: readonly string[] = [
   '\r',
 ];
 
+const POWERSHELL_FORBIDDEN_SUBSTRINGS: readonly string[] = [
+  '&',
+  '|',
+  '>',
+  '<',
+  '`',
+  '$(',
+  '\n',
+  '\r',
+];
+
 function isSafeLine(line: string): boolean {
-  if (FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s))) return false;
-  return SAFE_LINE_PATTERNS.some((re) => re.test(line));
+  if (POSIX_SAFE_PATTERNS.some((re) => re.test(line))) {
+    return !POSIX_FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s));
+  }
+  if (POWERSHELL_SAFE_PATTERNS.some((re) => re.test(line))) {
+    return !POWERSHELL_FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s));
+  }
+  return false;
 }
 
 function resolveProfilePath(profile: UpdateShellRcInput['profile']): string {
