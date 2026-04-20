@@ -124,14 +124,19 @@ async function handleFollowUpResult(
         if (!resumed) {
           if (result.reason === 'children_running') {
             // sendFollowUp force-reopened a released queue on behalf of the
-            // auto-resume attempt. Re-release it so late child deliveries
-            // don't leak into the next run on this stream.
+            // auto-resume attempt. Re-release drops the just-enqueued message
+            // too, but that's the lesser evil — leaving the queue open would
+            // leak late child deliveries into the next run on this stream.
             ToolUseFollowUpQueue.release(streamId);
             bus.emit('updateQueuedFollowUps', { streamId });
+            await vscode.window.showWarningMessage(
+              'Message dropped — no session available to receive it. Start a new agent task to continue.',
+            );
+          } else {
+            await vscode.window.showInformationMessage(
+              'Message queued. Auto-resume failed — start a new agent task to continue.',
+            );
           }
-          await vscode.window.showInformationMessage(
-            'Message queued. Auto-resume failed — start a new agent task to continue.',
-          );
         }
       }
       break;
