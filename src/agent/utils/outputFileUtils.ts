@@ -3,7 +3,6 @@ import * as path from 'path';
 import {
   workflowMergeOutputPath,
   workflowOutputPath,
-  workflowOutputRoundDir,
 } from '@agent/output/workflowOutputLayout';
 import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 
@@ -66,6 +65,3 @@ export function createMergeOutputFileLocationGetter(
   const location = fileService.createLocation(outputPath) as AgentFileLocation;
   return (_round: number): AgentFileLocation => location;
 }
-
-/** Re-export for callers building round-scoped glob prefixes. */
-export { workflowOutputRoundDir };

@@ -9,7 +9,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
-import { getRunDir, resolveRunDir } from '@utils/files/taskRunStorage';
+import { resolveRunDir } from '@utils/files/taskRunStorage';
 
 import { HISTORY_DIR } from './constants';
 
@@ -70,12 +70,21 @@ export async function runPackRunDir(
 
 /**
  * Delete a run's runDir. Irreversible. Used when the user discards a run
- * from the progress-view toolbar.
+ * from the progress-view toolbar. Resolves through `resolveRunDir` so the
+ * legacy `taskRuns/` location is cleaned up too.
  */
 export async function runCleanRunDir(
   executionId: ExecutionId,
 ): Promise<FileOpResult> {
-  const runDirAbsolute = getRunDir(executionId);
+  const runDirAbsolute = await resolveRunDir(executionId);
+  if (!runDirAbsolute) {
+    logger.warn(
+      CHANNEL,
+      `Run directory not found for execution ${executionId}`,
+    );
+    return { status: 'noFiles' };
+  }
+
   logger.info(
     CHANNEL,
     `Removing runDir for execution ${executionId}: ${runDirAbsolute}`,
