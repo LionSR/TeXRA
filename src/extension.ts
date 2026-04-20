@@ -110,7 +110,6 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
-  await vscode.commands.executeCommand('setContext', 'texra.activated', true);
 
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
@@ -219,6 +218,13 @@ export async function activate(context: vscode.ExtensionContext) {
   configureLatexSettings();
   registerCommands(context);
   registerFileDecorations(context);
+
+  // Set `texra.activated` only after commands and view providers are wired up.
+  // Gating UI contributions (commandPalette / keybindings / menus / walkthroughs
+  // / views) on this key means they won't appear until the corresponding
+  // handlers are actually registered, avoiding a startup window where
+  // invocations fail with "command not found".
+  await vscode.commands.executeCommand('setContext', 'texra.activated', true);
 
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
