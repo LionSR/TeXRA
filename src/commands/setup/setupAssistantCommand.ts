@@ -6,7 +6,7 @@ import { AgentConfigSchema } from '@agent/core';
 import { registerExecution } from '@agent/storage';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { AUTH_COMMANDS } from '@auth/constants';
-import { getAuthStatus } from '@auth/authCommands';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
@@ -51,7 +51,10 @@ const SETUP_INSTRUCTION =
 /**
  * Pick a model the setup agent can actually call, given the credentials
  * the user currently has. Order:
- *   1. Researcher Access sign-in → SIGNED_IN_SETUP_MODEL.
+ *   1. Researcher Access — only when the user's "Use Included Access"
+ *      mode is actually on (auth.authenticated alone is insufficient:
+ *      a signed-in user who flipped Included Access off will not get
+ *      server-side keys routed through their calls).
  *   2. Any direct API key for a provider whose default model routes
  *      through that same provider directly (deterministic by
  *      `SecretManager.API_PROVIDERS` order). Preferred over OpenRouter
@@ -63,8 +66,9 @@ const SETUP_INSTRUCTION =
  *      agents silently rerouted through OpenRouter the next time.
  */
 async function resolveLaunchModel(): Promise<string> {
-  const auth = await getAuthStatus().catch(() => ({ authenticated: false }));
-  if (auth.authenticated) return SIGNED_IN_SETUP_MODEL;
+  if (await getServerSideKeyService().canUseServerSideKeys()) {
+    return SIGNED_IN_SETUP_MODEL;
+  }
 
   for (const provider of SecretManager.API_PROVIDERS) {
     if (provider === 'openRouter') continue;
@@ -82,18 +86,14 @@ async function resolveLaunchModel(): Promise<string> {
 }
 
 /**
- * Pre-flight: ensure the user has *some* credential before we launch the
- * setup agent (otherwise the first probe will report "no credential" and
- * the agent itself cannot call a model). Returns true if we should proceed.
+ * Pre-flight: ensure the user has a *usable* credential before we launch
+ * the setup agent. `SecretManager.anyApiKeyExists` already encodes both
+ * paths (direct provider key OR Researcher Access sign-in with Included
+ * Access enabled), so a signed-in user who has turned Included Access
+ * off is correctly treated as having no credential.
  */
 async function ensureCredentialOrPrompt(): Promise<boolean> {
-  const anyKey = await SecretManager.anyApiKeyExists();
-  if (anyKey) return true;
-
-  const auth = await getAuthStatus().catch(() => ({
-    authenticated: false,
-  }));
-  if (auth.authenticated) return true;
+  if (await SecretManager.anyApiKeyExists()) return true;
 
   const picks = [
     {
@@ -123,10 +123,7 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
 
   if (picked.id === 'signIn') {
     await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-    const postAuth = await getAuthStatus().catch(() => ({
-      authenticated: false,
-    }));
-    return postAuth.authenticated;
+    return SecretManager.anyApiKeyExists();
   }
 
   if (picked.id === 'apiKey') {
