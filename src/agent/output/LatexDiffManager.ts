@@ -127,6 +127,10 @@ export class LatexDiffManager {
       return;
     }
 
+    // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
+    // relative \input{} resolution works when its cwd is runDir/r{round}.
+    await this.fileService.ensureMirroredInRoundDir(currRound);
+
     const outputByPath = new Map(
       outputFiles.map((f) => [getComparablePath(f.location), f]),
     );

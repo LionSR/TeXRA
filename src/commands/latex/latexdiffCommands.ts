@@ -18,6 +18,9 @@ import {
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
 import { legacyWorkflowOutputRoundRegex } from '@agent/output/workflowOutputLayout';
+import { listExecutions } from '@agent/storage';
+import { getStreamTabId } from '@logger/streamUtils';
+import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,
@@ -27,7 +30,7 @@ import {
 } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
-import type { OutputFileInfo } from '@shared/schemas';
+import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
@@ -352,6 +355,51 @@ interface DiffOperation {
   toRound?: number;
 }
 
+/**
+ * When the caller didn't supply `outputsByRound`, look up the most recent
+ * execution whose `agent + model + inputFile` match the request and pull
+ * its persisted `OutputFileInfo[]` from the stream-tab store. Returns null
+ * when no matching execution exists.
+ */
+async function discoverLatestExecutionOutputs(query: {
+  agent: string;
+  model: string;
+  inputFile: string;
+}): Promise<{
+  executionId: ExecutionId;
+  rounds: Map<number, OutputFileInfo[]>;
+} | null> {
+  try {
+    const executions = await listExecutions();
+    const normalizedInput = query.inputFile;
+
+    const candidates = executions
+      .filter(
+        (entry) =>
+          entry.agent === query.agent &&
+          entry.model === query.model &&
+          entry.agentConfig?.inputFile === normalizedInput,
+      )
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+    for (const candidate of candidates) {
+      const streamId = getStreamTabId(candidate.agent, candidate.model, {
+        executionId: candidate.id,
+      });
+      const rounds = await getStreamTabStore(streamId).readOutputFiles();
+      if (rounds && rounds.size > 0) {
+        return { executionId: candidate.id, rounds };
+      }
+    }
+  } catch (error) {
+    logger.debug(
+      CHANNEL,
+      `Metadata-driven latexdiff discovery failed: ${String(error)}`,
+    );
+  }
+  return null;
+}
+
 async function handleRunLatexdiff(
   config: RunLatexdiffCommandConfig,
 ): Promise<void> {
@@ -413,7 +461,24 @@ async function handleRunLatexdiff(
       }
     }
 
-    const fileService = new TaskRunFileService(runId);
+    let discoveredExecutionId = runId;
+    if (!outputsByRound) {
+      const discovered = await discoverLatestExecutionOutputs({
+        agent,
+        model,
+        inputFile,
+      });
+      if (discovered) {
+        outputsByRound = discovered.rounds;
+        discoveredExecutionId = discovered.executionId;
+        logger.debug(
+          CHANNEL,
+          `Using metadata outputs from execution ${discovered.executionId}`,
+        );
+      }
+    }
+
+    const fileService = new TaskRunFileService(discoveredExecutionId);
 
     const outcome = await vscode.window.withProgress(
       {
