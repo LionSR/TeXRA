@@ -616,7 +616,7 @@ export class StreamTabs extends LitElement {
                   childCount > 0 && this.expandedParents.has(stream.name);
 
                 // prettier-ignore
-                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${childCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded}>${repeat(children, (child) => child.name, (child) => {
+                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${childCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded || this.compact}>${repeat(children, (child) => child.name, (child) => {
                   const childStatus = this.getStatus(child.name);
                   const isFinished = !ACTIVE_CHILD_STATUSES.has(childStatus);
                   // prettier-ignore
