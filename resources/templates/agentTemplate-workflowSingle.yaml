@@ -1,7 +1,7 @@
 # --- Agent Inheritance (Optional) ---
 # inherits: base
 name: {{ AGENT_NAME }}
-description: {{ DESCRIPTION }}
+description: '{{ DESCRIPTION | replace("'", "''") }}'
 
 # --- Agent Settings ---
 settings:

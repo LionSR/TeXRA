@@ -14,6 +14,10 @@ import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getListOfFiles, getXmlFormatFromFiles } from '@utils/prompt';
+import {
+  listExternalRoots,
+  type ExternalRootKind,
+} from '@utils/files/externalRoots';
 import { setVarFromFile } from '@utils/files/varsUtils';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -152,7 +156,35 @@ function getBasicVars(
     TOOL_USE_AGENTS: toolUseAgentsList,
     CWD: workspacePath ?? WorkspaceFS.getPath() ?? '.',
     DEFAULT_BIB_PATH: defaultBibPath,
+    ...getAgentDirectoryVars(),
   };
+}
+
+/**
+ * Inject the absolute paths of registered agent directories as template
+ * variables so agents (notably `creator`) can reference the real paths in
+ * their system prompts. Reads from the external-roots registry populated at
+ * activation — keyed off the stable `kind` field so renaming a user-visible
+ * label cannot break prompt rendering. Absent roots render as empty strings
+ * (e.g. in tests that don't run activation).
+ */
+function getAgentDirectoryVars(): UserVars {
+  const KIND_TO_VAR: Record<ExternalRootKind, string> = {
+    builtInWorkflow: 'BUILTIN_WORKFLOW_DIR',
+    builtInToolUse: 'BUILTIN_TOOLUSE_DIR',
+    custom: 'CUSTOM_AGENTS_DIR',
+    agentDocs: 'AGENT_DOCS_DIR',
+  };
+  const vars: UserVars = {
+    BUILTIN_WORKFLOW_DIR: '',
+    BUILTIN_TOOLUSE_DIR: '',
+    CUSTOM_AGENTS_DIR: '',
+    AGENT_DOCS_DIR: '',
+  };
+  for (const root of listExternalRoots()) {
+    vars[KIND_TO_VAR[root.kind]] = root.absolutePath;
+  }
+  return vars;
 }
 
 /**

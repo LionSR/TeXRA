@@ -8,6 +8,7 @@ import {
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
 import {
+  assertWritable,
   countOccurrences,
   pluralize,
   resolveAndFormat,
@@ -50,6 +51,7 @@ export class EditFileTool extends defineTool({
       input.path,
       root,
     );
+    assertWritable(resolved, displayPath);
     const targetPath = resolved.fsPath;
 
     if (old_str.length === 0) {
