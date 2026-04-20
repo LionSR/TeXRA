@@ -161,8 +161,9 @@ function extractPartialTextTail(
 ): string {
   if (!message?.content) return '';
   const text = message.content
-    .filter((block): block is Extract<BetaContentBlock, { type: 'text' }> =>
-      block.type === 'text',
+    .filter(
+      (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+        block.type === 'text',
     )
     .map((block) => block.text)
     .join('');
@@ -872,15 +873,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
         const requestId = stream.request_id;
 
-        // Wrap only non-APIError stream failures. APIError subclasses carry
-        // status/headers/requestID/type that formatProviderHttpError needs
-        // for retry classification; replacing them loses that metadata and
-        // misclassifies e.g. 401 as generic retryable.
+        // Wrap only non-APIError, non-abort stream failures. APIError
+        // subclasses carry status/headers/requestID/type needed for retry
+        // classification; AnthropicUserAbortError is a sibling of
+        // AnthropicAPIError, so wrapping it would break downstream
+        // `instanceof AnthropicUserAbortError` checks.
+        const isAbort = isUserAbort(streamError);
         let enrichedError: unknown = streamError;
         if (
           !stream.currentMessage &&
           streamError instanceof Error &&
-          !(streamError instanceof AnthropicAPIError)
+          !(streamError instanceof AnthropicAPIError) &&
+          !isAbort
         ) {
           enrichedError = new Error(
             `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
@@ -896,7 +900,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
           (enrichedError as ErrorWithRequestId).request_id = requestId;
         }
 
-        const isAbort = isUserAbort(streamError);
         const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}: ${enrichedError instanceof Error ? enrichedError.message : String(enrichedError)}`;
         const logData = {
           data: {

@@ -55,12 +55,7 @@ export class InstructionPanel extends LitElement {
         background-color: var(--background-color);
         border-radius: var(--border-radius);
         margin-bottom: var(--spacing-large);
-        box-shadow: 0 1px 4px
-          color-mix(
-            in srgb,
-            var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3)) 50%,
-            transparent
-          );
+        border: var(--border-thin) solid var(--color-border);
       }
 
       .instruction-header {

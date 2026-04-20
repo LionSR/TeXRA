@@ -20,18 +20,21 @@ Skip **Sign in** and export `OPENAI_API_KEY` in the shell you launch VS Code fro
 :::
 
 ::: warning Windows
-Codex has no native Windows binary. Open TeXRA inside a **WSL** remote window before clicking **Install in Terminal** — otherwise the install runs in PowerShell and VS Code won't find the binary.
-:::
+TeXRA looks up Codex in the same environment as the VS Code extension host, so install it there:
+
+- **WSL Remote** — open TeXRA inside the WSL window before clicking **Install in Terminal**.
+- **Native Windows** — install Codex on Windows so a real `codex.exe` is on PATH. TeXRA spawns the binary directly and skips `.cmd` / PowerShell shims, so an npm wrapper alone won't be found.
+  :::
 
 ## Settings
 
 All Codex options live on the Codex card in **Dashboard → Tools** and are scoped to the current workspace.
 
-| Setting              | Options                                                                       | Default             | What it controls                                                           |
-| -------------------- | ----------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------- |
-| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                          | `workspace-write`   | File-system access. Agents may override per call via `sandbox_mode`.       |
-| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                              | `high`              | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
-| **Require approval** | checkbox under *Approval & Safety* (<i class="codicon codicon-shield"></i>)   | on                  | Show a confirmation prompt before every Codex call.                        |
+| Setting              | Options                                                                     | Default           | What it controls                                                           |
+| -------------------- | --------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------- |
+| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.       |
+| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                            | `high`            | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
+| **Require approval** | checkbox under _Approval & Safety_ (<i class="codicon codicon-shield"></i>) | on                | Show a confirmation prompt before every Codex call.                        |
 
 TeXRA always drives Codex with the short model name `gpt-5.4`. Everything else (providers, MCP servers, custom instructions) comes from Codex's own `~/.codex/config.toml`.
 
@@ -46,21 +49,21 @@ When it fires:
 1. A child stream tab `codex@codex-sdk` opens on the ProgressBoard (<i class="codicon codicon-type-hierarchy"></i>).
 2. Reasoning, commands, file diffs, web searches (<i class="codicon codicon-globe"></i>), and todos stream in live.
 3. When the turn ends, the tab sits in **WAITING**. Type a follow-up to continue the thread, or press <i class="codicon codicon-debug-stop"></i> **Stop** to end it.
-4. The calling agent gets back the final response, token usage, and a `thread_id` it can resume later.
+4. Every turn is delivered to the calling agent as a follow-up message (final response, token usage, and `thread_id`). Calls are async — the tool returns immediately with an execution ID.
 
-::: tip Background mode
-Agents can pass `run_in_background: true` to get the execution ID immediately and receive the result as a follow-up when Codex finishes. Good for long refactors that shouldn't block the parent.
+::: tip Follow-up instructions
+To send a follow-up from the calling agent, call `codex` again with `thread_id` set to the ID from the previous delivery. The prompt is queued as the next turn and errors if the thread is still processing — same contract as `delegate_agent(execution_id=…)`.
 :::
 
 ## Troubleshooting
 
 **Card shows <i class="codicon codicon-warning"></i> Not Found after install.** Hover the card for the exact message:
 
-| Message                                         | Fix                                                                               |
-| ----------------------------------------------- | --------------------------------------------------------------------------------- |
-| `@openai/codex-sdk not found`                   | Click **Install in Terminal** again, then **Recheck**.                            |
-| `Codex SDK loaded but native binary not found`  | Reinstall — the platform binary didn't ship. On Windows, open TeXRA in WSL first. |
-| `Platform not supported`                        | Unsupported OS/arch. Use WSL on Windows or a supported Linux/macOS host.          |
+| Message                                        | Fix                                                                                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `@openai/codex-sdk not found`                  | Click **Install in Terminal** again, then **Recheck**.                                                             |
+| `Codex SDK loaded but native binary not found` | Reinstall in the same environment as the extension host. On Windows, see the **Windows** note above for the catch. |
+| `Platform not supported`                       | Codex ships native binaries for Linux, macOS, and Windows (`x64` / `arm64`). On other hosts, fall back to WSL.     |
 
 **Still Not Found after everything ran.** Reload the window (`Developer: Reload Window`) so the extension re-checks for the binary.
 

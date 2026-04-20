@@ -28,6 +28,7 @@ import {
 } from '@shared/utils/uiConstants';
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
+import { filledButtonStyles } from '@shared/styles/commonViewStyles';
 import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
 
 // Local imports - progress view
@@ -190,6 +191,7 @@ export class PermissionCard extends LitElement {
   static override styles = [
     designTokens,
     codiconIconClasses,
+    filledButtonStyles,
     permissionCardStyles,
   ];
 
@@ -447,7 +449,7 @@ export class PermissionCard extends LitElement {
 
     return html`
       <button
-        class="action-button action-button--${variant}"
+        class="filled-button filled-button--${variant}"
         data-action=${action}
         @click=${this.handleActionClick}
       >

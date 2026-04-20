@@ -402,10 +402,7 @@ export class SettingsApp extends SettingsAppBase {
       }
 
       case SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS: {
-        const data = this.parseMessage(
-          raw,
-          UpdatePRSubscriptionsMessageSchema,
-        );
+        const data = this.parseMessage(raw, UpdatePRSubscriptionsMessageSchema);
         if (!data) return;
         this.prSubscriptions.set(data.keys);
         return;

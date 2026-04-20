@@ -40,6 +40,8 @@ import { agentDirectories } from '@frontend/agents';
 import { FileLister } from '@frontend/files';
 import { killActiveRecording } from '@frontend/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
+import { registerFileDecorations } from '@frontend/ui/fileDecorations';
+import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
@@ -67,8 +69,6 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands, getMainViewProvider } from './commands';
-import { registerFileDecorations } from './fileDecorations';
-import { registerWelcomeView } from './welcomeView';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
@@ -110,11 +110,6 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
-  await vscode.commands.executeCommand(
-    'setContext',
-    'texra.activated',
-    true,
-  );
 
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
@@ -360,6 +355,16 @@ export async function activate(context: vscode.ExtensionContext) {
     progressViewProvider.setMainViewProvider(mainViewProvider);
     mainViewProvider.setProgressViewProvider(progressViewProvider);
   }
+
+  // Gating UI contributions (commandPalette / keybindings / menus / walkthroughs
+  // / views) on `texra.activated` keeps them hidden until every command handler
+  // is registered. This must run after ALL `registerCommand` calls in this
+  // function (including the late ones for `texra.showMainView` and
+  // `texra.toggleView`), otherwise palette entries can fire before their
+  // handlers exist and produce "command not found" errors. It must also run
+  // BEFORE the welcome walkthrough is opened below, because the walkthrough
+  // itself is gated on `texra.activated`.
+  await vscode.commands.executeCommand('setContext', 'texra.activated', true);
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {

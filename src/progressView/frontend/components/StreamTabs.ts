@@ -217,15 +217,50 @@ export class StreamTab extends LitElement {
         background-color: var(--vscode-list-hoverBackground);
       }
 
+      /*
+       * Match VS Code's list-item selection: flip background + foreground
+       * together. The descendant-wildcard selector below forces nested spans
+       * (.last-active, .model) and codicon glyphs to inherit the selection
+       * color even when intermediate elements define their own.
+       */
       .tab-container.is-active {
-        background-color: var(--vscode-list-inactiveSelectionBackground);
-      }
-
-      .tab-container.is-active .tab {
+        background-color: var(--vscode-list-activeSelectionBackground);
         color: var(
-          --vscode-list-inactiveSelectionForeground,
+          --vscode-list-activeSelectionForeground,
           var(--vscode-foreground)
         );
+      }
+
+      .tab-container.is-active *,
+      .tab-container.is-active .tab,
+      .tab-container.is-active .tab-title,
+      .tab-container.is-active .tab-meta,
+      .tab-container.is-active .tab-description,
+      .tab-container.is-active .tab-delete,
+      .tab-container.is-active .tab-expand {
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
+        );
+      }
+
+      /*
+       * Re-apply the destructive-action cue on active tabs — the
+       * descendant-wildcard above would otherwise hold the close icon on
+       * the selection foreground.
+       */
+      .tab-container.is-active .tab-delete:hover,
+      .tab-container.is-active .tab-delete:focus-within,
+      .tab-container.is-active .tab-delete:hover *,
+      .tab-container.is-active .tab-delete:focus-within * {
+        color: var(--vscode-errorForeground);
+      }
+
+      /* Drop the dim-by-default opacity so the flipped foreground renders
+       * at full contrast on the selection background. */
+      .tab-container.is-active .tab-meta,
+      .tab-container.is-active .tab-description {
+        opacity: var(--opacity-full);
       }
 
       .tab-container.is-compact .tab {
@@ -589,6 +624,14 @@ export class StreamTabs extends LitElement {
               (stream) => stream.name,
               (stream) => {
                 const children = this.childStreamsByParent.get(stream.name);
+                // In compact mode, force childCount to 0 so the entire
+                // <div class="child-streams"> subtree is unmounted (saves
+                // memory on sessions with many child streams). In non-compact
+                // mode, the div always mounts with ?hidden tied to `expanded`
+                // so DOM is preserved across user-driven toggles (the common
+                // case PR #2984 optimized for). Compact toggles come from
+                // sidebar resize, which is infrequent enough that
+                // unmount/remount is acceptable and frees memory.
                 const childCount = !this.compact ? (children?.length ?? 0) : 0;
                 const expanded =
                   childCount > 0 && this.expandedParents.has(stream.name);

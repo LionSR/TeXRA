@@ -37,9 +37,8 @@ const MAX_BODY = 500;
  * left the middle structurally intact.
  */
 function sanitize(s: string): string {
-  return s.replaceAll(
-    /<\s*\/?\s*github-webhook-activity\s*>/gi,
-    (match) => match.replace(/github-webhook-activity/i, 'github-\u200Bwebhook-activity'),
+  return s.replaceAll(/<\s*\/?\s*github-webhook-activity\s*>/gi, (match) =>
+    match.replace(/github-webhook-activity/i, 'github-\u200Bwebhook-activity'),
   );
 }
 
@@ -78,8 +77,12 @@ export function formatReviewComment(
   const author = c.user?.login ?? 'someone';
   const line = c.line ?? c.original_line;
   const loc = line ? `${c.path}:${line}` : c.path;
+  const prefix =
+    c.in_reply_to_id != null
+      ? 'Reply to inline review thread'
+      : 'New line review comment';
   return wrap(
-    `New line review comment on ${slug}#${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
+    `${prefix} on ${slug}#${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
   );
 }
 
@@ -128,15 +131,46 @@ export function formatCheckFailureSummary(
   );
 }
 
+/** Non-blocking conclusions: `success`, `neutral` (advisory), `skipped`. */
+export function isPassingConclusion(conclusion: string | null): boolean {
+  return (
+    conclusion === 'success' ||
+    conclusion === 'neutral' ||
+    conclusion === 'skipped'
+  );
+}
+
+export function formatCIPassed(
+  slug: string,
+  prNumber: number,
+  sha: string,
+  runs: GhCheckRun[],
+): string {
+  return wrap(
+    `All ${runs.length} CI checks passed on ${slug}#${prNumber} (head ${sha.slice(0, 7)}).`,
+  );
+}
+
+export function formatCIComplete(
+  slug: string,
+  prNumber: number,
+  sha: string,
+  runs: GhCheckRun[],
+): string {
+  const passed = runs.filter((r) => isPassingConclusion(r.conclusion)).length;
+  const failed = runs.length - passed;
+  return wrap(
+    `CI completed on ${slug}#${prNumber} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
+  );
+}
+
 export function formatPRClosed(
   slug: string,
   prNumber: number,
   merged: boolean,
 ): string {
   const verb = merged ? 'merged' : 'closed';
-  return wrap(
-    `${slug}#${prNumber} was ${verb}. Subscription ended.`,
-  );
+  return wrap(`${slug}#${prNumber} was ${verb}. Subscription ended.`);
 }
 
 /**
@@ -151,7 +185,5 @@ export function formatSubscriptionError(
   prNumber: number,
   detail: string,
 ): string {
-  return wrap(
-    `PR subscription to ${slug}#${prNumber} halted: ${detail}`,
-  );
+  return wrap(`PR subscription to ${slug}#${prNumber} halted: ${detail}`);
 }

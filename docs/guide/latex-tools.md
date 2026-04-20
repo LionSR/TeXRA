@@ -4,15 +4,15 @@ TeXRA doesn't just send text to an AI and hope for the best. It plugs into battl
 
 ## Overview
 
-| What it does                                                         | Tool behind the scenes     |
-| -------------------------------------------------------------------- | -------------------------- |
-| <i class="codicon codicon-symbol-keyword"></i> Code formatting       | `latexindent` or `tex-fmt` |
-| <i class="codicon codicon-diff-single"></i> Version comparison       | `latexdiff`                |
-| <i class="codicon codicon-symbol-numeric"></i> Document statistics   | `texcount`                 |
-| <i class="codicon codicon-file-media"></i> Figure extraction         | Built-in                   |
-| <i class="codicon codicon-symbol-structure"></i> TikZ compilation    | Built-in                   |
-| <i class="codicon codicon-book"></i> Bibliography resolution         | Built-in                   |
-| <i class="codicon codicon-symbol-operator"></i> Symbolic math        | `wolfram`                  |
+| What it does                                                       | Tool behind the scenes     |
+| ------------------------------------------------------------------ | -------------------------- |
+| <i class="codicon codicon-symbol-keyword"></i> Code formatting     | `latexindent` or `tex-fmt` |
+| <i class="codicon codicon-diff-single"></i> Version comparison     | `latexdiff`                |
+| <i class="codicon codicon-symbol-numeric"></i> Document statistics | `texcount`                 |
+| <i class="codicon codicon-file-media"></i> Figure extraction       | Built-in                   |
+| <i class="codicon codicon-symbol-structure"></i> TikZ compilation  | Built-in                   |
+| <i class="codicon codicon-book"></i> Bibliography resolution       | Built-in                   |
+| <i class="codicon codicon-symbol-operator"></i> Symbolic math      | `wolfram`                  |
 
 All are configured from **Dashboard → Tools** (<i class="codicon codicon-tools"></i>) or **Dashboard → LaTeX** (<i class="codicon codicon-file-code"></i>). Missing dependencies show <i class="codicon codicon-warning"></i> **Not Found**; ready ones show <i class="codicon codicon-check"></i> **Available**.
 

@@ -19,7 +19,6 @@ export const statusIndicatorStyles: CSSResult = css`
   .status-indicator.is-running,
   .tab-status.is-running {
     background-color: var(--color-success, #4caf50);
-    box-shadow: 0 0 4px var(--color-success, #4caf50);
     opacity: var(--opacity-full);
     animation: pulse-scale 2s infinite;
   }
@@ -33,14 +32,12 @@ export const statusIndicatorStyles: CSSResult = css`
   .status-indicator.is-error,
   .tab-status.is-error {
     background-color: var(--color-error, #f44336);
-    box-shadow: 0 0 4px var(--color-error, #f44336);
     opacity: var(--opacity-full);
   }
 
   .status-indicator.is-waiting,
   .tab-status.is-waiting {
     background-color: var(--vscode-textLink-foreground);
-    box-shadow: 0 0 4px var(--vscode-textLink-foreground);
     opacity: var(--opacity-full);
     animation: pulse-scale 3s infinite;
   }
@@ -48,7 +45,6 @@ export const statusIndicatorStyles: CSSResult = css`
   .status-indicator.is-resuming,
   .tab-status.is-resuming {
     background-color: var(--vscode-textLink-foreground);
-    box-shadow: 0 0 4px var(--vscode-textLink-foreground);
     opacity: var(--opacity-full);
     animation: pulse-scale 1.5s infinite;
   }
@@ -56,7 +52,6 @@ export const statusIndicatorStyles: CSSResult = css`
   .status-indicator.is-initializing,
   .tab-status.is-initializing {
     background-color: var(--vscode-descriptionForeground);
-    box-shadow: 0 0 4px var(--vscode-descriptionForeground);
     opacity: var(--opacity-full);
     animation: pulse-scale 2.5s infinite;
   }

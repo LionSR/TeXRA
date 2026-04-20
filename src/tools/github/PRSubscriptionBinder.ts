@@ -16,11 +16,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId } from '@shared/schemas';
 
-import {
-  prKeyToString,
-  prPollingSource,
-  type PRKey,
-} from './PRPollingSource';
+import { prKeyToString, prPollingSource, type PRKey } from './PRPollingSource';
 import type { Disposable } from './AsyncEventSource';
 
 const logger = new AgentLogger('PRSubscriptionBinder');
@@ -61,10 +57,7 @@ function ensureReleaseHook(): void {
 }
 
 /** Returns true if a new subscription was created, false if it already existed. */
-export function bindPRSubscription(
-  streamId: StreamTabId,
-  pr: PRKey,
-): boolean {
+export function bindPRSubscription(streamId: StreamTabId, pr: PRKey): boolean {
   ensureReleaseHook();
   const key = prKeyToString(pr);
   let bound = perStream.get(streamId);
