@@ -44,7 +44,7 @@ prompts:
     - Limiting / analytically solvable case matches a closed form.
     - Conservation laws / invariants hold to expected tolerance.
     - Convergence study: refine the resolution, verify error scales as expected.
-    - Cross-check against an analytical result if one exists.
+    - Cross-check against an analytical result if one exists. For analytical or symbolic verification, prefer an agent with Mathematica/Wolfram access — that work is not your strength.
     - Sanity check: does the output look qualitatively right?
 
     Grounding in source material (when the task references a document):
