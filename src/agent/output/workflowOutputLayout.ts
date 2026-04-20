@@ -43,20 +43,6 @@ export function workflowOutputPath(params: {
   return `${workflowOutputRoundDir(params.round)}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
 }
 
-/** Anchored regex matching an output `.tex` filename in the current layout. */
-export function workflowOutputTexRegex(): RegExp {
-  return new RegExp(`^${escapeRegExp(WORKFLOW_OUTPUT_BASENAME)}\\.tex$`);
-}
-
-/**
- * Glob prefix (within the round dir) for the current layout:
- *   `r{round}/output`
- * Callers append suffixes (`_diff`, `_thinking`) and extensions.
- */
-export function workflowOutputGlobPrefix(params: { round: number }): string {
-  return `${workflowOutputRoundDir(params.round)}/${WORKFLOW_OUTPUT_BASENAME}`;
-}
-
 // ---------------------------------------------------------------------------
 // Merge layout — runDir-relative, fixed basename
 // ---------------------------------------------------------------------------
