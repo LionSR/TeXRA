@@ -17,7 +17,6 @@ import {
   type RunStorageFileLocation,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
-import { getConfig } from '@utils/config';
 import { getPathSegments } from '@utils/core/pathCore';
 import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
@@ -192,59 +191,30 @@ function shouldSkipRelocation(relativePath: string): boolean {
 }
 
 export class TaskRunFileService {
-  private useRunStorage: boolean;
   public metadata: {
-    mode: 'workspace' | 'taskRunStorage';
     executionId: ExecutionId | undefined;
     runDirectory: string | undefined;
   };
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
 
-  /**
-   * When true, the service always uses task-run storage regardless of user
-   * config. Set for subagent workflows so their outputs don't overcrowd the
-   * workspace.
-   */
-  private readonly forceRunStorage: boolean;
-
-  constructor(
-    executionId?: ExecutionId,
-    options?: { forceRunStorage?: boolean },
-  ) {
+  constructor(executionId?: ExecutionId) {
     this.metadata = {
-      mode: 'workspace',
       executionId: undefined,
       runDirectory: undefined,
     };
-    this.useRunStorage = false;
-    this.forceRunStorage = options?.forceRunStorage ?? false;
     this.updateRunContext(executionId);
   }
 
   public updateRunContext(executionId?: ExecutionId | null): void {
-    const storageMode = getConfig<'workspace' | 'taskRunStorage'>(
-      'texra.agentOutputs.storageMode',
-      'workspace',
-    );
-    const shouldUseRunStorage =
-      (storageMode === 'taskRunStorage' || this.forceRunStorage) &&
-      Boolean(executionId);
-
-    const nextMode = shouldUseRunStorage ? 'taskRunStorage' : 'workspace';
-    const nextRunDirectory = shouldUseRunStorage
-      ? getRunDir(executionId!)
-      : undefined;
+    const nextRunDirectory = executionId ? getRunDir(executionId) : undefined;
 
     const contextChanged =
-      this.metadata.mode !== nextMode ||
       this.metadata.executionId !== executionId ||
       this.metadata.runDirectory !== nextRunDirectory;
 
-    this.metadata.mode = nextMode;
     this.metadata.executionId = executionId ?? undefined;
     this.metadata.runDirectory = nextRunDirectory;
-    this.useRunStorage = shouldUseRunStorage;
 
     if (contextChanged) {
       this.hasPreparedSnapshot = false;
@@ -285,7 +255,7 @@ export class TaskRunFileService {
     } = {},
   ): Promise<void> {
     const executionId = this.metadata.executionId;
-    if (!executionId || !this.useRunStorage || this.hasPreparedSnapshot) {
+    if (!executionId || this.hasPreparedSnapshot) {
       return;
     }
 
@@ -369,58 +339,18 @@ export class TaskRunFileService {
   }
 
   /**
-   * Create a FileLocation for raw/intermediate output files (e.g., XML scratchpad).
-   * ALWAYS routes to run storage when executionId is available, regardless of
-   * the user's storageMode setting. This keeps intermediate artifacts isolated
-   * from the user's workspace.
+   * Create a FileLocation for a workflow output file. Routes to run storage
+   * when an executionId is available (the normal case); falls back to the
+   * workspace only when no execution context exists (e.g., ad-hoc utility
+   * calls made before any run is registered).
    *
-   * Falls back to workspace location only when no executionId is available.
-   *
-   * Accepts both absolute and workspace-relative paths for robustness.
-   *
-   * @param inputPath - Absolute or workspace-relative path (e.g., "paper__agent__r0_model.xml")
-   * @returns FileLocation (runStorage if executionId available, workspace otherwise)
-   */
-  public createRawOutputLocation(inputPath: string): FileLocation {
-    const resolved = WorkspaceFS.locatePath(inputPath);
-
-    if (resolved.kind === 'external') {
-      return createExternalLocation(resolved.absolutePath);
-    }
-
-    // Always route to run storage when executionId is available
-    const executionId = this.metadata.executionId;
-    if (executionId) {
-      const runDir = getRunDir(executionId);
-      const runAbsolute = path.join(runDir, resolved.relativePath);
-      return createRunStorageLocation(
-        runAbsolute,
-        resolved.relativePath,
-        executionId,
-      );
-    }
-
-    // Fallback to workspace when no execution context
-    return createWorkspaceLocation(
-      resolved.absolutePath,
-      resolved.relativePath,
-    );
-  }
-
-  /**
-   * Create a FileLocation from a path, with run-storage awareness.
-   * This is the preferred method for creating output file locations.
-   *
-   * Accepts both absolute and workspace-relative paths. Absolute paths within
-   * the workspace are automatically converted to relative paths internally.
-   * Paths outside the workspace are returned as external locations.
-   *
-   * Path normalization is handled internally - you can pass paths with either
-   * forward slashes or backslashes, and the function will normalize them for
-   * the current platform. It's safe to pass already-normalized paths.
+   * Accepts both absolute and workspace-relative paths. Absolute paths
+   * within the workspace are converted to relative paths internally. Paths
+   * outside the workspace are returned as external locations. Path
+   * normalization is handled internally.
    *
    * @param inputPath - Absolute or workspace-relative path
-   * @returns FileLocation (workspace, runStorage, or external based on path and mode)
+   * @returns FileLocation (runStorage, workspace, or external)
    */
   public createLocation(inputPath: string): FileLocation {
     const resolved = WorkspaceFS.locatePath(inputPath);
@@ -429,9 +359,8 @@ export class TaskRunFileService {
       return createExternalLocation(resolved.absolutePath);
     }
 
-    // Route to run storage when enabled
     const executionId = this.metadata.executionId;
-    if (executionId && this.useRunStorage) {
+    if (executionId) {
       const runAbsolute = path.join(
         getRunDir(executionId),
         resolved.relativePath,
@@ -443,11 +372,18 @@ export class TaskRunFileService {
       );
     }
 
-    // Default to workspace location
     return createWorkspaceLocation(
       resolved.absolutePath,
       resolved.relativePath,
     );
+  }
+
+  /**
+   * @deprecated Kept for one release so external callers in-flight can
+   * migrate. Identical to {@link createLocation}.
+   */
+  public createRawOutputLocation(inputPath: string): FileLocation {
+    return this.createLocation(inputPath);
   }
 
   /**

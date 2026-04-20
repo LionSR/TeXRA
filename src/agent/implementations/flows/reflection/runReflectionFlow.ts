@@ -144,12 +144,7 @@ export async function runReflectionFlow<C = unknown>(
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
-  // Subagent runs always route to task-run storage so their artifacts don't
-  // pollute the user's workspace. Top-level workflow runs respect the user's
-  // configured storage mode (workspace or taskRunStorage).
-  const fileService = new TaskRunFileService(executionId, {
-    forceRunStorage: input.isSubagent,
-  });
+  const fileService = new TaskRunFileService(executionId);
 
   const baseFiles: WorkspaceFileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile]
@@ -179,22 +174,13 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
+  const { shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
       const fileName = getOutputFileName(outputExt, round);
-      // Raw XML scratchpad files are intermediate artifacts — keep them in
-      // run storage regardless of the configured storage mode. (Commit 2
-      // collapses `createRawOutputLocation` into `createLocation` once
-      // every workflow output routes to run storage.)
-      if (useScratchpad) {
-        return fileService.createRawOutputLocation(
-          fileName,
-        ) as AgentFileLocation;
-      }
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 
