@@ -1,6 +1,9 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
+// Third-party imports
+import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
+
 // Local imports - agent
 import {
   DEFAULT_MODEL_CAPABILITIES,
@@ -1296,5 +1299,80 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(eventData.tokensBefore, 185000);
     assert.equal(eventData.tokensAfter, 25600);
     assert.equal(eventData.summary, '<summary>state</summary>');
+  });
+});
+
+describe('ModelHandlerAnthropic pre-message_start error handling', () => {
+  /**
+   * Builds a minimal stream stub that mimics the surface of the Anthropic
+   * SDK's MessageStream used by ModelHandlerAnthropic.createResponse:
+   *   - `.on()` for event listener registration (no-op)
+   *   - `.controller.abort()` (no-op)
+   *   - `.finalMessage()` returning a promise that rejects with `error`
+   *   - `.currentMessage` undefined (simulates no message_start received)
+   *   - `.request_id` undefined
+   */
+  function buildStreamStub(error: unknown): unknown {
+    return {
+      on: () => {},
+      controller: { abort: () => {} },
+      finalMessage: async () => {
+        throw error;
+      },
+      currentMessage: undefined,
+      request_id: undefined,
+    };
+  }
+
+  it('preserves AnthropicUserAbortError thrown before message_start (does not wrap it)', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.setLogger(createLoggerStub() as unknown as AgentLogger);
+    // Force streaming path so we exercise the pre-message_start catch block.
+    (handler as any).getStreamingConfig = () => true;
+
+    const abortError = new AnthropicUserAbortError();
+    const streamStub = buildStreamStub(abortError);
+
+    const client = {
+      beta: {
+        messages: {
+          stream: () => streamStub,
+        },
+      },
+    } as any;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+
+    await assert.rejects(
+      handler.createResponse({ client, messages, temperature: 0 }),
+      (err: unknown) => {
+        // The fix under test: aborts thrown before message_start must NOT be
+        // wrapped in a generic Error, otherwise downstream
+        // `instanceof AnthropicUserAbortError` checks (e.g. retry classifiers)
+        // would silently misclassify user aborts as generic stream failures.
+        assert.ok(
+          err instanceof AnthropicUserAbortError,
+          `expected AnthropicUserAbortError, got ${
+            err instanceof Error ? `${err.constructor.name}: ${err.message}` : String(err)
+          }`,
+        );
+        // And the wrap-guard message must not appear for the abort path.
+        assert.ok(
+          !/Stream closed before message_start/.test(
+            err instanceof Error ? err.message : '',
+          ),
+          'abort error must not be wrapped with the pre-message_start sentinel message',
+        );
+        return true;
+      },
+    );
   });
 });
