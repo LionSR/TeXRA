@@ -1,21 +1,18 @@
 /**
  * Single source of truth for workflow output-file layout.
  *
- * Current format:
- *   <inputDir>/r{round}/<inputBase>_<cleanAgent>_<model>.<ext>
+ * Current format (runDir-relative):
+ *   r{round}/output.<ext>
  *
- * Merge output (single-output, non-round):
- *   <inputDir>/<editedBase>_full_<model>.tex
+ * Merge output (single-output, non-round, runDir-relative):
+ *   _full.<ext>
  *
  * Legacy format (frozen; pre-r{round}/ refactor):
  *   <inputDir>/<inputBase>_<agentChunk>_r{round}_<normalizedModel>.*
  *
- * Writers (outputFileUtils), glob readers (housekeeping), and regex scanners
- * (latexdiff) all derive their patterns from the helpers here so a schema
- * change is a one-file edit.
+ * Per-execution isolation (executions/{id}/...) provides uniqueness;
+ * agent/model/round-in-basename tokens are no longer needed.
  */
-
-import * as path from 'path';
 
 import { getCleanAgentName } from '@agent/index';
 import { escapeRegExp } from '@utils/core/stringCore';
@@ -23,6 +20,9 @@ import { escapeRegExp } from '@utils/core/stringCore';
 // ---------------------------------------------------------------------------
 // Current layout
 // ---------------------------------------------------------------------------
+
+/** The fixed basename of every workflow output file (no extension). */
+export const WORKFLOW_OUTPUT_BASENAME = 'output';
 
 /** Build the `r{round}` subdirectory name. */
 export function workflowOutputRoundDir(round: number): string {
@@ -35,88 +35,35 @@ export function parseWorkflowOutputRoundDir(dirName: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
-/** Build the filename stem `<base>_<cleanAgent>_<model>` (no extension). */
-export function workflowOutputFilenameStem(
-  base: string,
-  agent: string,
-  model: string,
-): string {
-  return `${base}_${getCleanAgentName(agent)}_${model}`;
-}
-
-/** Build a full workflow output path for a round. */
+/** Build a runDir-relative workflow output path for a round. */
 export function workflowOutputPath(params: {
-  inputFile: string;
-  agent: string;
-  model: string;
   ext: string;
   round: number;
 }): string {
-  const parsed = path.parse(params.inputFile);
-  const stem = workflowOutputFilenameStem(
-    parsed.name,
-    params.agent,
-    params.model,
-  );
-  return path.join(
-    parsed.dir,
-    workflowOutputRoundDir(params.round),
-    `${stem}.${params.ext}`,
-  );
+  return `${workflowOutputRoundDir(params.round)}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
 }
 
-/**
- * Anchored regex matching a `.tex` filename in the current layout.
- * Model dots are preserved in the stored name, so metachars are escaped.
- */
-export function workflowOutputTexRegex(
-  base: string,
-  agent: string,
-  model: string,
-): RegExp {
-  const stem = `${escapeRegExp(base)}_${escapeRegExp(getCleanAgentName(agent))}_${escapeRegExp(model)}`;
-  return new RegExp(`^${stem}\\.tex$`);
+/** Anchored regex matching an output `.tex` filename in the current layout. */
+export function workflowOutputTexRegex(): RegExp {
+  return new RegExp(`^${escapeRegExp(WORKFLOW_OUTPUT_BASENAME)}\\.tex$`);
 }
 
 /**
  * Glob prefix (within the round dir) for the current layout:
- *   `r{round}/<base>_<cleanAgent>_<model>`
+ *   `r{round}/output`
  * Callers append suffixes (`_diff`, `_thinking`) and extensions.
  */
-export function workflowOutputGlobPrefix(params: {
-  base: string;
-  agent: string;
-  model: string;
-  round: number;
-}): string {
-  const stem = workflowOutputFilenameStem(
-    params.base,
-    params.agent,
-    params.model,
-  );
-  return `${workflowOutputRoundDir(params.round)}/${stem}`;
+export function workflowOutputGlobPrefix(params: { round: number }): string {
+  return `${workflowOutputRoundDir(params.round)}/${WORKFLOW_OUTPUT_BASENAME}`;
 }
 
 // ---------------------------------------------------------------------------
-// Merge layout — single-output, model-discriminated
+// Merge layout — runDir-relative, fixed basename
 // ---------------------------------------------------------------------------
 
-/** Build the merge output filename stem `<editedBase>_full_<model>` (no extension). */
-export function workflowMergeFilenameStem(
-  editedBase: string,
-  model: string,
-): string {
-  return `${editedBase}_full_${model}`;
-}
-
-/** Build the full merge output path next to the input. */
-export function workflowMergeOutputPath(params: {
-  inputFile: string;
-  editedBase: string;
-  model: string;
-}): string {
-  const stem = workflowMergeFilenameStem(params.editedBase, params.model);
-  return path.join(path.dirname(params.inputFile), `${stem}.tex`);
+/** Build the runDir-relative merge output path. */
+export function workflowMergeOutputPath(params: { ext: string }): string {
+  return `_full.${params.ext}`;
 }
 
 // ---------------------------------------------------------------------------

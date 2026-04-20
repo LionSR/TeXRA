@@ -17,11 +17,7 @@ import {
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
-import {
-  legacyWorkflowOutputRoundRegex,
-  parseWorkflowOutputRoundDir,
-  workflowOutputTexRegex,
-} from '@agent/output/workflowOutputLayout';
+import { legacyWorkflowOutputRoundRegex } from '@agent/output/workflowOutputLayout';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,
@@ -723,41 +719,11 @@ async function runLatexdiffViaWorkspaceScan(params: {
       roundOutputsMap.set(round.data, path.join(outputDirPath, fileName));
     }
 
-    // New layout: files sit under `<outputDirPath>/r{round}/` as
-    // `<base>_<cleanAgent>_<model>.tex`.
-    const newLayoutFileName = workflowOutputTexRegex(
-      baseInputName,
-      agent,
-      model,
-    );
-    for (const [subName, subType] of dirEntries) {
-      if (subType !== vscode.FileType.Directory) continue;
-      const roundIdx = parseWorkflowOutputRoundDir(subName);
-      if (roundIdx === null) continue;
-
-      const roundDirAbs = path.join(absoluteDir, subName);
-      let roundEntries: [string, vscode.FileType][];
-      try {
-        roundEntries = await vscode.workspace.fs.readDirectory(
-          vscode.Uri.file(roundDirAbs),
-        );
-      } catch {
-        continue;
-      }
-      for (const [fileName, fileType] of roundEntries) {
-        if (
-          fileType !== vscode.FileType.File ||
-          fileName.includes('_diff') ||
-          !newLayoutFileName.test(fileName)
-        ) {
-          continue;
-        }
-        roundOutputsMap.set(
-          roundIdx,
-          path.join(outputDirPath, subName, fileName),
-        );
-      }
-    }
+    // New-layout workflow outputs live inside task-run storage
+    // (`executions/{id}/r{round}/output.tex`), not in the workspace. That
+    // path is driven by execution metadata (`OutputFileInfo.outputsByRound`)
+    // via `runLatexdiffFromMetadata`; the workspace scan here only covers
+    // pre-refactor files.
 
     if (roundOutputsMap.size > 0) {
       inputToOutputsMap.set(candidateInput, roundOutputsMap);

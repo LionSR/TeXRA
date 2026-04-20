@@ -182,19 +182,14 @@ export async function runReflectionFlow<C = unknown>(
   const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 
-  const modelName = modelHandler.config.name;
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
-      const fileName = getOutputFileName(
-        config.inputFile,
-        config.agent,
-        modelName,
-        outputExt,
-        round,
-      );
-      // Raw XML scratchpad files are intermediate artifacts — keep them out
-      // of the user's workspace regardless of the configured storage mode.
+      const fileName = getOutputFileName(outputExt, round);
+      // Raw XML scratchpad files are intermediate artifacts — keep them in
+      // run storage regardless of the configured storage mode. (Commit 2
+      // collapses `createRawOutputLocation` into `createLocation` once
+      // every workflow output routes to run storage.)
       if (useScratchpad) {
         return fileService.createRawOutputLocation(
           fileName,

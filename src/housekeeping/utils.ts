@@ -10,8 +10,6 @@ import {
   legacyWorkflowOutputStem,
   normalizeLegacyModel,
   parseWorkflowOutputRoundDir,
-  workflowMergeFilenameStem,
-  workflowOutputGlobPrefix,
 } from '@agent/output/workflowOutputLayout';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -25,12 +23,14 @@ export { getAgentFirstNameChunk };
 export const parseRoundFolder = parseWorkflowOutputRoundDir;
 
 /**
- * Build glob patterns that match workflow output filenames in both layouts.
+ * Build glob patterns that match pre-refactor workflow output filenames
+ * left over in the user's workspace. Current-layout outputs live inside
+ * task-run storage (`executions/{id}/…`) and are managed per-execution, so
+ * they are not scanned for here.
  *
  * Pass the raw agent identifier (with any source prefix) — the SSOT
- * helpers derive the clean agent / legacy chunk forms internally so the
- * result matches what `getOutputFileName` writes today and what older
- * runs left on disk.
+ * helpers derive the legacy chunk form internally so the result matches
+ * what pre-refactor runs wrote to disk.
  */
 export function getFilePatterns(
   base: string,
@@ -61,38 +61,19 @@ export function getFilePatterns(
         `${legacyPrefix}_full_${legacyModel}${diffSuffix}`,
       );
     }
-
-    // New round-subfolder layout:
-    //   `r{round}/<base>_<cleanAgent>_<model>.*`
-    const newPrefix = workflowOutputGlobPrefix({ base, agent, model, round });
-    patterns.push(
-      newPrefix,
-      `${newPrefix}_diff`,
-      `${newPrefix}_thinking`,
-    );
-    if (round > 0) {
-      const diffSuffix = `_diffr${round}r${round - 1}`;
-      patterns.push(`${newPrefix}${diffSuffix}`);
-    }
   }
-  // Merge output lives next to the input and is named after the edited
-  // file (`<editedBase>_full_<model>.tex`). editedBase typically starts
-  // with the input base plus an agent/model suffix, so we emit two
-  // delimiter-aware patterns: the simple `<base>_full_<model>` case and
-  // the `<base>_<…>_full_<model>` case. Requiring the `_` after `<base>`
-  // keeps siblings like `paper2_…` from matching when the target is
-  // `paper.tex`.
-  //
-  // Emit both raw and normalized-model variants so legacy merge files
-  // written with the dot-stripped model token (`paper_full_gpt45`) are
-  // discovered alongside current files (`paper_full_gpt-4.5`).
-  const mergeModels =
-    legacyModel === model ? [model] : [model, legacyModel];
+  // Legacy merge output lived next to the input and was named after the
+  // edited file (`<editedBase>_full_<model>.tex`). Requiring the `_` after
+  // `<base>` keeps siblings like `paper2_…` from matching when the target
+  // is `paper.tex`. Emit both raw and normalized-model variants so legacy
+  // merge files written with the dot-stripped model token
+  // (`paper_full_gpt45`) are discovered alongside current-legacy files
+  // (`paper_full_gpt-4.5`).
+  const mergeModels = legacyModel === model ? [model] : [model, legacyModel];
   for (const m of mergeModels) {
-    const stem = workflowMergeFilenameStem(base, m);
     patterns.push(
-      stem,
-      `${stem}_diff`,
+      `${base}_full_${m}`,
+      `${base}_full_${m}_diff`,
       `${base}_*_full_${m}`,
       `${base}_*_full_${m}_diff`,
     );

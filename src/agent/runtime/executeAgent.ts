@@ -705,12 +705,7 @@ export async function executeMergeAgent(
         onRoundFinalized: (run) =>
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
         setting: ctx.setting as AgentWorkflowSetting,
-        getOutputFileLocation: createMergeOutputFileLocationGetter(
-          inputFile,
-          editedFile,
-          model,
-          fileService,
-        ),
+        getOutputFileLocation: createMergeOutputFileLocationGetter(fileService),
         parentStage: ctx.parentStage,
         onRoundCompleted: createRoundProgressCallback(
           ctx.executionId,
