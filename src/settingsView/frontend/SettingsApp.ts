@@ -775,7 +775,7 @@ export class SettingsApp extends SettingsAppBase {
           >
           <vscode-tab-header slot="header"
             ><span class="codicon codicon-organization"></span>
-            Teams</vscode-tab-header
+            Multi-Agent</vscode-tab-header
           >
           <vscode-tab-header slot="header"
             ><span class="codicon codicon-tools"></span>
