@@ -21,6 +21,7 @@ import {
 import { EdgeFunctionResponseSchema } from '@agent/remote/types';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
+import { renderAgentTemplateFromBundle } from '@commands/agent/agentTemplateRenderer';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
@@ -356,7 +357,7 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CREATE_AGENT>,
   ): Promise<void> {
     if (data.mode === 'template') {
-      await this.createAgentFromTemplate();
+      await this.createAgentFromTemplate(data.category);
     } else {
       await vscode.commands.executeCommand(
         'texra.createAgentWithAI',
@@ -683,10 +684,13 @@ export class AgentHandlers {
 
   // ── Private helpers ──
 
-  private async createAgentFromTemplate(): Promise<void> {
+  private async createAgentFromTemplate(
+    category: 'workflow' | 'toolUse',
+  ): Promise<void> {
     try {
+      const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
       const name = await vscode.window.showInputBox({
-        prompt: 'Enter a name for the new agent (without .yaml extension)',
+        prompt: `Enter a name for the new ${categoryLabel} agent (without .yaml extension)`,
         placeHolder: 'my_agent',
         validateInput: (value) => {
           if (!value) return 'Name cannot be empty';
@@ -714,35 +718,19 @@ export class AgentHandlers {
       }
 
       const baseName = name.replace(/\.yaml$/, '');
-      const template = `# --- Agent Inheritance (Optional) ---
-# inherits: base
+      const defaultDescription =
+        category === 'toolUse'
+          ? `${baseName} — interactive tool-use agent`
+          : `${baseName} — workflow agent`;
 
-name: ${baseName}
-
-# --- Agent Settings ---
-settings:
-  temperature: 0.1
-  isRewrite: true
-  documentTag: document
-  endTag: '</document>'
-  outputExt: tex
-  prefills:
-    - "<document>"
-
-# --- Agent Prompts ---
-prompts:
-  systemPrompt: |
-    [Define the AI's role and core instructions]
-
-  userPrefix: |
-    [Provide context using variables like {{ INPUT_CONTENT }}]
-
-  userRequest:
-    - |
-        [Define the initial task prompt]
-    - |
-        [Optional reflection prompt — remove this item if you only need one round]
-`;
+      const template = await renderAgentTemplateFromBundle(
+        this.ctx.extensionContext,
+        category === 'toolUse' ? 'toolUse' : 'workflowSingle',
+        {
+          agentName: baseName,
+          description: defaultDescription,
+        },
+      );
 
       await AbsoluteFS.write(filePath, template);
       const doc = await vscode.workspace.openTextDocument(
@@ -761,6 +749,8 @@ prompts:
   /** Refresh agent dir + selection after a directory change. */
   private async refreshAgentDirUI(): Promise<void> {
     await agentDirectories.refreshAfterDirChange();
+    const { refreshCustomAgentRoot } = await import('@frontend/setup');
+    await refreshCustomAgentRoot();
     await this.ctx.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendCustomAgentDir(w),
