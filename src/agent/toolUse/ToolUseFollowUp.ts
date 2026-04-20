@@ -10,6 +10,7 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
+import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -22,7 +23,10 @@ import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
  */
 export type SendFollowUpResult =
   | { status: 'sent' }
-  | { status: 'queued'; reason: 'resuming' | 'waiting' }
+  | {
+      status: 'queued';
+      reason: 'resuming' | 'waiting' | 'children_running';
+    }
   | { status: 'error'; message: string }
   | { status: 'no_session'; streamStatus: string | undefined };
 
@@ -62,6 +66,15 @@ export async function sendFollowUp(
   if (status === STREAM_STATUS.WAITING) {
     ToolUseFollowUpQueue.enqueue(streamId, text);
     return { status: 'queued', reason: 'waiting' };
+  }
+
+  const { subagents, processes } = getActiveChildren(streamId);
+  if (subagents.length > 0 || processes.length > 0) {
+    // force:true reopens a queue sealed by sessionLifecycle disposal — the
+    // caller must auto-resume the parent or re-release, or late child
+    // deliveries will leak into the next run on this stream.
+    ToolUseFollowUpQueue.enqueue(streamId, text, { force: true });
+    return { status: 'queued', reason: 'children_running' };
   }
 
   // No active/waiting session found - caller should handle UI notification
