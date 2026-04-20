@@ -79,23 +79,6 @@ export const historyListStyles: CSSResult = css`
     word-break: break-word;
   }
 
-  .history-item.selected {
-    background-color: var(--vscode-list-activeSelectionBackground);
-    color: var(
-      --vscode-list-activeSelectionForeground,
-      var(--vscode-foreground)
-    );
-  }
-
-  .history-item.selected .history-label,
-  .history-item.selected .history-value,
-  .history-item.selected .history-description,
-  .history-item.selected .history-timestamp,
-  .history-item.selected .config-key,
-  .history-item.selected .config-value {
-    color: inherit;
-  }
-
   .history-item {
     margin-bottom: var(--spacing-medium);
   }
