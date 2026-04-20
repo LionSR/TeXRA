@@ -84,7 +84,7 @@ const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
 const ULTRA_ONLY_PATTERN = /^(?:[a-z0-9_-]+\/)?gpt-5(?:\.\d+)?-pro(?:$|[-:@/])/i;
 
 function isUltraOnlyModelName(modelName: string): boolean {
-  return ULTRA_ONLY_PATTERN.test(modelName.trim().toLowerCase());
+  return ULTRA_ONLY_PATTERN.test(modelName.trim());
 }
 
 const isUltraOnlyModel = (model: RelayModel): boolean =>
