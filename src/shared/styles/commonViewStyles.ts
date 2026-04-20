@@ -302,3 +302,57 @@ export const focusRingStyles: CSSResult = css`
     border-radius: var(--border-radius-small);
   }
 `;
+
+/**
+ * Shared filled primary button styles.
+ *
+ * Canonical look mirroring `vscode-button` for use cases that need a
+ * regular `<button>` (e.g. inside templated lists or modals). Prefer this
+ * over reinventing padding/background/focus per component.
+ *
+ * Apply via Lit's static styles array:
+ *   static override styles = [designTokens, filledButtonStyles, css`...`];
+ *
+ * Then add the `.filled-button` class to any `<button>`. Add
+ * `.filled-button--secondary` for the secondary tone.
+ */
+export const filledButtonStyles: CSSResult = css`
+  .filled-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    padding: var(--spacing-small) var(--spacing-medium);
+    font-size: var(--font-size);
+    font-family: inherit;
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+    border: var(--border-thin) solid var(--vscode-button-border, transparent);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition:
+      background-color var(--transition-fast),
+      opacity var(--transition-fast);
+  }
+
+  .filled-button:hover {
+    background: var(--vscode-button-hoverBackground);
+  }
+
+  .filled-button:active {
+    opacity: var(--opacity-normal);
+  }
+
+  .filled-button:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+  }
+
+  .filled-button--secondary {
+    color: var(--vscode-button-secondaryForeground, inherit);
+    background: var(--vscode-button-secondaryBackground, transparent);
+  }
+
+  .filled-button--secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground, transparent);
+  }
+`;
