@@ -79,11 +79,16 @@ const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
 /**
  * Ultra-only models: reserved for Ultra-tier users even during the
  * sponsor-credit promotion. Matches gpt-5-pro, gpt-5.2-pro, gpt-5.4-pro, etc.
+ * Accepts optional provider prefixes like "openai/gpt-5.4-pro".
  */
-const ULTRA_ONLY_PATTERN = /^gpt-5(\.\d+)?-pro/i;
+const ULTRA_ONLY_PATTERN = /^(?:[a-z0-9_-]+\/)?gpt-5(?:\.\d+)?-pro(?:$|[-:@/])/i;
+
+function isUltraOnlyModelName(modelName: string): boolean {
+  return ULTRA_ONLY_PATTERN.test(modelName.trim());
+}
 
 const isUltraOnlyModel = (model: RelayModel): boolean =>
-  model.apiPatterns.some((p) => ULTRA_ONLY_PATTERN.test(p));
+  model.apiPatterns.some(isUltraOnlyModelName);
 
 const NON_ULTRA_ONLY_SHORT_NAMES = RELAY_MODELS.filter(
   (m) => !isUltraOnlyModel(m),
@@ -185,7 +190,7 @@ export function isModelAllowedForTier(
 ): boolean {
   if (tier === ULTRA_TIER) return true;
   if (!modelName) return false;
-  return !ULTRA_ONLY_PATTERN.test(modelName);
+  return !isUltraOnlyModelName(modelName);
 }
 
 // =============================================================================
