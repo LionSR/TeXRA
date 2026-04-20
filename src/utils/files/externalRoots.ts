@@ -27,13 +27,20 @@ import * as path from 'path';
  * - Containment is tested via `path.relative`, which works correctly even
  *   for filesystem roots like `/` or `C:\` (where `root + path.sep` would
  *   produce a bad prefix). When multiple registered roots could contain a
- *   path (nested registration), the most specific (longest) wins so
- *   read-only children defeat writable parents.
+ *   path (nested registration), the most specific (longest) wins; ties on
+ *   path length prefer read-only so a writable entry cannot silently grant
+ *   write access to a directory that is also registered read-only under a
+ *   different kind (e.g. if a user points the custom agents dir at the
+ *   built-in agents dir).
+ * - The registry keys on `ExternalRootKind`, not on the path — each kind
+ *   gets exactly one slot. Two different kinds may canonicalise to the
+ *   same path (legitimate when a user overlays a custom dir on a built-in
+ *   one) and both coexist; tiebreaking in `findExternalRoot` makes the
+ *   read-only one win for permission purposes.
  */
 
-/** Stable identifier for each registered root — keyed off by callers that need
- *  to locate a specific root (e.g. template-variable injection). Label strings
- *  are for display only and must not be used as keys. */
+/** Stable identifier for each registered root. Label strings are for display
+ *  only and must not be used as keys. */
 export type ExternalRootKind =
   | 'builtInWorkflow'
   | 'builtInToolUse'
@@ -56,7 +63,7 @@ export interface MatchedExternalRoot extends ExternalRoot {
   relative: string;
 }
 
-const roots = new Map<string, ExternalRoot>();
+const roots = new Map<ExternalRootKind, ExternalRoot>();
 
 /**
  * Canonicalise an absolute path: resolve `.`/`..` segments, then walk
@@ -87,7 +94,11 @@ function canonicalise(p: string): string {
   }
 }
 
-/** Register or replace an external root. */
+/**
+ * Register or replace the external root for the given kind. Calling again
+ * with the same kind (e.g. when the custom agents dir changes) replaces
+ * the previous entry for that kind in place.
+ */
 export function registerExternalRoot(
   absolutePath: string,
   options: { kind: ExternalRootKind; writable: boolean; label: string },
@@ -101,39 +112,23 @@ export function registerExternalRoot(
   // same space. Falls back to path.resolve only on canonicalise failure —
   // registration is setup-time and the caller already has a try/catch that
   // will surface a meaningful error.
-  let key: string;
+  let canonicalPath: string;
   try {
-    key = canonicalise(absolutePath);
+    canonicalPath = canonicalise(absolutePath);
   } catch {
-    key = path.resolve(absolutePath);
+    canonicalPath = path.resolve(absolutePath);
   }
-  roots.set(key, {
+  roots.set(options.kind, {
     kind: options.kind,
-    absolutePath: key,
+    absolutePath: canonicalPath,
     writable: options.writable,
     label: options.label,
   });
 }
 
-/** Remove a previously registered root. */
-export function unregisterExternalRoot(absolutePath: string): void {
-  if (!path.isAbsolute(absolutePath)) {
-    throw new Error(
-      `External root path must be absolute, got: ${absolutePath}`,
-    );
-  }
-  // Try both canonical and raw keys so callers can unregister with the same
-  // path they passed to register, even if canonicalisation was partial.
-  let canonicalKey: string | undefined;
-  try {
-    canonicalKey = canonicalise(absolutePath);
-  } catch {
-    // fall through to raw key only
-  }
-  if (canonicalKey !== undefined) {
-    roots.delete(canonicalKey);
-  }
-  roots.delete(path.resolve(absolutePath));
+/** Remove the registered root for the given kind. */
+export function unregisterExternalRoot(kind: ExternalRootKind): void {
+  roots.delete(kind);
 }
 
 /**
@@ -141,7 +136,9 @@ export function unregisterExternalRoot(absolutePath: string): void {
  * registered root matches or the path cannot be canonicalised (fail closed).
  * Uses `path.relative` for containment so filesystem-root registrations
  * (e.g. `/` on POSIX) behave correctly, and picks the most-specific
- * registered root when multiple would match.
+ * registered root when multiple would match. Ties on path length prefer
+ * read-only so overlapping registrations can never silently grant write
+ * access.
  */
 export function findExternalRoot(
   absolutePath: string,
@@ -167,11 +164,19 @@ export function findExternalRoot(
         !path.isAbsolute(relativePath));
     if (!contained) continue;
 
-    if (best === null || root.absolutePath.length > best.absolutePath.length) {
-      best = {
-        ...root,
-        relative: relativePath.replaceAll(path.sep, '/'),
-      };
+    if (best === null) {
+      best = { ...root, relative: relativePath.replaceAll(path.sep, '/') };
+      continue;
+    }
+
+    // Prefer the most-specific (longest) match; on ties, prefer read-only
+    // so a writable entry cannot override a colocated read-only one.
+    const thisLen = root.absolutePath.length;
+    const bestLen = best.absolutePath.length;
+    if (thisLen > bestLen) {
+      best = { ...root, relative: relativePath.replaceAll(path.sep, '/') };
+    } else if (thisLen === bestLen && best.writable && !root.writable) {
+      best = { ...root, relative: relativePath.replaceAll(path.sep, '/') };
     }
   }
   return best;

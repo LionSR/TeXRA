@@ -14,10 +14,7 @@ import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { GlobalStorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
-import {
-  registerExternalRoot,
-  unregisterExternalRoot,
-} from '@utils/files/externalRoots';
+import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 /**
@@ -127,12 +124,6 @@ async function deleteLegacyAgentFiles(): Promise<void> {
 }
 
 /**
- * Last registered custom-agents path, tracked so we can unregister it when
- * the user points at a new directory via Settings.
- */
-let currentCustomAgentRoot: string | undefined;
-
-/**
  * Register agent directories + bundled reference docs with the external-roots
  * allowlist so the creator tool-use agent can read/write them through the
  * standard file tools (read_file, write_file, ls, grep, glob, edit_file).
@@ -164,7 +155,6 @@ export async function registerAgentDirectoryRoots(
       writable: true,
       label: 'Custom agents',
     });
-    currentCustomAgentRoot = custom;
 
     const docsRoot = path.join(
       context.extensionPath,
@@ -186,22 +176,18 @@ export async function registerAgentDirectoryRoots(
 }
 
 /**
- * Re-register the custom agents directory after the user changes its location
- * via Settings. Unregisters the previous path first so stale entries do not
- * linger in the allowlist.
+ * Re-register the custom agents directory after the user changes its
+ * location via Settings. Registering the same `kind` overwrites the
+ * previous slot, so no separate unregister step is needed.
  */
 export async function refreshCustomAgentRoot(): Promise<void> {
   try {
     const custom = await agentDirectories.custom();
-    if (currentCustomAgentRoot && currentCustomAgentRoot !== custom) {
-      unregisterExternalRoot(currentCustomAgentRoot);
-    }
     registerExternalRoot(custom, {
       kind: 'custom',
       writable: true,
       label: 'Custom agents',
     });
-    currentCustomAgentRoot = custom;
   } catch (err) {
     logger.error(
       'extension',
