@@ -126,11 +126,6 @@ export function registerExternalRoot(
   });
 }
 
-/** Remove the registered root for the given kind. */
-export function unregisterExternalRoot(kind: ExternalRootKind): void {
-  roots.delete(kind);
-}
-
 /**
  * Return the registered root that contains `absolutePath`, or null when no
  * registered root matches or the path cannot be canonicalised (fail closed).
