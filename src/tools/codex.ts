@@ -131,6 +131,7 @@ export type CodexInput = z.infer<typeof CodexInputSchema>;
 interface ActiveThread {
   thread: Thread;
   childStreamId: StreamTabId;
+  parentStreamId: StreamTabId;
   executionId: ExecutionId;
 }
 
@@ -395,7 +396,12 @@ function startCodexLoop(params: {
   // guard and start a concurrent loop. Fresh threads don't have thread.id
   // yet; they're registered after the first turn completes.
   if (thread.id) {
-    storeThread(thread.id, { thread, childStreamId, executionId });
+    storeThread(thread.id, {
+      thread,
+      childStreamId,
+      parentStreamId,
+      executionId,
+    });
   }
 
   // Seed the initial prompt; the loop drains it as the first turn.
@@ -428,7 +434,12 @@ function startCodexLoop(params: {
         const wallTimeMs = Date.now() - startedAt;
         const threadId = thread.id;
         if (threadId && !threadRegistry.has(threadId)) {
-          storeThread(threadId, { thread, childStreamId, executionId });
+          storeThread(threadId, {
+            thread,
+            childStreamId,
+            parentStreamId,
+            executionId,
+          });
         }
 
         if (turn?.usage) {
@@ -548,7 +559,7 @@ export class CodexTool extends defineTool({
     ctx?.onExecutionReady?.();
 
     if (input.thread_id && threadRegistry.has(input.thread_id)) {
-      return resumeCodexThread(input.thread_id, input.prompt);
+      return resumeCodexThread(input.thread_id, input.prompt, ctx?.streamId);
     }
     // Fall through when the thread's in-memory loop is gone (extension
     // reload, crash): createCodexThread resumes via the SDK from disk.
@@ -620,11 +631,21 @@ async function launchCodexSession(
 async function resumeCodexThread(
   threadId: string,
   prompt: string,
+  callerStreamId: StreamTabId | undefined,
 ): Promise<ToolResult> {
   const stored = threadRegistry.get(threadId);
   if (!stored) {
     throw new ToolError(
       `Codex thread '${threadId}' is not active. It may have completed or been stopped; start a new session without thread_id.`,
+    );
+  }
+
+  // The turn result is delivered to the stored parent stream, so refuse
+  // callers from a different stream — otherwise the sender reports "sent"
+  // while the response lands on someone else's orchestrator.
+  if (callerStreamId && stored.parentStreamId !== callerStreamId) {
+    throw new ToolError(
+      `Codex thread '${threadId}' is owned by a different session; start a new session without thread_id to run in this context.`,
     );
   }
 

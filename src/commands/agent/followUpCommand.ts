@@ -121,7 +121,10 @@ async function handleFollowUpResult(
       bus.emit('updateQueuedFollowUps', { streamId });
       if (result.reason === 'waiting' || result.reason === 'children_running') {
         const resumed = await tryAutoResume(streamId);
-        if (!resumed) {
+        // tryAutoResume also returns false when the stream is already
+        // active/resuming — another consumer is on the way, so neither
+        // branch below should drop the queue or warn the user.
+        if (!resumed && !StreamStatusService.isActiveOrResuming(streamId)) {
           if (result.reason === 'children_running') {
             // sendFollowUp force-reopened a released queue on behalf of the
             // auto-resume attempt. Re-release drops the just-enqueued message
