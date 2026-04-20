@@ -3,6 +3,7 @@ import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import {
+  collectOutputFileLocations,
   OutputFileInfoListSchema,
   type OutputFileInfo,
   type StreamTabId,
@@ -117,16 +118,8 @@ export class OutputFilesManager {
     info: OutputFileInfo,
     workspaceOnly: boolean,
   ): void {
-    const { lineage } = info;
-    const locations = [
-      info.location,
-      lineage?.original,
-      lineage?.diffBase,
-      lineage?.diffFile,
-    ];
-
-    for (const loc of locations) {
-      if (loc?.absolutePath && (!workspaceOnly || loc.kind === 'workspace')) {
+    for (const loc of collectOutputFileLocations(info)) {
+      if (!workspaceOnly || loc.kind === 'workspace') {
         target.add(loc.absolutePath);
       }
     }

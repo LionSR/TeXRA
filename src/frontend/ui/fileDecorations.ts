@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { bus } from '@eventBus/ProgressEventBus';
+import { collectOutputFileLocations } from '@shared/schemas';
 import type { OutputFileInfo } from '@shared/schemas';
 
 // Session-scoped: the touched set is not persisted across window reloads so
@@ -45,22 +46,15 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
   }
 }
 
-// Mirrors `OutputFilesManager.collectPaths` so an edit workflow's original
-// workspace file (stored in `lineage.original`) is decorated, not just the
-// agent's staged output which is often under runStorage.
+// Decorate workspace files reachable from this output info — including the
+// original workspace file referenced via `lineage.original` for edit
+// workflows whose agent output sits under runStorage.
 function collectWorkspacePaths(
   target: Set<string>,
   info: OutputFileInfo,
 ): void {
-  const { lineage } = info;
-  const locations = [
-    info.location,
-    lineage?.original,
-    lineage?.diffBase,
-    lineage?.diffFile,
-  ];
-  for (const loc of locations) {
-    if (loc?.kind === 'workspace') {
+  for (const loc of collectOutputFileLocations(info)) {
+    if (loc.kind === 'workspace') {
       target.add(loc.absolutePath);
     }
   }
