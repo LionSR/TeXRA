@@ -23,6 +23,7 @@ export interface GhReviewComment {
   path: string;
   line?: number | null;
   original_line?: number | null;
+  in_reply_to_id?: number | null;
   html_url: string;
   created_at: string;
   updated_at?: string;
