@@ -9,7 +9,11 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
-import { resolveAndFormat, parseWorkingDirectory } from '@tools/utils';
+import {
+  assertWritable,
+  resolveAndFormat,
+  parseWorkingDirectory,
+} from '@tools/utils';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   buildApprovalRejectedResult,
@@ -44,6 +48,7 @@ export class WriteFileTool extends defineTool({
       input.path,
       root,
     );
+    assertWritable(resolved, displayPath);
     const filePath = resolved.fsPath;
 
     const exists = await WorkspaceFS.exists(filePath);

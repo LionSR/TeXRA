@@ -15,6 +15,8 @@ export interface SettingsHandlerContext {
     error: (channel: string, msg: string, options?: LogUtilsOptions) => void;
     debug: (channel: string, msg: string, options?: LogUtilsOptions) => void;
   };
+  /** VS Code extension context, used to resolve bundled resources. */
+  readonly extensionContext: vscode.ExtensionContext;
   /** Run a callback with the active webview, if available. */
   withActiveWebview: (
     fn: (w: vscode.Webview) => Promise<void>,
