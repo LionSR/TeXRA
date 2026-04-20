@@ -402,7 +402,10 @@ export class ToolCard extends LitElement {
               ${this.item.installUrl
                 ? html`
                     <button
-                      class="tool-action-btn tool-action-btn--secondary"
+                      class="tool-action-btn ${this.item.installCommand ||
+                      this.item.installExtensionId
+                        ? 'tool-action-btn--secondary'
+                        : ''}"
                       @click=${this.handleInstallUrl}
                     >
                       <span class="codicon codicon-link-external"></span>
