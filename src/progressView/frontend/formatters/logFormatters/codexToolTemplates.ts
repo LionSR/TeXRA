@@ -34,7 +34,7 @@ type CodexToolRenderer = (input: unknown) => TemplateResult | typeof nothing;
 const CodexInputDisplaySchema = z.object({
   prompt: z.string().optional().default(''),
   sandbox_mode: z.string().optional(),
-  run_in_background: z.boolean().optional(),
+  thread_id: z.string().optional(),
 });
 
 type CodexInputDisplay = z.infer<typeof CodexInputDisplaySchema>;
@@ -97,8 +97,8 @@ function renderCodexModeSection(input: CodexInputDisplay): RenderableSection {
     ...(input.sandbox_mode
       ? [{ iconClass: 'codicon-shield', label: input.sandbox_mode }]
       : []),
-    ...(input.run_in_background
-      ? [{ iconClass: 'codicon-run-all', label: 'background' }]
+    ...(input.thread_id
+      ? [{ iconClass: 'codicon-comment-discussion', label: 'follow-up' }]
       : []),
   ];
 
