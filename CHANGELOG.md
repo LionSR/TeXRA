@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
+- **Codex tool matches the delegate_agent model** — calling `codex` is now async: the tool returns immediately with an execution ID, and each turn's result is delivered as a follow-up message to the orchestrator (response, token usage, and `thread_id`). To continue a running Codex session, pass `thread_id` with a new prompt — it's queued as the next turn instead of interrupting the one in progress, and errors with "still processing" if a turn is mid-flight. The `run_in_background` flag is gone (all codex calls are async now); no changes to how you invoke Codex from the chat.
 - **Untrusted-workspace guard** — TeXRA now declares itself incompatible with untrusted workspaces, so opening an untrusted folder shows VS Code's standard trust prompt with a clear rationale (agents read files and execute shell commands). Previously the extension could activate silently in untrusted mode.
 - **Zotero and Codex tools are off by default for new installs** — both groups depend on external software (a running Zotero + Better BibTeX for Zotero; the `@openai/codex` CLI for Codex) that most first-time users haven't installed, so leaving them enabled produced a confusing "tools excluded — dependencies not installed" notification on the first agent run. They are now opt-in via Dashboard → Tools → toggle. Existing users keep their current setup; only new installs are affected.
 - **No more `latexindent` install popup on first use** — the missing-`latexindent` warning is now off by default, so first-time users no longer see an unexpected install prompt after running an agent. Re-enable it with `texra.latex.showLatexindentWarning` if you want the reminder.
@@ -24,6 +25,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Follow-up messages are queued while subagents finish** — sending a message from the orchestrator tab no longer shows "No active session" when a delegated subagent is still running. The message is queued and picked up when the orchestrator resumes to process the subagent's result.
 - **Opus 4.7 thinking models show reasoning again** — Anthropic flipped the Opus 4.7 adaptive-thinking default so reasoning is omitted from responses unless the caller opts in. TeXRA now asks for `display: summarized` on `opus47`/`opus47T`, restoring visible chain-of-thought in the UI. Opus 4.6 and Sonnet 4.6 are unchanged.
 - **Codex CLI no longer fails on Extra High effort** — TeXRA's `xhigh` reasoning tier now maps to `high` when handed off to the Codex CLI, which only accepts `minimal | low | medium | high`. Previously Codex sessions died with `unknown variant 'xhigh'` on deserialization.
 - **`latexFixer` and similar internal agents load again** — the agent YAML schema now accepts the `internal: true` flag instead of rejecting it via `z.strictObject`, so agents that mark themselves internal no longer fail validation.
