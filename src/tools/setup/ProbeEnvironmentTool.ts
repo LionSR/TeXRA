@@ -45,8 +45,12 @@ const CORE_TOOLS = [
 const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
 
 async function checkTool(name: string): Promise<ToolStatus> {
-  const installed = await checkToolInstalled(name, false);
-  const resolvedPath = installed ? findToolInCommonPaths(name) : null;
+  const knownInstalled = await checkToolInstalled(name, false);
+  const resolvedPath = findToolInCommonPaths(name);
+  // `checkToolInstalled` returns false for names without a TOOL_CONFIGS
+  // entry even if the binary is actually on PATH (e.g. `git`, `node`), so
+  // the path-based lookup is the authoritative fallback for optional tools.
+  const installed = knownInstalled || resolvedPath !== null;
   return {
     name,
     installed,
