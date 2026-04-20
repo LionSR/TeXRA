@@ -1091,6 +1091,7 @@
         "id": "texra.gettingStarted",
         "title": "Get started with TeXRA",
         "description": "Get TeXRA up and running in a few minutes. Connect your account, pick your field, and run your first paper through the orchestrator.",
+        "when": "texra.activated",
         "steps": [
           {
             "id": "texra.gettingStarted.sampleWorkspace",
@@ -1242,7 +1243,7 @@
     "viewsWelcome": [
       {
         "view": "texra.welcomeView",
-        "contents": "TeXRA is a multi-agent orchestration system for LaTeX research. An orchestrator coordinates specialized agents that derive results, verify proofs, run symbolic computation, generate figures, and assemble manuscripts — every step auditable, every citation grounded.\nOpen a folder to begin.\n[Open Folder](command:workbench.action.files.openFolder)\n[Clone Repository](command:git.clone)\nNew to TeXRA? [Take the tour](command:workbench.action.openWalkthrough?%22texra.gettingStarted%22) or [read the docs](https://github.com/LionSR/TeXRA#readme).",
+        "contents": "TeXRA is a multi-agent orchestration system for LaTeX research. An orchestrator coordinates specialized agents that derive results, verify proofs, run symbolic computation, generate figures, and assemble manuscripts — every step auditable, every citation grounded.\nOpen a folder to begin. The TeXRA tour and commands become available once a workspace is open.\n[Open Folder](command:workbench.action.files.openFolder)\n[Clone Repository](command:git.clone)\nWant to learn more first? [Read the docs](https://github.com/LionSR/TeXRA#readme).",
         "when": "workbenchState == empty"
       },
       {
@@ -1254,32 +1255,32 @@
     "menus": {
       "editor/title": [
         {
-          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.indentCurrentTeX",
           "group": "navigation"
         },
         {
-          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.applyReplacements",
           "group": "navigation"
         },
         {
-          "when": "editorLangId == latex",
+          "when": "texra.activated && editorLangId == latex",
           "command": "texra.fixCompilation",
           "group": "navigation"
         },
         {
-          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.getTeXCount",
           "group": "navigation"
         },
         {
-          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.cleanOutput",
           "group": "2_texra_housekeeping@1"
         },
         {
-          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.cleanBuild",
           "group": "2_texra_housekeeping@2"
         }
@@ -1318,24 +1319,24 @@
       ],
       "editor/context": [
         {
-          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.cleanOutput",
           "group": "z_texra@1"
         },
         {
-          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.cleanBuild",
           "group": "z_texra@2"
         }
       ],
       "explorer/context": [
         {
-          "when": "resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "texra.activated && resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.cleanOutput",
           "group": "z_texra@1"
         },
         {
-          "when": "resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "when": "texra.activated && resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "texra.cleanBuild",
           "group": "z_texra@2"
         }
@@ -1563,33 +1564,38 @@
       {
         "command": "texra.showMainView",
         "key": "ctrl+alt+m",
-        "mac": "cmd+option+m"
+        "mac": "cmd+option+m",
+        "when": "texra.activated"
       },
       {
         "command": "texra.showProgressView",
         "key": "ctrl+alt+p",
-        "mac": "cmd+option+p"
+        "mac": "cmd+option+p",
+        "when": "texra.activated"
       },
       {
         "command": "texra.cleanOutput",
         "key": "ctrl+alt+shift+c",
-        "mac": "cmd+option+shift+c"
+        "mac": "cmd+option+shift+c",
+        "when": "texra.activated"
       },
       {
         "command": "texra.cleanBuild",
         "key": "ctrl+alt+shift+b",
-        "mac": "cmd+option+shift+b"
+        "mac": "cmd+option+shift+b",
+        "when": "texra.activated"
       },
       {
         "command": "texra.toggleView",
         "key": "ctrl+alt+t",
         "mac": "cmd+option+t",
-        "when": "focusedView == texra.mainView"
+        "when": "texra.activated && focusedView == texra.mainView"
       },
       {
         "command": "texra.execute",
         "key": "ctrl+alt+e",
-        "mac": "cmd+option+e"
+        "mac": "cmd+option+e",
+        "when": "texra.activated"
       }
     ]
   },
