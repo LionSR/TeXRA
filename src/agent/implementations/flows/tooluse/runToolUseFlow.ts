@@ -87,28 +87,22 @@ function resolveTools(
   const unavailable = getUnavailableToolNamesCached();
   const missingDependency: string[] = [];
 
+  // Don't warn on routine filtering outcomes (user-disabled, unavailable,
+  // not in registry): they fire on every tool-use cycle and drown out real
+  // issues. Agent YAML typos are surfaced once at load time by
+  // `resolveToolDefinitions`; missing external deps are surfaced via
+  // `notifyUnavailableTools` below.
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
       if (isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
-      if (disabled.has(def.name)) {
-        logger.warn(
-          `Tool "${def.name}" excluded: disabled in Settings > Tools`,
-        );
-        return false;
-      }
+      if (disabled.has(def.name)) return false;
       if (unavailable.has(def.name)) {
-        logger.warn(
-          `Tool "${def.name}" excluded: external dependency not installed`,
-        );
         missingDependency.push(def.name);
         return false;
       }
-      if (!registry.has(def.name)) {
-        logger.warn(`Tool "${def.name}" not found in registry`);
-        return false;
-      }
+      if (!registry.has(def.name)) return false;
       return true;
     });
 

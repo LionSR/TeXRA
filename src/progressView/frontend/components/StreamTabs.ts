@@ -217,6 +217,12 @@ export class StreamTab extends LitElement {
         background-color: var(--vscode-list-hoverBackground);
       }
 
+      /*
+       * Match VS Code's list-item selection: flip background + foreground
+       * together. The descendant-wildcard selector below forces nested spans
+       * (.last-active, .model) and codicon glyphs to inherit the selection
+       * color even when intermediate elements define their own.
+       */
       .tab-container.is-active {
         background-color: var(--vscode-list-activeSelectionBackground);
         color: var(
@@ -225,26 +231,33 @@ export class StreamTab extends LitElement {
         );
       }
 
+      .tab-container.is-active *,
       .tab-container.is-active .tab,
+      .tab-container.is-active .tab-title,
       .tab-container.is-active .tab-meta,
       .tab-container.is-active .tab-description,
       .tab-container.is-active .tab-delete,
       .tab-container.is-active .tab-expand {
-        color: inherit;
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
+        );
       }
 
       /*
-       * Preserve the destructive-action hover/focus cue on active tabs.
-       * Without this, the .tab-container.is-active .tab-delete rule above
-       * (specificity 0,3,0) would permanently override the base
-       * .tab-delete:hover rule (0,2,0), leaving the close icon stuck on
-       * the inherited foreground.
+       * Re-apply the destructive-action cue on active tabs — the
+       * descendant-wildcard above would otherwise hold the close icon on
+       * the selection foreground.
        */
       .tab-container.is-active .tab-delete:hover,
-      .tab-container.is-active .tab-delete:focus-within {
+      .tab-container.is-active .tab-delete:focus-within,
+      .tab-container.is-active .tab-delete:hover *,
+      .tab-container.is-active .tab-delete:focus-within * {
         color: var(--vscode-errorForeground);
       }
 
+      /* Drop the dim-by-default opacity so the flipped foreground renders
+       * at full contrast on the selection background. */
       .tab-container.is-active .tab-meta,
       .tab-container.is-active .tab-description {
         opacity: var(--opacity-full);

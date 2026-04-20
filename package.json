@@ -1226,33 +1226,13 @@
     "views": {
       "texra": [
         {
-          "type": "tree",
-          "id": "texra.welcomeView",
-          "name": "TeXRA",
-          "contextualTitle": "TeXRA",
-          "when": "!texra.activated"
-        },
-        {
           "type": "webview",
           "id": "texra.mainView",
           "name": "TeXRA",
-          "contextualTitle": "TeXRA",
-          "when": "texra.activated"
+          "contextualTitle": "TeXRA"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "texra.welcomeView",
-        "contents": "TeXRA is a multi-agent orchestration system for LaTeX research. An orchestrator coordinates specialized agents that derive results, verify proofs, run symbolic computation, generate figures, and assemble manuscripts — every step auditable, every citation grounded.\nOpen a folder to begin. The TeXRA tour and commands become available once a workspace is open.\n[Open Folder](command:workbench.action.files.openFolder)\n[Clone Repository](command:git.clone)\nWant to learn more first? [Read the docs](https://texra.ai).",
-        "when": "workbenchState == empty"
-      },
-      {
-        "view": "texra.welcomeView",
-        "contents": "TeXRA supports one folder at a time. Open a single folder to continue.\n[Open Folder](command:workbench.action.files.openFolder)",
-        "when": "workbenchState == workspace"
-      }
-    ],
     "menus": {
       "editor/title": [
         {
