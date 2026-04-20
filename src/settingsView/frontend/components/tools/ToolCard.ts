@@ -48,6 +48,7 @@ export class ToolCard extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
+        flex-wrap: wrap;
         gap: var(--spacing-medium);
         margin-bottom: var(--spacing-small);
       }
@@ -55,6 +56,7 @@ export class ToolCard extends LitElement {
       .tool-title-group {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: var(--spacing-small);
         min-width: 0;
       }
@@ -234,8 +236,20 @@ export class ToolCard extends LitElement {
         display: inline-flex;
         align-items: center;
         flex-shrink: 0;
+        margin-left: auto;
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
+      }
+
+      @media (max-width: 420px) {
+        .tool-header {
+          align-items: flex-start;
+        }
+
+        .tool-toggle {
+          width: 100%;
+          margin-left: 0;
+        }
       }
 
       .tool-config-note {
