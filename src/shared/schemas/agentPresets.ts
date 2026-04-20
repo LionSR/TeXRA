@@ -48,12 +48,13 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     id: 'physicist',
     name: 'Physicist',
     description:
-      'For physics papers -- derivations, literature search, slides, and critical review.',
+      'For physics papers -- analytical derivations, numerical experiments, literature search, slides, and critical review.',
     icon: 'codicon-symbol-operator',
     workflowAgents: ['criticize', 'generic', 'devise', 'apply'],
     toolUseAgents: [
       'orchestrator',
       'research',
+      'numerics',
       'review',
       'search',
       'presenter',
