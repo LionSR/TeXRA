@@ -199,7 +199,14 @@ export class UpdateShellRcTool extends defineTool({
     if (needsLeadingNewline) blockParts.push('\n');
     if (existing.length > 0) blockParts.push('\n');
     const marker = input.marker.trim();
-    if (marker) blockParts.push(`${marker}\n`);
+    if (marker) {
+      if (/[\r\n]/.test(marker)) {
+        throw new ToolError(
+          'marker must not contain newlines (would let extra commands be smuggled into the rc file).',
+        );
+      }
+      blockParts.push(`${marker}\n`);
+    }
     blockParts.push(`${line}\n`);
     const block = blockParts.join('');
 
