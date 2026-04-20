@@ -6,8 +6,8 @@ import {
   collectOutputFileLocations,
   OutputFileInfoListSchema,
   type OutputFileInfo,
-  type StreamTabId,
-} from '@shared/schemas';
+} from '@shared/schemas/output';
+import type { StreamTabId } from '@shared/schemas/identifiers';
 
 /**
  * Manages output files per stream tab with disk-backed persistence.

@@ -86,7 +86,9 @@ export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 /**
  * Return every `FileLocation` reachable from an `OutputFileInfo`: the primary
  * `location` plus any lineage entries (`original`, `diffBase`, `diffFile`).
- * Locations without an `absolutePath` are skipped.
+ * Missing lineage entries (`null`/`undefined`) are skipped; defensively, any
+ * entry with a falsy `absolutePath` is also dropped, though valid
+ * `FileLocation`s always have one.
  *
  * Callers that only care about workspace files should filter the result by
  * `loc.kind === 'workspace'` themselves — the workspace-scope check is
@@ -104,7 +106,7 @@ export function collectOutputFileLocations(
   ];
   const result: FileLocation[] = [];
   for (const loc of candidates) {
-    if (loc?.absolutePath) {
+    if (loc != null && loc.absolutePath) {
       result.push(loc);
     }
   }

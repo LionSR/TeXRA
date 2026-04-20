@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 
 import { bus } from '@eventBus/ProgressEventBus';
-import { collectOutputFileLocations } from '@shared/schemas';
-import type { OutputFileInfo } from '@shared/schemas';
+import {
+  collectOutputFileLocations,
+  type OutputFileInfo,
+} from '@shared/schemas/output';
 
 // Session-scoped: the touched set is not persisted across window reloads so
 // the badges clear on restart and track only the current session's activity.
