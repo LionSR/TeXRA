@@ -49,6 +49,8 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
+import { setSetupPlatform } from '@tools/setup';
+import { getAuthStatus } from '@auth/authCommands';
 import { setGitHubTokenProvider, prPollingSource } from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
@@ -227,6 +229,42 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  setSetupPlatform({
+    secrets: {
+      providers: SecretManager.API_PROVIDERS,
+      setApiKey: (provider, key) =>
+        SecretManager.set(
+          SecretManager.getApiKeySecretName(provider as never),
+          key,
+        ),
+      deleteApiKey: (provider) =>
+        SecretManager.delete(
+          SecretManager.getApiKeySecretName(provider as never),
+        ),
+      apiKeyExists: (provider) =>
+        SecretManager.apiKeyExists(provider as never),
+      anyApiKeyExists: () => SecretManager.anyApiKeyExists(),
+      gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
+    },
+    commands: {
+      invoke: (cmd, ...args) =>
+        Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
+      hasCommand: async (cmd) =>
+        (await vscode.commands.getCommands(true)).includes(cmd),
+    },
+    extensions: {
+      isInstalled: (id) => vscode.extensions.getExtension(id) !== undefined,
+      install: async (id) => {
+        await vscode.commands.executeCommand(
+          'workbench.extensions.installExtension',
+          id,
+        );
+      },
+    },
+    auth: {
+      getStatus: () => getAuthStatus(),
+    },
+  });
   // GitHub token lives in SecretStorage (managed via the Git settings tab).
   // The tool layer only supports a synchronous token lookup, so we cache here
   // and refresh on secret changes.
