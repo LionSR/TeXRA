@@ -420,6 +420,48 @@ export class TaskRunFileService {
       executionId,
     );
   }
+
+  /**
+   * For every mirrored top-level dependency, ensure a symlink also exists at
+   * `<runDir>/r{round}/<relativePath>`. This lets `latexmk`, `pdflatex`, and
+   * `latexdiff` run with `cwd = runDir/r{round}` and resolve `\input{foo}`
+   * against sibling symlinks. Idempotent; safe to call every round.
+   */
+  public async ensureMirroredInRoundDir(round: number): Promise<void> {
+    const executionId = this.metadata.executionId;
+    if (!executionId || this.mirroredDependencies.size === 0) {
+      return;
+    }
+
+    const roundSegment = `r${round}`;
+    const runDir = getRunDir(executionId);
+
+    await Promise.all(
+      [...this.mirroredDependencies].map(async (relativePath) => {
+        const sourceAbsolute = path.join(runDir, relativePath);
+        const destinationAbsolute = path.join(
+          runDir,
+          roundSegment,
+          relativePath,
+        );
+        try {
+          await createSymlink(
+            createRunStorageLocation(
+              sourceAbsolute,
+              relativePath,
+              executionId,
+            ),
+            destinationAbsolute,
+          );
+        } catch (error) {
+          logger.debug(
+            CHANNEL,
+            `Unable to mirror ${relativePath} into ${roundSegment}: ${toErrorMessage(error)}`,
+          );
+        }
+      }),
+    );
+  }
 }
 
 /**
