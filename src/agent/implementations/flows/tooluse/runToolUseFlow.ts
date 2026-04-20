@@ -87,13 +87,11 @@ function resolveTools(
   const unavailable = getUnavailableToolNamesCached();
   const missingDependency: string[] = [];
 
-  // Routine filtering reasons (user-disabled, missing external dep, not in the
-  // current registry) are intentional outcomes of user configuration, not
-  // warnings. Agent YAML typos are already surfaced once at load time by
-  // `resolveToolDefinitions` in agentLoad.ts / RemoteAgentLoader.ts; missing
-  // external dependencies are surfaced via `notifyUnavailableTools`. Don't
-  // emit per-cycle warnings here — they show up as yellow bubbles on every
-  // tool-use run and drown out real issues.
+  // Don't warn on routine filtering outcomes (user-disabled, unavailable,
+  // not in registry): they fire on every tool-use cycle and drown out real
+  // issues. Agent YAML typos are surfaced once at load time by
+  // `resolveToolDefinitions`; missing external deps are surfaced via
+  // `notifyUnavailableTools` below.
   const toolConfigs = Array.isArray(tools) ? tools : [];
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))

@@ -1,17 +1,11 @@
 import * as vscode from 'vscode';
 
 /**
- * No-workspace webview for `texra.mainView`.
- *
- * In the single-folder case the full `MainViewProvider` owns this view id.
- * When no folder is open, we still want the same view id to exist so VS Code
- * restores its user-chosen location (e.g. the auxiliary sidebar) on startup —
- * splitting into a separate `texra.welcomeView` caused VS Code to forget the
- * moved-to-aux-bar position because the active view id kept changing between
- * sessions.
- *
- * This provider serves a minimal HTML welcome screen and reloads the window
- * once the user opens a single folder so the full activation path can run.
+ * No-workspace provider for `texra.mainView`. Keeping the same view id across
+ * workspace states is required for VS Code to persist the user's chosen
+ * location (e.g. auxiliary sidebar) — splitting into a separate welcome view
+ * id caused the aux-bar position to be lost between sessions. Reloads the
+ * window once a single folder is opened so the full activation path runs.
  */
 class WelcomeWebviewProvider implements vscode.WebviewViewProvider {
   resolveWebviewView(webviewView: vscode.WebviewView): void {

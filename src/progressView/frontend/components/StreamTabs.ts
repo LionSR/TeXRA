@@ -218,12 +218,10 @@ export class StreamTab extends LitElement {
       }
 
       /*
-       * Match VS Code's list-item selection pattern: on active, flip both
-       * background and foreground so every descendant text/icon renders in
-       * the selection foreground. The descendant-wildcard selector guarantees
-       * nested spans (.last-active, .model) and codicon glyphs inherit the
-       * selection color even when intermediate elements (.tab-meta,
-       * .tab-description) define their own color.
+       * Match VS Code's list-item selection: flip background + foreground
+       * together. The descendant-wildcard selector below forces nested spans
+       * (.last-active, .model) and codicon glyphs to inherit the selection
+       * color even when intermediate elements define their own.
        */
       .tab-container.is-active {
         background-color: var(--vscode-list-activeSelectionBackground);
@@ -247,9 +245,9 @@ export class StreamTab extends LitElement {
       }
 
       /*
-       * Preserve the destructive-action hover/focus cue on active tabs.
-       * The descendant-wildcard selector above would otherwise keep the close
-       * icon stuck on the inherited foreground.
+       * Re-apply the destructive-action cue on active tabs — the
+       * descendant-wildcard above would otherwise hold the close icon on
+       * the selection foreground.
        */
       .tab-container.is-active .tab-delete:hover,
       .tab-container.is-active .tab-delete:focus-within,
@@ -258,11 +256,8 @@ export class StreamTab extends LitElement {
         color: var(--vscode-errorForeground);
       }
 
-      /*
-       * When active, drop the dim-by-default opacity on meta/description so
-       * the flipped foreground renders at full contrast on the blue selection
-       * background.
-       */
+      /* Drop the dim-by-default opacity so the flipped foreground renders
+       * at full contrast on the selection background. */
       .tab-container.is-active .tab-meta,
       .tab-container.is-active .tab-description {
         opacity: var(--opacity-full);
