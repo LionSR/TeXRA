@@ -52,9 +52,14 @@ type UpdateShellRcInput = z.infer<typeof UpdateShellRcInputSchema>;
  *
  * All forms reject newlines.
  */
+/**
+ * POSIX pattern requires `export` (and/or the inline
+ * `NAME=value command` is disallowed). A bare `PATH=/foo` is a
+ * shell-local assignment that would NOT propagate to child processes
+ * from an rc file, producing a silent no-op PATH fix, so we reject it.
+ */
 const POSIX_SAFE_PATTERNS: readonly RegExp[] = [
   /^\s*export\s+[A-Za-z_][A-Za-z0-9_]*=[^\r\n]*$/,
-  /^\s*[A-Za-z_][A-Za-z0-9_]*=[^\r\n]*$/,
 ];
 
 const POWERSHELL_SAFE_PATTERNS: readonly RegExp[] = [
