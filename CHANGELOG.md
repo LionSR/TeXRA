@@ -4,7 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **Workflow outputs live in task-run storage only.** `paper_<agent>_<model>.tex` no longer appears next to your source. Every workflow run gets its own folder at `executions/{id}/` with the revised file at `r{round}/output.tex` and the merge output at `_full.tex`. Use the progress-view toolbar: **Accept** copies the file into your workspace, **Pack** snapshots the run (with dereferenced dependency symlinks) into `workspace/History/…`, **Clean** discards it. The `texra.agentOutputs.storageMode` setting is now deprecated and ignored.
+
 ### Features
+- **Auto-open the revised file when a workflow completes** — the primary output opens in a read-only editor tab so you never wonder where the result went. Silence it with `texra.agentOutputs.autoOpenFinal: false` for batch runs.
+- **Workflow mode reminder banner** — workflow tabs show a dismissible note that workflow mode runs across multiple rounds to reduce hallucinations and cut fluff, at the cost of 10–30 minutes wall-clock time per run. Pick Tool-Use mode for fast, iterative edits.
+- **Project-wide dependency mirror** — workflow runs now recursively mirror `\input{}`, `\include{}`, `\bibliography{}`, and local `\usepackage{}` targets into run storage alongside project siblings (`.cls`, `.sty`, `.bst`, `latexmkrc`). You can compile the revised file directly from inside `executions/{id}/r{round}/` without leaving the run folder.
+- **Latexdiff finds runs automatically** — the legacy `texra.runLatexdiff` command now locates the most recent matching execution via stored metadata, so diffs work even when the caller didn't supply the `outputsByRound` payload.
+
 
 - **Welcome sidebar when no folder is open** — opening VS Code without a folder used to leave the TeXRA sidebar blank. Now the sidebar shows a friendly welcome with Open Folder / Clone Repository buttons, a brief intro to multi-agent orchestration, and links to the Getting Started tour and docs. Multi-root workspaces get matching copy explaining the single-folder requirement.
 - **File badges for agent-touched files** — a "T" badge appears in the Explorer next to files agents have written during the current session (including the originals of files agents have edited), similar to how git marks modified files. Session-scoped; clears on window reload.
