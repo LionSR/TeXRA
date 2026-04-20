@@ -85,12 +85,35 @@ const POWERSHELL_FORBIDDEN_SUBSTRINGS: readonly string[] = [
   '\r',
 ];
 
+/**
+ * Scan `line` for a `;` that is not inside a single- or double-quoted
+ * string. Used for the PowerShell accept path where `;` is a legitimate
+ * PATH separator inside a quoted value (`"C:\foo;$env:Path"`) but also a
+ * statement separator outside quotes (`$env:Path = "..."; Remove-Item ...`).
+ * Backticks are already rejected by POWERSHELL_FORBIDDEN_SUBSTRINGS so we
+ * do not need to handle PowerShell's backtick escape here.
+ */
+function hasUnquotedSemicolon(line: string): boolean {
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === "'" && !inDouble) inSingle = !inSingle;
+    else if (c === '"' && !inSingle) inDouble = !inDouble;
+    else if (c === ';' && !inSingle && !inDouble) return true;
+  }
+  return false;
+}
+
 function isSafeLine(line: string): boolean {
   if (POSIX_SAFE_PATTERNS.some((re) => re.test(line))) {
     return !POSIX_FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s));
   }
   if (POWERSHELL_SAFE_PATTERNS.some((re) => re.test(line))) {
-    return !POWERSHELL_FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s));
+    if (POWERSHELL_FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s))) {
+      return false;
+    }
+    return !hasUnquotedSemicolon(line);
   }
   return false;
 }
