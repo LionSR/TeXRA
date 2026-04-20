@@ -876,12 +876,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Wrap only non-APIError stream failures. APIError subclasses carry
         // status/headers/requestID/type that formatProviderHttpError needs
         // for retry classification; replacing them loses that metadata and
-        // misclassifies e.g. 401 as generic retryable.
+        // misclassifies e.g. 401 as generic retryable. User aborts must also
+        // pass through unwrapped: AnthropicUserAbortError extends
+        // AnthropicError directly (sibling of AnthropicAPIError), so the
+        // APIError guard alone would wrap them and break downstream
+        // `instanceof AnthropicUserAbortError` checks.
+        const isAbort = isUserAbort(streamError);
         let enrichedError: unknown = streamError;
         if (
           !stream.currentMessage &&
           streamError instanceof Error &&
-          !(streamError instanceof AnthropicAPIError)
+          !(streamError instanceof AnthropicAPIError) &&
+          !isAbort
         ) {
           enrichedError = new Error(
             `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
@@ -897,7 +903,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
           (enrichedError as ErrorWithRequestId).request_id = requestId;
         }
 
-        const isAbort = isUserAbort(streamError);
         const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}: ${enrichedError instanceof Error ? enrichedError.message : String(enrichedError)}`;
         const logData = {
           data: {
