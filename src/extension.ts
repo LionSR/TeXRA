@@ -40,6 +40,8 @@ import { agentDirectories } from '@frontend/agents';
 import { FileLister } from '@frontend/files';
 import { killActiveRecording } from '@frontend/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
+import { registerFileDecorations } from '@frontend/ui/fileDecorations';
+import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
@@ -67,8 +69,6 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands, getMainViewProvider } from './commands';
-import { registerFileDecorations } from '@frontend/ui/fileDecorations';
-import { registerWelcomeView } from '@frontend/ui/welcomeView';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
