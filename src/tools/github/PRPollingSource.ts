@@ -393,7 +393,7 @@ export class PRPollingSource implements AsyncEventSource {
           state.etags.reviews,
         ),
         state.headSha
-          ? ghGet<{ check_runs: GhCheckRun[] }>(
+          ? ghGet<{ total_count: number; check_runs: GhCheckRun[] }>(
               `/repos/${pr.owner}/${pr.repo}/commits/${state.headSha}/check-runs?per_page=100`,
               state.etags.checkRuns,
             )
@@ -438,10 +438,13 @@ export class PRPollingSource implements AsyncEventSource {
         // we only surface transitions that happen after subscribe. Gate on
         // runs.length > 0: an empty array is ambiguous (no CI configured vs.
         // runs not yet registered), so "done" isn't meaningful and seeding
-        // would suppress the real terminal event once runs appear.
+        // would suppress the real terminal event once runs appear. Also
+        // require a complete page — the API caps at per_page=100, so a PR
+        // with more check runs would be evaluated from a truncated list.
         if (
           state.headSha &&
           runs.length > 0 &&
+          runs.length >= checksRes.data.total_count &&
           runs.every((r) => r.status === 'completed')
         ) {
           state.ciCompleteSha = state.headSha;
@@ -529,9 +532,13 @@ export class PRPollingSource implements AsyncEventSource {
       //
       // Gate on `runs.length > 0`: an empty array is ambiguous (no CI
       // configured vs. runs not yet registered), so "done" isn't meaningful.
+      // Also require a complete page (length >= total_count) — the API caps
+      // at per_page=100, so a PR with more check runs would prematurely
+      // emit a terminal event based on the first page alone.
       if (
         state.headSha &&
         runs.length > 0 &&
+        runs.length >= checksRes.data.total_count &&
         runs.every((r) => r.status === 'completed')
       ) {
         const headSha = state.headSha;
