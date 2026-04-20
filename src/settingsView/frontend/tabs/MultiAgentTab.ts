@@ -86,13 +86,19 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-card.active {
-        border-color: var(--vscode-focusBorder);
-        border-width: var(--border-medium);
-        background-color: color-mix(
-          in srgb,
-          var(--vscode-focusBorder) 8%,
-          var(--vscode-editor-inactiveSelectionBackground)
+        background-color: var(--vscode-list-activeSelectionBackground);
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
         );
+        border-color: var(--vscode-focusBorder);
+      }
+
+      .preset-card.active .preset-card-name,
+      .preset-card.active .preset-card-description,
+      .preset-card.active .preset-card-icon,
+      .preset-card.active .preset-active-badge {
+        color: inherit;
       }
 
       .preset-active-badge {
@@ -108,7 +114,7 @@ export class MultiAgentTab extends LitElement {
           var(--vscode-focusBorder) 15%,
           transparent
         );
-        border-radius: var(--border-radius-medium, 4px);
+        border-radius: var(--border-radius-medium);
       }
 
       .preset-active-badge .codicon {
@@ -155,7 +161,7 @@ export class MultiAgentTab extends LitElement {
       .preset-agent-badge {
         display: inline-block;
         padding: var(--border-thin) var(--border-radius-large);
-        font-size: var(--font-size-xs, 10px);
+        font-size: var(--font-size-xs);
         color: var(--vscode-badge-foreground);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);

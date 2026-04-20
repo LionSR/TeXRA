@@ -48,6 +48,7 @@ export class ToolCard extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
+        flex-wrap: wrap;
         gap: var(--spacing-medium);
         margin-bottom: var(--spacing-small);
       }
@@ -55,6 +56,7 @@ export class ToolCard extends LitElement {
       .tool-title-group {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: var(--spacing-small);
         min-width: 0;
       }
@@ -71,7 +73,7 @@ export class ToolCard extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         padding: var(--border-thin) var(--spacing-small);
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         border-radius: var(--border-radius);
         white-space: nowrap;
         font-weight: var(--font-weight-medium);
@@ -121,7 +123,7 @@ export class ToolCard extends LitElement {
 
       .tool-id-tag {
         font-family: var(--vscode-editor-font-family, monospace);
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         padding: var(--border-thin) var(--border-radius-large);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         color: var(--vscode-badge-foreground);
@@ -218,7 +220,7 @@ export class ToolCard extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         padding: var(--border-thin) var(--spacing-small);
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         border-radius: var(--border-radius);
         white-space: nowrap;
         font-weight: var(--font-weight-medium);
@@ -234,13 +236,25 @@ export class ToolCard extends LitElement {
         display: inline-flex;
         align-items: center;
         flex-shrink: 0;
+        margin-left: auto;
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
       }
 
+      @media (max-width: 420px) {
+        .tool-header {
+          align-items: flex-start;
+        }
+
+        .tool-toggle {
+          width: 100%;
+          margin-left: 0;
+        }
+      }
+
       .tool-config-note {
         margin-top: var(--spacing-small);
-        font-size: var(--font-size-xs, 11px);
+        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         font-style: italic;
       }
