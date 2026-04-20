@@ -611,7 +611,7 @@ export class StreamTabs extends LitElement {
               (stream) => stream.name,
               (stream) => {
                 const children = this.childStreamsByParent.get(stream.name);
-                const childCount = !this.compact ? (children?.length ?? 0) : 0;
+                const childCount = children?.length ?? 0;
                 const expanded =
                   childCount > 0 && this.expandedParents.has(stream.name);
 
