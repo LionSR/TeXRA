@@ -20,11 +20,50 @@ export const setupAssistantCommands = {
   runSetupAssistant: 'texra.runSetupAssistant',
 };
 
-/** Default model used to kick off the setup agent when nothing is configured. */
-const DEFAULT_SETUP_MODEL = 'gemini31p';
+/**
+ * Model to launch with when the user is signed in to Researcher Access
+ * (server-side keys cover Gemini).
+ */
+const SIGNED_IN_SETUP_MODEL = 'gemini31p';
+
+/**
+ * Provider → model mapping used when the user only has a direct API key.
+ * Picks a capable default per provider so the setup agent can actually
+ * start a turn with the credential it's been given.
+ */
+const API_KEY_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
+  anthropic: 'opus47T',
+  openai: 'gpt54',
+  google: 'gemini31p',
+  deepseek: 'deepseekT',
+  openRouter: 'sonnet46T',
+  xai: 'gpt54',
+  moonshot: 'kimi25T',
+  dashscope: 'kimi25T',
+  minimax: 'kimi25T',
+  glm: 'kimi25T',
+};
 
 const SETUP_INSTRUCTION =
   'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
+
+/**
+ * Pick a model the setup agent can actually call, given the credentials
+ * the user currently has. Checks the Researcher Access sign-in first,
+ * then falls back to the first provider that has an API key set.
+ */
+async function resolveLaunchModel(): Promise<string> {
+  const auth = await getAuthStatus().catch(() => ({ authenticated: false }));
+  if (auth.authenticated) return SIGNED_IN_SETUP_MODEL;
+
+  for (const provider of SecretManager.API_PROVIDERS) {
+    if (await SecretManager.apiKeyExists(provider)) {
+      return API_KEY_MODEL_BY_PROVIDER[provider] ?? SIGNED_IN_SETUP_MODEL;
+    }
+  }
+
+  return SIGNED_IN_SETUP_MODEL;
+}
 
 /**
  * Pre-flight: ensure the user has *some* credential before we launch the
@@ -94,10 +133,11 @@ async function runSetupAssistant(): Promise<void> {
       return;
     }
 
+    const model = await resolveLaunchModel();
     const config = AgentConfigSchema.parse({
       agent: 'setup',
       agentCategory: 'toolUse',
-      model: DEFAULT_SETUP_MODEL,
+      model,
       instruction: SETUP_INSTRUCTION,
     });
 

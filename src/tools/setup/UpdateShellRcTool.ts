@@ -17,7 +17,7 @@ const UpdateShellRcInputSchema = z.strictObject({
     .string()
     .min(1)
     .describe(
-      'The single line to append (e.g. `export PATH="/usr/local/texlive/2024/bin/universal-darwin:$PATH"`). A trailing newline is added automatically.',
+      'The single line to append (e.g. `export PATH="/usr/local/texlive/2024/bin/universal-darwin:$PATH"`). Must be a single environment-variable assignment — arbitrary shell commands are rejected.',
     ),
   marker: z
     .string()
@@ -35,6 +35,41 @@ const UpdateShellRcInputSchema = z.strictObject({
 
 type UpdateShellRcInput = z.infer<typeof UpdateShellRcInputSchema>;
 
+/**
+ * Safe-line validator. Only allows single environment-variable assignments,
+ * not arbitrary shell commands — the agent uses this tool specifically for
+ * PATH fixes after TeX installs, nothing else.
+ *
+ * Accepted forms:
+ *   - POSIX:      `export NAME=value`   or  `NAME=value`
+ *   - PowerShell: `$env:NAME = value`
+ *   - PowerShell: `[Environment]::SetEnvironmentVariable(...)`
+ *
+ * Rejected: command chaining (`;`, `&&`, `||`, `|`), command substitution
+ * (backticks, `$(...)`), redirection (`>`, `<`), and newlines.
+ */
+const SAFE_LINE_PATTERNS: readonly RegExp[] = [
+  /^\s*export\s+[A-Za-z_][A-Za-z0-9_]*=[^\r\n]*$/,
+  /^\s*[A-Za-z_][A-Za-z0-9_]*=[^\r\n]*$/,
+  /^\s*\$env:[A-Za-z_][A-Za-z0-9_]*\s*=[^\r\n]*$/,
+  /^\s*\[Environment\]::SetEnvironmentVariable\([^\r\n]*\)\s*$/,
+];
+
+const FORBIDDEN_SUBSTRINGS: readonly string[] = [
+  ';',
+  '&&',
+  '||',
+  '`',
+  '$(',
+  '\n',
+  '\r',
+];
+
+function isSafeLine(line: string): boolean {
+  if (FORBIDDEN_SUBSTRINGS.some((s) => line.includes(s))) return false;
+  return SAFE_LINE_PATTERNS.some((re) => re.test(line));
+}
+
 function resolveProfilePath(profile: UpdateShellRcInput['profile']): string {
   const home = os.homedir();
 
@@ -42,7 +77,6 @@ function resolveProfilePath(profile: UpdateShellRcInput['profile']): string {
   if (profile === 'bashrc') return path.join(home, '.bashrc');
   if (profile === 'profile') return path.join(home, '.profile');
   if (profile === 'powershell') {
-    // PowerShell uses Documents\PowerShell\Microsoft.PowerShell_profile.ps1
     return path.join(
       home,
       'Documents',
@@ -51,7 +85,6 @@ function resolveProfilePath(profile: UpdateShellRcInput['profile']): string {
     );
   }
 
-  // auto
   if (process.platform === 'win32') {
     return path.join(
       home,
@@ -67,21 +100,31 @@ function resolveProfilePath(profile: UpdateShellRcInput['profile']): string {
 }
 
 /**
- * Append a single line (typically a PATH export) to the user's shell rc.
+ * Append a single environment-variable assignment to the user's shell rc.
  *
- * Intentionally narrow: one line, one file, idempotent (skips if the exact
- * line is already present). The agent uses this specifically for post-
- * install PATH fixes when TeX binaries land outside the default `$PATH`.
+ * Intentionally narrow:
+ *   - one line, one file;
+ *   - input must match an env-var assignment pattern (see `isSafeLine`);
+ *   - line-based idempotency (skips if the exact trimmed line already appears).
+ *
+ * The agent uses this specifically for post-install PATH fixes when TeX
+ * binaries land outside the default `$PATH`.
  */
 export class UpdateShellRcTool extends defineTool({
   name: 'update_shell_rc',
-  description: `Append a single line to the user's shell rc (~/.zshrc, ~/.bashrc, ~/.profile, or the PowerShell profile on Windows). Idempotent — skips if the exact line is already present. Typical use: add a TeX Live bin directory to PATH after installing MacTeX/TeX Live when VS Code was launched without inheriting the shell PATH. A comment marker is written above the new line so the user can trace where it came from.`,
+  description: `Append a single environment-variable assignment to the user's shell rc (~/.zshrc, ~/.bashrc, ~/.profile, or the PowerShell profile on Windows). Only env-var assignments are accepted — command chaining (;, &&, ||, |), command substitution ($(...), \`...\`), redirection, and multi-line input are rejected. Idempotent: skips if the exact trimmed line already appears. Typical use: add a TeX Live bin directory to PATH after installing MacTeX/TeX Live when VS Code was launched without inheriting the shell PATH.`,
   schema: UpdateShellRcInputSchema,
 }) {
   protected async execute(input: UpdateShellRcInput): Promise<ToolResult> {
     const line = input.line.trim();
     if (!line) {
       throw new ToolError('Line cannot be empty or whitespace-only.');
+    }
+
+    if (!isSafeLine(line)) {
+      throw new ToolError(
+        `Refusing to write "${line.slice(0, 80)}": update_shell_rc only accepts environment-variable assignments (e.g. \`export PATH=...\`, \`$env:Path = ...\`). Command chaining, command substitution, and redirection are rejected.`,
+      );
     }
 
     const profilePath = resolveProfilePath(input.profile);
@@ -95,17 +138,22 @@ export class UpdateShellRcTool extends defineTool({
       }
     }
 
-    if (existing.includes(line)) {
+    const existingLines = existing.split('\n').map((l) => l.trim());
+    if (existingLines.includes(line)) {
       return {
         summary: `Shell rc already contains the line`,
         output: `${profilePath} already contains:\n  ${line}\nNo change made.`,
       };
     }
 
-    const prefix = existing.length > 0 && !existing.endsWith('\n') ? '\n' : '';
+    const needsLeadingNewline = existing.length > 0 && !existing.endsWith('\n');
+    const blockParts: string[] = [];
+    if (needsLeadingNewline) blockParts.push('\n');
+    if (existing.length > 0) blockParts.push('\n');
     const marker = input.marker.trim();
-    const block =
-      (marker ? `${prefix}\n${marker}\n` : `${prefix}\n`) + `${line}\n`;
+    if (marker) blockParts.push(`${marker}\n`);
+    blockParts.push(`${line}\n`);
+    const block = blockParts.join('');
 
     await fs.mkdir(path.dirname(profilePath), { recursive: true });
     await fs.appendFile(profilePath, block, 'utf8');
