@@ -2,6 +2,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { existsSync } from 'fs';
 
 // Third-party imports
 import { z } from 'zod';
@@ -118,29 +119,43 @@ function isSafeLineFor(line: string, shell: Shell): boolean {
   return !hasUnquotedSemicolon(line);
 }
 
+/**
+ * Pick the PowerShell profile the user's shell actually loads. Windows
+ * PowerShell 5.1 (pre-installed on all Windows) reads
+ * `Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1`; PowerShell 7+
+ * reads `Documents/PowerShell/Microsoft.PowerShell_profile.ps1`. If only
+ * one of the two files exists, write to that one. If both exist, prefer
+ * PS 7 (the newer path). If neither exists, default to PS 7 as well
+ * because it matches modern installs and the directory will be created.
+ */
+function resolvePowerShellProfile(home: string): string {
+  const ps7 = path.join(
+    home,
+    'Documents',
+    'PowerShell',
+    'Microsoft.PowerShell_profile.ps1',
+  );
+  const ps51 = path.join(
+    home,
+    'Documents',
+    'WindowsPowerShell',
+    'Microsoft.PowerShell_profile.ps1',
+  );
+  const ps7Exists = existsSync(ps7);
+  const ps51Exists = existsSync(ps51);
+  if (ps51Exists && !ps7Exists) return ps51;
+  return ps7;
+}
+
 function resolveProfilePath(profile: UpdateShellRcInput['profile']): string {
   const home = os.homedir();
 
   if (profile === 'zshrc') return path.join(home, '.zshrc');
   if (profile === 'bashrc') return path.join(home, '.bashrc');
   if (profile === 'profile') return path.join(home, '.profile');
-  if (profile === 'powershell') {
-    return path.join(
-      home,
-      'Documents',
-      'PowerShell',
-      'Microsoft.PowerShell_profile.ps1',
-    );
-  }
+  if (profile === 'powershell') return resolvePowerShellProfile(home);
 
-  if (process.platform === 'win32') {
-    return path.join(
-      home,
-      'Documents',
-      'PowerShell',
-      'Microsoft.PowerShell_profile.ps1',
-    );
-  }
+  if (process.platform === 'win32') return resolvePowerShellProfile(home);
   const shell = process.env.SHELL ?? '';
   if (shell.includes('zsh')) return path.join(home, '.zshrc');
   if (shell.includes('bash')) return path.join(home, '.bashrc');

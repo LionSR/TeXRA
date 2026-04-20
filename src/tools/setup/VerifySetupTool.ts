@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
-import { type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@tools/result';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { findToolInCommonPaths } from '@utils/system/platformPaths';
 
@@ -55,8 +55,18 @@ export class VerifySetupTool extends defineTool({
   protected async execute(input: VerifySetupInput): Promise<ToolResult> {
     const platform = getSetupPlatform();
 
-    if (input.tool) {
+    if (input.tool !== undefined && input.tool !== null) {
       const name = input.tool.trim();
+      if (!name) {
+        throw new ToolError(
+          'tool must be a non-empty command name (e.g. "pdflatex"). Call verify_setup with no arguments for a full check.',
+        );
+      }
+      if (!/^[A-Za-z0-9._+\-]+$/.test(name)) {
+        throw new ToolError(
+          `Invalid tool name "${name}". Only alphanumeric characters and \`._+-\` are allowed.`,
+        );
+      }
       const ok = await isToolPresent(name);
       return {
         summary: `Verify ${name}: ${ok ? 'ok' : 'missing'}`,
