@@ -77,8 +77,12 @@ export function formatReviewComment(
   const author = c.user?.login ?? 'someone';
   const line = c.line ?? c.original_line;
   const loc = line ? `${c.path}:${line}` : c.path;
+  const prefix =
+    c.in_reply_to_id != null
+      ? 'Reply to inline review thread'
+      : 'New line review comment';
   return wrap(
-    `New line review comment on ${slug}#${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
+    `${prefix} on ${slug}#${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
   );
 }
 
@@ -124,6 +128,39 @@ export function formatCheckFailureSummary(
   );
   return wrap(
     `${runs.length} CI checks on ${slug}#${prNumber} failed:\n${lines.join('\n')}`,
+  );
+}
+
+/** Non-blocking conclusions: `success`, `neutral` (advisory), `skipped`. */
+export function isPassingConclusion(conclusion: string | null): boolean {
+  return (
+    conclusion === 'success' ||
+    conclusion === 'neutral' ||
+    conclusion === 'skipped'
+  );
+}
+
+export function formatCIPassed(
+  slug: string,
+  prNumber: number,
+  sha: string,
+  runs: GhCheckRun[],
+): string {
+  return wrap(
+    `All ${runs.length} CI checks passed on ${slug}#${prNumber} (head ${sha.slice(0, 7)}).`,
+  );
+}
+
+export function formatCIComplete(
+  slug: string,
+  prNumber: number,
+  sha: string,
+  runs: GhCheckRun[],
+): string {
+  const passed = runs.filter((r) => isPassingConclusion(r.conclusion)).length;
+  const failed = runs.length - passed;
+  return wrap(
+    `CI completed on ${slug}#${prNumber} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
   );
 }
 
