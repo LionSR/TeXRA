@@ -17,11 +17,14 @@ import { AgentLogger } from '@logger/AgentLogger';
 import {
   formatCheckFailure,
   formatCheckFailureSummary,
+  formatCIComplete,
+  formatCIPassed,
   formatIssueComment,
   formatPRClosed,
   formatReview,
   formatReviewComment,
   formatSubscriptionError,
+  isPassingConclusion,
 } from './formatPREvent';
 import { GitHubAuthError, GitHubRateLimitError, ghGet } from './githubClient';
 import type { AsyncEventSource, Disposable } from './AsyncEventSource';
@@ -93,6 +96,10 @@ interface SubscriptionState {
   seenReviewCommentIds: Set<number>;
   seenReviewIds: Set<number>;
   lastFailedCheckKeys: Set<string>;
+  /** Head SHA for which the one-shot "CI complete" event has been emitted. */
+  ciCompleteSha: string | undefined;
+  /** Head SHA for which the one-shot "CI passed" event has been emitted. */
+  ciPassedSha: string | undefined;
   headSha: string | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
@@ -169,6 +176,8 @@ export class PRPollingSource implements AsyncEventSource {
         seenReviewCommentIds: new Set(),
         seenReviewIds: new Set(),
         lastFailedCheckKeys: new Set(),
+        ciCompleteSha: undefined,
+        ciPassedSha: undefined,
         headSha: undefined,
         state: undefined,
         merged: false,
@@ -335,6 +344,12 @@ export class PRPollingSource implements AsyncEventSource {
       }
       state.state = newState;
       state.merged = newMerged;
+      // New push invalidates prior CI terminal state — the next completion
+      // on the new SHA should re-emit both terminal events.
+      if (state.headSha !== newHead) {
+        state.ciCompleteSha = undefined;
+        state.ciPassedSha = undefined;
+      }
       state.headSha = newHead;
     }
 
@@ -380,7 +395,7 @@ export class PRPollingSource implements AsyncEventSource {
           state.etags.reviews,
         ),
         state.headSha
-          ? ghGet<{ check_runs: GhCheckRun[] }>(
+          ? ghGet<{ total_count: number; check_runs: GhCheckRun[] }>(
               `/repos/${pr.owner}/${pr.repo}/commits/${state.headSha}/check-runs?per_page=100`,
               state.etags.checkRuns,
             )
@@ -415,9 +430,28 @@ export class PRPollingSource implements AsyncEventSource {
       }
       if (checksRes.status === 200) {
         state.etags.checkRuns = checksRes.etag;
-        for (const r of checksRes.data.check_runs) {
+        const runs = checksRes.data.check_runs;
+        for (const r of runs) {
           if (this.isCheckFailure(r)) {
             state.lastFailedCheckKeys.add(this.checkKey(r));
+          }
+        }
+        // Seed so pre-existing terminal CI doesn't fire on the next tick —
+        // we only surface transitions that happen after subscribe. Gate on
+        // runs.length > 0: an empty array is ambiguous (no CI configured vs.
+        // runs not yet registered), so "done" isn't meaningful and seeding
+        // would suppress the real terminal event once runs appear. Also
+        // require a complete page — the API caps at per_page=100, so a PR
+        // with more check runs would be evaluated from a truncated list.
+        if (
+          state.headSha &&
+          runs.length > 0 &&
+          runs.length >= checksRes.data.total_count &&
+          runs.every((r) => r.status === 'completed')
+        ) {
+          state.ciCompleteSha = state.headSha;
+          if (runs.every((r) => isPassingConclusion(r.conclusion))) {
+            state.ciPassedSha = state.headSha;
           }
         }
       }
@@ -471,9 +505,10 @@ export class PRPollingSource implements AsyncEventSource {
 
     if (checksRes.status === 200) {
       state.etags.checkRuns = checksRes.etag;
+      const runs = checksRes.data.check_runs;
       const newFailures: GhCheckRun[] = [];
       const currentFailureKeys = new Set<string>();
-      for (const r of checksRes.data.check_runs) {
+      for (const r of runs) {
         if (!this.isCheckFailure(r)) continue;
         const key = this.checkKey(r);
         currentFailureKeys.add(key);
@@ -488,6 +523,43 @@ export class PRPollingSource implements AsyncEventSource {
       } else {
         for (const r of newFailures) {
           this.emit(state, formatCheckFailure(state.slug, pr.pullNumber, r));
+        }
+      }
+
+      // Emit two one-shot events per head SHA: "CI complete" on first
+      // terminal state (any conclusion), then "CI passed" the first time
+      // all checks pass (which may happen via a later rerun). Each is
+      // deduped against its own marker so a rerun turning red→green still
+      // emits "CI passed" even after "CI complete" already fired.
+      //
+      // Gate on `runs.length > 0`: an empty array is ambiguous (no CI
+      // configured vs. runs not yet registered), so "done" isn't meaningful.
+      // Also require a complete page (length >= total_count) — the API caps
+      // at per_page=100, so a PR with more check runs would prematurely
+      // emit a terminal event based on the first page alone.
+      if (
+        state.headSha &&
+        runs.length > 0 &&
+        runs.length >= checksRes.data.total_count &&
+        runs.every((r) => r.status === 'completed')
+      ) {
+        const headSha = state.headSha;
+        if (state.ciCompleteSha !== headSha) {
+          state.ciCompleteSha = headSha;
+          this.emit(
+            state,
+            formatCIComplete(state.slug, pr.pullNumber, headSha, runs),
+          );
+        }
+        if (
+          state.ciPassedSha !== headSha &&
+          runs.every((r) => isPassingConclusion(r.conclusion))
+        ) {
+          state.ciPassedSha = headSha;
+          this.emit(
+            state,
+            formatCIPassed(state.slug, pr.pullNumber, headSha, runs),
+          );
         }
       }
     }
