@@ -127,11 +127,6 @@ async function handleFollowUpResult(
         }
       }
       break;
-    case 'error':
-      await vscode.window.showErrorMessage(
-        `Failed to send follow-up: ${result.message}`,
-      );
-      break;
     case 'no_session':
       await vscode.window.showWarningMessage(
         'No active session. Start a new agent task to continue.',

@@ -23,7 +23,6 @@ import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 export type SendFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued'; reason: 'resuming' | 'waiting' }
-  | { status: 'error'; message: string }
   | { status: 'no_session'; streamStatus: string | undefined };
 
 const logger = new AgentLogger('ToolUseFollowUp');

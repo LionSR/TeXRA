@@ -818,11 +818,6 @@ Git worktree support: ${
             `Execution ID: ${executionId}`,
           ].join('\n'),
         };
-      case 'error':
-        deliveryState.hasDelivered = true;
-        throw new Error(
-          `Failed to send follow-up to '${handle.agentName}': ${result.message}`,
-        );
       case 'no_session':
         deliveryState.hasDelivered = true;
         throw new Error(
