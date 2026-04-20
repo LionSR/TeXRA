@@ -233,6 +233,18 @@ export class StreamTab extends LitElement {
         color: inherit;
       }
 
+      /*
+       * Preserve the destructive-action hover/focus cue on active tabs.
+       * Without this, the .tab-container.is-active .tab-delete rule above
+       * (specificity 0,3,0) would permanently override the base
+       * .tab-delete:hover rule (0,2,0), leaving the close icon stuck on
+       * the inherited foreground.
+       */
+      .tab-container.is-active .tab-delete:hover,
+      .tab-container.is-active .tab-delete:focus-within {
+        color: var(--vscode-errorForeground);
+      }
+
       .tab-container.is-active .tab-meta,
       .tab-container.is-active .tab-description {
         opacity: var(--opacity-full);

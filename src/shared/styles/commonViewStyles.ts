@@ -240,92 +240,6 @@ export const commonViewStyles: CSSResult = css`
     outline-offset: 1px;
   }
 
-  /*
-   * Shared filled primary button.
-   *
-   * Canonical look mirroring \`vscode-button\` for use cases that need a
-   * regular \`<button>\` (e.g. inside templated lists). Prefer this over
-   * reinventing padding/background/focus per component.
-   *
-   * Variant: add \`.filled-button--secondary\` for the secondary tone.
-   */
-  .filled-button {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    padding: var(--spacing-small) var(--spacing-medium);
-    font-size: var(--font-size);
-    font-family: inherit;
-    color: var(--vscode-button-foreground);
-    background: var(--vscode-button-background);
-    border: var(--border-thin) solid var(--vscode-button-border, transparent);
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition:
-      background-color var(--transition-fast),
-      opacity var(--transition-fast);
-  }
-
-  .filled-button:hover {
-    background: var(--vscode-button-hoverBackground);
-  }
-
-  .filled-button:active {
-    opacity: var(--opacity-normal);
-  }
-
-  .filled-button:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
-    outline-offset: 1px;
-  }
-
-  .filled-button--secondary {
-    color: var(--vscode-button-secondaryForeground, inherit);
-    background: var(--vscode-button-secondaryBackground, transparent);
-  }
-
-  .filled-button--secondary:hover {
-    background: var(--vscode-button-secondaryHoverBackground, transparent);
-  }
-
-  /*
-   * Shared panel-card container.
-   *
-   * Canonical VS Code-native card used across settings tabs and side panels.
-   * Prefer this class over reinventing padding/border/radius per component.
-   * Combine with \`.is-selected\` for selection state.
-   */
-  .panel-card {
-    padding: var(--spacing-medium);
-    background-color: var(--vscode-editor-background);
-    border: var(--border-thin) solid var(--color-border);
-    border-radius: var(--border-radius);
-  }
-
-  /*
-   * Shared "selected list/card item" state.
-   *
-   * Apply to any container representing a selected list, tab, or card item.
-   * This is the single canonical treatment — do NOT invent per-file
-   * gradients, custom tints, or color-mix selection backgrounds.
-   *
-   * Descendants that set their own \`color\` (labels, timestamps, badges…)
-   * should add their own \`color: inherit\` rule scoped under the selected
-   * parent so the selection foreground wins over their default.
-   */
-  .is-selected {
-    background-color: var(--vscode-list-activeSelectionBackground);
-    color: var(
-      --vscode-list-activeSelectionForeground,
-      var(--vscode-foreground)
-    );
-  }
-
-  /* Optional left-border accent for selection (used by list panes, not tabs). */
-  .selection-accent-left {
-    border-left: var(--border-medium) solid var(--vscode-focusBorder);
-  }
-
   /* Utility: single-line text truncation with ellipsis */
   .truncate {
     overflow: hidden;
@@ -386,5 +300,59 @@ export const focusRingStyles: CSSResult = css`
     outline: var(--border-thin) solid var(--vscode-focusBorder);
     outline-offset: -1px;
     border-radius: var(--border-radius-small);
+  }
+`;
+
+/**
+ * Shared filled primary button styles.
+ *
+ * Canonical look mirroring `vscode-button` for use cases that need a
+ * regular `<button>` (e.g. inside templated lists or modals). Prefer this
+ * over reinventing padding/background/focus per component.
+ *
+ * Apply via Lit's static styles array:
+ *   static override styles = [designTokens, filledButtonStyles, css`...`];
+ *
+ * Then add the `.filled-button` class to any `<button>`. Add
+ * `.filled-button--secondary` for the secondary tone.
+ */
+export const filledButtonStyles: CSSResult = css`
+  .filled-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    padding: var(--spacing-small) var(--spacing-medium);
+    font-size: var(--font-size);
+    font-family: inherit;
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+    border: var(--border-thin) solid var(--vscode-button-border, transparent);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition:
+      background-color var(--transition-fast),
+      opacity var(--transition-fast);
+  }
+
+  .filled-button:hover {
+    background: var(--vscode-button-hoverBackground);
+  }
+
+  .filled-button:active {
+    opacity: var(--opacity-normal);
+  }
+
+  .filled-button:focus-visible {
+    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+  }
+
+  .filled-button--secondary {
+    color: var(--vscode-button-secondaryForeground, inherit);
+    background: var(--vscode-button-secondaryBackground, transparent);
+  }
+
+  .filled-button--secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground, transparent);
   }
 `;

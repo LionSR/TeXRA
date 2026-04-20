@@ -28,7 +28,7 @@ export const permissionCardStyles: CSSResult = css`
     width: min(92vw, 600px);
     max-height: min(80vh, 44rem);
     overflow: hidden;
-    box-shadow: 0 2px 8px var(--vscode-widget-shadow, transparent);
+    box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.24));
   }
 
   .permission-header {
@@ -76,51 +76,6 @@ export const permissionCardStyles: CSSResult = css`
 
   .primary-actions {
     margin-left: auto;
-  }
-
-  /*
-   * .action-button is the local alias for the shared .filled-button look
-   * used elsewhere. Composed locally rather than via commonViewStyles
-   * since this stylesheet is consumed stand-alone by PermissionCard.
-   * Keep values in sync with .filled-button in commonViewStyles.
-   */
-  .action-button {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    padding: var(--spacing-small) var(--spacing-medium);
-    font-size: var(--font-size);
-    font-family: inherit;
-    color: var(--vscode-button-foreground);
-    background: var(--vscode-button-background);
-    border: var(--border-thin) solid var(--vscode-button-border, transparent);
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition:
-      background-color var(--transition-fast),
-      opacity var(--transition-fast);
-  }
-
-  .action-button:hover {
-    background: var(--vscode-button-hoverBackground);
-  }
-
-  .action-button:active {
-    opacity: var(--opacity-normal);
-  }
-
-  .action-button:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
-    outline-offset: 1px;
-  }
-
-  .action-button--secondary {
-    color: var(--vscode-button-secondaryForeground, inherit);
-    background: var(--vscode-button-secondaryBackground, transparent);
-  }
-
-  .action-button--secondary:hover {
-    background: var(--vscode-button-secondaryHoverBackground, transparent);
   }
 
   .file-path {
