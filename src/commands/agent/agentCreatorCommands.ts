@@ -15,6 +15,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
+import { renderAgentTemplateString } from '@commands/agent/agentTemplateRenderer';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import {
   agentDirectories,
@@ -646,10 +647,15 @@ class GenerateNode extends Node<AgentCreatorShared> {
       `AI generation failed, using template: ${error.message}`,
     );
     const { blueprint } = prepRes;
-    return nunjucksEnv.renderString(blueprint.fallbackTemplate, {
-      ...PASSTHROUGH[blueprint.category],
-      ...blueprint.fallbackVars,
-    });
+    // Route through the shared renderer so both the Settings "new from
+    // template" flow and this fallback produce byte-identical output for
+    // matching inputs. Category-specific passthrough is unnecessary here —
+    // the shared helper passes every runtime token through, and the
+    // bundled templates only reference the ones they need.
+    return renderAgentTemplateString(
+      blueprint.fallbackTemplate,
+      blueprint.fallbackVars,
+    );
   }
 
   async post(

@@ -79,12 +79,32 @@ const DEFAULT_TOOLS_YAML = [
 
 function buildRenderVars(vars: AgentTemplateVars): Record<string, string> {
   return {
-    ...buildPassthrough(),
     AGENT_NAME: vars.agentName,
     DESCRIPTION: vars.description,
     TOOLS_YAML: vars.toolsYaml ?? DEFAULT_TOOLS_YAML,
     OUTPUT_FILES: vars.outputFilesYaml ?? '',
   };
+}
+
+/**
+ * Render a template string with agent-runtime-token passthrough applied.
+ *
+ * Callers pass their own render variables on top of the passthrough so
+ * tokens like `{{ INSTRUCTION }}` that the generated agent expects at
+ * runtime survive this render step. Used by:
+ *  - `renderAgentTemplateFromBundle` below (Settings "new from template")
+ *  - `execFallback` in `agentCreatorCommands.ts` (AI creator fallback)
+ *
+ * Any caller-provided vars win over the passthrough defaults.
+ */
+export function renderAgentTemplateString(
+  templateString: string,
+  vars: Record<string, unknown>,
+): string {
+  return env.renderString(templateString, {
+    ...buildPassthrough(),
+    ...vars,
+  });
 }
 
 export async function renderAgentTemplateFromBundle(
@@ -99,5 +119,5 @@ export async function renderAgentTemplateFromBundle(
     FILES[kind],
   );
   const raw = await AbsoluteFS.read(templatePath);
-  return env.renderString(raw, buildRenderVars(vars));
+  return renderAgentTemplateString(raw, buildRenderVars(vars));
 }
