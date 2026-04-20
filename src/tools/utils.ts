@@ -83,9 +83,10 @@ export function resolveWorkspaceRelativePath(
     }
     const resolved = locatePathInRoot(root, input);
     if (resolved.kind === 'external') {
-      const external = externalAllowance(resolved.absolutePath);
-      if (external) {
-        return external;
+      // `annotateExternal` in `locatePathInRoot` already consulted the
+      // registry, so reuse that match instead of paying for a second lookup.
+      if (resolved.allowed) {
+        return externalResolution(resolved.absolutePath, resolved.allowed);
       }
       throw new ToolError('Path must stay within the working directory.');
     }
@@ -112,23 +113,38 @@ export function resolveWorkspaceRelativePath(
 
   if (resolved.kind === 'external') {
     if (resolved.allowed) {
-      const allowed = resolved.allowed;
-      return {
-        relative: allowed.relative || '.',
-        absolute: resolved.absolutePath,
-        fsPath: resolved.absolutePath,
-        external: {
-          root: allowed.absolutePath,
-          writable: allowed.writable,
-          label: allowed.label,
-        },
-      };
+      return externalResolution(resolved.absolutePath, resolved.allowed);
     }
     throw new ToolError('Path must stay within the workspace.');
   }
 
   const relative = resolved.relativePath || '.';
   return { relative, absolute: resolved.absolutePath, fsPath: relative };
+}
+
+/**
+ * Build a WorkspacePathResolution for an absolute path that sits inside a
+ * registered external root, using a pre-resolved allowlist match.
+ *
+ * `relative` is set to the full absolute path so the display (rendered via
+ * `toPosixPath(relative)`) unambiguously signals an external operation —
+ * agents and users should never confuse an external write with a workspace
+ * write, even when file basenames collide.
+ */
+function externalResolution(
+  absolutePath: string,
+  match: { absolutePath: string; writable: boolean; label: string },
+): WorkspacePathResolution {
+  return {
+    relative: absolutePath,
+    absolute: absolutePath,
+    fsPath: absolutePath,
+    external: {
+      root: match.absolutePath,
+      writable: match.writable,
+      label: match.label,
+    },
+  };
 }
 
 /**
@@ -140,16 +156,7 @@ function externalAllowance(
 ): WorkspacePathResolution | undefined {
   const match = findExternalRoot(absolutePath);
   if (!match) return undefined;
-  return {
-    relative: match.relative || '.',
-    absolute: absolutePath,
-    fsPath: absolutePath,
-    external: {
-      root: match.absolutePath,
-      writable: match.writable,
-      label: match.label,
-    },
-  };
+  return externalResolution(absolutePath, match);
 }
 
 /**

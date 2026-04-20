@@ -14,7 +14,10 @@ import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getListOfFiles, getXmlFormatFromFiles } from '@utils/prompt';
-import { listExternalRoots } from '@utils/files/externalRoots';
+import {
+  listExternalRoots,
+  type ExternalRootKind,
+} from '@utils/files/externalRoots';
 import { setVarFromFile } from '@utils/files/varsUtils';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -161,15 +164,16 @@ function getBasicVars(
  * Inject the absolute paths of registered agent directories as template
  * variables so agents (notably `creator`) can reference the real paths in
  * their system prompts. Reads from the external-roots registry populated at
- * activation — returns empty strings when a root is not registered (e.g.
- * during tests that don't spin up the VS Code setup).
+ * activation — keyed off the stable `kind` field so renaming a user-visible
+ * label cannot break prompt rendering. Absent roots render as empty strings
+ * (e.g. in tests that don't run activation).
  */
 function getAgentDirectoryVars(): UserVars {
-  const LABEL_TO_VAR: Record<string, string> = {
-    'Built-in workflow agents': 'BUILTIN_WORKFLOW_DIR',
-    'Built-in tool-use agents': 'BUILTIN_TOOLUSE_DIR',
-    'Custom agents': 'CUSTOM_AGENTS_DIR',
-    'Agent creation docs': 'AGENT_DOCS_DIR',
+  const KIND_TO_VAR: Record<ExternalRootKind, string> = {
+    builtInWorkflow: 'BUILTIN_WORKFLOW_DIR',
+    builtInToolUse: 'BUILTIN_TOOLUSE_DIR',
+    custom: 'CUSTOM_AGENTS_DIR',
+    agentDocs: 'AGENT_DOCS_DIR',
   };
   const vars: UserVars = {
     BUILTIN_WORKFLOW_DIR: '',
@@ -178,10 +182,7 @@ function getAgentDirectoryVars(): UserVars {
     AGENT_DOCS_DIR: '',
   };
   for (const root of listExternalRoots()) {
-    const key = LABEL_TO_VAR[root.label];
-    if (key) {
-      vars[key] = root.absolutePath;
-    }
+    vars[KIND_TO_VAR[root.kind]] = root.absolutePath;
   }
   return vars;
 }

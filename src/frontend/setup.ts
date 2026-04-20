@@ -150,14 +150,17 @@ export async function registerAgentDirectoryRoots(
     ]);
 
     registerExternalRoot(builtIn, {
+      kind: 'builtInWorkflow',
       writable: false,
       label: 'Built-in workflow agents',
     });
     registerExternalRoot(builtInToolUse, {
+      kind: 'builtInToolUse',
       writable: false,
       label: 'Built-in tool-use agents',
     });
     registerExternalRoot(custom, {
+      kind: 'custom',
       writable: true,
       label: 'Custom agents',
     });
@@ -170,6 +173,7 @@ export async function registerAgentDirectoryRoots(
       'agent-creation',
     );
     registerExternalRoot(docsRoot, {
+      kind: 'agentDocs',
       writable: false,
       label: 'Agent creation docs',
     });
@@ -193,6 +197,7 @@ export async function refreshCustomAgentRoot(): Promise<void> {
       unregisterExternalRoot(currentCustomAgentRoot);
     }
     registerExternalRoot(custom, {
+      kind: 'custom',
       writable: true,
       label: 'Custom agents',
     });
