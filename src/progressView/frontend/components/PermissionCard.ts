@@ -10,6 +10,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { postMessage } from '@shared/vscode';
 import type {
+  AgentOptionData,
   AgentProposalPermission,
   BashPermission,
   ExternalInquiryPermission,
@@ -46,6 +47,7 @@ export type PermissionState =
       kind: typeof PERMISSION_KIND.PROPOSAL;
       data: AgentProposalPermission;
       modelOptions?: ModelOptionData[];
+      agentOptions?: AgentOptionData[];
     }
   | {
       kind: typeof PERMISSION_KIND.PLAN_APPROVAL;

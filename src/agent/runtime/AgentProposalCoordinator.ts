@@ -25,7 +25,7 @@ import {
 
 /** Result of an agent proposal (workflow or tool-use). */
 export type ProposalResult =
-  | { action: 'approve'; model?: string }
+  | { action: 'approve'; model?: string; agent?: string }
   | { action: 'reject'; feedback?: string }
   | { action: 'setup' }
   | { action: 'timeout' };
