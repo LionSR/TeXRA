@@ -367,7 +367,7 @@ const CRITICIZE_INLINE_RE = new RegExp(
 // Whole-line form runs first so a macro occupying its own line is removed
 // without leaving a trailing blank line.
 const CRITICIZE_WHOLE_LINE_RE = new RegExp(
-  String.raw`^[ \t]*\\criticize\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}[ \t]*\r?\n?`,
+  String.raw`^[ \t]*\\criticize\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}[ \t]*$\r?\n?`,
   'gm',
 );
 

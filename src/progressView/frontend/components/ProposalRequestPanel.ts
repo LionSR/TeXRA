@@ -60,10 +60,19 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   @state() private selectedModel: string | null = null;
   @state() private selectedAgent: string | null = null;
 
-  // Reset selections when the rendered proposal changes, so a prior proposal's
-  // stale pick doesn't leak into the next approve.
+  // Reset only on proposalId change, not every permission replacement —
+  // otherwise the async upsert that adds model/agent options wipes the
+  // user's in-progress pick for the same proposal.
   protected override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has('permission')) {
+    if (!changed.has('permission')) return;
+    const previous = changed.get('permission') as
+      | { data?: { proposalId?: string } }
+      | null
+      | undefined;
+    const current = this.permission as
+      | { data?: { proposalId?: string } }
+      | null;
+    if (previous?.data?.proposalId !== current?.data?.proposalId) {
       this.selectedModel = null;
       this.selectedAgent = null;
     }
