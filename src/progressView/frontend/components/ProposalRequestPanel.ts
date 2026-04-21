@@ -46,6 +46,13 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import type { PermissionState } from './PermissionCard';
+
+function proposalIdOf(
+  p: PermissionState | null | undefined,
+): string | undefined {
+  return p?.kind === PERMISSION_KIND.PROPOSAL ? p.data.proposalId : undefined;
+}
 
 @customElement('proposal-request-panel')
 export class ProposalRequestPanel extends BaseFeedbackPanel {
@@ -60,10 +67,13 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   @state() private selectedModel: string | null = null;
   @state() private selectedAgent: string | null = null;
 
-  // Reset selections when the rendered proposal changes, so a prior proposal's
-  // stale pick doesn't leak into the next approve.
+  // Reset selections only when the proposal's identity changes, so an async
+  // permission upsert that just adds dropdown options doesn't wipe the user's
+  // in-progress pick for the same proposal.
   protected override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has('permission')) {
+    if (!changed.has('permission')) return;
+    const previous = changed.get('permission') as PermissionState | null | undefined;
+    if (proposalIdOf(previous) !== proposalIdOf(this.permission)) {
       this.selectedModel = null;
       this.selectedAgent = null;
     }
