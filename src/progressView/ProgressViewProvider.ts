@@ -264,8 +264,10 @@ export class ProgressViewProvider
   private async sendProposalModelOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
-    // Fall back to static metadata if ServerSideKeyService or the agent
-    // registry hasn't finished loading — so the dropdowns still appear.
+    // Model options have a static fallback (buildBasicModelOptionsData) so
+    // the dropdown still appears if ServerSideKeyService isn't ready. Agent
+    // options have no static equivalent, so the agent dropdown is omitted
+    // when the registry fetch fails.
     const isWorkflow = proposal.agentCategory === AGENT_CATEGORY.WORKFLOW;
     const loadAgentOptions = async () => {
       const all = await computeAgentOptionsData();

@@ -340,8 +340,11 @@ async function executeSubagent(
     const modelInfo = meta.modelOverride
       ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
       : `Model: ${configPayload.model}`;
+    const agentInfo = meta.agentOverride
+      ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
+      : '';
     metaLines.push(
-      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.`,
+      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
     );
   }
   return {
