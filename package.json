@@ -116,8 +116,8 @@
           },
           "texra.model.useBackgroundResponses": {
             "type": "boolean",
-            "default": false,
-            "description": "Keep long-running OpenAI requests alive in the background instead of timing out after 10 minutes. Useful for complex tasks but adds slight overhead.",
+            "default": true,
+            "description": "Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.",
             "scope": "resource"
           },
           "texra.model.openaiParallelToolCalls": {
