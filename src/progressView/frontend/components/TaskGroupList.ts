@@ -143,7 +143,6 @@ export class TaskGroupList extends LitElement {
       ? (changedProperties.get('messages') as LogMessageData[] | undefined)
       : undefined;
     const prevCount = prevMessages?.length ?? 0;
-    const prevUngroupedCount = this.cachedUngrouped.length;
 
     if (groupsChanged) {
       // Structural change — always full rebuild
@@ -175,9 +174,11 @@ export class TaskGroupList extends LitElement {
         // Structural change — full timeline rebuild (rare)
         this.cachedTimeline = this.buildFullTimeline();
       } else if (this.messages.length > prevCount) {
-        // Append-only: add new ungrouped entries to timeline.
-        // Grouped messages are already referenced via tree nodes in timeline entries.
-        this.appendToTimeline(prevUngroupedCount);
+        // Append-only: classify each new message and insert ungrouped ones
+        // into the timeline. Iterate the messages slice (not the ungrouped
+        // array) so a new message spliced into the middle of cachedUngrouped
+        // by appendNewMessages still gets picked up.
+        this.appendToTimeline(prevCount);
         // LOG_DELTA may also mutate existing timeline entries in the same batch.
         this.updateTimelineMessageRefs();
       } else {
@@ -387,10 +388,21 @@ export class TaskGroupList extends LitElement {
     ].sort((a, b) => a.time - b.time);
   }
 
-  /** Append new ungrouped messages to the timeline in sorted order. */
-  private appendToTimeline(prevUngroupedCount: number): void {
-    for (let i = prevUngroupedCount; i < this.cachedUngrouped.length; i++) {
-      const m = this.cachedUngrouped[i];
+  /**
+   * Insert timeline entries for ungrouped messages appended since `startIndex`.
+   * Grouped messages are already referenced via their tree node in timeline,
+   * so we skip them here. Iterating the messages slice — rather than the
+   * cachedUngrouped array — keeps this correct when a message with an earlier
+   * timestamp gets spliced into the middle of cachedUngrouped by
+   * appendNewMessages.
+   */
+  private appendToTimeline(startIndex: number): void {
+    for (let i = startIndex; i < this.messages.length; i++) {
+      const m = this.messages[i];
+      const inGroupNode = m.groupId
+        ? this.groupNodeIndex.has(m.groupId)
+        : false;
+      if (inGroupNode) continue;
       const entry = { key: m.id, time: m.timestamp ?? 0, msg: m };
       const lastTime =
         this.cachedTimeline.length > 0
