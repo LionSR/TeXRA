@@ -18,17 +18,18 @@ import {
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
+import { computeAgentOptionsData } from '@agent/index';
 import type {
   AgentProposalPermission,
   BashPermission,
   ExternalInquiryPermission,
-  ModelOptionData,
   PlanApprovalPermission,
   ProgressViewPlacement,
   StorageKey,
   StreamTabId,
   ToolEditPermission,
 } from '@shared/schemas';
+import { AGENT_CATEGORY } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import { ProgressEventHandler } from './events/ProgressEventHandler';
@@ -263,19 +264,23 @@ export class ProgressViewProvider
   private async sendProposalModelOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
-    let modelOptions: ModelOptionData[];
-    try {
-      modelOptions = await computeModelOptionsData();
-    } catch {
-      // Availability check failed (e.g. ServerSideKeyService not yet initialized) —
-      // fall back to static model metadata so the dropdown still appears.
-      modelOptions = buildBasicModelOptionsData();
-    }
+    // Fall back to static metadata if ServerSideKeyService or the agent
+    // registry hasn't finished loading — so the dropdowns still appear.
+    const isWorkflow = proposal.agentCategory === AGENT_CATEGORY.WORKFLOW;
+    const [modelOptions, agentOptions] = await Promise.all([
+      computeModelOptionsData().catch(() => buildBasicModelOptionsData()),
+      computeAgentOptionsData()
+        .then((all) => (isWorkflow ? all.workflow : all.toolUse))
+        // proposal.agent is a plain name (not source/name), so use label as value.
+        .then((raw) => raw.map((opt) => ({ ...opt, value: opt.label })))
+        .catch(() => undefined),
+    ]);
     if (!this.agentProposalHandler.get(proposal.proposalId)) return;
     this.webviewUpdater.showPermission({
       kind: PERMISSION_KIND.PROPOSAL,
       data: proposal,
       modelOptionsData: modelOptions,
+      agentOptionsData: agentOptions,
     });
   }
 
