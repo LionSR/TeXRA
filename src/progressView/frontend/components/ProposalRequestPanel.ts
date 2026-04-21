@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -70,9 +70,13 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // Reset selections only when the proposal's identity changes, so an async
   // permission upsert that just adds dropdown options doesn't wipe the user's
   // in-progress pick for the same proposal.
-  protected override willUpdate(changed: Map<string, unknown>): void {
+  protected override willUpdate(changed: PropertyValues): void {
+    super.willUpdate(changed);
     if (!changed.has('permission')) return;
-    const previous = changed.get('permission') as PermissionState | null | undefined;
+    const previous = changed.get('permission') as
+      | PermissionState
+      | null
+      | undefined;
     if (proposalIdOf(previous) !== proposalIdOf(this.permission)) {
       this.selectedModel = null;
       this.selectedAgent = null;
