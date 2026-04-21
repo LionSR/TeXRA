@@ -49,6 +49,17 @@ const SETUP_INSTRUCTION =
   'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
 
 /**
+ * Result of launch-model resolution. `restoreOpenRouter` is populated when
+ * we temporarily flipped the global `useOpenRouter` flag so that the
+ * caller can restore the prior value once the setup agent finishes.
+ */
+interface LaunchModelResolution {
+  model: string;
+  /** Prior value of the `useOpenRouter` flag if we flipped it, else undefined. */
+  restoreOpenRouter?: boolean;
+}
+
+/**
  * Pick a model the setup agent can actually call, given the credentials
  * the user currently has. Order:
  *   1. Researcher Access — only when the user's "Use Included Access"
@@ -60,29 +71,38 @@ const SETUP_INSTRUCTION =
  *      `SecretManager.API_PROVIDERS` order). Preferred over OpenRouter
  *      so we don't have to flip the global `useOpenRouter` flag.
  *   3. Only then, if `openRouter` is the sole provider with a key, do we
- *      enable `useOpenRouter` (a sticky global setting) and pick the
- *      OpenRouter-backed default. Doing this only as a last resort means
- *      a user with `openRouter + anthropic` doesn't have their other
- *      agents silently rerouted through OpenRouter the next time.
+ *      temporarily enable `useOpenRouter` and pick the OpenRouter-backed
+ *      default. The prior value is captured in `restoreOpenRouter` so
+ *      the caller can reset the flag after the setup agent completes —
+ *      otherwise running setup once would permanently reroute the user's
+ *      other agent runs through OpenRouter.
  */
-async function resolveLaunchModel(): Promise<string> {
+async function resolveLaunchModel(): Promise<LaunchModelResolution> {
   if (await getServerSideKeyService().canUseServerSideKeys()) {
-    return SIGNED_IN_SETUP_MODEL;
+    return { model: SIGNED_IN_SETUP_MODEL };
   }
 
   for (const provider of SecretManager.API_PROVIDERS) {
     if (provider === 'openRouter') continue;
     if (await SecretManager.apiKeyExists(provider)) {
-      return API_KEY_MODEL_BY_PROVIDER[provider] ?? SIGNED_IN_SETUP_MODEL;
+      return {
+        model: API_KEY_MODEL_BY_PROVIDER[provider] ?? SIGNED_IN_SETUP_MODEL,
+      };
     }
   }
 
   if (await SecretManager.apiKeyExists('openRouter')) {
-    await globalSM.update(GlobalStateKey.USE_OPENROUTER, true);
-    return API_KEY_MODEL_BY_PROVIDER.openRouter ?? SIGNED_IN_SETUP_MODEL;
+    const prior = globalSM.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
+    if (!prior) {
+      await globalSM.update(GlobalStateKey.USE_OPENROUTER, true);
+    }
+    return {
+      model: API_KEY_MODEL_BY_PROVIDER.openRouter ?? SIGNED_IN_SETUP_MODEL,
+      restoreOpenRouter: prior,
+    };
   }
 
-  return SIGNED_IN_SETUP_MODEL;
+  return { model: SIGNED_IN_SETUP_MODEL };
 }
 
 /**
@@ -146,17 +166,35 @@ async function runSetupAssistant(): Promise<void> {
       return;
     }
 
-    const model = await resolveLaunchModel();
+    const resolution = await resolveLaunchModel();
     const config = AgentConfigSchema.parse({
       agent: 'setup',
       agentCategory: 'toolUse',
-      model,
+      model: resolution.model,
       instruction: SETUP_INSTRUCTION,
     });
 
     const executionId = generateExecutionId();
     await registerExecution(executionId, config, config.agent);
-    await executeAgent(config, executionId);
+    try {
+      await executeAgent(config, executionId);
+    } finally {
+      // If we flipped the global OpenRouter routing flag to launch a
+      // router-backed setup model, restore the prior value now that the
+      // setup run has finished. Leaving it sticky would silently reroute
+      // the user's other agents through OpenRouter on subsequent runs.
+      if (resolution.restoreOpenRouter !== undefined) {
+        await globalSM
+          .update(GlobalStateKey.USE_OPENROUTER, resolution.restoreOpenRouter)
+          .then(undefined, (err) => {
+            logger.error(
+              CHANNEL,
+              'Failed to restore useOpenRouter flag after setup.',
+              { data: err },
+            );
+          });
+      }
+    }
   } catch (error) {
     logger.error(CHANNEL, 'Setup assistant failed to launch.', { data: error });
     void vscode.window.showErrorMessage(
