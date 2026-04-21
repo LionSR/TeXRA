@@ -26,7 +26,7 @@ import { formatRelativeTime } from '@shared/utils/string';
 import { layoutStyles } from '../styles/logStyles';
 import { ELEMENT_IDS, FILTER_BUTTONS, SORT_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
-import { getComposedPathElement, getRadioValue } from '../utils';
+import { getComposedPathElement, getRadioValue, setsEqual } from '../utils';
 import type { StreamFilter, StreamSort } from '../store';
 
 /** Stream statuses considered active (non-terminal) for child stream display. */
@@ -36,6 +36,23 @@ const ACTIVE_CHILD_STATUSES: ReadonlySet<string> = new Set([
   STREAM_STATUS.INITIALIZING,
   STREAM_STATUS.RESUMING,
 ]);
+
+type ChildActivity = 'active' | 'finished' | 'unknown';
+
+/**
+ * Classify a child stream's lifecycle. Absent entries in `streamStates`
+ * (e.g., child just appeared in `childStreamsByParent` before its first
+ * status event) are `unknown` — neither active nor finished — so the
+ * parent's expand/collapse decision can wait for a real signal.
+ */
+function classifyChild(
+  streamStates: ReadonlyMap<StreamTabId, StreamState>,
+  name: StreamTabId,
+): ChildActivity {
+  const status = streamStates.get(name)?.status;
+  if (status === undefined) return 'unknown';
+  return ACTIVE_CHILD_STATUSES.has(status) ? 'active' : 'finished';
+}
 
 function buildTooltip(
   info: StreamTabInfo,
@@ -566,79 +583,62 @@ export class StreamTabs extends LitElement {
   @property({ attribute: false })
   childStreamsByParent: Map<string, StreamTabInfo[]> = new Map();
 
-  /** Which parent streams have their child list expanded. */
+  /** Which parent streams have their child list expanded — derived from
+   *  inputs + `userOverride` on every reactive update. Not a source of truth. */
   @state() private expandedParents: Set<string> = new Set();
 
   /**
-   * Parents the user has manually collapsed. Auto-expand won't override
-   * these — only cleared when all children finish (parent leaves the map).
+   * Per-parent user intent that overrides the auto-expand/collapse rules.
+   * Entries live as long as the parent is in `childStreamsByParent`; a new
+   * appearance (new run) starts from auto. One map replaces the former
+   * `manuallyCollapsed` + `finishedCollapseHandled` sets.
    */
-  private manuallyCollapsed: Set<string> = new Set();
+  private userOverride: Map<string, 'expanded' | 'collapsed'> = new Map();
+
+  protected override willUpdate(changed: import('lit').PropertyValues): void {
+    if (!changed.has('childStreamsByParent') && !changed.has('streamStates'))
+      return;
+
+    for (const parentId of this.userOverride.keys()) {
+      if (!this.childStreamsByParent.has(parentId)) {
+        this.userOverride.delete(parentId);
+      }
+    }
+
+    const next = new Set<string>();
+    for (const [parentId, children] of this.childStreamsByParent) {
+      if (this.computeExpanded(parentId, children)) next.add(parentId);
+    }
+
+    if (!setsEqual(next, this.expandedParents)) this.expandedParents = next;
+  }
 
   /**
-   * Parents where the "all children finished" transition has already been
-   * handled — either we auto-collapsed, or the user manually expanded after.
-   * Prevents re-collapsing a parent the user has chosen to keep open.
-   * Cleared when any child becomes active again (new run).
+   * Single source of truth for "is this parent's child list expanded?".
+   * Rules (top to bottom):
+   *   1. Honor user intent if set.
+   *   2. Expand if any child is actively running.
+   *   3. Collapse once all children have reached a terminal status.
+   *   4. Otherwise (mixed / still-unknown), keep expanded — default on
+   *      first appearance before status events arrive.
    */
-  private finishedCollapseHandled: Set<string> = new Set();
+  private computeExpanded(
+    parentId: string,
+    children: readonly StreamTabInfo[],
+  ): boolean {
+    const override = this.userOverride.get(parentId);
+    if (override) return override === 'expanded';
 
-  /** Auto-expand when children appear, auto-collapse when gone or finished. */
-  protected override willUpdate(changed: import('lit').PropertyValues): void {
-    const childrenChanged = changed.has('childStreamsByParent');
-    const statesChanged = changed.has('streamStates');
-    if (!childrenChanged && !statesChanged) return;
-
-    let dirty = false;
-    const next = new Set(this.expandedParents);
-
-    if (childrenChanged) {
-      for (const parentId of this.childStreamsByParent.keys()) {
-        if (!next.has(parentId) && !this.manuallyCollapsed.has(parentId)) {
-          next.add(parentId);
-          dirty = true;
-        }
-      }
-      for (const parentId of next) {
-        if (!this.childStreamsByParent.has(parentId)) {
-          next.delete(parentId);
-          this.manuallyCollapsed.delete(parentId);
-          this.finishedCollapseHandled.delete(parentId);
-          dirty = true;
-        }
-      }
-      // Parents dropped from `next` above are already cleaned; these passes
-      // cover parents still tracked but no longer in childStreamsByParent.
-      for (const parentId of this.manuallyCollapsed) {
-        if (!this.childStreamsByParent.has(parentId)) {
-          this.manuallyCollapsed.delete(parentId);
-        }
-      }
-      for (const parentId of this.finishedCollapseHandled) {
-        if (!this.childStreamsByParent.has(parentId)) {
-          this.finishedCollapseHandled.delete(parentId);
-        }
-      }
+    let anyActive = false;
+    let anyUnknown = false;
+    for (const child of children) {
+      const activity = classifyChild(this.streamStates, child.name);
+      if (activity === 'active') anyActive = true;
+      else if (activity === 'unknown') anyUnknown = true;
     }
-
-    // Auto-collapse once per finish-transition; reset when a child reactivates.
-    for (const parentId of next) {
-      const children = this.childStreamsByParent.get(parentId);
-      if (!children) continue;
-      const allFinished = children.every(
-        (c) => !ACTIVE_CHILD_STATUSES.has(this.getStatus(c.name)),
-      );
-      if (!allFinished) {
-        this.finishedCollapseHandled.delete(parentId);
-        continue;
-      }
-      if (this.finishedCollapseHandled.has(parentId)) continue;
-      next.delete(parentId);
-      this.finishedCollapseHandled.add(parentId);
-      dirty = true;
-    }
-
-    if (dirty) this.expandedParents = next;
+    if (anyActive) return true;
+    if (anyUnknown) return true;
+    return false;
   }
 
   private getStatus(name: StreamTabId): string {
@@ -674,7 +674,7 @@ export class StreamTabs extends LitElement {
                 // prettier-ignore
                 return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${childCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded}>${repeat(children, (child) => child.name, (child) => {
                   const childStatus = this.getStatus(child.name);
-                  const isFinished = !ACTIVE_CHILD_STATUSES.has(childStatus);
+                  const isFinished = classifyChild(this.streamStates, child.name) === 'finished';
                   // prettier-ignore
                   return html`<stream-tab class=${isFinished ? 'is-finished' : ''} .info=${child} .compact=${false} .status=${childStatus} .lastTimestamp=${this.getTimestamp(child.name)} ?active=${child.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(child.name)}></stream-tab>`;
                 })}</div>` : nothing}`;
@@ -775,16 +775,10 @@ export class StreamTabs extends LitElement {
 
   private toggleChildren(parentId: string): void {
     const next = new Set(this.expandedParents);
-    if (next.has(parentId)) {
-      next.delete(parentId);
-      this.manuallyCollapsed.add(parentId);
-    } else {
-      next.add(parentId);
-      this.manuallyCollapsed.delete(parentId);
-      // Mark finish-transition as handled so willUpdate doesn't immediately
-      // re-collapse a parent the user just chose to expand.
-      this.finishedCollapseHandled.add(parentId);
-    }
+    const nowExpanded = !next.has(parentId);
+    if (nowExpanded) next.add(parentId);
+    else next.delete(parentId);
+    this.userOverride.set(parentId, nowExpanded ? 'expanded' : 'collapsed');
     this.expandedParents = next;
   }
 
