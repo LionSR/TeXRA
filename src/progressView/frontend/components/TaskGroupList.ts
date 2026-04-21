@@ -170,8 +170,9 @@ export class TaskGroupList extends LitElement {
     // Used by both tool-use and workflow streams so the user's original
     // instruction (the earliest ungrouped message) stays at the top.
     if (groupsChanged || messagesChanged) {
-      if (groupsChanged) {
-        // Structural change — full timeline rebuild (rare)
+      if (groupsChanged || this.messages.length < prevCount) {
+        // Structural change, or messages shrunk (e.g. clear/resync) —
+        // removed IDs must be pruned from cachedTimeline, so rebuild.
         this.cachedTimeline = this.buildFullTimeline();
       } else if (this.messages.length > prevCount) {
         // Append-only: classify each new message and insert ungrouped ones
@@ -182,8 +183,8 @@ export class TaskGroupList extends LitElement {
         // LOG_DELTA may also mutate existing timeline entries in the same batch.
         this.updateTimelineMessageRefs();
       } else {
-        // Same-length (streaming update): update msg refs on timeline entries in-place.
-        // guard([item.msg]) in render() detects new refs.
+        // Same length — streaming update. guard([item.msg]) in render()
+        // detects new refs on existing timeline entries.
         this.updateTimelineMessageRefs();
       }
     }
