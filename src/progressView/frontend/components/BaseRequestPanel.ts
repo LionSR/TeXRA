@@ -28,6 +28,7 @@ export abstract class BaseRequestPanel extends LitElement {
     action: string,
     feedback?: string,
     modelOverride?: string,
+    agentOverride?: string,
   ): void {
     this.dispatchEvent(
       ProgressEvents.permissionAction({
@@ -35,6 +36,7 @@ export abstract class BaseRequestPanel extends LitElement {
         action,
         feedback,
         modelOverride,
+        agentOverride,
       }),
     );
   }
