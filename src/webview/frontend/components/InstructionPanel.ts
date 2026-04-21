@@ -68,7 +68,7 @@ function getSessionTitle(type: SessionType): string {
 }
 
 function resolveSessionHintKey(session: SessionContextValue): SessionHintKey {
-  if (session.sessionType === 'toolUse') {
+  if (session.sessionType === SESSION_TYPES.TOOL_USE) {
     const opt = session.toolUseAgentOptions.find(
       (o) => o.value === session.toolUseAgent,
     );
