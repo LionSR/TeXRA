@@ -18,6 +18,7 @@ import { hasExtension } from '@utils/core/pathCore';
 // Local file imports
 import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
+import { resolveLatexDir } from './latexParsingUtils';
 import { tikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
 
@@ -47,7 +48,10 @@ export class LatexMediaManager {
       return;
     }
 
-    const baseDir = path.dirname(latexFile.absolutePath);
+    // Resolve against the workspace directory so figure paths from a
+    // run-storage symlink map back to real workspace files (otherwise
+    // mirrorWorkspaceFile would classify them as external and skip).
+    const baseDir = await resolveLatexDir(latexFile.absolutePath);
     const targetLocations = new Set<FileLocation>();
     for (const relative of figures) {
       const trimmed = relative?.trim();
@@ -189,6 +193,34 @@ export class LatexMediaManager {
     );
   }
 
+  /**
+   * Mirror figure dependencies from LaTeX files into run storage without
+   * adding figures to the model's vision context. Used for output files
+   * (round 1+) so newly-referenced figures are available for PDF compilation
+   * but not re-sent to the model on every round.
+   */
+  private async mirrorFiguresForFiles(files: FileLocation[]): Promise<void> {
+    if (!this.fileService?.hasRunDirectory() || files.length === 0) {
+      return;
+    }
+
+    await pMap(
+      files,
+      async (file) => {
+        try {
+          const figures = await extractFigurePathsFromLatex(file);
+          if (figures.length === 0) return;
+          await this.mirrorFigureDependencies(file, figures);
+        } catch (error) {
+          this.logger.debug(
+            `Unable to mirror figures from ${file.absolutePath}: ${toErrorMessage(error)}`,
+          );
+        }
+      },
+      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
+    );
+  }
+
   private async extractFiguresFromFiles(
     files: FileLocation[],
     workspaceState: AgentWorkspaceState,
@@ -217,7 +249,10 @@ export class LatexMediaManager {
         `Extracted ${figures.length} figures from ${file.absolutePath}`,
       );
 
-      const baseDir = path.dirname(file.absolutePath);
+      // Match the resolution in extractFigurePathsFromLatex so the returned
+      // figure paths (relative to the real latexDir) map back to workspace
+      // files when the .tex is symlinked into run storage.
+      const baseDir = await resolveLatexDir(file.absolutePath);
       const fileLocations = figures.map((relativePath) => {
         const absolutePath = path.normalize(path.join(baseDir, relativePath));
         return pathToLocation(absolutePath);
@@ -282,14 +317,21 @@ export class LatexMediaManager {
     cfg: ToolConfig,
     supportsVision: boolean,
     {
-      includeFigureExtraction,
+      figureMode,
       mirrorFileDependencies,
       includeTikzCompilation,
       includePdfCompilation,
       extraMediaFiles = [],
       logTikzSummary = false,
     }: {
-      includeFigureExtraction: boolean;
+      /**
+       * How to handle \includegraphics figures:
+       *  - 'extract': discover + add to vision context + mirror into run storage
+       *  - 'mirror':  discover + mirror only (no vision)
+       *  - 'none':    skip
+       * All modes are additionally gated by `cfg.autoExtractFigure`.
+       */
+      figureMode: 'extract' | 'mirror' | 'none';
       mirrorFileDependencies: boolean;
       includeTikzCompilation: boolean;
       includePdfCompilation: boolean;
@@ -322,8 +364,12 @@ export class LatexMediaManager {
       workspaceState.media.addMediaFiles(fileLocations);
     }
 
-    if (includeFigureExtraction && cfg.autoExtractFigure) {
-      await this.extractFiguresFromFiles(existingFiles, workspaceState);
+    if (cfg.autoExtractFigure) {
+      if (figureMode === 'extract') {
+        await this.extractFiguresFromFiles(existingFiles, workspaceState);
+      } else if (figureMode === 'mirror') {
+        await this.mirrorFiguresForFiles(existingFiles);
+      }
     }
 
     if (mirrorFileDependencies) {
@@ -359,7 +405,7 @@ export class LatexMediaManager {
     extraMediaFiles: PathInput[] = [],
   ): Promise<void> {
     await this.processFiles(inputFiles, workspaceState, cfg, supportsVision, {
-      includeFigureExtraction: true,
+      figureMode: 'extract',
       mirrorFileDependencies: true,
       includeTikzCompilation: true,
       includePdfCompilation: true,
@@ -369,7 +415,11 @@ export class LatexMediaManager {
   }
 
   /**
-   * Process output files to compile TikZ pictures and PDFs, attach texcount.
+   * Process output files to compile TikZ pictures and PDFs.
+   *
+   * Mirrors newly-referenced figure and \input dependencies into run storage
+   * so agent-introduced references compile outside the workspace. Figures are
+   * mirrored only (not added to vision context) — they were sent on round 0.
    */
   async processOutputFiles(
     outputFiles: FileLocation[],
@@ -378,8 +428,8 @@ export class LatexMediaManager {
     supportsVision: boolean,
   ): Promise<void> {
     await this.processFiles(outputFiles, workspaceState, cfg, supportsVision, {
-      includeFigureExtraction: false,
-      mirrorFileDependencies: false,
+      figureMode: 'mirror',
+      mirrorFileDependencies: true,
       includeTikzCompilation: true,
       includePdfCompilation: true,
     });
