@@ -63,7 +63,11 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // Reset selections when the rendered proposal changes, so a prior proposal's
   // stale pick doesn't leak into the next approve.
   protected override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has('permission')) {
+    if (!changed.has('permission')) return;
+    type MaybeProposal = { data?: { proposalId?: string } } | null | undefined;
+    const previous = changed.get('permission') as MaybeProposal;
+    const current = this.permission as MaybeProposal;
+    if (previous?.data?.proposalId !== current?.data?.proposalId) {
       this.selectedModel = null;
       this.selectedAgent = null;
     }
