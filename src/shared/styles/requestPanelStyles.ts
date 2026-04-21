@@ -408,21 +408,32 @@ export const requestPanelStyles: CSSResult = css`
     margin-right: var(--spacing-small);
   }
 
+  .workflow-proposal__agent-select,
   .workflow-proposal__model-select {
     display: flex;
     align-items: center;
     gap: var(--spacing-small);
-    margin-left: auto;
   }
 
+  .workflow-proposal__agent-select .codicon,
   .workflow-proposal__model-select .codicon {
     color: var(--vscode-descriptionForeground);
     flex-shrink: 0;
   }
 
+  /* Model dropdown floats to the right edge of the header row. */
+  .workflow-proposal__model-select {
+    margin-left: auto;
+  }
+
   .proposal-model-dropdown {
     min-width: 8rem;
     max-width: 12rem;
+  }
+
+  .proposal-agent-dropdown {
+    min-width: 7rem;
+    max-width: 11rem;
   }
 
   .workflow-proposal__instruction {
