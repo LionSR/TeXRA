@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -46,6 +46,13 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import type { PermissionState } from './PermissionCard';
+
+function proposalIdOf(
+  p: PermissionState | null | undefined,
+): string | undefined {
+  return p?.kind === PERMISSION_KIND.PROPOSAL ? p.data.proposalId : undefined;
+}
 
 @customElement('proposal-request-panel')
 export class ProposalRequestPanel extends BaseFeedbackPanel {
@@ -60,19 +67,17 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   @state() private selectedModel: string | null = null;
   @state() private selectedAgent: string | null = null;
 
-  // Reset only on proposalId change, not every permission replacement —
-  // otherwise the async upsert that adds model/agent options wipes the
-  // user's in-progress pick for the same proposal.
-  protected override willUpdate(changed: Map<string, unknown>): void {
+  // Reset selections only when the proposal's identity changes, so an async
+  // permission upsert that just adds dropdown options doesn't wipe the user's
+  // in-progress pick for the same proposal.
+  protected override willUpdate(changed: PropertyValues): void {
+    super.willUpdate(changed);
     if (!changed.has('permission')) return;
     const previous = changed.get('permission') as
-      | { data?: { proposalId?: string } }
+      | PermissionState
       | null
       | undefined;
-    const current = this.permission as
-      | { data?: { proposalId?: string } }
-      | null;
-    if (previous?.data?.proposalId !== current?.data?.proposalId) {
+    if (proposalIdOf(previous) !== proposalIdOf(this.permission)) {
       this.selectedModel = null;
       this.selectedAgent = null;
     }

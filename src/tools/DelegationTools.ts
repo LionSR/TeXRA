@@ -486,6 +486,22 @@ async function proposeAndExecute(
     result.agent !== proposal.agent
       ? result.agent
       : undefined;
+
+  // Re-validate against the current registry — between proposal display and
+  // approval the agent may have been removed/renamed, or the approval could
+  // carry a malformed value. Fail fast so the orchestrator sees the problem
+  // synchronously instead of after an async launch.
+  if (agentOverride) {
+    const visible = getVisibleAgents(proposal.agentCategory);
+    if (!visible.some((a) => a.name === agentOverride)) {
+      return {
+        summary: `Approved agent override '${agentOverride}' is not available`,
+        output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
+        isError: true,
+      };
+    }
+  }
+
   const effective = {
     ...proposal,
     ...(modelOverride && { model: modelOverride }),

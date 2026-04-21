@@ -269,13 +269,15 @@ export class ProgressViewProvider
     // options have no static equivalent, so the agent dropdown is omitted
     // when the registry fetch fails.
     const isWorkflow = proposal.agentCategory === AGENT_CATEGORY.WORKFLOW;
+    const loadAgentOptions = async () => {
+      const all = await computeAgentOptionsData();
+      const raw = isWorkflow ? all.workflow : all.toolUse;
+      // proposal.agent is a plain name (not source/name), so use label as value.
+      return raw.map((opt) => ({ ...opt, value: opt.label }));
+    };
     const [modelOptions, agentOptions] = await Promise.all([
       computeModelOptionsData().catch(() => buildBasicModelOptionsData()),
-      computeAgentOptionsData()
-        .then((all) => (isWorkflow ? all.workflow : all.toolUse))
-        // proposal.agent is a plain name (not source/name), so use label as value.
-        .then((raw) => raw.map((opt) => ({ ...opt, value: opt.label })))
-        .catch(() => undefined),
+      loadAgentOptions().catch(() => undefined),
     ]);
     if (!this.agentProposalHandler.get(proposal.proposalId)) return;
     this.webviewUpdater.showPermission({

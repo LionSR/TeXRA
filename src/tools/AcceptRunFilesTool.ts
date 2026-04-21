@@ -163,10 +163,10 @@ Optional:
         }
 
         const rawContent = await flexibleFS.read(sourceLocation);
-        const stripped = strip_criticize
-          ? stripCriticizeAnnotations(rawContent)
-          : { content: rawContent, count: 0 };
-        const proposedContent = stripped.content;
+        const { content: proposedContent, count: strippedCount } =
+          strip_criticize
+            ? stripCriticizeAnnotations(rawContent)
+            : { content: rawContent, count: 0 };
         const destExists = await WorkspaceFS.exists(dest.relativePath);
 
         // Determine original content for diff display
@@ -188,7 +188,7 @@ Optional:
           proposedContent,
           originalContent,
           destExists,
-          strippedCount: stripped.count,
+          strippedCount,
         };
       }),
     );
