@@ -199,6 +199,8 @@ interface ApprovalMeta {
   autoApproved: boolean;
   modelOverride?: string;
   requestedModel?: string;
+  agentOverride?: string;
+  requestedAgent?: string;
 }
 
 /**
@@ -475,19 +477,37 @@ async function proposeAndExecute(
 
   // At this point result.action === 'approve' (all other cases returned above)
   const modelOverride = result.action === 'approve' ? result.model : undefined;
-  const effective = modelOverride
-    ? { ...proposal, model: modelOverride }
-    : proposal;
-  return executeSubagent(toConfigPayload(effective), agentName, streamId, {
-    enableYoloOnChild: isApprovalBypassedForStream(streamId),
-    approvalMeta: {
-      autoApproved: false,
-      ...(modelOverride && {
-        modelOverride,
-        requestedModel: proposal.model,
-      }),
+  const agentOverride =
+    result.action === 'approve' &&
+    result.agent &&
+    result.agent !== proposal.agent
+      ? result.agent
+      : undefined;
+  const effective = {
+    ...proposal,
+    ...(modelOverride && { model: modelOverride }),
+    ...(agentOverride && { agent: agentOverride }),
+  };
+  const effectiveAgentName = agentOverride ?? agentName;
+  return executeSubagent(
+    toConfigPayload(effective),
+    effectiveAgentName,
+    streamId,
+    {
+      enableYoloOnChild: isApprovalBypassedForStream(streamId),
+      approvalMeta: {
+        autoApproved: false,
+        ...(modelOverride && {
+          modelOverride,
+          requestedModel: proposal.model,
+        }),
+        ...(agentOverride && {
+          agentOverride,
+          requestedAgent: proposal.agent,
+        }),
+      },
     },
-  });
+  );
 }
 
 // ============================================================================
