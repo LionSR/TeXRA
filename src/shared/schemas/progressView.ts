@@ -247,6 +247,7 @@ const PermissionPayloadSchema = z.discriminatedUnion('kind', [
     kind: z.literal('proposal'),
     data: AgentProposalPermissionSchema,
     modelOptionsData: z.array(ModelOptionDataSchema).optional(),
+    agentOptionsData: z.array(AgentOptionDataSchema).optional(),
   }),
   z.object({
     kind: z.literal('planApproval'),
@@ -600,6 +601,7 @@ const AgentProposalActionMessageSchema = z.object({
   action: z.enum(['approve', 'reject', 'setup']),
   feedback: z.string().optional(),
   model: z.string().optional(),
+  agent: z.string().optional(),
 });
 
 const PlanApprovalActionMessageSchema = z.object({

@@ -571,6 +571,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         proposalCoordinator.resolveRequest(proposalId, {
           action: 'approve',
           model: data.model,
+          agent: data.agent,
         });
         break;
       case 'reject':

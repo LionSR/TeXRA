@@ -273,7 +273,8 @@ export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
   ctx: MessageHandlerContext,
 ): void {
-  const { permission, action, feedback, modelOverride, answer } = event.detail;
+  const { permission, action, feedback, modelOverride, agentOverride, answer } =
+    event.detail;
   const { sessionLinks } = event.detail;
 
   switch (permission.kind) {
@@ -326,6 +327,7 @@ export function handlePermissionAction(
         action,
         feedback,
         model: modelOverride,
+        agent: agentOverride,
       });
       // Optimistic removal — track resolved ID so late SHOW is a no-op
       const removed = removePrompt(
