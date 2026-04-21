@@ -17,7 +17,11 @@ import {
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
-import { legacyWorkflowOutputRoundRegex } from '@agent/output/workflowOutputLayout';
+import {
+  WORKFLOW_OUTPUT_BASENAME,
+  legacyWorkflowOutputRoundRegex,
+  parseWorkflowOutputRoundDir,
+} from '@agent/output/workflowOutputLayout';
 import { listExecutions } from '@agent/storage';
 import { getStreamTabId } from '@logger/streamUtils';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
@@ -30,14 +34,17 @@ import {
 } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
+import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
   TaskRunFileService,
+  createRunStorageLocation,
   flexibleFS,
   getComparablePath,
   pathToLocation,
+  resolveRunDir,
   type FileLocation,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
@@ -357,6 +364,91 @@ interface DiffOperation {
 }
 
 /**
+ * Read `executions/{runId}/r{round}/output.*` directly from disk and build
+ * `OutputFileInfo[]` per round. Used as a recovery fallback when the caller
+ * supplies a `runId` but stream-tab metadata is missing or stale — in that
+ * case the plain workspace scan would return nothing because the new layout
+ * lives inside run storage.
+ *
+ * Lineage `original` is set to the configured `inputFile` so latexdiff has
+ * a base to compare against.
+ */
+async function scanRunDirForOutputs(
+  executionId: ExecutionId,
+  inputFile: string,
+): Promise<Map<number, OutputFileInfo[]> | null> {
+  try {
+    const runDirAbsolute = await resolveRunDir(executionId);
+    if (!runDirAbsolute) return null;
+
+    const dirEntries = await vscode.workspace.fs.readDirectory(
+      vscode.Uri.file(runDirAbsolute),
+    );
+
+    const baseLocation = pathToLocation(
+      path.isAbsolute(inputFile)
+        ? inputFile
+        : path.join(WorkspaceFS.getPath() ?? '', inputFile),
+    );
+
+    const rounds = new Map<number, OutputFileInfo[]>();
+
+    for (const [entryName, fileType] of dirEntries) {
+      if (fileType !== vscode.FileType.Directory) continue;
+      const round = parseWorkflowOutputRoundDir(entryName);
+      if (round == null) continue;
+
+      const roundDirAbsolute = path.join(runDirAbsolute, entryName);
+      let roundEntries: [string, vscode.FileType][];
+      try {
+        roundEntries = await vscode.workspace.fs.readDirectory(
+          vscode.Uri.file(roundDirAbsolute),
+        );
+      } catch {
+        continue;
+      }
+
+      const outputs: OutputFileInfo[] = [];
+      for (const [fileName, nestedType] of roundEntries) {
+        if (nestedType !== vscode.FileType.File) continue;
+        const parsed = path.parse(fileName);
+        if (parsed.name !== WORKFLOW_OUTPUT_BASENAME) continue;
+
+        const relativePath = path.join(entryName, fileName);
+        const location = createRunStorageLocation(
+          path.join(runDirAbsolute, relativePath),
+          relativePath,
+          executionId,
+        );
+        outputs.push({
+          source: inputFile,
+          round,
+          location,
+          lineage: {
+            original: baseLocation,
+            diffBase: null,
+            diffFile: null,
+          },
+          diff: null,
+        });
+      }
+
+      if (outputs.length > 0) rounds.set(round, outputs);
+    }
+
+    return rounds.size > 0
+      ? new Map([...rounds.entries()].sort((a, b) => a[0] - b[0]))
+      : null;
+  } catch (error) {
+    logger.debug(
+      CHANNEL,
+      `RunDir scan for ${executionId} failed: ${String(error)}`,
+    );
+    return null;
+  }
+}
+
+/**
  * When the caller didn't supply `outputsByRound`, look up the most recent
  * execution whose `agent + model + inputFile` match the request and pull
  * its persisted `OutputFileInfo[]` from the stream-tab store. Returns null
@@ -476,6 +568,28 @@ async function handleRunLatexdiff(
           CHANNEL,
           `Using metadata outputs from execution ${discovered.executionId}`,
         );
+      }
+    }
+
+    // Stream-tab metadata can be missing or stale for older runs even when a
+    // runId is on hand. Before falling back to the workspace scan (which
+    // ignores the new run-storage layout), scan the run dir on disk for
+    // `r{round}/output.*` files so latexdiff still has something to work with.
+    if (!outputsByRound && runId) {
+      const parsedRunId = ExecutionIdSchema.safeParse(runId);
+      if (parsedRunId.success) {
+        const scanned = await scanRunDirForOutputs(
+          parsedRunId.data,
+          inputFile,
+        );
+        if (scanned) {
+          outputsByRound = scanned;
+          discoveredExecutionId = parsedRunId.data;
+          logger.debug(
+            CHANNEL,
+            `Using run-dir scan outputs from execution ${parsedRunId.data}`,
+          );
+        }
       }
     }
 

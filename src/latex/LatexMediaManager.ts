@@ -181,11 +181,22 @@ export class LatexMediaManager {
     const visited = new Set<string>();
     const worklist: FileLocation[] = [...texFiles];
 
-    // Sweep siblings of every root input file up front.
+    // Sweep siblings of every root input file up front. Resolve the real
+    // path first so a mirrored symlink inside run storage points back to
+    // the original workspace tree — otherwise project-local .cls/.sty/.bst/
+    // latexmkrc files that live beside the real source are invisible.
     await Promise.all(
-      texFiles.map((file) =>
-        this.mirrorProjectSiblings(path.dirname(file.absolutePath)),
-      ),
+      texFiles.map(async (file) => {
+        let siblingDir = path.dirname(file.absolutePath);
+        try {
+          siblingDir = path.dirname(await fs.realpath(file.absolutePath));
+        } catch (error) {
+          this.logger.debug(
+            `Unable to resolve real path for ${file.absolutePath}: ${toErrorMessage(error)}`,
+          );
+        }
+        await this.mirrorProjectSiblings(siblingDir);
+      }),
     );
 
     while (worklist.length > 0) {

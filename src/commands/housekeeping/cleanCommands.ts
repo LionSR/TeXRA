@@ -151,15 +151,22 @@ export async function handleClean(config: unknown): Promise<void> {
   );
 
   // Toolbar-driven invocations pass an executionId: delete the run's runDir
-  // directly. Legacy callers without an executionId fall back to the
-  // workspace-scan clean for pre-refactor files.
-  let result;
+  // directly. When no runDir exists (legacy pre-refactor runs whose outputs
+  // live in the workspace), fall back to the workspace-scan clean so those
+  // artifacts aren't orphaned.
+  const runWorkspaceClean = (): Promise<FileOpResult> =>
+    useMultipleOutputs && outputFiles.length > 0
+      ? runCleanMultiple(model, inputFile, agent, outputFiles)
+      : runCleanSingle(model, inputFile, agent);
+
+  let result: FileOpResult;
   if (executionId) {
     result = await runCleanRunDir(executionId);
-  } else if (useMultipleOutputs && outputFiles.length > 0) {
-    result = await runCleanMultiple(model, inputFile, agent, outputFiles);
+    if (result.status === 'noFiles') {
+      result = await runWorkspaceClean();
+    }
   } else {
-    result = await runCleanSingle(model, inputFile, agent);
+    result = await runWorkspaceClean();
   }
   showCleanResult(result, inputFile);
 

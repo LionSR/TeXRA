@@ -110,31 +110,39 @@ async function handlePack(config: unknown): Promise<void> {
     PackConfigSchema,
     config,
     'config',
-    (data) => {
+    async (data) => {
+      const runWorkspacePack = (): Promise<FileOpResult> => {
+        if (data.outputFiles.length > 1 && !data.useMultipleOutputs) {
+          logger.warn(
+            CHANNEL,
+            'Multiple output files but multi-output mode disabled',
+          );
+        }
+        return runPack(
+          data.model,
+          data.inputFile,
+          data.agent,
+          data.useMultipleOutputs ? data.outputFiles : [],
+        );
+      };
+
       // Toolbar-driven invocations pass an executionId: snapshot the runDir
-      // into workspace/History/ (dereferencing symlinked deps). Legacy
-      // callers without an executionId fall back to the workspace-scan
-      // pack for pre-refactor files still lying in the user's tree.
+      // into workspace/History/ (dereferencing symlinked deps). When no
+      // runDir exists (legacy pre-refactor runs whose outputs live in the
+      // workspace), fall back to the workspace-scan pack so those artifacts
+      // still get captured.
       if (data.executionId) {
-        return runPackRunDir(
+        const runDirResult = await runPackRunDir(
           data.executionId,
           data.agent,
           data.model,
           data.inputFile,
         );
+        if (runDirResult.status !== 'noFiles') {
+          return runDirResult;
+        }
       }
-      if (data.outputFiles.length > 1 && !data.useMultipleOutputs) {
-        logger.warn(
-          CHANNEL,
-          'Multiple output files but multi-output mode disabled',
-        );
-      }
-      return runPack(
-        data.model,
-        data.inputFile,
-        data.agent,
-        data.useMultipleOutputs ? data.outputFiles : [],
-      );
+      return runWorkspacePack();
     },
     (data) => {
       if (data.skipProgressViewClear) return null;

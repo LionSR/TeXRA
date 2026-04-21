@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import {
+  WORKFLOW_OUTPUT_BASENAME,
   workflowMergeOutputPath,
   workflowOutputPath,
 } from '@agent/output/workflowOutputLayout';
@@ -46,7 +47,15 @@ export function getExtractedDocOutputFileName(
       (seg) => seg && seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
     )
     .join(path.sep);
-  const safeName = path.basename(parsed.name) || 'output';
+  // Avoid the fallback `output` because the primary round output is already
+  // `r{round}/output.{ext}`; a collision would overwrite it.
+  const rawName = path.basename(parsed.name) || 'extracted';
+  // Guard against an LLM-supplied source like `output.tex` landing directly
+  // in roundDir and overwriting the primary output.
+  const safeName =
+    safeDir === '' && rawName === WORKFLOW_OUTPUT_BASENAME
+      ? `${WORKFLOW_OUTPUT_BASENAME}_extracted`
+      : rawName;
   return path.join(roundDir, safeDir, `${safeName}.${extension}`);
 }
 
