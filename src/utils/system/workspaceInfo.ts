@@ -7,6 +7,7 @@ import { execa } from 'execa';
 
 // Local imports
 import { WorkspaceFS } from '@utils/files';
+import { listExternalRoots } from '@utils/files/externalRoots';
 import { isWSL } from './wslDetect';
 
 /** Timeout for git commands in milliseconds. */
@@ -157,6 +158,20 @@ export async function buildWorkspaceInfoBlock(
     const parts = ['Git: yes', branchPart];
     if (info.git.dirty) parts.push('uncommitted changes');
     lines.push(parts.join(', '));
+  }
+
+  const externalRoots = listExternalRoots();
+  if (externalRoots.length > 0) {
+    lines.push('');
+    lines.push(
+      'Accessible external directories (absolute paths — use read_file, write_file, ls, grep, glob, edit_file):',
+    );
+    for (const root of externalRoots) {
+      const rw = root.writable ? 'writable' : 'read-only';
+      lines.push(
+        `  ${escapeXml(root.absolutePath)} — ${escapeXml(root.label)} (${rw})`,
+      );
+    }
   }
 
   return `\n<workspace_info>\n${lines.join('\n')}\n</workspace_info>`;

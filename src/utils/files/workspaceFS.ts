@@ -5,7 +5,11 @@ import { getWorkspaceProvider } from '@agent/core/workspace';
 
 // Local imports - filesystem
 import { RelativeFS } from './relativeFS';
-import { locatePathInRoot, type ResolvedPath } from './workspaceRoot';
+import {
+  annotateExternal,
+  locatePathInRoot,
+  type ResolvedPath,
+} from './workspaceRoot';
 
 /**
  * Static filesystem rooted at the workspace folder.
@@ -48,7 +52,10 @@ export class WorkspaceFS extends RelativeFS {
 
     if (!root) {
       if (!inputPath) return { kind: 'external', absolutePath: '' };
-      return { kind: 'external', absolutePath: path.resolve(inputPath) };
+      return annotateExternal({
+        kind: 'external',
+        absolutePath: path.resolve(inputPath),
+      });
     }
 
     // Absolute paths: platform's asRelativePath for symlink handling
@@ -61,7 +68,7 @@ export class WorkspaceFS extends RelativeFS {
           relativePath: relative,
         };
       }
-      return { kind: 'external', absolutePath: inputPath };
+      return annotateExternal({ kind: 'external', absolutePath: inputPath });
     }
 
     // Empty + relative paths: pure path logic

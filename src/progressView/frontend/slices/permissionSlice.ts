@@ -114,6 +114,7 @@ export const permissionHandlers: HandlerRegistry = {
           kind: PERMISSION_KIND.PROPOSAL,
           data: permission.data,
           modelOptions: permission.modelOptionsData,
+          agentOptions: permission.agentOptionsData,
         });
       } else {
         // Prepend newest permissions so keyboard shortcuts target the latest request.
