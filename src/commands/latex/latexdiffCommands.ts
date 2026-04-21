@@ -20,6 +20,7 @@ import {
 import {
   WORKFLOW_OUTPUT_BASENAME,
   legacyWorkflowOutputRoundRegex,
+  midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,
 } from '@agent/output/workflowOutputLayout';
 import { listExecutions } from '@agent/storage';
@@ -909,6 +910,40 @@ async function runLatexdiffViaWorkspaceScan(params: {
       const round = RoundKeySchema.safeParse(match[1]);
       if (!round.success) continue;
       roundOutputsMap.set(round.data, path.join(outputDirPath, fileName));
+    }
+
+    // Mid-era layout: outputs under `r{round}/<base>_<cleanAgent>_<model>.tex`.
+    // Some upgraded workspaces may still hold these files. Only look in
+    // known `r{round}/` subdirectories so we don't descend the whole tree.
+    const midEraFilename = `${midEraWorkflowOutputStem({
+      base: baseInputName,
+      agent,
+      model,
+    })}.tex`;
+    for (const [entryName, entryType] of dirEntries) {
+      if (entryType !== vscode.FileType.Directory) continue;
+      const round = parseWorkflowOutputRoundDir(entryName);
+      if (round == null) continue;
+      if (roundOutputsMap.has(round)) continue;
+
+      const roundAbsoluteDir = path.join(absoluteDir, entryName);
+      let roundEntries: [string, vscode.FileType][];
+      try {
+        roundEntries = await vscode.workspace.fs.readDirectory(
+          vscode.Uri.file(roundAbsoluteDir),
+        );
+      } catch {
+        continue;
+      }
+      const match = roundEntries.find(
+        ([fileName, nestedType]) =>
+          nestedType === vscode.FileType.File && fileName === midEraFilename,
+      );
+      if (!match) continue;
+      roundOutputsMap.set(
+        round,
+        path.join(outputDirPath, entryName, midEraFilename),
+      );
     }
 
     // New-layout workflow outputs live inside task-run storage

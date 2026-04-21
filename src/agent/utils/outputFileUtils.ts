@@ -14,6 +14,12 @@ import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
  *
  * Per-execution isolation (`executions/{id}/...`) gives each run its own
  * directory, so no agent/model/input tokens are needed in the filename.
+ *
+ * IMPORTANT: callers MUST resolve this through a TaskRunFileService bound
+ * to an executionId. The fixed-stem filename is only collision-safe when
+ * combined with per-execution run storage; a workspace-scoped resolution
+ * would route every round to the same `<workspace>/r{round}/output.{ext}`
+ * and clobber outputs across runs.
  */
 export function getOutputFileName(outputExt: string, round: number): string {
   return workflowOutputPath({ ext: outputExt, round });
@@ -66,10 +72,19 @@ export function getExtractedDocOutputFileName(
  * the filename and the same location is returned for every round. The
  * merge output lives at the runDir root as `_full.{ext}`; per-execution
  * isolation keeps it from colliding with other runs.
+ *
+ * The fileService MUST carry an executionId; the fixed `_full.{ext}` path
+ * relies on run-storage isolation for uniqueness. Without it, every merge
+ * in the workspace would clobber the same file.
  */
 export function createMergeOutputFileLocationGetter(
   fileService: TaskRunFileService,
 ): (round: number) => AgentFileLocation {
+  if (!fileService.hasRunDirectory()) {
+    throw new Error(
+      'createMergeOutputFileLocationGetter requires a TaskRunFileService bound to an executionId; the `_full.{ext}` path is only collision-safe inside per-execution run storage.',
+    );
+  }
   const outputPath = workflowMergeOutputPath({ ext: 'tex' });
   const location = fileService.createLocation(outputPath) as AgentFileLocation;
   return (_round: number): AgentFileLocation => location;

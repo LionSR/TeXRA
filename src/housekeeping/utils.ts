@@ -8,6 +8,7 @@ import { sync as globSync } from 'glob';
 import {
   getAgentFirstNameChunk,
   legacyWorkflowOutputStem,
+  midEraWorkflowOutputStem,
   normalizeLegacyModel,
   parseWorkflowOutputRoundDir,
 } from '@agent/output/workflowOutputLayout';
@@ -40,6 +41,22 @@ export function getFilePatterns(
 ): string[] {
   const patterns: string[] = [];
   const legacyModel = normalizeLegacyModel(model);
+
+  // Mid-era layout: files live under `r{round}/<base>_<cleanAgent>_<model>.*`.
+  // These files can still be present in workspaces for users who upgraded
+  // from the mid-era PR; without matching patterns here, clean/pack would
+  // leave them orphaned.
+  const midEraStem = midEraWorkflowOutputStem({ base, agent, model });
+  for (let round = 0; round < numRounds; round++) {
+    patterns.push(
+      `r${round}/${midEraStem}`,
+      `r${round}/${midEraStem}_diff`,
+      `r${round}/${midEraStem}_thinking`,
+    );
+    if (round > 0) {
+      patterns.push(`r${round}/${midEraStem}_diffr${round}r${round - 1}`);
+    }
+  }
 
   for (let round = 0; round < numRounds; round++) {
     // Legacy flat layout: `<base>_<chunk>_r{round}_<normalizedModel>.*`

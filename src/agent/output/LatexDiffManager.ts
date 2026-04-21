@@ -13,15 +13,15 @@ import {
   type OutputFileInfo,
 } from '@shared/schemas';
 import {
+  createExternalLocation,
+  createRunStorageLocation,
+  createWorkspaceLocation,
   flexibleFS,
   TaskRunFileService,
   type FileLocation,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
-import {
-  getComparablePath,
-  getFileDirectory,
-} from '@utils/files/taskRunStorage';
+import { getComparablePath } from '@utils/files/taskRunStorage';
 
 import type { RoundFileMapping } from './types';
 
@@ -303,9 +303,15 @@ export class LatexDiffManager {
       return null;
     }
 
-    const refRelDir = getFileDirectory(referenceLocation);
-    const diffRelativePath = path.join(refRelDir, result.diffFileName);
-    const diffLocation = this.fileService.createLocation(diffRelativePath);
+    // LaTeXdiffService writes the diff next to the reference's absolutePath.
+    // We must therefore describe the diff with a FileLocation of the same
+    // kind as `referenceLocation`, otherwise rewrite runs (base = workspace
+    // original) would try to compile a diff that lives in run storage — a
+    // file that was never written there.
+    const diffLocation = this.buildSiblingDiffLocation(
+      referenceLocation,
+      result.diffFileName,
+    );
 
     const buildDir = path.join(
       path.dirname(diffLocation.absolutePath),
@@ -324,5 +330,38 @@ export class LatexDiffManager {
     });
 
     return diffLocation;
+  }
+
+  /**
+   * Describe the diff file that LaTeXdiffService wrote next to
+   * `reference.absolutePath`. The returned FileLocation must share the
+   * reference's kind — otherwise rewrite runs (base = workspace original)
+   * would try to compile a diff that lives in run storage while the file
+   * was actually written into the workspace.
+   */
+  private buildSiblingDiffLocation(
+    reference: FileLocation,
+    diffFileName: string,
+  ): FileLocation {
+    const siblingAbsolute = path.join(
+      path.dirname(reference.absolutePath),
+      diffFileName,
+    );
+    if (reference.kind === 'workspace') {
+      const relativeDir = path.dirname(reference.relativePath);
+      return createWorkspaceLocation(
+        siblingAbsolute,
+        path.join(relativeDir, diffFileName),
+      );
+    }
+    if (reference.kind === 'runStorage') {
+      const relativeDir = path.dirname(reference.relativePath);
+      return createRunStorageLocation(
+        siblingAbsolute,
+        path.join(relativeDir, diffFileName),
+        reference.executionId,
+      );
+    }
+    return createExternalLocation(siblingAbsolute);
   }
 }

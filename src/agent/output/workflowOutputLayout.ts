@@ -83,6 +83,22 @@ export function legacyWorkflowOutputStem(params: {
   return `${params.base}_${getAgentFirstNameChunk(params.agent)}_r${params.round}_${normalizeLegacyModel(params.model)}`;
 }
 
+/**
+ * Mid-era filename stem (no extension): `<base>_<cleanAgent>_<model>`.
+ *
+ * Between the legacy flat layout and the current runDir-scoped layout, the
+ * output filename dropped the `_r{round}_` token but the files still lived
+ * in the workspace under an `r{round}/` subdirectory. Returned here as the
+ * filename stem only — callers combine it with the round-dir glob prefix.
+ */
+export function midEraWorkflowOutputStem(params: {
+  base: string;
+  agent: string;
+  model: string;
+}): string {
+  return `${params.base}_${getCleanAgentName(params.agent)}_${params.model}`;
+}
+
 /** Anchored regex capturing the round from legacy flat filenames. */
 export function legacyWorkflowOutputRoundRegex(
   base: string,
