@@ -29,7 +29,6 @@ export interface SetupSecretsAdapter {
 /** Per-command surface. */
 export interface SetupCommandAdapter {
   invoke(commandId: string, ...args: unknown[]): Promise<unknown>;
-  hasCommand(commandId: string): Promise<boolean>;
 }
 
 /** Extension host surface. */

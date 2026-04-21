@@ -4,12 +4,11 @@ import { z } from 'zod';
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@tools/result';
-import { checkToolInstalled } from '@utils/system/toolUtils';
-import { findToolInCommonPaths } from '@utils/system/platformPaths';
 
 // Local file imports
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
+import { CORE_LATEX_TOOLS, isToolPresent } from './toolProbing';
 
 const VerifySetupInputSchema = z.strictObject({
   tool: z
@@ -21,31 +20,6 @@ const VerifySetupInputSchema = z.strictObject({
 });
 
 type VerifySetupInput = z.infer<typeof VerifySetupInputSchema>;
-
-/**
- * Tools checked by the no-argument `verify_setup` call.
- * Must stay aligned with the tool's description and ProbeEnvironmentTool's
- * CORE_TOOLS so the agent's "ready" claim reflects what's actually verified.
- */
-const CORE_TOOLS = [
-  'pdflatex',
-  'latexmk',
-  'latexindent',
-  'latexdiff',
-  'texcount',
-  'perl',
-  'gs',
-] as const;
-
-/**
- * Resolve a tool as installed by (1) the known-tool check which spawns
- * `<tool> --version`, or (2) a PATH search for tools without a config entry
- * (e.g. `node`, `git`, or an arbitrary binary the user asks about).
- */
-async function isToolPresent(name: string): Promise<boolean> {
-  if (await checkToolInstalled(name, false)) return true;
-  return findToolInCommonPaths(name) !== null;
-}
 
 export class VerifySetupTool extends defineTool({
   name: 'verify_setup',
@@ -92,7 +66,7 @@ export class VerifySetupTool extends defineTool({
     }
 
     const [coreResults, hasMagick, hasGm, anyKey, auth] = await Promise.all([
-      Promise.all(CORE_TOOLS.map(isToolPresent)),
+      Promise.all(CORE_LATEX_TOOLS.map(isToolPresent)),
       isToolPresent('magick'),
       isToolPresent('gm'),
       platform.secrets.anyApiKeyExists(),
@@ -101,7 +75,9 @@ export class VerifySetupTool extends defineTool({
       })),
     ]);
 
-    const missingCore: string[] = CORE_TOOLS.filter((_, i) => !coreResults[i]);
+    const missingCore: string[] = CORE_LATEX_TOOLS.filter(
+      (_, i) => !coreResults[i],
+    );
     if (!hasMagick && !hasGm) missingCore.push('gm/magick');
 
     const latexWorkshopInstalled =

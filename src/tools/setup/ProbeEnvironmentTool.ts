@@ -8,15 +8,13 @@ import { z } from 'zod';
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@tools/result';
-import {
-  checkToolInstalled,
-  detectPackageManager,
-} from '@utils/system/toolUtils';
-import { extendEnvPath, findToolInCommonPaths } from '@utils/system/platformPaths';
+import { detectPackageManager } from '@utils/system/toolUtils';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 // Local file imports
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
+import { CORE_LATEX_TOOLS, IMAGE_TOOLS, locateTool } from './toolProbing';
 
 const ProbeEnvironmentInputSchema = z.strictObject({}).describe(
   'No inputs — returns a structured JSON summary of the host environment.',
@@ -30,32 +28,16 @@ interface ToolStatus {
   path?: string;
 }
 
-const CORE_TOOLS = [
-  'pdflatex',
-  'latexmk',
-  'latexindent',
-  'latexdiff',
-  'texcount',
-  'perl',
-  'gs',
-  'gm',
-  'magick',
-] as const;
+/** Tools probed by `probe_environment`: LaTeX toolchain + both image-tool
+ *  candidates. The image tool is satisfied by either; `missingCore` logic
+ *  below reports a single `gm/magick` entry when both are absent. */
+const PROBED_CORE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
 
 const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
 
 async function checkTool(name: string): Promise<ToolStatus> {
-  const knownInstalled = await checkToolInstalled(name, false);
-  const resolvedPath = findToolInCommonPaths(name);
-  // `checkToolInstalled` returns false for names without a TOOL_CONFIGS
-  // entry even if the binary is actually on PATH (e.g. `git`, `node`), so
-  // the path-based lookup is the authoritative fallback for optional tools.
-  const installed = knownInstalled || resolvedPath !== null;
-  return {
-    name,
-    installed,
-    path: resolvedPath ?? undefined,
-  };
+  const located = await locateTool(name);
+  return { name, ...located };
 }
 
 /**
@@ -80,7 +62,7 @@ export class ProbeEnvironmentTool extends defineTool({
 
     const [coreTools, optionalTools, apiKeys, anyKeySet, auth, githubToken] =
       await Promise.all([
-        Promise.all(CORE_TOOLS.map(checkTool)),
+        Promise.all(PROBED_CORE_TOOLS.map(checkTool)),
         Promise.all(OPTIONAL_TOOLS.map(checkTool)),
         Promise.all(
           platform.secrets.providers.map(async (provider) => ({

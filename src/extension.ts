@@ -255,8 +255,6 @@ export async function activate(context: vscode.ExtensionContext) {
     commands: {
       invoke: (cmd, ...args) =>
         Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
-      hasCommand: async (cmd) =>
-        (await vscode.commands.getCommands(true)).includes(cmd),
     },
     extensions: {
       isInstalled: (id) => vscode.extensions.getExtension(id) !== undefined,
