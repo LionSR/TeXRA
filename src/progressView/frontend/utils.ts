@@ -33,3 +33,13 @@ export function getComposedPathElement<T extends Element>(
   }
   return null;
 }
+
+/** Shallow equality check — avoids triggering Lit re-renders when the
+ *  derived set is the same as the previous one. */
+export function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) {
+    if (!b.has(v)) return false;
+  }
+  return true;
+}
