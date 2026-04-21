@@ -49,37 +49,36 @@ const SETUP_INSTRUCTION =
   'Please help me finish installing TeXRA. Probe my environment, install anything missing, and get me a working credential.';
 
 /**
- * Result of launch-model resolution. `restoreOpenRouter` is populated when
- * we temporarily flipped the global `useOpenRouter` flag so that the
- * caller can restore the prior value once the setup agent finishes.
+ * Result of launch-model resolution. `requiresOpenRouter` signals that the
+ * chosen model needs the global `useOpenRouter` routing flag flipped on;
+ * the actual flip/restore is handled by the caller via `withOpenRouterFlag`
+ * so that any failure — even in pre-execution setup like `registerExecution`
+ * — still restores the prior value.
  */
 interface LaunchModelResolution {
   model: string;
-  /** Prior value of the `useOpenRouter` flag if we flipped it, else undefined. */
-  restoreOpenRouter?: boolean;
+  requiresOpenRouter: boolean;
 }
 
 /**
  * Pick a model the setup agent can actually call, given the credentials
- * the user currently has. Order:
- *   1. Researcher Access — only when the user's "Use Included Access"
- *      mode is actually on (auth.authenticated alone is insufficient:
- *      a signed-in user who flipped Included Access off will not get
- *      server-side keys routed through their calls).
+ * the user currently has. Pure: never mutates global state.
+ *
+ * Order:
+ *   1. Researcher Access — only when "Use Included Access" is actually on
+ *      (`auth.authenticated` alone is insufficient: a signed-in user who
+ *      turned Included Access off will not get server-side keys routed
+ *      through their calls — so `canUseServerSideKeys()` is the real gate).
  *   2. Any direct API key for a provider whose default model routes
- *      through that same provider directly (deterministic by
- *      `SecretManager.API_PROVIDERS` order). Preferred over OpenRouter
- *      so we don't have to flip the global `useOpenRouter` flag.
- *   3. Only then, if `openRouter` is the sole provider with a key, do we
- *      temporarily enable `useOpenRouter` and pick the OpenRouter-backed
- *      default. The prior value is captured in `restoreOpenRouter` so
- *      the caller can reset the flag after the setup agent completes —
- *      otherwise running setup once would permanently reroute the user's
- *      other agent runs through OpenRouter.
+ *      through that same provider directly (iterating
+ *      `SecretManager.API_PROVIDERS` for deterministic ordering). Preferred
+ *      over OpenRouter so we don't need to touch the routing flag at all.
+ *   3. Only if `openRouter` is the sole provider with a key, report a
+ *      router-backed default and let the caller temporarily flip the flag.
  */
 async function resolveLaunchModel(): Promise<LaunchModelResolution> {
   if (await getServerSideKeyService().canUseServerSideKeys()) {
-    return { model: SIGNED_IN_SETUP_MODEL };
+    return { model: SIGNED_IN_SETUP_MODEL, requiresOpenRouter: false };
   }
 
   for (const provider of SecretManager.API_PROVIDERS) {
@@ -87,22 +86,52 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution> {
     if (await SecretManager.apiKeyExists(provider)) {
       return {
         model: API_KEY_MODEL_BY_PROVIDER[provider] ?? SIGNED_IN_SETUP_MODEL,
+        requiresOpenRouter: false,
       };
     }
   }
 
   if (await SecretManager.apiKeyExists('openRouter')) {
-    const prior = globalSM.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
-    if (!prior) {
-      await globalSM.update(GlobalStateKey.USE_OPENROUTER, true);
-    }
     return {
       model: API_KEY_MODEL_BY_PROVIDER.openRouter ?? SIGNED_IN_SETUP_MODEL,
-      restoreOpenRouter: prior,
+      requiresOpenRouter: true,
     };
   }
 
-  return { model: SIGNED_IN_SETUP_MODEL };
+  return { model: SIGNED_IN_SETUP_MODEL, requiresOpenRouter: false };
+}
+
+/**
+ * Single source of truth for the `useOpenRouter` flip/restore dance.
+ * When the resolved model requires OpenRouter routing *and* the flag is
+ * currently off, flip it on for the scoped callback and always restore in
+ * a `finally` — regardless of how the callback exits — so
+ * `registerExecution` or `executeAgent` failures can't leave the flag
+ * sticky. Otherwise runs the callback with no state mutation at all:
+ *   - `requiresOpenRouter === false` → never touches the flag, so a user
+ *     who has OpenRouter on (or off) stays wherever they were.
+ *   - already enabled → nothing to flip, nothing to restore.
+ */
+async function withOpenRouterFlag<T>(
+  requiresOpenRouter: boolean,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!requiresOpenRouter) return fn();
+  const prior = globalSM.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
+  if (prior) return fn();
+
+  await globalSM.update(GlobalStateKey.USE_OPENROUTER, true);
+  try {
+    return await fn();
+  } finally {
+    await globalSM
+      .update(GlobalStateKey.USE_OPENROUTER, false)
+      .then(undefined, (err) => {
+        logger.error(CHANNEL, 'Failed to restore useOpenRouter flag.', {
+          data: err,
+        });
+      });
+  }
 }
 
 /**
@@ -174,27 +203,11 @@ async function runSetupAssistant(): Promise<void> {
       instruction: SETUP_INSTRUCTION,
     });
 
-    const executionId = generateExecutionId();
-    await registerExecution(executionId, config, config.agent);
-    try {
+    await withOpenRouterFlag(resolution.requiresOpenRouter, async () => {
+      const executionId = generateExecutionId();
+      await registerExecution(executionId, config, config.agent);
       await executeAgent(config, executionId);
-    } finally {
-      // If we flipped the global OpenRouter routing flag to launch a
-      // router-backed setup model, restore the prior value now that the
-      // setup run has finished. Leaving it sticky would silently reroute
-      // the user's other agents through OpenRouter on subsequent runs.
-      if (resolution.restoreOpenRouter !== undefined) {
-        await globalSM
-          .update(GlobalStateKey.USE_OPENROUTER, resolution.restoreOpenRouter)
-          .then(undefined, (err) => {
-            logger.error(
-              CHANNEL,
-              'Failed to restore useOpenRouter flag after setup.',
-              { data: err },
-            );
-          });
-      }
-    }
+    });
   } catch (error) {
     logger.error(CHANNEL, 'Setup assistant failed to launch.', { data: error });
     void vscode.window.showErrorMessage(

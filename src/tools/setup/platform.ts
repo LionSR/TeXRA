@@ -70,8 +70,3 @@ export function getSetupPlatform(): SetupPlatform {
   }
   return platform;
 }
-
-/** Return whether the platform has been wired (useful for tests). */
-export function isSetupPlatformReady(): boolean {
-  return platform !== undefined;
-}

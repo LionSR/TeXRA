@@ -22,7 +22,6 @@ export { UpdateShellRcTool } from './UpdateShellRcTool';
 export {
   setSetupPlatform,
   getSetupPlatform,
-  isSetupPlatformReady,
   type SetupPlatform,
   type SetupSecretsAdapter,
   type SetupCommandAdapter,

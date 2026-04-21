@@ -50,10 +50,14 @@ type Shell = 'posix' | 'powershell';
  *       as a PATH fix).
  *       Rejects `;`, `&`, `|`, `<`, `>`, backticks, `$(...)` — any of
  *       which can chain commands in sh/bash/zsh.
- *   - PowerShell `$env:NAME = value` / `[Environment]::SetEnvironmentVariable(...)`
- *       Rejects `&`, `|`, `<`, `>`, backticks, `$(...)`. `;` is
- *       intentionally allowed inside quoted strings (Windows PATH
- *       separator) but rejected outside quotes (statement separator).
+ *   - PowerShell `$env:NAME = "…"` / `[Environment]::SetEnvironmentVariable("…","…","…")`
+ *       The RHS must be a double-quoted string literal (or three quoted
+ *       literals, for the static method form). This rejects executable
+ *       expression RHS like `$env:Path = (Get-Command …)` — `(` alone is
+ *       not otherwise forbidden (legitimate Windows paths can contain
+ *       parens), so we pin the shape of the assignment instead. `;` is
+ *       allowed inside the quoted value (Windows PATH separator) but
+ *       rejected outside quotes (statement separator).
  *
  * All forms reject newlines.
  */
@@ -62,8 +66,8 @@ const POSIX_SAFE_PATTERNS: readonly RegExp[] = [
 ];
 
 const POWERSHELL_SAFE_PATTERNS: readonly RegExp[] = [
-  /^\s*\$env:[A-Za-z_][A-Za-z0-9_]*\s*=[^\r\n]*$/,
-  /^\s*\[Environment\]::SetEnvironmentVariable\([^\r\n]*\)\s*$/,
+  /^\s*\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*"[^"\r\n]*"\s*$/,
+  /^\s*\[Environment\]::SetEnvironmentVariable\(\s*"[^"\r\n]*"\s*,\s*"[^"\r\n]*"\s*,\s*"[^"\r\n]*"\s*\)\s*$/,
 ];
 
 const POSIX_FORBIDDEN_SUBSTRINGS: readonly string[] = [
