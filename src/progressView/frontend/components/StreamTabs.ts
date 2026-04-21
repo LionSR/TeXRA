@@ -575,34 +575,69 @@ export class StreamTabs extends LitElement {
    */
   private manuallyCollapsed: Set<string> = new Set();
 
-  /** Auto-expand parents when children appear, auto-collapse when gone. */
+  /**
+   * Parents where the "all children finished" transition has already been
+   * handled — either we auto-collapsed, or the user manually expanded after.
+   * Prevents re-collapsing a parent the user has chosen to keep open.
+   * Cleared when any child becomes active again (new run).
+   */
+  private finishedCollapseHandled: Set<string> = new Set();
+
+  /** Auto-expand when children appear, auto-collapse when gone or finished. */
   protected override willUpdate(changed: import('lit').PropertyValues): void {
-    if (!changed.has('childStreamsByParent')) return;
+    const childrenChanged = changed.has('childStreamsByParent');
+    const statesChanged = changed.has('streamStates');
+    if (!childrenChanged && !statesChanged) return;
 
     let dirty = false;
     const next = new Set(this.expandedParents);
 
-    // Auto-expand NEW parents (not yet seen and not manually collapsed)
-    for (const parentId of this.childStreamsByParent.keys()) {
-      if (!next.has(parentId) && !this.manuallyCollapsed.has(parentId)) {
-        next.add(parentId);
-        dirty = true;
+    if (childrenChanged) {
+      for (const parentId of this.childStreamsByParent.keys()) {
+        if (!next.has(parentId) && !this.manuallyCollapsed.has(parentId)) {
+          next.add(parentId);
+          dirty = true;
+        }
+      }
+      for (const parentId of next) {
+        if (!this.childStreamsByParent.has(parentId)) {
+          next.delete(parentId);
+          this.manuallyCollapsed.delete(parentId);
+          this.finishedCollapseHandled.delete(parentId);
+          dirty = true;
+        }
+      }
+      // Parents dropped from `next` above are already cleaned; these passes
+      // cover parents still tracked but no longer in childStreamsByParent.
+      for (const parentId of this.manuallyCollapsed) {
+        if (!this.childStreamsByParent.has(parentId)) {
+          this.manuallyCollapsed.delete(parentId);
+        }
+      }
+      for (const parentId of this.finishedCollapseHandled) {
+        if (!this.childStreamsByParent.has(parentId)) {
+          this.finishedCollapseHandled.delete(parentId);
+        }
       }
     }
-    // Auto-collapse parents that lost all children + clear manual state
+
+    // Auto-collapse once per finish-transition; reset when a child reactivates.
     for (const parentId of next) {
-      if (!this.childStreamsByParent.has(parentId)) {
-        next.delete(parentId);
-        this.manuallyCollapsed.delete(parentId);
-        dirty = true;
+      const children = this.childStreamsByParent.get(parentId);
+      if (!children) continue;
+      const allFinished = children.every(
+        (c) => !ACTIVE_CHILD_STATUSES.has(this.getStatus(c.name)),
+      );
+      if (!allFinished) {
+        this.finishedCollapseHandled.delete(parentId);
+        continue;
       }
+      if (this.finishedCollapseHandled.has(parentId)) continue;
+      next.delete(parentId);
+      this.finishedCollapseHandled.add(parentId);
+      dirty = true;
     }
-    // Also clean manual set for parents no longer in the map
-    for (const parentId of this.manuallyCollapsed) {
-      if (!this.childStreamsByParent.has(parentId)) {
-        this.manuallyCollapsed.delete(parentId);
-      }
-    }
+
     if (dirty) this.expandedParents = next;
   }
 
@@ -746,6 +781,9 @@ export class StreamTabs extends LitElement {
     } else {
       next.add(parentId);
       this.manuallyCollapsed.delete(parentId);
+      // Mark finish-transition as handled so willUpdate doesn't immediately
+      // re-collapse a parent the user just chose to expand.
+      this.finishedCollapseHandled.add(parentId);
     }
     this.expandedParents = next;
   }
