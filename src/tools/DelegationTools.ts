@@ -477,12 +477,31 @@ async function proposeAndExecute(
 
   // At this point result.action === 'approve' (all other cases returned above)
   const modelOverride = result.action === 'approve' ? result.model : undefined;
-  const agentOverride =
+  const requestedAgentOverride =
     result.action === 'approve' &&
     result.agent &&
     result.agent !== proposal.agent
       ? result.agent
       : undefined;
+
+  // Re-validate the agent override against the current registry. Between
+  // proposal display and approval the registry may have changed (agent
+  // removed/renamed), or the approval could carry a malformed value. Fail
+  // fast with a clear ToolResult so the orchestrator sees the problem
+  // synchronously, rather than executeSubagent silently swallowing it.
+  let agentOverride = requestedAgentOverride;
+  if (requestedAgentOverride) {
+    const visible = getVisibleAgents(proposal.agentCategory);
+    if (!visible.some((a) => a.name === requestedAgentOverride)) {
+      return {
+        summary: `Approved agent override '${requestedAgentOverride}' is not available`,
+        output: `Cannot launch '${requestedAgentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
+        isError: true,
+      };
+    }
+    agentOverride = requestedAgentOverride;
+  }
+
   const effective = {
     ...proposal,
     ...(modelOverride && { model: modelOverride }),
