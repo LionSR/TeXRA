@@ -74,9 +74,6 @@ export class TaskGroupList extends LitElement {
   /** All log messages to render */
   @property({ attribute: false }) messages: LogMessageData[] = [];
 
-  /** Whether this is a tool-use session (affects timeline rendering) */
-  @property({ attribute: false }) isToolUse = false;
-
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
 
@@ -170,8 +167,10 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Recompute tool-use timeline incrementally when possible
-    if (this.isToolUse && (groupsChanged || messagesChanged)) {
+    // Recompute the interleaved timeline incrementally when possible.
+    // Used by both tool-use and workflow streams so the user's original
+    // instruction (the earliest ungrouped message) stays at the top.
+    if (groupsChanged || messagesChanged) {
       if (groupsChanged) {
         // Structural change — full timeline rebuild (rare)
         this.cachedTimeline = this.buildFullTimeline();
@@ -568,31 +567,11 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
-    if (this.isToolUse) {
-      // Tool-use: interleave ungrouped messages (user input, follow-ups, errors)
-      // with groups chronologically so the conversation reads top-to-bottom.
-      // Timeline is memoized in willUpdate() — only rebuilt when inputs change.
-      return html`
-        <vscode-scrollable
-          id=${ELEMENT_IDS.LOG_CONTENT}
-          class="log-container"
-          @vsc-scrollable-scroll=${this.handleVscScroll}
-        >
-          ${repeat(
-            this.cachedTimeline,
-            (item) => item.key,
-            (item) =>
-              'msg' in item
-                ? guard([item.msg], () => formatLogEntry(item.msg))
-                : this.renderGroupNode(item.tree),
-          )}
-        </vscode-scrollable>
-      `;
-    }
-
-    // Workflow: groups first, then ungrouped messages.
-    // Workflow stages are hierarchical (not conversational), so structure-first
-    // ordering keeps stage execution visually separate from stray messages.
+    // Interleave ungrouped messages (user input, follow-ups, errors) with run
+    // groups chronologically so the conversation reads top-to-bottom. The
+    // user's original instruction always surfaces at the top because it has
+    // the earliest timestamp. Timeline is memoized in willUpdate() — only
+    // rebuilt when inputs change.
     return html`
       <vscode-scrollable
         id=${ELEMENT_IDS.LOG_CONTENT}
@@ -600,14 +579,12 @@ export class TaskGroupList extends LitElement {
         @vsc-scrollable-scroll=${this.handleVscScroll}
       >
         ${repeat(
-          this.cachedTree,
-          (t) => t.group.id,
-          (t) => this.renderGroupNode(t),
-        )}
-        ${repeat(
-          this.cachedUngrouped,
-          (m) => m.id,
-          (m) => guard([m], () => formatLogEntry(m)),
+          this.cachedTimeline,
+          (item) => item.key,
+          (item) =>
+            'msg' in item
+              ? guard([item.msg], () => formatLogEntry(item.msg))
+              : this.renderGroupNode(item.tree),
         )}
       </vscode-scrollable>
     `;
