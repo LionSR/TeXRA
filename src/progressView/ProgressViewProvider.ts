@@ -264,19 +264,14 @@ export class ProgressViewProvider
   private async sendProposalModelOptions(
     proposal: AgentProposalPermission,
   ): Promise<void> {
-    // Availability check fallback: ServerSideKeyService may not be initialized
-    // yet, or the agent registry may not have loaded — fall back so the
-    // dropdown still appears with static metadata.
+    // Fall back to static metadata if ServerSideKeyService or the agent
+    // registry hasn't finished loading — so the dropdowns still appear.
+    const isWorkflow = proposal.agentCategory === AGENT_CATEGORY.WORKFLOW;
     const [modelOptions, agentOptions] = await Promise.all([
       computeModelOptionsData().catch(() => buildBasicModelOptionsData()),
       computeAgentOptionsData()
-        .then((all) =>
-          proposal.agentCategory === AGENT_CATEGORY.WORKFLOW
-            ? all.workflow
-            : all.toolUse,
-        )
-        // Use agent name (label) as the option value so it matches proposal.agent,
-        // which is a simple name — not the source/name key used elsewhere.
+        .then((all) => (isWorkflow ? all.workflow : all.toolUse))
+        // proposal.agent is a plain name (not source/name), so use label as value.
         .then((raw) => raw.map((opt) => ({ ...opt, value: opt.label })))
         .catch(() => undefined),
     ]);

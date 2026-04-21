@@ -274,26 +274,26 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   };
 
   // ===========================================================================
-  // Override emitAction to include model override for approve
+  // Override emitAction to include model/agent overrides for approve
   // ===========================================================================
 
   protected override emitAction(action: string, feedback?: string): void {
+    if (action !== 'approve') {
+      super.emitAction(action, feedback);
+      return;
+    }
     const data = this.permission.data as AgentProposalPermission;
-    const isApprove = action === 'approve';
-    const modelOverride = isApprove
-      ? this.resolveOverride(this.selectedModel, data.model)
-      : undefined;
-    const agentOverride = isApprove
-      ? this.resolveOverride(this.selectedAgent, data.agent)
-      : undefined;
-    super.emitAction(action, feedback, modelOverride, agentOverride);
-  }
-
-  private resolveOverride(
-    selected: string | null,
-    original: string,
-  ): string | undefined {
-    return selected && selected !== original ? selected : undefined;
+    const pickIfChanged = (
+      selected: string | null,
+      original: string,
+    ): string | undefined =>
+      selected && selected !== original ? selected : undefined;
+    super.emitAction(
+      action,
+      feedback,
+      pickIfChanged(this.selectedModel, data.model),
+      pickIfChanged(this.selectedAgent, data.agent),
+    );
   }
 }
 

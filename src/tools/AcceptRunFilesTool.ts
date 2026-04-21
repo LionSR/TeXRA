@@ -20,6 +20,7 @@ import { z } from 'zod';
 // Local imports - shared
 import { getExecutionStore } from '@agent/storage';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 // Local imports - tools
@@ -32,6 +33,7 @@ import {
   getApprovedContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
+import { formatResultCount, pluralize } from '@tools/utils';
 
 // Local imports - utils
 import {
@@ -77,10 +79,7 @@ const AcceptRunFilesInputSchema = z.strictObject({
     .array(FileMapping)
     .min(1)
     .describe('Files to copy from run storage to workspace'),
-  /**
-   * If true, strip all `\criticize{...}{...}{...}` LaTeX annotations from
-   * each file's content before the approval diff is shown.
-   */
+  /** If true, strip `\criticize{...}{...}{...}` annotations before approval. */
   strip_criticize: z
     .boolean()
     .nullish()
@@ -165,7 +164,7 @@ Optional:
 
         const rawContent = await flexibleFS.read(sourceLocation);
         const stripped = strip_criticize
-          ? this.stripCriticizeAnnotations(rawContent)
+          ? stripCriticizeAnnotations(rawContent)
           : { content: rawContent, count: 0 };
         const proposedContent = stripped.content;
         const destExists = await WorkspaceFS.exists(dest.relativePath);
@@ -266,47 +265,14 @@ Optional:
     const accepted = files.length - rejected;
     const strippedSuffix =
       totalStripped > 0
-        ? ` (stripped ${totalStripped} \\criticize annotation${totalStripped > 1 ? 's' : ''})`
+        ? ` (stripped ${formatResultCount(totalStripped, '\\criticize annotation')})`
         : '';
-    const summary = `Accepted ${accepted}/${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}${strippedSuffix}`;
+    const summary = `Accepted ${accepted}/${files.length} ${pluralize(files.length, 'file')} from run ${executionId}${strippedSuffix}`;
     return {
       summary,
       output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
       edits,
     };
-  }
-
-  /**
-   * Remove all `\criticize{...}{...}{...}` LaTeX annotations from content.
-   * Handles one level of nested braces inside each argument (same shape as
-   * `wrapCritiqueInAlign` in `src/replacement/advanced.ts`). When a macro is
-   * the only non-whitespace content on its line, the whole line is removed
-   * so no blank line is left behind.
-   */
-  private stripCriticizeAnnotations(content: string): {
-    content: string;
-    count: number;
-  } {
-    const criticizeArg = String.raw`(?:[^{}]|\{[^{}]*\})*`;
-    const inlineRe = new RegExp(
-      String.raw`\\criticize\{${criticizeArg}\}\{${criticizeArg}\}\{${criticizeArg}\}`,
-      'g',
-    );
-    const wholeLineRe = new RegExp(
-      String.raw`^[ \t]*\\criticize\{${criticizeArg}\}\{${criticizeArg}\}\{${criticizeArg}\}[ \t]*\r?\n?`,
-      'gm',
-    );
-
-    let count = 0;
-    let out = content.replace(wholeLineRe, () => {
-      count++;
-      return '';
-    });
-    out = out.replace(inlineRe, () => {
-      count++;
-      return '';
-    });
-    return { content: out, count };
   }
 
   /**
