@@ -129,7 +129,9 @@ export class ArxivSourceProcessor {
           );
         }
       } else {
-        const contentType = response.headers['content-type'] ?? '';
+        const rawContentType = response.headers['content-type'];
+        const contentType =
+          typeof rawContentType === 'string' ? rawContentType : '';
         const extension = this.getExtensionFromContentType(contentType);
         destPath = destBasePath + extension;
       }
