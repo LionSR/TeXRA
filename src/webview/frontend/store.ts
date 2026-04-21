@@ -159,9 +159,9 @@ export const ONBOARDING_PLACEHOLDERS = {
     'Run LaTeX checks and report compilation warnings.',
   ],
   orchestrator: [
-    'Review my paper and suggest improvements.',
-    'Leave blank -- the orchestrator will figure out what to do.',
-    'Polish the writing, then run a critical review.',
+    'Use polish on the intro, then have review audit the math.',
+    'Run correct across the paper, then have review check every derivation.',
+    'Leave blank — the orchestrator will plan the pipeline for you.',
   ],
 } satisfies Record<SessionType | 'orchestrator', string[]>;
 

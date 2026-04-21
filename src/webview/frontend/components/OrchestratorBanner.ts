@@ -1,9 +1,10 @@
 /**
- * Banner explaining the orchestrator agent workflow.
+ * Banner with orchestrator-specific tips.
  *
- * Appears when the orchestrator is selected in the agent dropdown
- * to help users understand the delegation-based workflow.
- * Dismissable via a "Got it" button; dismissal persists to settings.
+ * Appears when the orchestrator is selected. The conceptual explanation
+ * lives in the InstructionPanel's session-hint; this banner adds only
+ * complementary info: the approval keyboard shortcut and a shortcut
+ * to Multi-Agent settings. Dismissable via "Got it".
  *
  * @fires dismiss-orchestrator - When dismiss button is clicked
  */
@@ -111,20 +112,18 @@ export class OrchestratorBanner extends LitElement {
 
     return html`
       <div class="orchestrator-banner">
-        <strong>Orchestrator selected.</strong> Hit Execute to analyze your
-        paper and generate improvement tasks. Review and approve them in
-        Progress — press <strong>y</strong>/<strong>n</strong> to approve or
-        reject quickly.
-        <div class="orchestrator-banner-footer">
-          <span class="orchestrator-tip"
-            >Customize auto-approve rules and task presets in
-            <button
-              class="settings-link"
-              @click=${this.handleOpenMultiAgentSettings}
-            >
-              Multi-Agent settings</button
-            >.</span
+        <span class="orchestrator-tip">
+          <strong>Tip:</strong> press <strong>y</strong>/<strong>n</strong> in
+          the Progress board to approve or reject proposed tasks fast. Tune
+          auto-approve rules and presets in
+          <button
+            class="settings-link"
+            @click=${this.handleOpenMultiAgentSettings}
           >
+            Multi-Agent settings</button
+          >.
+        </span>
+        <div class="orchestrator-banner-footer">
           <button
             class="got-it-btn"
             title="Dismiss (can be re-enabled in settings)"

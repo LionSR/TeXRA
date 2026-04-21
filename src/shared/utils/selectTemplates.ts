@@ -13,7 +13,9 @@ function buildAgentTooltip(opt: AgentOptionData): string {
   const hints: string[] = [];
 
   if (opt.isOrchestrator)
-    hints.push('Coordinates agents to work on your paper');
+    hints.push(
+      'Plans a pipeline of specialized agents. Name them in your instruction to steer delegation.',
+    );
   if (opt.isRemote) hints.push(properties.remote.hint);
   if (opt.isCustom) hints.push(properties.custom.hint);
   if (opt.description) hints.push(opt.description);
