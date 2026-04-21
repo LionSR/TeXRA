@@ -52,27 +52,26 @@ export class LatexMediaManager {
     // run-storage symlink map back to real workspace files (otherwise
     // mirrorWorkspaceFile would classify them as external and skip).
     const baseDir = await resolveLatexDir(latexFile.absolutePath);
-    const targetLocations = new Set<FileLocation>();
+    const absolutePaths = new Set<string>();
     for (const relative of figures) {
       const trimmed = relative?.trim();
       if (!trimmed) {
         continue;
       }
-      const absolutePath = path.normalize(path.join(baseDir, trimmed));
-      targetLocations.add(pathToLocation(absolutePath));
+      absolutePaths.add(path.normalize(path.join(baseDir, trimmed)));
     }
 
-    if (targetLocations.size === 0) {
+    if (absolutePaths.size === 0) {
       return;
     }
 
-    const tasks = [...targetLocations].map(async (targetLocation) => {
+    const tasks = [...absolutePaths].map(async (absolutePath) => {
       try {
-        await this.fileService!.mirrorWorkspaceFile(targetLocation);
+        await this.fileService!.mirrorWorkspaceFile(pathToLocation(absolutePath));
       } catch (error) {
         const message = toErrorMessage(error);
         this.logger.debug(
-          `Unable to mirror figure dependency ${targetLocation.absolutePath}: ${message}`,
+          `Unable to mirror figure dependency ${absolutePath}: ${message}`,
         );
       }
     });
