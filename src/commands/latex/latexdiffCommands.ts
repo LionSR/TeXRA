@@ -412,7 +412,16 @@ async function scanRunDirForOutputs(
       for (const [fileName, nestedType] of roundEntries) {
         if (nestedType !== vscode.FileType.File) continue;
         const parsed = path.parse(fileName);
-        if (parsed.name !== WORKFLOW_OUTPUT_BASENAME) continue;
+        // Only the canonical round output `output.tex` is a valid latexdiff
+        // target — scratchpad artifacts like `output.xml` and multi-document
+        // extracted files (which carry their own source-derived names) must
+        // not be fed into latexdiff via this fallback.
+        if (
+          parsed.name !== WORKFLOW_OUTPUT_BASENAME ||
+          parsed.ext !== '.tex'
+        ) {
+          continue;
+        }
 
         const relativePath = path.join(entryName, fileName);
         const location = createRunStorageLocation(
@@ -464,15 +473,22 @@ async function discoverLatestExecutionOutputs(query: {
 } | null> {
   try {
     const executions = await listExecutions();
-    const normalizedInput = query.inputFile;
+    // Normalize both sides so trivial path-format differences (duplicate
+    // separators, `./`, mixed forward/backslash) don't silently miss a
+    // matching execution.
+    const normalizedInput = path.normalize(query.inputFile);
 
     const candidates = executions
-      .filter(
-        (entry) =>
-          entry.agent === query.agent &&
-          entry.model === query.model &&
-          entry.agentConfig?.inputFile === normalizedInput,
-      )
+      .filter((entry) => {
+        if (entry.agent !== query.agent || entry.model !== query.model) {
+          return false;
+        }
+        const entryInput = entry.agentConfig?.inputFile;
+        return (
+          typeof entryInput === 'string' &&
+          path.normalize(entryInput) === normalizedInput
+        );
+      })
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
     for (const candidate of candidates) {
@@ -555,26 +571,11 @@ async function handleRunLatexdiff(
     }
 
     let discoveredExecutionId = runId;
-    if (!outputsByRound) {
-      const discovered = await discoverLatestExecutionOutputs({
-        agent,
-        model,
-        inputFile,
-      });
-      if (discovered) {
-        outputsByRound = discovered.rounds;
-        discoveredExecutionId = discovered.executionId;
-        logger.debug(
-          CHANNEL,
-          `Using metadata outputs from execution ${discovered.executionId}`,
-        );
-      }
-    }
 
-    // Stream-tab metadata can be missing or stale for older runs even when a
-    // runId is on hand. Before falling back to the workspace scan (which
-    // ignores the new run-storage layout), scan the run dir on disk for
-    // `r{round}/output.*` files so latexdiff still has something to work with.
+    // When the caller specifies a runId (progress-toolbar invocations do),
+    // scope output discovery to that execution first. Otherwise metadata
+    // auto-discovery can return a different, newer run with the same
+    // agent/model/inputFile — silently diffing against the wrong outputs.
     if (!outputsByRound && runId) {
       const parsedRunId = ExecutionIdSchema.safeParse(runId);
       if (parsedRunId.success) {
@@ -590,6 +591,25 @@ async function handleRunLatexdiff(
             `Using run-dir scan outputs from execution ${parsedRunId.data}`,
           );
         }
+      }
+    }
+
+    // No runId (or runId scan returned nothing): fall back to searching
+    // executions by agent/model/inputFile and pulling their persisted
+    // stream-tab metadata.
+    if (!outputsByRound) {
+      const discovered = await discoverLatestExecutionOutputs({
+        agent,
+        model,
+        inputFile,
+      });
+      if (discovered) {
+        outputsByRound = discovered.rounds;
+        discoveredExecutionId = discovered.executionId;
+        logger.debug(
+          CHANNEL,
+          `Using metadata outputs from execution ${discovered.executionId}`,
+        );
       }
     }
 
