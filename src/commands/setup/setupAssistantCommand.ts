@@ -96,29 +96,38 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
   }
 
   // Step 2: signed-in user whose tier excludes the default signed-in
-  // model. Look for any tier-available model among the per-provider
-  // defaults before falling through to direct-key / OR paths.
+  // model. Look for any tier-available *directly-routed* model among the
+  // per-provider defaults. Skip the `openRouter` entry because that
+  // model (e.g. `sonnet46T`) is specifically for OR-routed calls and
+  // routing it direct via server-side keys would pick the wrong backend.
   if (await serverKeys.canUseServerSideKeys()) {
-    for (const model of Object.values(API_KEY_MODEL_BY_PROVIDER)) {
+    for (const [provider, model] of Object.entries(API_KEY_MODEL_BY_PROVIDER)) {
+      if (provider === 'openRouter') continue;
       if (serverKeys.canUseModelSync(model)) {
         return { model, requiresOpenRouter: false };
       }
     }
   }
 
+  // Step 3: direct provider key. Only consider providers we know how to
+  // map to a default model — silently falling back to `SIGNED_IN_SETUP_MODEL`
+  // (a Google model) for an unmapped provider would produce a runtime
+  // auth failure with a credential that can't reach Google.
   for (const provider of SecretManager.API_PROVIDERS) {
     if (provider === 'openRouter') continue;
+    const model = API_KEY_MODEL_BY_PROVIDER[provider];
+    if (!model) continue;
     if (await SecretManager.apiKeyExists(provider)) {
-      return {
-        model: API_KEY_MODEL_BY_PROVIDER[provider] ?? SIGNED_IN_SETUP_MODEL,
-        requiresOpenRouter: false,
-      };
+      return { model, requiresOpenRouter: false };
     }
   }
 
+  // Step 4: only OpenRouter key present. The `openRouter` entry is
+  // statically declared in `API_KEY_MODEL_BY_PROVIDER`, so no fallback
+  // is needed.
   if (await SecretManager.apiKeyExists('openRouter')) {
     return {
-      model: API_KEY_MODEL_BY_PROVIDER.openRouter ?? SIGNED_IN_SETUP_MODEL,
+      model: API_KEY_MODEL_BY_PROVIDER.openRouter,
       requiresOpenRouter: true,
     };
   }
