@@ -1,0 +1,1 @@
+export { registerSetupAssistantCommand } from './setupAssistantCommand';
