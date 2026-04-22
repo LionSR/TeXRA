@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Improvements
+
+- **GPT-5.4 Pro now off by default** — `gpt54pro` is no longer part of the default model list and is stripped from existing users' enabled models on upgrade. It remains available to manually re-enable in the Models settings tab.
+
 ## [0.37.4] - 2026-04-21
 
 ### Breaking changes

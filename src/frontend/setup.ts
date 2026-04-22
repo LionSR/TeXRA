@@ -9,7 +9,11 @@ import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/computeModelOptions';
+import {
+  DEFAULT_MODELS,
+  FORCE_DISABLED_MODELS,
+  MODEL_LIST_VERSION,
+} from '@model/computeModelOptions';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { GlobalStorageFS } from '@utils/files';
@@ -233,7 +237,8 @@ export async function refreshModelListIfNeeded(): Promise<void> {
 }
 
 /**
- * Merges new default models into user's existing enabled models list.
+ * Merges new default models into the user's enabled list and strips any models
+ * listed in FORCE_DISABLED_MODELS.
  */
 async function mergeNewModelsIfCustomized(): Promise<void> {
   const currentModels = globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS);
@@ -245,22 +250,35 @@ async function mergeNewModelsIfCustomized(): Promise<void> {
     return;
   }
 
+  const forceDisabled = new Set(FORCE_DISABLED_MODELS);
+  const kept = currentModels.filter((model) => !forceDisabled.has(model));
+  const removed = currentModels.filter((model) => forceDisabled.has(model));
+
   const modelsToAdd = DEFAULT_MODELS.filter(
-    (model) => !currentModels.includes(model),
+    (model) => !kept.includes(model),
   );
 
-  if (modelsToAdd.length === 0) {
+  if (modelsToAdd.length === 0 && removed.length === 0) {
     return;
   }
 
   await globalSM.update(GlobalStateKey.ENABLED_MODELS, [
-    ...currentModels,
+    ...kept,
     ...modelsToAdd,
   ]);
-  logger.info(
-    'extension',
-    `Merged ${modelsToAdd.length} new models into user's list: ${modelsToAdd.join(', ')}`,
-  );
+
+  if (modelsToAdd.length > 0) {
+    logger.info(
+      'extension',
+      `Merged ${modelsToAdd.length} new models into user's list: ${modelsToAdd.join(', ')}`,
+    );
+  }
+  if (removed.length > 0) {
+    logger.info(
+      'extension',
+      `Removed ${removed.length} force-disabled models from user's list: ${removed.join(', ')}`,
+    );
+  }
 }
 
 /** Default options for global settings that should only be set if not already configured */
