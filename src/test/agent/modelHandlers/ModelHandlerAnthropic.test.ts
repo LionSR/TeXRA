@@ -1361,7 +1361,9 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
         assert.ok(
           err instanceof AnthropicUserAbortError,
           `expected AnthropicUserAbortError, got ${
-            err instanceof Error ? `${err.constructor.name}: ${err.message}` : String(err)
+            err instanceof Error
+              ? `${err.constructor.name}: ${err.message}`
+              : String(err)
           }`,
         );
         // And the wrap-guard message must not appear for the abort path.
