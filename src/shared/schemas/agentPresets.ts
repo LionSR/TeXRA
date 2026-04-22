@@ -34,7 +34,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For Lean 4 projects -- theorem search, tactic simplification, blueprints, and LaTeX polishing.',
     icon: 'codicon-symbol-structure',
-    workflowAgents: ['correct', 'polish'],
+    workflowAgents: [],
     toolUseAgents: [
       'lean',
       'leanSearch',
