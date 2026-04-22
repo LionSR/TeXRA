@@ -10,7 +10,6 @@ settings:
     - unset_api_key
     - invoke_command
     - install_vscode_extension
-    - update_shell_rc
     - bash
     - read_file
     - write_file
@@ -56,8 +55,12 @@ prompts:
       B. LaTeX Workshop extension: `install_vscode_extension` with
          `"James-Yu.latex-workshop"`.
       C. PATH fix if TeX binaries are installed but missing from PATH:
-         briefly explain, then offer `update_shell_rc` with a targeted
-         `export PATH=...` line (show the full line first).
+         show the user the exact one-line `export PATH=...` (POSIX) or
+         `$env:Path = "..."` (PowerShell) you propose to append, then run
+         it through `bash` — e.g. `printf '\n# added by TeXRA setup\nexport
+         PATH="/usr/local/texlive/2024/bin/universal-darwin:$PATH"\n' >>
+         ~/.zshrc`. The user's normal bash approval dialog is the gate; do
+         not bypass it. Tell the user to open a new terminal afterward.
       D. Credentials: exactly one of
            - Researcher Access sign-in (recommended, free): call
              `invoke_command` with `texra.auth.signIn`.
