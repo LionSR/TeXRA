@@ -49,7 +49,8 @@ export class MediaExtractionNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
-    const { modelHandler, latexMediaManager, config } = this.services;
+    const { modelHandler, latexMediaManager, config, fileService } =
+      this.services;
 
     if (
       !modelHandler.capabilities.supportsVision ||
@@ -67,6 +68,10 @@ export class MediaExtractionNode<C = unknown> extends Node<
         prepRes.extraMediaFiles,
       );
     } else {
+      // Output files live at `runDir/r{round}/…`; mirror mirrored-workspace
+      // deps (cls/sty/bib, local \input targets) as symlinks inside the
+      // round dir so pdflatex/latexmk can resolve them during auto-compile.
+      await fileService.ensureMirroredInRoundDir(prepRes.currentRound);
       await latexMediaManager.processOutputFiles(
         prepRes.files,
         prepRes.workspaceState,

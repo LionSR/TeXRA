@@ -127,10 +127,12 @@ async function handlePack(config: unknown): Promise<void> {
       };
 
       // Toolbar-driven invocations pass an executionId: snapshot the runDir
-      // into workspace/History/ (dereferencing symlinked deps). When no
-      // runDir exists (legacy pre-refactor runs whose outputs live in the
-      // workspace), fall back to the workspace-scan pack so those artifacts
-      // still get captured.
+      // AND the workspace. The workspace pass is a no-op for new runs (their
+      // outputs live only inside the runDir), but it catches legacy runs
+      // whose outputs still sit beside the source — those runs also
+      // produce a runDir via `ensureRunDir`, so keying solely off
+      // `runPackRunDir` returning non-noFiles skips real workspace
+      // artifacts and would produce an empty snapshot.
       if (data.executionId) {
         const runDirResult = await runPackRunDir(
           data.executionId,
@@ -138,9 +140,10 @@ async function handlePack(config: unknown): Promise<void> {
           data.model,
           data.inputFile,
         );
-        if (runDirResult.status !== 'noFiles') {
-          return runDirResult;
-        }
+        const workspaceResult = await runWorkspacePack();
+        return workspaceResult.status !== 'noFiles'
+          ? workspaceResult
+          : runDirResult;
       }
       return runWorkspacePack();
     },

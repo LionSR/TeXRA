@@ -595,10 +595,13 @@ async function handleRunLatexdiff(
       }
     }
 
-    // No runId (or runId scan returned nothing): fall back to searching
-    // executions by agent/model/inputFile and pulling their persisted
-    // stream-tab metadata.
-    if (!outputsByRound) {
+    // No runId given: fall back to searching executions by
+    // agent/model/inputFile and pulling their persisted stream-tab
+    // metadata. When the caller pinned a runId but the run-dir scan
+    // turned up nothing, DO NOT drop to latest-matching auto-discovery:
+    // that would silently diff against a different (usually newer)
+    // execution with the same agent/model/input.
+    if (!outputsByRound && !runId) {
       const discovered = await discoverLatestExecutionOutputs({
         agent,
         model,
