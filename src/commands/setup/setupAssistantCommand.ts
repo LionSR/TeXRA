@@ -92,6 +92,22 @@ interface LaunchModelResolution {
  */
 async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
   const serverKeys = getServerSideKeyService();
+
+  // When global OR routing is on, every model call is re-routed through
+  // OpenRouter at the ModelFactory level regardless of what we pick for
+  // "direct" here — so a server-side or direct-provider pick would be
+  // silently misrouted (and possibly land on a model OR doesn't carry).
+  // `ensureRoutingConfigured` has already validated an OR key is
+  // present, so we can short-circuit to the OR-routed default. Returning
+  // `requiresOpenRouter: true` is a no-op in the flip helper when the
+  // global flag is already on, so this doesn't mutate anything.
+  if (getUseOpenRouter()) {
+    return {
+      model: API_KEY_MODEL_BY_PROVIDER.openRouter,
+      requiresOpenRouter: true,
+    };
+  }
+
   if (await serverKeys.canUseServerSideKeysForModel(SIGNED_IN_SETUP_MODEL)) {
     return { model: SIGNED_IN_SETUP_MODEL, requiresOpenRouter: false };
   }
