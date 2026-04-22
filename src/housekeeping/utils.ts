@@ -24,6 +24,14 @@ export { getAgentFirstNameChunk };
 export const parseRoundFolder = parseWorkflowOutputRoundDir;
 
 /**
+ * Produce an ISO-8601 timestamp stripped of separators, suitable for use in
+ * a file or folder name (e.g. `20260422T003541`). Second-level granularity.
+ */
+export function generateTimestamp(): string {
+  return new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
+}
+
+/**
  * Build glob patterns that match pre-refactor workflow output filenames
  * left over in the user's workspace. Current-layout outputs live inside
  * task-run storage (`executions/{id}/…`) and are managed per-execution, so

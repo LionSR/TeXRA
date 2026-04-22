@@ -12,13 +12,10 @@ import { WorkspaceFS } from '@utils/files';
 import { resolveRunDir } from '@utils/files/taskRunStorage';
 
 import { HISTORY_DIR } from './constants';
+import { generateTimestamp } from './utils';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
-
-function generateTimestamp(): string {
-  return new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
-}
 
 /**
  * Snapshot a completed run's runDir into `workspace/History/`. Symlinks
