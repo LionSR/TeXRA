@@ -1349,6 +1349,10 @@
           "when": "texra.activated"
         },
         {
+          "command": "texra.runSetupAssistant",
+          "when": "texra.activated"
+        },
+        {
           "command": "texra.cleanOutput",
           "when": "texra.activated"
         },

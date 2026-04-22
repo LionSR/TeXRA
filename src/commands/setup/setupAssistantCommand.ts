@@ -102,30 +102,30 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution> {
 }
 
 /**
- * Single source of truth for the `useOpenRouter` flip/restore dance.
- * When the resolved model requires OpenRouter routing *and* the flag is
- * currently off, flip it on for the scoped callback and always restore in
- * a `finally` — regardless of how the callback exits — so
- * `registerExecution` or `executeAgent` failures can't leave the flag
- * sticky. Otherwise runs the callback with no state mutation at all:
- *   - `requiresOpenRouter === false` → never touches the flag, so a user
- *     who has OpenRouter on (or off) stays wherever they were.
- *   - already enabled → nothing to flip, nothing to restore.
+ * Align the global `useOpenRouter` flag with the routing the resolved
+ * setup model actually needs, and always restore the prior value in a
+ * `finally` so `registerExecution` / `executeAgent` failures can't leave
+ * the flag sticky. Handles both directions:
+ *   - resolved model wants OpenRouter, flag is off → flip on, restore off
+ *   - resolved model wants direct provider routing, flag is on → flip off,
+ *     restore on (otherwise ModelFactory routes through OpenRouter even
+ *     though the user only has a direct provider key, and launch fails
+ *     with a missing OpenRouter key)
+ *   - flag already matches what we need → no mutation at all
  */
 async function withOpenRouterFlag<T>(
   requiresOpenRouter: boolean,
   fn: () => Promise<T>,
 ): Promise<T> {
-  if (!requiresOpenRouter) return fn();
   const prior = globalSM.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
-  if (prior) return fn();
+  if (prior === requiresOpenRouter) return fn();
 
-  await globalSM.update(GlobalStateKey.USE_OPENROUTER, true);
+  await globalSM.update(GlobalStateKey.USE_OPENROUTER, requiresOpenRouter);
   try {
     return await fn();
   } finally {
     await globalSM
-      .update(GlobalStateKey.USE_OPENROUTER, false)
+      .update(GlobalStateKey.USE_OPENROUTER, prior)
       .then(undefined, (err) => {
         logger.error(CHANNEL, 'Failed to restore useOpenRouter flag.', {
           data: err,
