@@ -23,7 +23,7 @@ export function readGitAuthorSettings(): {
   return {
     markCommits: workspaceSM.get<boolean>(
       WorkspaceStateKey.GIT_MARK_COMMITS,
-      false,
+      true,
     ),
     authorName:
       workspaceSM.get<string>(WorkspaceStateKey.GIT_AUTHOR_NAME) ||
