@@ -15,12 +15,15 @@ import { getSetupPlatform } from './platform';
  * one opens an existing, trusted UI flow). Do NOT add destructive commands
  * (delete, reset, clean) to this list.
  */
+// Intentionally excluded: `AUTH_COMMANDS.SIGN_OUT` — the setup agent's
+// purpose is to *establish* credentials, and signing the user out
+// mid-setup would undo the very credential the assistant just wired up.
+// A user who genuinely wants to sign out has the Profile command for it.
 const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
   // API keys & auth
   'texra.setApiKey',
   'texra.removeApiKey',
   AUTH_COMMANDS.SIGN_IN,
-  AUTH_COMMANDS.SIGN_OUT,
   AUTH_COMMANDS.VIEW_PROFILE,
   // Settings dashboard tabs
   'texra.showSettingsView',

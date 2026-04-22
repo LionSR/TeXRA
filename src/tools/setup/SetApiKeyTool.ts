@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local file imports
@@ -81,7 +82,12 @@ export class SetApiKeyTool extends defineTool({
 
     await platform.secrets.setApiKey(provider, input.key.trim());
 
-    // Refresh the main view so the "no API key" banner disappears immediately.
+    // Drop the TTL-cached model-options computation before the refresh
+    // so the re-rendered picker actually reflects the just-added key —
+    // otherwise the UI can replay a recent pre-key result and still
+    // show the provider's models as unavailable. Matches the manual
+    // `texra.setApiKey` command's ordering in `apiKeyCommands`.
+    invalidateModelOptionsCache();
     await Promise.all([
       platform.commands
         .invoke('texra.refreshApiKeyStatus')
