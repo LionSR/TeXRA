@@ -652,7 +652,6 @@ export async function executeAgent(
           setting: ctx.setting as AgentWorkflowSetting,
           parentStage: ctx.parentStage,
           onRoundCompleted,
-          isSubagent,
         });
         return {
           category: 'workflow' as const,
@@ -699,17 +698,16 @@ export async function executeMergeAgent(
       logger.info(`Executing merge with model ${model}`);
 
       const fileService = new TaskRunFileService(executionId);
+      const mergeSetting = ctx.setting as AgentWorkflowSetting;
       const result = await runReflectionFlow({
         ...ctx,
         ...createInterruptCallbacks(),
         onRoundFinalized: (run) =>
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
-        setting: ctx.setting as AgentWorkflowSetting,
+        setting: mergeSetting,
         getOutputFileLocation: createMergeOutputFileLocationGetter(
-          inputFile,
-          editedFile,
-          model,
           fileService,
+          mergeSetting.outputExt,
         ),
         parentStage: ctx.parentStage,
         onRoundCompleted: createRoundProgressCallback(

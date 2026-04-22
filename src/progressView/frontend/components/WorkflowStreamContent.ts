@@ -34,6 +34,7 @@ import './FileList';
 import './FollowupSection';
 import './BackgroundTasksPanel';
 import './RequestPanels';
+import './WorkflowHintBanner';
 
 @customElement('workflow-stream-content')
 export class WorkflowStreamContent extends LitElement {
@@ -89,6 +90,8 @@ export class WorkflowStreamContent extends LitElement {
         .progress=${state.conversationProgress}
         .yoloActive=${false}
       ></stream-header>
+
+      <workflow-hint-banner></workflow-hint-banner>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
