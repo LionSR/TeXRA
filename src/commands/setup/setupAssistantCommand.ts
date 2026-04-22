@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core';
+import { loadAgents } from '@agent/index';
 import { registerExecution } from '@agent/storage';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -289,6 +290,15 @@ async function runSetupAssistant(): Promise<void> {
       model: resolution.model,
       instruction: SETUP_INSTRUCTION,
     });
+
+    // Activation fires `loadAgents()` fire-and-forget, so a user
+    // invoking the setup assistant from the first walkthrough step (or
+    // immediately after install, especially with remote-agent fetches
+    // in flight) can race the agent registry and hit "Could not find
+    // agent: setup". `loadAgents()` is idempotent: it returns the
+    // in-flight promise if loading is still running, or resolves
+    // immediately if already initialized, or kicks off a fresh load.
+    await loadAgents();
 
     const launch = async () => {
       const executionId = generateExecutionId();
