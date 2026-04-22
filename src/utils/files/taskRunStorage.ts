@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import {
   AgentFileLocationSchema,
   ExternalFileLocationSchema,
@@ -453,7 +454,7 @@ export class TaskRunFileService {
         // these — the dependency is still reachable at
         // `r{round}/../<relativePath>`, i.e. `<runDir>/<relativePath>`.
         const { dir: depDir, name: depName } = path.parse(relativePath);
-        if (depDir === '' && depName === 'output') {
+        if (depDir === '' && depName === WORKFLOW_OUTPUT_BASENAME) {
           logger.debug(
             CHANNEL,
             `Skipping round-dir mirror of ${relativePath}: would clobber primary output in ${roundSegment}`,
