@@ -19,6 +19,7 @@ import {
   DEFAULT_MAX_ROUNDS,
 } from './constants';
 import {
+  generateTimestamp,
   getAgentFirstNameChunk,
   getFilePatterns,
   findFilesFromPatterns,
@@ -27,10 +28,6 @@ import {
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
-
-function generateTimestamp(): string {
-  return new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
-}
 
 export async function runPackSingle(
   model: string,

@@ -5,8 +5,14 @@ import { z } from 'zod';
 // Local imports
 import type { FileOpResult } from '@agent/types';
 import { parseWithErrorDisplay } from '@common/errors';
-import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
+import {
+  runPack,
+  runPackSingle,
+  runPackMultiple,
+  runPackRunDir,
+} from '@housekeeping';
 import * as logger from '@logger/logUtils';
+import { ExecutionIdSchema } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
 import {
   emitClearMissingOutputs,
@@ -29,6 +35,7 @@ const PackConfigSchema = BasePackSchema.extend({
   outputFiles: z.array(z.string()).prefault([]),
   useMultipleOutputs: z.boolean().optional(),
   streamId: z.string().optional(),
+  executionId: ExecutionIdSchema.optional(),
   skipProgressViewClear: z.boolean().optional(),
 }).transform((c) => ({
   ...c,
@@ -103,19 +110,48 @@ async function handlePack(config: unknown): Promise<void> {
     PackConfigSchema,
     config,
     'config',
-    (data) => {
-      if (data.outputFiles.length > 1 && !data.useMultipleOutputs) {
-        logger.warn(
-          CHANNEL,
-          'Multiple output files but multi-output mode disabled',
+    async (data) => {
+      const runWorkspacePack = (): Promise<FileOpResult> => {
+        if (data.outputFiles.length > 1 && !data.useMultipleOutputs) {
+          logger.warn(
+            CHANNEL,
+            'Multiple output files but multi-output mode disabled',
+          );
+        }
+        return runPack(
+          data.model,
+          data.inputFile,
+          data.agent,
+          data.useMultipleOutputs ? data.outputFiles : [],
         );
+      };
+
+      // Toolbar-driven invocations pass an executionId: snapshot the runDir
+      // AND the workspace. The workspace pass is a no-op for new runs (their
+      // outputs live only inside the runDir), but it catches legacy runs
+      // whose outputs still sit beside the source — those runs also
+      // produce a runDir via `ensureRunDir`, so keying solely off
+      // `runPackRunDir` returning non-noFiles skips real workspace
+      // artifacts and would produce an empty snapshot.
+      if (data.executionId) {
+        const runDirResult = await runPackRunDir(
+          data.executionId,
+          data.agent,
+          data.model,
+          data.inputFile,
+        );
+        const workspaceResult = await runWorkspacePack();
+        // Surface errors from either leg — a failed runDir snapshot
+        // (permission denied, disk full) must not be masked by a
+        // successful workspace pack, or the user sees "Pack complete"
+        // while no primary run-dir snapshot was created.
+        if (runDirResult.status === 'error') return runDirResult;
+        if (workspaceResult.status === 'error') return workspaceResult;
+        return workspaceResult.status !== 'noFiles'
+          ? workspaceResult
+          : runDirResult;
       }
-      return runPack(
-        data.model,
-        data.inputFile,
-        data.agent,
-        data.useMultipleOutputs ? data.outputFiles : [],
-      );
+      return runWorkspacePack();
     },
     (data) => {
       if (data.skipProgressViewClear) return null;
