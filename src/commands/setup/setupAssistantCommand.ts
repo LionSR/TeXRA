@@ -62,7 +62,6 @@ interface LaunchModelResolution {
   requiresOpenRouter: boolean;
 }
 
-
 /**
  * Pick a model the setup agent can actually call, given the credentials
  * the user currently has AND the global `useOpenRouter` routing flag
