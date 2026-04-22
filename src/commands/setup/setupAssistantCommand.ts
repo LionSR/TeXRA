@@ -13,6 +13,7 @@ import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
 import * as logger from '@logger/logUtils';
 import { generateExecutionId } from '@utils/core/executionId';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'SetupAssistant';
 logger.initialize(CHANNEL);
@@ -62,13 +63,16 @@ interface LaunchModelResolution {
 
 /**
  * Pick a model the setup agent can actually call, given the credentials
- * the user currently has. Pure: never mutates global state.
+ * the user currently has AND the global `useOpenRouter` routing flag
+ * (already validated by the caller). Pure: never mutates state.
  *
  * Order:
- *   1. Researcher Access — only when "Use Included Access" is actually on
- *      (`auth.authenticated` alone is insufficient: a signed-in user who
- *      turned Included Access off will not get server-side keys routed
- *      through their calls — so `canUseServerSideKeys()` is the real gate).
+ *   1. Researcher Access — only when "Use Included Access" is actually
+ *      on AND the signed-in setup model is in the user's tier. A plain
+ *      `canUseServerSideKeys()` pass is insufficient because a lower-tier
+ *      user may have server-side access to *some* models but not
+ *      `SIGNED_IN_SETUP_MODEL`; we'd otherwise fall through preflight
+ *      and fail at runtime when tier enforcement kicks in.
  *   2. Any direct API key for a provider whose default model routes
  *      through that same provider directly (iterating
  *      `SecretManager.API_PROVIDERS` for deterministic ordering). Preferred
@@ -77,7 +81,8 @@ interface LaunchModelResolution {
  *      router-backed default and let the caller temporarily flip the flag.
  */
 async function resolveLaunchModel(): Promise<LaunchModelResolution> {
-  if (await getServerSideKeyService().canUseServerSideKeys()) {
+  const serverKeys = getServerSideKeyService();
+  if (await serverKeys.canUseServerSideKeysForModel(SIGNED_IN_SETUP_MODEL)) {
     return { model: SIGNED_IN_SETUP_MODEL, requiresOpenRouter: false };
   }
 
@@ -102,30 +107,29 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution> {
 }
 
 /**
- * Align the global `useOpenRouter` flag with the routing the resolved
- * setup model actually needs, and always restore the prior value in a
- * `finally` so `registerExecution` / `executeAgent` failures can't leave
- * the flag sticky. Handles both directions:
- *   - resolved model wants OpenRouter, flag is off → flip on, restore off
- *   - resolved model wants direct provider routing, flag is on → flip off,
- *     restore on (otherwise ModelFactory routes through OpenRouter even
- *     though the user only has a direct provider key, and launch fails
- *     with a missing OpenRouter key)
- *   - flag already matches what we need → no mutation at all
+ * Temporarily flip the `useOpenRouter` flag *on* for the scoped callback
+ * and always restore in a `finally`. Only used in the narrow OR-only
+ * case — i.e. the user has no server-side access and no direct provider
+ * key, only an OpenRouter key. In that state, any other agent they could
+ * launch concurrently would also need OpenRouter routing (they have no
+ * other credential), so the global flip matches what the user wants
+ * anyway and can't break a concurrent non-OR agent.
+ *
+ * The reverse direction (flag on, direct provider picked) is *not*
+ * handled here — it's caught at preflight and surfaced as a settings
+ * misconfiguration the user must resolve, so we never mutate shared
+ * routing state against a user who deliberately enabled OpenRouter.
  */
-async function withOpenRouterFlag<T>(
-  requiresOpenRouter: boolean,
-  fn: () => Promise<T>,
-): Promise<T> {
+async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
   const prior = globalSM.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
-  if (prior === requiresOpenRouter) return fn();
+  if (prior) return fn();
 
-  await globalSM.update(GlobalStateKey.USE_OPENROUTER, requiresOpenRouter);
+  await globalSM.update(GlobalStateKey.USE_OPENROUTER, true);
   try {
     return await fn();
   } finally {
     await globalSM
-      .update(GlobalStateKey.USE_OPENROUTER, prior)
+      .update(GlobalStateKey.USE_OPENROUTER, false)
       .then(undefined, (err) => {
         logger.error(CHANNEL, 'Failed to restore useOpenRouter flag.', {
           data: err,
@@ -185,6 +189,33 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   return false;
 }
 
+/**
+ * Refuse launch if "Use OpenRouter" is globally on but the user has no
+ * OpenRouter key. In that configuration, every model call routes through
+ * OpenRouter regardless of provider, and the setup agent (like any other
+ * agent) will fail on a missing OR key. We ask the user to resolve the
+ * misconfiguration explicitly — we deliberately don't flip the global
+ * flag off for them, because a user who enabled OpenRouter did so on
+ * purpose and may have concurrent OR-routed agents running.
+ */
+async function ensureRoutingConfigured(): Promise<boolean> {
+  if (!getUseOpenRouter()) return true;
+  if (await SecretManager.apiKeyExists('openRouter')) return true;
+
+  const choice = await vscode.window.showWarningMessage(
+    '"Use OpenRouter" is enabled in settings, but no OpenRouter key is set. Every model call routes through OpenRouter and will fail. Add an OpenRouter key, or disable "Use OpenRouter" in the Models tab, then retry.',
+    { modal: true },
+    'Open Models tab',
+    'Add OpenRouter key',
+  );
+  if (choice === 'Open Models tab') {
+    await vscode.commands.executeCommand('texra.showModels');
+  } else if (choice === 'Add OpenRouter key') {
+    await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
+  }
+  return false;
+}
+
 async function runSetupAssistant(): Promise<void> {
   try {
     const proceed = await ensureCredentialOrPrompt();
@@ -195,6 +226,8 @@ async function runSetupAssistant(): Promise<void> {
       return;
     }
 
+    if (!(await ensureRoutingConfigured())) return;
+
     const resolution = await resolveLaunchModel();
     const config = AgentConfigSchema.parse({
       agent: 'setup',
@@ -203,11 +236,17 @@ async function runSetupAssistant(): Promise<void> {
       instruction: SETUP_INSTRUCTION,
     });
 
-    await withOpenRouterFlag(resolution.requiresOpenRouter, async () => {
+    const launch = async () => {
       const executionId = generateExecutionId();
       await registerExecution(executionId, config, config.agent);
       await executeAgent(config, executionId);
-    });
+    };
+
+    if (resolution.requiresOpenRouter) {
+      await withOpenRouterFlagOn(launch);
+    } else {
+      await launch();
+    }
   } catch (error) {
     logger.error(CHANNEL, 'Setup assistant failed to launch.', { data: error });
     void vscode.window.showErrorMessage(
