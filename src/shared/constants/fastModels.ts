@@ -27,5 +27,7 @@ export const FAST_FIRST_RESPONSE_HINT =
 export function isFastFirstResponseModel(
   inputPrice: number | undefined,
 ): boolean {
-  return inputPrice !== undefined && inputPrice < FAST_FIRST_RESPONSE_PRICE_CEILING;
+  return (
+    inputPrice !== undefined && inputPrice < FAST_FIRST_RESPONSE_PRICE_CEILING
+  );
 }

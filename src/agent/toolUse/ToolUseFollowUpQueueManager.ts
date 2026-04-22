@@ -31,9 +31,7 @@ export class ToolUseFollowUpQueue {
    * polling) to tear down stream-scoped subscriptions when the owning stream
    * goes away.
    */
-  static onRelease(
-    observer: (streamId: StreamTabId) => void,
-  ): () => void {
+  static onRelease(observer: (streamId: StreamTabId) => void): () => void {
     this.releaseObservers.add(observer);
     return () => {
       this.releaseObservers.delete(observer);
@@ -84,19 +82,27 @@ export class ToolUseFollowUpQueue {
    * Enqueue a follow-up for a stream.
    *
    * Auto-creates the queue if it doesn't exist yet (needed for WAITING streams
-   * from prior sessions). Silently discards if the queue was explicitly released
-   * (orchestrator disposed — late-arriving subagent results).
+   * from prior sessions). Returns false and silently discards if the queue was
+   * explicitly released (orchestrator disposed — late-arriving subagent
+   * results). Pass `{ force: true }` for explicit user actions that should
+   * reopen a released queue (caller is responsible for ensuring a consumer
+   * will drain it, or releasing again on failure).
    */
-  static enqueue(streamId: StreamTabId, followUp: string): void {
-    if (this.released.has(streamId)) {
+  static enqueue(
+    streamId: StreamTabId,
+    followUp: string,
+    options?: { force?: boolean },
+  ): boolean {
+    if (this.released.has(streamId) && !options?.force) {
       logger.debug(
         `Queue for stream ${streamId} was released, discarding follow-up.`,
       );
-      return;
+      return false;
     }
     const queue = this.acquire(streamId);
     queue.enqueue(followUp);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
+    return true;
   }
 
   static drain(streamId: StreamTabId): string[] {

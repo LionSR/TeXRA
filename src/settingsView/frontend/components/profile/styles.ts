@@ -75,11 +75,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .tier-badge.ultra {
-    background: linear-gradient(
-      135deg,
-      var(--vscode-textLink-foreground) 0%,
-      var(--vscode-textLink-activeForeground) 100%
-    );
+    background: var(--vscode-textLink-activeForeground);
     color: var(--vscode-button-foreground);
   }
 

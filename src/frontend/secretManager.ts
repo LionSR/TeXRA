@@ -61,9 +61,7 @@ export class SecretManager {
     return stored ?? process.env.GITHUB_TOKEN ?? undefined;
   }
 
-  public static async gitHubTokenExists(): Promise<
-    'secret' | 'env' | 'none'
-  > {
+  public static async gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {
     const stored = await this.get(this.GITHUB_TOKEN_KEY);
     if (stored) return 'secret';
     if (process.env.GITHUB_TOKEN) return 'env';

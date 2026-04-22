@@ -81,12 +81,12 @@ The `external_inquiry` tool lets a TeXRA agent paste a question to an external c
 
 ## Which Agent to Use
 
-| Agent        | Best for                                                       |
-| ------------ | -------------------------------------------------------------- |
-| `search`     | Finding papers, literature reviews, fact-checking              |
-| `research`   | Computational verification with Wolfram and literature lookups |
-| `discuss`    | Brainstorming research directions with literature context      |
-| `ask`        | Quick lookups about your documents and related work            |
+| Agent      | Best for                                                       |
+| ---------- | -------------------------------------------------------------- |
+| `search`   | Finding papers, literature reviews, fact-checking              |
+| `research` | Computational verification with Wolfram and literature lookups |
+| `discuss`  | Brainstorming research directions with literature context      |
+| `ask`      | Quick lookups about your documents and related work            |
 
 Pick any of them from the **Agent** dropdown (<i class="codicon codicon-sparkle"></i>). Check `Dashboard → Agents` (<i class="codicon codicon-sparkle"></i>) to see exactly which tools each one has enabled.
 

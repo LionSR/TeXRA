@@ -8,7 +8,6 @@ import { StreamLogStore } from '@logger/StreamLogStore';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
 import { StreamMetaManager } from '@progressView/managers/StreamMetaManager';
-import { RunInstructionsManager } from '@progressView/managers/RunInstructionsManager';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
   getStreamTabStore,
@@ -102,8 +101,10 @@ export function cleanupToolUseAgentRegistry(meta: StreamMetaManager): void {
 /**
  * Core state management for the progress view.
  *
- * Coordinates five persistence managers (streamLogs, outputFiles, usageStats,
- * meta, runInstructions) plus ephemeral in-memory state and preferences.
+ * Coordinates four persistence managers (streamLogs, outputFiles, usageStats,
+ * meta) plus ephemeral in-memory state and preferences. Instructions are
+ * emitted as user-message log entries, so they live inside the log stream
+ * (not in state).
  */
 export class ProgressViewState {
   // -- Persistence managers ---------------------------------------------------
@@ -111,7 +112,6 @@ export class ProgressViewState {
   readonly outputFiles: OutputFilesManager;
   readonly usageStats: UsageStatsManager;
   readonly meta: StreamMetaManager;
-  readonly runInstructions: RunInstructionsManager;
 
   // -- Preferences ------------------------------------------------------------
   private _prefs!: PersistedState<ProgressViewPrefs>;
@@ -141,7 +141,6 @@ export class ProgressViewState {
     this.outputFiles = new OutputFilesManager();
     this.usageStats = new UsageStatsManager();
     this.meta = new StreamMetaManager();
-    this.runInstructions = new RunInstructionsManager();
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -216,14 +215,6 @@ export class ProgressViewState {
     if (state) {
       state.hints = {};
     }
-  }
-
-  setDescription(stream: StreamTabId, description: string): void {
-    this.meta.setDescription(stream, description);
-  }
-
-  getDescription(stream: StreamTabId): string | undefined {
-    return this.meta.getDescription(stream);
   }
 
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
@@ -315,7 +306,6 @@ export class ProgressViewState {
     this.outputFiles.evict(stream);
     this.usageStats.evict(stream);
     this.meta.evict(stream);
-    this.runInstructions.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
@@ -343,7 +333,6 @@ export class ProgressViewState {
     this.outputFiles.evictAll();
     this.usageStats.evictAll();
     this.meta.evictAll();
-    this.runInstructions.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();
@@ -379,6 +368,18 @@ export class ProgressViewState {
       await this.loadManagers(streamIds);
     }
 
+    // Promote any pre-existing `runInstructions.json` disk files (from the
+    // earlier memento→StreamTabStore migration) to the archival
+    // `legacyInstructions.json` so the instruction text survives on disk
+    // even though the new UI no longer displays it.
+    await Promise.all(
+      this.streamLogs.keys().map((id) =>
+        getStreamTabStore(id)
+          .migrateOnDiskRunInstructions()
+          .catch(() => {}),
+      ),
+    );
+
     this.logger.info('[Persistence] Managers loaded');
 
     this.validateActiveStream();
@@ -394,7 +395,6 @@ export class ProgressViewState {
     await Promise.all([
       this.streamLogs.flush(),
       this.meta.flush(),
-      this.runInstructions.flush(),
       this.outputFiles.flush(),
       this.usageStats.flush(),
     ]);
@@ -407,7 +407,6 @@ export class ProgressViewState {
       this.outputFiles.load(streamIds),
       this.usageStats.load(streamIds),
       this.meta.load(streamIds),
-      this.runInstructions.load(streamIds),
     ]);
   }
 

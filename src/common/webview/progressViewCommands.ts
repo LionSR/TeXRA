@@ -12,7 +12,6 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   LOG_DELTA: 'logDelta',
 
-  UPDATE_INSTRUCTION: 'updateInstruction',
   UPDATE_TODOS: 'updateTodos',
   UPDATE_PLAN: 'updatePlan',
   UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',

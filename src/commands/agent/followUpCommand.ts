@@ -7,6 +7,7 @@ import {
   sendFollowUp,
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -118,19 +119,29 @@ async function handleFollowUpResult(
       break;
     case 'queued':
       bus.emit('updateQueuedFollowUps', { streamId });
-      if (result.reason === 'waiting') {
+      if (result.reason === 'waiting' || result.reason === 'children_running') {
         const resumed = await tryAutoResume(streamId);
-        if (!resumed) {
-          await vscode.window.showInformationMessage(
-            'Message queued. Auto-resume failed — start a new agent task to continue.',
-          );
+        // tryAutoResume also returns false when the stream is already
+        // active/resuming — another consumer is on the way, so neither
+        // branch below should drop the queue or warn the user.
+        if (!resumed && !StreamStatusService.isActiveOrResuming(streamId)) {
+          if (result.reason === 'children_running') {
+            // sendFollowUp force-reopened a released queue on behalf of the
+            // auto-resume attempt. Re-release drops the just-enqueued message
+            // too, but that's the lesser evil — leaving the queue open would
+            // leak late child deliveries into the next run on this stream.
+            ToolUseFollowUpQueue.release(streamId);
+            bus.emit('updateQueuedFollowUps', { streamId });
+            await vscode.window.showWarningMessage(
+              'Message dropped — no session available to receive it. Start a new agent task to continue.',
+            );
+          } else {
+            await vscode.window.showInformationMessage(
+              'Message queued. Auto-resume failed — start a new agent task to continue.',
+            );
+          }
         }
       }
-      break;
-    case 'error':
-      await vscode.window.showErrorMessage(
-        `Failed to send follow-up: ${result.message}`,
-      );
       break;
     case 'no_session':
       await vscode.window.showWarningMessage(

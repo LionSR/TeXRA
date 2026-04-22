@@ -127,7 +127,9 @@ function extractReasoningDelta(chunk: ChatCompletionChunk): string {
  * suffix because continuation prompts reference the tail of the response.
  */
 function extractOpenAIPartialTail(
-  snapshot: { choices?: Array<{ message?: { content?: string | null } }> } | undefined,
+  snapshot:
+    | { choices?: Array<{ message?: { content?: string | null } }> }
+    | undefined,
   maxChars: number,
 ): string {
   const content = snapshot?.choices?.[0]?.message?.content ?? '';
@@ -522,7 +524,12 @@ export class ModelHandlerOpenAI<
       if (!isUserAbort(streamError)) {
         this.logger.warn(
           `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
-          { data: { model: this.config.fullName, partialTextLength: partialText.length } },
+          {
+            data: {
+              model: this.config.fullName,
+              partialTextLength: partialText.length,
+            },
+          },
         );
       }
       throw streamError;

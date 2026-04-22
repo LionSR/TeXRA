@@ -56,6 +56,7 @@ import {
 import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_AUTHOR_EMAIL,
+  DEFAULT_GIT_MARK_COMMITS,
 } from '@shared/constants/git';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
@@ -194,7 +195,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly toolDashboardLoaded = signal(false);
 
   // Git author settings state
-  private readonly gitMarkCommits = signal(false);
+  private readonly gitMarkCommits = signal(DEFAULT_GIT_MARK_COMMITS);
   private readonly gitAuthorName = signal(DEFAULT_GIT_AUTHOR_NAME);
   private readonly gitAuthorEmail = signal(DEFAULT_GIT_AUTHOR_EMAIL);
   private readonly gitWorktreeSupport = signal(false);
@@ -402,10 +403,7 @@ export class SettingsApp extends SettingsAppBase {
       }
 
       case SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS: {
-        const data = this.parseMessage(
-          raw,
-          UpdatePRSubscriptionsMessageSchema,
-        );
+        const data = this.parseMessage(raw, UpdatePRSubscriptionsMessageSchema);
         if (!data) return;
         this.prSubscriptions.set(data.keys);
         return;

@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -32,7 +32,10 @@ import {
   type WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { postMessage } from '@shared/vscode';
-import { renderModelOptions } from '@shared/utils/selectTemplates';
+import {
+  renderAgentOptions,
+  renderModelOptions,
+} from '@shared/utils/selectTemplates';
 
 // Local imports - shared schemas
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
@@ -43,6 +46,13 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import type { PermissionState } from './PermissionCard';
+
+function proposalIdOf(
+  p: PermissionState | null | undefined,
+): string | undefined {
+  return p?.kind === PERMISSION_KIND.PROPOSAL ? p.data.proposalId : undefined;
+}
 
 @customElement('proposal-request-panel')
 export class ProposalRequestPanel extends BaseFeedbackPanel {
@@ -55,6 +65,23 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   ];
 
   @state() private selectedModel: string | null = null;
+  @state() private selectedAgent: string | null = null;
+
+  // Reset selections only when the proposal's identity changes, so an async
+  // permission upsert that just adds dropdown options doesn't wipe the user's
+  // in-progress pick for the same proposal.
+  protected override willUpdate(changed: PropertyValues): void {
+    super.willUpdate(changed);
+    if (!changed.has('permission')) return;
+    const previous = changed.get('permission') as
+      | PermissionState
+      | null
+      | undefined;
+    if (proposalIdOf(previous) !== proposalIdOf(this.permission)) {
+      this.selectedModel = null;
+      this.selectedAgent = null;
+    }
+  }
 
   protected override handleExtraKey(key: string): boolean {
     if (key === 's') {
@@ -70,10 +97,16 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
       this.permission.kind === PERMISSION_KIND.PROPOSAL
         ? (this.permission.modelOptions ?? [])
         : [];
+    const agentOptions =
+      this.permission.kind === PERMISSION_KIND.PROPOSAL
+        ? (this.permission.agentOptions ?? [])
+        : [];
     const isWorkflow = data.agentCategory === AGENT_CATEGORY.WORKFLOW;
     const categoryLabel = isWorkflow ? 'Workflow' : 'Tool-Use';
     const currentModel = this.selectedModel ?? data.model;
+    const currentAgent = this.selectedAgent ?? data.agent;
     const hasModelOptions = modelOptions.length > 0;
+    const hasAgentOptions = agentOptions.length > 0;
 
     return html`
       <div
@@ -93,7 +126,23 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
             >
               ${categoryLabel}
             </span>
-            <span class="workflow-proposal__agent">${data.agent}</span>
+            ${hasAgentOptions
+              ? html`
+                  <div class="workflow-proposal__agent-select">
+                    <i class="codicon codicon-sparkle"></i>
+                    <vscode-single-select
+                      class="proposal-agent-dropdown"
+                      position="below"
+                      .value=${currentAgent}
+                      @change=${this.handleAgentSelectChange}
+                    >
+                      ${renderAgentOptions(agentOptions, currentAgent)}
+                    </vscode-single-select>
+                  </div>
+                `
+              : html`<span class="workflow-proposal__agent"
+                  >${data.agent}</span
+                >`}
             ${hasModelOptions
               ? html`
                   <div class="workflow-proposal__model-select">
@@ -231,21 +280,34 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
     }
   };
 
+  private handleAgentSelectChange = (event: Event): void => {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value) {
+      this.selectedAgent = value;
+    }
+  };
+
   // ===========================================================================
-  // Override emitAction to include model override for approve
+  // Override emitAction to include model/agent overrides for approve
   // ===========================================================================
 
   protected override emitAction(action: string, feedback?: string): void {
-    const modelOverride =
-      action === 'approve' ? this.getModelOverride() : undefined;
-    super.emitAction(action, feedback, modelOverride);
-  }
-
-  private getModelOverride(): string | undefined {
+    if (action !== 'approve') {
+      super.emitAction(action, feedback);
+      return;
+    }
     const data = this.permission.data as AgentProposalPermission;
-    return this.selectedModel && this.selectedModel !== data.model
-      ? this.selectedModel
-      : undefined;
+    const pickIfChanged = (
+      selected: string | null,
+      original: string,
+    ): string | undefined =>
+      selected && selected !== original ? selected : undefined;
+    super.emitAction(
+      action,
+      feedback,
+      pickIfChanged(this.selectedModel, data.model),
+      pickIfChanged(this.selectedAgent, data.agent),
+    );
   }
 }
 

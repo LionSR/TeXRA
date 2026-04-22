@@ -10,6 +10,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { postMessage } from '@shared/vscode';
 import type {
+  AgentOptionData,
   AgentProposalPermission,
   BashPermission,
   ExternalInquiryPermission,
@@ -28,6 +29,7 @@ import {
 } from '@shared/utils/uiConstants';
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
+import { filledButtonStyles } from '@shared/styles/commonViewStyles';
 import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
 
 // Local imports - progress view
@@ -45,6 +47,7 @@ export type PermissionState =
       kind: typeof PERMISSION_KIND.PROPOSAL;
       data: AgentProposalPermission;
       modelOptions?: ModelOptionData[];
+      agentOptions?: AgentOptionData[];
     }
   | {
       kind: typeof PERMISSION_KIND.PLAN_APPROVAL;
@@ -190,6 +193,7 @@ export class PermissionCard extends LitElement {
   static override styles = [
     designTokens,
     codiconIconClasses,
+    filledButtonStyles,
     permissionCardStyles,
   ];
 
@@ -447,7 +451,7 @@ export class PermissionCard extends LitElement {
 
     return html`
       <button
-        class="action-button action-button--${variant}"
+        class="filled-button filled-button--${variant}"
         data-action=${action}
         @click=${this.handleActionClick}
       >

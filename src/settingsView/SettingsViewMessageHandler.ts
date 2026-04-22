@@ -301,12 +301,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
 
-  constructor(_context: vscode.ExtensionContext) {
+  constructor(context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
 
     const ctx: SettingsHandlerContext = {
       channel: this.channel,
       logger: this.logger,
+      extensionContext: context,
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
 
@@ -893,7 +894,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async handleSetGitHubToken(): Promise<void> {
     const token = await vscode.window.showInputBox({
-      prompt: 'Paste a GitHub personal access token (repo or public_repo scope)',
+      prompt:
+        'Paste a GitHub personal access token (repo or public_repo scope)',
       password: true,
       placeHolder: 'ghp_…',
       ignoreFocusOut: true,

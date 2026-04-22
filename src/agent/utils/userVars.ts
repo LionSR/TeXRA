@@ -14,6 +14,10 @@ import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getListOfFiles, getXmlFormatFromFiles } from '@utils/prompt';
+import {
+  listExternalRoots,
+  type ExternalRootKind,
+} from '@utils/files/externalRoots';
 import { setVarFromFile } from '@utils/files/varsUtils';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -152,7 +156,35 @@ function getBasicVars(
     TOOL_USE_AGENTS: toolUseAgentsList,
     CWD: workspacePath ?? WorkspaceFS.getPath() ?? '.',
     DEFAULT_BIB_PATH: defaultBibPath,
+    ...getAgentDirectoryVars(),
   };
+}
+
+/**
+ * Inject the absolute paths of registered agent directories as template
+ * variables so agents (notably `creator`) can reference the real paths in
+ * their system prompts. Reads from the external-roots registry populated at
+ * activation — keyed off the stable `kind` field so renaming a user-visible
+ * label cannot break prompt rendering. Absent roots render as empty strings
+ * (e.g. in tests that don't run activation).
+ */
+function getAgentDirectoryVars(): UserVars {
+  const KIND_TO_VAR: Record<ExternalRootKind, string> = {
+    builtInWorkflow: 'BUILTIN_WORKFLOW_DIR',
+    builtInToolUse: 'BUILTIN_TOOLUSE_DIR',
+    custom: 'CUSTOM_AGENTS_DIR',
+    agentDocs: 'AGENT_DOCS_DIR',
+  };
+  const vars: UserVars = {
+    BUILTIN_WORKFLOW_DIR: '',
+    BUILTIN_TOOLUSE_DIR: '',
+    CUSTOM_AGENTS_DIR: '',
+    AGENT_DOCS_DIR: '',
+  };
+  for (const root of listExternalRoots()) {
+    vars[KIND_TO_VAR[root.kind]] = root.absolutePath;
+  }
+  return vars;
 }
 
 /**
@@ -462,9 +494,9 @@ export function getToolFlags(
     AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
     CODEX_GUIDANCE: agentSetting.tools.some((t) => t.name === 'codex')
       ? 'Choose codex for coding tasks that benefit from a separate OpenAI agent — it runs in its own sandbox with independent tool use. ' +
-        'Codex is multi-turn: each call returns a thread_id. Always pass thread_id back when following up on a previous codex task — ' +
-        'this resumes the same session with full history and file context intact. ' +
-        'Use this to provide feedback, request corrections, or continue iterative work without re-explaining context. ' +
+        'Codex is async and multi-turn, mirroring delegate_agent: each call returns an execution ID, and results arrive as follow-up messages that include a thread_id. ' +
+        'Pass that thread_id back on a later codex call to send a follow-up instruction to the same session — the agent retains full history and file context. ' +
+        'The follow-up errors out if the thread is still processing; wait for its delivery before resuming. ' +
         'When multiple codex agents need to edit the same files, or when you want to isolate experimental changes, ' +
         'use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.'
       : '',

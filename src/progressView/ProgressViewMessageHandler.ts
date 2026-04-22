@@ -476,14 +476,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const streamId = data.stream;
     await this.withToolbarTaskState(streamId, async (taskState) => {
       const executionId = this.provider.state.meta.getExecutionId(streamId);
-      const activeRunId = this.provider.state.meta.getActiveRunId(streamId);
-      const storageKey = (activeRunId ??
-        executionId ??
-        null) as StorageKey | null;
-      const runOutputs = storageKey
-        ? this.provider.state.outputFiles.getRun(streamId, storageKey)
-        : undefined;
-      const outputsByRound = runOutputs
+      const runOutputs = this.provider.state.outputFiles.getFiles(streamId);
+      const outputsByRound = runOutputs.size
         ? Object.fromEntries(runOutputs.entries())
         : undefined;
 
@@ -577,6 +571,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         proposalCoordinator.resolveRequest(proposalId, {
           action: 'approve',
           model: data.model,
+          agent: data.agent,
         });
         break;
       case 'reject':
@@ -703,10 +698,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE>,
   ): Promise<void> {
     const streamId = data.stream;
-    const storageKey = this.provider.state.meta.getActiveRunId(streamId);
-    const runOutputs = storageKey
-      ? this.provider.state.outputFiles.getRun(streamId, storageKey)
-      : undefined;
+    const runOutputs = this.provider.state.outputFiles.getFiles(streamId);
 
     const executionId = this.provider.state.meta.getExecutionId(streamId);
 
@@ -965,10 +957,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const storageKey = this.provider.state.meta.getActiveRunId(streamId);
     const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
       streamId,
-      { storageKey, workspaceOnly: true },
+      { workspaceOnly: true },
     );
 
     // Collect all output files from declared config and generated paths
@@ -1156,11 +1147,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return null;
     }
 
-    const storageKey = this.provider.state.meta.getActiveRunId(streamId);
-    const runOutputs = storageKey
-      ? this.provider.state.outputFiles.getRun(streamId, storageKey)
-      : null;
-    const outputFiles = this.extractOutputFilePaths(runOutputs);
+    const runOutputs = this.provider.state.outputFiles.getFiles(streamId);
+    const outputFiles = this.extractOutputFilePaths(
+      runOutputs.size ? runOutputs : null,
+    );
 
     if (outputFiles.length === 0) {
       this.logger.warn(this.channel, 'Followup: No output files found', {

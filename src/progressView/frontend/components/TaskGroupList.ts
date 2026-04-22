@@ -74,12 +74,6 @@ export class TaskGroupList extends LitElement {
   /** All log messages to render */
   @property({ attribute: false }) messages: LogMessageData[] = [];
 
-  /** Currently visible run ID (null = show all) */
-  @property({ attribute: false }) activeRunId: string | null = null;
-
-  /** Whether this is a tool-use session (affects run filtering) */
-  @property({ attribute: false }) isToolUse = false;
-
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
 
@@ -95,9 +89,6 @@ export class TaskGroupList extends LitElement {
 
   /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
   private groupNodeIndex = new Map<string, GroupTree>();
-
-  /** Memoized set of root group IDs for isGroupVisible() */
-  private cachedRootGroupIds: Set<string> = new Set();
 
   /** Memoized tool-use timeline (ungrouped msgs + groups sorted chronologically) */
   private cachedTimeline: Array<
@@ -152,7 +143,6 @@ export class TaskGroupList extends LitElement {
       ? (changedProperties.get('messages') as LogMessageData[] | undefined)
       : undefined;
     const prevCount = prevMessages?.length ?? 0;
-    const prevUngroupedCount = this.cachedUngrouped.length;
 
     if (groupsChanged) {
       // Structural change — always full rebuild
@@ -176,29 +166,25 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Recompute root group IDs when groups or activeRunId change.
-    // Derive from cachedTree (already contains only root groups) instead of re-filtering.
-    if (
-      changedProperties.has('groups') ||
-      changedProperties.has('activeRunId')
-    ) {
-      this.cachedRootGroupIds = new Set(this.cachedTree.map((t) => t.group.id));
-    }
-
-    // Recompute tool-use timeline incrementally when possible
-    if (this.isToolUse && (groupsChanged || messagesChanged)) {
-      if (groupsChanged) {
-        // Structural change — full timeline rebuild (rare)
+    // Recompute the interleaved timeline incrementally when possible.
+    // Used by both tool-use and workflow streams so the user's original
+    // instruction (the earliest ungrouped message) stays at the top.
+    if (groupsChanged || messagesChanged) {
+      if (groupsChanged || this.messages.length < prevCount) {
+        // Structural change, or messages shrunk (e.g. clear/resync) —
+        // removed IDs must be pruned from cachedTimeline, so rebuild.
         this.cachedTimeline = this.buildFullTimeline();
       } else if (this.messages.length > prevCount) {
-        // Append-only: add new ungrouped entries to timeline.
-        // Grouped messages are already referenced via tree nodes in timeline entries.
-        this.appendToTimeline(prevUngroupedCount);
+        // Append-only: classify each new message and insert ungrouped ones
+        // into the timeline. Iterate the messages slice (not the ungrouped
+        // array) so a new message spliced into the middle of cachedUngrouped
+        // by appendNewMessages still gets picked up.
+        this.appendToTimeline(prevCount);
         // LOG_DELTA may also mutate existing timeline entries in the same batch.
         this.updateTimelineMessageRefs();
       } else {
-        // Same-length (streaming update): update msg refs on timeline entries in-place.
-        // guard([item.msg]) in render() detects new refs.
+        // Same length — streaming update. guard([item.msg]) in render()
+        // detects new refs on existing timeline entries.
         this.updateTimelineMessageRefs();
       }
     }
@@ -403,10 +389,21 @@ export class TaskGroupList extends LitElement {
     ].sort((a, b) => a.time - b.time);
   }
 
-  /** Append new ungrouped messages to the timeline in sorted order. */
-  private appendToTimeline(prevUngroupedCount: number): void {
-    for (let i = prevUngroupedCount; i < this.cachedUngrouped.length; i++) {
-      const m = this.cachedUngrouped[i];
+  /**
+   * Insert timeline entries for ungrouped messages appended since `startIndex`.
+   * Grouped messages are already referenced via their tree node in timeline,
+   * so we skip them here. Iterating the messages slice — rather than the
+   * cachedUngrouped array — keeps this correct when a message with an earlier
+   * timestamp gets spliced into the middle of cachedUngrouped by
+   * appendNewMessages.
+   */
+  private appendToTimeline(startIndex: number): void {
+    for (let i = startIndex; i < this.messages.length; i++) {
+      const m = this.messages[i];
+      const inGroupNode = m.groupId
+        ? this.groupNodeIndex.has(m.groupId)
+        : false;
+      if (inGroupNode) continue;
       const entry = { key: m.id, time: m.timestamp ?? 0, msg: m };
       const lastTime =
         this.cachedTimeline.length > 0
@@ -443,22 +440,6 @@ export class TaskGroupList extends LitElement {
       if (this.cachedUngrouped[i].id === id) return this.cachedUngrouped[i];
     }
     return undefined;
-  }
-
-  /** Check if a root group should be visible */
-  private isGroupVisible(groupId: string): boolean {
-    // Tool-use: show all groups (conversation turns are append-only)
-    if (this.isToolUse) return true;
-
-    // No run selected: show all groups
-    if (!this.activeRunId) return true;
-
-    // Fallback: if activeRunId doesn't match any root group, show all
-    // This prevents blank content when run IDs are mismatched
-    if (!this.cachedRootGroupIds.has(this.activeRunId)) return true;
-
-    // Normal case: only show the selected run
-    return groupId === this.activeRunId;
   }
 
   /** Check if a group is expanded */
@@ -525,12 +506,6 @@ export class TaskGroupList extends LitElement {
   /** Render a group node and its children recursively */
   private renderGroupNode(node: GroupTree): TemplateResult | typeof nothing {
     const { group, children, messages } = node;
-
-    // Hide root groups that aren't active
-    if (!group.parentGroupId && !this.isGroupVisible(group.id)) {
-      return nothing;
-    }
-
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
@@ -605,31 +580,11 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
-    if (this.isToolUse) {
-      // Tool-use: interleave ungrouped messages (user input, follow-ups, errors)
-      // with groups chronologically so the conversation reads top-to-bottom.
-      // Timeline is memoized in willUpdate() — only rebuilt when inputs change.
-      return html`
-        <vscode-scrollable
-          id=${ELEMENT_IDS.LOG_CONTENT}
-          class="log-container"
-          @vsc-scrollable-scroll=${this.handleVscScroll}
-        >
-          ${repeat(
-            this.cachedTimeline,
-            (item) => item.key,
-            (item) =>
-              'msg' in item
-                ? guard([item.msg], () => formatLogEntry(item.msg))
-                : this.renderGroupNode(item.tree),
-          )}
-        </vscode-scrollable>
-      `;
-    }
-
-    // Workflow: groups first, then ungrouped messages.
-    // Workflow stages are hierarchical (not conversational), so structure-first
-    // ordering keeps stage execution visually separate from stray messages.
+    // Interleave ungrouped messages (user input, follow-ups, errors) with run
+    // groups chronologically so the conversation reads top-to-bottom. The
+    // user's original instruction always surfaces at the top because it has
+    // the earliest timestamp. Timeline is memoized in willUpdate() — only
+    // rebuilt when inputs change.
     return html`
       <vscode-scrollable
         id=${ELEMENT_IDS.LOG_CONTENT}
@@ -637,14 +592,12 @@ export class TaskGroupList extends LitElement {
         @vsc-scrollable-scroll=${this.handleVscScroll}
       >
         ${repeat(
-          this.cachedTree,
-          (t) => t.group.id,
-          (t) => this.renderGroupNode(t),
-        )}
-        ${repeat(
-          this.cachedUngrouped,
-          (m) => m.id,
-          (m) => guard([m], () => formatLogEntry(m)),
+          this.cachedTimeline,
+          (item) => item.key,
+          (item) =>
+            'msg' in item
+              ? guard([item.msg], () => formatLogEntry(item.msg))
+              : this.renderGroupNode(item.tree),
         )}
       </vscode-scrollable>
     `;

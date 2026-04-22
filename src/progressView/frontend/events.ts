@@ -30,10 +30,6 @@ export interface ToolbarCommandDetail {
   command: string;
 }
 
-export interface RunSelectedDetail {
-  runId: string | null;
-}
-
 /** Alias for semantic clarity - uses shared StringValueDetail */
 export type FollowUpChangeDetail = StringValueDetail;
 
@@ -48,6 +44,7 @@ export interface PermissionActionDetail {
   action: string;
   feedback?: string;
   modelOverride?: string;
+  agentOverride?: string;
   /** Answer text from external inquiry panel (submit action only). */
   answer?: string;
   /** External chat/thread links captured from the user (submit action only). */
@@ -85,9 +82,6 @@ export const ProgressEvents = {
 
   toolbarCommand: (detail: ToolbarCommandDetail) =>
     createEvent('toolbar-command', detail),
-
-  runSelected: (detail: RunSelectedDetail) =>
-    createEvent('run-selected', detail),
 
   fileAction: (detail: ProgressFileActionDetail) =>
     createEvent('file-action', detail),

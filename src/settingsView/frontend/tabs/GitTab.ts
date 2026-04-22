@@ -102,7 +102,7 @@ export class GitTab extends LitElement {
         color: var(--vscode-descriptionForeground);
       }
       .instructions ol {
-        margin: var(--spacing-xs) 0 0 0;
+        margin: var(--spacing-tiny) 0 0 0;
         padding-left: 1.25em;
       }
       .instructions li {
@@ -110,9 +110,9 @@ export class GitTab extends LitElement {
       }
       .instructions code {
         background: var(--vscode-textBlockQuote-background);
-        padding: 0 4px;
-        border-radius: 3px;
-        font-size: 0.9em;
+        padding: 0 var(--spacing-small);
+        border-radius: var(--border-radius);
+        font-size: var(--font-size-sm);
       }
 
       .subscriptions-list {
@@ -125,13 +125,13 @@ export class GitTab extends LitElement {
         align-items: center;
         justify-content: space-between;
         gap: var(--spacing-small);
-        padding: var(--spacing-xs) 0;
+        padding: var(--spacing-tiny) 0;
       }
       .subscriptions-list code {
         background: var(--vscode-textBlockQuote-background);
-        padding: 1px 6px;
-        border-radius: 3px;
-        font-size: 0.9em;
+        padding: var(--border-thin) var(--spacing-medium);
+        border-radius: var(--border-radius);
+        font-size: var(--font-size-sm);
       }
     `,
   ];
@@ -202,10 +202,9 @@ export class GitTab extends LitElement {
         <div class="setting-block">
           <p class="section-title">GitHub personal access token</p>
           <p class="setting-description">
-            Used by the <code>subscribe_pr_activity</code> tool to poll
-            GitHub for pull request events (comments, reviews, failed CI).
-            Stored in VS Code SecretStorage — never written to
-            <code>settings.json</code>.
+            Used by the <code>subscribe_pr_activity</code> tool to poll GitHub
+            for pull request events (comments, reviews, failed CI). Stored in VS
+            Code SecretStorage — never written to <code>settings.json</code>.
           </p>
           <div class="token-row">
             Status: ${this.renderTokenStatusBadge()}
@@ -232,14 +231,13 @@ export class GitTab extends LitElement {
             <strong>How to get a token:</strong>
             <ol>
               <li>
-                Click <em>Create on GitHub…</em> (opens the token-creation
-                page in your browser, pre-filled for TeXRA PR subscription
-                use).
+                Click <em>Create on GitHub…</em> (opens the token-creation page
+                in your browser, pre-filled for TeXRA PR subscription use).
               </li>
               <li>
                 Choose scopes: <code>repo</code> for private repos or
-                <code>public_repo</code> for public only. Read-only usage;
-                no write scopes needed.
+                <code>public_repo</code> for public only. Read-only usage; no
+                write scopes needed.
               </li>
               <li>
                 Pick an expiration (90 days is common) and click
@@ -253,8 +251,8 @@ export class GitTab extends LitElement {
             ${this.githubTokenStatus === 'env'
               ? html`<p>
                   A token is currently being read from the
-                  <code>GITHUB_TOKEN</code> environment variable. Setting
-                  one above will override it.
+                  <code>GITHUB_TOKEN</code> environment variable. Setting one
+                  above will override it.
                 </p>`
               : nothing}
           </div>
@@ -266,8 +264,8 @@ export class GitTab extends LitElement {
                 <p class="section-title">Active PR subscriptions</p>
                 <p class="setting-description">
                   Each subscription polls GitHub every 30s. Click
-                  <em>Stop</em> to cancel; the current agent task will
-                  keep running but no new PR events will arrive.
+                  <em>Stop</em> to cancel; the current agent task will keep
+                  running but no new PR events will arrive.
                 </p>
                 <ul class="subscriptions-list">
                   ${this.prSubscriptions.map(

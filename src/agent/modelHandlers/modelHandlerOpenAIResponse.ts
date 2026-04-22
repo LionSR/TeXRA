@@ -216,7 +216,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   public override isBackgroundModeActive(): boolean {
     const useBackgroundResponses = getConfig<boolean>(
       'texra.model.useBackgroundResponses',
-      false,
+      true,
     );
     return useBackgroundResponses && this.isBackgroundModeEligible();
   }
@@ -233,12 +233,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Determines if background mode should be enabled for this request.
-   * Background mode is only supported for GPT 5 series models when running
-   * workflow agents (CoT or Direct), not tool-use agents.
+   * Enabled for GPT-family models (gpt4*, gpt5*, etc.) when running a
+   * workflow agent (CoT or Direct) — not for tool-use agents, which rely
+   * on per-step streaming.
    */
   private isBackgroundModeEligible(): boolean {
-    const isGpt5 = this.config.name.toLowerCase().startsWith('gpt5');
-    return isGpt5 && this.isWorkflowMode();
+    const isGpt = this.config.name.toLowerCase().startsWith('gpt');
+    return isGpt && this.isWorkflowMode();
   }
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
@@ -731,7 +732,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.warn(
         `Failed to retrieve pending background response ${pendingId}: ${formatted.message}. ` +
           'Will create new request.',
-        { data: { responseId: pendingId, error: formatted.message, statusCode: code } },
+        {
+          data: {
+            responseId: pendingId,
+            error: formatted.message,
+            statusCode: code,
+          },
+        },
       );
       this.clearPendingBackgroundResponse();
       return null;
@@ -1540,7 +1547,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
       'texra.model.useBackgroundResponses',
-      false,
+      true,
     );
     const useBackgroundResponses =
       this.backgroundModeSupported &&
@@ -1553,7 +1560,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (backgroundToggleEnabled && !useBackgroundResponses) {
       const reason = !this.backgroundModeSupported
         ? 'this handler does not support background execution'
-        : 'not eligible for this model/agent type (requires GPT 5 series with workflow agents)';
+        : 'not eligible for this model/agent type (requires a GPT model with a workflow agent)';
       this.logger.debug(
         `Background mode toggle is enabled but ${reason}. Falling back to synchronous requests.`,
       );

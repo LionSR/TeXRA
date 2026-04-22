@@ -5,25 +5,33 @@ import * as path from 'path';
 import { sync as globSync } from 'glob';
 
 // Local imports - log
-import { getCleanAgentName } from '@agent/index';
+import {
+  getAgentFirstNameChunk,
+  legacyWorkflowOutputStem,
+  normalizeLegacyModel,
+  parseWorkflowOutputRoundDir,
+  workflowMergeFilenameStem,
+  workflowOutputGlobPrefix,
+} from '@agent/output/workflowOutputLayout';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
-export function getAgentFirstNameChunk(agent: string): string {
-  const cleanAgent = getCleanAgentName(agent);
+export { getAgentFirstNameChunk };
 
-  if (cleanAgent.startsWith('write-')) {
-    return cleanAgent.split('-')[1];
-  }
-  if (cleanAgent.includes('_')) {
-    return cleanAgent.split('_')[0];
-  }
-  return cleanAgent.split('-')[0];
-}
+/** @deprecated Re-exported for backward compatibility; prefer the SSOT helper. */
+export const parseRoundFolder = parseWorkflowOutputRoundDir;
 
+/**
+ * Build glob patterns that match workflow output filenames in both layouts.
+ *
+ * Pass the raw agent identifier (with any source prefix) — the SSOT
+ * helpers derive the clean agent / legacy chunk forms internally so the
+ * result matches what `getOutputFileName` writes today and what older
+ * runs left on disk.
+ */
 export function getFilePatterns(
   base: string,
   model: string,
@@ -31,25 +39,58 @@ export function getFilePatterns(
   numRounds: number = 3,
 ): string[] {
   const patterns: string[] = [];
-  const chunk = getAgentFirstNameChunk(agent);
+  const legacyModel = normalizeLegacyModel(model);
 
   for (let round = 0; round < numRounds; round++) {
-    const prefix = `${base}_${chunk}_r${round}`;
+    // Legacy flat layout: `<base>_<chunk>_r{round}_<normalizedModel>.*`
+    const legacyStem = legacyWorkflowOutputStem({ base, agent, model, round });
+    // Legacy stem already includes `_<normalizedModel>`; for suffix variants
+    // we reconstruct the prefix (everything up to the model token).
+    const legacyPrefix = legacyStem.slice(0, -(legacyModel.length + 1));
     patterns.push(
-      `${prefix}_${model}`,
-      `${prefix}_${model}_diff`,
-      `${prefix}_full_${model}`,
-      `${prefix}_full_${model}_diff`,
-      `${prefix}_${model}_thinking`,
+      legacyStem,
+      `${legacyStem}_diff`,
+      `${legacyPrefix}_full_${legacyModel}`,
+      `${legacyPrefix}_full_${legacyModel}_diff`,
+      `${legacyStem}_thinking`,
     );
-
     if (round > 0) {
       const diffSuffix = `_diffr${round}r${round - 1}`;
       patterns.push(
-        `${prefix}_${model}${diffSuffix}`,
-        `${prefix}_full_${model}${diffSuffix}`,
+        `${legacyStem}${diffSuffix}`,
+        `${legacyPrefix}_full_${legacyModel}${diffSuffix}`,
       );
     }
+
+    // New round-subfolder layout:
+    //   `r{round}/<base>_<cleanAgent>_<model>.*`
+    const newPrefix = workflowOutputGlobPrefix({ base, agent, model, round });
+    patterns.push(newPrefix, `${newPrefix}_diff`, `${newPrefix}_thinking`);
+    if (round > 0) {
+      const diffSuffix = `_diffr${round}r${round - 1}`;
+      patterns.push(`${newPrefix}${diffSuffix}`);
+    }
+  }
+  // Merge output lives next to the input and is named after the edited
+  // file (`<editedBase>_full_<model>.tex`). editedBase typically starts
+  // with the input base plus an agent/model suffix, so we emit two
+  // delimiter-aware patterns: the simple `<base>_full_<model>` case and
+  // the `<base>_<…>_full_<model>` case. Requiring the `_` after `<base>`
+  // keeps siblings like `paper2_…` from matching when the target is
+  // `paper.tex`.
+  //
+  // Emit both raw and normalized-model variants so legacy merge files
+  // written with the dot-stripped model token (`paper_full_gpt45`) are
+  // discovered alongside current files (`paper_full_gpt-4.5`).
+  const mergeModels = legacyModel === model ? [model] : [model, legacyModel];
+  for (const m of mergeModels) {
+    const stem = workflowMergeFilenameStem(base, m);
+    patterns.push(
+      stem,
+      `${stem}_diff`,
+      `${base}_*_full_${m}`,
+      `${base}_*_full_${m}_diff`,
+    );
   }
   return patterns;
 }

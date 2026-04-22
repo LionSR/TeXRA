@@ -16,48 +16,56 @@ export const syncHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data, ctx) => {
     if (!data.stream || data.action === 'clear') return;
 
-    const hasRunData =
-      data.activeRunId !== undefined ||
-      data.runInstructions !== undefined ||
-      data.runUsage !== undefined ||
-      data.runFiles !== undefined ||
-      data.runMissingOutputs !== undefined ||
-      data.contextState !== undefined;
+    const hasWorkflowFiles =
+      data.workflowFiles !== undefined ||
+      data.workflowMissingOutputs !== undefined;
     const hasTaskData =
       data.todos !== undefined ||
       data.plan !== undefined ||
       data.queuedFollowUps !== undefined;
-    const hasInstruction = data.instruction !== undefined && !!data.runId;
     const hasMeta =
       data.conversationProgress !== undefined || data.badges !== undefined;
+    const hasRunUsage = data.runUsage !== undefined;
+    const hasContext = data.contextState !== undefined;
 
-    if (hasRunData || hasTaskData || hasInstruction || hasMeta) {
+    if (
+      hasWorkflowFiles ||
+      hasTaskData ||
+      hasMeta ||
+      hasRunUsage ||
+      hasContext
+    ) {
       ctx.setStreamState(data.stream, (prev) =>
         create(prev, (draft) => {
-          if (hasRunData) {
-            if (isWorkflowState(prev)) {
-              const d = draft as WorkflowStreamState;
-              if (data.activeRunId !== undefined)
-                d.activeRunId = data.activeRunId;
-              if (data.runInstructions) {
-                Object.assign(d.runInstructions, data.runInstructions);
-              }
-              if (data.runFiles) Object.assign(d.runFiles, data.runFiles);
-              if (data.runMissingOutputs) {
-                Object.assign(d.runMissingOutputs, data.runMissingOutputs);
-              }
+          // contextState is a base field shared by workflow and tool-use.
+          if (hasContext) {
+            draft.contextState = data.contextState;
+          }
+
+          if (hasWorkflowFiles && isWorkflowState(prev)) {
+            const d = draft as WorkflowStreamState;
+            // Replace (not merge) so a clean operation that shrinks the
+            // backend's set is reflected after a tab switch — Object.assign
+            // would leak stale rounds.
+            if (data.workflowFiles) d.files = { ...data.workflowFiles };
+            if (data.workflowMissingOutputs) {
+              d.missingOutputs = { ...data.workflowMissingOutputs };
             }
-            if (data.runUsage) {
-              Object.assign(draft.runUsage, data.runUsage);
-              if (isToolUseState(prev)) {
-                (draft as ToolUseStreamState).sessionUsage = sumUsageStats(
-                  Object.values((draft as ToolUseStreamState).runUsage),
-                );
-              }
-            }
-            if (data.contextState) {
-              draft.contextState = data.contextState;
-            }
+          }
+
+          // runUsage is per-run for both workflow and tool-use; derive the
+          // sum into sessionUsage so the UI always shows cumulative totals.
+          // Replace (not merge) so a clean operation that shrinks the backend's
+          // run set is reflected — Object.assign would leak stale entries and
+          // over-count sessionUsage.
+          if (
+            hasRunUsage &&
+            data.runUsage &&
+            (isToolUseState(prev) || isWorkflowState(prev))
+          ) {
+            const d = draft as ToolUseStreamState | WorkflowStreamState;
+            d.runUsage = { ...data.runUsage };
+            d.sessionUsage = sumUsageStats(Object.values(d.runUsage));
           }
 
           if (isToolUseState(prev) && hasTaskData) {
@@ -74,14 +82,6 @@ export const syncHandlers: HandlerRegistry = {
               d.toolEditBypass = data.toolEditBypass;
             if (data.superYoloBypass !== undefined)
               d.superYoloBypass = data.superYoloBypass;
-          }
-          if (isWorkflowState(prev) && hasInstruction) {
-            const d = draft as WorkflowStreamState;
-            if (data.instruction && data.runId) {
-              d.runInstructions[data.runId] = data.instruction;
-            } else if (data.runId) {
-              delete d.runInstructions[data.runId];
-            }
           }
 
           if (data.conversationProgress) {

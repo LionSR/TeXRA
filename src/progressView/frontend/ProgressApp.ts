@@ -35,12 +35,12 @@ import {
   select,
   combine,
 } from '@shared/signals';
-import { getEffectiveRunId } from '@shared/streams/runSelection';
 import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
 import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view frontend
 import { webviewStorage } from './webviewStorage';
+import { setsEqual } from './utils';
 import {
   createInitialState,
   EMPTY_STREAM_LOGS,
@@ -74,7 +74,6 @@ import {
   handleFollowupModeChange,
   handleFollowupRequestOptions,
   handlePermissionAction,
-  handleRunSelected,
   handleSortChange,
   handleStreamDelete,
   handleStreamSwitch,
@@ -122,13 +121,7 @@ import type { PermissionState } from './components/PermissionCard';
 // Signal.Computed evaluations that run on every state change.
 // ---------------------------------------------------------------------------
 
-function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
-  if (a.size !== b.size) return false;
-  for (const v of a) {
-    if (!b.has(v)) return false;
-  }
-  return true;
-}
+// setsEqual is provided by the shared frontend utils module.
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because ProgressApp implements all abstract members below.
@@ -402,11 +395,6 @@ export class ProgressApp extends ProgressAppBase {
     return state ? isToolUseState(state) : false;
   });
 
-  private activeRunId$ = new Signal.Computed(() => {
-    const state = this.activeStreamState$.get();
-    return state ? getEffectiveRunId(state, { mode: 'fallback' }) : null;
-  });
-
   /** Stream context derived from active stream + state. */
   private streamContext$ = new Signal.Computed((): StreamContextValue => {
     const activeStreamInfo = this.activeStreamInfo$.get();
@@ -415,16 +403,12 @@ export class ProgressApp extends ProgressAppBase {
 
     const streamState = this.activeStreamState$.get();
     const isToolUse = streamState ? isToolUseState(streamState) : false;
-    const runId = streamState
-      ? getEffectiveRunId(streamState, { mode: 'fallback' })
-      : null;
     const followupOptions =
       this.followupOptions$.get().get(activeStreamInfo.name) ?? null;
 
     return {
       streamInfo: activeStreamInfo,
       streamState,
-      runId,
       followupOptions,
       isToolUse,
       hasStreams,
@@ -433,8 +417,7 @@ export class ProgressApp extends ProgressAppBase {
 
   /**
    * Log context derived from active stream + logs.
-   * Depends on leaf selectors (activeTaskGroups$, activeRunId$, activeIsToolUse$)
-   * instead of activeStreamState$ directly, so status/badge/progress changes
+   * Depends on leaf selectors so status/badge/progress changes
    * don't cause LogList re-renders.
    */
   private logContext$ = new Signal.Computed((): StreamLogContextValue => {
@@ -445,7 +428,6 @@ export class ProgressApp extends ProgressAppBase {
     return {
       logs: this.activeStreamLogs$.get().logs,
       taskGroups: this.activeTaskGroups$.get(),
-      runId: this.activeRunId$.get(),
       isToolUse: this.activeIsToolUse$.get(),
       hasStreams,
       streamName: activeStreamInfo.name,
@@ -605,7 +587,6 @@ export class ProgressApp extends ProgressAppBase {
       <workflow-stream-content
         @toolbar-command=${this.onToolbarCommand}
         @permission-action=${this.onPermissionAction}
-        @run-selected=${this.onRunSelected}
         @file-action=${this.onFileAction}
         @followup-request-options=${this.onFollowupRequestOptions}
         @followup-mode-change=${this.onFollowupModeChange}
@@ -752,9 +733,6 @@ export class ProgressApp extends ProgressAppBase {
 
   private onToolbarCommand = (e: CustomEvent): void =>
     handleToolbarCommand(e, this.getEventHandlerContext());
-
-  private onRunSelected = (e: CustomEvent): void =>
-    handleRunSelected(e, this.getEventHandlerContext());
 
   private onFollowUpChange = (e: CustomEvent): void =>
     handleFollowUpChange(e, this.getEventHandlerContext());

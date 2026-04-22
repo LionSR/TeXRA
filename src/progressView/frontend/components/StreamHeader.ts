@@ -24,7 +24,6 @@ import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
-import './RunSelector';
 
 interface ToolbarButton {
   id: string;
@@ -150,13 +149,6 @@ export class StreamHeader extends LitElement {
         gap: var(--spacing-medium);
       }
 
-      .log-header__secondary {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        font-size: var(--font-size-sm);
-      }
-
       .header-left {
         display: flex;
         align-items: center;
@@ -178,30 +170,6 @@ export class StreamHeader extends LitElement {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-      }
-
-      .run-selector {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        min-width: 180px;
-        max-width: 360px;
-        flex-shrink: 0;
-      }
-
-      .run-selector-title {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-medium);
-        white-space: nowrap;
-      }
-
-      .run-selector-title .codicon {
-        font-size: var(--font-size-icon);
-        line-height: 1;
       }
 
       .header-actions {
@@ -336,7 +304,7 @@ export class StreamHeader extends LitElement {
       }
 
       .parent-link .codicon {
-        font-size: var(--font-size-xs, 10px);
+        font-size: var(--font-size-xs);
       }
 
       /* Uses shared .tinted-badge base; no --_tint override = inherits text-secondary default */
@@ -361,12 +329,6 @@ export class StreamHeader extends LitElement {
   @property({ attribute: false }) stream: StreamTabInfo | null = null;
   @property({ attribute: false }) status: string = STREAM_STATUS.READY;
   @property({ attribute: false }) progress: ConversationProgress | undefined;
-  @property({ attribute: false }) runId: string | null = null;
-  @property({ attribute: false }) runs: Array<{
-    id: string;
-    name: string;
-    startTime: number;
-  }> = [];
   @property({ attribute: false }) yoloActive = false;
   @property({ attribute: false }) superYoloActive = false;
 
@@ -452,35 +414,6 @@ export class StreamHeader extends LitElement {
             </vscode-toolbar-container>
           </div>
         </div>
-        ${this.renderRunSelector()}
-      </div>
-    `;
-  }
-
-  private renderRunSelector(): TemplateResult | typeof nothing {
-    // Only show run selector for top-level workflow streams with runs.
-    // Child streams (e.g. codex subagents) never have sessions.
-    if (
-      this.stream?.agentCategory !== 'workflow' ||
-      this.stream.parentStreamId ||
-      this.runs.length === 0
-    ) {
-      return nothing;
-    }
-
-    return html`
-      <div class="log-header__secondary">
-        <div id=${ELEMENT_IDS.RUN_SELECTOR_CONTAINER} class="run-selector">
-          <div class="run-selector-title" aria-hidden="true">
-            <i class="codicon codicon-history"></i>
-            <span>Sessions</span>
-          </div>
-          <run-selector
-            .runs=${this.runs}
-            .activeRunId=${this.runId}
-            @run-selected=${this.handleRunSelected}
-          ></run-selector>
-        </div>
       </div>
     `;
   }
@@ -549,9 +482,5 @@ export class StreamHeader extends LitElement {
     if (!command) return;
 
     this.dispatchEvent(ProgressEvents.toolbarCommand({ command }));
-  }
-
-  private handleRunSelected(event: CustomEvent) {
-    this.dispatchEvent(ProgressEvents.runSelected(event.detail));
   }
 }

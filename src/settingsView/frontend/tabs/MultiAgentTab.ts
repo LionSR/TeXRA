@@ -86,13 +86,19 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-card.active {
-        border-color: var(--vscode-focusBorder);
-        border-width: var(--border-medium);
-        background-color: color-mix(
-          in srgb,
-          var(--vscode-focusBorder) 8%,
-          var(--vscode-editor-inactiveSelectionBackground)
+        background-color: var(--vscode-list-activeSelectionBackground);
+        color: var(
+          --vscode-list-activeSelectionForeground,
+          var(--vscode-foreground)
         );
+        border-color: var(--vscode-focusBorder);
+      }
+
+      .preset-card.active .preset-card-name,
+      .preset-card.active .preset-card-description,
+      .preset-card.active .preset-card-icon,
+      .preset-card.active .preset-active-badge {
+        color: inherit;
       }
 
       .preset-active-badge {
@@ -108,7 +114,7 @@ export class MultiAgentTab extends LitElement {
           var(--vscode-focusBorder) 15%,
           transparent
         );
-        border-radius: var(--border-radius-medium, 4px);
+        border-radius: var(--border-radius-medium);
       }
 
       .preset-active-badge .codicon {
@@ -155,7 +161,7 @@ export class MultiAgentTab extends LitElement {
       .preset-agent-badge {
         display: inline-block;
         padding: var(--border-thin) var(--border-radius-large);
-        font-size: var(--font-size-xs, 10px);
+        font-size: var(--font-size-xs);
         color: var(--vscode-badge-foreground);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);
@@ -339,7 +345,7 @@ export class MultiAgentTab extends LitElement {
       <div
         class="preset-card ${isActive ? 'active' : ''}"
         @click=${() => this.handlePresetClick(preset)}
-        title="Apply ${preset.name} preset"
+        title="Apply ${preset.name} team"
       >
         <div class="preset-card-header">
           <span class="codicon ${preset.icon} preset-card-icon"></span>
@@ -360,7 +366,7 @@ export class MultiAgentTab extends LitElement {
           ? html`<button
               class="preset-delete-btn"
               @click=${(e: Event) => this.handleDeletePreset(e, preset)}
-              title="Delete preset"
+              title="Delete team"
             >
               <span class="codicon codicon-trash"></span>
             </button>`
@@ -397,16 +403,17 @@ export class MultiAgentTab extends LitElement {
       <div class="multi-agent-container tab-content-container">
         <div class="how-it-works">
           <strong
-            >The orchestrator reads your paper and delegates tasks to
-            specialized agents.</strong
+            >You run a team of specialized AI agents, led by an
+            orchestrator.</strong
           >
-          Each agent focuses on what it does best — writing, citations, figures,
-          formatting, and more.
+          The orchestrator reads your paper and hands tasks to the right
+          teammate — writing, derivations, numerical experiments, citations,
+          figures, and more.
           <ol class="how-it-works-steps">
             <li class="how-it-works-step">
               <span class="step-number">1</span>
               <span
-                ><strong>Pick a preset</strong> below that matches your field.
+                ><strong>Pick a team</strong> below that matches your field.
                 This enables and configures the right specialized agents for
                 you.</span
               >
@@ -429,10 +436,10 @@ export class MultiAgentTab extends LitElement {
           </ol>
         </div>
 
-        <h3>Mode Presets</h3>
+        <h3>Multi-Agent Teams</h3>
 
         <p class="text-secondary setting-description">
-          Click one to activate it. You can make your own presets in the Agents
+          Click one to activate it. You can make your own teams in the Agents
           tab.
         </p>
 
@@ -441,11 +448,12 @@ export class MultiAgentTab extends LitElement {
           ${this.customPresets.map((p) => this.renderPresetCard(p, true))}
         </div>
 
-        <h3>Agent Delegation</h3>
+        <h3>Team Coordination</h3>
 
         <p class="text-secondary setting-description">
-          Control how the orchestrator hands off work. It can only use agents
-          and models you've turned on in the Models and Agents tabs.
+          Control how the orchestrator works with the rest of the team. It can
+          only use agents and models you've turned on in the Models and Agents
+          tabs.
         </p>
 
         <div class="setting-block">
