@@ -41,6 +41,7 @@ import {
 import { registerStateRestoreCommand } from '@commands/history';
 import { registerSettingsViewCommands } from '@commands/settings';
 import { registerAuthCommands } from '@commands/auth';
+import { registerSetupAssistantCommand } from '@commands/setup';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
@@ -87,6 +88,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerSettingsCommands(context);
   registerSampleProjectCommands(context);
   registerWalkthroughCommands(context);
+  registerSetupAssistantCommand(context);
 
   mainViewProviderInstance = new MainViewProvider(context);
   context.subscriptions.push(

@@ -56,6 +56,14 @@ import {
   SubscribePRTool,
   UnsubscribePRTool,
 } from './github';
+import {
+  ProbeEnvironmentTool,
+  VerifySetupTool,
+  SetApiKeyTool,
+  UnsetApiKeyTool,
+  InvokeCommandTool,
+  InstallVscodeExtensionTool,
+} from './setup';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -116,6 +124,12 @@ function createDefaultTools() {
     subscribe_pr_activity: new SubscribePRTool(),
     unsubscribe_pr_activity: new UnsubscribePRTool(),
     find_current_pr: new FindCurrentPRTool(),
+    probe_environment: new ProbeEnvironmentTool(),
+    verify_setup: new VerifySetupTool(),
+    set_api_key: new SetApiKeyTool(),
+    unset_api_key: new UnsetApiKeyTool(),
+    invoke_command: new InvokeCommandTool(),
+    install_vscode_extension: new InstallVscodeExtensionTool(),
   } satisfies Record<string, ITool>;
 }
 
