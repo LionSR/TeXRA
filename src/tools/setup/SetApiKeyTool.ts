@@ -37,10 +37,17 @@ function looksLikePlaceholder(key: string): boolean {
   return PLACEHOLDER_PATTERNS.some((re) => re.test(trimmed));
 }
 
+/**
+ * Mask the key for user-facing output. Scales the visible prefix/suffix
+ * with key length so we never expose more than ~25% of the characters —
+ * a 9-char key would otherwise reveal 8 of 9 under a fixed 4+4 scheme.
+ * Cap at 4 on each side so long keys still show a useful fingerprint.
+ */
 function maskKey(key: string): string {
   const trimmed = key.trim();
   if (trimmed.length <= 8) return '*'.repeat(trimmed.length);
-  return `${trimmed.slice(0, 4)}…${trimmed.slice(-4)}`;
+  const preview = Math.min(4, Math.floor(trimmed.length / 8));
+  return `${trimmed.slice(0, preview)}…${trimmed.slice(-preview)}`;
 }
 
 /**
