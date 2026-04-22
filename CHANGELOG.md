@@ -4,7 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **Workflow outputs live in task-run storage only.** `paper_<agent>_<model>.tex` no longer appears next to your source. Every workflow run gets its own folder at `executions/{id}/` with the revised file at `r{round}/output.tex` and the merge output at `_full.tex`. Use the progress-view toolbar: **Accept** copies the file into your workspace, **Pack** snapshots the run (with dereferenced dependency symlinks) into `workspace/History/…`, **Clean** discards it. The `texra.agentOutputs.storageMode` setting is now deprecated and ignored.
+
 ### Features
+- **Auto-open the revised file when a workflow completes** — the primary output opens in a read-only editor tab so you never wonder where the result went. Silence it with `texra.agentOutputs.autoOpenFinal: false` for batch runs.
+- **Workflow mode reminder banner** — workflow tabs show a dismissible note that workflow mode runs across multiple rounds to reduce hallucinations and cut fluff, at the cost of 10–30 minutes wall-clock time per run. Pick Tool-Use mode for fast, iterative edits.
+- **Project-wide dependency mirror** — workflow runs now recursively mirror `\input{}`, `\include{}`, `\bibliography{}`, and local `\usepackage{}` targets into run storage alongside project siblings (`.cls`, `.sty`, `.bst`, `latexmkrc`). You can compile the revised file directly from inside `executions/{id}/r{round}/` without leaving the run folder.
+- **Latexdiff finds runs automatically** — the legacy `texra.runLatexdiff` command now locates the most recent matching execution via stored metadata, so diffs work even when the caller didn't supply the `outputsByRound` payload.
+
 
 - **Setup assistant for first-time install** — a new `Run Setup Assistant` command (also the first step in the Getting Started walkthrough) launches a conversational tool-use agent that probes your environment, proposes one install command at a time under the standard bash-approval gate, verifies each step, and walks you through adding an API key or signing in for Researcher Access. The agent can also hand off to any settings-dashboard tab (Models, Agents, Memory, Multi-Agent, Tools, Git) when you want to customize something beyond the default setup.
 - **Inline explainers for Workflow, Interactive, and Orchestrator modes** — the mode switcher now shows a short description of what each mode does and when to pick it, so new users don't have to leave the sidebar to figure out the difference. Explainers are dismissible and remember that choice per workspace.
