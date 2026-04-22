@@ -92,6 +92,7 @@ import {
 } from '@tools/approval';
 import {
   getLastCheckResults,
+  onToolAvailabilityChanged,
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import {
@@ -321,6 +322,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // Lifetime == extension; bus is process-global so no dispose needed.
     bus.on('prSubscriptionsChanged', ({ keys }) => {
       void this.withActiveWebview((w) => this.sendPRSubscriptions(w, keys));
+    });
+
+    // Push a refreshed Tools tab whenever external tool availability
+    // changes (e.g. GitHub token set/removed in the Git tab). The probe
+    // already ran inside `invalidateToolAvailability`, so skip re-probing.
+    onToolAvailabilityChanged(() => {
+      void this.withActiveWebview((w) =>
+        this.sendToolDashboardData(w, { skipChecks: true }),
+      );
     });
   }
 
@@ -905,9 +915,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
       void vscode.window.showInformationMessage('GitHub token saved.');
       await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
-      // Re-probe external tools so the Tools tab and the runtime
-      // availability cache pick up the new token without a manual recheck.
-      await this.withActiveWebview((w) => this.sendToolDashboardData(w));
+      // The Tools tab refreshes automatically via `onToolAvailabilityChanged`,
+      // triggered by the secret-storage change listener in extension.ts.
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -922,7 +931,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await SecretManager.delete(SecretManager.GITHUB_TOKEN_KEY);
       void vscode.window.showInformationMessage('GitHub token removed.');
       await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
-      await this.withActiveWebview((w) => this.sendToolDashboardData(w));
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,

@@ -55,6 +55,7 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
+import { invalidateToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
 import { getAuthStatus } from '@auth/authCommands';
 import { setGitHubTokenProvider, prPollingSource } from '@tools/github';
@@ -299,7 +300,10 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
       if (e.key === SecretManager.GITHUB_TOKEN_KEY) {
-        void refreshGitHubToken();
+        // Refresh the cached token first so availability checks see the
+        // new value, then re-probe so any subscribed UI (Tools tab) and
+        // the runtime cache pick up the change automatically.
+        void refreshGitHubToken().then(() => invalidateToolAvailability());
       }
     }),
   );
