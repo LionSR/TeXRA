@@ -66,6 +66,12 @@ interface LaunchModelResolution {
  * the user currently has AND the global `useOpenRouter` routing flag
  * (already validated by the caller). Pure: never mutates state.
  *
+ * Returns `null` when every resolution path fails — e.g. the user is
+ * signed in with Included Access but their tier excludes every model we
+ * know how to route, and they've added no direct or OpenRouter key.
+ * The caller surfaces that as a clear preflight error rather than
+ * launching with a model that will crash on tier enforcement.
+ *
  * Order:
  *   1. Researcher Access — only when "Use Included Access" is actually
  *      on AND the signed-in setup model is in the user's tier. A plain
@@ -73,17 +79,31 @@ interface LaunchModelResolution {
  *      user may have server-side access to *some* models but not
  *      `SIGNED_IN_SETUP_MODEL`; we'd otherwise fall through preflight
  *      and fail at runtime when tier enforcement kicks in.
- *   2. Any direct API key for a provider whose default model routes
+ *   2. If the user is signed in but `SIGNED_IN_SETUP_MODEL` is not in
+ *      tier, scan `API_KEY_MODEL_BY_PROVIDER` for any model that IS in
+ *      tier so a lower-tier signed-in user still gets a working launch.
+ *   3. Any direct API key for a provider whose default model routes
  *      through that same provider directly (iterating
  *      `SecretManager.API_PROVIDERS` for deterministic ordering). Preferred
  *      over OpenRouter so we don't need to touch the routing flag at all.
- *   3. Only if `openRouter` is the sole provider with a key, report a
+ *   4. Only if `openRouter` is the sole provider with a key, report a
  *      router-backed default and let the caller temporarily flip the flag.
  */
-async function resolveLaunchModel(): Promise<LaunchModelResolution> {
+async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
   const serverKeys = getServerSideKeyService();
   if (await serverKeys.canUseServerSideKeysForModel(SIGNED_IN_SETUP_MODEL)) {
     return { model: SIGNED_IN_SETUP_MODEL, requiresOpenRouter: false };
+  }
+
+  // Step 2: signed-in user whose tier excludes the default signed-in
+  // model. Look for any tier-available model among the per-provider
+  // defaults before falling through to direct-key / OR paths.
+  if (await serverKeys.canUseServerSideKeys()) {
+    for (const model of Object.values(API_KEY_MODEL_BY_PROVIDER)) {
+      if (serverKeys.canUseModelSync(model)) {
+        return { model, requiresOpenRouter: false };
+      }
+    }
   }
 
   for (const provider of SecretManager.API_PROVIDERS) {
@@ -103,7 +123,7 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution> {
     };
   }
 
-  return { model: SIGNED_IN_SETUP_MODEL, requiresOpenRouter: false };
+  return null;
 }
 
 /**
@@ -229,6 +249,24 @@ async function runSetupAssistant(): Promise<void> {
     if (!(await ensureRoutingConfigured())) return;
 
     const resolution = await resolveLaunchModel();
+    if (!resolution) {
+      // Edge case: signed in with Included Access but tier excludes every
+      // setup-model candidate, and no direct/OR keys to fall back on.
+      // Refuse launch rather than pick a model that crashes at runtime.
+      const choice = await vscode.window.showWarningMessage(
+        'No model is available for your current credentials and tier. Add a provider API key or upgrade your Researcher Access tier, then retry.',
+        { modal: true },
+        'Set API key',
+        'Open Models tab',
+      );
+      if (choice === 'Set API key') {
+        await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
+      } else if (choice === 'Open Models tab') {
+        await vscode.commands.executeCommand('texra.showModels');
+      }
+      return;
+    }
+
     const config = AgentConfigSchema.parse({
       agent: 'setup',
       agentCategory: 'toolUse',
