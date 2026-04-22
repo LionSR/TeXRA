@@ -26,6 +26,9 @@ function createPlatform(): {
       async apiKeyExists() {
         return false;
       },
+      async hasUsableApiKey() {
+        return false;
+      },
       async storedApiKeyExists() {
         return false;
       },

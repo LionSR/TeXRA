@@ -14,6 +14,13 @@ export interface SetupSecretsAdapter {
   deleteApiKey(provider: string): Promise<void>;
   apiKeyExists(provider: string): Promise<boolean>;
   /**
+   * Like `apiKeyExists` but rejects empty values. A stale
+   * `PROVIDER_API_KEY=""` env var is "present" but unusable at launch,
+   * so setup-readiness checks must use this helper rather than raw
+   * `apiKeyExists` to avoid misleading the agent (and the user).
+   */
+  hasUsableApiKey(provider: string): Promise<boolean>;
+  /**
    * Like `apiKeyExists` but only reports SecretStorage entries — ignores
    * environment-variable-backed keys. Needed by `unset_api_key` so the
    * agent doesn't claim to have removed a key that still comes from

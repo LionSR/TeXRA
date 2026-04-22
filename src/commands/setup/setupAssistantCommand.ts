@@ -205,13 +205,23 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
 
 /**
  * Pre-flight: ensure the user has a *usable* credential before we launch
- * the setup agent. `SecretManager.anyApiKeyExists` already encodes both
- * paths (direct provider key OR Researcher Access sign-in with Included
- * Access enabled), so a signed-in user who has turned Included Access
- * off is correctly treated as having no credential.
+ * the setup agent. Direct uses of `SecretManager.anyApiKeyExists` would
+ * report a blank `PROVIDER_API_KEY=""` env var as present, which then
+ * fails in `resolveLaunchModel` with a confusing "No model is available"
+ * modal. `hasAnyUsableCredential()` mirrors the adapter-level check:
+ * at least one provider with a non-blank key, or valid server-side
+ * access. Keeps preflight and launch agreed on what "has a credential"
+ * means.
  */
+async function hasAnyUsableCredential(): Promise<boolean> {
+  for (const provider of SecretManager.API_PROVIDERS) {
+    if (await hasUsableKey(provider)) return true;
+  }
+  return getServerSideKeyService().canUseServerSideKeys();
+}
+
 async function ensureCredentialOrPrompt(): Promise<boolean> {
-  if (await SecretManager.anyApiKeyExists()) return true;
+  if (await hasAnyUsableCredential()) return true;
 
   const picks = [
     {
@@ -241,12 +251,12 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
 
   if (picked.id === 'signIn') {
     await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-    return SecretManager.anyApiKeyExists();
+    return hasAnyUsableCredential();
   }
 
   if (picked.id === 'apiKey') {
     await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
-    return SecretManager.anyApiKeyExists();
+    return hasAnyUsableCredential();
   }
 
   // walkthrough

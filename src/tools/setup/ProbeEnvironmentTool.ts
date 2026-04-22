@@ -68,10 +68,14 @@ export class ProbeEnvironmentTool extends defineTool({
         Promise.all(PROBED_CORE_TOOLS.map(checkTool)),
         Promise.all(OPTIONAL_TOOLS.map(checkTool)),
         Promise.all(
+          // Use `hasUsableApiKey` so the per-provider report matches
+          // what the setup-launch path considers a working credential —
+          // a stale `PROVIDER_API_KEY=""` env var must not surface as
+          // `hasKey: true` and mislead the agent's credential planning.
           platform.secrets.providers.map(async (provider) => ({
             provider,
             hasKey: await platform.secrets
-              .apiKeyExists(provider)
+              .hasUsableApiKey(provider)
               .catch(() => false),
           })),
         ),
