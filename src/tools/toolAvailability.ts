@@ -11,6 +11,7 @@
  */
 
 // Local imports
+import { bus } from '@eventBus/ProgressEventBus';
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
@@ -112,43 +113,16 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
   return lastResults;
 }
 
-// ============================================================
-// Change notifications
-// ============================================================
-
-type AvailabilityChangeListener = () => void;
-const availabilityListeners = new Set<AvailabilityChangeListener>();
-
 /**
- * Subscribe to tool-availability changes. The listener fires after
- * {@link invalidateToolAvailability} completes a fresh probe.
- * Use this to refresh any UI that depends on external tool status
- * (e.g. the Tools tab in the settings view). Returns a disposer.
- */
-export function onToolAvailabilityChanged(
-  listener: AvailabilityChangeListener,
-): () => void {
-  availabilityListeners.add(listener);
-  return () => availabilityListeners.delete(listener);
-}
-
-/**
- * Re-probe external tools and notify listeners.
- *
- * Call this whenever an input to the availability checks changes
- * (GitHub token, workspace git-repo status, extension install state).
- * This is the single entry point for "tool inputs may have changed" —
- * mutators don't have to know which UIs or runtime caches are affected.
+ * Re-probe external tools and broadcast `toolAvailabilityChanged` so any
+ * subscribed UI (Tools tab) and runtime caches refresh. Call this whenever
+ * an input to the availability checks changes (GitHub token, workspace
+ * git-repo status, extension install state) — mutators don't have to know
+ * which UIs depend on the result.
  */
 export async function invalidateToolAvailability(): Promise<void> {
   await runExternalToolChecks();
-  for (const listener of availabilityListeners) {
-    try {
-      listener();
-    } catch {
-      // Listeners must not throw; swallow to protect siblings.
-    }
-  }
+  bus.emit('toolAvailabilityChanged', undefined);
 }
 
 /**

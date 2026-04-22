@@ -298,13 +298,13 @@ export async function activate(context: vscode.ExtensionContext) {
   setGitHubTokenProvider(() => cachedGitHubToken);
   void refreshGitHubToken();
   context.subscriptions.push(
-    context.secrets.onDidChange((e) => {
-      if (e.key === SecretManager.GITHUB_TOKEN_KEY) {
-        // Refresh the cached token first so availability checks see the
-        // new value, then re-probe so any subscribed UI (Tools tab) and
-        // the runtime cache pick up the change automatically.
-        void refreshGitHubToken().then(() => invalidateToolAvailability());
-      }
+    context.secrets.onDidChange(async (e) => {
+      if (e.key !== SecretManager.GITHUB_TOKEN_KEY) return;
+      // Refresh the cached token first so availability checks see the
+      // new value, then re-probe so any subscribed UI (Tools tab) and
+      // the runtime cache pick up the change automatically.
+      await refreshGitHubToken();
+      await invalidateToolAvailability();
     }),
   );
   const disposeGitHubAuthListener = bus.on(

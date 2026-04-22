@@ -92,7 +92,7 @@ import {
 } from '@tools/approval';
 import {
   getLastCheckResults,
-  onToolAvailabilityChanged,
+  invalidateToolAvailability,
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import {
@@ -323,11 +323,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     bus.on('prSubscriptionsChanged', ({ keys }) => {
       void this.withActiveWebview((w) => this.sendPRSubscriptions(w, keys));
     });
-
-    // Push a refreshed Tools tab whenever external tool availability
-    // changes (e.g. GitHub token set/removed in the Git tab). The probe
-    // already ran inside `invalidateToolAvailability`, so skip re-probing.
-    onToolAvailabilityChanged(() => {
+    bus.on('toolAvailabilityChanged', () => {
       void this.withActiveWebview((w) =>
         this.sendToolDashboardData(w, { skipChecks: true }),
       );
@@ -561,7 +557,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (data) =>
         this.handleInstallToolExtension(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
-        this.withActiveWebview((w) => this.sendToolDashboardData(w)),
+        invalidateToolAvailability(),
       [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: async (data) => {
         await setToolEnabled(data.toolId, data.enabled);
         refreshDisabledToolCache();
@@ -915,8 +911,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
       void vscode.window.showInformationMessage('GitHub token saved.');
       await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
-      // The Tools tab refreshes automatically via `onToolAvailabilityChanged`,
-      // triggered by the secret-storage change listener in extension.ts.
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
