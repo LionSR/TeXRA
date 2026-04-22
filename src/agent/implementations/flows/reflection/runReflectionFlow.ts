@@ -164,8 +164,10 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { shouldEnsureXmlStructure, totalRounds, outputExt } =
-    deriveConfig(setting, prompt);
+  const { shouldEnsureXmlStructure, totalRounds, outputExt } = deriveConfig(
+    setting,
+    prompt,
+  );
 
   const getOutputFileLocation =
     input.getOutputFileLocation ??
