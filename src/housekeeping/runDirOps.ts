@@ -34,7 +34,10 @@ export async function runPackRunDir(
 
   const runDirAbsolute = await resolveRunDir(executionId);
   if (!runDirAbsolute) {
-    logger.warn(CHANNEL, `Run directory not found for execution ${executionId}`);
+    logger.warn(
+      CHANNEL,
+      `Run directory not found for execution ${executionId}`,
+    );
     return { status: 'noFiles' };
   }
 
