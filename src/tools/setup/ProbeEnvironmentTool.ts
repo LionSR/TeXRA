@@ -119,7 +119,18 @@ export class ProbeEnvironmentTool extends defineTool({
         installed: latexWorkshopInstalled,
       },
       credentials: {
-        anyApiKeySet: anyKeySet,
+        // `anyApiKeySet` is literal — only true if at least one
+        // per-provider API key is present (matches the `apiKeys`
+        // array below). A Researcher-Access-only user would have
+        // had this come out true under the previous adapter-backed
+        // check, which contradicted the per-provider detail and
+        // misled credential planning.
+        anyApiKeySet: apiKeys.some((k) => k.hasKey),
+        // `hasAnyUsableCredential` is the broader "can setup launch a
+        // model right now" signal — direct key OR server-side
+        // Researcher Access. Kept as a separate field so the agent
+        // can reason about the two independently.
+        hasAnyUsableCredential: anyKeySet,
         apiKeys,
         researcherAccess: {
           authenticated: auth.authenticated,

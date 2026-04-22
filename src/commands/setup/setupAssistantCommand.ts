@@ -290,7 +290,12 @@ async function runSetupAssistant(): Promise<void> {
       return;
     }
 
-    if (!(await ensureRoutingConfigured())) return;
+    if (!(await ensureRoutingConfigured())) {
+      void vscode.window.showInformationMessage(
+        'Setup assistant cancelled. Resolve the "Use OpenRouter" configuration (add an OpenRouter key or disable the setting in Dashboard → Models), then run `TeXRA: Run Setup Assistant` again.',
+      );
+      return;
+    }
 
     const resolution = await resolveLaunchModel();
     if (!resolution) {

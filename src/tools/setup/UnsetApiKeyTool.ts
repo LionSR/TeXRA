@@ -34,11 +34,13 @@ export class UnsetApiKeyTool extends defineTool({
 
     const storedExists = await platform.secrets.storedApiKeyExists(provider);
     if (!storedExists) {
-      // apiKeyExists covers env-var-backed keys too, so if we see one without
-      // a SecretStorage entry the user has the key set via a shell env var.
-      // `deleteApiKey` can't touch that — be explicit instead of falsely
-      // claiming success.
-      const envExists = await platform.secrets.apiKeyExists(provider);
+      // If no SecretStorage entry exists but a *usable* (non-blank) key
+      // is still reported, it's coming from the `<PROVIDER>_API_KEY`
+      // env var — `deleteApiKey` can't touch that, so be explicit.
+      // Use `hasUsableApiKey` (not `apiKeyExists`) so a stale
+      // `PROVIDER_API_KEY=""` doesn't falsely claim an env var is
+      // supplying credentials.
+      const envExists = await platform.secrets.hasUsableApiKey(provider);
       if (envExists) {
         const envVar = `${provider.toUpperCase()}_API_KEY`;
         return {
@@ -59,7 +61,9 @@ export class UnsetApiKeyTool extends defineTool({
 
     // A shell env var can shadow the deletion — flag that so the agent can
     // tell the user why the key still appears to exist after removal.
-    const stillPresent = await platform.secrets.apiKeyExists(provider);
+    // `hasUsableApiKey` here too, so a blank env var doesn't trip the
+    // "env var still active" branch.
+    const stillPresent = await platform.secrets.hasUsableApiKey(provider);
     if (stillPresent) {
       const envVar = `${provider.toUpperCase()}_API_KEY`;
       return {
