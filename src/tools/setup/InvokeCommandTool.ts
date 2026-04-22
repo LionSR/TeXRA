@@ -72,10 +72,13 @@ export class InvokeCommandTool extends defineTool({
 
     await platform.commands.invoke(commandId, ...input.args);
 
+    // Never echo raw `args` back into the transcript: if the model passed
+    // a sensitive value (e.g. an API key to `texra.setApiKey`) that
+    // string would otherwise leak into logs, stream UI, and saved
+    // history. Report only the arity, which is enough for the agent to
+    // reason about what it just did.
     const argPreview =
-      input.args.length > 0
-        ? ` with args ${JSON.stringify(input.args).slice(0, 200)}`
-        : '';
+      input.args.length > 0 ? ` (${input.args.length} arg(s), redacted)` : '';
 
     return {
       summary: `Invoked ${commandId}${argPreview}`,

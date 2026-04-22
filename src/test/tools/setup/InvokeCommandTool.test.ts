@@ -58,6 +58,32 @@ function createPlatform(): {
 }
 
 describe('InvokeCommandTool allowlist', () => {
+  it('redacts raw args in summary/output so secrets cannot leak to transcripts', async () => {
+    const { platform, invocations } = createPlatform();
+    setSetupPlatform(platform);
+    const tool = new InvokeCommandTool();
+
+    const fakeSecret = 'sk-fake-secret-1234567890abcdef';
+    const result = await tool.call({
+      command: 'texra.setApiKey',
+      args: ['openai', fakeSecret],
+    });
+
+    assert.ok(!result.isError);
+    assert.equal(invocations[0].args.length, 2, 'args still forwarded');
+    assert.ok(
+      !(result.summary ?? '').includes(fakeSecret),
+      'summary must not echo raw args',
+    );
+    assert.ok(
+      !(result.output ?? '').includes(fakeSecret),
+      'output must not echo raw args',
+    );
+    // The tool still acknowledges that args were passed, so the agent
+    // can reason about what it just did.
+    assert.match(result.summary ?? '', /2 arg\(s\), redacted/);
+  });
+
   it('allows texra.setApiKey and forwards args', async () => {
     const { platform, invocations } = createPlatform();
     setSetupPlatform(platform);
