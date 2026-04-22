@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@tools/result';
 import { detectPackageManager } from '@utils/system/toolUtils';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
 import { defineTool } from '../core/define';
@@ -56,7 +56,10 @@ export class ProbeEnvironmentTool extends defineTool({
   protected async execute(_input: ProbeInput): Promise<ToolResult> {
     const platform = getSetupPlatform();
 
-    const homedir = os.homedir();
+    // `os.homedir()` can throw UV_ENOENT in container/remote environments
+    // where the home directory is not resolvable; fall back to a string
+    // sentinel so the probe still produces a useful environment report.
+    const homedir = safeHomedir() ?? '<unresolved>';
     const extendedPath = extendEnvPath();
     const pm = detectPackageManager();
 
