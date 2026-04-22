@@ -165,8 +165,18 @@ export async function handleClean(config: unknown): Promise<void> {
   if (executionId) {
     const runDirResult = await runCleanRunDir(executionId);
     const workspaceResult = await runWorkspaceClean();
-    result =
-      workspaceResult.status !== 'noFiles' ? workspaceResult : runDirResult;
+    // Surface errors from either leg — a failed runDir removal (e.g.
+    // permission-denied) must not be masked by a successful workspace
+    // sweep, or the user sees "Cleanup complete" while `executions/{id}`
+    // remains on disk.
+    if (runDirResult.status === 'error') {
+      result = runDirResult;
+    } else if (workspaceResult.status === 'error') {
+      result = workspaceResult;
+    } else {
+      result =
+        workspaceResult.status !== 'noFiles' ? workspaceResult : runDirResult;
+    }
   } else {
     result = await runWorkspaceClean();
   }

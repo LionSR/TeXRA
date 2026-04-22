@@ -43,9 +43,13 @@ export async function runPackRunDir(
 
   const baseName = inputFile ? path.parse(inputFile).name : 'run';
   const cleanAgent = getCleanAgentName(agent);
+  // Include an executionId fragment in the destination folder so two packs
+  // of the same input+agent+model within the same second (the timestamp's
+  // granularity) don't collide and silently merge via `errorOnExist: false`.
+  const idFragment = executionId.replace(/-/g, '').slice(0, 8);
   const destinationRelative = path.join(
     HISTORY_DIR,
-    `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}`,
+    `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}_${idFragment}`,
   );
   const destinationAbsolute = WorkspaceFS.fullPath(destinationRelative);
 
