@@ -122,28 +122,13 @@ export class RetryRequestPanel extends BaseRequestPanel {
   ): string | null {
     if (!details) return null;
 
-    const formatBody = (v: unknown) =>
-      typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
+    const lines: string[] = [];
+    if (details.provider) lines.push(`provider: ${details.provider}`);
 
-    const lines = [
-      details.provider && `provider: ${details.provider}`,
-      details.requestId && `requestId: ${details.requestId}`,
-      details.rawErrorBody != null &&
-        `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
-    ].filter(Boolean);
-
-    const diag = details.streamDiagnostics;
-    if (diag && (diag.eventsProcessed > 0 || diag.messageStartReceived)) {
-      const entries = Object.entries(diag).map(([k, v]) =>
-        k === 'blockTypesSeen'
-          ? `  ${k}: [${(v as string[])?.join(', ') || ''}]`
-          : `  ${k}: ${v ?? 'null'}`,
-      );
-      lines.push('--- Stream Diagnostics ---', ...entries);
-    }
-
-    // Show the tail of text that was generated before the failure — useful
-    // both for diagnostics and for letting the user see progress wasn't lost.
+    // Show the tail of text that was generated before the failure so the
+    // user can see progress wasn't lost. Internal diagnostics (requestId,
+    // rawErrorBody, streamDiagnostics) are intentionally omitted — they
+    // belong in developer logs, not in the user-facing retry panel.
     const partialText = details.partialText;
     if (partialText) {
       const maxTailChars = 1024;
