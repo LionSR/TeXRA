@@ -10,8 +10,10 @@ import {
   runCleanMultiple,
   runCleanBuild,
   runCleanOutput,
+  runCleanRunDir,
 } from '@housekeeping';
 import * as logger from '@logger/logUtils';
+import { ExecutionIdSchema } from '@shared/schemas';
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'cleanCommands';
@@ -29,6 +31,7 @@ const CleanConfigSchema = CleanParamsSchema.extend({
   outputFiles: z.array(z.string()).prefault([]),
   useMultipleOutputs: z.boolean().optional(),
   streamId: z.string().optional(),
+  executionId: ExecutionIdSchema.optional(),
   skipProgressViewClear: z.boolean().optional(),
 }).transform((c) => ({
   ...c,
@@ -138,6 +141,7 @@ export async function handleClean(config: unknown): Promise<void> {
     outputFiles,
     useMultipleOutputs,
     streamId,
+    executionId,
     skipProgressViewClear,
   } = data;
 
@@ -146,10 +150,36 @@ export async function handleClean(config: unknown): Promise<void> {
     `Clean command called with config: ${JSON.stringify(data)}`,
   );
 
-  const result =
+  // Toolbar-driven invocations pass an executionId: delete the run's runDir
+  // AND sweep the workspace. The workspace scan is a no-op for new runs
+  // (their outputs live only inside the runDir), but it catches legacy
+  // runs whose outputs still sit beside the source — those runs also
+  // produce a runDir via `ensureRunDir`, so keying solely off
+  // `runCleanRunDir` returning `success` leaves the real artifacts behind.
+  const runWorkspaceClean = (): Promise<FileOpResult> =>
     useMultipleOutputs && outputFiles.length > 0
-      ? await runCleanMultiple(model, inputFile, agent, outputFiles)
-      : await runCleanSingle(model, inputFile, agent);
+      ? runCleanMultiple(model, inputFile, agent, outputFiles)
+      : runCleanSingle(model, inputFile, agent);
+
+  let result: FileOpResult;
+  if (executionId) {
+    const runDirResult = await runCleanRunDir(executionId);
+    const workspaceResult = await runWorkspaceClean();
+    // Surface errors from either leg — a failed runDir removal (e.g.
+    // permission-denied) must not be masked by a successful workspace
+    // sweep, or the user sees "Cleanup complete" while `executions/{id}`
+    // remains on disk.
+    if (runDirResult.status === 'error') {
+      result = runDirResult;
+    } else if (workspaceResult.status === 'error') {
+      result = workspaceResult;
+    } else {
+      result =
+        workspaceResult.status !== 'noFiles' ? workspaceResult : runDirResult;
+    }
+  } else {
+    result = await runWorkspaceClean();
+  }
   showCleanResult(result, inputFile);
 
   if (!skipProgressViewClear) {
