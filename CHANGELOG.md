@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.37.4] - 2026-04-21
+
 ### Breaking changes
 
 - **Workflow outputs live in task-run storage only.** `paper_<agent>_<model>.tex` no longer appears next to your source. Every workflow run gets its own folder at `executions/{id}/` with the revised file at `r{round}/output.tex` and the merge output at `_full.tex`. Use the progress-view toolbar: **Accept** copies the file into your workspace, **Pack** snapshots the run (with dereferenced dependency symlinks) into `workspace/History/…`, **Clean** discards it. The `texra.agentOutputs.storageMode` setting is now deprecated and ignored.
