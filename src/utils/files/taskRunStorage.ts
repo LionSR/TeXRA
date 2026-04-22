@@ -426,6 +426,12 @@ export class TaskRunFileService {
    * `<runDir>/r{round}/<relativePath>`. This lets `latexmk`, `pdflatex`, and
    * `latexdiff` run with `cwd = runDir/r{round}` and resolve `\input{foo}`
    * against sibling symlinks. Idempotent; safe to call every round.
+   *
+   * Dependencies whose relative path would collide with a primary round
+   * artifact (e.g. a workspace file literally named `output.tex` or
+   * `output.pdf` would map to `r{round}/output.*`) are skipped — the
+   * revised-output file must never be replaced by a symlink to the
+   * original source.
    */
   public async ensureMirroredInRoundDir(round: number): Promise<void> {
     const executionId = this.metadata.executionId;
@@ -438,6 +444,23 @@ export class TaskRunFileService {
 
     await Promise.all(
       [...this.mirroredDependencies].map(async (relativePath) => {
+        // A dep whose path ends at `output.{ext}` (no subdirectory within the
+        // round) would symlink over the primary revised output that lives at
+        // `r{round}/output.{ext}` — the fixed basename comes from
+        // `WORKFLOW_OUTPUT_BASENAME` in `@agent/output/workflowOutputLayout`.
+        // `createSymlink` replaces any existing entry on EEXIST, so an
+        // unguarded mirror would silently destroy the round's result. Skip
+        // these — the dependency is still reachable at
+        // `r{round}/../<relativePath>`, i.e. `<runDir>/<relativePath>`.
+        const { dir: depDir, name: depName } = path.parse(relativePath);
+        if (depDir === '' && depName === 'output') {
+          logger.debug(
+            CHANNEL,
+            `Skipping round-dir mirror of ${relativePath}: would clobber primary output in ${roundSegment}`,
+          );
+          return;
+        }
+
         const sourceAbsolute = path.join(runDir, relativePath);
         const destinationAbsolute = path.join(
           runDir,
