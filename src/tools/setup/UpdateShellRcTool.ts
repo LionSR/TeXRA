@@ -18,7 +18,7 @@ const UpdateShellRcInputSchema = z.strictObject({
     .string()
     .min(1)
     .describe(
-      'The single line to append (e.g. `export PATH="/usr/local/texlive/2024/bin/universal-darwin:$PATH"`). Must be a single environment-variable assignment — arbitrary shell commands are rejected.',
+      'The single line to append (e.g. `export PATH="/usr/local/texlive/2024/bin/universal-darwin:$PATH"` on POSIX, `$env:Path = "C:\\texlive\\2024\\bin\\win32;$env:Path"` on PowerShell). The variable name must be `PATH` — every other env var (`PROMPT_COMMAND`, `LD_PRELOAD`, etc.) is rejected. Arbitrary shell commands are rejected.',
     ),
   marker: z
     .string()
@@ -40,17 +40,20 @@ type Shell = 'posix' | 'powershell';
 
 /**
  * Safe-line validator, scoped to the resolved target shell. Only allows a
- * single environment-variable assignment matching that shell's syntax —
- * the agent uses this tool specifically for PATH fixes after TeX installs,
- * nothing else.
+ * single `PATH`-variable assignment matching that shell's syntax. The agent
+ * uses this tool specifically for PATH fixes after TeX installs, so the
+ * variable name is pinned to the exported env vars that control the lookup
+ * path (and nothing else — `PROMPT_COMMAND`, `LD_PRELOAD`, etc. all have
+ * execution side effects and must not round-trip through this tool).
  *
- *   - POSIX      `export NAME=value`
- *       Requires the `export` keyword (bare `NAME=value` is shell-local
+ *   - POSIX      `export PATH=value`
+ *       Requires the `export` keyword (bare `PATH=value` is shell-local
  *       and does not propagate to child processes, so it silently fails
  *       as a PATH fix).
- *       Rejects `;`, `&`, `|`, `<`, `>`, backticks, `$(...)` — any of
- *       which can chain commands in sh/bash/zsh.
- *   - PowerShell `$env:NAME = "…"` / `[Environment]::SetEnvironmentVariable("…","…","…")`
+ *       Rejects `;`, `&`, `|`, `<`, `>`, backticks, `$(`, `$'` — any of
+ *       which can chain commands or embed encoded bytes via ANSI-C
+ *       quoting in sh/bash/zsh.
+ *   - PowerShell `$env:Path = "…"` / `[Environment]::SetEnvironmentVariable("PATH","…","…")`
  *       The RHS must be a double-quoted string literal (or three quoted
  *       literals, for the static method form). This rejects executable
  *       expression RHS like `$env:Path = (Get-Command …)` — `(` alone is
@@ -62,12 +65,12 @@ type Shell = 'posix' | 'powershell';
  * All forms reject newlines.
  */
 const POSIX_SAFE_PATTERNS: readonly RegExp[] = [
-  /^\s*export\s+[A-Za-z_][A-Za-z0-9_]*=[^\r\n]*$/,
+  /^\s*export\s+PATH=[^\r\n]*$/,
 ];
 
 const POWERSHELL_SAFE_PATTERNS: readonly RegExp[] = [
-  /^\s*\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*"[^"\r\n]*"\s*$/,
-  /^\s*\[Environment\]::SetEnvironmentVariable\(\s*"[^"\r\n]*"\s*,\s*"[^"\r\n]*"\s*,\s*"[^"\r\n]*"\s*\)\s*$/,
+  /^\s*\$env:Path\s*=\s*"[^"\r\n]*"\s*$/i,
+  /^\s*\[Environment\]::SetEnvironmentVariable\(\s*"PATH"\s*,\s*"[^"\r\n]*"\s*,\s*"[^"\r\n]*"\s*\)\s*$/i,
 ];
 
 const POSIX_FORBIDDEN_SUBSTRINGS: readonly string[] = [
@@ -78,6 +81,7 @@ const POSIX_FORBIDDEN_SUBSTRINGS: readonly string[] = [
   '<',
   '`',
   '$(',
+  "$'",
   '\n',
   '\r',
 ];
@@ -210,7 +214,7 @@ function normalizeMarker(raw: string): string {
  */
 export class UpdateShellRcTool extends defineTool({
   name: 'update_shell_rc',
-  description: `Append a single environment-variable assignment to the user's shell rc (~/.zshrc, ~/.bashrc, ~/.profile, or the PowerShell profile on Windows). The target shell is resolved first, then the input line is validated against only that shell's syntax — a POSIX \`export PATH=...\` targeting a PowerShell profile (or vice versa) is rejected. Command chaining (;, &&, ||, |), command substitution ($(...), \`...\`), redirection, and multi-line input are rejected. The marker is always written as a comment (\`#\` prefix added in code); any leading \`#\` in the input is stripped. Idempotent: skips if the exact trimmed line already appears.`,
+  description: `Append a single PATH-variable assignment to the user's shell rc (~/.zshrc, ~/.bashrc, ~/.profile, or the PowerShell profile on Windows). The variable name must be \`PATH\` — every other env var (\`PROMPT_COMMAND\`, \`LD_PRELOAD\`, etc.) is rejected. The target shell is resolved first, then the input line is validated against only that shell's syntax — a POSIX \`export PATH=...\` targeting a PowerShell profile (or vice versa) is rejected. Command chaining (;, &&, ||, |), command substitution ($(...), \`...\`), ANSI-C quoting ($'...'), redirection, and multi-line input are rejected. On PowerShell, the RHS must be a double-quoted string literal — expression RHS like \`$env:Path = (Get-Command …)\` is rejected. The marker is always written as a comment (\`#\` prefix added in code); any leading \`#\` in the input is stripped. Idempotent: skips if the exact trimmed line already appears.`,
   schema: UpdateShellRcInputSchema,
 }) {
   protected async execute(input: UpdateShellRcInput): Promise<ToolResult> {
