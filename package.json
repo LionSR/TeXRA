@@ -780,6 +780,12 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.runSetupAssistant",
+        "title": "Run Setup Assistant",
+        "category": "TeXRA",
+        "icon": "$(rocket)"
+      },
+      {
         "command": "texra.openGettingStarted",
         "title": "Open Getting Started Walkthrough",
         "category": "TeXRA",
@@ -1095,6 +1101,17 @@
         "when": "texra.activated",
         "steps": [
           {
+            "id": "texra.gettingStarted.setupAssistant",
+            "title": "Let TeXRA set itself up",
+            "description": "One click. TeXRA's setup assistant will check your environment, install any missing LaTeX tools, add an API key or sign you in, and get you ready to go. It asks before every command and explains what it's doing.\n\n[Run Setup Assistant](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The remaining steps walk you through the same checklist manually.",
+            "media": {
+              "markdown": "resources/walkthroughs/getting-started.md"
+            },
+            "completionEvents": [
+              "onCommand:texra.runSetupAssistant"
+            ]
+          },
+          {
             "id": "texra.gettingStarted.sampleWorkspace",
             "title": "Try the sample project",
             "description": "Not sure where to start? We've bundled a small LaTeX project you can play with.\n\n[Create the sample project](command:texra.createSampleProject)\n\nYou'll get a folder with example `.tex` files and a README that explains the layout.",
@@ -1329,6 +1346,10 @@
         },
         {
           "command": "texra.openGettingStarted",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.runSetupAssistant",
           "when": "texra.activated"
         },
         {
