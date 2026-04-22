@@ -63,6 +63,25 @@ interface LaunchModelResolution {
 }
 
 /**
+ * `SecretManager.apiKeyExists` returns true for an env-backed entry
+ * even when its value is the empty string (`PROVIDER_API_KEY=""` is a
+ * common stale-env-var case). That key will fail at runtime auth, so
+ * for setup-launch purposes we must treat "present but empty" as
+ * "missing" and fall through to the next provider candidate.
+ */
+async function hasUsableKey(
+  provider: (typeof SecretManager.API_PROVIDERS)[number],
+): Promise<boolean> {
+  if (!(await SecretManager.apiKeyExists(provider))) return false;
+  try {
+    const key = await SecretManager.getApiKey(provider);
+    return key.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pick a model the setup agent can actually call, given the credentials
  * the user currently has AND the global `useOpenRouter` routing flag
  * (already validated by the caller). Pure: never mutates state.
@@ -134,7 +153,7 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
     if (provider === 'openRouter') continue;
     const model = API_KEY_MODEL_BY_PROVIDER[provider];
     if (!model) continue;
-    if (await SecretManager.apiKeyExists(provider)) {
+    if (await hasUsableKey(provider)) {
       return { model, requiresOpenRouter: false };
     }
   }
@@ -142,7 +161,7 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
   // Step 4: only OpenRouter key present. The `openRouter` entry is
   // statically declared in `API_KEY_MODEL_BY_PROVIDER`, so no fallback
   // is needed.
-  if (await SecretManager.apiKeyExists('openRouter')) {
+  if (await hasUsableKey('openRouter')) {
     return {
       model: API_KEY_MODEL_BY_PROVIDER.openRouter,
       requiresOpenRouter: true,
@@ -246,7 +265,7 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
  */
 async function ensureRoutingConfigured(): Promise<boolean> {
   if (!getUseOpenRouter()) return true;
-  if (await SecretManager.apiKeyExists('openRouter')) return true;
+  if (await hasUsableKey('openRouter')) return true;
 
   const choice = await vscode.window.showWarningMessage(
     '"Use OpenRouter" is enabled in settings, but no OpenRouter key is set. Every model call routes through OpenRouter and will fail. Add an OpenRouter key, or disable "Use OpenRouter" in the Models tab, then retry.',
@@ -265,7 +284,7 @@ async function ensureRoutingConfigured(): Promise<boolean> {
   // OR key, or disabled Use OpenRouter in the Models tab), in which case
   // we can proceed without forcing them to re-invoke the command.
   if (!getUseOpenRouter()) return true;
-  if (await SecretManager.apiKeyExists('openRouter')) return true;
+  if (await hasUsableKey('openRouter')) return true;
   return false;
 }
 
