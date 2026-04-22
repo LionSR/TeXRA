@@ -84,8 +84,9 @@ export class VerifySetupTool extends defineTool({
     );
     if (!hasMagick && !hasGm) missingCore.push('gm/magick');
 
-    const latexWorkshopInstalled =
-      platform.extensions.isInstalled(LATEX_WORKSHOP_EXT_ID);
+    const latexWorkshopInstalled = platform.extensions.isInstalled(
+      LATEX_WORKSHOP_EXT_ID,
+    );
 
     const lines: string[] = [];
     if (missingCore.length === 0) {
@@ -110,8 +111,7 @@ export class VerifySetupTool extends defineTool({
         : 'NONE — need an API key or sign-in';
     lines.push(`Credentials: ${credSummary}.`);
 
-    const ready =
-      missingCore.length === 0 && latexWorkshopInstalled && anyKey;
+    const ready = missingCore.length === 0 && latexWorkshopInstalled && anyKey;
 
     return {
       summary: ready
