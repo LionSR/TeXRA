@@ -11,7 +11,10 @@ import { clearStoreCache } from '@agent/storage';
 import { initPlatform } from '@platform/platform';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
-import { initializeServerSideKeyAccess } from '@auth/serverKeys';
+import {
+  getServerSideKeyService,
+  initializeServerSideKeyAccess,
+} from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@auth/UriHandler';
@@ -52,6 +55,8 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
+import { setSetupPlatform } from '@tools/setup';
+import { getAuthStatus } from '@auth/authCommands';
 import { setGitHubTokenProvider, prPollingSource } from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
@@ -228,6 +233,61 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  setSetupPlatform({
+    secrets: {
+      providers: SecretManager.API_PROVIDERS,
+      setApiKey: (provider, key) =>
+        SecretManager.set(
+          SecretManager.getApiKeySecretName(provider as never),
+          key,
+        ),
+      deleteApiKey: (provider) =>
+        SecretManager.delete(
+          SecretManager.getApiKeySecretName(provider as never),
+        ),
+      apiKeyExists: (provider) =>
+        SecretManager.apiKeyExists(provider as never),
+      hasUsableApiKey: (provider) =>
+        SecretManager.hasUsableApiKey(provider as never),
+      storedApiKeyExists: async (provider) => {
+        const stored = await SecretManager.get(
+          SecretManager.getApiKeySecretName(provider as never),
+        );
+        return stored !== undefined;
+      },
+      anyApiKeyExists: async () => {
+        // Shared SecretManager.anyApiKeyExists reports true for
+        // PROVIDER_API_KEY="" — a common stale-env case. For setup
+        // tools (probe/verify) and setup-launch preflight, "any key
+        // present" must mean "launchable", so require at least one
+        // provider with a non-blank key (or server-side access).
+        const usable = await Promise.all(
+          SecretManager.API_PROVIDERS.map((p) =>
+            SecretManager.hasUsableApiKey(p),
+          ),
+        );
+        if (usable.some(Boolean)) return true;
+        return getServerSideKeyService().canUseServerSideKeys();
+      },
+      gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
+    },
+    commands: {
+      invoke: (cmd, ...args) =>
+        Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
+    },
+    extensions: {
+      isInstalled: (id) => vscode.extensions.getExtension(id) !== undefined,
+      install: async (id) => {
+        await vscode.commands.executeCommand(
+          'workbench.extensions.installExtension',
+          id,
+        );
+      },
+    },
+    auth: {
+      getStatus: () => getAuthStatus(),
+    },
+  });
   // GitHub token lives in SecretStorage (managed via the Git settings tab).
   // The tool layer only supports a synchronous token lookup, so we cache here
   // and refresh on secret changes.

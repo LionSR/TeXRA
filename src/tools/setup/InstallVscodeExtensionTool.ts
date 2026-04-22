@@ -1,0 +1,73 @@
+// Third-party imports
+import { z } from 'zod';
+
+// Local imports
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
+import { ToolError, type ToolResult } from '@tools/result';
+
+// Local file imports
+import { defineTool } from '../core/define';
+import { getSetupPlatform } from './platform';
+
+/**
+ * Allowlist of VS Code extensions the setup agent may install.
+ * Matches the install flows already surfaced by the LaTeX tab.
+ */
+const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
+  LATEX_WORKSHOP_EXT_ID,
+  'leanprover.lean4',
+]);
+
+const InstallVscodeExtensionInputSchema = z.strictObject({
+  extensionId: z
+    .string()
+    .min(1)
+    .describe(
+      'VS Code extension ID in "<publisher>.<name>" form (e.g. "James-Yu.latex-workshop").',
+    ),
+});
+
+type InstallVscodeExtensionInput = z.infer<
+  typeof InstallVscodeExtensionInputSchema
+>;
+
+export class InstallVscodeExtensionTool extends defineTool({
+  name: 'install_vscode_extension',
+  description: `Install a VS Code extension from the Marketplace. Allowlisted: James-Yu.latex-workshop, leanprover.lean4. Blocks other extension IDs. Use this (rather than \`invoke_command workbench.extensions.installExtension\`) so the caller gets a clean success/failure status.`,
+  schema: InstallVscodeExtensionInputSchema,
+}) {
+  protected async execute(
+    input: InstallVscodeExtensionInput,
+  ): Promise<ToolResult> {
+    const platform = getSetupPlatform();
+    const id = input.extensionId.trim();
+
+    if (!ALLOWED_EXTENSIONS.has(id)) {
+      throw new ToolError(
+        `Extension "${id}" is not in the setup allowlist. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(', ')}.`,
+      );
+    }
+
+    if (platform.extensions.isInstalled(id)) {
+      return {
+        summary: `Extension ${id} already installed`,
+        output: `The "${id}" extension is already installed. No action taken.`,
+      };
+    }
+
+    await platform.extensions.install(id);
+
+    // Give VS Code a brief moment to register the new extension.
+    await new Promise((r) => setTimeout(r, 250));
+    const installed = platform.extensions.isInstalled(id);
+
+    return {
+      summary: installed
+        ? `Installed extension ${id}`
+        : `Install issued for ${id} (verify manually)`,
+      output: installed
+        ? `Successfully installed "${id}". It is now available in VS Code.`
+        : `Requested install of "${id}". VS Code has not yet confirmed the extension is active — you may need to reload the window.`,
+    };
+  }
+}
