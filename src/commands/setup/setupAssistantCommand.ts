@@ -241,7 +241,14 @@ async function ensureRoutingConfigured(): Promise<boolean> {
     await vscode.commands.executeCommand('texra.showModels');
   } else if (choice === 'Add OpenRouter key') {
     await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
+  } else {
+    return false;
   }
+  // Re-check: the user may have resolved the misconfiguration (added an
+  // OR key, or disabled Use OpenRouter in the Models tab), in which case
+  // we can proceed without forcing them to re-invoke the command.
+  if (!getUseOpenRouter()) return true;
+  if (await SecretManager.apiKeyExists('openRouter')) return true;
   return false;
 }
 

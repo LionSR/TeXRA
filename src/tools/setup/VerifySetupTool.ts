@@ -51,9 +51,13 @@ export class VerifySetupTool extends defineTool({
             : `Not found: neither "gm" nor "magick" is on PATH. The install may not have completed, or the shell PATH needs to be refreshed.`,
         };
       }
-      if (!/^[A-Za-z0-9._+\-]+$/.test(name)) {
+      // First char must be alphanumeric — rejects punctuation-only
+      // tokens like `"."` or `".."`, which would otherwise path-join
+      // through `findToolInCommonPaths` to existing directories (e.g.
+      // `/usr/bin/.`) and produce a false "ok" verification result.
+      if (!/^[A-Za-z0-9][A-Za-z0-9._+\-]*$/.test(name)) {
         throw new ToolError(
-          `Invalid tool name "${name}". Only alphanumeric characters and \`._+-\` are allowed (or the alias "gm/magick").`,
+          `Invalid tool name "${name}". Must start with an alphanumeric character; only \`A-Za-z0-9._+-\` are allowed thereafter (or the alias "gm/magick").`,
         );
       }
       const ok = await isToolPresent(name);
