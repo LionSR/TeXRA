@@ -25,19 +25,15 @@ import { stripLatexComments } from './latexParsingUtils';
 import { compileLatex2Pdf } from './texTools';
 
 /** LaTeX project siblings that should always ride alongside the main file. */
-const PROJECT_SIBLING_EXTENSIONS = new Set([
-  '.cls',
-  '.sty',
-  '.bst',
-  '.cfg',
-]);
+const PROJECT_SIBLING_EXTENSIONS = new Set(['.cls', '.sty', '.bst', '.cfg']);
 const PROJECT_SIBLING_NAMES = new Set([
   'latexmkrc',
   '.latexmkrc',
   '.latexindentrc',
 ]);
 
-const USEPACKAGE_PATTERN = /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+const USEPACKAGE_PATTERN =
+  /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
 
 /** Maximum concurrent LaTeX compilation operations */
 const LATEX_CONCURRENCY = 4;
@@ -305,7 +301,10 @@ export class LatexMediaManager {
     const candidates: string[] = [];
     for (const name of entries) {
       const ext = path.extname(name).toLowerCase();
-      if (PROJECT_SIBLING_EXTENSIONS.has(ext) || PROJECT_SIBLING_NAMES.has(name)) {
+      if (
+        PROJECT_SIBLING_EXTENSIONS.has(ext) ||
+        PROJECT_SIBLING_NAMES.has(name)
+      ) {
         candidates.push(path.join(projectDir, name));
       }
     }

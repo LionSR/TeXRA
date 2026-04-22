@@ -417,10 +417,7 @@ async function scanRunDirForOutputs(
         // target — scratchpad artifacts like `output.xml` and multi-document
         // extracted files (which carry their own source-derived names) must
         // not be fed into latexdiff via this fallback.
-        if (
-          parsed.name !== WORKFLOW_OUTPUT_BASENAME ||
-          parsed.ext !== '.tex'
-        ) {
+        if (parsed.name !== WORKFLOW_OUTPUT_BASENAME || parsed.ext !== '.tex') {
           continue;
         }
 
@@ -580,10 +577,7 @@ async function handleRunLatexdiff(
     if (!outputsByRound && runId) {
       const parsedRunId = ExecutionIdSchema.safeParse(runId);
       if (parsedRunId.success) {
-        const scanned = await scanRunDirForOutputs(
-          parsedRunId.data,
-          inputFile,
-        );
+        const scanned = await scanRunDirForOutputs(parsedRunId.data, inputFile);
         if (scanned) {
           outputsByRound = scanned;
           discoveredExecutionId = parsedRunId.data;
