@@ -698,13 +698,17 @@ export async function executeMergeAgent(
       logger.info(`Executing merge with model ${model}`);
 
       const fileService = new TaskRunFileService(executionId);
+      const mergeSetting = ctx.setting as AgentWorkflowSetting;
       const result = await runReflectionFlow({
         ...ctx,
         ...createInterruptCallbacks(),
         onRoundFinalized: (run) =>
           ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
-        setting: ctx.setting as AgentWorkflowSetting,
-        getOutputFileLocation: createMergeOutputFileLocationGetter(fileService),
+        setting: mergeSetting,
+        getOutputFileLocation: createMergeOutputFileLocationGetter(
+          fileService,
+          mergeSetting.outputExt,
+        ),
         parentStage: ctx.parentStage,
         onRoundCompleted: createRoundProgressCallback(
           ctx.executionId,

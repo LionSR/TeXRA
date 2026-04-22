@@ -76,16 +76,21 @@ export function getExtractedDocOutputFileName(
  * The fileService MUST carry an executionId; the fixed `_full.{ext}` path
  * relies on run-storage isolation for uniqueness. Without it, every merge
  * in the workspace would clobber the same file.
+ *
+ * @param outputExt Extension for the merge output (usually `setting.outputExt`,
+ *   which is `tex` for the default merge agent but may differ for a custom
+ *   merge agent configured with a non-TeX output format).
  */
 export function createMergeOutputFileLocationGetter(
   fileService: TaskRunFileService,
+  outputExt: string,
 ): (round: number) => AgentFileLocation {
   if (!fileService.hasRunDirectory()) {
     throw new Error(
       'createMergeOutputFileLocationGetter requires a TaskRunFileService bound to an executionId; the `_full.{ext}` path is only collision-safe inside per-execution run storage.',
     );
   }
-  const outputPath = workflowMergeOutputPath({ ext: 'tex' });
+  const outputPath = workflowMergeOutputPath({ ext: outputExt });
   const location = fileService.createLocation(outputPath) as AgentFileLocation;
   return (_round: number): AgentFileLocation => location;
 }
