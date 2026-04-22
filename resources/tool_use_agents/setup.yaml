@@ -66,8 +66,8 @@ prompts:
              `invoke_command` with `texra.auth.signIn`.
            - User-supplied API key: once the user pastes one in chat, call
              `set_api_key` with `{ provider, key }`. Never guess a key.
-      E. Optional extras (texcount, latexdiff, Zotero, Lean 4) — ask once
-         whether to install; default is skip.
+      E. Optional extras (Zotero, Lean 4) — ask once whether to install;
+         default is skip.
       F. If no `.tex` files in the workspace, offer to create the sample
          project via `invoke_command` with `texra.createSampleProject`.
       G. Final `verify_setup` call; print a plain-language "you're good to
