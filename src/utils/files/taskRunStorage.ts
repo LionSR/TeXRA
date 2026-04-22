@@ -428,11 +428,15 @@ export class TaskRunFileService {
    * `latexdiff` run with `cwd = runDir/r{round}` and resolve `\input{foo}`
    * against sibling symlinks. Idempotent; safe to call every round.
    *
-   * Dependencies whose relative path would collide with a primary round
-   * artifact (e.g. a workspace file literally named `output.tex` or
-   * `output.pdf` would map to `r{round}/output.*`) are skipped — the
-   * revised-output file must never be replaced by a symlink to the
-   * original source.
+   * Collisions with primary workflow artifacts are skipped:
+   *   - `output.{ext}` at runDir root (the fixed round-output basename from
+   *     `WORKFLOW_OUTPUT_BASENAME`).
+   *   - Any existing real file at the destination — e.g. an extracted
+   *     multi-document output written to `r{round}/<source>.tex` by the
+   *     XML output manager when the same path is also an `\input`
+   *     dependency. Replacing that real file with a symlink to the
+   *     original workspace source would silently destroy the round's
+   *     revised content.
    */
   public async ensureMirroredInRoundDir(round: number): Promise<void> {
     const executionId = this.metadata.executionId;
@@ -447,11 +451,9 @@ export class TaskRunFileService {
       [...this.mirroredDependencies].map(async (relativePath) => {
         // A dep whose path ends at `output.{ext}` (no subdirectory within the
         // round) would symlink over the primary revised output that lives at
-        // `r{round}/output.{ext}` — the fixed basename comes from
-        // `WORKFLOW_OUTPUT_BASENAME` in `@agent/output/workflowOutputLayout`.
-        // `createSymlink` replaces any existing entry on EEXIST, so an
-        // unguarded mirror would silently destroy the round's result. Skip
-        // these — the dependency is still reachable at
+        // `r{round}/output.{ext}`. `createSymlink` replaces any existing
+        // entry on EEXIST, so an unguarded mirror would silently destroy the
+        // round's result. Skip these — the dependency is still reachable at
         // `r{round}/../<relativePath>`, i.e. `<runDir>/<relativePath>`.
         const { dir: depDir, name: depName } = path.parse(relativePath);
         if (depDir === '' && depName === WORKFLOW_OUTPUT_BASENAME) {
@@ -468,6 +470,32 @@ export class TaskRunFileService {
           roundSegment,
           relativePath,
         );
+
+        // Guard against clobbering a real file already written to the round
+        // dir — e.g. a multi-document extracted output at
+        // `r{round}/chapters/ch1.tex` when `chapters/ch1.tex` is also an
+        // `\input` dependency. A stale symlink from a previous call is
+        // safe to replace (idempotent); anything else must be preserved.
+        try {
+          const stat = await fs.lstat(destinationAbsolute);
+          if (!stat.isSymbolicLink()) {
+            logger.debug(
+              CHANNEL,
+              `Skipping round-dir mirror of ${relativePath}: destination in ${roundSegment} is an existing real file (likely an extracted output)`,
+            );
+            return;
+          }
+        } catch (error) {
+          const err = error as NodeJS.ErrnoException;
+          if (err?.code !== 'ENOENT') {
+            logger.debug(
+              CHANNEL,
+              `Unable to stat ${destinationAbsolute}: ${toErrorMessage(err)}`,
+            );
+          }
+          // ENOENT is the common case — no collision, proceed with the link.
+        }
+
         try {
           await createSymlink(
             createRunStorageLocation(
