@@ -27,25 +27,19 @@ Claude Opus 4.7 uses adaptive thinking only (extended thinking with a manual `bu
 
 ## OpenAI Models
 
-| Model ID     | Use Case                  | Cost | Speed  |
-| :----------- | :------------------------ | :--- | :----- |
-| `gpt54pro`   | Premium reasoning         | $$$$ | Slow   |
-| `gpt54`      | Flagship reasoning        | $$$  | Medium |
-| `gpt53codex` | Coding specialist         | $$$  | Medium |
-| `gpt41`      | Long context (1M), vision | $$$  | Medium |
-| `gpt5-`      | Fast flagship             | $$   | Fast   |
+| Model ID  | Use Case             | Cost | Speed  |
+| :-------- | :------------------- | :--- | :----- |
+| `gpt54`   | Flagship reasoning   | $$$  | Medium |
+| `gpt54-`  | Lower-cost reasoning | $$   | Fast   |
+| `gpt54--` | Budget reasoning     | $    | Fast   |
 
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
 ## Google Models
 
-| Model ID     | Use Case                             | Cost | Speed  |
-| :----------- | :----------------------------------- | :--- | :----- |
-| `gemini31p`  | Pro with reasoning, 1M context       | $$$  | Medium |
-| `gemini3f`   | Flash with reasoning, 1M context     | $$   | Fast   |
-| `gemini25p`  | Strong reasoning, vision, 1M context | $$$  | Medium |
-| `gemini25f`  | Fast reasoning, 1M context           | $$   | Fast   |
-| `gemini25f-` | Budget flash, 64k context            | $    | Fast   |
+| Model ID    | Use Case                       | Cost | Speed  |
+| :---------- | :----------------------------- | :--- | :----- |
+| `gemini31p` | Pro with reasoning, 1M context | $$$  | Medium |
 
 ## DeepSeek Models
 
@@ -59,16 +53,15 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 | Model ID  | Use Case                | Cost | Speed  |
 | :-------- | :---------------------- | :--- | :----- |
-| `kimi25T` | K2.5 with thinking mode | $$$  | Medium |
-| `kimi25`  | K2.5, agent tasks       | $$$  | Medium |
+| `kimi26T` | K2.6 with thinking mode | $$$  | Medium |
+| `kimi26`  | K2.6, agent tasks       | $$$  | Medium |
 
 ## DashScope Qwen Models
 
-| Model ID    | Use Case                      | Cost | Speed  |
-| :---------- | :---------------------------- | :--- | :----- |
-| `qwen3max`  | Flagship coding, 262k context | $$$  | Medium |
-| `qwenplus`  | Hybrid thinking, 1M context   | $$   | Medium |
-| `qwenturbo` | Fast with optional thinking   | $    | Fast   |
+| Model ID    | Use Case                    | Cost | Speed  |
+| :---------- | :-------------------------- | :--- | :----- |
+| `qwenplus`  | Hybrid thinking, 1M context | $$   | Medium |
+| `qwenturbo` | Fast with optional thinking | $    | Fast   |
 
 ## MiniMax Models
 
@@ -109,11 +102,11 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 ## Choosing a Model
 
-- **Simple tasks**: Fast, cheap models (`gemini3f`, `gpt5-`, `haiku45`)
-- **Complex tasks**: Powerful models (`opus47`, `opus46`, `gpt54pro`)
-- **Code-heavy / LaTeX editing**: Coding models (`gpt53codex`, `opus47T`)
-- **Reasoning-heavy**: Thinking models (`opus47T`, `sonnet46T`, `opus46T`, `deepseekT`)
-- **Large documents**: High-context models (`gemini*`, `gpt41`)
+- **Simple tasks**: Fast, cheap models (`qwenturbo`, `deepseek`, `haiku45`)
+- **Complex tasks**: Powerful models (`opus47`, `gpt54`, `gemini31p`)
+- **Code-heavy / LaTeX editing**: Strong editing models (`opus47T`, `sonnet46T`, `qwenplus`)
+- **Reasoning-heavy**: Thinking models (`opus47T`, `sonnet46T`, `deepseekT`, `kimi26T`)
+- **Large documents**: High-context models (`gemini31p`, `sonnet46`, `opus47`)
 
 ## Configuration
 
