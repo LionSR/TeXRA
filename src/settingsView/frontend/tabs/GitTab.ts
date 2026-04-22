@@ -202,9 +202,8 @@ export class GitTab extends LitElement {
         <div class="setting-block">
           <p class="section-title">GitHub personal access token</p>
           <p class="setting-description">
-            Used by the <code>subscribe_pr_activity</code> tool to poll GitHub
-            for pull request events (comments, reviews, failed CI). Stored in VS
-            Code SecretStorage — never written to <code>settings.json</code>.
+            Used to poll GitHub for pull request events (comments, reviews,
+            failed CI) when you subscribe to a PR.
           </p>
           <div class="token-row">
             Status: ${this.renderTokenStatusBadge()}

@@ -71,9 +71,8 @@ export function formatProgressStatusTemplate(
 // Error detail fields to render in the flat banner, in display order.
 // `satisfies` ties each name to ErrorLogData's keys so adding/renaming/removing
 // a schema field becomes a type error here — no silent drift.
-// Internal diagnostic fields (requestId, rawMessage, rawErrorBody,
-// streamDiagnostics, isRelayError, retryable) are intentionally excluded:
-// they are useful for developer logs but not for end users.
+// Fields omitted on purpose: streamDiagnostics and partialText render
+// separately in RetryRequestPanel; cause is not shown in the flat list.
 const ERROR_DETAIL_FIELDS = [
   'message',
   'operation',
@@ -81,6 +80,11 @@ const ERROR_DETAIL_FIELDS = [
   'provider',
   'statusCode',
   'statusText',
+  'isRelayError',
+  'retryable',
+  'requestId',
+  'rawMessage',
+  'rawErrorBody',
 ] as const satisfies ReadonlyArray<keyof ErrorLogData>;
 
 /** Format error message as TemplateResult. */
@@ -114,7 +118,12 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
     );
   }).map((key) => {
     const value = errorData[key as keyof ErrorLogData];
-    return `${key}: ${String(value)}`;
+    // Format objects (like rawErrorBody) as indented JSON
+    const displayValue =
+      typeof value === 'object'
+        ? JSON.stringify(value, null, 2)
+        : String(value);
+    return `${key}: ${displayValue}`;
   });
 
   const detailText = detailLines.join('\n');
