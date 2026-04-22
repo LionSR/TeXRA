@@ -7,6 +7,7 @@ import { AgentConfigSchema } from '@agent/core';
 import { registerExecution } from '@agent/storage';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { formatZodError } from '@common/errors';
+import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -45,7 +46,10 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     if (!isResume) {
       await registerExecution(executionId, config, config.agent);
     }
-    await executeAgent(config, executionId);
+    const result = await executeAgent(config, executionId);
+    if (result.category === 'workflow') {
+      await openFinalOutputIfAvailable(result);
+    }
   } catch (error) {
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${formatZodError(error)}`;

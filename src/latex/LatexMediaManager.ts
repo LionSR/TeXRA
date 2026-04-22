@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { promises as fs } from 'fs';
 
 import pMap from 'p-map';
 
@@ -20,7 +21,23 @@ import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
 import { resolveLatexDir } from './latexParsingUtils';
 import { tikzPictureManager } from './TikzPictureManager';
+import { stripLatexComments } from './latexParsingUtils';
 import { compileLatex2Pdf } from './texTools';
+
+/** LaTeX project siblings that should always ride alongside the main file. */
+const PROJECT_SIBLING_EXTENSIONS = new Set([
+  '.cls',
+  '.sty',
+  '.bst',
+  '.cfg',
+]);
+const PROJECT_SIBLING_NAMES = new Set([
+  'latexmkrc',
+  '.latexmkrc',
+  '.latexindentrc',
+]);
+
+const USEPACKAGE_PATTERN = /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
 
 /** Maximum concurrent LaTeX compilation operations */
 const LATEX_CONCURRENCY = 4;
@@ -144,8 +161,13 @@ export class LatexMediaManager {
   }
 
   /**
-   * Mirror \input, \include, and bibliography dependencies into run storage
-   * so output files can be compiled outside the workspace.
+   * Mirror \input, \include, \bibliography, \usepackage targets, and common
+   * project-sibling files (.cls/.sty/.bst/latexmkrc/.latexindentrc) into run
+   * storage so output files can be compiled outside the workspace.
+   *
+   * Dep discovery is recursive: each newly mirrored .tex is re-parsed so
+   * that transitive includes (e.g. main.tex → chapters/ch1.tex →
+   * chapters/figures/fig1.tex) are all brought along.
    */
   private async mirrorLatexFileDependencies(
     files: FileLocation[],
@@ -159,36 +181,149 @@ export class LatexMediaManager {
     );
     if (texFiles.length === 0) return;
 
-    await pMap(
-      texFiles,
-      async (file) => {
-        try {
-          const deps = await extractLatexFileDependencies(file);
-          if (deps.length === 0) return;
+    const visited = new Set<string>();
+    const worklist: FileLocation[] = [...texFiles];
 
-          await Promise.all(
-            deps.map(async (absolutePath) => {
-              try {
-                await this.fileService!.mirrorWorkspaceFile(
-                  pathToLocation(absolutePath),
-                );
-              } catch (error) {
-                this.logger.debug(
-                  `Unable to mirror LaTeX dependency ${absolutePath}: ${toErrorMessage(error)}`,
-                );
-              }
-            }),
-          );
+    // Sweep siblings of every root input file up front. Resolve the real
+    // path first so a mirrored symlink inside run storage points back to
+    // the original workspace tree — otherwise project-local .cls/.sty/.bst/
+    // latexmkrc files that live beside the real source are invisible.
+    await Promise.all(
+      texFiles.map(async (file) => {
+        let siblingDir = path.dirname(file.absolutePath);
+        try {
+          siblingDir = path.dirname(await fs.realpath(file.absolutePath));
+        } catch (error) {
           this.logger.debug(
-            `Mirrored ${deps.length} LaTeX file dependencies from ${file.absolutePath}`,
+            `Unable to resolve real path for ${file.absolutePath}: ${toErrorMessage(error)}`,
+          );
+        }
+        await this.mirrorProjectSiblings(siblingDir);
+      }),
+    );
+
+    while (worklist.length > 0) {
+      const file = worklist.shift()!;
+      if (visited.has(file.absolutePath)) continue;
+      visited.add(file.absolutePath);
+
+      const deps = await this.collectDependencies(file);
+      if (deps.length === 0) continue;
+
+      await Promise.all(
+        deps.map(async (absolutePath) => {
+          const depLocation = pathToLocation(absolutePath);
+          try {
+            await this.fileService!.mirrorWorkspaceFile(depLocation);
+            if (hasExtension(absolutePath, '.tex')) {
+              worklist.push(depLocation);
+            }
+          } catch (error) {
+            this.logger.debug(
+              `Unable to mirror LaTeX dependency ${absolutePath}: ${toErrorMessage(error)}`,
+            );
+          }
+        }),
+      );
+      this.logger.debug(
+        `Mirrored ${deps.length} LaTeX dependencies from ${file.absolutePath}`,
+      );
+    }
+  }
+
+  /**
+   * Extract direct \input / \include / \bibliography targets plus any local
+   * \usepackage{name} whose `name.sty` sits beside the current file or its
+   * project root.
+   */
+  private async collectDependencies(
+    latexFile: FileLocation,
+  ): Promise<string[]> {
+    const found = new Set<string>();
+
+    try {
+      const direct = await extractLatexFileDependencies(latexFile);
+      for (const abs of direct) {
+        found.add(abs);
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Unable to extract LaTeX dependencies from ${latexFile.absolutePath}: ${toErrorMessage(error)}`,
+      );
+    }
+
+    try {
+      const realPath = await fs.realpath(latexFile.absolutePath);
+      const content = await flexibleFS.read(latexFile);
+      const uncommented = stripLatexComments(content);
+      const baseDir = path.dirname(realPath);
+
+      for (const match of uncommented.matchAll(USEPACKAGE_PATTERN)) {
+        for (const entry of match[1].split(',')) {
+          const name = entry.trim();
+          if (!name) continue;
+          const candidate = path.join(baseDir, `${name}.sty`);
+          if (
+            await flexibleFS.exists({
+              kind: 'external',
+              absolutePath: candidate,
+            })
+          ) {
+            found.add(candidate);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Unable to probe \\usepackage targets in ${latexFile.absolutePath}: ${toErrorMessage(error)}`,
+      );
+    }
+
+    return [...found];
+  }
+
+  /**
+   * Shallow scan of a LaTeX project directory for common sibling files
+   * (*.cls, *.sty, *.bst, latexmkrc, .latexindentrc) and mirror them into
+   * run storage so the compiled document can find its project-local style.
+   */
+  private async mirrorProjectSiblings(projectDir: string): Promise<void> {
+    if (!this.fileService) return;
+
+    let entries: string[];
+    try {
+      entries = await fs.readdir(projectDir);
+    } catch (error) {
+      this.logger.debug(
+        `Unable to scan project siblings in ${projectDir}: ${toErrorMessage(error)}`,
+      );
+      return;
+    }
+
+    const candidates: string[] = [];
+    for (const name of entries) {
+      const ext = path.extname(name).toLowerCase();
+      if (PROJECT_SIBLING_EXTENSIONS.has(ext) || PROJECT_SIBLING_NAMES.has(name)) {
+        candidates.push(path.join(projectDir, name));
+      }
+    }
+
+    if (candidates.length === 0) return;
+
+    await Promise.all(
+      candidates.map(async (absolutePath) => {
+        try {
+          const stats = await fs.stat(absolutePath);
+          if (!stats.isFile()) return;
+          await this.fileService!.mirrorWorkspaceFile(
+            pathToLocation(absolutePath),
           );
         } catch (error) {
           this.logger.debug(
-            `Unable to extract LaTeX dependencies from ${file.absolutePath}: ${toErrorMessage(error)}`,
+            `Unable to mirror project sibling ${absolutePath}: ${toErrorMessage(error)}`,
           );
         }
-      },
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
+      }),
     );
   }
 
