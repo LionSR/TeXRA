@@ -33,9 +33,9 @@ For complex tasks:
 
 Match model capability to task complexity - overpowered models waste money, underpowered ones produce poor results.
 
-- **Simple tasks** (corrections): Use fast, cheap models (`gemini3f`, `gpt5-`, `haiku45`)
-- **Complex tasks** (transformations): Use powerful models (`opus46`, `gpt54pro`)
-- **Reasoning-heavy**: Use thinking models (`sonnet46T`, `opus46T`, `deepseekT`)
+- **Simple tasks** (corrections): Use fast, cheap models (`qwenturbo`, `deepseek`, `haiku45`)
+- **Complex tasks** (transformations): Use powerful models (`opus47`, `gpt54`)
+- **Reasoning-heavy**: Use thinking models (`sonnet46T`, `opus47T`, `deepseekT`)
 
 See the [AI Models Guide](./models.md) for detailed comparisons.
 

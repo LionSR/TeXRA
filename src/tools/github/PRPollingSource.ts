@@ -799,10 +799,7 @@ export class PRPollingSource implements AsyncEventSource {
     // server's view almost certainly matches what we last committed). If a
     // 200 arrives later, `latestTotal` takes precedence and we recompute.
     const seedTotal = latestTotal ?? cache?.lastTotalCount ?? 0;
-    let totalPages = Math.max(
-      1,
-      Math.ceil(seedTotal / CHECK_RUNS_PAGE_SIZE),
-    );
+    let totalPages = Math.max(1, Math.ceil(seedTotal / CHECK_RUNS_PAGE_SIZE));
     if (totalPages > MAX_CHECK_RUNS_PAGES) {
       this.logger.warn(
         `Pagination cap hit for ${owner}/${repo}@${sha.slice(0, 7)} check-runs: ` +
@@ -852,8 +849,7 @@ export class PRPollingSource implements AsyncEventSource {
     //     — nothing actually changed, so the prior commit is still correct.
     //  3. Fall back to the deduped run count (degenerate case, no 200s and
     //     no cache; e.g. brand-new subscription with empty results).
-    const reportedTotal =
-      latestTotal ?? cache?.lastTotalCount ?? runsById.size;
+    const reportedTotal = latestTotal ?? cache?.lastTotalCount ?? runsById.size;
 
     // Stage the per-page caches. The caller commits to `state.checkRunsCache`
     // only after successfully consuming the response — see the type doc above.

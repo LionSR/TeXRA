@@ -13,7 +13,7 @@ description: One-line description.
 
 settings:
   agentCategory: toolUse
-  temperature: 0.7          # 0.3-0.5 for precise tasks, 0.7-0.8 for creative
+  temperature: 0.7 # 0.3-0.5 for precise tasks, 0.7-0.8 for creative
   tools:
     - bash
     - read_file
