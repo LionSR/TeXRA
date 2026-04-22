@@ -9,6 +9,7 @@ import { WorkspaceStateKey, workspaceSM } from '@common/state';
 import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_AUTHOR_EMAIL,
+  DEFAULT_GIT_MARK_COMMITS,
 } from '@shared/constants/git';
 import { setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { setWorktreeSupportEnabled } from '@tools/worktreeConfig';
@@ -23,7 +24,7 @@ export function readGitAuthorSettings(): {
   return {
     markCommits: workspaceSM.get<boolean>(
       WorkspaceStateKey.GIT_MARK_COMMITS,
-      false,
+      DEFAULT_GIT_MARK_COMMITS,
     ),
     authorName:
       workspaceSM.get<string>(WorkspaceStateKey.GIT_AUTHOR_NAME) ||
