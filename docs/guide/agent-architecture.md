@@ -2,6 +2,12 @@
 
 Every time you click "Execute" in TeXRA, an **agent** takes your files and instructions, asks an AI model to do the work, and delivers the result. This page explains what happens under the hood—enough to understand the system, customize it, and troubleshoot when things go sideways.
 
+::: tip When to use workflow mode
+Workflow agents are built for **deep, single-shot thinking**—things like rewriting a whole section, deriving or checking equations step-by-step, converting a paper to slides, or merging edits. They plan in a `<scratchpad>`, produce a full XML-wrapped output, and optionally reflect on it for another round, so runs with frontier reasoning models can take **10–30 minutes** to finish.
+
+If you want a snappier turnaround (e.g. quick polishes, small corrections), pick a **smaller or faster model** in the model dropdown—output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, use a **tool-use agent** (`chat`, `ask`, `research`) instead: those stream back in seconds and don't go through the full workflow pipeline.
+:::
+
 ## Agent Definition Files (`.yaml`)
 
 Each agent is defined in a simple `.yaml` file that tells TeXRA what to say to the AI model and how to handle the response. You can browse and manage these files from the **Agents** tab in the TeXRA Dashboard, or create your own (see [Custom Agents](./custom-agents.md)).
