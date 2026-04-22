@@ -141,6 +141,12 @@ async function handlePack(config: unknown): Promise<void> {
           data.inputFile,
         );
         const workspaceResult = await runWorkspacePack();
+        // Surface errors from either leg — a failed runDir snapshot
+        // (permission denied, disk full) must not be masked by a
+        // successful workspace pack, or the user sees "Pack complete"
+        // while no primary run-dir snapshot was created.
+        if (runDirResult.status === 'error') return runDirResult;
+        if (workspaceResult.status === 'error') return workspaceResult;
         return workspaceResult.status !== 'noFiles'
           ? workspaceResult
           : runDirResult;
