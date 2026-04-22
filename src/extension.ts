@@ -247,17 +247,8 @@ export async function activate(context: vscode.ExtensionContext) {
         ),
       apiKeyExists: (provider) =>
         SecretManager.apiKeyExists(provider as never),
-      hasUsableApiKey: async (provider) => {
-        if (!(await SecretManager.apiKeyExists(provider as never))) {
-          return false;
-        }
-        try {
-          const key = await SecretManager.getApiKey(provider as never);
-          return key.trim().length > 0;
-        } catch {
-          return false;
-        }
-      },
+      hasUsableApiKey: (provider) =>
+        SecretManager.hasUsableApiKey(provider as never),
       storedApiKeyExists: async (provider) => {
         const stored = await SecretManager.get(
           SecretManager.getApiKeySecretName(provider as never),
@@ -270,18 +261,12 @@ export async function activate(context: vscode.ExtensionContext) {
         // tools (probe/verify) and setup-launch preflight, "any key
         // present" must mean "launchable", so require at least one
         // provider with a non-blank key (or server-side access).
-        const usableDirect = await Promise.all(
-          SecretManager.API_PROVIDERS.map(async (provider) => {
-            if (!(await SecretManager.apiKeyExists(provider))) return false;
-            try {
-              const key = await SecretManager.getApiKey(provider);
-              return key.trim().length > 0;
-            } catch {
-              return false;
-            }
-          }),
+        const usable = await Promise.all(
+          SecretManager.API_PROVIDERS.map((p) =>
+            SecretManager.hasUsableApiKey(p),
+          ),
         );
-        if (usableDirect.some(Boolean)) return true;
+        if (usable.some(Boolean)) return true;
         return getServerSideKeyService().canUseServerSideKeys();
       },
       gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
