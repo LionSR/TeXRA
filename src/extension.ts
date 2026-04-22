@@ -11,7 +11,10 @@ import { clearStoreCache } from '@agent/storage';
 import { initPlatform } from '@platform/platform';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
-import { initializeServerSideKeyAccess } from '@auth/serverKeys';
+import {
+  getServerSideKeyService,
+  initializeServerSideKeyAccess,
+} from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@auth/UriHandler';
@@ -250,7 +253,26 @@ export async function activate(context: vscode.ExtensionContext) {
         );
         return stored !== undefined;
       },
-      anyApiKeyExists: () => SecretManager.anyApiKeyExists(),
+      anyApiKeyExists: async () => {
+        // Shared SecretManager.anyApiKeyExists reports true for
+        // PROVIDER_API_KEY="" — a common stale-env case. For setup
+        // tools (probe/verify), "any key present" is meant as
+        // "setup-launchable", so require at least one provider with a
+        // non-blank key (or server-side access) before reporting true.
+        const usableDirect = await Promise.all(
+          SecretManager.API_PROVIDERS.map(async (provider) => {
+            if (!(await SecretManager.apiKeyExists(provider))) return false;
+            try {
+              const key = await SecretManager.getApiKey(provider);
+              return key.trim().length > 0;
+            } catch {
+              return false;
+            }
+          }),
+        );
+        if (usableDirect.some(Boolean)) return true;
+        return getServerSideKeyService().canUseServerSideKeys();
+      },
       gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
     },
     commands: {
