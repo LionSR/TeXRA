@@ -67,7 +67,9 @@ export class LatexMediaManager {
 
     const tasks = [...absolutePaths].map(async (absolutePath) => {
       try {
-        await this.fileService!.mirrorWorkspaceFile(pathToLocation(absolutePath));
+        await this.fileService!.mirrorWorkspaceFile(
+          pathToLocation(absolutePath),
+        );
       } catch (error) {
         const message = toErrorMessage(error);
         this.logger.debug(

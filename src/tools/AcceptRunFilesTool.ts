@@ -233,9 +233,7 @@ Optional:
           ? ` (stripped ${entry.strippedCount} \\criticize)`
           : '';
       totalStripped += entry.strippedCount;
-      results.push(
-        `${action}: ${entry.original}${mappingNote}${strippedNote}`,
-      );
+      results.push(`${action}: ${entry.original}${mappingNote}${strippedNote}`);
       edits.push({
         path: entry.original,
         lineChanges: approval.lineChanges,
