@@ -1,14 +1,14 @@
 // Third-party imports
 import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
 
+// Local imports - platform
+import { platform } from '@platform/platform';
+
 // Local imports - auth
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - state
 import { GlobalStateKey, globalSM } from '@common/state';
-
-// Local imports - platform
-import { platform } from '@platform/platform';
 
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
@@ -29,12 +29,11 @@ import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
  */
 export const DEFAULT_MODELS = [
   'gemini31p',
-  'gemini3f',
   'sonnet46T',
   'opus47T',
   'gpt54',
   'deepseekT',
-  'kimi25T',
+  'kimi26T',
 ];
 
 /**
@@ -43,7 +42,7 @@ export const DEFAULT_MODELS = [
  * to get the updated defaults. A simple integer avoids hash-collision risks
  * and doesn't trigger on harmless reordering.
  */
-export const MODEL_LIST_VERSION = 11;
+export const MODEL_LIST_VERSION = 12;
 
 /**
  * Get the list of visible models from extension global state.

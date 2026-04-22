@@ -136,9 +136,7 @@ export async function registerAgentDirectoryRoots(
   // Register each root independently so one failing directory resolution
   // (e.g. a misconfigured custom agents path) does not take out the others —
   // the creator agent still needs its reference docs and built-in examples.
-  const registrations: Array<
-    () => Promise<void> | void
-  > = [
+  const registrations: Array<() => Promise<void> | void> = [
     async () =>
       registerExternalRoot(await agentDirectories.builtIn(), {
         kind: 'builtInWorkflow',
@@ -159,12 +157,7 @@ export async function registerAgentDirectoryRoots(
       }),
     () =>
       registerExternalRoot(
-        path.join(
-          context.extensionPath,
-          'resources',
-          'docs',
-          'agent-creation',
-        ),
+        path.join(context.extensionPath, 'resources', 'docs', 'agent-creation'),
         {
           kind: 'agentDocs',
           writable: false,

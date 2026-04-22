@@ -1,9 +1,6 @@
 import * as path from 'path';
 
-import {
-  findExternalRoot,
-  type MatchedExternalRoot,
-} from './externalRoots';
+import { findExternalRoot, type MatchedExternalRoot } from './externalRoots';
 
 /**
  * Result of resolving a path against a workspace root.
@@ -25,9 +22,10 @@ export type ResolvedPath =
  * Wrap an external result with allowlist info. Returns the input unchanged
  * when the path does not match any registered external root.
  */
-export function annotateExternal(
-  resolved: { kind: 'external'; absolutePath: string },
-): { kind: 'external'; absolutePath: string; allowed?: MatchedExternalRoot } {
+export function annotateExternal(resolved: {
+  kind: 'external';
+  absolutePath: string;
+}): { kind: 'external'; absolutePath: string; allowed?: MatchedExternalRoot } {
   const match = findExternalRoot(resolved.absolutePath);
   return match ? { ...resolved, allowed: match } : resolved;
 }
