@@ -905,6 +905,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
       void vscode.window.showInformationMessage('GitHub token saved.');
       await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+      // Re-probe external tools so the Tools tab and the runtime
+      // availability cache pick up the new token without a manual recheck.
+      await this.withActiveWebview((w) => this.sendToolDashboardData(w));
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -919,6 +922,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await SecretManager.delete(SecretManager.GITHUB_TOKEN_KEY);
       void vscode.window.showInformationMessage('GitHub token removed.');
       await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+      await this.withActiveWebview((w) => this.sendToolDashboardData(w));
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
