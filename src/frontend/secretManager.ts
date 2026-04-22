@@ -111,9 +111,7 @@ export class SecretManager {
    * setup flow, per-provider probes, preflight checks) must use this
    * helper rather than the looser `apiKeyExists`.
    */
-  public static async hasUsableApiKey(
-    provider: ApiProvider,
-  ): Promise<boolean> {
+  public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
     const key = await this.lookupApiKey(provider);
     return typeof key === 'string' && key.trim().length > 0;
   }

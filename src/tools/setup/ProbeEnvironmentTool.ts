@@ -16,9 +16,11 @@ import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
 import { CORE_LATEX_TOOLS, IMAGE_TOOLS, locateTool } from './toolProbing';
 
-const ProbeEnvironmentInputSchema = z.strictObject({}).describe(
-  'No inputs — returns a structured JSON summary of the host environment.',
-);
+const ProbeEnvironmentInputSchema = z
+  .strictObject({})
+  .describe(
+    'No inputs — returns a structured JSON summary of the host environment.',
+  );
 
 type ProbeInput = z.infer<typeof ProbeEnvironmentInputSchema>;
 
@@ -98,8 +100,9 @@ export class ProbeEnvironmentTool extends defineTool({
       coreTools.find((t) => t.name === 'magick')?.installed;
     if (!hasImageTool) missingCore.push('gm/magick');
 
-    const latexWorkshopInstalled =
-      platform.extensions.isInstalled(LATEX_WORKSHOP_EXT_ID);
+    const latexWorkshopInstalled = platform.extensions.isInstalled(
+      LATEX_WORKSHOP_EXT_ID,
+    );
 
     const summary = {
       os: {
@@ -179,8 +182,6 @@ function buildHeadline(summary: {
   if (summary.credentials.anyApiKeySet) creds.push('API key set');
   if (summary.credentials.researcherAccess.authenticated)
     creds.push('signed in');
-  parts.push(
-    `credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`,
-  );
+  parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);
   return parts.join('; ');
 }
