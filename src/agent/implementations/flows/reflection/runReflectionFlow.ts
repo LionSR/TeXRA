@@ -61,14 +61,6 @@ export interface RunReflectionFlowInput<
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
   onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
-  /**
-   * When true, route outputs into task-run storage regardless of the user's
-   * `texra.agentOutputs.storageMode` setting. Used for subagent runs so they
-   * don't pollute the user's workspace. User-initiated workflows respect the
-   * configured storage mode (default: workspace) so the progress toolbar's
-   * pack/clean operations can still find them.
-   */
-  isSubagent?: boolean;
 }
 
 export interface RunReflectionFlowResult {
@@ -80,7 +72,6 @@ function deriveConfig(
   setting: AgentWorkflowSetting,
   prompt: RunReflectionFlowInput['prompt'],
 ): {
-  useScratchpad: boolean;
   shouldEnsureXmlStructure: boolean;
   totalRounds: number;
   outputExt: string;
@@ -114,7 +105,6 @@ function deriveConfig(
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
-    useScratchpad,
     shouldEnsureXmlStructure,
     totalRounds,
     outputExt: useScratchpad ? 'xml' : setting.outputExt,
@@ -144,12 +134,7 @@ export async function runReflectionFlow<C = unknown>(
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
-  // Subagent runs always route to task-run storage so their artifacts don't
-  // pollute the user's workspace. Top-level workflow runs respect the user's
-  // configured storage mode (workspace or taskRunStorage).
-  const fileService = new TaskRunFileService(executionId, {
-    forceRunStorage: input.isSubagent,
-  });
+  const fileService = new TaskRunFileService(executionId);
 
   const baseFiles: WorkspaceFileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile]
@@ -179,27 +164,22 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
+  const { shouldEnsureXmlStructure, totalRounds, outputExt } =
     deriveConfig(setting, prompt);
 
-  const modelName = modelHandler.config.name;
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
-      const fileName = getOutputFileName(
-        config.inputFile,
-        config.agent,
-        modelName,
-        outputExt,
-        round,
-      );
-      // Raw XML scratchpad files are intermediate artifacts — keep them out
-      // of the user's workspace regardless of the configured storage mode.
-      if (useScratchpad) {
-        return fileService.createRawOutputLocation(
-          fileName,
-        ) as AgentFileLocation;
+      // The default `r{round}/output.{ext}` filename is only collision-safe
+      // when resolved through a run-storage-bound fileService. Enforce the
+      // invariant so a misconfigured TaskRunFileService can't silently
+      // route outputs to a shared `<workspace>/r{round}/output.tex` path.
+      if (!fileService.hasRunDirectory()) {
+        throw new Error(
+          'runReflectionFlow requires a TaskRunFileService bound to an executionId for default output-path resolution.',
+        );
       }
+      const fileName = getOutputFileName(outputExt, round);
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 

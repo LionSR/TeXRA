@@ -103,14 +103,30 @@ When set, bibliography tools will use this path when no explicit file is provide
 
 ### Agent Output Storage
 
-Control where agent-generated files are saved:
+Workflow outputs always land inside task-run storage — each run gets its
+own folder under `executions/{id}/`, with the primary revised file at
+`r{round}/output.{ext}` and the merge output at `_full.{ext}`. Per-run
+isolation keeps parallel runs from colliding, and the whole folder is
+reachable from the progress-view toolbar:
+
+- **Accept** — copy the revised file into your workspace (via the
+  normal approval flow).
+- **Pack** — snapshot the whole run (including mirrored `.bib`, `.cls`,
+  `.sty`, and figure dependencies) into `workspace/History/`.
+- **Clean** — discard the run's folder entirely.
+- **Open in task storage** — reveal the folder so you can browse
+  artifacts manually.
+
+When a workflow completes, the final revised file auto-opens in a new
+editor tab as a read-only preview so you don't feel the output
+"vanished." Disable the preview with:
 
 ```json
-"texra.agentOutputs.storageMode": "workspace"
+"texra.agentOutputs.autoOpenFinal": false
 ```
 
-- `workspace`: Write output files beside the source files (default)
-- `taskRunStorage`: Isolate artifacts inside the extension storage
+The legacy `texra.agentOutputs.storageMode` setting is deprecated and
+ignored — every workflow output now goes to task-run storage.
 
 ### Audio Settings
 
