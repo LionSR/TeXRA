@@ -498,11 +498,7 @@ export class TaskRunFileService {
 
         try {
           await createSymlink(
-            createRunStorageLocation(
-              sourceAbsolute,
-              relativePath,
-              executionId,
-            ),
+            createRunStorageLocation(sourceAbsolute, relativePath, executionId),
             destinationAbsolute,
           );
         } catch (error) {
