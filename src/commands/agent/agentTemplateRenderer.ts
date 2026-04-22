@@ -14,7 +14,10 @@ import { AbsoluteFS } from '@utils/files';
  * schema (e.g. `agentCategory`, `prefills` length, `userRequest` shape).
  */
 
-export type AgentTemplateKind = 'toolUse' | 'workflowSingle' | 'workflowMultiple';
+export type AgentTemplateKind =
+  | 'toolUse'
+  | 'workflowSingle'
+  | 'workflowMultiple';
 
 const FILES: Record<AgentTemplateKind, string> = {
   toolUse: 'agentTemplate-toolUse.yaml',
