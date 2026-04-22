@@ -306,6 +306,16 @@ export async function activate(context: vscode.ExtensionContext) {
       await refreshGitHubToken();
       await invalidateToolAvailability();
     }),
+    // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
+    // reflects the new state without the user clicking Re-check.
+    vscode.extensions.onDidChange(() => {
+      void invalidateToolAvailability();
+    }),
+    // Workspace folders opened/closed can flip `isGitRepository`, which
+    // gates the GitHub PR subscription tool group.
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      void invalidateToolAvailability();
+    }),
   );
   const disposeGitHubAuthListener = bus.on(
     'githubTokenInvalid',

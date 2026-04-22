@@ -1591,8 +1591,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleInstallToolExtension(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.INSTALL_TOOL_EXTENSION>,
   ): Promise<void> {
-    await this.latexHandlers.installExtension(data.extensionId, (w) =>
-      this.sendToolDashboardData(w),
-    );
+    await this.latexHandlers.installExtension(data.extensionId);
   }
 }
