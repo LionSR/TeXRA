@@ -50,6 +50,26 @@ const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
 
+/**
+ * Prepare raw process output for terminal-style display.
+ * Strips ANSI escape codes and simulates carriage-return overwrite so that
+ * progress lines (e.g. lake build's "● Building…\r✔ Built…") render like
+ * a real terminal instead of showing both the building and built indicators.
+ */
+function processTerminalText(text: string): string {
+  // Strip ANSI escape sequences (colors, cursor movement, etc.)
+  const stripped = text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  // Within each newline-delimited segment, a bare \r moves back to the start.
+  // Split on \r and keep only the last segment per line.
+  const lines = stripped.split('\n');
+  return lines
+    .map((line) => {
+      const parts = line.split('\r');
+      return parts[parts.length - 1];
+    })
+    .join('\n');
+}
+
 /** Maps group status to codicon class (with optional animation) */
 function getStatusIcon(status: string): string {
   switch (status) {
@@ -92,6 +112,9 @@ export class TaskGroupList extends LitElement {
   /** Memoized tree output from buildGroupTree() - recomputed only when inputs change */
   private cachedTree: GroupTree[] = [];
   private cachedUngrouped: LogMessageData[] = [];
+
+  /** Memoized processed text for terminal mode rendering */
+  private cachedTerminalText = '';
 
   /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
   private groupNodeIndex = new Map<string, GroupTree>();
@@ -145,6 +168,13 @@ export class TaskGroupList extends LitElement {
 
     const groupsChanged = changedProperties.has('groups');
     const messagesChanged = changedProperties.has('messages');
+    const terminalChanged = changedProperties.has('terminal');
+
+    if (this.terminal && (messagesChanged || terminalChanged)) {
+      this.cachedTerminalText = processTerminalText(
+        this.messages.map((m) => m.text).join(''),
+      );
+    }
     const prevMessages = messagesChanged
       ? (changedProperties.get('messages') as LogMessageData[] | undefined)
       : undefined;
@@ -582,6 +612,20 @@ export class TaskGroupList extends LitElement {
           @vsc-scrollable-scroll=${this.handleVscScroll}
         >
           <div class="log-placeholder">${unsafeHTML(PLACEHOLDER_HTML)}</div>
+        </vscode-scrollable>
+      `;
+    }
+
+    // Terminal mode: render raw process output as a single pre-formatted text
+    // block so carriage returns and ANSI codes behave like a real terminal.
+    if (this.terminal) {
+      return html`
+        <vscode-scrollable
+          id=${ELEMENT_IDS.LOG_CONTENT}
+          class="log-container"
+          @vsc-scrollable-scroll=${this.handleVscScroll}
+        >
+          <pre class="terminal-pre">${this.cachedTerminalText}</pre>
         </vscode-scrollable>
       `;
     }
