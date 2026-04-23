@@ -153,6 +153,8 @@ export interface ProgressEventPayloads {
 
   /** Active PR-activity subscription keys changed; frontends refresh their list. */
   prSubscriptionsChanged: { keys: readonly string[] };
+  /** Active PR-activity owners changed; frontends refresh owner metadata. */
+  prSubscriptionBindingsChanged: undefined;
 
   /**
    * External tool availability was re-probed. Frontends (Tools tab) refresh
