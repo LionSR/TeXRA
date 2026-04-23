@@ -13,10 +13,7 @@
  */
 
 import { z } from 'zod';
-import {
-  isAssistantMessage,
-  isToolMessage,
-} from 'openai/lib/chatCompletionUtils';
+import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import latexPreamble from '../../../resources/templates/chatExport.tex';
 import type { Part } from '@google/genai';
 import type {
@@ -471,7 +468,7 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
     }
 
     // OpenAI Chat Completions tool role
-    if (role === 'tool' || isToolMessage(toChatCompletionMessageParam(item))) {
+    if (role === 'tool') {
       const text =
         typeof msg.content === 'string'
           ? msg.content

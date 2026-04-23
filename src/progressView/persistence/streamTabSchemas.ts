@@ -59,7 +59,15 @@ export type LegacyInstructionEntry = z.infer<
 >;
 
 export const LegacyInstructionsDataSchema = z
-  .record(z.string(), LegacyInstructionEntrySchema)
+  .record(z.string(), z.unknown())
+  .transform((raw) =>
+    Object.fromEntries(
+      Object.entries(raw).flatMap(([k, v]) => {
+        const r = LegacyInstructionEntrySchema.safeParse(v);
+        return r.success ? ([[k, r.data]] as [[string, LegacyInstructionEntry]]) : [];
+      })
+    )
+  )
   .catch({});
 
 /**
