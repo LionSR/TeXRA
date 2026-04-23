@@ -1,6 +1,13 @@
 # TeXRA: AI TeX Research Assistant for VS Code
 
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/texra-ai.texra)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
+[![Installs](https://vsmarketplacebadges.dev/installs-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
+[![Downloads](https://vsmarketplacebadges.dev/downloads-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
+[![Rating](https://vsmarketplacebadges.dev/rating-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
+[![Open VSX Version](https://img.shields.io/open-vsx/v/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
+[![Open VSX Downloads](https://img.shields.io/open-vsx/dt/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
+[![Latest Release](https://img.shields.io/github/v/release/LionSR/TeXRA)](https://github.com/LionSR/TeXRA/releases)
+[![Last Commit](https://img.shields.io/github/last-commit/LionSR/TeXRA)](https://github.com/LionSR/TeXRA/commits)
 [![License](https://img.shields.io/badge/license-Proprietary-blue)](LICENSE)
 
 > **🎓 Free for Researchers!** TeXRA now offers a **Researcher Access Program** with
