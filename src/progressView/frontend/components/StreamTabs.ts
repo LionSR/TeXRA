@@ -425,7 +425,7 @@ export class StreamTab extends LitElement {
             ${hasChildrenCompact
               ? html`<i
                   class="codicon codicon-chevron-right compact-subagent-hint"
-                  title="${this.childCount} subagent${this.childCount > 1 ? 's' : ''}"
+                  title="${this.childCount} child stream${this.childCount > 1 ? 's' : ''}"
                 ></i>`
               : nothing}
           </div>
