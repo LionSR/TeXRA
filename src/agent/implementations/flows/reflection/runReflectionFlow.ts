@@ -33,6 +33,7 @@ import {
   type StorageKey,
 } from '@shared/schemas';
 import {
+  AbsoluteFS,
   TaskRunFileService,
   WorkspaceFS,
   createWorkspaceLocation,
@@ -153,8 +154,22 @@ export async function runReflectionFlow<C = unknown>(
           'runReflectionFlow requires a TaskRunFileService bound to an executionId for default output-path resolution.',
         );
       }
-      const fileName = getOutputFileName('xml', round);
-      return fileService.createLocation(fileName) as AgentFileLocation;
+      const canonical = fileService.createLocation(
+        getOutputFileName('xml', round),
+      ) as AgentFileLocation;
+      // Resume-from-pre-refactor compat: if a round was partially written on an
+      // older build that used `.tex` for non-scratchpad agents, keep using that
+      // file on resume so initializeOutputAndPrefill sees the existing content
+      // instead of starting a fresh round at output.xml.
+      if (!AbsoluteFS.existsSync(canonical.absolutePath)) {
+        const legacy = fileService.createLocation(
+          getOutputFileName('tex', round),
+        ) as AgentFileLocation;
+        if (AbsoluteFS.existsSync(legacy.absolutePath)) {
+          return legacy;
+        }
+      }
+      return canonical;
     });
 
   const interruptible: IInterruptible = {

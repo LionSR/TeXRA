@@ -34,11 +34,12 @@ function getCompileDisplayName(file: OutputFileInfo): string {
   const rawBase = path.basename(file.location.absolutePath);
   const src = file.source;
   if (!src || src === rawBase) return rawBase;
-  // Avoid leaking the generic stem that replaced the old descriptive names
+  // Avoid leaking the generic raw-wrapper stem (`output`, `output.xml`, or the
+  // pre-refactor `output.tex`) as a display name — those are run-storage
+  // internals, not the meaningful document name.
   const srcBase = path.basename(src);
-  return srcBase && srcBase !== 'output' && srcBase !== 'output.tex'
-    ? srcBase
-    : rawBase;
+  const GENERIC_STEMS = new Set(['output', 'output.xml', 'output.tex']);
+  return srcBase && !GENERIC_STEMS.has(srcBase) ? srcBase : rawBase;
 }
 
 /**
