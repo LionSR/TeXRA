@@ -462,11 +462,6 @@ async function scanRunDirForOutputs(
       // Collect .tex files recursively — extracted docs may live in subdirs
       // (e.g. r0/chapters/main.tex) when source names include path segments.
       const allTexFiles = await collectTexFiles(roundDirAbsolute);
-      // Strip diff artifacts before the output.tex decision so a round with
-      // only output.tex + one artifact doesn't lose output.tex (artifacts
-      // are filtered first, then the raw stem is dropped only when real
-      // extracted outputs remain alongside it).
-      const rawStem = `${WORKFLOW_OUTPUT_BASENAME}.tex`;
       // Between-round artifacts written to run storage always carry both round
       // numbers (e.g. output_diffr1r0.tex). The bare _diff suffix only appears
       // in workspace-side diffs, never here, so a legitimately-named source
@@ -474,9 +469,10 @@ async function scanRunDirForOutputs(
       const nonArtifact = allTexFiles.filter(
         (f) => !/_diffr\d+r\d+$/.test(path.parse(f).name),
       );
-      // For XML-mode agents, the round dir has both output.tex (raw wrapper)
-      // and extracted files (e.g. paper.tex).  Drop the raw stem only when
-      // real extracted outputs exist alongside it.
+      // Raw round output is output.xml (never collected by collectTexFiles).
+      // Guard for pre-refactor runs where non-scratchpad agents wrote output.tex
+      // as the raw wrapper: drop it when real extracted outputs exist alongside.
+      const rawStem = `${WORKFLOW_OUTPUT_BASENAME}.tex`;
       const texFiles =
         nonArtifact.length > 1 && nonArtifact.includes(rawStem)
           ? nonArtifact.filter((f) => f !== rawStem)

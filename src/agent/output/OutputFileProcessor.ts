@@ -1,5 +1,3 @@
-import * as path from 'path';
-
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -19,8 +17,6 @@ import {
 
 import { indentLatexFile, indentLatexFiles } from './LatexOutputUtils';
 import type { XmlOutputManager } from './XmlOutputManager';
-
-const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
 
 export interface ProcessingContext {
   agentSetting: AgentWorkflowSetting;
@@ -82,23 +78,6 @@ export class OutputFileProcessor {
     }
   }
 
-  /**
-   * Derive a meaningful source name for a non-XML single output.
-   * When there is exactly one base file, use its filename so that
-   * FileLineageCalculator can find the workspace original (which powers
-   * the diff display and the "Compare with base" buttons). Falls back to
-   * the raw output basename when there are multiple base files.
-   */
-  private getSourceForSingleOutput(outputLocation: FileLocation): string {
-    if (this.ctx.baseFiles.length === 1) {
-      const base = this.ctx.baseFiles[0];
-      return path.basename(
-        base.kind !== 'external' ? base.relativePath : base.absolutePath,
-      );
-    }
-    return path.basename(outputLocation.absolutePath);
-  }
-
   private handleEmptyOutput(
     round: number,
     rawLocation: FileLocation,
@@ -117,19 +96,10 @@ export class OutputFileProcessor {
     logger.debug(`Processing single output for ${outputLocation.absolutePath}`);
 
     try {
-      const shouldProcessXml = this.shouldProcessXml(agentSetting);
-      const processed = shouldProcessXml
-        ? await this.ctx.xmlManager.processSingleXmlOutput(
-            outputLocation,
-            currRound,
-          )
-        : {
-            source: this.getSourceForSingleOutput(outputLocation),
-            round: currRound,
-            location: rawLocation ?? outputLocation,
-            lineage: null,
-            diff: null,
-          };
+      const processed = await this.ctx.xmlManager.processSingleXmlOutput(
+        outputLocation,
+        currRound,
+      );
 
       if (!processed.location.absolutePath) {
         logger.debug(
@@ -248,22 +218,6 @@ export class OutputFileProcessor {
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
       data.xmlSummary = { ...emptySummary };
-    }
-  }
-
-  private shouldProcessXml(agentSetting: AgentWorkflowSetting): boolean {
-    switch (agentSetting.xmlStructureMode ?? 'scratchpadOnly') {
-      case 'always':
-        return true;
-      case 'scratchpadOnly':
-        return (
-          Boolean(agentSetting.documentTag) ||
-          Boolean(
-            agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)),
-          )
-        );
-      default:
-        return false;
     }
   }
 }
