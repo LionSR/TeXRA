@@ -1413,16 +1413,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // Invalidate model options cache so downstream refreshes see fresh key state.
     invalidateModelOptionsCache();
     await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
-    await vscode.commands.executeCommand('texra.refreshAllOptions');
-    await this.withActiveWebview((w) => this.sendProfileData(w));
+    await Promise.all([
+      vscode.commands.executeCommand('texra.refreshAllOptions'),
+      this.withActiveWebview((w) => this.sendProfileData(w)),
+    ]);
   }
 
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
   private async refreshAfterAgentMutation(): Promise<void> {
-    await this.withActiveWebview((w) =>
-      this.agentHandlers.sendAgentSelectionData(w),
-    );
-    await vscode.commands.executeCommand('texra.refreshAllOptions');
+    await Promise.all([
+      this.withActiveWebview((w) =>
+        this.agentHandlers.sendAgentSelectionData(w),
+      ),
+      vscode.commands.executeCommand('texra.refreshAllOptions'),
+    ]);
   }
 
   private async handleOpenProviderKeyUrl(
@@ -1528,8 +1532,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // Enabled model list changed — invalidate cached options.
     invalidateModelOptionsCache();
-    await vscode.commands.executeCommand('texra.refreshAllOptions');
-    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
+    await Promise.all([
+      vscode.commands.executeCommand('texra.refreshAllOptions'),
+      this.withActiveWebview((w) => this.sendModelSelectionData(w)),
+    ]);
   }
 
   private async handleSetHelperModel(
