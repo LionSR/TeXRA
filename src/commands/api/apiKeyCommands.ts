@@ -21,7 +21,7 @@ export const apiKeyCommands = {
 async function refreshApiKeyUI(): Promise<void> {
   invalidateModelOptionsCache();
   await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
-  void vscode.commands.executeCommand('texra.refreshAllOptions');
+  await vscode.commands.executeCommand('texra.refreshAllOptions');
 }
 
 async function setApiKeyForProvider(
