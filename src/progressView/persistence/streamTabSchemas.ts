@@ -46,6 +46,53 @@ export const StreamTabMetaSchema = z.object({
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 
 // ============================================================================
+// Legacy instructions: { runId: { text, timestamp?, ... } }
+// ============================================================================
+
+export const LegacyInstructionEntrySchema = z.looseObject({
+  text: z.string(),
+  timestamp: z.number().optional(),
+});
+
+export type LegacyInstructionEntry = z.infer<
+  typeof LegacyInstructionEntrySchema
+>;
+
+export const LegacyInstructionsDataSchema = z
+  .record(z.string(), LegacyInstructionEntrySchema)
+  .catch({});
+
+/**
+ * Pick the legacy instruction that best matches the workflow run users most
+ * recently viewed. Prefer `preferredRunId` when available; otherwise fall back
+ * to the newest timestamp, breaking ties by later insertion order.
+ */
+export function selectPreferredLegacyInstruction(
+  record: Record<string, LegacyInstructionEntry>,
+  preferredRunId?: string | null,
+): LegacyInstructionEntry | null {
+  if (preferredRunId && record[preferredRunId]) {
+    return record[preferredRunId];
+  }
+
+  let selected: LegacyInstructionEntry | null = null;
+  for (const entry of Object.values(record)) {
+    if (!selected) {
+      selected = entry;
+      continue;
+    }
+
+    const nextTimestamp = entry.timestamp ?? Number.NEGATIVE_INFINITY;
+    const currentTimestamp = selected.timestamp ?? Number.NEGATIVE_INFINITY;
+    if (nextTimestamp >= currentTimestamp) {
+      selected = entry;
+    }
+  }
+
+  return selected;
+}
+
+// ============================================================================
 // Legacy detection + flattening
 // ============================================================================
 
