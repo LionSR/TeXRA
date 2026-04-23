@@ -98,12 +98,13 @@ export class XmlOutputManager {
     const sourceName =
       outputContent.match(DOCUMENT_NAME_REGEX)?.[1]?.trim() ?? '';
 
-    // Name the extracted .tex after the document (XML name attr), then the
-    // input file, then fall back to the raw stem ("output").  This keeps the
-    // extracted LaTeX readable ("constrained_note.tex") while the raw model
-    // response stays at its fixed "output.*" path.
+    // Name the extracted .tex after: input file stem → first XML document name
+    // → raw output stem.  Input file takes priority because extractDocument()
+    // also uses agentConfig.inputFile as its matching hint, so the destination
+    // name and the extracted content are always in sync.  For agents without an
+    // inputFile, the XML document name gives a human-readable fallback.
     const inputFileStem = path.parse(this.agentConfig.inputFile).name;
-    const texStem = sourceName || inputFileStem || rawStem;
+    const texStem = inputFileStem || sourceName || rawStem;
     const texRelativePath = outputDir
       ? path.join(outputDir, `${texStem}.tex`)
       : `${texStem}.tex`;
