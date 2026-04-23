@@ -384,7 +384,7 @@ export class StreamTab extends LitElement {
     const tooltip = this._tooltip;
     const agentDecorator = this._agentDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
-    const hasChildrenCompact = this.childCount > 0 && this.compact;
+    const childStreamLabel = `${this.childCount} child stream${this.childCount > 1 ? 's' : ''}`;
 
     return html`
       <div
@@ -403,9 +403,7 @@ export class StreamTab extends LitElement {
               class="tab-expand"
               data-stream=${stream.name}
               data-action="toggle-children"
-              title=${this.expanded
-                ? 'Collapse child streams'
-                : `${this.childCount} child stream${this.childCount > 1 ? 's' : ''}`}
+              title=${this.expanded ? 'Collapse child streams' : childStreamLabel}
               aria-expanded=${this.expanded ? 'true' : 'false'}
             >
               <i class="codicon codicon-chevron-right"></i>
@@ -422,12 +420,12 @@ export class StreamTab extends LitElement {
               >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
               stream.name}</span
             >
-            ${hasChildrenCompact
+            ${this.childCount > 0 && this.compact
               ? html`<i
                   class="codicon codicon-chevron-right compact-subagent-hint"
                   role="img"
-                  aria-label="${this.childCount} child stream${this.childCount > 1 ? 's' : ''}"
-                  title="${this.childCount} child stream${this.childCount > 1 ? 's' : ''}"
+                  aria-label=${childStreamLabel}
+                  title=${childStreamLabel}
                 ></i>`
               : nothing}
           </div>
