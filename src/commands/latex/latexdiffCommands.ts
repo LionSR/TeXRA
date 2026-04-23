@@ -469,8 +469,12 @@ async function scanRunDirForOutputs(
       // are filtered first, then the raw stem is dropped only when real
       // extracted outputs remain alongside it).
       const rawStem = `${WORKFLOW_OUTPUT_BASENAME}.tex`;
+      // Between-round artifacts written to run storage always carry both round
+      // numbers (e.g. output_diffr1r0.tex). The bare _diff suffix only appears
+      // in workspace-side diffs, never here, so a legitimately-named source
+      // like "chapter_diff.tex" is not mistakenly dropped.
       const nonArtifact = allTexFiles.filter(
-        (f) => !LATEXDIFF_ARTIFACT_RE.test(path.parse(f).name),
+        (f) => !/_diffr\d+r\d+$/.test(path.parse(f).name),
       );
       // For XML-mode agents, the round dir has both output.tex (raw wrapper)
       // and extracted files (e.g. paper.tex).  Drop the raw stem only when
