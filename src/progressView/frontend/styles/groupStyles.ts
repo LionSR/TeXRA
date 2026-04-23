@@ -23,18 +23,6 @@ export const groupStyles = css`
     background-color: var(--vscode-list-hoverBackground);
   }
 
-  /* Alternate striping on top-level groups for visual separation */
-  .log-run
-    > .log-group-content
-    > .log-group:nth-child(even)
-    > .log-group-header {
-    background-color: color-mix(
-      in srgb,
-      var(--vscode-editor-background) 97%,
-      var(--vscode-foreground)
-    );
-  }
-
   .log-group-header {
     &.is-running {
       border-left-color: var(--vscode-statusBarItem-warningBackground);
