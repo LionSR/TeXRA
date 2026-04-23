@@ -1,6 +1,6 @@
 # TeXRA: AI TeX Research Assistant for VS Code
 
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/texra-ai.texra)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![License](https://img.shields.io/badge/license-Proprietary-blue)](LICENSE)
 
 > **🎓 Free for Researchers!** TeXRA now offers a **Researcher Access Program** with
