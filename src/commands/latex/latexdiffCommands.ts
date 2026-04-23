@@ -438,11 +438,17 @@ async function scanRunDirForOutputs(
     const toAbs = (f: string): string =>
       path.isAbsolute(f) ? f : path.join(workspacePath, f);
 
-    // Build a basename → workspace location map from all configured base files
-    // so multi-output runs can match each recovered file to its correct original.
-    const baseLocationByBasename = new Map<string, FileLocation>();
+    // Build a relative-path (no extension) → workspace location map so
+    // multi-output runs with duplicate basenames (e.g. chapters/main.tex and
+    // appendix/main.tex) don't collide. fileRelToRound mirrors the workspace
+    // relative path for XML-extracted files, so the keys match directly.
+    const baseLocationByRelPath = new Map<string, FileLocation>();
     for (const bf of [inputFile, ...(extraBaseFiles ?? [])]) {
-      baseLocationByBasename.set(path.basename(bf), pathToLocation(toAbs(bf)));
+      const abs = toAbs(bf);
+      const rel = (workspacePath ? path.relative(workspacePath, abs) : bf)
+        .replace(/\\/g, '/')
+        .replace(/\.tex$/i, '');
+      baseLocationByRelPath.set(rel, pathToLocation(abs));
     }
     const defaultBaseLocation = pathToLocation(toAbs(inputFile));
 
@@ -490,11 +496,11 @@ async function scanRunDirForOutputs(
           sourceNoExt === WORKFLOW_OUTPUT_BASENAME
             ? path.basename(inputFile)
             : sourceNoExt;
-        // Match each recovered file to its base by basename; fall back to the
+        // Match recovered file to its base by relative path; fall back to the
         // primary inputFile so single-output rounds always have a valid original.
+        const fileKey = fileRelToRound.replace(/\\/g, '/').replace(/\.tex$/i, '');
         const originalLocation =
-          baseLocationByBasename.get(path.basename(fileRelToRound)) ??
-          defaultBaseLocation;
+          baseLocationByRelPath.get(fileKey) ?? defaultBaseLocation;
         outputs.push({
           source,
           round,
