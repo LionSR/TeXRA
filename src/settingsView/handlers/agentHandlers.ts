@@ -757,7 +757,7 @@ export class AgentHandlers {
         this.sendAgentSelectionData(w),
       ]);
     });
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await vscode.commands.executeCommand('texra.refreshAllOptions');
   }
 
   /** Read and validate custom presets from workspace state. */

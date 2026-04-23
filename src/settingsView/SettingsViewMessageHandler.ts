@@ -1413,7 +1413,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // Invalidate model options cache so downstream refreshes see fresh key state.
     invalidateModelOptionsCache();
     await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await vscode.commands.executeCommand('texra.refreshAllOptions');
     await this.withActiveWebview((w) => this.sendProfileData(w));
   }
 
@@ -1422,7 +1422,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) =>
       this.agentHandlers.sendAgentSelectionData(w),
     );
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await vscode.commands.executeCommand('texra.refreshAllOptions');
   }
 
   private async handleOpenProviderKeyUrl(
@@ -1528,7 +1528,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // Enabled model list changed — invalidate cached options.
     invalidateModelOptionsCache();
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await vscode.commands.executeCommand('texra.refreshAllOptions');
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
