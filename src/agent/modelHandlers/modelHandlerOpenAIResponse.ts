@@ -151,6 +151,12 @@ interface RequestIdTaggedError extends Error {
   request_id?: string;
 }
 
+function isResponseFunctionToolCallItem(
+  item: ResponseOutputItem | undefined,
+): item is ResponseFunctionToolCallItem {
+  return item?.type === 'function_call';
+}
+
 /**
  * MIME types that the OpenAI Responses API accepts as `input_file` content.
  * Composed from the shared OFFICE_MIME_TYPES plus PDF.
@@ -2615,22 +2621,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const items = response?.output;
     if (!Array.isArray(items)) return [];
 
-    const calls = items.filter(
-      (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
-    );
+    const calls = items.filter(isResponseFunctionToolCallItem);
     if (calls.length === 0) {
       return [];
     }
 
-    return calls
-      .filter((call) => Boolean(call.call_id && call.name))
-      .map((call) => ({
-        provider: 'openai-response',
-        callId: call.call_id!,
-        name: call.name!,
-        input: this.parseArguments(call.arguments),
-        raw: call,
-      }));
+    return calls.map((call) => ({
+      provider: 'openai-response',
+      callId: call.call_id,
+      name: call.name,
+      input: this.parseArguments(call.arguments),
+      raw: call,
+    }));
   }
 
   /**
