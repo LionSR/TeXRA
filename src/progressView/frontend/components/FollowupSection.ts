@@ -95,8 +95,9 @@ export class FollowupSection extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--spacing-small);
-        flex: 1;
+        flex: 0 1 auto;
         min-width: 120px;
+        max-width: 160px;
         position: relative;
       }
 
