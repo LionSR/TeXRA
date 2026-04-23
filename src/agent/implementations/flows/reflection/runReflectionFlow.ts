@@ -144,16 +144,16 @@ export async function runReflectionFlow<C = unknown>(
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
-      // The default `r{round}/output.{ext}` filename is only collision-safe
+      // The default `r{round}/output.xml` filename is only collision-safe
       // when resolved through a run-storage-bound fileService. Enforce the
       // invariant so a misconfigured TaskRunFileService can't silently
-      // route outputs to a shared `<workspace>/r{round}/output.tex` path.
+      // route outputs to a shared `<workspace>/r{round}/output.xml` path.
       if (!fileService.hasRunDirectory()) {
         throw new Error(
           'runReflectionFlow requires a TaskRunFileService bound to an executionId for default output-path resolution.',
         );
       }
-      const fileName = getOutputFileName(setting.outputExt, round);
+      const fileName = getOutputFileName('xml', round);
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 

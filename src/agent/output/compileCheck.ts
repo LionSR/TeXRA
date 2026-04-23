@@ -28,7 +28,7 @@ const MIN_TIMEOUT_MS = 10000;
 /**
  * Return a human-readable display name for an output file in compile messages.
  * Prefers the `source` field (which carries the original document name, e.g.
- * "constrained_note.tex") over the raw run-storage basename ("output.tex").
+ * "constrained_note.tex") over the extracted-file basename.
  */
 function getCompileDisplayName(file: OutputFileInfo): string {
   const rawBase = path.basename(file.location.absolutePath);
