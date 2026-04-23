@@ -60,10 +60,15 @@ function buildStreamInfo(
       ? `${agentName}: ${path.basename(inputFile)}`
       : agentName;
 
+  // `bash` child streams carry a synthetic AgentConfig whose `model` is the
+  // schema's prefault, not a model actually used for inference. Hide it so
+  // the tab doesn't display a misleading model label.
+  const isBashSession = config?.agent === 'bash';
+
   return {
     name: id,
     label,
-    model: config?.model,
+    model: isBashSession ? undefined : config?.model,
     agent: config?.agent,
     agentCategory: category,
     hasMultipleOutputs:
