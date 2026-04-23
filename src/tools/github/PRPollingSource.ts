@@ -326,8 +326,11 @@ export class PRPollingSource {
             } else if (err instanceof GitHubRateLimitError) {
               // Rate limiting is a transient condition; skip until the reset
               // time without touching consecutiveFailures so a rate-limit
-              // burst doesn't inflate the backoff exponent.
+              // burst doesn't inflate the backoff exponent. Clear firstFailureAt
+              // so time spent waiting on rate limits doesn't count toward the
+              // 24 h continuous-failure window.
               state.skipPollUntilMs = err.resetAt * 1000;
+              state.firstFailureAt = undefined;
               this.logger.warn(
                 `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
               );
