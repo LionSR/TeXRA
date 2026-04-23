@@ -162,26 +162,28 @@ async function refreshPersistedSystemMessage(
     ? `${systemPrompt}\n${instructionSuffix}`
     : instructionSuffix;
 
-  const updated = [...persisted];
-  const existing = updated[systemIdx] as Record<string, unknown>;
-  const prevContent = existing.content;
+  const existing = persisted[systemIdx] as Record<string, unknown>;
   // Preserve the existing content shape AND block type: OpenAI Chat uses
   // { type: 'text' }, OpenAI Responses uses { type: 'input_text' }. If we
   // unconditionally stamped 'text', resumed Responses snapshots would be
-  // rejected by the API. Read the existing block's type and reuse it.
-  let content: unknown;
-  if (
-    Array.isArray(prevContent) &&
-    prevContent.length > 0 &&
-    typeof prevContent[0] === 'object' &&
-    prevContent[0] !== null &&
-    'type' in (prevContent[0] as object)
-  ) {
-    const firstBlock = prevContent[0] as { type: string };
-    content = [{ type: firstBlock.type, text: systemText }];
-  } else {
-    content = systemText;
-  }
+  // rejected by the API.
+  const content = buildSystemContent(existing.content, systemText);
+  const updated = [...persisted];
   updated[systemIdx] = { ...existing, content } as ProviderMessage;
   return updated;
+}
+
+function buildSystemContent(prevContent: unknown, systemText: string): unknown {
+  const firstBlockType = readFirstBlockType(prevContent);
+  return firstBlockType
+    ? [{ type: firstBlockType, text: systemText }]
+    : systemText;
+}
+
+function readFirstBlockType(prevContent: unknown): string | null {
+  if (!Array.isArray(prevContent) || prevContent.length === 0) return null;
+  const first = prevContent[0];
+  if (typeof first !== 'object' || first === null) return null;
+  const type = (first as { type?: unknown }).type;
+  return typeof type === 'string' ? type : null;
 }
