@@ -140,16 +140,24 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * which UIs depend on the result.
  *
  * Concurrent calls are coalesced: while a probe is in flight, additional
- * callers receive the same Promise. Bursts of events (e.g. workspace folder
- * and extension changes landing together) therefore trigger one probe and
- * one `toolAvailabilityChanged` emission.
+ * callers share the same Promise. If any of those callers arrives AFTER
+ * the probe started reading inputs, a follow-up probe is scheduled so the
+ * final cache reflects the most recent state. A burst therefore produces
+ * at most two probes and one `toolAvailabilityChanged` emission at the end.
  */
 let inflightRefresh: Promise<void> | null = null;
+let pendingRerun = false;
 export function refreshToolAvailability(): Promise<void> {
-  if (inflightRefresh) return inflightRefresh;
+  if (inflightRefresh) {
+    pendingRerun = true;
+    return inflightRefresh;
+  }
   inflightRefresh = (async () => {
     try {
-      await runExternalToolChecks();
+      do {
+        pendingRerun = false;
+        await runExternalToolChecks();
+      } while (pendingRerun);
       bus.emit('toolAvailabilityChanged', undefined);
     } finally {
       inflightRefresh = null;
