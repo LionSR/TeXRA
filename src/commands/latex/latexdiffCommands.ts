@@ -451,17 +451,22 @@ async function scanRunDirForOutputs(
       // Collect .tex files recursively — extracted docs may live in subdirs
       // (e.g. r0/chapters/main.tex) when source names include path segments.
       const allTexFiles = await collectTexFiles(roundDirAbsolute);
-      // For XML-mode agents, the round dir has both output.tex (raw wrapper)
-      // and extracted files (e.g. paper.tex).  Drop the raw stem when extracted
-      // files are present so latexdiff doesn't operate on XML-wrapped content.
+      // Strip diff artifacts before the output.tex decision so a round with
+      // only output.tex + one artifact doesn't lose output.tex (artifacts
+      // are filtered first, then the raw stem is dropped only when real
+      // extracted outputs remain alongside it).
       const rawStem = `${WORKFLOW_OUTPUT_BASENAME}.tex`;
+      const nonArtifact = allTexFiles.filter(
+        (f) => !LATEXDIFF_ARTIFACT_RE.test(path.parse(f).name),
+      );
+      // For XML-mode agents, the round dir has both output.tex (raw wrapper)
+      // and extracted files (e.g. paper.tex).  Drop the raw stem only when
+      // real extracted outputs exist alongside it.
       const texFiles =
-        allTexFiles.length > 1 && allTexFiles.includes(rawStem)
-          ? allTexFiles.filter((f) => f !== rawStem)
-          : allTexFiles;
+        nonArtifact.length > 1 && nonArtifact.includes(rawStem)
+          ? nonArtifact.filter((f) => f !== rawStem)
+          : nonArtifact;
       for (const fileRelToRound of texFiles) {
-        const parsed = path.parse(fileRelToRound);
-        if (LATEXDIFF_ARTIFACT_RE.test(parsed.name)) continue;
 
         const relativePath = path.join(entryName, fileRelToRound);
         const location = createRunStorageLocation(
