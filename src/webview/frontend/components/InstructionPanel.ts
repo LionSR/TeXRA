@@ -35,47 +35,13 @@ import {
   sessionContext,
   type SessionContextValue,
 } from '../contexts/mainViewContexts';
-
-type SessionHintKey = SessionType | 'orchestrator';
-
-const SESSION_HINT_COPY: Record<
-  SessionHintKey,
-  { lede: string; body: string; time: string; ariaLabel: string }
-> = {
-  workflow: {
-    lede: 'Deep pass.',
-    body: 'Drafts, reviews its own work, then revises — across your whole document.',
-    time: 'Typically 5–10 min on fast models, 10–30 min on frontier reasoning. Pick a smaller model if you need faster turnaround.',
-    ariaLabel: 'About workflow mode',
-  },
-  toolUse: {
-    lede: 'Conversational.',
-    body: 'Reads, edits, and searches in a running dialogue you steer turn by turn.',
-    time: 'Turns stream back in seconds; tool-heavy runs take a minute or two. Pick a stronger model for longer chains of reasoning.',
-    ariaLabel: 'About interactive mode',
-  },
-  orchestrator: {
-    lede: 'Orchestrator.',
-    body: 'Plans a pipeline of specialized agents and dispatches them for you.',
-    time: 'Name specific agents in your instruction (e.g., “use polish on the intro, then review the math”) to steer delegation — otherwise it picks. Approve tasks in Progress as they arrive.',
-    ariaLabel: 'About orchestrator mode',
-  },
-};
-
-function getSessionTitle(type: SessionType): string {
-  const copy = SESSION_HINT_COPY[type];
-  return `${copy.lede} ${copy.body}`;
-}
-
-function resolveSessionHintKey(session: SessionContextValue): SessionHintKey {
-  if (session.sessionType === SESSION_TYPES.TOOL_USE) {
-    const opt = session.toolUseAgentOptions.find(
-      (o) => o.value === session.toolUseAgent,
-    );
-    if (opt?.isOrchestrator) return 'orchestrator';
-  }
-  return session.sessionType;
-}
+import {
+  SESSION_HINT_COPY,
+  getSessionTitle,
+  resolveSessionHintKey,
+} from '../sessionHints';
+import { infoNoticeStyles } from '../styles/infoNoticeStyles';
+import { renderInfoNotice } from './infoNotice';
 
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
@@ -83,6 +49,7 @@ export class InstructionPanel extends LitElement {
     designTokens,
     commonViewStyles,
     selectStyles,
+    infoNoticeStyles,
     css`
       :host {
         display: block;
@@ -134,18 +101,6 @@ export class InstructionPanel extends LitElement {
 
       .instruction-session-toggle vscode-radio {
         font-size: var(--font-size-sm);
-      }
-
-      .session-hint {
-        display: flex;
-        gap: var(--spacing-small);
-        align-items: baseline;
-        margin-top: var(--spacing-small);
-        padding: var(--spacing-tiny) var(--spacing-small);
-        border-left: 2px solid var(--vscode-textLink-foreground);
-        color: var(--vscode-descriptionForeground);
-        font-size: var(--font-size-sm);
-        line-height: var(--line-height-relaxed);
       }
 
       .session-hint-lede {
@@ -289,17 +244,31 @@ export class InstructionPanel extends LitElement {
     return options.find((o) => o.value === selectedValue)?.hint ?? '';
   }
 
-  private renderSessionHint(session: SessionContextValue): TemplateResult {
-    const copy = SESSION_HINT_COPY[resolveSessionHintKey(session)];
-    return html`
-      <div class="session-hint" role="note" aria-label=${copy.ariaLabel}>
+  private renderSessionHint(
+    session: SessionContextValue,
+  ): TemplateResult | typeof nothing {
+    const hintKey = resolveSessionHintKey(session);
+    if (session.dismissedSessionHints[hintKey]) {
+      return nothing;
+    }
+
+    const copy = SESSION_HINT_COPY[hintKey];
+    return renderInfoNotice({
+      ariaLabel: copy.ariaLabel,
+      variant: 'inline',
+      content: html`
         <span class="session-hint-lede">${copy.lede}</span>
         <span class="session-hint-body">
           ${copy.body}
           <span class="session-hint-time">${copy.time}</span>
         </span>
-      </div>
-    `;
+      `,
+      dismiss: {
+        title: 'Hide this hint',
+        ariaLabel: 'Hide this hint',
+        onDismiss: this.handleDismissSessionHint,
+      },
+    });
   }
 
   private handleSessionTypeChange(event: Event): void {
@@ -384,6 +353,10 @@ export class InstructionPanel extends LitElement {
         text: 'Choose the AI model used by the selected agent.',
       }),
     );
+  }
+
+  private handleDismissSessionHint(): void {
+    this.dispatchEvent(MainViewEvents.dismissSessionHint());
   }
 
   override render(): TemplateResult | typeof nothing {

@@ -20,6 +20,8 @@ import { PROMO_NOTICE_SHORT } from '@shared/copy/promoNotice';
 
 // Local imports - main view events
 import { MainViewEvents } from '../events';
+import { infoNoticeStyles } from '../styles/infoNoticeStyles';
+import { renderInfoNotice } from './infoNotice';
 
 @customElement('login-banner')
 export class LoginBanner extends LitElement {
@@ -27,32 +29,8 @@ export class LoginBanner extends LitElement {
     designTokens,
     codiconStyles,
     commonViewStyles,
+    infoNoticeStyles,
     css`
-      :host {
-        display: block;
-      }
-
-      .login-banner {
-        background: var(--vscode-inputValidation-infoBackground);
-        color: var(--vscode-inputValidation-infoForeground);
-        border: var(--border-thin) solid
-          var(--vscode-inputValidation-infoBorder);
-        border-radius: var(--border-radius);
-        padding: var(--spacing-medium);
-        margin-bottom: var(--spacing-large);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: var(--spacing-medium);
-      }
-
-      .login-banner-content {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-medium);
-        flex: 1;
-      }
-
       .login-banner-icon {
         font-size: 1.5em;
         color: var(--vscode-button-background);
@@ -75,16 +53,6 @@ export class LoginBanner extends LitElement {
         font-size: var(--font-size-sm);
         opacity: var(--opacity-normal);
       }
-
-      .login-banner .actions {
-        flex-shrink: 0;
-      }
-
-      .actions {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
-      }
     `,
   ];
 
@@ -101,38 +69,37 @@ export class LoginBanner extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (!this.visible) return nothing;
 
-    return html`
-      <div id="loginBanner" class="login-banner">
-        <div class="login-banner-content">
-          <span class="login-banner-icon"
-            ><i class="codicon codicon-sparkle"></i
-          ></span>
-          <div class="login-banner-text">
-            <span class="login-banner-title">Researcher Access Program</span>
-            <span class="login-banner-description">
-              ${PROMO_NOTICE_SHORT}
-            </span>
-          </div>
+    return renderInfoNotice({
+      id: 'loginBanner',
+      ariaLabel: 'Sign in to access researcher program features',
+      variant: 'banner',
+      leading: html`
+        <span class="login-banner-icon"
+          ><i class="codicon codicon-sparkle"></i
+        ></span>
+      `,
+      content: html`
+        <div class="login-banner-text">
+          <span class="login-banner-title">Researcher Access Program</span>
+          <span class="login-banner-description">${PROMO_NOTICE_SHORT}</span>
         </div>
-        <div class="actions">
-          <vscode-button
-            id="loginBannerButton"
-            appearance="primary"
-            @click=${this.handleSignIn}
-          >
-            <span slot="start" class="codicon codicon-sign-in"></span>
-            Sign In
-          </vscode-button>
-          <vscode-toolbar-button
-            id="loginBannerDismissButton"
-            icon="close"
-            title="Dismiss (can be re-enabled in settings)"
-            aria-label="Dismiss login banner"
-            @click=${this.handleDismiss}
-          ></vscode-toolbar-button>
-        </div>
-      </div>
-    `;
+      `,
+      actions: html`
+        <vscode-button
+          id="loginBannerButton"
+          appearance="primary"
+          @click=${this.handleSignIn}
+        >
+          <span slot="start" class="codicon codicon-sign-in"></span>
+          Sign In
+        </vscode-button>
+      `,
+      dismiss: {
+        title: 'Dismiss (can be re-enabled in settings)',
+        ariaLabel: 'Dismiss login banner',
+        onDismiss: this.handleDismiss,
+      },
+    });
   }
 }
 

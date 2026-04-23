@@ -4,7 +4,7 @@
  * Appears when the orchestrator is selected. The conceptual explanation
  * lives in the InstructionPanel's session-hint; this banner adds only
  * complementary info: the approval keyboard shortcut and a shortcut
- * to Multi-Agent settings. Dismissable via "Got it".
+ * to Multi-Agent settings. Dismissable via the shared notice control.
  *
  * @fires dismiss-orchestrator - When dismiss button is clicked
  */
@@ -20,6 +20,8 @@ import { postMessage } from '@shared/vscode';
 
 // Local imports - main view events
 import { MainViewEvents } from '../events';
+import { infoNoticeStyles } from '../styles/infoNoticeStyles';
+import { renderInfoNotice } from './infoNotice';
 
 @customElement('orchestrator-banner')
 export class OrchestratorBanner extends LitElement {
@@ -27,58 +29,11 @@ export class OrchestratorBanner extends LitElement {
     designTokens,
     codiconStyles,
     commonViewStyles,
+    infoNoticeStyles,
     css`
-      :host {
-        display: block;
-      }
-
-      .orchestrator-banner {
-        border-radius: var(--border-radius);
-        padding: var(--spacing-small) var(--spacing-medium);
-        margin-bottom: var(--spacing-large);
-        background-color: var(--vscode-inputValidation-infoBackground);
-        color: var(--vscode-inputValidation-infoForeground);
-        border: var(--border-thin) solid
-          var(--vscode-inputValidation-infoBorder);
-        line-height: var(--line-height-relaxed);
-        font-size: var(--font-size-sm);
-      }
-
-      .orchestrator-banner-footer {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        margin-top: var(--spacing-small);
-      }
-
       .orchestrator-tip {
         font-size: var(--font-size-xs);
         opacity: 0.8;
-      }
-
-      .got-it-btn {
-        flex-shrink: 0;
-        background: none;
-        border: var(--border-thin) solid
-          var(--vscode-inputValidation-infoBorder);
-        color: var(--vscode-inputValidation-infoForeground);
-        cursor: pointer;
-        padding: var(--spacing-tiny) var(--spacing-medium);
-        border-radius: var(--border-radius);
-        font-size: var(--font-size-sm);
-      }
-
-      .got-it-btn:hover {
-        background: color-mix(
-          in srgb,
-          var(--vscode-inputValidation-infoBorder) 15%,
-          transparent
-        );
-      }
-
-      .got-it-btn:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
-        outline-offset: 1px;
       }
 
       .settings-link {
@@ -110,8 +65,10 @@ export class OrchestratorBanner extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (!this.visible) return nothing;
 
-    return html`
-      <div class="orchestrator-banner">
+    return renderInfoNotice({
+      ariaLabel: 'Orchestrator approval guidance',
+      variant: 'banner',
+      content: html`
         <span class="orchestrator-tip">
           <strong>Tip:</strong> press <strong>y</strong>/<strong>n</strong> in
           the Progress board to approve or reject proposed tasks fast. Tune
@@ -123,17 +80,13 @@ export class OrchestratorBanner extends LitElement {
             Multi-Agent settings</button
           >.
         </span>
-        <div class="orchestrator-banner-footer">
-          <button
-            class="got-it-btn"
-            title="Dismiss (can be re-enabled in settings)"
-            @click=${this.handleDismiss}
-          >
-            Got it
-          </button>
-        </div>
-      </div>
-    `;
+      `,
+      dismiss: {
+        title: 'Dismiss (can be re-enabled in settings)',
+        ariaLabel: 'Dismiss orchestrator banner',
+        onDismiss: this.handleDismiss,
+      },
+    });
   }
 }
 

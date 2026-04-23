@@ -19,6 +19,8 @@ import { COMMAND_LINKS } from '@shared/utils/uiConstants';
 
 // Local imports - main view events
 import { MainViewEvents } from '../events';
+import { infoNoticeStyles } from '../styles/infoNoticeStyles';
+import { renderInfoNotice } from './infoNotice';
 
 @customElement('getting-started-banner')
 export class GettingStartedBanner extends LitElement {
@@ -26,28 +28,14 @@ export class GettingStartedBanner extends LitElement {
     designTokens,
     codiconStyles,
     commonViewStyles,
+    infoNoticeStyles,
     css`
-      :host {
-        display: block;
-      }
-
-      .getting-started-banner {
-        border-radius: var(--border-radius);
-        padding: var(--spacing-small) var(--spacing-medium);
-        margin-bottom: var(--spacing-large);
-        background-color: var(--vscode-inputValidation-infoBackground);
-        color: var(--vscode-inputValidation-infoForeground);
-        border: var(--border-thin) solid
-          var(--vscode-inputValidation-infoBorder);
-        line-height: var(--line-height-relaxed);
-      }
-
-      .getting-started-banner a {
+      .info-notice a {
         color: var(--color-text-link);
         text-decoration: none;
       }
 
-      .getting-started-banner a:hover {
+      .info-notice a:hover {
         text-decoration: underline;
       }
 
@@ -58,9 +46,7 @@ export class GettingStartedBanner extends LitElement {
       }
 
       .getting-started-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        font-weight: var(--font-weight-semibold);
       }
     `,
   ];
@@ -74,20 +60,17 @@ export class GettingStartedBanner extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (!this.visible) return nothing;
 
-    return html`
-      <div id="gettingStartedBanner" class="getting-started-banner">
-        <div class="getting-started-header">
-          <span class="getting-started-text">
-            <strong>Welcome to TeXRA!</strong> Open a workspace with LaTeX
-            files, or get started with one of these:
-          </span>
-          <vscode-toolbar-button
-            icon="close"
-            title="Dismiss (can be re-enabled in settings)"
-            aria-label="Dismiss getting started banner"
-            @click=${this.handleDismiss}
-          ></vscode-toolbar-button>
-        </div>
+    return renderInfoNotice({
+      id: 'gettingStartedBanner',
+      ariaLabel: 'Getting started guidance',
+      variant: 'banner',
+      content: html`
+        <span class="getting-started-header">
+          <strong>Welcome to TeXRA!</strong> Open a workspace with LaTeX files,
+          or get started with one of these:
+        </span>
+      `,
+      secondary: html`
         <ul class="getting-started-list">
           <li>
             <a href=${COMMAND_LINKS.GETTING_STARTED}>Walk me through setup</a>
@@ -108,8 +91,13 @@ export class GettingStartedBanner extends LitElement {
             -- download a paper's source
           </li>
         </ul>
-      </div>
-    `;
+      `,
+      dismiss: {
+        title: 'Dismiss (can be re-enabled in settings)',
+        ariaLabel: 'Dismiss getting started banner',
+        onDismiss: this.handleDismiss,
+      },
+    });
   }
 }
 

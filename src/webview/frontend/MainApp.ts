@@ -19,6 +19,7 @@ import {
   type DependencyBannerState,
   type ModelOptionData,
   type AgentOptionData,
+  type SessionHintKey,
   type SingleFiles,
   type FileOptions,
   type MultiFiles,
@@ -74,6 +75,7 @@ import {
   dispatchMainViewMessage,
   type MainViewHandlerRegistry,
 } from './mainViewDispatcher';
+import { resolveSessionHintKey } from './sessionHints';
 import { SESSION_DEFAULTS } from './sessionDefaults';
 import {
   DEFAULT_STATE,
@@ -178,6 +180,9 @@ export class MainApp extends MainAppBase {
     visible: false,
   });
   private readonly gettingStartedVisible = signal(false);
+  private readonly dismissedSessionHints = signal(
+    DEFAULT_STATE.dismissedSessionHints,
+  );
   private readonly orchestratorBannerDismissed = signal(false);
   private readonly orchestratorBannerVisible$ = new Signal.Computed(() =>
     this.isSelectedAgentOrchestrator()
@@ -219,6 +224,7 @@ export class MainApp extends MainAppBase {
       isRecording: this.isRecording.get(),
       isPolishing: this.isPolishing.get(),
       debugMode: this.debugMode,
+      dismissedSessionHints: this.dismissedSessionHints.get(),
     }),
   );
 
@@ -435,6 +441,7 @@ export class MainApp extends MainAppBase {
       outputFilesVisible: mv.outputFiles,
       outputFilesActive: this.outputFilesActive.get(),
       latexdiffsVisible: this.latexdiffsVisible.get(),
+      dismissedSessionHints: this.dismissedSessionHints.get(),
       autoExtractFigure: cv.autoExtractFigure,
       autoExtractTikzFigure: cv.autoExtractTikzFigure,
       autoCompileInputPdf: cv.autoCompileInputPdf,
@@ -481,6 +488,7 @@ export class MainApp extends MainAppBase {
     });
     this.outputFilesActive.set(state.outputFilesActive);
     this.latexdiffsVisible.set(state.latexdiffsVisible);
+    this.dismissedSessionHints.set(state.dismissedSessionHints);
     this.checkboxValues.set({
       autoExtractFigure: state.autoExtractFigure,
       autoExtractTikzFigure: state.autoExtractTikzFigure,
@@ -1705,6 +1713,21 @@ export class MainApp extends MainAppBase {
     this.orchestratorBannerDismissed.set(true);
   }
 
+  private handleComponentDismissSessionHint(): void {
+    this.dismissSessionHint(resolveSessionHintKey(this.sessionContext$.get()));
+  }
+
+  private dismissSessionHint(hintKey: SessionHintKey): void {
+    const dismissed = this.dismissedSessionHints.get();
+    if (dismissed[hintKey]) return;
+
+    this.dismissedSessionHints.set({
+      ...dismissed,
+      [hintKey]: true,
+    });
+    this.saveState();
+  }
+
   private handleComponentLatexDiffsToggle(
     e: CustomEvent<LatexDiffsToggleDetail>,
   ): void {
@@ -1982,6 +2005,7 @@ export class MainApp extends MainAppBase {
             @agent-settings=${this.handleComponentAgentSettings}
             @model-settings=${this.handleComponentModelSettings}
             @focus-instruction=${this.handleComponentFocusInstruction}
+            @dismiss-session-hint=${this.handleComponentDismissSessionHint}
           ></instruction-panel>
 
           <banner-group

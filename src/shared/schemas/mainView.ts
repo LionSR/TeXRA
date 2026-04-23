@@ -27,6 +27,20 @@ import { ToolConfigFieldsSchema } from './toolConfig';
 export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
 export type SessionType = z.infer<typeof SessionTypeSchema>;
 
+export const SessionHintKeySchema = z.enum([
+  'toolUse',
+  'workflow',
+  'orchestrator',
+]);
+export type SessionHintKey = z.infer<typeof SessionHintKeySchema>;
+
+export const SessionHintDismissalsSchema = z.object({
+  toolUse: z.boolean().prefault(false),
+  workflow: z.boolean().prefault(false),
+  orchestrator: z.boolean().prefault(false),
+});
+export type SessionHintDismissals = z.infer<typeof SessionHintDismissalsSchema>;
+
 export const FileTypeSchema = z.enum([
   'input',
   'reference',
@@ -106,6 +120,7 @@ export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
   outputFilesVisible: z.boolean().prefault(false),
   outputFilesActive: z.boolean().prefault(false),
   latexdiffsVisible: z.boolean().prefault(false),
+  dismissedSessionHints: SessionHintDismissalsSchema.prefault({}),
   openedFiles: z.array(z.string()).nullish(),
 });
 export type MainViewPersistedState = z.infer<
@@ -233,6 +248,7 @@ export const SessionContextSchema = z.object({
   isRecording: z.boolean(),
   isPolishing: z.boolean(),
   debugMode: z.boolean(),
+  dismissedSessionHints: SessionHintDismissalsSchema,
 });
 export type SessionContextValue = z.infer<typeof SessionContextSchema>;
 

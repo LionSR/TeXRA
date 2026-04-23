@@ -18,6 +18,7 @@ register({
   paths: {
     '@/*': ['*', path.join(srcDir, '*')],
     '~/*': ['*', path.join(srcDir, '*')],
+    '@shared/*': ['shared/*', path.join(srcDir, 'shared/*')],
     '@common/*': ['common/*', path.join(srcDir, 'common/*')],
     '@webview/*': ['webview/*', path.join(srcDir, 'webview/*')],
     '@agent/*': ['agent/*', path.join(srcDir, 'agent/*')],
