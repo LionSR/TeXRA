@@ -94,7 +94,9 @@ function parseToolInput(
   logger: AgentLogger,
 ): unknown {
   if (raw == null) {
-    logger.warn(`Tool call ${callId}: Received null input, using empty object`);
+    logger.debug(
+      `Tool call ${callId}: Received null input, using empty object`,
+    );
     return {};
   }
 
@@ -105,7 +107,7 @@ function parseToolInput(
   try {
     return JSON.parse(raw);
   } catch {
-    logger.warn(
+    logger.debug(
       `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
     );
     return raw;
