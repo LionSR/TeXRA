@@ -345,12 +345,15 @@ export class TaskGroupList extends LitElement {
       this.cachedTerminalLines += processTerminalText(combined.slice(0, lastNl + 1));
       this.cachedRawTail = combined.slice(lastNl + 1);
     } else {
-      // No newline: keep raw bytes so that split ANSI sequences and cross-chunk
-      // \r overwrites are handled correctly at render time. Cap at 64 KiB to
-      // bound growth from progress bars that emit many \r updates without \n.
+      // No newline: keep raw bytes so split ANSI sequences and cross-chunk \r
+      // overwrites are handled correctly at render time.
+      // Only apply a 64 KiB cap when the tail contains \r (progress-bar rewrites)
+      // to avoid silently dropping legitimate long-line output (e.g. JSON/base64).
       const MAX_TAIL = 65536;
       this.cachedRawTail =
-        combined.length > MAX_TAIL ? combined.slice(combined.length - MAX_TAIL) : combined;
+        combined.includes('\r') && combined.length > MAX_TAIL
+          ? combined.slice(combined.length - MAX_TAIL)
+          : combined;
     }
   }
 
