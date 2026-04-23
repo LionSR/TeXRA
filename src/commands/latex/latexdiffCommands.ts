@@ -413,11 +413,12 @@ async function scanRunDirForOutputs(
       for (const [fileName, nestedType] of roundEntries) {
         if (nestedType !== vscode.FileType.File) continue;
         const parsed = path.parse(fileName);
-        // Only the canonical round output `output.tex` is a valid latexdiff
-        // target — scratchpad artifacts like `output.xml` and multi-document
-        // extracted files (which carry their own source-derived names) must
-        // not be fed into latexdiff via this fallback.
-        if (parsed.name !== WORKFLOW_OUTPUT_BASENAME || parsed.ext !== '.tex') {
+        // Accept any .tex file as a latexdiff target.  Extracted documents
+        // now carry source-derived names (e.g. "constrained_note.tex") rather
+        // than the fixed "output.tex" stem, so filtering by basename would
+        // silently drop them.  Skip non-LaTeX files (.xml raw outputs, .log
+        // compile artefacts, etc.) by extension only.
+        if (parsed.ext !== '.tex') {
           continue;
         }
 
@@ -428,7 +429,9 @@ async function scanRunDirForOutputs(
           executionId,
         );
         outputs.push({
-          source: inputFile,
+          // Use the file's own stem as source so FileLineageCalculator can
+          // match it back to the workspace original (e.g. "constrained_note").
+          source: parsed.name,
           round,
           location,
           lineage: {
