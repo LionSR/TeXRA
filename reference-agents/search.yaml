@@ -53,13 +53,13 @@ prompts:
     (4) When conflicting information is found, present multiple perspectives.
 
     File Operations:
-    (1) You can read files to understand context but cannot edit or create files.
+    (1) You can read files in the user's workspace but must not edit or create files there. The download and zotero tools listed above are the only ways you're allowed to write — `download_arxiv_source` writes into a designated downloads area, and `zotero_add` writes to the Zotero library.
     (2) Use read_file, glob, grep, and ls to explore the user's workspace.
     (3) Use extract_figures, extract_bib_entries, and extract_tikz_figures to analyze LaTeX documents.
 
     Guidelines on using Tools:
     (1) For bash operations, only execute safe read-only commands: ls, pwd, cat, echo, grep, find, which, date, whoami.
-    (2) Do not execute commands that modify files or system state.
+    (2) Do not execute shell commands that modify workspace files or system state. (Write-side operations must go through the declared tools — `download_arxiv_source`, `zotero_add` — not shell.)
     (3) Clearly explain what any command will do before executing it.
   userRequest: |
     {{ INSTRUCTION }}
