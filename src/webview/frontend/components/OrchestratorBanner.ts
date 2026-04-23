@@ -113,6 +113,11 @@ export class OrchestratorBanner extends LitElement {
     return html`
       <div class="orchestrator-banner">
         <span class="orchestrator-tip">
+          <strong>Not sure which agent?</strong> Just ask — type something
+          like "which agent should handle my intro?" and the orchestrator will
+          pick and dispatch the right one for you.
+        </span>
+        <span class="orchestrator-tip">
           <strong>Tip:</strong> press <strong>y</strong>/<strong>n</strong> in
           the Progress board to approve or reject proposed tasks fast. Tune
           auto-approve rules and presets in

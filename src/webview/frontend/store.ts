@@ -163,6 +163,8 @@ export const ONBOARDING_PLACEHOLDERS = {
     'Run correct across the paper, then have review check every derivation.',
     'Leave blank — the orchestrator will plan the pipeline for you.',
     'Which agent should handle my literature review?',
+    'Which agent is best for tightening the conclusion?',
+    'What should I run on the methodology section?',
   ],
 } satisfies Record<SessionType | 'orchestrator', string[]>;
 
