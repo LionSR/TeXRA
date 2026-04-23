@@ -58,13 +58,13 @@ function processTerminalText(text: string): string {
     .split('\n')
     .map((line) => {
       const segs = line.split('\r');
-      const last = segs.at(-1)!;
-      if (last.length > 0) return last;
-      // One or more trailing \r leave cursor at start — find last written content
-      for (let i = segs.length - 2; i >= 0; i--) {
-        if (segs[i]!.length > 0) return segs[i]!;
+      let current = segs[0]!;
+      for (let i = 1; i < segs.length; i++) {
+        const seg = segs[i]!;
+        // \r moves cursor to column 0 without clearing; shorter writes preserve the tail
+        current = seg.length < current.length ? seg + current.slice(seg.length) : seg;
       }
-      return '';
+      return current;
     })
     .join('\n');
 }
