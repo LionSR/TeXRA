@@ -424,6 +424,7 @@ async function collectTexFiles(
 async function scanRunDirForOutputs(
   executionId: ExecutionId,
   inputFile: string,
+  extraBaseFiles?: string[],
 ): Promise<Map<number, OutputFileInfo[]> | null> {
   try {
     const runDirAbsolute = await resolveRunDir(executionId);
@@ -433,11 +434,17 @@ async function scanRunDirForOutputs(
       vscode.Uri.file(runDirAbsolute),
     );
 
-    const baseLocation = pathToLocation(
-      path.isAbsolute(inputFile)
-        ? inputFile
-        : path.join(WorkspaceFS.getPath() ?? '', inputFile),
-    );
+    const workspacePath = WorkspaceFS.getPath() ?? '';
+    const toAbs = (f: string): string =>
+      path.isAbsolute(f) ? f : path.join(workspacePath, f);
+
+    // Build a basename → workspace location map from all configured base files
+    // so multi-output runs can match each recovered file to its correct original.
+    const baseLocationByBasename = new Map<string, FileLocation>();
+    for (const bf of [inputFile, ...(extraBaseFiles ?? [])]) {
+      baseLocationByBasename.set(path.basename(bf), pathToLocation(toAbs(bf)));
+    }
+    const defaultBaseLocation = pathToLocation(toAbs(inputFile));
 
     const rounds = new Map<number, OutputFileInfo[]>();
 
@@ -483,12 +490,17 @@ async function scanRunDirForOutputs(
           sourceNoExt === WORKFLOW_OUTPUT_BASENAME
             ? path.basename(inputFile)
             : sourceNoExt;
+        // Match each recovered file to its base by basename; fall back to the
+        // primary inputFile so single-output rounds always have a valid original.
+        const originalLocation =
+          baseLocationByBasename.get(path.basename(fileRelToRound)) ??
+          defaultBaseLocation;
         outputs.push({
           source,
           round,
           location,
           lineage: {
-            original: baseLocation,
+            original: originalLocation,
             diffBase: null,
             diffFile: null,
           },
@@ -633,7 +645,11 @@ async function handleRunLatexdiff(
     if (!outputsByRound && runId) {
       const parsedRunId = ExecutionIdSchema.safeParse(runId);
       if (parsedRunId.success) {
-        const scanned = await scanRunDirForOutputs(parsedRunId.data, inputFile);
+        const scanned = await scanRunDirForOutputs(
+          parsedRunId.data,
+          inputFile,
+          outputFiles,
+        );
         if (scanned) {
           outputsByRound = scanned;
           discoveredExecutionId = parsedRunId.data;
