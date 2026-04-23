@@ -75,12 +75,10 @@ function processTerminalText(text: string): string {
         const seg = segs[i]!;
         const eraseAt = seg.indexOf(ERASE_SENTINEL);
         if (eraseAt >= 0) {
-          // Overlay prefix up to the erase point, then clear the line from there.
+          // \r overlays the prefix up to the erase point; \x1b[K clears from there to EOL.
           const pre = seg.slice(0, eraseAt);
           const post = seg.slice(eraseAt + 1).split(ERASE_SENTINEL).join('');
-          const overlaid =
-            pre.length < current.length ? pre + current.slice(pre.length) : pre;
-          current = overlaid.slice(0, pre.length) + post;
+          current = pre + post;
         } else {
           // \r moves cursor to column 0 without clearing; shorter writes preserve the tail
           current = seg.length < current.length ? seg + current.slice(seg.length) : seg;
