@@ -13,6 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import stripAnsi from 'strip-ansi';
 
 // Local imports - shared schemas
 import { STREAM_STATUS } from '@shared/schemas';
@@ -50,22 +51,16 @@ const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
 
-/**
- * Prepare raw process output for terminal-style display.
- * Strips ANSI escape codes and simulates carriage-return overwrite so that
- * progress lines (e.g. lake build's "● Building…\r✔ Built…") render like
- * a real terminal instead of showing both the building and built indicators.
- */
+/** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
 function processTerminalText(text: string): string {
-  // Strip ANSI escape sequences (colors, cursor movement, etc.)
-  const stripped = text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
-  // Within each newline-delimited segment, a bare \r moves back to the start.
-  // Split on \r and keep only the last segment per line.
-  const lines = stripped.split('\n');
-  return lines
+  return stripAnsi(text)
+    .replace(/\r\n/g, '\n')
+    .split('\n')
     .map((line) => {
-      const parts = line.split('\r');
-      return parts[parts.length - 1];
+      const segs = line.split('\r');
+      const last = segs.at(-1)!;
+      // Line ending with \r leaves cursor at start — show content before it
+      return last.length > 0 ? last : (segs.at(-2) ?? '');
     })
     .join('\n');
 }
@@ -113,8 +108,10 @@ export class TaskGroupList extends LitElement {
   private cachedTree: GroupTree[] = [];
   private cachedUngrouped: LogMessageData[] = [];
 
-  /** Memoized processed text for terminal mode rendering */
-  private cachedTerminalText = '';
+  /** Raw text from last '\n' to end of received messages (partial-line buffer) */
+  private cachedRawTail = '';
+  /** Processed complete lines for terminal mode (up to and including the last '\n') */
+  private cachedTerminalLines = '';
 
   /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
   private groupNodeIndex = new Map<string, GroupTree>();
@@ -168,13 +165,24 @@ export class TaskGroupList extends LitElement {
 
     const groupsChanged = changedProperties.has('groups');
     const messagesChanged = changedProperties.has('messages');
-    const terminalChanged = changedProperties.has('terminal');
 
-    if (this.terminal && (messagesChanged || terminalChanged)) {
-      this.cachedTerminalText = processTerminalText(
-        this.messages.map((m) => m.text).join(''),
-      );
+    if (this.terminal) {
+      if (changedProperties.has('terminal')) {
+        this.rebuildTerminalText();
+      } else if (messagesChanged) {
+        const prevCount =
+          (changedProperties.get('messages') as LogMessageData[] | undefined)
+            ?.length ?? 0;
+        if (this.messages.length > prevCount) {
+          this.appendTerminalChunk(
+            this.messages.slice(prevCount).map((m) => m.text).join(''),
+          );
+        } else {
+          this.rebuildTerminalText();
+        }
+      }
     }
+
     const prevMessages = messagesChanged
       ? (changedProperties.get('messages') as LogMessageData[] | undefined)
       : undefined;
@@ -317,6 +325,23 @@ export class TaskGroupList extends LitElement {
     const idx = this.cachedUngrouped.findIndex((m) => m.id === msg.id);
     if (idx >= 0) {
       this.cachedUngrouped[idx] = msg;
+    }
+  }
+
+  private rebuildTerminalText(): void {
+    this.cachedRawTail = '';
+    this.cachedTerminalLines = '';
+    this.appendTerminalChunk(this.messages.map((m) => m.text).join(''));
+  }
+
+  private appendTerminalChunk(newRaw: string): void {
+    const combined = this.cachedRawTail + newRaw;
+    const lastNl = combined.lastIndexOf('\n');
+    if (lastNl >= 0) {
+      this.cachedTerminalLines += processTerminalText(combined.slice(0, lastNl + 1));
+      this.cachedRawTail = combined.slice(lastNl + 1);
+    } else {
+      this.cachedRawTail = combined;
     }
   }
 
@@ -616,8 +641,6 @@ export class TaskGroupList extends LitElement {
       `;
     }
 
-    // Terminal mode: render raw process output as a single pre-formatted text
-    // block so carriage returns and ANSI codes behave like a real terminal.
     if (this.terminal) {
       return html`
         <vscode-scrollable
@@ -625,7 +648,7 @@ export class TaskGroupList extends LitElement {
           class="log-container"
           @vsc-scrollable-scroll=${this.handleVscScroll}
         >
-          <pre class="terminal-pre">${this.cachedTerminalText}</pre>
+          <pre class="terminal-pre">${this.cachedTerminalLines}${processTerminalText(this.cachedRawTail)}</pre>
         </vscode-scrollable>
       `;
     }
