@@ -178,6 +178,12 @@ const ALLOWED_VSCODE_SETTING_KEYS = new Set([
   ...RELIABILITY_SETTINGS.map((s) => s.key),
 ]);
 
+/** Clamp nested delegation max depth to the supported range. */
+function clampNestedMaxDepth(value: unknown): number {
+  const n = typeof value === 'number' && Number.isFinite(value) ? value : 2;
+  return Math.min(5, Math.max(1, Math.round(n)));
+}
+
 function getProviderVscodeSettings(provider: string): ProviderVscodeSetting[] {
   const defs = PROVIDER_VSCODE_SETTINGS[provider.toLowerCase()];
   if (!defs) return [];
@@ -424,6 +430,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
           data,
         ),
+      [SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_ENABLED]: (data) =>
+        this.updateBooleanAndSendSuperYolo(
+          WorkspaceStateKey.NESTED_DELEGATION_ENABLED,
+          data,
+        ),
+      [SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH]: (data) =>
+        this.handleSetNestedDelegationMaxDepth(data),
 
       // ── Delegated to AgentHandlers ──
 
@@ -822,12 +835,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     );
+    const nestedDelegationEnabled = workspaceSM.get<boolean>(
+      WorkspaceStateKey.NESTED_DELEGATION_ENABLED,
+      false,
+    );
+    const nestedDelegationMaxDepth = clampNestedMaxDepth(
+      workspaceSM.get<number>(WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH, 2),
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
       enabled,
       reliabilitySettings: getReliabilitySettings(),
       allowOrchestratorKill,
       detachSubagentsOnStop,
+      nestedDelegationEnabled,
+      nestedDelegationMaxDepth,
     });
   }
 
@@ -858,6 +880,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: { enabled: boolean },
   ): Promise<void> {
     await workspaceSM.update(key, data.enabled);
+    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
+  }
+
+  private async handleSetNestedDelegationMaxDepth(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_NESTED_DELEGATION_MAX_DEPTH>,
+  ): Promise<void> {
+    await workspaceSM.update(
+      WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+      clampNestedMaxDepth(data.value),
+    );
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
 

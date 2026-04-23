@@ -531,6 +531,12 @@ export interface ExecuteAgentOptions {
   enforceCategory?: boolean;
   /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
   parentStreamId?: StreamTabId;
+  /**
+   * Depth of this execution in the delegation chain. Root (user-initiated) is 0;
+   * each delegate_agent / delegate_workflow call increments it. Used to gate
+   * nested delegation based on the Multi-Agent settings. Defaults to 0.
+   */
+  delegationDepth?: number;
   /** Fires with the real streamId before the stream is activated (before UI sync). */
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
@@ -553,6 +559,7 @@ export async function executeAgent(
     onBeforeActivation: options?.onStreamResolved,
     enforceCategory: options?.enforceCategory,
   });
+  ctx.delegationDepth = options?.delegationDepth ?? 0;
   const { setting, streamId, config } = ctx;
   const { agent: agentName } = config;
   const { isSubagent } = options ?? {};

@@ -57,6 +57,7 @@ export class ToolUsePrepareNode<C> extends Node<
           memoryEnabled,
           hasDelegationTools,
           isSubagent: this.services.isSubagent,
+          nestedDelegationBlocked: this.services.delegationTrimmed === true,
         },
       );
 

@@ -19,6 +19,7 @@ import {
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { readNestedDelegationConfig } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   getHandle,
@@ -219,10 +220,34 @@ async function executeSubagent(
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
+  const parentContext = getCurrentToolFileInteractionContext();
+  const parentExecutionId = parentContext?.executionId;
+  const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
+
+  // Defense-in-depth: the tool-use flow already filters delegation tools out
+  // of the toolset when nesting is disabled or capped, but if a rogue agent
+  // invokes the tool anyway we refuse here with a clear message so the LLM
+  // can pivot. The root orchestrator (depth 0) is never blocked.
+  if (parentDelegationDepth > 0) {
+    const nested = readNestedDelegationConfig();
+    if (!nested.enabled) {
+      return {
+        error:
+          'Nested delegation is disabled. Enable Settings → Multi-Agent → Allow nested delegation, or complete this task directly without delegating.',
+        isError: true,
+      };
+    }
+    if (parentDelegationDepth >= nested.maxDepth) {
+      return {
+        error: `Nested delegation depth cap reached (${nested.maxDepth}). Increase Settings → Multi-Agent → Max nesting depth, or complete this task directly without delegating.`,
+        isError: true,
+      };
+    }
+  }
+
   const executionId = generateExecutionId();
   const startedAt = Date.now();
 
-  const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
   await registerExecution(
     executionId,
@@ -249,6 +274,7 @@ async function executeSubagent(
     isSubagent: true,
     enforceCategory: true,
     parentStreamId: orchestratorStreamId,
+    delegationDepth: parentDelegationDepth + 1,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {

@@ -10,6 +10,12 @@ import type {
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
+/** Snapshot of nested-delegation settings, read once per tool-use flow entry. */
+export interface NestedDelegationConfig {
+  enabled: boolean;
+  maxDepth: number;
+}
+
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly setting: AgentToolUseSetting;
   readonly session: IToolUseSession;
@@ -27,6 +33,14 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;
   /** True when this agent was launched as a subagent by an orchestrator. */
   readonly isSubagent?: boolean;
+  /** Nested delegation policy snapshot, read once at flow entry. */
+  readonly nestedDelegationConfig?: NestedDelegationConfig;
+  /**
+   * True when the agent's YAML requested delegation tools but they were filtered
+   * out by the nested-delegation gate (disabled or depth cap reached). The
+   * prepare node uses this to tell the LLM it cannot delegate further.
+   */
+  readonly delegationTrimmed?: boolean;
 }
 
 export type { FlowParams as ToolUseFlowParams };
