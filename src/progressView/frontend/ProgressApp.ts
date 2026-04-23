@@ -36,6 +36,7 @@ import {
   combine,
 } from '@shared/signals';
 import { isProcessAgent } from '@shared/streams/agentKind';
+import { sortStreams } from '@shared/streams/streamSort';
 import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view frontend
@@ -266,6 +267,7 @@ export class ProgressApp extends ProgressAppBase {
   // --- Selector computeds: extract fields, auto-memoized by Object.is ---
   private streamById$ = select(this.appState, (s) => s.streamById);
   private streamFilter$ = select(this.appState, (s) => s.streamFilter);
+  private streamSort$ = select(this.appState, (s) => s.streamSort);
   private streamStates$ = select(this.appState, (s) => s.streamStates);
   private streamLogs$ = select(this.appState, (s) => s.streamLogs);
   private activeStreamId$ = select(this.appState, (s) => s.activeStreamId);
@@ -282,15 +284,26 @@ export class ProgressApp extends ProgressAppBase {
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
   /**
-   * Top-level streams for the sidebar tab list (child streams excluded).
-   * Sorting is applied server-side; streamById preserves the received order.
+   * All streams sorted. For time sort, also reads streamStates$ for
+   * lastTimestamp so the order updates reactively as streams receive output.
+   * For agent/file sorts only streamById$ is read, so no re-sort on log appends.
    */
+  private sortedStreams$ = new Signal.Computed(() => {
+    const streamById = this.streamById$.get();
+    const sort = this.streamSort$.get();
+    const states = sort === 'time' ? this.streamStates$.get() : undefined;
+    return sortStreams([...streamById.values()], sort, {
+      getLastActivityTimestamp: states
+        ? (stream) => states.get(stream.name)?.lastTimestamp
+        : undefined,
+    });
+  });
+
+  /** Top-level streams for the tab list (child streams excluded). */
   private tabStreams$ = combine(
-    [this.streamById$, this.streamFilter$] as const,
-    (streamById, filter) => {
-      const topLevel = [...streamById.values()].filter(
-        (s) => !s.parentStreamId,
-      );
+    [this.sortedStreams$, this.streamFilter$] as const,
+    (sorted, filter) => {
+      const topLevel = sorted.filter((s) => !s.parentStreamId);
       if (filter === 'all') return topLevel;
       return topLevel.filter((s) => s.agentCategory === filter);
     },
