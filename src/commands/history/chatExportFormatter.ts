@@ -410,11 +410,11 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
           nodes.push({ kind: 'tool-result', text: textParts.join('\n') });
         }
       } else {
-        const output =
-          typeof item.output === 'string'
-            ? item.output
-            : JSON.stringify(item.output ?? '', null, 2);
-        nodes.push({ kind: 'tool-result', text: output });
+        const outputText =
+          typeof output === 'string'
+            ? output
+            : JSON.stringify(output ?? '', null, 2);
+        nodes.push({ kind: 'tool-result', text: outputText });
       }
       lastAssistantHadToolUse = false;
       continue;
@@ -450,11 +450,9 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
       }
 
       // OpenAI Chat Completions: tool_calls array on assistant messages
-      if (
-        isAssistantMessage(msg as ChatCompletionMessageParam) &&
-        Array.isArray(msg.tool_calls)
-      ) {
-        for (const tc of msg.tool_calls) {
+      const openaiMsg = msg as ChatCompletionMessageParam;
+      if (isAssistantMessage(openaiMsg) && Array.isArray(openaiMsg.tool_calls)) {
+        for (const tc of openaiMsg.tool_calls) {
           const fn = tc.type === 'function' ? tc.function : undefined;
           if (fn?.name) {
             nodes.push({
@@ -470,11 +468,12 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
     }
 
     // OpenAI Chat Completions tool role
-    if (isToolMessage(msg as ChatCompletionMessageParam)) {
+    const openaiMsg = msg as ChatCompletionMessageParam;
+    if (isToolMessage(openaiMsg)) {
       const text =
-        typeof msg.content === 'string'
-          ? msg.content
-          : JSON.stringify(msg.content, null, 2);
+        typeof openaiMsg.content === 'string'
+          ? openaiMsg.content
+          : JSON.stringify(openaiMsg.content, null, 2);
       nodes.push({ kind: 'tool-result', text });
       lastAssistantHadToolUse = false;
     }

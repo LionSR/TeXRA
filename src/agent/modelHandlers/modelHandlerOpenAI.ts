@@ -17,7 +17,6 @@ import {
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
-import { validateInputTools } from 'openai/lib/parser';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -418,9 +417,7 @@ export class ModelHandlerOpenAI<
       if (!parallelToolCalls) {
         baseParams.parallel_tool_calls = false;
       }
-      const convertedTools = toOpenAITools(tools);
-      validateInputTools(convertedTools);
-      baseParams.tools = convertedTools;
+      baseParams.tools = toOpenAITools(tools);
       baseParams.tool_choice = 'auto';
     }
 
