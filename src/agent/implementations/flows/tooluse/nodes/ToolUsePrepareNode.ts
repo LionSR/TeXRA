@@ -165,10 +165,10 @@ async function refreshPersistedSystemMessage(
   const updated = [...persisted];
   const existing = updated[systemIdx] as Record<string, unknown>;
   const prevContent = existing.content;
-  // Preserve the existing content shape: if it was an array of text blocks,
-  // keep the array form; otherwise use a plain string. This keeps us
-  // compatible across OpenAI / OpenAI Responses / OpenRouter without
-  // hard-coding any one shape.
+  // Preserve the existing content shape AND block type: OpenAI Chat uses
+  // { type: 'text' }, OpenAI Responses uses { type: 'input_text' }. If we
+  // unconditionally stamped 'text', resumed Responses snapshots would be
+  // rejected by the API. Read the existing block's type and reuse it.
   let content: unknown;
   if (
     Array.isArray(prevContent) &&
@@ -177,7 +177,8 @@ async function refreshPersistedSystemMessage(
     prevContent[0] !== null &&
     'type' in (prevContent[0] as object)
   ) {
-    content = [{ type: 'text', text: systemText }];
+    const firstBlock = prevContent[0] as { type: string };
+    content = [{ type: firstBlock.type, text: systemText }];
   } else {
     content = systemText;
   }
