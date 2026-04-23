@@ -26,7 +26,6 @@ describe('PromptBuilder', () => {
     isMultipleOutput: false,
     filePatternsContain: [],
     tools: [],
-    xmlStructureMode: 'scratchpadOnly',
   };
 
   it('uses array-based userRequest entries for reflections', async () => {
