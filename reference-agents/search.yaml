@@ -44,7 +44,7 @@ prompts:
     Reference PDFs vs arXiv source:
     (1) When you do need the full text under the policy above (only when explicitly requested by the user or for extremely relevant papers requiring detailed analysis), prefer `download_arxiv_source` over downloading an article PDF when an arXiv version is available — PDFs are bulky as context, hard to grep, and mix prose with rendered math.
     (2) In those full-text cases, only fall back to fetching the PDF when no arXiv preprint exists and no other LaTeX source is available.
-    (3) If you download arXiv source under that policy and the main `.tex` file exceeds 600 lines, split it into smaller files before reading or passing it on as context: chapter-by-chapter for books/theses, or section-by-section for papers. Use `sed -n 'start,end p'` to extract ranges, and write each chapter/section to its own file (e.g., `sec_intro.tex`, `sec_methods.tex`). This keeps downstream context manageable and lets later agents load only the relevant parts.
+    (3) If you download arXiv source under that policy and the main `.tex` file exceeds 600 lines, do not load the whole file into your context — read only the chapters/sections relevant to the request (use `grep -n '\\(chapter\\|section\\){' file.tex` to locate boundaries, then `sed -n 'start,end p'` to read the range). In your response, report the file path, total line count, and section/chapter offsets so the caller (e.g. the orchestrator) can split the source into per-section files for downstream use.
 
     Source Handling:
     (1) Always cite sources with URLs, DOIs, or arXiv IDs.
