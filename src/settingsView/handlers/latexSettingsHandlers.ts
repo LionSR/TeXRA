@@ -279,10 +279,10 @@ export class LatexSettingsHandlers {
     }
   }
 
-  /** Install a VS Code extension and refresh the given view data. */
+  /** Install a VS Code extension and optionally refresh the given view data. */
   async installExtension(
     extensionId: string,
-    refresh: (w: vscode.Webview) => Promise<void>,
+    refresh?: (w: vscode.Webview) => Promise<void>,
   ): Promise<void> {
     try {
       await vscode.commands.executeCommand(
@@ -292,7 +292,9 @@ export class LatexSettingsHandlers {
       void vscode.window.showInformationMessage(
         `Extension "${extensionId}" installed`,
       );
-      await this.ctx.withActiveWebview(refresh);
+      if (refresh) {
+        await this.ctx.withActiveWebview(refresh);
+      }
     } catch (error) {
       await showLoggedErrorMessage(
         this.ctx.channel,
