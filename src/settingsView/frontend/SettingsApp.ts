@@ -50,6 +50,7 @@ import {
   UpdateLatexSettingsStatusMessageSchema,
   type AgentSelectionItem,
   type NumberVscodeSetting,
+  type PRSubscriptionEntry,
   type ToolDashboardItem,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
@@ -203,7 +204,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly githubTokenStatus = signal<'secret' | 'env' | 'none'>(
     'none',
   );
-  private readonly prSubscriptions = signal<readonly string[]>([]);
+  private readonly prSubscriptions = signal<readonly PRSubscriptionEntry[]>([]);
 
   // LaTeX settings state
   private readonly latexSettingsStatus = signal({
@@ -405,7 +406,7 @@ export class SettingsApp extends SettingsAppBase {
       case SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS: {
         const data = this.parseMessage(raw, UpdatePRSubscriptionsMessageSchema);
         if (!data) return;
-        this.prSubscriptions.set(data.keys);
+        this.prSubscriptions.set(data.subscriptions);
         return;
       }
 
@@ -682,6 +683,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR,
   );
 
+  private handleOpenPRSubscriptionStream = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM,
+  );
+
   // LaTeX settings event handlers
   private handleApplyLatexSettings = forwardDetail(
     SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS,
@@ -918,6 +923,8 @@ export class SettingsApp extends SettingsAppBase {
               @github-token-remove=${this.handleGitHubTokenRemove}
               @github-token-open-url=${this.handleGitHubTokenOpenUrl}
               @unsubscribe-pr=${this.handleUnsubscribePR}
+              @open-pr-subscription-stream=${this
+                .handleOpenPRSubscriptionStream}
               .githubTokenStatus=${this.githubTokenStatus.get()}
               .prSubscriptions=${this.prSubscriptions.get()}
             ></git-tab>

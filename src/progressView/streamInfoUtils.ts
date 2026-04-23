@@ -31,7 +31,7 @@ function matchesFilter(
  * Build a StreamTabInfo object for a single stream ID.
  * Returns null if the stream doesn't match the filter.
  */
-function buildStreamInfo(
+export function buildStreamInfo(
   state: ProgressViewState,
   id: string,
   filter: AgentCategoryFilter,
