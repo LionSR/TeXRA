@@ -432,10 +432,14 @@ export class ProgressViewProvider
     }
   }
 
-  public setActiveStream(streamId: StreamTabId): void {
+  public async setActiveStream(streamId: StreamTabId): Promise<void> {
     this.state.activeStream = streamId;
 
     if (!this.canSendToWebview()) return;
+
+    // Rehydrate entries released by the status-change eviction so the
+    // newly-active tab shows its full log instead of an empty view.
+    if (streamId) await this.state.streamLogs.ensureLoaded(streamId);
 
     this.webviewUpdater.setActiveStream(streamId);
     // Hydrate content (logs, todos, follow-ups, instruction, bypass state) + active-state metadata

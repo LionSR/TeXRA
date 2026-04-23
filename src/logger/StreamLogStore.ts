@@ -32,6 +32,19 @@ export class StreamLogStore {
   private readonly dirtyStreamIds = new Set<StreamTabId>();
   private readonly kv = new KVStore(STREAM_LOGS_DIR);
 
+  /**
+   * Lightweight summary per stream (first/last timestamp). Populated at load
+   * and refreshed on append/update. Survives `releaseEntries` so sidebar
+   * sorting keeps working for streams whose heavy entries have been evicted.
+   */
+  private readonly summaries = new Map<
+    StreamTabId,
+    { firstTimestamp?: number; lastTimestamp?: number }
+  >();
+
+  /** Deduplicates concurrent `ensureLoaded` calls for the same stream. */
+  private readonly pendingLoads = new Map<StreamTabId, Promise<void>>();
+
   /** Guards persistence — tests create store without calling load(). */
   private loaded = false;
 
@@ -50,20 +63,63 @@ export class StreamLogStore {
   }
 
   has(streamId: StreamTabId): boolean {
-    return this.logs.has(streamId);
+    return this.logs.has(streamId) || this.summaries.has(streamId);
   }
 
   keys(): StreamTabId[] {
-    return [...this.logs.keys()];
+    // Union of loaded + summary-only streams; Set dedupes.
+    return [...new Set([...this.logs.keys(), ...this.summaries.keys()])];
   }
 
   ensureStream(streamId: StreamTabId): StreamLog {
     return this.getOrCreate(streamId);
   }
 
+  /**
+   * Drop heavy entries from memory while keeping the on-disk copy authoritative.
+   * Skips streams with pending writes so `save()` can flush first. Subsequent
+   * access must go through `ensureLoaded` to rehydrate.
+   */
+  releaseEntries(streamId: StreamTabId): void {
+    const logInstance = this.logs.get(streamId);
+    if (!logInstance) return;
+    if (this.dirtyStreamIds.has(streamId)) return;
+    this.refreshSummary(streamId, logInstance);
+    this.logs.delete(streamId);
+  }
+
+  /**
+   * Async reload entries from disk if they were released. No-op when already
+   * resident or when the stream is unknown.
+   */
+  async ensureLoaded(streamId: StreamTabId): Promise<void> {
+    if (this.logs.has(streamId)) return;
+    if (!this.summaries.has(streamId)) return;
+    const existing = this.pendingLoads.get(streamId);
+    if (existing) return existing;
+    const work = (async () => {
+      try {
+        const raw = await this.kv.read<unknown[]>(streamId);
+        const entries = this.parsePersistedEntries(raw);
+        const logInstance = new StreamLog(entries);
+        this.logs.set(streamId, logInstance);
+        this.refreshSummary(streamId, logInstance);
+      } catch {
+        log.warn(LOG_TAG, `Failed to reload stream ${streamId} from disk`);
+      }
+    })();
+    this.pendingLoads.set(streamId, work);
+    try {
+      await work;
+    } finally {
+      this.pendingLoads.delete(streamId);
+    }
+  }
+
   append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {
     const logInstance = this.getOrCreate(streamId);
     const appended = logInstance.append(entry);
+    this.refreshSummary(streamId, logInstance);
     this.markDirty(streamId);
     void this.save();
     this.notify(streamId);
@@ -81,6 +137,7 @@ export class StreamLogStore {
     const updated = logInstance.update(id, patch);
     if (!updated) return undefined;
 
+    this.refreshSummary(streamId, logInstance);
     this.markDirty(streamId);
     void this.save();
     this.notify(streamId);
@@ -92,15 +149,22 @@ export class StreamLogStore {
   }
 
   getFirstTimestamp(streamId: StreamTabId): number | undefined {
-    return this.logs.get(streamId)?.firstTimestamp;
+    return (
+      this.logs.get(streamId)?.firstTimestamp ??
+      this.summaries.get(streamId)?.firstTimestamp
+    );
   }
 
   getLastTimestamp(streamId: StreamTabId): number | undefined {
-    return this.logs.get(streamId)?.lastTimestamp;
+    return (
+      this.logs.get(streamId)?.lastTimestamp ??
+      this.summaries.get(streamId)?.lastTimestamp
+    );
   }
 
   async delete(streamId: StreamTabId): Promise<void> {
     this.logs.delete(streamId);
+    this.summaries.delete(streamId);
     this.dirtyStreamIds.delete(streamId);
     if (!this.loaded) return;
 
@@ -112,6 +176,7 @@ export class StreamLogStore {
   async clear(): Promise<void> {
     const count = this.logs.size;
     this.logs.clear();
+    this.summaries.clear();
     this.dirtyStreamIds.clear();
     if (!this.loaded) return;
 
@@ -159,6 +224,7 @@ export class StreamLogStore {
    */
   async load(migrationSource?: MementoStorage): Promise<void> {
     this.logs.clear();
+    this.summaries.clear();
     this.dirtyStreamIds.clear();
 
     // 1. Scan directory — filenames decode back to stream IDs
@@ -180,7 +246,9 @@ export class StreamLogStore {
       let totalEntries = 0;
       for (const [streamId, entries] of results) {
         if (entries.length > 0) {
-          this.logs.set(streamId as StreamTabId, new StreamLog(entries));
+          const logInstance = new StreamLog(entries);
+          this.logs.set(streamId as StreamTabId, logInstance);
+          this.refreshSummary(streamId as StreamTabId, logInstance);
           totalEntries += entries.length;
         }
       }
@@ -244,8 +312,16 @@ export class StreamLogStore {
     if (!logInstance) {
       logInstance = new StreamLog();
       this.logs.set(streamId, logInstance);
+      if (!this.summaries.has(streamId)) this.summaries.set(streamId, {});
     }
     return logInstance;
+  }
+
+  private refreshSummary(streamId: StreamTabId, logInstance: StreamLog): void {
+    this.summaries.set(streamId, {
+      firstTimestamp: logInstance.firstTimestamp,
+      lastTimestamp: logInstance.lastTimestamp,
+    });
   }
 
   private markDirty(streamId: StreamTabId): void {
@@ -329,7 +405,9 @@ export class StreamLogStore {
     for (const [streamId, rawEntries] of Object.entries(record)) {
       const entries = this.parsePersistedEntries(rawEntries);
       if (entries.length > 0) {
-        this.logs.set(streamId as StreamTabId, new StreamLog(entries));
+        const logInstance = new StreamLog(entries);
+        this.logs.set(streamId as StreamTabId, logInstance);
+        this.refreshSummary(streamId as StreamTabId, logInstance);
         totalEntries += entries.length;
       }
     }
