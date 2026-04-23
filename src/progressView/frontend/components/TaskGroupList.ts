@@ -61,7 +61,7 @@ function processTerminalText(text: string): string {
   // before stripping all ANSI so the overwrite loop can honour them: an erase clears
   // the line from that column onward instead of preserving the stale tail characters.
   // eslint-disable-next-line no-control-regex
-  const preprocessed = text.replace(/\[\d*K/g, ERASE_SENTINEL);
+  const preprocessed = text.replace(/\x1b\[\d*K/g, ERASE_SENTINEL);
   return stripAnsi(preprocessed)
     .replace(/\r\n/g, '\n')
     .split('\n')
