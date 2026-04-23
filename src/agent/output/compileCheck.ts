@@ -117,6 +117,9 @@ async function compileOne(
   opts: PerFileOptions,
 ): Promise<void> {
   const displayName = getCompileDisplayName(outputFile);
+  // compiledBasename is the actual on-disk filename LaTeX engines use when
+  // naming their .log; it may differ from displayName when file.source is set.
+  const compiledBasename = path.basename(outputFile.location.absolutePath);
   // Full relative path keeps two outputs sharing a basename distinct
   // (ch1/main.tex vs ch2/main.tex).
   const safeName = getComparablePath(outputFile.location).replaceAll(
@@ -157,7 +160,6 @@ async function compileOne(
     return;
   }
 
-  const compiledBasename = path.basename(outputFile.location.absolutePath);
   const tail = await readLogTail(buildDir, compiledBasename);
   await flexibleFS.ensureDir(pathToLocation(opts.compileRoot));
   await flexibleFS.write(
