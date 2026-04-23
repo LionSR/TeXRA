@@ -89,17 +89,27 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<{ location: FileLocation; sourceName: string }> {
-    const { name } = path.parse(outputLocation.absolutePath);
+    const { name: rawStem } = path.parse(outputLocation.absolutePath);
     const outputDir = getFileDirectory(outputLocation);
-    const texRelativePath = outputDir
-      ? path.join(outputDir, `${name}.tex`)
-      : `${name}.tex`;
 
-    const texLocation = this.fileService.createLocation(texRelativePath);
-
+    // Read content first so we can derive the destination name from the
+    // XML document-name attribute before creating the output location.
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
     const sourceName =
       outputContent.match(DOCUMENT_NAME_REGEX)?.[1]?.trim() ?? '';
+
+    // Name the extracted .tex after the document (XML name attr), then the
+    // input file, then fall back to the raw stem ("output").  This keeps the
+    // extracted LaTeX readable ("constrained_note.tex") while the raw model
+    // response stays at its fixed "output.*" path.
+    const inputFileStem = path.parse(this.agentConfig.inputFile).name;
+    const texStem = sourceName || inputFileStem || rawStem;
+    const texRelativePath = outputDir
+      ? path.join(outputDir, `${texStem}.tex`)
+      : `${texStem}.tex`;
+
+    const texLocation = this.fileService.createLocation(texRelativePath);
+
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
