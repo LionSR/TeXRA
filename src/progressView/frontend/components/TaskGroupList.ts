@@ -209,6 +209,10 @@ export class TaskGroupList extends LitElement {
       }
     }
 
+    // Group tree, message classification, and timeline are only used by the
+    // non-terminal render path — skip them when terminal mode is active.
+    if (this.terminal) return;
+
     const prevMessages = messagesChanged
       ? (changedProperties.get('messages') as LogMessageData[] | undefined)
       : undefined;
