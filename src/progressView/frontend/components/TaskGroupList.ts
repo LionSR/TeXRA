@@ -52,16 +52,17 @@ const PLACEHOLDER_HTML = getGettingStartedHtml(
 );
 
 // Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
-// \x00 won't appear in legitimate terminal text and is not touched by strip-ansi.
+// Real null bytes in the input are stripped first so the sentinel is unambiguous.
 const ERASE_SENTINEL = '\x00';
 
 /** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
 function processTerminalText(text: string): string {
-  // Replace ANSI erase-line escapes (\x1b[K, \x1b[0K, \x1b[2K, …) with a sentinel
+  // Strip any real null bytes so \x00 is unambiguous as our internal sentinel.
+  // Then replace ANSI erase-line escapes (\x1b[K, \x1b[0K, \x1b[2K, …) with it
   // before stripping all ANSI so the overwrite loop can honour them: an erase clears
   // the line from that column onward instead of preserving the stale tail characters.
   // eslint-disable-next-line no-control-regex
-  const preprocessed = text.replace(/\x1b\[\d*K/g, ERASE_SENTINEL);
+  const preprocessed = text.split(ERASE_SENTINEL).join('').replace(/\x1b\[\d*K/g, ERASE_SENTINEL);
   return stripAnsi(preprocessed)
     .replace(/\r\n/g, '\n')
     .split('\n')
