@@ -508,7 +508,8 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     if (handle) {
       // Running execution: agent/status from handle, only fetch live data from KV
       const store = getExecutionStore(executionId);
-      const [children, todos, report] = await Promise.all([
+      const [meta, children, todos, report] = await Promise.all([
+        store.readMeta(),
         store.readChildren(),
         store.readTodos(),
         store.readReport(),
@@ -525,6 +526,10 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
       const progressLine = formatProgressLine(handle);
       if (progressLine) lines.push(progressLine);
+
+      if (meta?.parentExecutionId) {
+        lines.push(`Parent: ${meta.parentExecutionId}`);
+      }
 
       await this.appendChildren(lines, children);
 
