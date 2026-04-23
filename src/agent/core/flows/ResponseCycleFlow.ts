@@ -422,10 +422,6 @@ class ResponseProcessNode<C> extends BaseNode<
       .join(', ');
     logger.debug(`Usage summary: ${usageSummary}`);
 
-    logger.info(`Stop reason: ${result.stopReason}`, {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    });
-
     logger.debug(`Normalized usage: ${JSON.stringify(result.normalizedUsage)}`);
 
     logger.debug('Response preview:');
@@ -587,10 +583,6 @@ class ResponseContinuationNode<C> extends BaseNode<
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
     }
-
-    logger.info('🧵 Added continuation prompt from partial XML output', {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    });
 
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.addContinueMessageWithPrefill(

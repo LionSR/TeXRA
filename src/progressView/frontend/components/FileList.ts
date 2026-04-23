@@ -314,7 +314,13 @@ export class FileList extends LitElement {
    * Returns empty string for generic names that shouldn't override the fallback.
    */
   private getSourceDisplayPath(source: string | undefined): string {
-    if (!source || source === 'output' || source === 'output.tex') return '';
+    if (
+      !source ||
+      source === 'output' ||
+      source === 'output.xml' ||
+      source === 'output.tex'
+    )
+      return '';
     // Treat a trailing all-alpha suffix as a real extension (.tex, .txt, .bib…).
     // Suffixes containing digits (.v2, .r3) are version qualifiers, not
     // extensions, so .tex is appended in those cases.
