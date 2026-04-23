@@ -288,6 +288,12 @@ export class StreamTab extends LitElement {
         gap: var(--spacing-tiny);
       }
 
+      .compact-subagent-hint {
+        font-size: var(--font-size-xs);
+        opacity: 0.35;
+        flex-shrink: 0;
+      }
+
       .tab-delete::part(control) {
         padding: 0;
         border-radius: var(--border-radius-small);
@@ -378,6 +384,7 @@ export class StreamTab extends LitElement {
     const tooltip = this._tooltip;
     const agentDecorator = this._agentDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
+    const hasChildrenCompact = this.childCount > 0 && this.compact;
 
     return html`
       <div
@@ -415,6 +422,12 @@ export class StreamTab extends LitElement {
               >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
               stream.name}</span
             >
+            ${hasChildrenCompact
+              ? html`<i
+                  class="codicon codicon-chevron-right compact-subagent-hint"
+                  title="${this.childCount} subagent${this.childCount > 1 ? 's' : ''}"
+                ></i>`
+              : nothing}
           </div>
           ${this.compact
             ? nothing
