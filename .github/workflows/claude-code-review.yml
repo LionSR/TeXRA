@@ -49,12 +49,28 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Detect workflow changes in this PR
+        id: workflow-diff
+        shell: bash
+        run: |
+          git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          if git diff --quiet FETCH_HEAD...HEAD -- .github/workflows/claude-code-review.yml; then
+            echo "workflow_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "workflow_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Skip Claude Code Review
-        if: steps.claude-auth.outputs.enabled != 'true'
-        run: echo "CLAUDE_CODE_OAUTH_TOKEN is unavailable; skipping Claude review."
+        if: steps.claude-auth.outputs.enabled != 'true' || steps.workflow-diff.outputs.workflow_changed == 'true'
+        run: |
+          if [ "${{ steps.workflow-diff.outputs.workflow_changed }}" = "true" ]; then
+            echo "This PR changes .github/workflows/claude-code-review.yml; skipping Claude review because the action requires workflow content to match the default branch for OIDC token exchange."
+          else
+            echo "CLAUDE_CODE_OAUTH_TOKEN is unavailable; skipping Claude review."
+          fi
 
       - name: Run Claude Code Review
-        if: steps.claude-auth.outputs.enabled == 'true'
+        if: steps.claude-auth.outputs.enabled == 'true' && steps.workflow-diff.outputs.workflow_changed != 'true'
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
