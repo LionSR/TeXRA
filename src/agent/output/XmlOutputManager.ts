@@ -104,10 +104,9 @@ export class XmlOutputManager {
     // name and the extracted content are always in sync.  For agents without an
     // inputFile, the XML document name gives a human-readable fallback.
     const inputFileStem = path.parse(this.agentConfig.inputFile).name;
-    // Sanitize the stem derived from model output to prevent path traversal:
-    // strip all directory components and take only the filename stem.
-    const rawTexStem = inputFileStem || sourceName || rawStem;
-    const texStem = path.parse(path.basename(rawTexStem)).name || rawStem;
+    const texStem =
+      path.parse(path.basename(inputFileStem || sourceName || rawStem)).name ||
+      rawStem;
     const texRelativePath = outputDir
       ? path.join(outputDir, `${texStem}.tex`)
       : `${texStem}.tex`;

@@ -157,8 +157,6 @@ async function compileOne(
     return;
   }
 
-  // LaTeX engines name their log after the actual compiled file, not the
-  // cosmetic display name, so pass the real basename for log path lookup.
   const compiledBasename = path.basename(outputFile.location.absolutePath);
   const tail = await readLogTail(buildDir, compiledBasename);
   await flexibleFS.ensureDir(pathToLocation(opts.compileRoot));
