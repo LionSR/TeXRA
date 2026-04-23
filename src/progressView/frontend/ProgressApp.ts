@@ -36,7 +36,7 @@ import {
   combine,
 } from '@shared/signals';
 import { isProcessAgent } from '@shared/streams/agentKind';
-import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
+import { sortStreams } from '@shared/streams/streamSort';
 import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view frontend
@@ -60,7 +60,6 @@ const EMPTY_CHILD_MAP: Map<StreamTabId, StreamTabInfo[]> = new Map();
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
   streamFilter: AgentCategoryFilterSchema.catch('all'),
-  streamSort: StreamSortSchema.catch('time'),
 });
 
 // Local imports - event handlers
@@ -75,7 +74,6 @@ import {
   handleFollowupModeChange,
   handleFollowupRequestOptions,
   handlePermissionAction,
-  handleSortChange,
   handleStreamDelete,
   handleStreamSwitch,
   handleToolbarCommand,
@@ -286,20 +284,13 @@ export class ProgressApp extends ProgressAppBase {
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
   /**
-   * All streams sorted (unfiltered).
-   *
-   * For agent/inputFile sort: depends only on streamById$ (stable after
-   * stream creation — no re-sort on status/timestamp updates).
-   *
-   * For time sort: also reads streamStates$ for lastTimestamp, so log
-   * appends trigger a re-sort. This is unavoidable since time sort IS
-   * the timestamp ordering.
+   * All streams sorted. For time sort, also reads streamStates$ for
+   * lastTimestamp so the order updates reactively as streams receive output.
+   * For agent/file sorts only streamById$ is read, so no re-sort on log appends.
    */
   private sortedStreams$ = new Signal.Computed(() => {
     const streamById = this.streamById$.get();
     const sort = this.streamSort$.get();
-    // Only read streamStates$ when time-sorting — for agent/inputFile
-    // sort, this signal won't re-evaluate on status/timestamp changes.
     const states = sort === 'time' ? this.streamStates$.get() : undefined;
     return sortStreams([...streamById.values()], sort, {
       getLastActivityTimestamp: states
@@ -308,10 +299,7 @@ export class ProgressApp extends ProgressAppBase {
     });
   });
 
-  /**
-   * Top-level streams for the sidebar tab list (child streams excluded).
-   * Child streams are shown nested under their parent via childStreamsByParent$.
-   */
+  /** Top-level streams for the tab list (child streams excluded). */
   private tabStreams$ = combine(
     [this.sortedStreams$, this.streamFilter$] as const,
     (sorted, filter) => {
@@ -451,7 +439,6 @@ export class ProgressApp extends ProgressAppBase {
     this.appState.set({
       ...createInitialState(),
       streamFilter: prefs.streamFilter,
-      streamSort: prefs.streamSort,
     });
   }
 
@@ -543,14 +530,12 @@ export class ProgressApp extends ProgressAppBase {
               .streams=${this.tabStreams$.get()}
               .activeStreamId=${this.activeStreamId$.get()}
               .filter=${this.streamFilter$.get()}
-              .sort=${this.streamSort$.get()}
               .streamStates=${this.streamStates$.get()}
               .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
               .childStreamsByParent=${this.childStreamsByParent$.get()}
               @stream-switch=${this.onStreamSwitch}
               @stream-delete=${this.onStreamDelete}
               @filter-change=${this.onFilterChange}
-              @sort-change=${this.onSortChange}
               @delete-all=${this.onDeleteAll}
             ></stream-tabs>
           </vscode-split-layout>
@@ -731,9 +716,6 @@ export class ProgressApp extends ProgressAppBase {
   // Event handlers requiring context
   private onFilterChange = (e: CustomEvent): void =>
     handleFilterChange(e, this.getEventHandlerContext());
-
-  private onSortChange = (e: CustomEvent): void =>
-    handleSortChange(e, this.getEventHandlerContext());
 
   private onToolbarCommand = (e: CustomEvent): void =>
     handleToolbarCommand(e, this.getEventHandlerContext());

@@ -26,8 +26,7 @@ export {
 } from '@shared/schemas';
 
 export type StreamFilter = AgentCategoryFilter;
-export type { ContextState };
-export type { StreamSort };
+export type { ContextState, StreamSort };
 
 /** Followup options derived from schema (minus command/stream fields) */
 export type FollowupOptionsState = Omit<
@@ -59,6 +58,7 @@ export interface ProgressState {
   /** Canonical stream storage — Map preserves insertion order for iteration. */
   streamById: Map<StreamTabId, StreamTabInfo>;
   streamFilter: StreamFilter;
+  /** Sort order as last received from the backend — drives reactive time-sort. */
   streamSort: StreamSort;
   /** Meta state per stream (status, todos, usage, ui, taskGroups, etc.) */
   streamStates: Map<StreamTabId, StreamState>;

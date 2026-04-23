@@ -10,6 +10,7 @@ import {
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
+import { when } from 'lit/directives/when.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -86,13 +87,6 @@ export class FollowUpInput extends LitElement {
         gap: var(--spacing-small);
       }
 
-      .polish-progress {
-        display: none;
-      }
-
-      .polish-progress.is-visible {
-        display: block;
-      }
     `,
   ];
 
@@ -200,14 +194,7 @@ export class FollowUpInput extends LitElement {
                 title="Polish follow-up with AI"
                 @click=${this.emitPolish}
               ></vscode-toolbar-button>
-              <vscode-progress-ring
-                id="polishFollowUpProgressContainer"
-                class=${classMap({
-                  'polish-progress': true,
-                  'is-visible': this.polishing,
-                })}
-                ?hidden=${!this.polishing}
-              ></vscode-progress-ring>
+              ${when(this.polishing, () => html`<vscode-progress-ring></vscode-progress-ring>`)}
               <vscode-toolbar-button
                 id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
                 icon=${this.recordingController.state.icon}

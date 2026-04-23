@@ -30,6 +30,7 @@ import {
   ToolEditPermissionSchema,
 } from './prompts';
 import { StreamStatusSchema, StreamTabInfoSchema } from './stream';
+import { StreamSortSchema } from '@shared/streams/streamSort';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
@@ -124,6 +125,7 @@ export const UpdateStreamsMessageSchema = z.object({
   streams: z.array(StreamTabInfoSchema),
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
   agentFilter: AgentCategoryFilterSchema,
+  streamSort: StreamSortSchema.optional(),
   streamStates: z.record(z.string(), StreamMetadataSchema).optional(),
 });
 
