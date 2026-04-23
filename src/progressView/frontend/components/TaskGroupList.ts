@@ -213,6 +213,14 @@ export class TaskGroupList extends LitElement {
     // non-terminal render path — skip them when terminal mode is active.
     if (this.terminal) return;
 
+    // If terminal just switched off, caches weren't maintained while it was on —
+    // do a full rebuild so the non-terminal render has accurate data.
+    if (changedProperties.get('terminal') === true) {
+      [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
+      this.cachedTimeline = this.buildFullTimeline();
+      return;
+    }
+
     const prevMessages = messagesChanged
       ? (changedProperties.get('messages') as LogMessageData[] | undefined)
       : undefined;
