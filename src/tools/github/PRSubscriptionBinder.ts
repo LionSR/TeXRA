@@ -26,6 +26,37 @@ type PerStream = Map<string, Disposable>;
 const perStream = new Map<StreamTabId, PerStream>();
 let releaseHookRegistered = false;
 
+export interface PRSubscriptionBinding {
+  key: string;
+  streamIds: readonly StreamTabId[];
+}
+
+function emitBindingsChanged(): void {
+  bus.emit('prSubscriptionBindingsChanged', undefined);
+}
+
+export function listPRSubscriptionBindings(
+  keys: readonly string[] = prPollingSource.activeKeys(),
+): PRSubscriptionBinding[] {
+  const streamIdsByKey = new Map<string, StreamTabId[]>();
+
+  for (const [streamId, bound] of perStream) {
+    for (const key of bound.keys()) {
+      const existing = streamIdsByKey.get(key);
+      if (existing) {
+        existing.push(streamId);
+      } else {
+        streamIdsByKey.set(key, [streamId]);
+      }
+    }
+  }
+
+  return keys.map((key) => ({
+    key,
+    streamIds: streamIdsByKey.get(key) ?? [],
+  }));
+}
+
 function ensureReleaseHook(): void {
   if (releaseHookRegistered) return;
   ToolUseFollowUpQueue.onRelease((streamId) => {
@@ -39,6 +70,7 @@ function ensureReleaseHook(): void {
       }
     }
     perStream.delete(streamId);
+    emitBindingsChanged();
   });
   // PRPollingSource can delete subscriptions unilaterally (PR closed/merged,
   // auth error, repeated failures). Without this prune the binder's
@@ -75,6 +107,7 @@ export function bindPRSubscription(streamId: StreamTabId, pr: PRKey): boolean {
   });
   bound.set(key, disposable);
   logger.info(`Bound PR subscription ${key} → stream ${streamId}`);
+  emitBindingsChanged();
   return true;
 }
 
@@ -94,6 +127,7 @@ export function unbindPRSubscription(
   }
   bound.delete(key);
   if (bound.size === 0) perStream.delete(streamId);
+  emitBindingsChanged();
   return true;
 }
 
@@ -117,5 +151,6 @@ export function unbindAllForPR(key: string): number {
     removed += 1;
     if (bound.size === 0) perStream.delete(streamId);
   }
+  if (removed > 0) emitBindingsChanged();
   return removed;
 }
