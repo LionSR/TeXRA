@@ -59,8 +59,12 @@ function processTerminalText(text: string): string {
     .map((line) => {
       const segs = line.split('\r');
       const last = segs.at(-1)!;
-      // Line ending with \r leaves cursor at start — show content before it
-      return last.length > 0 ? last : (segs.at(-2) ?? '');
+      if (last.length > 0) return last;
+      // One or more trailing \r leave cursor at start — find last written content
+      for (let i = segs.length - 2; i >= 0; i--) {
+        if (segs[i]!.length > 0) return segs[i]!;
+      }
+      return '';
     })
     .join('\n');
 }
@@ -341,7 +345,10 @@ export class TaskGroupList extends LitElement {
       this.cachedTerminalLines += processTerminalText(combined.slice(0, lastNl + 1));
       this.cachedRawTail = combined.slice(lastNl + 1);
     } else {
-      this.cachedRawTail = combined;
+      // No newline: collapse \r-overwritten content so the tail stays bounded
+      // (frequent \r updates without \n, e.g. progress bars, would otherwise
+      // grow the buffer and make every render O(n) on accumulated output)
+      this.cachedRawTail = processTerminalText(combined);
     }
   }
 
