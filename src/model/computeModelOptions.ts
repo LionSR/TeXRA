@@ -25,7 +25,8 @@ import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
 
 /**
  * Default models that should be present in every user's model list.
- * Update this list and increment MODEL_LIST_VERSION below when adding new models.
+ * Update this list and increment MODEL_LIST_VERSION below when adding or
+ * removing models.
  */
 export const DEFAULT_MODELS = [
   'gemini31p',
@@ -42,7 +43,7 @@ export const DEFAULT_MODELS = [
  * to get the updated defaults. A simple integer avoids hash-collision risks
  * and doesn't trigger on harmless reordering.
  */
-export const MODEL_LIST_VERSION = 12;
+export const MODEL_LIST_VERSION = 13;
 
 /**
  * Get the list of visible models from extension global state.
