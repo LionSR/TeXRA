@@ -40,6 +40,7 @@
     },
     "orchestrator": { "folder": "tool-use", "visibility": ["public"] },
     "presenter": { "folder": "tool-use", "visibility": ["public"] },
+    "progressCheck": { "folder": "tool-use", "visibility": ["public"] },
     "search": { "folder": "tool-use", "visibility": ["public"] },
     "simplifier": { "folder": "tool-use", "visibility": ["public"] },
     "lean": { "folder": "tool-use-lean", "visibility": ["researcher", "lean"] },
