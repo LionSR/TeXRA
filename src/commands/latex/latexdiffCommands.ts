@@ -1,4 +1,5 @@
 // Standard library imports
+import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -383,13 +384,25 @@ async function collectTexFiles(
   }
   const results: string[] = [];
   for (const [name, type] of entries) {
-    if (type === vscode.FileType.File) {
+    const absPath = path.join(dir, name);
+    // Skip symlinks — they are mirrored dependency copies placed by
+    // ensureMirroredInRoundDir, not revised outputs.  Use lstat because
+    // some vscode.workspace.fs implementations don't set the SymbolicLink
+    // flag in the returned FileType bitmask.
+    try {
+      if ((await fs.promises.lstat(absPath)).isSymbolicLink()) continue;
+    } catch {
+      // lstat failed; fall through and include the entry
+    }
+    const isFile = (type & vscode.FileType.File) !== 0;
+    const isDir = (type & vscode.FileType.Directory) !== 0;
+    if (isFile) {
       if (hasExtension(name, '.tex')) {
         results.push(prefix ? `${prefix}/${name}` : name);
       }
-    } else if (type === vscode.FileType.Directory) {
+    } else if (isDir) {
       const sub = await collectTexFiles(
-        path.join(dir, name),
+        absPath,
         prefix ? `${prefix}/${name}` : name,
       );
       results.push(...sub);
@@ -437,7 +450,15 @@ async function scanRunDirForOutputs(
       const outputs: OutputFileInfo[] = [];
       // Collect .tex files recursively — extracted docs may live in subdirs
       // (e.g. r0/chapters/main.tex) when source names include path segments.
-      const texFiles = await collectTexFiles(roundDirAbsolute);
+      const allTexFiles = await collectTexFiles(roundDirAbsolute);
+      // For XML-mode agents, the round dir has both output.tex (raw wrapper)
+      // and extracted files (e.g. paper.tex).  Drop the raw stem when extracted
+      // files are present so latexdiff doesn't operate on XML-wrapped content.
+      const rawStem = `${WORKFLOW_OUTPUT_BASENAME}.tex`;
+      const texFiles =
+        allTexFiles.length > 1 && allTexFiles.includes(rawStem)
+          ? allTexFiles.filter((f) => f !== rawStem)
+          : allTexFiles;
       for (const fileRelToRound of texFiles) {
         const parsed = path.parse(fileRelToRound);
         if (LATEXDIFF_ARTIFACT_RE.test(parsed.name)) continue;
