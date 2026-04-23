@@ -268,8 +268,8 @@ export class GitTab extends LitElement {
             <strong>How to get a token:</strong>
             <ol>
               <li>
-                Click <em>Create on GitHub…</em> to open the token-creation
-                page in your browser.
+                Click <em>Create on GitHub…</em> to open the token-creation page
+                in your browser.
               </li>
               <li>
                 Choose scopes: <code>repo</code> for private repos or
@@ -300,8 +300,8 @@ export class GitTab extends LitElement {
               <div class="setting-block">
                 <p class="section-title">Active PR subscriptions</p>
                 <p class="setting-description">
-                  Click <em>Stop</em> to cancel a subscription. The rest of
-                  your work continues; only updates for that PR stop arriving.
+                  Click <em>Stop</em> to cancel a subscription. The rest of your
+                  work continues; only updates for that PR stop arriving.
                 </p>
                 <ul class="subscriptions-list">
                   ${this.prSubscriptions.map(

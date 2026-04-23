@@ -991,7 +991,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // If the current filter would hide the target stream, clear it to 'all'
     // so SET_ACTIVE_STREAM doesn't silently land on the wrong tab.
-    if (buildStreamInfo(state, data.streamId, state.agentCategoryFilter) === null) {
+    if (
+      buildStreamInfo(state, data.streamId, state.agentCategoryFilter) === null
+    ) {
       state.agentCategoryFilter = 'all';
       provider.syncFullView();
     }
