@@ -59,6 +59,7 @@ import {
   DEFAULT_GIT_MARK_COMMITS,
 } from '@shared/constants/git';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
+import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolicy';
 
 // Local imports - settings view
 import type { AgentCategory } from '@shared/schemas/agent';
@@ -184,7 +185,9 @@ export class SettingsApp extends SettingsAppBase {
   private readonly reliabilitySettings = signal<NumberVscodeSetting[]>([]);
   private readonly allowOrchestratorKill = signal(true);
   private readonly detachSubagentsOnStop = signal(false);
-  private readonly nestedDelegationMaxDepth = signal(1);
+  private readonly nestedDelegationMaxDepth = signal<number>(
+    NESTED_DELEGATION_DEPTH_RANGE.default,
+  );
 
   // Approval settings state
   private readonly bashApprovalEnabled = signal(true);
