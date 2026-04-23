@@ -268,4 +268,49 @@ export const logEntryStyles = css`
     color: var(--vscode-badge-foreground);
     margin-right: var(--spacing-small);
   }
+
+  /* Terminal-style output: monospace font, tighter spacing, no log bullets.
+     Applied to streams that proxy raw process output (e.g. bash child streams)
+     so their stdout/stderr reads like a terminal instead of a logger. */
+  :host([terminal]) .log-container {
+    font-family: var(
+      --vscode-editor-font-family,
+      ui-monospace,
+      SFMono-Regular,
+      Consolas,
+      monospace
+    );
+    font-size: var(--vscode-editor-font-size, var(--font-size));
+    background-color: var(
+      --vscode-terminal-background,
+      var(--vscode-editor-background, transparent)
+    );
+    color: var(--vscode-terminal-foreground, var(--vscode-foreground));
+  }
+
+  :host([terminal]) .log-line {
+    padding: 0;
+    line-height: 1.35;
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* Bullet/timestamp prefix is noisy for raw process output. */
+  :host([terminal]) .log-line .timestamp {
+    display: none;
+  }
+
+  /* stdout renders at terminal foreground; stderr keeps a warn tint. */
+  :host([terminal]) .message-info,
+  :host([terminal]) .message-debug {
+    color: inherit;
+  }
+
+  :host([terminal]) .message-warn {
+    color: var(--vscode-terminal-ansiYellow, var(--color-warning));
+  }
+
+  :host([terminal]) .message-error {
+    color: var(--vscode-terminal-ansiRed, var(--color-error));
+  }
 `;
