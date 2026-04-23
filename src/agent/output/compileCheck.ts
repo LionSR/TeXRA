@@ -91,7 +91,7 @@ export async function runCompileCheck(
   for (const outputFile of texOutputs) {
     const displayName = getCompileDisplayName(outputFile);
     try {
-      await compileOne(ctx, outputFile, currentRound, {
+      await compileOne(ctx, outputFile, currentRound, displayName, {
         compileRoot,
         runDirectory,
         timeoutMs,
@@ -114,9 +114,9 @@ async function compileOne(
   ctx: CompileCheckContext,
   outputFile: OutputFileInfo,
   currentRound: number,
+  displayName: string,
   opts: PerFileOptions,
 ): Promise<void> {
-  const displayName = getCompileDisplayName(outputFile);
   // compiledBasename is the actual on-disk filename LaTeX engines use when
   // naming their .log; it may differ from displayName when file.source is set.
   const compiledBasename = path.basename(outputFile.location.absolutePath);
