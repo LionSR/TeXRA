@@ -112,7 +112,7 @@ export class TaskGroupList extends LitElement {
   private cachedTree: GroupTree[] = [];
   private cachedUngrouped: LogMessageData[] = [];
 
-  /** Canonicalized partial-line buffer: visible display text, with trailing '\r' if cursor is at line start */
+  /** Raw partial-line buffer: unprocessed bytes after the last '\n', capped at 64 KiB */
   private cachedRawTail = '';
   /** Processed complete lines for terminal mode (up to and including the last '\n') */
   private cachedTerminalLines = '';
@@ -345,12 +345,12 @@ export class TaskGroupList extends LitElement {
       this.cachedTerminalLines += processTerminalText(combined.slice(0, lastNl + 1));
       this.cachedRawTail = combined.slice(lastNl + 1);
     } else {
-      // No newline: collapse to visible content to bound growth (progress bars
-      // can emit many \r-overwritten updates without ever emitting \n).
-      // Preserve a trailing '\r' as a cursor-at-start marker so the next chunk
-      // can still overwrite from column 0.
-      const visible = processTerminalText(combined);
-      this.cachedRawTail = combined.endsWith('\r') ? visible + '\r' : visible;
+      // No newline: keep raw bytes so that split ANSI sequences and cross-chunk
+      // \r overwrites are handled correctly at render time. Cap at 64 KiB to
+      // bound growth from progress bars that emit many \r updates without \n.
+      const MAX_TAIL = 65536;
+      this.cachedRawTail =
+        combined.length > MAX_TAIL ? combined.slice(combined.length - MAX_TAIL) : combined;
     }
   }
 
