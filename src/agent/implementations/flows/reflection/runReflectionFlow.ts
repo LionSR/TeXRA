@@ -72,28 +72,10 @@ function deriveConfig(
   setting: AgentWorkflowSetting,
   prompt: RunReflectionFlowInput['prompt'],
 ): {
-  shouldEnsureXmlStructure: boolean;
   totalRounds: number;
   outputExt: string;
 } {
   const useScratchpad = setting.prefills.includes('<scratchpad>');
-
-  let shouldEnsureXmlStructure: boolean;
-  switch (setting.xmlStructureMode) {
-    case 'always':
-      shouldEnsureXmlStructure = true;
-      break;
-    case 'never':
-      shouldEnsureXmlStructure = false;
-      break;
-    case 'scratchpadOnly':
-      shouldEnsureXmlStructure = useScratchpad;
-      break;
-    default: {
-      const _exhaustive: never = setting.xmlStructureMode;
-      throw new Error(`Unknown xmlStructureMode: ${_exhaustive}`);
-    }
-  }
 
   const { userRequest } = prompt;
   let requestCount: number;
@@ -105,7 +87,6 @@ function deriveConfig(
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   return {
-    shouldEnsureXmlStructure,
     totalRounds,
     outputExt: useScratchpad ? 'xml' : setting.outputExt,
   };
@@ -164,10 +145,7 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { shouldEnsureXmlStructure, totalRounds, outputExt } = deriveConfig(
-    setting,
-    prompt,
-  );
+  const { totalRounds, outputExt } = deriveConfig(setting, prompt);
 
   const getOutputFileLocation =
     input.getOutputFileLocation ??
@@ -281,7 +259,6 @@ export async function runReflectionFlow<C = unknown>(
       promptBuilder,
       fileService,
       getOutputFileLocation,
-      shouldEnsureXmlStructure,
       baseFiles,
     };
     pf.setServices(services);
