@@ -381,13 +381,14 @@ export class TaskGroupList extends LitElement {
     } else {
       // No newline: keep raw bytes so split ANSI sequences and cross-chunk \r
       // overwrites are handled correctly at render time.
-      // Only cap when there are confirmed standalone \r rewrites, i.e. \r is
-      // present AND the buffer does not end with \r (a trailing \r might be the
-      // first half of a \r\n split across chunks, so we defer the cap to avoid
-      // permanently dropping the preceding content before the \n arrives).
+      // Cap when there is at least one \r that is NOT the last character — that
+      // confirms standalone CR rewrites exist (progress-bar style). A trailing \r
+      // as the only/last CR is deferred: it may be the first half of a \r\n split
+      // across chunks, and capping would permanently drop the preceding content.
       const MAX_TAIL = 65536;
+      const crIdx = combined.indexOf('\r');
       this.cachedRawTail =
-        combined.includes('\r') && !combined.endsWith('\r') && combined.length > MAX_TAIL
+        crIdx >= 0 && crIdx < combined.length - 1 && combined.length > MAX_TAIL
           ? combined.slice(combined.length - MAX_TAIL)
           : combined;
     }
