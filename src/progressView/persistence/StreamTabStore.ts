@@ -11,9 +11,9 @@
  *       usageStats.json        → runId → TokenUsageStats
  *
  * Legacy data shapes (from before one-run-per-tab refactor) are transparently
- * migrated on read via preprocess helpers in streamTabSchemas.ts.
- * Instructions are rendered as user-message log entries now, so they are
- * stored in the log stream, not in this store.
+ * migrated on read via preprocess helpers in streamTabSchemas.ts. New workflow
+ * instructions live in the log stream; this store only retains archived legacy
+ * instruction records so older tabs can be backfilled during load.
  */
 
 import * as path from 'path';
@@ -27,11 +27,14 @@ import type {
 } from '@shared/schemas';
 import {
   StreamTabMetaSchema,
+  LegacyInstructionsDataSchema,
   OutputFilesDataSchema,
   MissingOutputsDataSchema,
   UsageDataSchema,
   flattenLegacyRuns,
   isLegacyNested,
+  selectPreferredLegacyInstruction,
+  type LegacyInstructionEntry,
   type StreamTabMeta,
   type OutputFilesRecord,
   type MissingOutputsRecord,
@@ -153,11 +156,29 @@ class StreamTabKVStore extends KVStore {
   /**
    * Persist legacy `{ runId: InstructionUpdate }` data verbatim so migrated
    * users don't lose the instruction text of older workflow tabs. The new
-   * UI logs instructions as user-message entries at run start, so this
-   * file is write-only here — readers must inspect it manually on disk.
+   * UI logs instructions as user-message entries at run start, so newer runs
+   * read from the log stream; legacy runs can still be backfilled from here.
    */
   async writeLegacyInstructions(data: unknown): Promise<void> {
     await this.write(KEYS.LEGACY_INSTRUCTIONS, data);
+  }
+
+  /**
+   * Read the archived legacy instruction record and pick the run users most
+   * likely expect to see. Prefers `meta.activeRunId` when that migration hint
+   * exists, otherwise falls back to the newest archived entry.
+   */
+  async readPreferredLegacyInstruction(): Promise<LegacyInstructionEntry | null> {
+    const raw = await this.read(KEYS.LEGACY_INSTRUCTIONS);
+    if (!raw) return null;
+
+    const result = LegacyInstructionsDataSchema.safeParse(raw);
+    if (!result.success || Object.keys(result.data).length === 0) {
+      return null;
+    }
+
+    const meta = await this.readMeta();
+    return selectPreferredLegacyInstruction(result.data, meta?.activeRunId);
   }
 
   /**
