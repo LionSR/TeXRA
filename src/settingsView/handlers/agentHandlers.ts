@@ -751,13 +751,15 @@ export class AgentHandlers {
     await agentDirectories.refreshAfterDirChange();
     const { refreshCustomAgentRoot } = await import('@frontend/setup');
     await refreshCustomAgentRoot();
-    await this.ctx.withActiveWebview(async (w) => {
-      await Promise.all([
-        this.sendCustomAgentDir(w),
-        this.sendAgentSelectionData(w),
-      ]);
-    });
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await Promise.all([
+      this.ctx.withActiveWebview(async (w) => {
+        await Promise.all([
+          this.sendCustomAgentDir(w),
+          this.sendAgentSelectionData(w),
+        ]);
+      }),
+      vscode.commands.executeCommand('texra.refreshAllOptions'),
+    ]);
   }
 
   /** Read and validate custom presets from workspace state. */

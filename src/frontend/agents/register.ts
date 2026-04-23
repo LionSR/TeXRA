@@ -89,7 +89,7 @@ export async function promptToAddAgentToConfig(
   if (shouldAdd) {
     current.push(agentName);
     await workspaceSM.update(stateKey, current);
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await vscode.commands.executeCommand('texra.refreshAllOptions');
     vscode.window.showInformationMessage(`Agent "${agentName}" is now visible`);
   }
 }
