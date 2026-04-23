@@ -173,13 +173,13 @@ async function compileOne(
 
 async function readLogTail(
   buildDir: string,
-  displayName: string,
+  compiledBasename: string,
 ): Promise<string> {
   // LaTeX engines drop `<basename-without-ext>.log`; strip .tex
   // case-insensitively so .TEX/.Tex map to the same file.
   const latexLogAbs = path.join(
     buildDir,
-    `${displayName.replace(/\.tex$/i, '')}.log`,
+    `${compiledBasename.replace(/\.tex$/i, '')}.log`,
   );
   try {
     const full = await flexibleFS.read(pathToLocation(latexLogAbs));
