@@ -498,11 +498,14 @@ async function scanRunDirForOutputs(
           sourceNoExt === WORKFLOW_OUTPUT_BASENAME
             ? path.basename(inputFile)
             : sourceNoExt;
-        // Match recovered file to its base by relative path; fall back to the
-        // primary inputFile so single-output rounds always have a valid original.
+        // Match recovered file to its base by relative path. Fall back to the
+        // single configured base only when there's no ambiguity (one candidate);
+        // in multi-file runs an unmatched file gets null so it surfaces as a
+        // "missing base" error rather than silently diffing against the wrong doc.
         const fileKey = fileRelToRound.replace(/\\/g, '/').replace(/\.tex$/i, '');
         const originalLocation =
-          baseLocationByRelPath.get(fileKey) ?? defaultBaseLocation;
+          baseLocationByRelPath.get(fileKey) ??
+          (baseLocationByRelPath.size === 1 ? defaultBaseLocation : null);
         outputs.push({
           source,
           round,
