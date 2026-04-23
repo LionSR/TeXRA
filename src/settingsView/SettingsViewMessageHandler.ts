@@ -60,6 +60,8 @@ import {
   formatCost,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { buildStreamInfo } from '@progressView/streamInfoUtils';
 import type { ExecutionId } from '@shared/schemas';
 import type { HistoryItem } from '@shared/schemas/historyViewMessages';
 import {
@@ -92,6 +94,7 @@ import {
 } from '@tools/approval';
 import {
   getLastCheckResults,
+  refreshToolAvailability,
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import {
@@ -99,7 +102,11 @@ import {
   parseCodexReasoningEffort,
 } from '@tools/codexConfig';
 import { findExternalToolDef } from '@tools/externalToolDefs';
-import { prPollingSource, unbindAllForPR } from '@tools/github';
+import {
+  listPRSubscriptionBindings,
+  prPollingSource,
+  unbindAllForPR,
+} from '@tools/github';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import {
   MEMORY_STORAGE_ROOT,
@@ -322,6 +329,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     bus.on('prSubscriptionsChanged', ({ keys }) => {
       void this.withActiveWebview((w) => this.sendPRSubscriptions(w, keys));
     });
+    bus.on('prSubscriptionBindingsChanged', () => {
+      void this.withActiveWebview((w) => this.sendPRSubscriptions(w));
+    });
+    bus.on('toolAvailabilityChanged', () => {
+      void this.withActiveWebview((w) =>
+        this.sendToolDashboardData(w, { skipChecks: true }),
+      );
+    });
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
@@ -512,6 +527,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           );
         }
       },
+      [SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM]: (data) =>
+        this.handleOpenPRSubscriptionStream(data),
 
       // ── Delegated to LatexSettingsHandlers ──
 
@@ -551,7 +568,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (data) =>
         this.handleInstallToolExtension(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
-        this.withActiveWebview((w) => this.sendToolDashboardData(w)),
+        refreshToolAvailability(),
       [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: async (data) => {
         await setToolEnabled(data.toolId, data.enabled);
         refreshDisabledToolCache();
@@ -932,10 +949,54 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     webview: vscode.Webview,
     keys?: readonly string[],
   ): Promise<void> {
+    const state = ProgressViewProvider.getInstance()?.state;
+    const subscriptions = listPRSubscriptionBindings(
+      keys ?? prPollingSource.activeKeys(),
+    ).map(({ key, streamIds }) => ({
+      key,
+      owners: streamIds.map((streamId) => ({
+        streamId,
+        label: state
+          ? (buildStreamInfo(state, streamId, 'all')?.label ?? streamId)
+          : streamId,
+      })),
+    }));
+
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      keys: [...(keys ?? prPollingSource.activeKeys())],
+      subscriptions,
     });
+  }
+
+  private async handleOpenPRSubscriptionStream(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM>,
+  ): Promise<void> {
+    const provider = ProgressViewProvider.getInstance();
+    if (!provider) {
+      await vscode.window.showErrorMessage(
+        'Progress View is not available. Please try again.',
+      );
+      return;
+    }
+
+    const { state } = provider;
+    if (!state.streamLogs.has(data.streamId)) {
+      await vscode.window.showWarningMessage(
+        'The agent stream is no longer available.',
+      );
+      return;
+    }
+
+    await provider.showProgressView();
+
+    // If the current filter would hide the target stream, clear it to 'all'
+    // so SET_ACTIVE_STREAM doesn't silently land on the wrong tab.
+    if (buildStreamInfo(state, data.streamId, state.agentCategoryFilter) === null) {
+      state.agentCategoryFilter = 'all';
+      provider.syncFullView();
+    }
+
+    provider.setActiveStream(data.streamId);
   }
 
   // ============================================================
@@ -1413,16 +1474,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // Invalidate model options cache so downstream refreshes see fresh key state.
     invalidateModelOptionsCache();
     await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
-    await this.withActiveWebview((w) => this.sendProfileData(w));
+    await Promise.all([
+      vscode.commands.executeCommand('texra.refreshAllOptions'),
+      this.withActiveWebview((w) => this.sendProfileData(w)),
+    ]);
   }
 
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
   private async refreshAfterAgentMutation(): Promise<void> {
-    await this.withActiveWebview((w) =>
-      this.agentHandlers.sendAgentSelectionData(w),
-    );
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
+    await Promise.all([
+      this.withActiveWebview((w) =>
+        this.agentHandlers.sendAgentSelectionData(w),
+      ),
+      vscode.commands.executeCommand('texra.refreshAllOptions'),
+    ]);
   }
 
   private async handleOpenProviderKeyUrl(
@@ -1528,8 +1593,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // Enabled model list changed — invalidate cached options.
     invalidateModelOptionsCache();
-    void vscode.commands.executeCommand('texra.refreshAllOptions');
-    await this.withActiveWebview((w) => this.sendModelSelectionData(w));
+    await Promise.all([
+      vscode.commands.executeCommand('texra.refreshAllOptions'),
+      this.withActiveWebview((w) => this.sendModelSelectionData(w)),
+    ]);
   }
 
   private async handleSetHelperModel(
@@ -1585,8 +1652,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleInstallToolExtension(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.INSTALL_TOOL_EXTENSION>,
   ): Promise<void> {
-    await this.latexHandlers.installExtension(data.extensionId, (w) =>
-      this.sendToolDashboardData(w),
-    );
+    await this.latexHandlers.installExtension(data.extensionId);
   }
 }

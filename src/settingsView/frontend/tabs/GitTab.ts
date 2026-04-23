@@ -15,6 +15,9 @@ import {
   tintedBadgeStyles,
 } from '@shared/styles';
 
+// Local imports - shared schemas
+import type { PRSubscriptionEntry } from '@shared/schemas/settingsViewMessages';
+
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
 
@@ -121,9 +124,9 @@ export class GitTab extends LitElement {
         margin: var(--spacing-small) 0 0 0;
       }
       .subscriptions-list li {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
         gap: var(--spacing-small);
         padding: var(--spacing-tiny) 0;
       }
@@ -132,6 +135,34 @@ export class GitTab extends LitElement {
         padding: var(--border-thin) var(--spacing-medium);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
+      }
+      .subscription-meta {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-small);
+      }
+      .subscription-key {
+        overflow-wrap: anywhere;
+      }
+      .subscription-owners {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-tiny);
+      }
+      .subscription-owner-row {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        flex-wrap: wrap;
+      }
+      .subscription-owner-label,
+      .subscription-owner-placeholder {
+        font-size: var(--font-size-sm);
+        color: var(--vscode-descriptionForeground);
+      }
+      .subscription-owner-placeholder {
+        margin: 0;
       }
     `,
   ];
@@ -142,7 +173,8 @@ export class GitTab extends LitElement {
   @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) githubTokenStatus: 'secret' | 'env' | 'none' =
     'none';
-  @property({ attribute: false }) prSubscriptions: readonly string[] = [];
+  @property({ attribute: false })
+  prSubscriptions: readonly PRSubscriptionEntry[] = [];
 
   private handleMarkCommitsToggle(event: Event): void {
     const target = event.target as HTMLInputElement | null;
@@ -185,6 +217,12 @@ export class GitTab extends LitElement {
     this.dispatchEvent(createEvent('unsubscribe-pr', { key }));
   }
 
+  private handleOpenPRSubscriptionStream(streamId: string): void {
+    this.dispatchEvent(
+      createEvent('open-pr-subscription-stream', { streamId }),
+    );
+  }
+
   private renderTokenStatusBadge(): TemplateResult {
     if (this.githubTokenStatus === 'secret') {
       return html`<span class="tinted-badge tinted-badge--ok">Set</span>`;
@@ -202,9 +240,8 @@ export class GitTab extends LitElement {
         <div class="setting-block">
           <p class="section-title">GitHub personal access token</p>
           <p class="setting-description">
-            Used by the <code>subscribe_pr_activity</code> tool to poll GitHub
-            for pull request events (comments, reviews, failed CI). Stored in VS
-            Code SecretStorage — never written to <code>settings.json</code>.
+            Used to poll GitHub for pull request events (comments, reviews,
+            failed CI) when you subscribe to a PR.
           </p>
           <div class="token-row">
             Status: ${this.renderTokenStatusBadge()}
@@ -231,8 +268,8 @@ export class GitTab extends LitElement {
             <strong>How to get a token:</strong>
             <ol>
               <li>
-                Click <em>Create on GitHub…</em> (opens the token-creation page
-                in your browser, pre-filled for TeXRA PR subscription use).
+                Click <em>Create on GitHub…</em> to open the token-creation
+                page in your browser.
               </li>
               <li>
                 Choose scopes: <code>repo</code> for private repos or
@@ -263,18 +300,50 @@ export class GitTab extends LitElement {
               <div class="setting-block">
                 <p class="section-title">Active PR subscriptions</p>
                 <p class="setting-description">
-                  Each subscription polls GitHub every 30s. Click
-                  <em>Stop</em> to cancel; the current agent task will keep
-                  running but no new PR events will arrive.
+                  Click <em>Stop</em> to cancel a subscription. The rest of
+                  your work continues; only updates for that PR stop arriving.
                 </p>
                 <ul class="subscriptions-list">
                   ${this.prSubscriptions.map(
-                    (key) => html`
+                    (subscription) => html`
                       <li>
-                        <code>${key}</code>
+                        <div class="subscription-meta">
+                          <code class="subscription-key"
+                            >${subscription.key}</code
+                          >
+                          ${subscription.owners.length > 0
+                            ? html`
+                                <div class="subscription-owners">
+                                  ${subscription.owners.map(
+                                    (owner) => html`
+                                      <div class="subscription-owner-row">
+                                        <span class="subscription-owner-label"
+                                          >${owner.label}</span
+                                        >
+                                        <vscode-button
+                                          appearance="secondary"
+                                          @click=${() =>
+                                            this.handleOpenPRSubscriptionStream(
+                                              owner.streamId,
+                                            )}
+                                        >
+                                          Jump to agent
+                                        </vscode-button>
+                                      </div>
+                                    `,
+                                  )}
+                                </div>
+                              `
+                            : html`
+                                <p class="subscription-owner-placeholder">
+                                  Owning agent unavailable.
+                                </p>
+                              `}
+                        </div>
                         <vscode-button
                           appearance="secondary"
-                          @click=${() => this.handleUnsubscribePR(key)}
+                          @click=${() =>
+                            this.handleUnsubscribePR(subscription.key)}
                         >
                           Stop
                         </vscode-button>

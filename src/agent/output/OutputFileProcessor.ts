@@ -1,5 +1,3 @@
-import * as path from 'path';
-
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -19,8 +17,6 @@ import {
 
 import { indentLatexFile, indentLatexFiles } from './LatexOutputUtils';
 import type { XmlOutputManager } from './XmlOutputManager';
-
-const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
 
 export interface ProcessingContext {
   agentSetting: AgentWorkflowSetting;
@@ -100,19 +96,10 @@ export class OutputFileProcessor {
     logger.debug(`Processing single output for ${outputLocation.absolutePath}`);
 
     try {
-      const shouldProcessXml = this.shouldProcessXml(agentSetting);
-      const processed = shouldProcessXml
-        ? await this.ctx.xmlManager.processSingleXmlOutput(
-            outputLocation,
-            currRound,
-          )
-        : {
-            source: path.basename(outputLocation.absolutePath),
-            round: currRound,
-            location: rawLocation ?? outputLocation,
-            lineage: null,
-            diff: null,
-          };
+      const processed = await this.ctx.xmlManager.processSingleXmlOutput(
+        outputLocation,
+        currRound,
+      );
 
       if (!processed.location.absolutePath) {
         logger.debug(
@@ -231,22 +218,6 @@ export class OutputFileProcessor {
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
       data.xmlSummary = { ...emptySummary };
-    }
-  }
-
-  private shouldProcessXml(agentSetting: AgentWorkflowSetting): boolean {
-    switch (agentSetting.xmlStructureMode ?? 'scratchpadOnly') {
-      case 'always':
-        return true;
-      case 'scratchpadOnly':
-        return (
-          Boolean(agentSetting.documentTag) ||
-          Boolean(
-            agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)),
-          )
-        );
-      default:
-        return false;
     }
   }
 }

@@ -51,6 +51,7 @@ import {
   SignInMessageSchema,
   SignOutMessageSchema,
 } from './profileViewMessages';
+import { StreamTabIdSchema } from './identifiers';
 export { SETTINGS_VIEW_CMD };
 
 /** Tab name order - single source of truth for tab indices */
@@ -350,10 +351,22 @@ export type UpdateGitHubTokenStatusMessage = z.infer<
   typeof UpdateGitHubTokenStatusMessageSchema
 >;
 
-/** Outbound: backend → frontend active PR subscription keys. */
+export const PRSubscriptionOwnerSchema = z.object({
+  streamId: StreamTabIdSchema,
+  label: z.string(),
+});
+export type PRSubscriptionOwner = z.infer<typeof PRSubscriptionOwnerSchema>;
+
+export const PRSubscriptionEntrySchema = z.object({
+  key: z.string().min(1),
+  owners: z.array(PRSubscriptionOwnerSchema),
+});
+export type PRSubscriptionEntry = z.infer<typeof PRSubscriptionEntrySchema>;
+
+/** Outbound: backend → frontend active PR subscriptions. */
 export const UpdatePRSubscriptionsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS),
-  keys: z.array(z.string()),
+  subscriptions: z.array(PRSubscriptionEntrySchema),
 });
 export type UpdatePRSubscriptionsMessage = z.infer<
   typeof UpdatePRSubscriptionsMessageSchema
@@ -674,6 +687,11 @@ const UnsubscribePRMessageSchema = z.object({
   key: z.string().min(1),
 });
 
+const OpenPRSubscriptionStreamMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_PR_SUBSCRIPTION_STREAM),
+  streamId: StreamTabIdSchema,
+});
+
 // LaTeX settings inbound messages
 const GetLatexSettingsStatusMessageSchema = commandOnly(
   CMD.GET_LATEX_SETTINGS_STATUS,
@@ -800,6 +818,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     OpenGitHubTokenUrlMessageSchema,
     GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
+    OpenPRSubscriptionStreamMessageSchema,
     // Approval settings messages
     GetApprovalSettingsMessageSchema,
     SetBashApprovalEnabledMessageSchema,

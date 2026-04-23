@@ -700,7 +700,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return null;
     }
 
-    this.logger.info(
+    this.logger.debug(
       `Resuming polling for pending background response ${pendingId}`,
     );
 
@@ -730,8 +730,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         throw err;
       }
       this.logger.warn(
-        `Failed to retrieve pending background response ${pendingId}: ${formatted.message}. ` +
-          'Will create new request.',
+        `Couldn't resume the pending OpenAI response; will start a new request. (${formatted.message})`,
         {
           data: {
             responseId: pendingId,
@@ -761,7 +760,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (pendingResponse.status === 'completed') {
       // Already completed while we were disconnected
-      this.logger.info(
+      this.logger.debug(
         `Pending background response ${pendingId} already completed`,
       );
       // Note: clearPendingBackgroundResponse() called by finalizeResponse() in caller
@@ -774,8 +773,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       pendingResponse.incomplete_details?.reason ??
       'no additional details';
     this.logger.warn(
-      `Pending background response ${pendingId} failed remotely ` +
-        `(status: ${pendingResponse.status}, reason: ${errorDetail}). Will create new request.`,
+      `OpenAI background response ended remotely (${pendingResponse.status}: ${errorDetail}); starting a new request.`,
       {
         data: {
           responseId: pendingId,
@@ -834,7 +832,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } else {
       const errorDetail =
         response.error?.message ?? response.incomplete_details?.reason;
-      this.logger.warn(
+      this.logger.debug(
         `Response ${response.id} has status "${response.status}" - not safe for chaining`,
         {
           data: {
@@ -901,7 +899,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     } else {
       // DIAGNOSTIC: Log when usage data is missing (streaming instability?)
-      this.logger.warn(
+      this.logger.debug(
         `[TOKEN_DIAG] response.usage.input_tokens MISSING - cannot track context usage`,
         {
           data: {
@@ -1838,7 +1836,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         // Safety net: handle unexpected pending status (shouldn't happen without background mode)
         if (this.isBackgroundPending(response)) {
-          this.logger.warn(
+          this.logger.debug(
             `WebSocket response ${response.id} ended with pending status "${response.status}" — polling for completion`,
           );
           response = await this.waitForBackgroundCompletion(
@@ -1885,7 +1883,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // during slow GPT-5 requests), poll until it finishes instead of silently
         // returning an incomplete response.
         if (this.isBackgroundPending(response)) {
-          this.logger.warn(
+          this.logger.debug(
             `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
           );
           response = await this.waitForBackgroundCompletion(
@@ -1926,7 +1924,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (this.isBackgroundPending(response)) {
         if (useBackgroundResponses) {
           this.logger.logProgress(
-            `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
+            'Running OpenAI in background mode; polling for completion (this may take longer than usual).',
           );
         } else {
           this.logger.debug(
@@ -1968,7 +1966,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // OpenAI: If the error indicates the response ID is invalid, clear it
       // This allows retry logic to recover by starting a fresh conversation
       if (isPreviousResponseIdError(error)) {
-        this.logger.info(
+        this.logger.debug(
           `Clearing previousResponseId=${this.previousResponseId} due to invalid/expired response - ` +
             'next retry will rebuild conversation from local history',
         );
@@ -1990,9 +1988,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // hidden reasoning tokens) and compact client-side messages, then retry.
         // The guard !compactedThisCall prevents infinite recursion.
         this.logger.logProgress(
-          'Context window exceeded despite pre-flight check — ' +
-            'accumulated server-side reasoning tokens likely exceeded limit. ' +
-            'Clearing chained state and compacting for retry.',
+          'Context window exceeded — compacting conversation and retrying.',
         );
         this.previousResponseId = null;
         // Don't call resetConversationState() — it zeroes cumulativeInputTokens
@@ -2022,7 +2018,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // failure (tryResumeBackgroundResponse and waitForBackgroundCompletion).
       // If it survived to here, the next retry will try to resume the same ID.
       if (this.pendingBackgroundResponseId) {
-        this.logger.info(
+        this.logger.debug(
           `Retaining pendingBackgroundResponseId=${this.pendingBackgroundResponseId} for retry - ` +
             'next attempt will try to resume polling instead of creating new request',
         );
@@ -2062,7 +2058,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       output_tokens_details: { reasoning_tokens: 0 },
     };
     if (!responseObject.usage) {
-      this.logger.warn(
+      this.logger.debug(
         'Response missing usage information - token counts will show as 0',
         {
           data: {
@@ -2234,7 +2230,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         await delay(pollInterval, { signal });
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
-          this.logger.warn(
+          this.logger.debug(
             `Background polling aborted for response ${responseId} while waiting to poll.`,
             {
               data: {
@@ -2437,7 +2433,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return [endTurn, messages];
     }
 
-    this.logger.warn(
+    this.logger.debug(
       'Output file exists but no end tag found - continuing from file',
     );
     // Only need to handle case where prefill needs to be prepended

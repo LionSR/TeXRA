@@ -36,8 +36,6 @@ export const AgentSettingBaseSchema = z.strictObject({
   internal: z.boolean().optional(),
 });
 
-const XmlStructureMode = z.enum(['never', 'scratchpadOnly', 'always']);
-
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
     .literal(AgentCategory.Workflow)
@@ -47,7 +45,6 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
   isMultipleOutput: z.boolean().prefault(false),
-  xmlStructureMode: XmlStructureMode.prefault('scratchpadOnly'),
 });
 
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
@@ -61,7 +58,8 @@ function normalizeAgentSettingInput(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) {
     return input;
   }
-  const { agentType, maxRounds, ...rest } = input as Record<string, unknown>;
+  const { agentType, maxRounds, xmlStructureMode: _xmlStructureMode, ...rest } =
+    input as Record<string, unknown>;
 
   // Migrate legacy maxRounds → rounds
   if (maxRounds !== undefined && rest.rounds === undefined) {

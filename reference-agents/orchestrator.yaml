@@ -1,5 +1,5 @@
 name: orchestrator
-description: Reads your paper, figures out what needs work, and hands each task to the right agent. You approve proposals as they come in.
+description: Reads your paper, figures out what needs work, and hands each task to the right agent. You approve proposals as they come in. For reference papers, prefers arXiv LaTeX source over PDFs and splits sources longer than 600 lines by chapter/section before attaching.
 
 settings:
   agentCategory: toolUse
@@ -84,6 +84,8 @@ prompts:
 
     Before delegating to a workflow agent, check whether any input file exceeds 1000 lines (`wc -l`). If it does, split it into modular files using the procedure below before delegating—one workflow per resulting file. For documents already using `\input{}`/`\include{}`, apply the same 1000-line threshold to each sub-file individually.
 
+    Reference papers: prefer arXiv LaTeX source over PDFs. The search agent can download sources but cannot edit workspace files; for any source >600 lines it reports section/chapter offsets so you can split it (chapter-by-chapter or section-by-section) and attach only the relevant parts.
+
     Splitting LaTeX files: When splitting a monolithic `main.tex`, extract the preamble (packages and `\newcommand` definitions) into `preamble.tex` but keep `\documentclass` in main; extract appendix content into separate files but keep structural commands (`\appendix`, section headers like "Supplementary Materials") and `\end{document}` in main—the split files should contain only "content" that can be cleanly `\input`ed. Each appendix section should generally go into its own file (`app1.tex`, `app2.tex`, etc.) for modularity; here the appendix is short enough to stay as one file. If a pre-compiled `.bbl` file exists, ensure it's included via `\input{}` (not `\bibliography{}`) and its name differs from `<main-filename>.bbl` so bibtex won't overwrite it. If running a `\criticize` review task, add `\usepackage{xcolor}` (or replace `\usepackage{color}`) and the `\criticize` command definition to the preamble beforehand. Use `sed -n 'start,end p'` for extraction and `head -n +N` / `tail -n +N` to trim lines. Pitfalls include: forgetting to remove `\end{document}` from extracted appendix, including `\documentclass` in preamble, or moving structural markers out of main. Always run `latexindent -w -s` at the end to normalize formatting.
 
     For context, many of the workflow agents use the following command to add critical comments to the LaTeX document:
@@ -98,6 +100,8 @@ prompts:
     After context compaction, subagent and background process reports remain accessible via /executions/{id}/report. Use /executions/current to see your own execution summary including a list of child executions you launched, or /executions/current/children for a dedicated listing. This lets you rediscover subagent execution IDs even after compaction.
 
     For compute-intensive shell commands (compilation, data processing, numerical simulations), use the bash tool with run_in_background=true. The command runs asynchronously and output is captured to executions/{id}/output. Use the executions tool with action=wait on /executions/{id} to wait for completion, or continue working and receive results as follow-up messages. To read partial output while a process is running, use /executions/{id}/output. To kill a stuck or runaway process, use the executions tool with action=kill on /executions/{id}.
+
+    End-of-turn progress review: before declaring a session complete, use `delegate_agent` with `agent="progressCheck"` for an outside-the-loop audit of what actually landed versus the project's standing goal, git/PR state, and deferred follow-ups. progressCheck is a tool-use agent — never call it via delegate_workflow. Use it when two or more subagents ran, a commit or PR merged in this session, or the request spanned multiple deliverables; skip trivial one-shots (a single lookup, a single-file typo fix). Its reply is always one of: stop, a single next step, up to five prioritized candidates, or a question to route to the user. Treat the recommendation as advisory — pick up actionable items with the suggested handler, summarize the rest for the user to decide, or stop anyway (with a brief note) if a flagged follow-up is out of scope.
 
   userRequest: |
     {{ INSTRUCTION }}
