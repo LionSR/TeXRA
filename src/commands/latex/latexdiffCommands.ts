@@ -476,9 +476,15 @@ async function scanRunDirForOutputs(
         );
         // Preserve subdirectory in source (e.g. "chapters/main") so
         // FileLineageCalculator can match it back to the workspace original.
+        // For the generic "output" stem, fall back to the input file basename
+        // so progress labels show the meaningful name instead of "output".
         const sourceNoExt = fileRelToRound.replace(/\.tex$/i, '');
+        const source =
+          sourceNoExt === WORKFLOW_OUTPUT_BASENAME
+            ? path.basename(inputFile)
+            : sourceNoExt;
         outputs.push({
-          source: sourceNoExt,
+          source,
           round,
           location,
           lineage: {
