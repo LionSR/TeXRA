@@ -772,6 +772,11 @@ export async function resumeToolUseFromSnapshot(
             ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
+          // Derive from the recovered parent chain: any execution with a
+          // parent is a subagent. Without this, the rebuilt system prompt
+          // would drop subagent-specific instructions (e.g. the shared
+          // /memories protocol) that the fresh run had included.
+          isSubagent: (ctx.delegationDepth ?? 0) > 0,
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
         },
