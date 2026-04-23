@@ -17,7 +17,6 @@ import {
   type RegisteredToolName,
 } from '@tools/registry';
 import {
-  getLastCheckResults,
   runExternalToolChecks,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailability';
@@ -140,14 +139,12 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
 // Public API
 // ============================================================
 
-/** Cached detail check results from the last full probe. */
-let lastDetailResults: (string | undefined)[] | null = null;
-
 /**
  * Build the complete tool dashboard items list.
  *
  * @param cachedResults — when provided, skips network probes and uses
- *   these results. Used by the toggle handler for instant UI updates.
+ *   these results (including their `statusDetail`). Used by the toggle
+ *   handler for instant UI updates.
  */
 export async function buildToolDashboardItems(
   cachedResults?: ExternalToolCheckResult[],
@@ -162,26 +159,9 @@ export async function buildToolDashboardItems(
 
   const results = cachedResults ?? (await runExternalToolChecks());
 
-  // Skip detail checks when using cached results (toggle path)
-  const detailResults = cachedResults
-    ? (lastDetailResults ?? results.map(() => undefined))
-    : await Promise.all(
-        results.map(async ({ id }) => {
-          const def = findExternalToolDef(id);
-          if (!def?.detailCheck) return undefined;
-          try {
-            return await def.detailCheck();
-          } catch {
-            return undefined;
-          }
-        }),
-      );
-  lastDetailResults = detailResults;
-
   const disabledIds = getDisabledToolIds();
   const externalItems: ToolDashboardItem[] = [];
-  for (let i = 0; i < results.length; i++) {
-    const { id, tools, status } = results[i];
+  for (const { id, tools, status, statusDetail } of results) {
     const def = findExternalToolDef(id);
     if (!def || def.hideFromDashboard) continue;
     externalItems.push({
@@ -198,7 +178,7 @@ export async function buildToolDashboardItems(
       installCommand: def.installCommand,
       authCommand: def.authCommand,
       configNotes: def.configNotes,
-      statusDetail: detailResults[i],
+      statusDetail,
       authNote: def.authNote,
       toggleable: def.toggleable,
       enabled: !disabledIds.has(def.id),
