@@ -425,6 +425,8 @@ export class StreamTab extends LitElement {
             ${hasChildrenCompact
               ? html`<i
                   class="codicon codicon-chevron-right compact-subagent-hint"
+                  role="img"
+                  aria-label="${this.childCount} child stream${this.childCount > 1 ? 's' : ''}"
                   title="${this.childCount} child stream${this.childCount > 1 ? 's' : ''}"
                 ></i>`
               : nothing}
