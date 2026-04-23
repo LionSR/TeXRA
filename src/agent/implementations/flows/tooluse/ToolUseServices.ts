@@ -3,7 +3,6 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
-import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 import type {
   BaseFlowContextInit,
   FlowParams,
@@ -28,8 +27,6 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;
   /** True when this agent was launched as a subagent by an orchestrator. */
   readonly isSubagent?: boolean;
-  /** Nested delegation policy snapshot, read once at flow entry. */
-  readonly nestedDelegationConfig?: NestedDelegationConfig;
   /**
    * True when the agent's YAML requested delegation tools but they were filtered
    * out by the nested-delegation gate (disabled or depth cap reached). The

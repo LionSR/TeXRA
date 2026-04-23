@@ -168,7 +168,6 @@ export async function runToolUseFlow<C = unknown>(
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
     delegationDepth,
-    nestedDelegationConfig: nestedConfig,
     delegationTrimmed,
   };
 
