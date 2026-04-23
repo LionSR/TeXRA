@@ -8,7 +8,7 @@ import { createEvent } from '@shared/utils/events';
 
 import type { FollowupFormData } from './components/FollowupSection';
 import type { PermissionState } from './components/PermissionCard';
-import type { FollowupMode, StreamFilter, StreamSort } from './store';
+import type { FollowupMode, StreamFilter } from './store';
 
 // =============================================================================
 // Event Detail Types
@@ -20,10 +20,6 @@ export interface StreamEventDetail {
 
 export interface FilterEventDetail {
   filter: StreamFilter;
-}
-
-export interface SortEventDetail {
-  sort: StreamSort;
 }
 
 export interface ToolbarCommandDetail {
@@ -75,8 +71,6 @@ export const ProgressEvents = {
 
   filterChange: (detail: FilterEventDetail) =>
     createEvent('filter-change', detail),
-
-  sortChange: (detail: SortEventDetail) => createEvent('sort-change', detail),
 
   deleteAll: () => createEvent('delete-all', undefined),
 
