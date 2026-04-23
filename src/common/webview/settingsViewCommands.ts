@@ -100,6 +100,7 @@ export const SETTINGS_VIEW_CMD = {
   GET_PR_SUBSCRIPTIONS: 'getPRSubscriptions',
   UPDATE_PR_SUBSCRIPTIONS: 'updatePRSubscriptions',
   UNSUBSCRIBE_PR: 'unsubscribePR',
+  OPEN_PR_SUBSCRIPTION_STREAM: 'openPRSubscriptionStream',
   // LaTeX settings commands
   GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
