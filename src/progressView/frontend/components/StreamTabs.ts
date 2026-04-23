@@ -708,15 +708,13 @@ export class StreamTabs extends LitElement {
                 )}
               </vscode-radio-group>
 
-              <vscode-toolbar-container>
-                <vscode-toolbar-button
-                  id=${ELEMENT_IDS.DELETE_ALL_BTN}
-                  icon="close-all"
-                  label="Clear all"
-                  title="Clear all streams"
-                  @click=${this.handleDeleteAll}
-                ></vscode-toolbar-button>
-              </vscode-toolbar-container>
+              <vscode-toolbar-button
+                id=${ELEMENT_IDS.DELETE_ALL_BTN}
+                icon="close-all"
+                label="Clear all"
+                title="Clear all streams"
+                @click=${this.handleDeleteAll}
+              ></vscode-toolbar-button>
             </div>`}
       </div>
     `;
