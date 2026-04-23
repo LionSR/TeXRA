@@ -218,7 +218,7 @@ export async function refreshModelListIfNeeded(): Promise<void> {
   );
 
   try {
-    await mergeNewModelsIfCustomized();
+    await mergeNewModelsIfCustomized(storedVersion);
     await globalSM.update(
       GlobalStateKey.MODEL_LIST_VERSION,
       MODEL_LIST_VERSION,
@@ -235,9 +235,11 @@ export async function refreshModelListIfNeeded(): Promise<void> {
 /**
  * Reconciles the user's enabled-models list with the current defaults: adds
  * any new DEFAULT_MODELS entries and applies per-version one-off removals
- * (see inline comments for rationale).
+ * gated on previousVersion so they run on the intended upgrade only.
  */
-async function mergeNewModelsIfCustomized(): Promise<void> {
+async function mergeNewModelsIfCustomized(
+  previousVersion: number | undefined,
+): Promise<void> {
   const currentModels = globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS);
   if (!currentModels) {
     logger.info(
@@ -247,28 +249,27 @@ async function mergeNewModelsIfCustomized(): Promise<void> {
     return;
   }
 
-  // gpt54pro was a default for 0.36.5–0.36.x, then removed as duplicative with
-  // gpt54. Strip it once on upgrade so it is off by default for all users; they
-  // can still re-enable it manually in the Models settings tab.
-  const stripped = currentModels.filter((model) => model !== 'gpt54pro');
+  // One-time strip of gpt54pro for users upgrading past version 13. It was a
+  // default for 0.36.5–0.36.x, then removed as duplicative with gpt54. The
+  // (previousVersion ?? 0) < 13 gate ensures users who manually re-enable it
+  // after this release don't lose it again on future unrelated version bumps.
+  const strippedSet = new Set<string>();
+  if ((previousVersion ?? 0) < 13 && currentModels.includes('gpt54pro')) {
+    strippedSet.add('gpt54pro');
+  }
+  const kept = currentModels.filter((model) => !strippedSet.has(model));
+  const removed = [...strippedSet];
 
-  const modelsToAdd = DEFAULT_MODELS.filter(
-    (model) => !stripped.includes(model),
-  );
+  const added = DEFAULT_MODELS.filter((model) => !kept.includes(model));
 
-  if (modelsToAdd.length === 0 && stripped.length === currentModels.length) {
+  if (added.length === 0 && removed.length === 0) {
     return;
   }
 
-  await globalSM.update(GlobalStateKey.ENABLED_MODELS, [
-    ...stripped,
-    ...modelsToAdd,
-  ]);
+  await globalSM.update(GlobalStateKey.ENABLED_MODELS, [...kept, ...added]);
   logger.info(
     'extension',
-    `Refreshed enabled models: added [${modelsToAdd.join(', ')}], removed [${currentModels
-      .filter((m) => !stripped.includes(m))
-      .join(', ')}]`,
+    `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]`,
   );
 }
 
