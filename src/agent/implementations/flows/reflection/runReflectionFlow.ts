@@ -33,6 +33,7 @@ import {
   type StorageKey,
 } from '@shared/schemas';
 import {
+  AbsoluteFS,
   TaskRunFileService,
   WorkspaceFS,
   createWorkspaceLocation,
@@ -72,29 +73,8 @@ function deriveConfig(
   setting: AgentWorkflowSetting,
   prompt: RunReflectionFlowInput['prompt'],
 ): {
-  shouldEnsureXmlStructure: boolean;
   totalRounds: number;
-  outputExt: string;
 } {
-  const useScratchpad = setting.prefills.includes('<scratchpad>');
-
-  let shouldEnsureXmlStructure: boolean;
-  switch (setting.xmlStructureMode) {
-    case 'always':
-      shouldEnsureXmlStructure = true;
-      break;
-    case 'never':
-      shouldEnsureXmlStructure = false;
-      break;
-    case 'scratchpadOnly':
-      shouldEnsureXmlStructure = useScratchpad;
-      break;
-    default: {
-      const _exhaustive: never = setting.xmlStructureMode;
-      throw new Error(`Unknown xmlStructureMode: ${_exhaustive}`);
-    }
-  }
-
   const { userRequest } = prompt;
   let requestCount: number;
   if (Array.isArray(userRequest)) {
@@ -104,11 +84,7 @@ function deriveConfig(
   }
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
-  return {
-    shouldEnsureXmlStructure,
-    totalRounds,
-    outputExt: useScratchpad ? 'xml' : setting.outputExt,
-  };
+  return { totalRounds };
 }
 
 export async function runReflectionFlow<C = unknown>(
@@ -164,25 +140,36 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { shouldEnsureXmlStructure, totalRounds, outputExt } = deriveConfig(
-    setting,
-    prompt,
-  );
+  const { totalRounds } = deriveConfig(setting, prompt);
 
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
-      // The default `r{round}/output.{ext}` filename is only collision-safe
+      // The default `r{round}/output.xml` filename is only collision-safe
       // when resolved through a run-storage-bound fileService. Enforce the
       // invariant so a misconfigured TaskRunFileService can't silently
-      // route outputs to a shared `<workspace>/r{round}/output.tex` path.
+      // route outputs to a shared `<workspace>/r{round}/output.xml` path.
       if (!fileService.hasRunDirectory()) {
         throw new Error(
           'runReflectionFlow requires a TaskRunFileService bound to an executionId for default output-path resolution.',
         );
       }
-      const fileName = getOutputFileName(outputExt, round);
-      return fileService.createLocation(fileName) as AgentFileLocation;
+      const canonical = fileService.createLocation(
+        getOutputFileName('xml', round),
+      ) as AgentFileLocation;
+      // Resume-from-pre-refactor compat: if a round was partially written on an
+      // older build that used `.tex` for non-scratchpad agents, keep using that
+      // file on resume so initializeOutputAndPrefill sees the existing content
+      // instead of starting a fresh round at output.xml.
+      if (!AbsoluteFS.existsSync(canonical.absolutePath)) {
+        const legacy = fileService.createLocation(
+          getOutputFileName('tex', round),
+        ) as AgentFileLocation;
+        if (AbsoluteFS.existsSync(legacy.absolutePath)) {
+          return legacy;
+        }
+      }
+      return canonical;
     });
 
   const interruptible: IInterruptible = {
@@ -281,7 +268,6 @@ export async function runReflectionFlow<C = unknown>(
       promptBuilder,
       fileService,
       getOutputFileLocation,
-      shouldEnsureXmlStructure,
       baseFiles,
     };
     pf.setServices(services);

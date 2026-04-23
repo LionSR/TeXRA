@@ -26,7 +26,6 @@ export interface ReflectionServices<
   readonly promptBuilder: PromptBuilder;
   readonly fileService: TaskRunFileService;
   readonly getOutputFileLocation: (round: number) => AgentFileLocation;
-  readonly shouldEnsureXmlStructure: boolean;
   readonly baseFiles: WorkspaceFileLocation[];
   readonly onRoundFinalized: RoundFinalizedCallback;
 }
