@@ -368,6 +368,37 @@ interface DiffOperation {
 }
 
 /**
+ * Recursively collect all `.tex` file paths under `dir`, returned as paths
+ * relative to `dir` using forward slashes (e.g. `"chapters/main.tex"`).
+ */
+async function collectTexFiles(
+  dir: string,
+  prefix = '',
+): Promise<string[]> {
+  let entries: [string, vscode.FileType][];
+  try {
+    entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+  } catch {
+    return [];
+  }
+  const results: string[] = [];
+  for (const [name, type] of entries) {
+    if (type === vscode.FileType.File) {
+      if (hasExtension(name, '.tex')) {
+        results.push(prefix ? `${prefix}/${name}` : name);
+      }
+    } else if (type === vscode.FileType.Directory) {
+      const sub = await collectTexFiles(
+        path.join(dir, name),
+        prefix ? `${prefix}/${name}` : name,
+      );
+      results.push(...sub);
+    }
+  }
+  return results;
+}
+
+/**
  * Read `executions/{runId}/r{round}/output.*` directly from disk and build
  * `OutputFileInfo[]` per round. Used as a recovery fallback when the caller
  * supplies a `runId` but stream-tab metadata is missing or stale — in that
@@ -403,43 +434,25 @@ async function scanRunDirForOutputs(
       if (round == null) continue;
 
       const roundDirAbsolute = path.join(runDirAbsolute, entryName);
-      let roundEntries: [string, vscode.FileType][];
-      try {
-        roundEntries = await vscode.workspace.fs.readDirectory(
-          vscode.Uri.file(roundDirAbsolute),
-        );
-      } catch {
-        continue;
-      }
-
       const outputs: OutputFileInfo[] = [];
-      for (const [fileName, nestedType] of roundEntries) {
-        if (nestedType !== vscode.FileType.File) continue;
-        const parsed = path.parse(fileName);
-        // Accept any .tex file as a latexdiff target.  Extracted documents
-        // now carry source-derived names (e.g. "constrained_note.tex") rather
-        // than the fixed "output.tex" stem, so filtering by basename would
-        // silently drop them.  Skip non-LaTeX files (.xml raw outputs, .log
-        // compile artefacts, etc.) by extension only.
-        if (
-          parsed.ext !== '.tex' ||
-          // Exclude latexdiff artifacts written to round dirs by LatexDiffManager
-          // (e.g. "foo_diff.tex", "foo_diffr1r0.tex").
-          LATEXDIFF_ARTIFACT_RE.test(parsed.name)
-        ) {
-          continue;
-        }
+      // Collect .tex files recursively — extracted docs may live in subdirs
+      // (e.g. r0/chapters/main.tex) when source names include path segments.
+      const texFiles = await collectTexFiles(roundDirAbsolute);
+      for (const fileRelToRound of texFiles) {
+        const parsed = path.parse(fileRelToRound);
+        if (LATEXDIFF_ARTIFACT_RE.test(parsed.name)) continue;
 
-        const relativePath = path.join(entryName, fileName);
+        const relativePath = path.join(entryName, fileRelToRound);
         const location = createRunStorageLocation(
           path.join(runDirAbsolute, relativePath),
           relativePath,
           executionId,
         );
+        // Preserve subdirectory in source (e.g. "chapters/main") so
+        // FileLineageCalculator can match it back to the workspace original.
+        const sourceNoExt = fileRelToRound.replace(/\.tex$/i, '');
         outputs.push({
-          // Use the file's own stem as source so FileLineageCalculator can
-          // match it back to the workspace original (e.g. "constrained_note").
-          source: parsed.name,
+          source: sourceNoExt,
           round,
           location,
           lineage: {
