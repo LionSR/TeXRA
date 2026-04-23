@@ -428,11 +428,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
           data,
         ),
-      [SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_ENABLED]: (data) =>
-        this.updateBooleanAndSendSuperYolo(
-          WorkspaceStateKey.NESTED_DELEGATION_ENABLED,
-          data,
-        ),
       [SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH]: (data) =>
         this.handleSetNestedDelegationMaxDepth(data),
 
@@ -833,10 +828,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     );
-    const nestedDelegationEnabled = workspaceSM.get<boolean>(
-      WorkspaceStateKey.NESTED_DELEGATION_ENABLED,
-      false,
-    );
     const nestedDelegationMaxDepth = clampNestedDelegationDepth(
       workspaceSM.get<number>(
         WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
@@ -849,7 +840,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       reliabilitySettings: getReliabilitySettings(),
       allowOrchestratorKill,
       detachSubagentsOnStop,
-      nestedDelegationEnabled,
       nestedDelegationMaxDepth,
     });
   }

@@ -225,21 +225,13 @@ async function executeSubagent(
   const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
 
   // Defense-in-depth: the tool-use flow already filters delegation tools out
-  // of the toolset when nesting is disabled or capped, but if a rogue agent
-  // invokes the tool anyway we refuse here with a clear message so the LLM
-  // can pivot. The root orchestrator (depth 0) is never blocked.
+  // of the toolset when the depth cap is reached, but if a rogue agent calls
+  // the tool anyway we refuse here with a clear message so the LLM can pivot.
   if (parentDelegationDepth > 0) {
-    const nested = readNestedDelegationConfig();
-    if (!nested.enabled) {
+    const { maxDepth } = readNestedDelegationConfig();
+    if (parentDelegationDepth >= maxDepth) {
       return {
-        error:
-          'Nested delegation is disabled. Enable Settings → Multi-Agent → Allow nested delegation, or complete this task directly without delegating.',
-        isError: true,
-      };
-    }
-    if (parentDelegationDepth >= nested.maxDepth) {
-      return {
-        error: `Nested delegation depth cap reached (${nested.maxDepth}). Increase Settings → Multi-Agent → Max nesting depth, or complete this task directly without delegating.`,
+        error: `Delegation depth cap reached (max depth ${maxDepth}). Raise Settings → Multi-Agent → Max delegation depth, or complete this task directly without delegating.`,
         isError: true,
       };
     }

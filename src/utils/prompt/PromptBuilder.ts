@@ -65,14 +65,13 @@ The /memories directory is shared with the orchestrator and other subagents. Che
 
 /**
  * Notice injected into a delegated subagent's system suffix when its YAML
- * requested delegation tools but the nested-delegation gate removed them
- * (either the global switch is off, or the depth cap is reached). Without
- * this, the LLM keeps trying to call delegate_agent / delegate_workflow
- * and fails confusingly.
+ * requested delegation tools but the max-delegation-depth gate removed
+ * them. Without this, the LLM keeps trying to call delegate_agent /
+ * delegate_workflow and fails confusingly.
  */
-const NESTED_DELEGATION_BLOCKED_INSTRUCTIONS = `<nested_delegation_disabled>
-You are a delegated subagent. Nested delegation is disabled for this execution, so the delegation tools (delegate_agent, delegate_workflow, resume_agent, propose_agent, propose_workflow) are unavailable to you. Do not attempt to call them. Complete the task directly using the tools you have, or report back to the orchestrator if the task truly requires further delegation.
-</nested_delegation_disabled>`;
+const NESTED_DELEGATION_BLOCKED_INSTRUCTIONS = `<delegation_depth_reached>
+You are a delegated subagent. The configured delegation depth does not allow you to delegate further, so the delegation tools (delegate_agent, delegate_workflow, resume_agent, propose_agent, propose_workflow) are unavailable to you. Do not attempt to call them. Complete the task directly using the tools you have, or report back to the orchestrator if the task truly requires further delegation.
+</delegation_depth_reached>`;
 
 /**
  * Combine the base system prompt with optional rules from `.texrarules`.

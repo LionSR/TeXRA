@@ -279,7 +279,6 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) allowOrchestratorKill = true;
   @property({ attribute: false }) detachSubagentsOnStop = false;
   @property({ attribute: false }) worktreeSupport = false;
-  @property({ attribute: false }) nestedDelegationEnabled = false;
   @property({ attribute: false }) nestedDelegationMaxDepth =
     NESTED_DELEGATION_DEPTH_RANGE.default;
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
@@ -308,10 +307,6 @@ export class MultiAgentTab extends LitElement {
 
   private handleWorktreeSupportToggle(event: Event): void {
     this.emitToggle('worktree-support-toggle', event);
-  }
-
-  private handleNestedDelegationToggle(event: Event): void {
-    this.emitToggle('allow-nested-delegation-toggle', event);
   }
 
   private handleNestedDelegationMaxDepthChange(input: HTMLInputElement): void {
@@ -538,26 +533,14 @@ export class MultiAgentTab extends LitElement {
         </div>
 
         <div class="setting-block">
-          <vscode-checkbox
-            ?checked=${this.nestedDelegationEnabled}
-            @change=${this.handleNestedDelegationToggle}
-          >
-            Allow nested delegation
-          </vscode-checkbox>
-          <p class="text-secondary setting-description">
-            Let a delegated agent delegate further (orchestrator →
-            sub-orchestrator → leaf agent). When off, subagents cannot call
-            delegation tools.
-          </p>
           <div class="reliability-row">
-            <label>Max nesting depth</label>
+            <label>Max delegation depth</label>
             <vscode-textfield
               class="reliability-input"
               type="number"
               .value=${String(this.nestedDelegationMaxDepth)}
               min=${NESTED_DELEGATION_DEPTH_RANGE.min}
               max=${NESTED_DELEGATION_DEPTH_RANGE.max}
-              ?disabled=${!this.nestedDelegationEnabled}
               @change=${(e: Event) =>
                 this.handleNestedDelegationMaxDepthChange(
                   e.target as HTMLInputElement,
@@ -565,8 +548,10 @@ export class MultiAgentTab extends LitElement {
             ></vscode-textfield>
           </div>
           <p class="reliability-description">
-            Depth 2 allows one grandchild (orchestrator → orchestrator → leaf).
-            Only applies when nested delegation is on.
+            Depth 1 (default): only the top-level orchestrator may delegate;
+            subagents cannot delegate further. Depth 2 lets a sub-orchestrator
+            delegate once more (orchestrator → sub-orchestrator → leaf).
+            Higher values allow deeper chains.
           </p>
         </div>
 

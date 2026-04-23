@@ -216,7 +216,6 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
   reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
   allowOrchestratorKill: z.boolean().prefault(true),
   detachSubagentsOnStop: z.boolean().prefault(false),
-  nestedDelegationEnabled: z.boolean().prefault(false),
   nestedDelegationMaxDepth: z
     .number()
     .int()
@@ -588,11 +587,6 @@ const SetDetachSubagentsOnStopMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
-const SetNestedDelegationEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_NESTED_DELEGATION_ENABLED),
-  enabled: z.boolean(),
-});
-
 const SetNestedDelegationMaxDepthMessageSchema = z.object({
   command: z.literal(CMD.SET_NESTED_DELEGATION_MAX_DEPTH),
   value: z
@@ -809,7 +803,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetSuperYoloEnabledMessageSchema,
     SetAllowOrchestratorKillMessageSchema,
     SetDetachSubagentsOnStopMessageSchema,
-    SetNestedDelegationEnabledMessageSchema,
     SetNestedDelegationMaxDepthMessageSchema,
     // Git author settings messages
     GetGitAuthorSettingsMessageSchema,

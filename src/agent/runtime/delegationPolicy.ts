@@ -16,17 +16,13 @@ import {
   type NestedDelegationConfig,
 } from '@shared/constants/delegationPolicy';
 
-/** Read the current nested-delegation policy from workspace state. */
+/** Read the current delegation policy from workspace state. */
 export function readNestedDelegationConfig(): NestedDelegationConfig {
   const state = getWorkspaceState();
-  const enabled = state.get<boolean>(
-    WorkspaceStateKey.NESTED_DELEGATION_ENABLED,
-    false,
-  );
   const maxDepth = clampNestedDelegationDepth(
     state.get<number>(WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH, undefined),
   );
-  return { enabled, maxDepth };
+  return { maxDepth };
 }
 
 /**
