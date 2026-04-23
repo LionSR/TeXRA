@@ -539,7 +539,7 @@ export const profileViewStyles: CSSResult = css`
 
   .reasoning-level-select {
     flex-shrink: 0;
-    max-width: 160px;
+    width: 120px;
     font-size: var(--font-size-xs);
   }
 
