@@ -77,15 +77,6 @@ export function prKeyToString(k: PRKey): string {
   return `${k.owner}/${k.repo}#${k.pullNumber}`;
 }
 
-export function parsePRKey(key: string): PRKey {
-  const match = key.match(/^([^/]+)\/([^#]+)#(\d+)$/);
-  if (!match) throw new Error(`Invalid PR key: ${key}`);
-  return {
-    owner: match[1],
-    repo: match[2],
-    pullNumber: Number(match[3]),
-  };
-}
 
 function withSince(url: string, since: string | undefined): string {
   if (!since) return url;
