@@ -73,10 +73,7 @@ function deriveConfig(
   prompt: RunReflectionFlowInput['prompt'],
 ): {
   totalRounds: number;
-  outputExt: string;
 } {
-  const useScratchpad = setting.prefills.includes('<scratchpad>');
-
   const { userRequest } = prompt;
   let requestCount: number;
   if (Array.isArray(userRequest)) {
@@ -86,10 +83,7 @@ function deriveConfig(
   }
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
-  return {
-    totalRounds,
-    outputExt: useScratchpad ? 'xml' : setting.outputExt,
-  };
+  return { totalRounds };
 }
 
 export async function runReflectionFlow<C = unknown>(
@@ -145,7 +139,7 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { totalRounds, outputExt } = deriveConfig(setting, prompt);
+  const { totalRounds } = deriveConfig(setting, prompt);
 
   const getOutputFileLocation =
     input.getOutputFileLocation ??
@@ -159,7 +153,7 @@ export async function runReflectionFlow<C = unknown>(
           'runReflectionFlow requires a TaskRunFileService bound to an executionId for default output-path resolution.',
         );
       }
-      const fileName = getOutputFileName(outputExt, round);
+      const fileName = getOutputFileName(setting.outputExt, round);
       return fileService.createLocation(fileName) as AgentFileLocation;
     });
 
