@@ -36,6 +36,14 @@ export class GitHubRateLimitError extends Error {
   }
 }
 
+/** Thrown for HTTP statuses that won't recover on retry (404, 410, 422). */
+export class GitHubPermanentError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = 'GitHubPermanentError';
+  }
+}
+
 /**
  * GitHub error responses are `{ message, documentation_url, ... }` JSON
  * objects. Raw `String(obj)` would render as `[object Object]`; extract the
@@ -105,6 +113,14 @@ export async function ghGet<T>(
         }
       }
       throw new GitHubAuthError(
+        `GitHub returned ${status}: ${extractApiMessage(ax.response?.data, ax.message)}`,
+      );
+    }
+    // Permanent HTTP failures — retrying won't help; surface immediately so
+    // callers can halt rather than burning a slot for 24 h.
+    if (status === 404 || status === 410 || status === 422) {
+      throw new GitHubPermanentError(
+        status,
         `GitHub returned ${status}: ${extractApiMessage(ax.response?.data, ax.message)}`,
       );
     }

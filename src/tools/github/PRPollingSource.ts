@@ -28,6 +28,7 @@ import {
 } from './formatPREvent';
 import {
   GitHubAuthError,
+  GitHubPermanentError,
   GitHubRateLimitError,
   type ConditionalResponse,
   ghGet,
@@ -308,6 +309,20 @@ export class PRPollingSource {
               this.subscriptions.delete(key);
               this.notifyKeysChanged();
               bus.emit('githubTokenInvalid', { message: err.message });
+            } else if (err instanceof GitHubPermanentError) {
+              this.logger.warn(
+                `Permanent error for ${key} (HTTP ${err.status}); stopping subscription. ${err.message}`,
+              );
+              this.emit(
+                state,
+                formatSubscriptionError(
+                  state.slug,
+                  state.pr.pullNumber,
+                  err.message,
+                ),
+              );
+              this.subscriptions.delete(key);
+              this.notifyKeysChanged();
             } else if (err instanceof GitHubRateLimitError) {
               // Rate limiting is a transient condition; skip until the reset
               // time without touching consecutiveFailures so a rate-limit
