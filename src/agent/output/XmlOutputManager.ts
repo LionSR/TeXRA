@@ -5,6 +5,7 @@ import { XMLParser } from 'fast-xml-parser';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
+import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
@@ -109,7 +110,12 @@ export class XmlOutputManager {
     const safeSourceName = sourceName
       ? path.parse(path.basename(sourceName)).name
       : '';
-    const texStem = inputFileStem || safeSourceName || rawStem;
+    const stemCandidate = inputFileStem || safeSourceName || rawStem;
+    // Guard: don't write the extracted .tex to the same path as the raw output.
+    const texStem =
+      stemCandidate === WORKFLOW_OUTPUT_BASENAME
+        ? `${WORKFLOW_OUTPUT_BASENAME}_extracted`
+        : stemCandidate;
     const texRelativePath = outputDir
       ? path.join(outputDir, `${texStem}.tex`)
       : `${texStem}.tex`;
