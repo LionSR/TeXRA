@@ -315,7 +315,10 @@ export class FileList extends LitElement {
    */
   private getSourceDisplayPath(source: string | undefined): string {
     if (!source || source === 'output' || source === 'output.tex') return '';
-    const hasExt = /\.tex$/i.test(source);
+    // Treat a trailing all-alpha suffix as a real extension (.tex, .txt, .bib…).
+    // Suffixes containing digits (.v2, .r3) are version qualifiers, not
+    // extensions, so .tex is appended in those cases.
+    const hasExt = /\.[a-zA-Z]+$/.test(source);
     return hasExt ? source : `${source}.tex`;
   }
 
