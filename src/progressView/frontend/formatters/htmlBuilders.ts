@@ -175,10 +175,7 @@ export function buildFileListRender(files: FileListEntry[]): {
 
     const source = file.source ?? 'unknown';
     const showSource = source !== 'unknown';
-    const sourceDisplay = file.sourceDisplay ?? source;
-    const sourceText = file.internal
-      ? `${sourceDisplay}, internal`
-      : sourceDisplay;
+    const sourceText = file.sourceDisplay ?? source;
 
     // prettier-ignore
     return html`<li class="detail-item" title=${filePath}><i class=${`codicon ${icon}`}></i> <span class="file-link clickable-link" data-file=${filePath}>${fileName}</span>${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
