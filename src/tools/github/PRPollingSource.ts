@@ -290,6 +290,10 @@ export class PRPollingSource {
             state.consecutiveFailures = 0;
             state.detachDeadlineMs = undefined;
           } catch (err) {
+            // Capture time of failure (not tick start) so that backoff and
+            // deadline calculations are not shortened by the duration of
+            // pollOne(), which can take many seconds across multiple HTTP calls.
+            const failNow = Date.now();
             if (err instanceof GitHubAuthError) {
               this.logger.warn(
                 `Auth error for ${key}; stopping subscription. ${err.message}`,
@@ -327,14 +331,14 @@ export class PRPollingSource {
               // waiting on rate limits doesn't erode the 24 h failure window.
               const rateLimitEndsAt = err.resetAt * 1000;
               if (state.detachDeadlineMs !== undefined) {
-                state.detachDeadlineMs += Math.max(0, rateLimitEndsAt - now);
+                state.detachDeadlineMs += Math.max(0, rateLimitEndsAt - failNow);
               }
               state.skipPollUntilMs = rateLimitEndsAt;
               this.logger.warn(
                 `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
               );
             } else {
-              state.detachDeadlineMs ??= now + MAX_FAILURE_DURATION_MS;
+              state.detachDeadlineMs ??= failNow + MAX_FAILURE_DURATION_MS;
               state.consecutiveFailures += 1;
               const backoffMs = Math.min(
                 BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
@@ -344,8 +348,8 @@ export class PRPollingSource {
               // simultaneously (e.g. network outage), preventing thundering herd.
               const jitter = 0.8 + Math.random() * 0.4;
               const actualDelayMs = Math.round(backoffMs * jitter);
-              state.skipPollUntilMs = now + actualDelayMs;
-              if (now >= state.detachDeadlineMs) {
+              state.skipPollUntilMs = failNow + actualDelayMs;
+              if (failNow >= state.detachDeadlineMs) {
                 this.logger.warn(
                   `Poll failed for ${key} (failure #${state.consecutiveFailures}); ` +
                     `detach deadline reached, stopping subscription: ${String(err)}`,
