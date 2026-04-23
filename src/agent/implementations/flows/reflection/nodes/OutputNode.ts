@@ -68,15 +68,8 @@ export class OutputNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
-    const {
-      outputState,
-      xmlManager,
-      diffManager,
-      setting,
-      logger,
-      baseFiles,
-      shouldEnsureXmlStructure: shouldEnsureXml,
-    } = this.services;
+    const { outputState, xmlManager, diffManager, setting, logger, baseFiles } =
+      this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
 
     let mapping: RoundFileMapping | undefined;
@@ -85,17 +78,15 @@ export class OutputNode<C = unknown> extends Node<
     if (endTurn) {
       logger.debug(`Processing output for round ${currentRound}`);
 
-      if (shouldEnsureXml) {
-        await tryOperation(
-          'XML structure',
-          () =>
-            xmlManager.ensureCorrectXmlStructure(
-              outputLocation,
-              setting.documentTag,
-            ),
-          logger,
-        );
-      }
+      await tryOperation(
+        'XML structure',
+        () =>
+          xmlManager.ensureCorrectXmlStructure(
+            outputLocation,
+            setting.documentTag,
+          ),
+        logger,
+      );
 
       await tryOperation(
         'Output processing',
