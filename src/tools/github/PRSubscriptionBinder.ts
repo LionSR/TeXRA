@@ -98,6 +98,11 @@ export function bindPRSubscription(streamId: StreamTabId, pr: PRKey): boolean {
     perStream.set(streamId, bound);
   }
   if (bound.has(key)) return false;
+  // Set a sentinel before subscribe() so that listPRSubscriptionBindings()
+  // returns correct owner data if prSubscriptionsChanged fires synchronously
+  // inside subscribe() before the real disposable is available.
+  const sentinel: Disposable = { dispose: () => {} };
+  bound.set(key, sentinel);
   const disposable = prPollingSource.subscribe(key, (text) => {
     void sendFollowUp(streamId, text).then((result) => {
       if (result.status === 'sent' || result.status === 'queued') {
