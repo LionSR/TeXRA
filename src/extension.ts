@@ -55,7 +55,7 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
-import { invalidateToolAvailability } from '@tools/toolAvailability';
+import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
 import { getAuthStatus } from '@auth/authCommands';
 import { setGitHubTokenProvider, prPollingSource } from '@tools/github';
@@ -304,17 +304,17 @@ export async function activate(context: vscode.ExtensionContext) {
       // new value, then re-probe so any subscribed UI (Tools tab) and
       // the runtime cache pick up the change automatically.
       await refreshGitHubToken();
-      await invalidateToolAvailability();
+      await refreshToolAvailability();
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      void invalidateToolAvailability();
+      void refreshToolAvailability();
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
     // gates the GitHub PR subscription tool group.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void invalidateToolAvailability();
+      void refreshToolAvailability();
     }),
   );
   const disposeGitHubAuthListener = bus.on(

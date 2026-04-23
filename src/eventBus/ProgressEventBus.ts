@@ -157,7 +157,7 @@ export interface ProgressEventPayloads {
   /**
    * External tool availability was re-probed. Frontends (Tools tab) refresh
    * their dashboard from the updated cache. Emitted by
-   * {@link invalidateToolAvailability}.
+   * {@link refreshToolAvailability}.
    */
   toolAvailabilityChanged: undefined;
 

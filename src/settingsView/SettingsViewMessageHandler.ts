@@ -92,7 +92,7 @@ import {
 } from '@tools/approval';
 import {
   getLastCheckResults,
-  invalidateToolAvailability,
+  refreshToolAvailability,
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import {
@@ -557,7 +557,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (data) =>
         this.handleInstallToolExtension(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
-        invalidateToolAvailability(),
+        refreshToolAvailability(),
       [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: async (data) => {
         await setToolEnabled(data.toolId, data.enabled);
         refreshDisabledToolCache();

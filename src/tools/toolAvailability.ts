@@ -1,8 +1,10 @@
 /**
  * External tool availability checks with caching.
  *
- * Pure service — runs checks, manages cache, returns results.
- * Tool definitions (what to check + UI metadata) live in
+ * Runs `check` (main probe) and `detailCheck` (human-readable detail) in
+ * parallel, caches the results, and broadcasts `toolAvailabilityChanged`
+ * when inputs change so subscribed UIs refresh without re-probing. Tool
+ * definitions (what to check + UI metadata) live in
  * {@link @tools/externalToolDefs}.
  *
  * Used by:
@@ -26,6 +28,8 @@ export interface ExternalToolCheckResult {
   readonly tools: readonly RegisteredToolName[];
   readonly name: string;
   readonly status: 'available' | 'not-found' | 'unknown';
+  /** Human-readable status detail from the group's `detailCheck`, if any. */
+  readonly statusDetail?: string;
 }
 
 // ============================================================
@@ -58,30 +62,41 @@ export function getDisabledToolNames(): ReadonlySet<string> {
 
 /**
  * Run all external tool checks in parallel.
- * Always performs fresh checks and updates the availability cache.
+ * Always performs fresh `check` + `detailCheck` probes and updates the
+ * availability cache.
  *
  * Called by the tool dashboard (needs per-group results).
  * Also populates the cache read by `getUnavailableToolNamesCached()`.
  *
- * @returns Per-group results with `available` / `not-found` / `unknown` status.
+ * @returns Per-group results with `available` / `not-found` / `unknown`
+ *   status and an optional human-readable `statusDetail`.
  */
 export async function runExternalToolChecks(): Promise<
   ExternalToolCheckResult[]
 > {
   const results = await Promise.all(
     EXTERNAL_TOOL_DEFS.map(
-      async ({ id, tools, name, check }): Promise<ExternalToolCheckResult> => {
-        try {
-          const available = await check();
-          return {
-            id,
-            tools,
-            name,
-            status: available ? 'available' : 'not-found',
-          };
-        } catch {
-          return { id, tools, name, status: 'unknown' };
+      async ({
+        id,
+        tools,
+        name,
+        check,
+        detailCheck,
+      }): Promise<ExternalToolCheckResult> => {
+        const [available, statusDetail] = await Promise.all([
+          check().catch(() => null),
+          detailCheck?.().catch(() => undefined),
+        ]);
+        if (available === null) {
+          return { id, tools, name, status: 'unknown', statusDetail };
         }
+        return {
+          id,
+          tools,
+          name,
+          status: available ? 'available' : 'not-found',
+          statusDetail,
+        };
       },
     ),
   );
@@ -120,7 +135,7 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * git-repo status, extension install state) — mutators don't have to know
  * which UIs depend on the result.
  */
-export async function invalidateToolAvailability(): Promise<void> {
+export async function refreshToolAvailability(): Promise<void> {
   await runExternalToolChecks();
   bus.emit('toolAvailabilityChanged', undefined);
 }
