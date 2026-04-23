@@ -152,8 +152,13 @@ interface SubscriptionState {
     reviewComments?: string;
   };
   consecutiveFailures: number;
-  /** Epoch-ms of the first failure in the current run; undefined when healthy. */
-  firstFailureAt: number | undefined;
+  /**
+   * Epoch-ms at which the subscription will be detached if still failing.
+   * Set to `now + MAX_FAILURE_DURATION_MS` on the first transient failure and
+   * extended by the rate-limit duration on each rate-limit hit, so rate-limit
+   * wait time doesn't count toward the 24 h window. Cleared on success.
+   */
+  detachDeadlineMs: number | undefined;
   /** Epoch-ms until which this subscription skips polling (rate-limit or backoff). */
   skipPollUntilMs: number;
 }
@@ -218,7 +223,7 @@ export class PRPollingSource {
         etags: {},
         sinceCursors: {},
         consecutiveFailures: 0,
-        firstFailureAt: undefined,
+        detachDeadlineMs: undefined,
         skipPollUntilMs: 0,
       };
       this.subscriptions.set(key, state);
@@ -283,7 +288,7 @@ export class PRPollingSource {
           try {
             await this.pollOne(state);
             state.consecutiveFailures = 0;
-            state.firstFailureAt = undefined;
+            state.detachDeadlineMs = undefined;
           } catch (err) {
             if (err instanceof GitHubAuthError) {
               this.logger.warn(
@@ -317,17 +322,19 @@ export class PRPollingSource {
             } else if (err instanceof GitHubRateLimitError) {
               // Rate limiting is a transient condition; skip until the reset
               // time without touching consecutiveFailures so a rate-limit
-              // burst doesn't inflate the backoff exponent. Clear firstFailureAt
-              // so time spent waiting on rate limits doesn't count toward the
-              // 24 h continuous-failure window.
-              state.skipPollUntilMs = err.resetAt * 1000;
-              state.firstFailureAt = undefined;
+              // burst doesn't inflate the backoff exponent. Extend (not reset)
+              // the detach deadline by the rate-limit duration so time spent
+              // waiting on rate limits doesn't erode the 24 h failure window.
+              const rateLimitEndsAt = err.resetAt * 1000;
+              if (state.detachDeadlineMs !== undefined) {
+                state.detachDeadlineMs += rateLimitEndsAt - now;
+              }
+              state.skipPollUntilMs = rateLimitEndsAt;
               this.logger.warn(
                 `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
               );
             } else {
-              const now = Date.now();
-              state.firstFailureAt ??= now;
+              state.detachDeadlineMs ??= now + MAX_FAILURE_DURATION_MS;
               state.consecutiveFailures += 1;
               const backoffMs = Math.min(
                 BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
@@ -341,7 +348,7 @@ export class PRPollingSource {
                 `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
                   `retrying in ${backoffMs / 1000}s): ${String(err)}`,
               );
-              if (now - state.firstFailureAt >= MAX_FAILURE_DURATION_MS) {
+              if (now >= state.detachDeadlineMs) {
                 this.emit(
                   state,
                   formatSubscriptionError(
