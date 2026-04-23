@@ -82,6 +82,23 @@ export class OutputFileProcessor {
     }
   }
 
+  /**
+   * Derive a meaningful source name for a non-XML single output.
+   * When there is exactly one base file, use its filename so that
+   * FileLineageCalculator can find the workspace original (which powers
+   * the diff display and the "Compare with base" buttons). Falls back to
+   * the raw output basename when there are multiple base files.
+   */
+  private getSourceForSingleOutput(outputLocation: FileLocation): string {
+    if (this.ctx.baseFiles.length === 1) {
+      const base = this.ctx.baseFiles[0];
+      return path.basename(
+        base.kind !== 'external' ? base.relativePath : base.absolutePath,
+      );
+    }
+    return path.basename(outputLocation.absolutePath);
+  }
+
   private handleEmptyOutput(
     round: number,
     rawLocation: FileLocation,
@@ -107,7 +124,7 @@ export class OutputFileProcessor {
             currRound,
           )
         : {
-            source: path.basename(outputLocation.absolutePath),
+            source: this.getSourceForSingleOutput(outputLocation),
             round: currRound,
             location: rawLocation ?? outputLocation,
             lineage: null,
