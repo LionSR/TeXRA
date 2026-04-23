@@ -51,20 +51,42 @@ const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
 
+// Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
+// \x00 won't appear in legitimate terminal text and is not touched by strip-ansi.
+const ERASE_SENTINEL = '\x00';
+
 /** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
 function processTerminalText(text: string): string {
-  return stripAnsi(text)
+  // Replace ANSI erase-line escapes (\x1b[K, \x1b[0K, \x1b[2K, …) with a sentinel
+  // before stripping all ANSI so the overwrite loop can honour them: an erase clears
+  // the line from that column onward instead of preserving the stale tail characters.
+  const preprocessed = text.replace(/\x1b\[\d*K/g, ERASE_SENTINEL);
+  return stripAnsi(preprocessed)
     .replace(/\r\n/g, '\n')
     .split('\n')
     .map((line) => {
       const segs = line.split('\r');
       let current = segs[0]!;
+      // Erase sentinel in the initial (pre-\r) content clears from that column to EOL.
+      const firstErase = current.indexOf(ERASE_SENTINEL);
+      if (firstErase >= 0) current = current.slice(0, firstErase);
+
       for (let i = 1; i < segs.length; i++) {
         const seg = segs[i]!;
-        // \r moves cursor to column 0 without clearing; shorter writes preserve the tail
-        current = seg.length < current.length ? seg + current.slice(seg.length) : seg;
+        const eraseAt = seg.indexOf(ERASE_SENTINEL);
+        if (eraseAt >= 0) {
+          // Overlay prefix up to the erase point, then clear the line from there.
+          const pre = seg.slice(0, eraseAt);
+          const post = seg.slice(eraseAt + 1).replace(/\x00/g, '');
+          const overlaid =
+            pre.length < current.length ? pre + current.slice(pre.length) : pre;
+          current = overlaid.slice(0, pre.length) + post;
+        } else {
+          // \r moves cursor to column 0 without clearing; shorter writes preserve the tail
+          current = seg.length < current.length ? seg + current.slice(seg.length) : seg;
+        }
       }
-      return current;
+      return current.replace(/\x00/g, '');
     })
     .join('\n');
 }
