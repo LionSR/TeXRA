@@ -427,13 +427,13 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .proposal-model-dropdown {
-    min-width: 8rem;
-    max-width: 12rem;
+    min-width: 6rem;
+    max-width: 9rem;
   }
 
   .proposal-agent-dropdown {
-    min-width: 7rem;
-    max-width: 11rem;
+    min-width: 5rem;
+    max-width: 8rem;
   }
 
   .workflow-proposal__instruction {
