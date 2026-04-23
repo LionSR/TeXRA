@@ -60,16 +60,16 @@ function processTerminalText(text: string): string {
   // Replace ANSI erase-line escapes (\x1b[K, \x1b[0K, \x1b[2K, …) with a sentinel
   // before stripping all ANSI so the overwrite loop can honour them: an erase clears
   // the line from that column onward instead of preserving the stale tail characters.
-  const preprocessed = text.replace(/\x1b\[\d*K/g, ERASE_SENTINEL);
+  // eslint-disable-next-line no-control-regex
+  const preprocessed = text.replace(/\[\d*K/g, ERASE_SENTINEL);
   return stripAnsi(preprocessed)
     .replace(/\r\n/g, '\n')
     .split('\n')
     .map((line) => {
       const segs = line.split('\r');
-      let current = segs[0]!;
-      // Erase sentinel in the initial (pre-\r) content clears from that column to EOL.
-      const firstErase = current.indexOf(ERASE_SENTINEL);
-      if (firstErase >= 0) current = current.slice(0, firstErase);
+      // On a fresh line (no preceding \r), \x1b[K has nothing to clear; text after
+      // the erase point is still written at the cursor, so just strip the markers.
+      let current = segs[0]!.split(ERASE_SENTINEL).join('');
 
       for (let i = 1; i < segs.length; i++) {
         const seg = segs[i]!;
@@ -77,7 +77,7 @@ function processTerminalText(text: string): string {
         if (eraseAt >= 0) {
           // Overlay prefix up to the erase point, then clear the line from there.
           const pre = seg.slice(0, eraseAt);
-          const post = seg.slice(eraseAt + 1).replace(/\x00/g, '');
+          const post = seg.slice(eraseAt + 1).split(ERASE_SENTINEL).join('');
           const overlaid =
             pre.length < current.length ? pre + current.slice(pre.length) : pre;
           current = overlaid.slice(0, pre.length) + post;
@@ -86,7 +86,7 @@ function processTerminalText(text: string): string {
           current = seg.length < current.length ? seg + current.slice(seg.length) : seg;
         }
       }
-      return current.replace(/\x00/g, '');
+      return current.split(ERASE_SENTINEL).join('');
     })
     .join('\n');
 }
