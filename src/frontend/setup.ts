@@ -9,11 +9,7 @@ import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import {
-  DEFAULT_MODELS,
-  FORCE_DISABLED_MODELS,
-  MODEL_LIST_VERSION,
-} from '@model/computeModelOptions';
+import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/computeModelOptions';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { GlobalStorageFS } from '@utils/files';
@@ -237,8 +233,9 @@ export async function refreshModelListIfNeeded(): Promise<void> {
 }
 
 /**
- * Merges new default models into the user's enabled list and strips any models
- * listed in FORCE_DISABLED_MODELS.
+ * Reconciles the user's enabled-models list with the current defaults: adds
+ * any new DEFAULT_MODELS entries and applies per-version one-off removals
+ * (see inline comments for rationale).
  */
 async function mergeNewModelsIfCustomized(): Promise<void> {
   const currentModels = globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS);
@@ -250,35 +247,29 @@ async function mergeNewModelsIfCustomized(): Promise<void> {
     return;
   }
 
-  const forceDisabled = new Set(FORCE_DISABLED_MODELS);
-  const kept = currentModels.filter((model) => !forceDisabled.has(model));
-  const removed = currentModels.filter((model) => forceDisabled.has(model));
+  // gpt54pro was a default for 0.36.5–0.36.x, then removed as duplicative with
+  // gpt54. Strip it once on upgrade so it is off by default for all users; they
+  // can still re-enable it manually in the Models settings tab.
+  const stripped = currentModels.filter((model) => model !== 'gpt54pro');
 
   const modelsToAdd = DEFAULT_MODELS.filter(
-    (model) => !kept.includes(model),
+    (model) => !stripped.includes(model),
   );
 
-  if (modelsToAdd.length === 0 && removed.length === 0) {
+  if (modelsToAdd.length === 0 && stripped.length === currentModels.length) {
     return;
   }
 
   await globalSM.update(GlobalStateKey.ENABLED_MODELS, [
-    ...kept,
+    ...stripped,
     ...modelsToAdd,
   ]);
-
-  if (modelsToAdd.length > 0) {
-    logger.info(
-      'extension',
-      `Merged ${modelsToAdd.length} new models into user's list: ${modelsToAdd.join(', ')}`,
-    );
-  }
-  if (removed.length > 0) {
-    logger.info(
-      'extension',
-      `Removed ${removed.length} force-disabled models from user's list: ${removed.join(', ')}`,
-    );
-  }
+  logger.info(
+    'extension',
+    `Refreshed enabled models: added [${modelsToAdd.join(', ')}], removed [${currentModels
+      .filter((m) => !stripped.includes(m))
+      .join(', ')}]`,
+  );
 }
 
 /** Default options for global settings that should only be set if not already configured */

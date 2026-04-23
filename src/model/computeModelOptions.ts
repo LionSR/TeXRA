@@ -37,13 +37,6 @@ export const DEFAULT_MODELS = [
 ];
 
 /**
- * Models that must be off by default for all users. Any entry here is stripped
- * from existing users' enabled-model lists when MODEL_LIST_VERSION advances.
- * Users can still re-enable these manually in settings.
- */
-export const FORCE_DISABLED_MODELS = ['gpt54pro'];
-
-/**
  * Version number for the default model list.
  * Increment this when adding or removing models to force existing users
  * to get the updated defaults. A simple integer avoids hash-collision risks
