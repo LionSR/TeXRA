@@ -347,11 +347,13 @@ export class TaskGroupList extends LitElement {
     } else {
       // No newline: keep raw bytes so split ANSI sequences and cross-chunk \r
       // overwrites are handled correctly at render time.
-      // Only apply a 64 KiB cap when the tail contains \r (progress-bar rewrites)
-      // to avoid silently dropping legitimate long-line output (e.g. JSON/base64).
+      // Only cap when there are confirmed standalone \r rewrites, i.e. \r is
+      // present AND the buffer does not end with \r (a trailing \r might be the
+      // first half of a \r\n split across chunks, so we defer the cap to avoid
+      // permanently dropping the preceding content before the \n arrives).
       const MAX_TAIL = 65536;
       this.cachedRawTail =
-        combined.includes('\r') && combined.length > MAX_TAIL
+        combined.includes('\r') && !combined.endsWith('\r') && combined.length > MAX_TAIL
           ? combined.slice(combined.length - MAX_TAIL)
           : combined;
     }
