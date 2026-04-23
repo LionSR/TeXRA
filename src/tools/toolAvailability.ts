@@ -1,8 +1,10 @@
 /**
  * External tool availability checks with caching.
  *
- * Pure service — runs checks, manages cache, returns results.
- * Tool definitions (what to check + UI metadata) live in
+ * Runs `check` (main probe) and `detailCheck` (human-readable detail) in
+ * parallel, caches the results, and broadcasts `toolAvailabilityChanged`
+ * when inputs change so subscribed UIs refresh without re-probing. Tool
+ * definitions (what to check + UI metadata) live in
  * {@link @tools/externalToolDefs}.
  *
  * Used by:
@@ -11,6 +13,7 @@
  */
 
 // Local imports
+import { bus } from '@eventBus/ProgressEventBus';
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
@@ -25,6 +28,8 @@ export interface ExternalToolCheckResult {
   readonly tools: readonly RegisteredToolName[];
   readonly name: string;
   readonly status: 'available' | 'not-found' | 'unknown';
+  /** Human-readable status detail from the group's `detailCheck`, if any. */
+  readonly statusDetail?: string;
 }
 
 // ============================================================
@@ -57,38 +62,77 @@ export function getDisabledToolNames(): ReadonlySet<string> {
 
 /**
  * Run all external tool checks in parallel.
- * Always performs fresh checks and updates the availability cache.
+ * Always returns fresh `check` + `detailCheck` probes and updates the
+ * availability cache.
  *
- * Called by the tool dashboard (needs per-group results).
- * Also populates the cache read by `getUnavailableToolNamesCached()`.
+ * Concurrent calls are coalesced: while a probe is in flight, additional
+ * callers share the same Promise and receive its results. If any caller
+ * arrives AFTER the active probe started reading inputs, a follow-up probe
+ * is scheduled so the cache ultimately reflects the most recent state and
+ * a stale probe can't overwrite a fresh one by finishing last.
  *
- * @returns Per-group results with `available` / `not-found` / `unknown` status.
+ * Called by the tool dashboard (needs per-group results) and
+ * {@link refreshToolAvailability}. Also populates the cache read by
+ * `getUnavailableToolNamesCached()`.
+ *
+ * @returns Per-group results with `available` / `not-found` / `unknown`
+ *   status and an optional human-readable `statusDetail`.
  */
-export async function runExternalToolChecks(): Promise<
-  ExternalToolCheckResult[]
-> {
-  const results = await Promise.all(
+let inflightProbe: Promise<ExternalToolCheckResult[]> | null = null;
+let pendingRerun = false;
+export function runExternalToolChecks(): Promise<ExternalToolCheckResult[]> {
+  if (inflightProbe) {
+    pendingRerun = true;
+    return inflightProbe;
+  }
+  inflightProbe = (async () => {
+    let results: ExternalToolCheckResult[] = [];
+    try {
+      do {
+        pendingRerun = false;
+        results = await runProbes();
+        cached = buildUnavailableSet(results);
+        lastResults = results;
+      } while (pendingRerun);
+    } finally {
+      inflightProbe = null;
+    }
+    return results;
+  })();
+  return inflightProbe;
+}
+
+async function runProbes(): Promise<ExternalToolCheckResult[]> {
+  return Promise.all(
     EXTERNAL_TOOL_DEFS.map(
-      async ({ id, tools, name, check }): Promise<ExternalToolCheckResult> => {
+      async ({
+        id,
+        tools,
+        name,
+        check,
+        detailCheck,
+      }): Promise<ExternalToolCheckResult> => {
+        // Run check then detailCheck sequentially — some groups (Codex,
+        // Zotero, GitHub PR) share probe work between the two, so running
+        // them in parallel would duplicate that work.
+        let available: boolean;
         try {
-          const available = await check();
-          return {
-            id,
-            tools,
-            name,
-            status: available ? 'available' : 'not-found',
-          };
+          available = await check();
         } catch {
-          return { id, tools, name, status: 'unknown' };
+          const statusDetail = await detailCheck?.().catch(() => undefined);
+          return { id, tools, name, status: 'unknown', statusDetail };
         }
+        const statusDetail = await detailCheck?.().catch(() => undefined);
+        return {
+          id,
+          tools,
+          name,
+          status: available ? 'available' : 'not-found',
+          statusDetail,
+        };
       },
     ),
   );
-
-  cached = buildUnavailableSet(results);
-  lastResults = results;
-
-  return results;
 }
 
 /** Build the set of unavailable tool names from external check results only. */
@@ -110,6 +154,22 @@ function buildUnavailableSet(
  */
 export function getLastCheckResults(): ExternalToolCheckResult[] | null {
   return lastResults;
+}
+
+/**
+ * Re-probe external tools and broadcast `toolAvailabilityChanged` so any
+ * subscribed UI (Tools tab) and runtime caches refresh. Call this whenever
+ * an input to the availability checks changes (GitHub token, workspace
+ * git-repo status, extension install state) — mutators don't have to know
+ * which UIs depend on the result.
+ *
+ * Coalescing and follow-up-probe scheduling happen inside
+ * `runExternalToolChecks`, so the dashboard-load probe and a refresh-triggered
+ * probe can't race.
+ */
+export async function refreshToolAvailability(): Promise<void> {
+  await runExternalToolChecks();
+  bus.emit('toolAvailabilityChanged', undefined);
 }
 
 /**
