@@ -343,7 +343,8 @@ export class PRPollingSource {
               // Jitter ±20% to spread retries when many subscriptions fail
               // simultaneously (e.g. network outage), preventing thundering herd.
               const jitter = 0.8 + Math.random() * 0.4;
-              state.skipPollUntilMs = now + backoffMs * jitter;
+              const actualDelayMs = Math.round(backoffMs * jitter);
+              state.skipPollUntilMs = now + actualDelayMs;
               if (now >= state.detachDeadlineMs) {
                 this.logger.warn(
                   `Poll failed for ${key} (failure #${state.consecutiveFailures}); ` +
@@ -362,7 +363,7 @@ export class PRPollingSource {
               } else {
                 this.logger.warn(
                   `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
-                    `retrying in ${Math.round(backoffMs / 1000)}s): ${String(err)}`,
+                    `retrying in ${Math.round(actualDelayMs / 1000)}s): ${String(err)}`,
                 );
               }
             }
