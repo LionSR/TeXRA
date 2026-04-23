@@ -50,10 +50,11 @@ const MAX_CONCURRENT_SUBSCRIPTIONS = 10;
 const COALESCE_THRESHOLD = 3;
 // Exponential backoff on transient poll failures. After each failure the
 // subscription sleeps for min(BASE * 2^(n-1), MAX) before retrying, so the
-// schedule is 1 min → 2 → 4 → 8 → 16 → 32 → 60 min (cap). The subscription
-// is never torn down due to transient errors; it keeps retrying indefinitely.
+// schedule is 1 min → 2 → 4 → 8 → 16 → 32 → 60 min (cap). After 24 h of
+// continuous failure the subscription is detached.
 const BACKOFF_BASE_MS = 60_000;
 const BACKOFF_MAX_MS = 3_600_000;
+const MAX_FAILURE_DURATION_MS = 24 * 3_600_000;
 // Per-resource id history is trimmed to this many entries so long-running
 // subscriptions don't grow the state map unboundedly.
 const MAX_SEEN_IDS = 1000;
@@ -159,7 +160,9 @@ interface SubscriptionState {
     reviewComments?: string;
   };
   consecutiveFailures: number;
-  /** Epoch-ms until which this subscription skips polling (rate-limit backoff). */
+  /** Epoch-ms of the first failure in the current run; undefined when healthy. */
+  firstFailureAt: number | undefined;
+  /** Epoch-ms until which this subscription skips polling (rate-limit or backoff). */
   skipPollUntilMs: number;
 }
 
@@ -223,6 +226,7 @@ export class PRPollingSource {
         etags: {},
         sinceCursors: {},
         consecutiveFailures: 0,
+        firstFailureAt: undefined,
         skipPollUntilMs: 0,
       };
       this.subscriptions.set(key, state);
@@ -287,6 +291,7 @@ export class PRPollingSource {
           try {
             await this.pollOne(state);
             state.consecutiveFailures = 0;
+            state.firstFailureAt = undefined;
           } catch (err) {
             if (err instanceof GitHubAuthError) {
               this.logger.warn(
@@ -312,16 +317,30 @@ export class PRPollingSource {
                 `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
               );
             } else {
+              const now = Date.now();
+              state.firstFailureAt ??= now;
               state.consecutiveFailures += 1;
               const backoffMs = Math.min(
                 BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
                 BACKOFF_MAX_MS,
               );
-              state.skipPollUntilMs = Date.now() + backoffMs;
+              state.skipPollUntilMs = now + backoffMs;
               this.logger.warn(
                 `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
                   `retrying in ${backoffMs / 1000}s): ${String(err)}`,
               );
+              if (now - state.firstFailureAt >= MAX_FAILURE_DURATION_MS) {
+                this.emit(
+                  state,
+                  formatSubscriptionError(
+                    state.slug,
+                    state.pr.pullNumber,
+                    `unreachable for over 24 h; detaching`,
+                  ),
+                );
+                this.subscriptions.delete(key);
+                this.notifyKeysChanged();
+              }
             }
           }
         }),
