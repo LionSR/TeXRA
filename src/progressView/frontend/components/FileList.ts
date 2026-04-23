@@ -315,7 +315,7 @@ export class FileList extends LitElement {
    */
   private getSourceDisplayPath(source: string | undefined): string {
     if (!source || source === 'output' || source === 'output.tex') return '';
-    const hasExt = source.includes('.');
+    const hasExt = /\.[^/\\]+$/.test(source);
     return hasExt ? source : `${source}.tex`;
   }
 

@@ -418,7 +418,12 @@ async function scanRunDirForOutputs(
         // than the fixed "output.tex" stem, so filtering by basename would
         // silently drop them.  Skip non-LaTeX files (.xml raw outputs, .log
         // compile artefacts, etc.) by extension only.
-        if (parsed.ext !== '.tex') {
+        if (
+          parsed.ext !== '.tex' ||
+          // Exclude latexdiff artifacts written to round dirs by LatexDiffManager
+          // (e.g. "foo_diff.tex", "foo_diffr1r0.tex").
+          /_diff(r\d+r\d+)?$/.test(parsed.name)
+        ) {
           continue;
         }
 
