@@ -18,10 +18,14 @@ import {
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
 import {
+  WORKFLOW_OUTPUT_BASENAME,
   legacyWorkflowOutputRoundRegex,
+  midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,
-  workflowOutputTexRegex,
 } from '@agent/output/workflowOutputLayout';
+import { listExecutions } from '@agent/storage';
+import { getStreamTabId } from '@logger/streamUtils';
+import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,
@@ -31,13 +35,17 @@ import {
 } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
-import type { OutputFileInfo } from '@shared/schemas';
+import { ExecutionIdSchema } from '@shared/schemas';
+import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
   TaskRunFileService,
+  createRunStorageLocation,
   flexibleFS,
+  getComparablePath,
   pathToLocation,
+  resolveRunDir,
   type FileLocation,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
@@ -356,6 +364,149 @@ interface DiffOperation {
   toRound?: number;
 }
 
+/**
+ * Read `executions/{runId}/r{round}/output.*` directly from disk and build
+ * `OutputFileInfo[]` per round. Used as a recovery fallback when the caller
+ * supplies a `runId` but stream-tab metadata is missing or stale — in that
+ * case the plain workspace scan would return nothing because the new layout
+ * lives inside run storage.
+ *
+ * Lineage `original` is set to the configured `inputFile` so latexdiff has
+ * a base to compare against.
+ */
+async function scanRunDirForOutputs(
+  executionId: ExecutionId,
+  inputFile: string,
+): Promise<Map<number, OutputFileInfo[]> | null> {
+  try {
+    const runDirAbsolute = await resolveRunDir(executionId);
+    if (!runDirAbsolute) return null;
+
+    const dirEntries = await vscode.workspace.fs.readDirectory(
+      vscode.Uri.file(runDirAbsolute),
+    );
+
+    const baseLocation = pathToLocation(
+      path.isAbsolute(inputFile)
+        ? inputFile
+        : path.join(WorkspaceFS.getPath() ?? '', inputFile),
+    );
+
+    const rounds = new Map<number, OutputFileInfo[]>();
+
+    for (const [entryName, fileType] of dirEntries) {
+      if (fileType !== vscode.FileType.Directory) continue;
+      const round = parseWorkflowOutputRoundDir(entryName);
+      if (round == null) continue;
+
+      const roundDirAbsolute = path.join(runDirAbsolute, entryName);
+      let roundEntries: [string, vscode.FileType][];
+      try {
+        roundEntries = await vscode.workspace.fs.readDirectory(
+          vscode.Uri.file(roundDirAbsolute),
+        );
+      } catch {
+        continue;
+      }
+
+      const outputs: OutputFileInfo[] = [];
+      for (const [fileName, nestedType] of roundEntries) {
+        if (nestedType !== vscode.FileType.File) continue;
+        const parsed = path.parse(fileName);
+        // Only the canonical round output `output.tex` is a valid latexdiff
+        // target — scratchpad artifacts like `output.xml` and multi-document
+        // extracted files (which carry their own source-derived names) must
+        // not be fed into latexdiff via this fallback.
+        if (parsed.name !== WORKFLOW_OUTPUT_BASENAME || parsed.ext !== '.tex') {
+          continue;
+        }
+
+        const relativePath = path.join(entryName, fileName);
+        const location = createRunStorageLocation(
+          path.join(runDirAbsolute, relativePath),
+          relativePath,
+          executionId,
+        );
+        outputs.push({
+          source: inputFile,
+          round,
+          location,
+          lineage: {
+            original: baseLocation,
+            diffBase: null,
+            diffFile: null,
+          },
+          diff: null,
+        });
+      }
+
+      if (outputs.length > 0) rounds.set(round, outputs);
+    }
+
+    return rounds.size > 0
+      ? new Map([...rounds.entries()].sort((a, b) => a[0] - b[0]))
+      : null;
+  } catch (error) {
+    logger.debug(
+      CHANNEL,
+      `RunDir scan for ${executionId} failed: ${String(error)}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * When the caller didn't supply `outputsByRound`, look up the most recent
+ * execution whose `agent + model + inputFile` match the request and pull
+ * its persisted `OutputFileInfo[]` from the stream-tab store. Returns null
+ * when no matching execution exists.
+ */
+async function discoverLatestExecutionOutputs(query: {
+  agent: string;
+  model: string;
+  inputFile: string;
+}): Promise<{
+  executionId: ExecutionId;
+  rounds: Map<number, OutputFileInfo[]>;
+} | null> {
+  try {
+    const executions = await listExecutions();
+    // Normalize both sides so trivial path-format differences (duplicate
+    // separators, `./`, mixed forward/backslash) don't silently miss a
+    // matching execution.
+    const normalizedInput = path.normalize(query.inputFile);
+
+    const candidates = executions
+      .filter((entry) => {
+        if (entry.agent !== query.agent || entry.model !== query.model) {
+          return false;
+        }
+        const entryInput = entry.agentConfig?.inputFile;
+        return (
+          typeof entryInput === 'string' &&
+          path.normalize(entryInput) === normalizedInput
+        );
+      })
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+    for (const candidate of candidates) {
+      const streamId = getStreamTabId(candidate.agent, candidate.model, {
+        executionId: candidate.id,
+      });
+      const rounds = await getStreamTabStore(streamId).readOutputFiles();
+      if (rounds && rounds.size > 0) {
+        return { executionId: candidate.id, rounds };
+      }
+    }
+  } catch (error) {
+    logger.debug(
+      CHANNEL,
+      `Metadata-driven latexdiff discovery failed: ${String(error)}`,
+    );
+  }
+  return null;
+}
+
 async function handleRunLatexdiff(
   config: RunLatexdiffCommandConfig,
 ): Promise<void> {
@@ -417,7 +568,50 @@ async function handleRunLatexdiff(
       }
     }
 
-    const fileService = new TaskRunFileService(runId);
+    let discoveredExecutionId = runId;
+
+    // When the caller specifies a runId (progress-toolbar invocations do),
+    // scope output discovery to that execution first. Otherwise metadata
+    // auto-discovery can return a different, newer run with the same
+    // agent/model/inputFile — silently diffing against the wrong outputs.
+    if (!outputsByRound && runId) {
+      const parsedRunId = ExecutionIdSchema.safeParse(runId);
+      if (parsedRunId.success) {
+        const scanned = await scanRunDirForOutputs(parsedRunId.data, inputFile);
+        if (scanned) {
+          outputsByRound = scanned;
+          discoveredExecutionId = parsedRunId.data;
+          logger.debug(
+            CHANNEL,
+            `Using run-dir scan outputs from execution ${parsedRunId.data}`,
+          );
+        }
+      }
+    }
+
+    // No runId given: fall back to searching executions by
+    // agent/model/inputFile and pulling their persisted stream-tab
+    // metadata. When the caller pinned a runId but the run-dir scan
+    // turned up nothing, DO NOT drop to latest-matching auto-discovery:
+    // that would silently diff against a different (usually newer)
+    // execution with the same agent/model/input.
+    if (!outputsByRound && !runId) {
+      const discovered = await discoverLatestExecutionOutputs({
+        agent,
+        model,
+        inputFile,
+      });
+      if (discovered) {
+        outputsByRound = discovered.rounds;
+        discoveredExecutionId = discovered.executionId;
+        logger.debug(
+          CHANNEL,
+          `Using metadata outputs from execution ${discovered.executionId}`,
+        );
+      }
+    }
+
+    const fileService = new TaskRunFileService(discoveredExecutionId);
 
     const outcome = await vscode.window.withProgress(
       {
@@ -577,12 +771,7 @@ async function runLatexdiffFromMetadata(params: {
   const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
 
   const getFileLabel = (info: OutputFileInfo): string =>
-    info.source ??
-    path.basename(
-      info.location.kind === 'external'
-        ? info.location.absolutePath
-        : info.location.relativePath,
-    );
+    info.source ?? path.basename(getComparablePath(info.location));
 
   const immediateResults: DiffRunResult[] = [];
   const operations: DiffOperation[] = [];
@@ -614,10 +803,7 @@ async function runLatexdiffFromMetadata(params: {
         round,
       });
 
-      const key =
-        info.location.kind === 'external'
-          ? info.location.absolutePath
-          : info.location.relativePath;
+      const key = getComparablePath(info.location);
       if (!groupedByRelative.has(key)) {
         groupedByRelative.set(key, []);
       }
@@ -723,41 +909,45 @@ async function runLatexdiffViaWorkspaceScan(params: {
       roundOutputsMap.set(round.data, path.join(outputDirPath, fileName));
     }
 
-    // New layout: files sit under `<outputDirPath>/r{round}/` as
-    // `<base>_<cleanAgent>_<model>.tex`.
-    const newLayoutFileName = workflowOutputTexRegex(
-      baseInputName,
+    // Mid-era layout: outputs under `r{round}/<base>_<cleanAgent>_<model>.tex`.
+    // Some upgraded workspaces may still hold these files. Only look in
+    // known `r{round}/` subdirectories so we don't descend the whole tree.
+    const midEraFilename = `${midEraWorkflowOutputStem({
+      base: baseInputName,
       agent,
       model,
-    );
-    for (const [subName, subType] of dirEntries) {
-      if (subType !== vscode.FileType.Directory) continue;
-      const roundIdx = parseWorkflowOutputRoundDir(subName);
-      if (roundIdx === null) continue;
+    })}.tex`;
+    for (const [entryName, entryType] of dirEntries) {
+      if (entryType !== vscode.FileType.Directory) continue;
+      const round = parseWorkflowOutputRoundDir(entryName);
+      if (round == null) continue;
+      if (roundOutputsMap.has(round)) continue;
 
-      const roundDirAbs = path.join(absoluteDir, subName);
+      const roundAbsoluteDir = path.join(absoluteDir, entryName);
       let roundEntries: [string, vscode.FileType][];
       try {
         roundEntries = await vscode.workspace.fs.readDirectory(
-          vscode.Uri.file(roundDirAbs),
+          vscode.Uri.file(roundAbsoluteDir),
         );
       } catch {
         continue;
       }
-      for (const [fileName, fileType] of roundEntries) {
-        if (
-          fileType !== vscode.FileType.File ||
-          fileName.includes('_diff') ||
-          !newLayoutFileName.test(fileName)
-        ) {
-          continue;
-        }
-        roundOutputsMap.set(
-          roundIdx,
-          path.join(outputDirPath, subName, fileName),
-        );
-      }
+      const match = roundEntries.find(
+        ([fileName, nestedType]) =>
+          nestedType === vscode.FileType.File && fileName === midEraFilename,
+      );
+      if (!match) continue;
+      roundOutputsMap.set(
+        round,
+        path.join(outputDirPath, entryName, midEraFilename),
+      );
     }
+
+    // New-layout workflow outputs live inside task-run storage
+    // (`executions/{id}/r{round}/output.tex`), not in the workspace. That
+    // path is driven by execution metadata (`OutputFileInfo.outputsByRound`)
+    // via `runLatexdiffFromMetadata`; the workspace scan here only covers
+    // pre-refactor files.
 
     if (roundOutputsMap.size > 0) {
       inputToOutputsMap.set(candidateInput, roundOutputsMap);

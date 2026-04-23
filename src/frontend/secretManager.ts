@@ -103,6 +103,19 @@ export class SecretManager {
     return key !== undefined;
   }
 
+  /**
+   * Like `apiKeyExists` but rejects empty / whitespace-only values. A
+   * stale `PROVIDER_API_KEY=""` env var is "present" but not usable at
+   * launch — every runtime auth path falls over on a blank key. Callers
+   * that gate on "can this credential actually authenticate?" (the
+   * setup flow, per-provider probes, preflight checks) must use this
+   * helper rather than the looser `apiKeyExists`.
+   */
+  public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
+    const key = await this.lookupApiKey(provider);
+    return typeof key === 'string' && key.trim().length > 0;
+  }
+
   public static async getApiProviderQuickPickItems(): Promise<
     ApiProviderQuickPickItem[]
   > {

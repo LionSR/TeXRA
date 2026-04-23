@@ -13,15 +13,15 @@ description: One-line description.
 
 settings:
   agentCategory: workflow
-  isRewrite: true            # true = editing existing docs, false = creating new
-  rounds: 2                  # 1 or 2 (default 2)
-  temperature: 0.1           # 0.1 for editing, 0.5-0.8 for creative tasks
-  outputExt: tex             # MUST be "tex" — TeXRA is a LaTeX tool
+  isRewrite: true # true = editing existing docs, false = creating new
+  rounds: 2 # 1 or 2 (default 2)
+  temperature: 0.1 # 0.1 for editing, 0.5-0.8 for creative tasks
+  outputExt: tex # MUST be "tex" — TeXRA is a LaTeX tool
   documentTag: latex_document
-  endTag: "</latex_document>"
-  prefills:                  # MUST have exactly `rounds` entries
-    - "<scratchpad>"
-    - "<scratchpad>"
+  endTag: '</latex_document>'
+  prefills: # MUST have exactly `rounds` entries
+    - '<scratchpad>'
+    - '<scratchpad>'
 
 prompts:
   systemPrompt: |
@@ -36,7 +36,7 @@ prompts:
     </document>
     </documents>
     <instruction>{{ INSTRUCTION }}</instruction>
-  userRequest:               # MUST be an array with exactly `rounds` entries
+  userRequest: # MUST be an array with exactly `rounds` entries
     - |
       [Round 1: plan in <scratchpad>, then emit output wrapped in <latex_document>]
     - |
@@ -109,11 +109,11 @@ description: Improves writing quality and clarity based on your instructions.
 settings:
   agentCategory: workflow
   documentTag: latex_document
-  endTag: "</latex_document>"
+  endTag: '</latex_document>'
   outputExt: tex
   prefills:
-    - "<scratchpad>"
-    - "<scratchpad>"
+    - '<scratchpad>'
+    - '<scratchpad>'
 
 prompts:
   systemPrompt: |

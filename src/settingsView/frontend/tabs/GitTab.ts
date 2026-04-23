@@ -240,9 +240,8 @@ export class GitTab extends LitElement {
         <div class="setting-block">
           <p class="section-title">GitHub personal access token</p>
           <p class="setting-description">
-            Used by the <code>subscribe_pr_activity</code> tool to poll GitHub
-            for pull request events (comments, reviews, failed CI). Stored in VS
-            Code SecretStorage — never written to <code>settings.json</code>.
+            Used to poll GitHub for pull request events (comments, reviews,
+            failed CI) when you subscribe to a PR.
           </p>
           <div class="token-row">
             Status: ${this.renderTokenStatusBadge()}
@@ -269,8 +268,8 @@ export class GitTab extends LitElement {
             <strong>How to get a token:</strong>
             <ol>
               <li>
-                Click <em>Create on GitHub…</em> (opens the token-creation page
-                in your browser, pre-filled for TeXRA PR subscription use).
+                Click <em>Create on GitHub…</em> to open the token-creation
+                page in your browser.
               </li>
               <li>
                 Choose scopes: <code>repo</code> for private repos or
@@ -301,9 +300,8 @@ export class GitTab extends LitElement {
               <div class="setting-block">
                 <p class="section-title">Active PR subscriptions</p>
                 <p class="setting-description">
-                  Each subscription polls GitHub every 30s. Click
-                  <em>Stop</em> to cancel; the current agent task will keep
-                  running but no new PR events will arrive.
+                  Click <em>Stop</em> to cancel a subscription. The rest of
+                  your work continues; only updates for that PR stop arriving.
                 </p>
                 <ul class="subscriptions-list">
                   ${this.prSubscriptions.map(

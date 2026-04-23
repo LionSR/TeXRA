@@ -35,11 +35,13 @@ import {
   select,
   combine,
 } from '@shared/signals';
+import { isProcessAgent } from '@shared/streams/agentKind';
 import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
 import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view frontend
 import { webviewStorage } from './webviewStorage';
+import { setsEqual } from './utils';
 import {
   createInitialState,
   EMPTY_STREAM_LOGS,
@@ -120,13 +122,7 @@ import type { PermissionState } from './components/PermissionCard';
 // Signal.Computed evaluations that run on every state change.
 // ---------------------------------------------------------------------------
 
-function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
-  if (a.size !== b.size) return false;
-  for (const v of a) {
-    if (!b.has(v)) return false;
-  }
-  return true;
-}
+// setsEqual is provided by the shared frontend utils module.
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because ProgressApp implements all abstract members below.
@@ -436,6 +432,9 @@ export class ProgressApp extends ProgressAppBase {
       isToolUse: this.activeIsToolUse$.get(),
       hasStreams,
       streamName: activeStreamInfo.name,
+      // Process agents emit raw stdout/stderr; render them terminal-style
+      // (monospace, no timestamps, tight spacing) rather than logger entries.
+      terminalMode: isProcessAgent(activeStreamInfo.agent),
     };
   });
 

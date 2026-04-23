@@ -20,6 +20,7 @@ import { z } from 'zod';
 // Local imports - shared
 import { getExecutionStore } from '@agent/storage';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 // Local imports - tools
@@ -32,6 +33,7 @@ import {
   getApprovedContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
+import { formatResultCount, pluralize } from '@tools/utils';
 
 // Local imports - utils
 import {
@@ -77,6 +79,13 @@ const AcceptRunFilesInputSchema = z.strictObject({
     .array(FileMapping)
     .min(1)
     .describe('Files to copy from run storage to workspace'),
+  /** If true, strip `\criticize{...}{...}{...}` annotations before approval. */
+  strip_criticize: z
+    .boolean()
+    .nullish()
+    .describe(
+      'If true, remove all \\criticize{...}{...}{...} LaTeX annotations from each file before approval. Use when accepting output from critique-style agents that embed review markers.',
+    ),
 });
 
 export type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
@@ -109,11 +118,14 @@ Example — given delivery:
 
 Call:
   execution_id: "a1b2c3d4"
-  files: [{path: "paper__correct__r0_gemini.tex", original: "paper.tex"}]`,
+  files: [{path: "paper__correct__r0_gemini.tex", original: "paper.tex"}]
+
+Optional:
+  strip_criticize  when true, remove all \\criticize{...}{...}{...} annotations from accepted files before the approval diff`,
   schema: AcceptRunFilesInputSchema,
 }) {
   protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
-    const { execution_id: executionId, files } = input;
+    const { execution_id: executionId, files, strip_criticize } = input;
     const runDir = await resolveStoragePath(executionId);
     const runDirExists = runDir !== undefined;
 
@@ -150,7 +162,11 @@ Call:
           );
         }
 
-        const proposedContent = await flexibleFS.read(sourceLocation);
+        const rawContent = await flexibleFS.read(sourceLocation);
+        const { content: proposedContent, count: strippedCount } =
+          strip_criticize
+            ? stripCriticizeAnnotations(rawContent)
+            : { content: rawContent, count: 0 };
         const destExists = await WorkspaceFS.exists(dest.relativePath);
 
         // Determine original content for diff display
@@ -159,7 +175,7 @@ Call:
           sourceAbsolute === dest.absolutePath;
         let originalContent: string;
         if (isSameFile) {
-          originalContent = proposedContent;
+          originalContent = rawContent;
         } else if (destExists) {
           originalContent = await WorkspaceFS.read(dest.relativePath);
         } else {
@@ -172,6 +188,7 @@ Call:
           proposedContent,
           originalContent,
           destExists,
+          strippedCount,
         };
       }),
     );
@@ -182,6 +199,8 @@ Call:
     const acceptedEntries: { outputPath: string; originalPath: string }[] = [];
     let rejected = 0;
     const rejectionMessages: string[] = [];
+
+    let totalStripped = 0;
 
     for (const entry of prepared) {
       const mappingNote =
@@ -209,7 +228,12 @@ Call:
       );
 
       const action = entry.destExists ? 'replaced' : 'created';
-      results.push(`${action}: ${entry.original}${mappingNote}`);
+      const strippedNote =
+        entry.strippedCount > 0
+          ? ` (stripped ${entry.strippedCount} \\criticize)`
+          : '';
+      totalStripped += entry.strippedCount;
+      results.push(`${action}: ${entry.original}${mappingNote}${strippedNote}`);
       edits.push({
         path: entry.original,
         lineChanges: approval.lineChanges,
@@ -237,7 +261,11 @@ Call:
     }
 
     const accepted = files.length - rejected;
-    const summary = `Accepted ${accepted}/${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}`;
+    const strippedSuffix =
+      totalStripped > 0
+        ? ` (stripped ${formatResultCount(totalStripped, '\\criticize annotation')})`
+        : '';
+    const summary = `Accepted ${accepted}/${files.length} ${pluralize(files.length, 'file')} from run ${executionId}${strippedSuffix}`;
     return {
       summary,
       output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,

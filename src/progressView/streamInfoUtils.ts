@@ -3,6 +3,7 @@ import * as path from 'path';
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
+import { isProcessAgent } from '@shared/streams/agentKind';
 import { sortStreams } from '@shared/streams/streamSort';
 import type { ProgressViewState } from './state/ProgressViewState';
 
@@ -60,10 +61,15 @@ export function buildStreamInfo(
       ? `${agentName}: ${path.basename(inputFile)}`
       : agentName;
 
+  // Process agents (e.g. bash) carry a synthetic AgentConfig whose `model` is
+  // the schema's prefault, not a model actually used for inference — omit it
+  // so the tab doesn't display a misleading label.
+  const processAgent = isProcessAgent(config?.agent);
+
   return {
     name: id,
     label,
-    model: config?.model,
+    model: processAgent ? undefined : config?.model,
     agent: config?.agent,
     agentCategory: category,
     hasMultipleOutputs:

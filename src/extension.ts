@@ -11,7 +11,10 @@ import { clearStoreCache } from '@agent/storage';
 import { initPlatform } from '@platform/platform';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
-import { initializeServerSideKeyAccess } from '@auth/serverKeys';
+import {
+  getServerSideKeyService,
+  initializeServerSideKeyAccess,
+} from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@auth/UriHandler';
@@ -52,6 +55,9 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
+import { refreshToolAvailability } from '@tools/toolAvailability';
+import { setSetupPlatform } from '@tools/setup';
+import { getAuthStatus } from '@auth/authCommands';
 import { setGitHubTokenProvider, prPollingSource } from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
@@ -228,6 +234,60 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  setSetupPlatform({
+    secrets: {
+      providers: SecretManager.API_PROVIDERS,
+      setApiKey: (provider, key) =>
+        SecretManager.set(
+          SecretManager.getApiKeySecretName(provider as never),
+          key,
+        ),
+      deleteApiKey: (provider) =>
+        SecretManager.delete(
+          SecretManager.getApiKeySecretName(provider as never),
+        ),
+      apiKeyExists: (provider) => SecretManager.apiKeyExists(provider as never),
+      hasUsableApiKey: (provider) =>
+        SecretManager.hasUsableApiKey(provider as never),
+      storedApiKeyExists: async (provider) => {
+        const stored = await SecretManager.get(
+          SecretManager.getApiKeySecretName(provider as never),
+        );
+        return stored !== undefined;
+      },
+      anyApiKeyExists: async () => {
+        // Shared SecretManager.anyApiKeyExists reports true for
+        // PROVIDER_API_KEY="" — a common stale-env case. For setup
+        // tools (probe/verify) and setup-launch preflight, "any key
+        // present" must mean "launchable", so require at least one
+        // provider with a non-blank key (or server-side access).
+        const usable = await Promise.all(
+          SecretManager.API_PROVIDERS.map((p) =>
+            SecretManager.hasUsableApiKey(p),
+          ),
+        );
+        if (usable.some(Boolean)) return true;
+        return getServerSideKeyService().canUseServerSideKeys();
+      },
+      gitHubTokenExists: () => SecretManager.gitHubTokenExists(),
+    },
+    commands: {
+      invoke: (cmd, ...args) =>
+        Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
+    },
+    extensions: {
+      isInstalled: (id) => vscode.extensions.getExtension(id) !== undefined,
+      install: async (id) => {
+        await vscode.commands.executeCommand(
+          'workbench.extensions.installExtension',
+          id,
+        );
+      },
+    },
+    auth: {
+      getStatus: () => getAuthStatus(),
+    },
+  });
   // GitHub token lives in SecretStorage (managed via the Git settings tab).
   // The tool layer only supports a synchronous token lookup, so we cache here
   // and refresh on secret changes.
@@ -237,11 +297,40 @@ export async function activate(context: vscode.ExtensionContext) {
   };
   setGitHubTokenProvider(() => cachedGitHubToken);
   void refreshGitHubToken();
+  // VS Code's event emitters don't await async listeners, so we funnel
+  // fire-and-forget async work through this helper to log rejections
+  // instead of letting them become unhandled promise rejections.
+  const logRefreshFailure = (trigger: string) => (err: unknown) => {
+    logger.error(
+      'extension',
+      `Tool availability refresh failed (${trigger}): ${toErrorMessage(err)}`,
+    );
+  };
+
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
-      if (e.key === SecretManager.GITHUB_TOKEN_KEY) {
-        void refreshGitHubToken();
-      }
+      if (e.key !== SecretManager.GITHUB_TOKEN_KEY) return;
+      // Refresh the cached token first so availability checks see the
+      // new value, then re-probe so any subscribed UI (Tools tab) and
+      // the runtime cache pick up the change automatically.
+      void (async () => {
+        await refreshGitHubToken();
+        await refreshToolAvailability();
+      })().catch(logRefreshFailure('secret change'));
+    }),
+    // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
+    // reflects the new state without the user clicking Re-check.
+    vscode.extensions.onDidChange(() => {
+      void refreshToolAvailability().catch(
+        logRefreshFailure('extension change'),
+      );
+    }),
+    // Workspace folders opened/closed can flip `isGitRepository`, which
+    // gates the GitHub PR subscription tool group.
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      void refreshToolAvailability().catch(
+        logRefreshFailure('workspace folder change'),
+      );
     }),
   );
   const disposeGitHubAuthListener = bus.on(

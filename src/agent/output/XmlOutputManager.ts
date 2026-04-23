@@ -217,9 +217,7 @@ export class XmlOutputManager {
     // path passed through createLocation would be re-classified as external
     // anyway, so skip the round-trip and build the location explicitly.
     const isExternal = outputLocation.kind === 'external';
-    const roundDir = isExternal
-      ? path.dirname(outputLocation.absolutePath)
-      : path.dirname(outputLocation.relativePath);
+    const roundDir = getFileDirectory(outputLocation);
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
@@ -235,12 +233,7 @@ export class XmlOutputManager {
         continue;
       }
 
-      const texFile = getExtractedDocOutputFileName(
-        source,
-        roundDir,
-        this.agentConfig.agent,
-        this.agentConfig.model,
-      );
+      const texFile = getExtractedDocOutputFileName(source, roundDir);
       const texLocation = isExternal
         ? createExternalLocation(texFile)
         : this.fileService.createLocation(texFile);

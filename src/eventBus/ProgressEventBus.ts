@@ -156,6 +156,13 @@ export interface ProgressEventPayloads {
   /** Active PR-activity owners changed; frontends refresh owner metadata. */
   prSubscriptionBindingsChanged: undefined;
 
+  /**
+   * External tool availability was re-probed. Frontends (Tools tab) refresh
+   * their dashboard from the updated cache. Emitted by
+   * {@link refreshToolAvailability}.
+   */
+  toolAvailabilityChanged: undefined;
+
   // ── Frontend-bound events ──
   // Emitted by agent core/runtime; consumed by frontend listeners.
   // Keeps @agent/ free of @frontend/ imports.

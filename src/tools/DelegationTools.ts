@@ -199,6 +199,8 @@ interface ApprovalMeta {
   autoApproved: boolean;
   modelOverride?: string;
   requestedModel?: string;
+  agentOverride?: string;
+  requestedAgent?: string;
 }
 
 /**
@@ -338,8 +340,11 @@ async function executeSubagent(
     const modelInfo = meta.modelOverride
       ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
       : `Model: ${configPayload.model}`;
+    const agentInfo = meta.agentOverride
+      ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
+      : '';
     metaLines.push(
-      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.`,
+      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
     );
   }
   return {
@@ -475,19 +480,53 @@ async function proposeAndExecute(
 
   // At this point result.action === 'approve' (all other cases returned above)
   const modelOverride = result.action === 'approve' ? result.model : undefined;
-  const effective = modelOverride
-    ? { ...proposal, model: modelOverride }
-    : proposal;
-  return executeSubagent(toConfigPayload(effective), agentName, streamId, {
-    enableYoloOnChild: isApprovalBypassedForStream(streamId),
-    approvalMeta: {
-      autoApproved: false,
-      ...(modelOverride && {
-        modelOverride,
-        requestedModel: proposal.model,
-      }),
+  const agentOverride =
+    result.action === 'approve' &&
+    result.agent &&
+    result.agent !== proposal.agent
+      ? result.agent
+      : undefined;
+
+  // Re-validate against the current registry — between proposal display and
+  // approval the agent may have been removed/renamed, or the approval could
+  // carry a malformed value. Fail fast so the orchestrator sees the problem
+  // synchronously instead of after an async launch.
+  if (agentOverride) {
+    const visible = getVisibleAgents(proposal.agentCategory);
+    if (!visible.some((a) => a.name === agentOverride)) {
+      return {
+        summary: `Approved agent override '${agentOverride}' is not available`,
+        output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
+        isError: true,
+      };
+    }
+  }
+
+  const effective = {
+    ...proposal,
+    ...(modelOverride && { model: modelOverride }),
+    ...(agentOverride && { agent: agentOverride }),
+  };
+  const effectiveAgentName = agentOverride ?? agentName;
+  return executeSubagent(
+    toConfigPayload(effective),
+    effectiveAgentName,
+    streamId,
+    {
+      enableYoloOnChild: isApprovalBypassedForStream(streamId),
+      approvalMeta: {
+        autoApproved: false,
+        ...(modelOverride && {
+          modelOverride,
+          requestedModel: proposal.model,
+        }),
+        ...(agentOverride && {
+          agentOverride,
+          requestedAgent: proposal.agent,
+        }),
+      },
     },
-  });
+  );
 }
 
 // ============================================================================

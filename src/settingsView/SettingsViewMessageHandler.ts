@@ -94,6 +94,7 @@ import {
 } from '@tools/approval';
 import {
   getLastCheckResults,
+  refreshToolAvailability,
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import {
@@ -331,6 +332,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     bus.on('prSubscriptionBindingsChanged', () => {
       void this.withActiveWebview((w) => this.sendPRSubscriptions(w));
     });
+    bus.on('toolAvailabilityChanged', () => {
+      void this.withActiveWebview((w) =>
+        this.sendToolDashboardData(w, { skipChecks: true }),
+      );
+    });
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
@@ -562,7 +568,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (data) =>
         this.handleInstallToolExtension(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
-        this.withActiveWebview((w) => this.sendToolDashboardData(w)),
+        refreshToolAvailability(),
       [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: async (data) => {
         await setToolEnabled(data.toolId, data.enabled);
         refreshDisabledToolCache();
@@ -1624,8 +1630,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleInstallToolExtension(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.INSTALL_TOOL_EXTENSION>,
   ): Promise<void> {
-    await this.latexHandlers.installExtension(data.extensionId, (w) =>
-      this.sendToolDashboardData(w),
-    );
+    await this.latexHandlers.installExtension(data.extensionId);
   }
 }

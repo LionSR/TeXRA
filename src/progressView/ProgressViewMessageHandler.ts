@@ -571,6 +571,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         proposalCoordinator.resolveRequest(proposalId, {
           action: 'approve',
           model: data.model,
+          agent: data.agent,
         });
         break;
       case 'reject':
@@ -972,6 +973,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       taskState.activeFiles.output ??
       outputFiles.length > 1;
 
+    const executionId = this.provider.state.meta.getExecutionId(streamId);
+
     await vscode.commands.executeCommand(command, {
       streamId,
       agent: taskState.agentConfig.agent,
@@ -979,6 +982,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       inputFile: taskState.agentConfig.inputFile,
       outputFiles: useMultipleOutputs ? outputFiles : [],
       useMultipleOutputs,
+      ...(executionId && { executionId }),
       skipProgressViewClear: true,
     });
   }
