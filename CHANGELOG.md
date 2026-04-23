@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- **GPT-5.4 Pro now off by default** — `gpt54pro` is no longer part of the default model list and is stripped from existing users' enabled models on upgrade. It remains available to manually re-enable in the Models settings tab.
+- **Default model list trimmed** — `gpt54pro` and `opus46T` (superseded by `opus47T`) are no longer part of the default model list and are stripped from existing users' enabled models on upgrade. Both remain available to manually re-enable in the Models settings tab.
 
 ## [0.37.4] - 2026-04-21
 

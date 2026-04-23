@@ -249,13 +249,17 @@ async function mergeNewModelsIfCustomized(
     return;
   }
 
-  // One-time strip of gpt54pro for users upgrading past version 13. It was a
-  // default for 0.36.5–0.36.x, then removed as duplicative with gpt54. The
-  // (previousVersion ?? 0) < 13 gate ensures users who manually re-enable it
-  // after this release don't lose it again on future unrelated version bumps.
+  // One-time strip for users upgrading past version 13:
+  // - gpt54pro: default for 0.36.5–0.36.x, then removed as duplicative with gpt54.
+  // - opus46T: default before opus47T landed and superseded it.
+  // The (previousVersion ?? 0) < 13 gate ensures users who manually re-enable
+  // either after this release don't lose it again on future unrelated bumps.
+  const V13_REMOVALS = ['gpt54pro', 'opus46T'];
   const strippedSet = new Set<string>();
-  if ((previousVersion ?? 0) < 13 && currentModels.includes('gpt54pro')) {
-    strippedSet.add('gpt54pro');
+  if ((previousVersion ?? 0) < 13) {
+    for (const model of V13_REMOVALS) {
+      if (currentModels.includes(model)) strippedSet.add(model);
+    }
   }
   const kept = currentModels.filter((model) => !strippedSet.has(model));
   const removed = [...strippedSet];
