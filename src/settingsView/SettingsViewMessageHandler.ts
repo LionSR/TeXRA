@@ -979,11 +979,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
+    const { state } = provider;
+    if (!state.streamLogs.has(data.streamId)) {
+      await vscode.window.showWarningMessage(
+        'The agent stream is no longer available.',
+      );
+      return;
+    }
+
     await provider.showProgressView();
 
     // If the current filter would hide the target stream, clear it to 'all'
     // so SET_ACTIVE_STREAM doesn't silently land on the wrong tab.
-    const { state } = provider;
     if (buildStreamInfo(state, data.streamId, state.agentCategoryFilter) === null) {
       state.agentCategoryFilter = 'all';
       provider.syncFullView();

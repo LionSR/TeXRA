@@ -35,6 +35,11 @@ function emitBindingsChanged(): void {
   bus.emit('prSubscriptionBindingsChanged', undefined);
 }
 
+function removeBoundKey(streamId: StreamTabId, bound: PerStream, key: string): void {
+  bound.delete(key);
+  if (bound.size === 0) perStream.delete(streamId);
+}
+
 export function listPRSubscriptionBindings(
   keys: readonly string[] = prPollingSource.activeKeys(),
 ): PRSubscriptionBinding[] {
@@ -103,6 +108,10 @@ export function bindPRSubscription(streamId: StreamTabId, pr: PRKey): boolean {
   // inside subscribe() before the real disposable is available.
   const sentinel: Disposable = { dispose: () => {} };
   bound.set(key, sentinel);
+  // prSubscriptionsChanged fires synchronously during subscribe() for new keys
+  // (covering the UI refresh); only emit here for existing keys where that
+  // event won't fire.
+  const keyIsNew = !prPollingSource.activeKeys().includes(key);
   let disposable: Disposable;
   try {
     disposable = prPollingSource.subscribe(key, (text) => {
@@ -113,13 +122,12 @@ export function bindPRSubscription(streamId: StreamTabId, pr: PRKey): boolean {
       });
     });
   } catch (err) {
-    bound.delete(key);
-    if (bound.size === 0) perStream.delete(streamId);
+    removeBoundKey(streamId, bound, key);
     throw err;
   }
   bound.set(key, disposable);
   logger.info(`Bound PR subscription ${key} → stream ${streamId}`);
-  emitBindingsChanged();
+  if (!keyIsNew) emitBindingsChanged();
   return true;
 }
 
@@ -137,8 +145,7 @@ export function unbindPRSubscription(
   } catch (err) {
     logger.warn(`Disposer threw on explicit unsubscribe: ${String(err)}`);
   }
-  bound.delete(key);
-  if (bound.size === 0) perStream.delete(streamId);
+  removeBoundKey(streamId, bound, key);
   emitBindingsChanged();
   return true;
 }
@@ -159,9 +166,8 @@ export function unbindAllForPR(key: string): number {
     } catch (err) {
       logger.warn(`Disposer threw during unbindAllForPR: ${String(err)}`);
     }
-    bound.delete(key);
+    removeBoundKey(streamId, bound, key);
     removed += 1;
-    if (bound.size === 0) perStream.delete(streamId);
   }
   if (removed > 0) emitBindingsChanged();
   return removed;
