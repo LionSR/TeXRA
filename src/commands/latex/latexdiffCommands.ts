@@ -54,8 +54,6 @@ import { hasExtension } from '@utils/core/pathCore';
 
 const CHANNEL = 'LaTeXCommands';
 
-/** Matches latexdiff artifact stems: foo_diff or foo_diffr1r0 */
-const LATEXDIFF_ARTIFACT_RE = /_diff(r\d+r\d+)?$/;
 logger.initialize(CHANNEL);
 
 const service = new LaTeXdiffService(CHANNEL);
