@@ -1,4 +1,5 @@
 // Standard library imports
+import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -52,6 +53,7 @@ import { checkToolInstalled } from '@utils/system';
 import { hasExtension } from '@utils/core/pathCore';
 
 const CHANNEL = 'LaTeXCommands';
+
 logger.initialize(CHANNEL);
 
 const service = new LaTeXdiffService(CHANNEL);
@@ -365,6 +367,49 @@ interface DiffOperation {
 }
 
 /**
+ * Recursively collect all `.tex` file paths under `dir`, returned as paths
+ * relative to `dir` using forward slashes (e.g. `"chapters/main.tex"`).
+ */
+async function collectTexFiles(
+  dir: string,
+  prefix = '',
+): Promise<string[]> {
+  let entries: [string, vscode.FileType][];
+  try {
+    entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+  } catch {
+    return [];
+  }
+  const results: string[] = [];
+  for (const [name, type] of entries) {
+    const absPath = path.join(dir, name);
+    // Skip symlinks — they are mirrored dependency copies placed by
+    // ensureMirroredInRoundDir, not revised outputs.  Use lstat because
+    // some vscode.workspace.fs implementations don't set the SymbolicLink
+    // flag in the returned FileType bitmask.
+    try {
+      if ((await fs.promises.lstat(absPath)).isSymbolicLink()) continue;
+    } catch {
+      // lstat failed; fall through and include the entry
+    }
+    const isFile = (type & vscode.FileType.File) !== 0;
+    const isDir = (type & vscode.FileType.Directory) !== 0;
+    if (isFile) {
+      if (hasExtension(name, '.tex')) {
+        results.push(prefix ? `${prefix}/${name}` : name);
+      }
+    } else if (isDir) {
+      const sub = await collectTexFiles(
+        absPath,
+        prefix ? `${prefix}/${name}` : name,
+      );
+      results.push(...sub);
+    }
+  }
+  return results;
+}
+
+/**
  * Read `executions/{runId}/r{round}/output.*` directly from disk and build
  * `OutputFileInfo[]` per round. Used as a recovery fallback when the caller
  * supplies a `runId` but stream-tab metadata is missing or stale — in that
@@ -377,6 +422,7 @@ interface DiffOperation {
 async function scanRunDirForOutputs(
   executionId: ExecutionId,
   inputFile: string,
+  extraBaseFiles?: string[],
 ): Promise<Map<number, OutputFileInfo[]> | null> {
   try {
     const runDirAbsolute = await resolveRunDir(executionId);
@@ -386,11 +432,23 @@ async function scanRunDirForOutputs(
       vscode.Uri.file(runDirAbsolute),
     );
 
-    const baseLocation = pathToLocation(
-      path.isAbsolute(inputFile)
-        ? inputFile
-        : path.join(WorkspaceFS.getPath() ?? '', inputFile),
-    );
+    const workspacePath = WorkspaceFS.getPath() ?? '';
+    const toAbs = (f: string): string =>
+      path.isAbsolute(f) ? f : path.join(workspacePath, f);
+
+    // Build a relative-path (no extension) → workspace location map so
+    // multi-output runs with duplicate basenames (e.g. chapters/main.tex and
+    // appendix/main.tex) don't collide. fileRelToRound mirrors the workspace
+    // relative path for XML-extracted files, so the keys match directly.
+    const baseLocationByRelPath = new Map<string, FileLocation>();
+    for (const bf of [inputFile, ...(extraBaseFiles ?? [])]) {
+      const abs = toAbs(bf);
+      const rel = (workspacePath ? path.relative(workspacePath, abs) : bf)
+        .replace(/\\/g, '/')
+        .replace(/\.tex$/i, '');
+      baseLocationByRelPath.set(rel, pathToLocation(abs));
+    }
+    const defaultBaseLocation = pathToLocation(toAbs(inputFile));
 
     const rounds = new Map<number, OutputFileInfo[]>();
 
@@ -400,39 +458,60 @@ async function scanRunDirForOutputs(
       if (round == null) continue;
 
       const roundDirAbsolute = path.join(runDirAbsolute, entryName);
-      let roundEntries: [string, vscode.FileType][];
-      try {
-        roundEntries = await vscode.workspace.fs.readDirectory(
-          vscode.Uri.file(roundDirAbsolute),
-        );
-      } catch {
-        continue;
-      }
-
       const outputs: OutputFileInfo[] = [];
-      for (const [fileName, nestedType] of roundEntries) {
-        if (nestedType !== vscode.FileType.File) continue;
-        const parsed = path.parse(fileName);
-        // Only the canonical round output `output.tex` is a valid latexdiff
-        // target — scratchpad artifacts like `output.xml` and multi-document
-        // extracted files (which carry their own source-derived names) must
-        // not be fed into latexdiff via this fallback.
-        if (parsed.name !== WORKFLOW_OUTPUT_BASENAME || parsed.ext !== '.tex') {
-          continue;
-        }
+      // Collect .tex files recursively — extracted docs may live in subdirs
+      // (e.g. r0/chapters/main.tex) when source names include path segments.
+      const allTexFiles = await collectTexFiles(roundDirAbsolute);
+      // Strip diff artifacts before the output.tex decision so a round with
+      // only output.tex + one artifact doesn't lose output.tex (artifacts
+      // are filtered first, then the raw stem is dropped only when real
+      // extracted outputs remain alongside it).
+      const rawStem = `${WORKFLOW_OUTPUT_BASENAME}.tex`;
+      // Between-round artifacts written to run storage always carry both round
+      // numbers (e.g. output_diffr1r0.tex). The bare _diff suffix only appears
+      // in workspace-side diffs, never here, so a legitimately-named source
+      // like "chapter_diff.tex" is not mistakenly dropped.
+      const nonArtifact = allTexFiles.filter(
+        (f) => !/_diffr\d+r\d+$/.test(path.parse(f).name),
+      );
+      // For XML-mode agents, the round dir has both output.tex (raw wrapper)
+      // and extracted files (e.g. paper.tex).  Drop the raw stem only when
+      // real extracted outputs exist alongside it.
+      const texFiles =
+        nonArtifact.length > 1 && nonArtifact.includes(rawStem)
+          ? nonArtifact.filter((f) => f !== rawStem)
+          : nonArtifact;
+      for (const fileRelToRound of texFiles) {
 
-        const relativePath = path.join(entryName, fileName);
+        const relativePath = path.join(entryName, fileRelToRound);
         const location = createRunStorageLocation(
           path.join(runDirAbsolute, relativePath),
           relativePath,
           executionId,
         );
+        // Preserve subdirectory in source (e.g. "chapters/main") so
+        // FileLineageCalculator can match it back to the workspace original.
+        // For the generic "output" stem, fall back to the input file basename
+        // so progress labels show the meaningful name instead of "output".
+        const sourceNoExt = fileRelToRound.replace(/\.tex$/i, '');
+        const source =
+          sourceNoExt === WORKFLOW_OUTPUT_BASENAME
+            ? path.basename(inputFile)
+            : sourceNoExt;
+        // Match recovered file to its base by relative path. Fall back to the
+        // single configured base only when there's no ambiguity (one candidate);
+        // in multi-file runs an unmatched file gets null so it surfaces as a
+        // "missing base" error rather than silently diffing against the wrong doc.
+        const fileKey = fileRelToRound.replace(/\\/g, '/').replace(/\.tex$/i, '');
+        const originalLocation =
+          baseLocationByRelPath.get(fileKey) ??
+          (baseLocationByRelPath.size === 1 ? defaultBaseLocation : null);
         outputs.push({
-          source: inputFile,
+          source,
           round,
           location,
           lineage: {
-            original: baseLocation,
+            original: originalLocation,
             diffBase: null,
             diffFile: null,
           },
@@ -577,7 +656,11 @@ async function handleRunLatexdiff(
     if (!outputsByRound && runId) {
       const parsedRunId = ExecutionIdSchema.safeParse(runId);
       if (parsedRunId.success) {
-        const scanned = await scanRunDirForOutputs(parsedRunId.data, inputFile);
+        const scanned = await scanRunDirForOutputs(
+          parsedRunId.data,
+          inputFile,
+          outputFiles,
+        );
         if (scanned) {
           outputsByRound = scanned;
           discoveredExecutionId = parsedRunId.data;
