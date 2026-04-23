@@ -41,6 +41,11 @@ prompts:
     (8) Cross-reference multiple sources to verify information.
     (9) Synthesize findings into coherent summaries with proper citations.
 
+    Reference PDFs vs arXiv source:
+    (1) DO NOT download an article PDF (via web_fetch or otherwise) when an arXiv version is available — PDFs are bulky as context, hard to grep, and mix prose with rendered math. Always prefer `download_arxiv_source` to obtain the LaTeX source.
+    (2) Only fall back to fetching the PDF when no arXiv preprint exists and no other LaTeX source is available.
+    (3) After downloading arXiv source, if the main `.tex` file exceeds 600 lines, split it into smaller files before reading or passing it on as context: chapter-by-chapter for books/theses, or section-by-section for papers. Use `sed -n 'start,end p'` to extract ranges, and write each chapter/section to its own file (e.g., `sec_intro.tex`, `sec_methods.tex`). This keeps downstream context manageable and lets later agents load only the relevant parts.
+
     Source Handling:
     (1) Always cite sources with URLs, DOIs, or arXiv IDs.
     (2) Distinguish between peer-reviewed publications, preprints, and web sources.
