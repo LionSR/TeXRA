@@ -54,6 +54,8 @@ export interface StreamLogContextValue {
   hasStreams: boolean;
   /** Stream name for switch detection in LogList */
   streamName: string | null;
+  /** Render log output in terminal style (monospace, no timestamps, etc). */
+  terminalMode: boolean;
 }
 
 export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
@@ -62,6 +64,7 @@ export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   isToolUse: false,
   hasStreams: false,
   streamName: null,
+  terminalMode: false,
 };
 
 export const streamLogContext = createContext<StreamLogContextValue>(

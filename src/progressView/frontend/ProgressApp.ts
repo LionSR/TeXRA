@@ -431,6 +431,9 @@ export class ProgressApp extends ProgressAppBase {
       isToolUse: this.activeIsToolUse$.get(),
       hasStreams,
       streamName: activeStreamInfo.name,
+      // `bash` child streams emit raw stdout/stderr; render them terminal-style
+      // (monospace, no timestamps, tight spacing) instead of as logger entries.
+      terminalMode: activeStreamInfo.agent === 'bash',
     };
   });
 
