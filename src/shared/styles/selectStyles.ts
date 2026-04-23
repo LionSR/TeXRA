@@ -20,16 +20,16 @@ export const selectStyles: CSSResult = css`
   }
 
   .agent-select-controls {
-    flex: 1;
-    min-width: 10rem;
-    max-width: 14rem;
+    flex: 0 1 auto;
+    min-width: 7rem;
+    max-width: 10rem;
   }
 
   .agent-select-dropdowns {
     position: relative;
     width: 100%;
-    min-width: 10rem;
-    max-width: 14rem;
+    min-width: 7rem;
+    max-width: 10rem;
   }
 
   vscode-option {
