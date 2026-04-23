@@ -2626,13 +2626,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return [];
     }
 
-    return calls.map((call) => ({
-      provider: 'openai-response',
-      callId: call.call_id,
-      name: call.name,
-      input: this.parseArguments(call.arguments),
-      raw: call,
-    }));
+    return calls
+      .filter(
+        (
+          call,
+        ): call is ResponseFunctionToolCallItem & {
+          call_id: string;
+          name: string;
+        } => Boolean(call.call_id && call.name),
+      )
+      .map((call) => ({
+        provider: 'openai-response',
+        callId: call.call_id,
+        name: call.name,
+        input: this.parseArguments(call.arguments),
+        raw: call,
+      }));
   }
 
   /**
