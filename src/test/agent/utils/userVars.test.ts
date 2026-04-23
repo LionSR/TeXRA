@@ -25,7 +25,6 @@ const baseSetting: AgentSetting = {
   isMultipleOutput: false,
   filePatternsContain: [],
   tools: [],
-  xmlStructureMode: 'scratchpadOnly',
 };
 
 const basePrompt: AgentPrompt = {
