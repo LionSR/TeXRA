@@ -108,6 +108,13 @@ export async function ghGet<T>(
         `GitHub returned ${status}: ${extractApiMessage(ax.response?.data, ax.message)}`,
       );
     }
+    // Network-level errors (timeout, connection refused, DNS failure) have no
+    // HTTP response. Re-throw a plain Error with a human-readable message so
+    // callers and the follow-up queue never see "AxiosError: …" internals.
+    if (!ax.response) {
+      const code = ax.code ?? 'NETWORK_ERROR';
+      throw new Error(`GitHub request failed (${code}): ${ax.message}`);
+    }
     throw err;
   }
 }
