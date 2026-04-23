@@ -35,6 +35,7 @@ import {
   select,
   combine,
 } from '@shared/signals';
+import { isProcessAgent } from '@shared/streams/agentKind';
 import { sortStreams, StreamSortSchema } from '@shared/streams/streamSort';
 import { codiconStyles } from '@shared/styles/codiconStyles';
 
@@ -431,6 +432,9 @@ export class ProgressApp extends ProgressAppBase {
       isToolUse: this.activeIsToolUse$.get(),
       hasStreams,
       streamName: activeStreamInfo.name,
+      // Process agents emit raw stdout/stderr; render them terminal-style
+      // (monospace, no timestamps, tight spacing) rather than logger entries.
+      terminalMode: isProcessAgent(activeStreamInfo.agent),
     };
   });
 

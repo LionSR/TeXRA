@@ -80,6 +80,12 @@ export class TaskGroupList extends LitElement {
   /** Toggle state store for persistence */
   @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
 
+  /**
+   * Render log output in terminal style (monospace, no bullets/timestamps).
+   * Reflected to the host attribute so scoped CSS can target it.
+   */
+  @property({ type: Boolean, reflect: true }) terminal = false;
+
   /** Track previous group statuses to detect completion (not rendered — no @state needed) */
   private previousStatuses = new Map<string, string>();
 
