@@ -324,19 +324,41 @@ export class PRPollingSource {
               this.subscriptions.delete(key);
               this.notifyKeysChanged();
             } else if (err instanceof GitHubRateLimitError) {
-              // Rate limiting is a transient condition; skip until the reset
-              // time without touching consecutiveFailures so a rate-limit
-              // burst doesn't inflate the backoff exponent. Extend (not reset)
-              // the detach deadline by the rate-limit duration so time spent
-              // waiting on rate limits doesn't erode the 24 h failure window.
               const rateLimitEndsAt = err.resetAt * 1000;
-              if (state.detachDeadlineMs !== undefined) {
-                state.detachDeadlineMs += Math.max(0, rateLimitEndsAt - failNow);
+              // If the detach deadline has already passed, treat this like any
+              // other terminal failure rather than letting the rate-limit
+              // extension keep the slot alive beyond the 24 h window.
+              if (
+                state.detachDeadlineMs !== undefined &&
+                failNow >= state.detachDeadlineMs
+              ) {
+                this.logger.warn(
+                  `Rate limited while polling ${key} and detach deadline already passed; stopping subscription.`,
+                );
+                this.emit(
+                  state,
+                  formatSubscriptionError(
+                    state.slug,
+                    state.pr.pullNumber,
+                    `unreachable for over 24 h; detaching`,
+                  ),
+                );
+                this.subscriptions.delete(key);
+                this.notifyKeysChanged();
+              } else {
+                // Rate limiting is a transient condition; skip until the reset
+                // time without touching consecutiveFailures so a rate-limit
+                // burst doesn't inflate the backoff exponent. Extend (not reset)
+                // the detach deadline by the rate-limit duration so time spent
+                // waiting on rate limits doesn't erode the 24 h failure window.
+                if (state.detachDeadlineMs !== undefined) {
+                  state.detachDeadlineMs += Math.max(0, rateLimitEndsAt - failNow);
+                }
+                state.skipPollUntilMs = rateLimitEndsAt;
+                this.logger.warn(
+                  `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
+                );
               }
-              state.skipPollUntilMs = rateLimitEndsAt;
-              this.logger.warn(
-                `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
-              );
             } else {
               state.detachDeadlineMs ??= failNow + MAX_FAILURE_DURATION_MS;
               state.consecutiveFailures += 1;
