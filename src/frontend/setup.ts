@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import fsExtra from 'fs-extra';
+import { glob } from 'glob';
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';
@@ -73,7 +74,10 @@ export async function copyDefaultAgents(
     GlobalStateKey.LAST_KNOWN_VERSION,
   );
 
-  if (currentVersion === lastKnownVersion) {
+  if (
+    currentVersion === lastKnownVersion &&
+    !(await hasMissingBundledAgentFiles(context))
+  ) {
     return;
   }
 
@@ -101,6 +105,35 @@ export async function copyDefaultAgents(
       `Error copying default agents: ${toErrorMessage(err)}`,
     );
   }
+}
+
+async function hasMissingBundledAgentFiles(
+  context: vscode.ExtensionContext,
+): Promise<boolean> {
+  const resourcesBase = path.join(context.extensionPath, 'resources');
+  const bundledRoots = ['agents', 'tool_use_agents'] as const;
+
+  for (const root of bundledRoots) {
+    const bundledFiles = await glob('**/*.yaml', {
+      cwd: path.join(resourcesBase, root),
+      nodir: true,
+    });
+
+    for (const relativePath of bundledFiles) {
+      const storagePath = path.join(root, relativePath);
+      if (await GlobalStorageFS.exists(storagePath)) {
+        continue;
+      }
+
+      logger.info(
+        'extension',
+        `Bundled agent missing from global storage, re-syncing defaults: ${storagePath}`,
+      );
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

@@ -10,13 +10,16 @@ import {
   ChatCompletionAssistantMessageParam,
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
-  ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
   ChatCompletionToolMessageParam,
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
+import {
+  assertToolCallsAreChatCompletionFunctionToolCalls,
+  validateInputTools,
+} from 'openai/lib/parser';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -417,7 +420,9 @@ export class ModelHandlerOpenAI<
       if (!parallelToolCalls) {
         baseParams.parallel_tool_calls = false;
       }
-      baseParams.tools = toOpenAITools(tools);
+      const convertedTools = toOpenAITools(tools);
+      validateInputTools(convertedTools);
+      baseParams.tools = convertedTools;
       baseParams.tool_choice = 'auto';
     }
 
@@ -1455,29 +1460,26 @@ export class ModelHandlerOpenAI<
 
   extractToolUse(responseObject: ChatCompletion): TCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
-    if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return toolCalls
-        .filter(
-          (
-            call,
-          ): call is ChatCompletionMessageFunctionToolCall & { id: string } =>
-            Boolean(
-              call &&
-              typeof call === 'object' &&
-              (call as ChatCompletionMessageFunctionToolCall).function?.name &&
-              call.id,
-            ),
-        )
-        .map((call) => ({
-          provider: this.toolCallProvider,
-          callId: call.id,
-          name: call.function!.name,
-          input: this.parseArguments(call.function!.arguments),
-          raw: call,
-        })) as TCall[];
+    if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
+      return [];
     }
 
-    return [];
+    try {
+      assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls);
+    } catch {
+      this.logger.warn(
+        'Skipping malformed OpenAI tool_calls payload while extracting tool use.',
+      );
+      return [];
+    }
+
+    return toolCalls.map((call) => ({
+      provider: this.toolCallProvider,
+      callId: call.id,
+      name: call.function.name,
+      input: this.parseArguments(call.function.arguments),
+      raw: call,
+    })) as TCall[];
   }
 
   /**
