@@ -24,10 +24,10 @@ import {
 } from '@shared/utils/icons';
 import { formatRelativeTime } from '@shared/utils/string';
 import { layoutStyles } from '../styles/logStyles';
-import { ELEMENT_IDS, FILTER_BUTTONS, SORT_BUTTONS } from '../constants';
+import { ELEMENT_IDS, FILTER_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement, getRadioValue, setsEqual } from '../utils';
-import type { StreamFilter, StreamSort } from '../store';
+import type { StreamFilter } from '../store';
 
 /** Stream statuses considered active (non-terminal) for child stream display. */
 const ACTIVE_CHILD_STATUSES: ReadonlySet<string> = new Set([
@@ -554,10 +554,6 @@ export class StreamTabs extends LitElement {
         flex: 0 0 auto;
       }
 
-      .sort-btn.active::part(control) {
-        background-color: var(--vscode-toolbar-hoverBackground);
-      }
-
       /* Child stream nesting */
       .child-streams {
         padding-left: var(--spacing-medium, 12px);
@@ -583,7 +579,6 @@ export class StreamTabs extends LitElement {
   @property({ type: Boolean, reflect: true }) compact = false;
   @property({ attribute: false }) activeStreamId: string | null = null;
   @property({ attribute: false }) filter: StreamFilter = 'all';
-  @property({ attribute: false }) sort: StreamSort = 'time';
   /**
    * Stream states map — passed directly from ProgressApp's streamStates$.
    * Stable Mutative reference (only changed entries get new refs), so
@@ -727,36 +722,13 @@ export class StreamTabs extends LitElement {
                 )}
               </vscode-radio-group>
 
-              <vscode-toolbar-container
-                id="sortButtons"
-                @click=${this.handleSortClick}
-              >
-                ${repeat(
-                  SORT_BUTTONS,
-                  (btn) => btn.id,
-                  (btn) => html`
-                    <vscode-toolbar-button
-                      id=${btn.id}
-                      icon=${btn.icon}
-                      label=${btn.title}
-                      title=${btn.title}
-                      data-sort=${btn.sort}
-                      aria-pressed=${this.sort === btn.sort ? 'true' : 'false'}
-                      class=${classMap({
-                        'sort-btn': true,
-                        active: this.sort === btn.sort,
-                      })}
-                    ></vscode-toolbar-button>
-                  `,
-                )}
-                <vscode-toolbar-button
-                  id=${ELEMENT_IDS.DELETE_ALL_BTN}
-                  icon="close-all"
-                  label="Clear all"
-                  title="Clear all streams"
-                  @click=${this.handleDeleteAll}
-                ></vscode-toolbar-button>
-              </vscode-toolbar-container>
+              <vscode-toolbar-button
+                id=${ELEMENT_IDS.DELETE_ALL_BTN}
+                icon="close-all"
+                label="Clear all"
+                title="Clear all streams"
+                @click=${this.handleDeleteAll}
+              ></vscode-toolbar-button>
             </div>`}
       </div>
     `;
@@ -800,15 +772,6 @@ export class StreamTabs extends LitElement {
     const filter = getRadioValue<StreamFilter>(event);
     if (!filter) return;
     this.dispatchEvent(ProgressEvents.filterChange({ filter }));
-  }
-
-  private handleSortClick(event: MouseEvent): void {
-    const button = getComposedPathElement<HTMLElement>(event, '[data-sort]');
-    if (!(button instanceof HTMLElement) || !button.dataset.sort) return;
-
-    this.dispatchEvent(
-      ProgressEvents.sortChange({ sort: button.dataset.sort as StreamSort }),
-    );
   }
 
   private handleDeleteAll(): void {
