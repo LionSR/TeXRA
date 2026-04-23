@@ -3,18 +3,13 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
+import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 import type {
   BaseFlowContextInit,
   FlowParams,
 } from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
-
-/** Snapshot of nested-delegation settings, read once per tool-use flow entry. */
-export interface NestedDelegationConfig {
-  enabled: boolean;
-  maxDepth: number;
-}
 
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly setting: AgentToolUseSetting;

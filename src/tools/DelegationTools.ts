@@ -19,7 +19,7 @@ import {
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { readNestedDelegationConfig } from '@agent/implementations/flows/tooluse/runToolUseFlow';
+import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   getHandle,

@@ -21,6 +21,10 @@ import {
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
+import {
+  NESTED_DELEGATION_DEPTH_RANGE,
+  clampNestedDelegationDepth,
+} from '@shared/constants/delegationPolicy';
 
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {
@@ -276,7 +280,8 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) detachSubagentsOnStop = false;
   @property({ attribute: false }) worktreeSupport = false;
   @property({ attribute: false }) nestedDelegationEnabled = false;
-  @property({ attribute: false }) nestedDelegationMaxDepth = 2;
+  @property({ attribute: false }) nestedDelegationMaxDepth =
+    NESTED_DELEGATION_DEPTH_RANGE.default;
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
@@ -315,7 +320,7 @@ export class MultiAgentTab extends LitElement {
       input.value = String(this.nestedDelegationMaxDepth);
       return;
     }
-    const clamped = Math.min(5, Math.max(1, Math.round(parsed)));
+    const clamped = clampNestedDelegationDepth(parsed);
     if (clamped !== parsed) input.value = String(clamped);
     this.dispatchEvent(
       createEvent('nested-delegation-max-depth-change', { value: clamped }),
@@ -550,8 +555,8 @@ export class MultiAgentTab extends LitElement {
               class="reliability-input"
               type="number"
               .value=${String(this.nestedDelegationMaxDepth)}
-              min="1"
-              max="5"
+              min=${NESTED_DELEGATION_DEPTH_RANGE.min}
+              max=${NESTED_DELEGATION_DEPTH_RANGE.max}
               ?disabled=${!this.nestedDelegationEnabled}
               @change=${(e: Event) =>
                 this.handleNestedDelegationMaxDepthChange(

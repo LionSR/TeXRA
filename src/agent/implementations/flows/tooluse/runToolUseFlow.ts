@@ -14,8 +14,9 @@ import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
-import { GlobalStateKey, WorkspaceStateKey } from '@common/state';
+import { getGlobalState } from '@agent/core/stateStore';
+import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
+import { GlobalStateKey } from '@common/state';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import {
@@ -24,6 +25,10 @@ import {
   type EndGroupStatus,
 } from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
+import {
+  delegationAllowed,
+  type NestedDelegationConfig,
+} from '@shared/constants/delegationPolicy';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -43,10 +48,7 @@ import {
 } from './nodes/types';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
-import type {
-  NestedDelegationConfig,
-  ToolUseServices,
-} from './ToolUseServices';
+import type { ToolUseServices } from './ToolUseServices';
 
 export interface RunToolUseFlowInput<
   C = unknown,
@@ -79,32 +81,6 @@ export interface ToolUseFlowContext {
 }
 
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
-
-export function readNestedDelegationConfig(): NestedDelegationConfig {
-  const state = getWorkspaceState();
-  const enabled = state.get<boolean>(
-    WorkspaceStateKey.NESTED_DELEGATION_ENABLED,
-    false,
-  );
-  const raw = state.get<number>(WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH, 2);
-  const maxDepth = Math.min(
-    5,
-    Math.max(1, Number.isFinite(raw) ? Math.round(raw) : 2),
-  );
-  return { enabled, maxDepth };
-}
-
-/**
- * Delegation gate. Root (depth 0) can always delegate; subagents can only
- * delegate when nesting is enabled and their depth is below the cap.
- */
-export function delegationAllowed(
-  depth: number,
-  config: NestedDelegationConfig,
-): boolean {
-  if (depth <= 0) return true;
-  return config.enabled && depth < config.maxDepth;
-}
 
 function resolveTools(
   tools: AgentToolUseSetting['tools'],

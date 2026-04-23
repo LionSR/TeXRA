@@ -37,6 +37,7 @@ import {
   type AgentLoadOptions,
 } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
+import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -741,6 +742,12 @@ export async function resumeToolUseFromSnapshot(
     snapshot.agentConfig,
     snapshot.executionId,
     { streamTabIdOverride: snapshot.streamId },
+  );
+  // Recover delegation depth from the persisted parent-execution chain
+  // so resumed subagents remain gated by the nested-delegation policy
+  // instead of silently promoting to root.
+  ctx.delegationDepth = await computeDelegationDepthFromStorage(
+    snapshot.executionId,
   );
   const { setting, streamId } = ctx;
 

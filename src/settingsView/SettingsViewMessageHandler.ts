@@ -80,6 +80,10 @@ import {
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
 import { isFastFirstResponseModel } from '@shared/constants/fastModels';
+import {
+  NESTED_DELEGATION_DEPTH_RANGE,
+  clampNestedDelegationDepth,
+} from '@shared/constants/delegationPolicy';
 import type {
   RemoteAgent,
   ProviderKeyStatus,
@@ -177,12 +181,6 @@ const ALLOWED_VSCODE_SETTING_KEYS = new Set([
     .map((s) => s.key),
   ...RELIABILITY_SETTINGS.map((s) => s.key),
 ]);
-
-/** Clamp nested delegation max depth to the supported range. */
-function clampNestedMaxDepth(value: unknown): number {
-  const n = typeof value === 'number' && Number.isFinite(value) ? value : 2;
-  return Math.min(5, Math.max(1, Math.round(n)));
-}
 
 function getProviderVscodeSettings(provider: string): ProviderVscodeSetting[] {
   const defs = PROVIDER_VSCODE_SETTINGS[provider.toLowerCase()];
@@ -839,8 +837,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       WorkspaceStateKey.NESTED_DELEGATION_ENABLED,
       false,
     );
-    const nestedDelegationMaxDepth = clampNestedMaxDepth(
-      workspaceSM.get<number>(WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH, 2),
+    const nestedDelegationMaxDepth = clampNestedDelegationDepth(
+      workspaceSM.get<number>(
+        WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+        NESTED_DELEGATION_DEPTH_RANGE.default,
+      ),
     );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
@@ -888,7 +889,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     await workspaceSM.update(
       WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
-      clampNestedMaxDepth(data.value),
+      clampNestedDelegationDepth(data.value),
     );
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }

@@ -23,6 +23,7 @@ import {
   AgentSourceSchema,
 } from './agent';
 import { AgentModePresetSchema } from './agentPresets';
+import { NESTED_DELEGATION_DEPTH_RANGE } from '../constants/delegationPolicy';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
@@ -216,7 +217,12 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
   allowOrchestratorKill: z.boolean().prefault(true),
   detachSubagentsOnStop: z.boolean().prefault(false),
   nestedDelegationEnabled: z.boolean().prefault(false),
-  nestedDelegationMaxDepth: z.number().int().min(1).max(5).prefault(2),
+  nestedDelegationMaxDepth: z
+    .number()
+    .int()
+    .min(NESTED_DELEGATION_DEPTH_RANGE.min)
+    .max(NESTED_DELEGATION_DEPTH_RANGE.max)
+    .prefault(NESTED_DELEGATION_DEPTH_RANGE.default),
 });
 export type UpdateSuperYoloEnabledMessage = z.infer<
   typeof UpdateSuperYoloEnabledMessageSchema
@@ -589,7 +595,11 @@ const SetNestedDelegationEnabledMessageSchema = z.object({
 
 const SetNestedDelegationMaxDepthMessageSchema = z.object({
   command: z.literal(CMD.SET_NESTED_DELEGATION_MAX_DEPTH),
-  value: z.number().int().min(1).max(5),
+  value: z
+    .number()
+    .int()
+    .min(NESTED_DELEGATION_DEPTH_RANGE.min)
+    .max(NESTED_DELEGATION_DEPTH_RANGE.max),
 });
 
 // Agent mode preset inbound messages
