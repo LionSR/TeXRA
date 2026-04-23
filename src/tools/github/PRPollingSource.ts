@@ -324,7 +324,10 @@ export class PRPollingSource {
                 BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
                 BACKOFF_MAX_MS,
               );
-              state.skipPollUntilMs = now + backoffMs;
+              // Jitter ±20% to spread retries when many subscriptions fail
+              // simultaneously (e.g. network outage), preventing thundering herd.
+              const jitter = 0.8 + Math.random() * 0.4;
+              state.skipPollUntilMs = now + backoffMs * jitter;
               this.logger.warn(
                 `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
                   `retrying in ${backoffMs / 1000}s): ${String(err)}`,
