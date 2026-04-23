@@ -35,7 +35,11 @@ function emitBindingsChanged(): void {
   bus.emit('prSubscriptionBindingsChanged', undefined);
 }
 
-function removeBoundKey(streamId: StreamTabId, bound: PerStream, key: string): void {
+function removeBoundKey(
+  streamId: StreamTabId,
+  bound: PerStream,
+  key: string,
+): void {
   bound.delete(key);
   if (bound.size === 0) perStream.delete(streamId);
 }
