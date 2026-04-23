@@ -212,7 +212,8 @@ async function migrateStreamToStore(
   const writes: Promise<void>[] = [];
 
   // Meta: taskState + executionId + parentStreamId.
-  // activeRunId is no longer persisted; one run per workflow tab.
+  // Preserve legacy activeRunId as a read-time migration hint so flattened
+  // outputs/instructions can still prefer the run users last selected.
   const taskStateEntry = data.taskStateEntries.find(
     ([key]) => key === streamId,
   );
@@ -220,6 +221,7 @@ async function migrateStreamToStore(
     ? TaskStateSchema.safeParse(taskStateEntry[1])
     : null;
   const executionId = extractFromRecord(data.executionIdsRaw, streamId);
+  const activeRunId = extractFromRecord(data.activeRunIdsRaw, streamId);
   const parentStreamId = extractFromRecord(data.parentStreamIdsRaw, streamId);
 
   const meta: StreamTabMeta = {};
@@ -228,6 +230,9 @@ async function migrateStreamToStore(
   }
   if (typeof executionId === 'string' && executionId.length > 0) {
     meta.executionId = executionId;
+  }
+  if (typeof activeRunId === 'string' && activeRunId.length > 0) {
+    meta.activeRunId = normalizeRunId(activeRunId);
   }
   if (typeof parentStreamId === 'string' && parentStreamId.length > 0) {
     meta.parentStreamId = parentStreamId;
@@ -276,8 +281,8 @@ async function migrateStreamToStore(
   // The new UI renders instructions as user-message log entries at run
   // start, but pre-refactor workflow runs never logged them — the text
   // only lived in this legacy memento record. Persist it verbatim as a
-  // `legacyInstructions.json` side file so no user-visible data is lost
-  // on upgrade; it isn't read by the UI but remains accessible on disk.
+  // `legacyInstructions.json` side file so load-time backfills can restore
+  // the visible instruction in archived workflow tabs.
   const runInstructionsData = extractFromRecord(
     data.runInstructionsRaw,
     streamId,

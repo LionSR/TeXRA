@@ -13,12 +13,19 @@
  */
 
 import { z } from 'zod';
+import {
+  isAssistantMessage,
+  isToolMessage,
+} from 'openai/lib/chatCompletionUtils';
 import latexPreamble from '../../../resources/templates/chatExport.tex';
 import type { Part } from '@google/genai';
-import type { ChatCompletionMessageToolCall } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
+} from 'openai/resources/chat/completions';
 import type {
   ResponseFunctionCallOutputItemList,
-  ResponseFunctionToolCall,
+  ResponseFunctionToolCallItem,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
 
@@ -393,9 +400,10 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
     // OpenAI Response API: top-level function_call_output items.
     // output can be a string OR an array of input_text/input_file/input_image parts.
     if (isResponseFunctionCallOutputItem(item)) {
-      if (Array.isArray(item.output)) {
+      const output = item.output;
+      if (Array.isArray(output)) {
         const textParts: string[] = [];
-        for (const part of item.output as ResponseFunctionCallOutputItemList) {
+        for (const part of output as ResponseFunctionCallOutputItemList) {
           if (part.type === 'input_text' && typeof part.text === 'string') {
             textParts.push(part.text);
           } else if (part.type === 'input_image') {
@@ -448,24 +456,22 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
       }
 
       // OpenAI Chat Completions: tool_calls array on assistant messages
-      if (Array.isArray(msg.tool_calls)) {
-        for (const tc of msg.tool_calls as ChatCompletionMessageToolCall[]) {
-          const fn = tc.type === 'function' ? tc.function : undefined;
-          if (fn?.name) {
-            nodes.push({
-              kind: 'tool-call',
-              name: fn.name,
-              input: fn.arguments ?? '{}',
-            });
-            lastAssistantHadToolUse = true;
-          }
+      for (const tc of getAssistantToolCalls(item)) {
+        const fn = tc.type === 'function' ? tc.function : undefined;
+        if (fn?.name) {
+          nodes.push({
+            kind: 'tool-call',
+            name: fn.name,
+            input: fn.arguments ?? '{}',
+          });
+          lastAssistantHadToolUse = true;
         }
       }
       continue;
     }
 
     // OpenAI Chat Completions tool role
-    if (role === 'tool') {
+    if (role === 'tool' || isToolMessage(toChatCompletionMessageParam(item))) {
       const text =
         typeof msg.content === 'string'
           ? msg.content
@@ -480,7 +486,7 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
 
 function isResponseFunctionCallItem(
   item: unknown,
-): item is ResponseFunctionToolCall {
+): item is ResponseFunctionToolCallItem {
   return (
     typeof item === 'object' &&
     item !== null &&
@@ -498,6 +504,20 @@ function isResponseFunctionCallOutputItem(
     'type' in item &&
     item.type === 'function_call_output'
   );
+}
+
+function toChatCompletionMessageParam(
+  item: unknown,
+): ChatCompletionMessageParam {
+  return item as ChatCompletionMessageParam;
+}
+
+function getAssistantToolCalls(item: unknown): ChatCompletionMessageToolCall[] {
+  const message = toChatCompletionMessageParam(item);
+  if (!isAssistantMessage(message) || !Array.isArray(message.tool_calls)) {
+    return [];
+  }
+  return message.tool_calls;
 }
 
 // ============================================================
