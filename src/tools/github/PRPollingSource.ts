@@ -327,7 +327,7 @@ export class PRPollingSource {
               // waiting on rate limits doesn't erode the 24 h failure window.
               const rateLimitEndsAt = err.resetAt * 1000;
               if (state.detachDeadlineMs !== undefined) {
-                state.detachDeadlineMs += rateLimitEndsAt - now;
+                state.detachDeadlineMs += Math.max(0, rateLimitEndsAt - now);
               }
               state.skipPollUntilMs = rateLimitEndsAt;
               this.logger.warn(
