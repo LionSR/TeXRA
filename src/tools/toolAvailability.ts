@@ -62,19 +62,48 @@ export function getDisabledToolNames(): ReadonlySet<string> {
 
 /**
  * Run all external tool checks in parallel.
- * Always performs fresh `check` + `detailCheck` probes and updates the
+ * Always returns fresh `check` + `detailCheck` probes and updates the
  * availability cache.
  *
- * Called by the tool dashboard (needs per-group results).
- * Also populates the cache read by `getUnavailableToolNamesCached()`.
+ * Concurrent calls are coalesced: while a probe is in flight, additional
+ * callers share the same Promise and receive its results. If any caller
+ * arrives AFTER the active probe started reading inputs, a follow-up probe
+ * is scheduled so the cache ultimately reflects the most recent state and
+ * a stale probe can't overwrite a fresh one by finishing last.
+ *
+ * Called by the tool dashboard (needs per-group results) and
+ * {@link refreshToolAvailability}. Also populates the cache read by
+ * `getUnavailableToolNamesCached()`.
  *
  * @returns Per-group results with `available` / `not-found` / `unknown`
  *   status and an optional human-readable `statusDetail`.
  */
-export async function runExternalToolChecks(): Promise<
-  ExternalToolCheckResult[]
-> {
-  const results = await Promise.all(
+let inflightProbe: Promise<ExternalToolCheckResult[]> | null = null;
+let pendingRerun = false;
+export function runExternalToolChecks(): Promise<ExternalToolCheckResult[]> {
+  if (inflightProbe) {
+    pendingRerun = true;
+    return inflightProbe;
+  }
+  inflightProbe = (async () => {
+    let results: ExternalToolCheckResult[] = [];
+    try {
+      do {
+        pendingRerun = false;
+        results = await runProbes();
+        cached = buildUnavailableSet(results);
+        lastResults = results;
+      } while (pendingRerun);
+    } finally {
+      inflightProbe = null;
+    }
+    return results;
+  })();
+  return inflightProbe;
+}
+
+async function runProbes(): Promise<ExternalToolCheckResult[]> {
+  return Promise.all(
     EXTERNAL_TOOL_DEFS.map(
       async ({
         id,
@@ -104,11 +133,6 @@ export async function runExternalToolChecks(): Promise<
       },
     ),
   );
-
-  cached = buildUnavailableSet(results);
-  lastResults = results;
-
-  return results;
 }
 
 /** Build the set of unavailable tool names from external check results only. */
@@ -139,31 +163,13 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * git-repo status, extension install state) — mutators don't have to know
  * which UIs depend on the result.
  *
- * Concurrent calls are coalesced: while a probe is in flight, additional
- * callers share the same Promise. If any of those callers arrives AFTER
- * the probe started reading inputs, a follow-up probe is scheduled so the
- * final cache reflects the most recent state. A burst therefore produces
- * at most two probes and one `toolAvailabilityChanged` emission at the end.
+ * Coalescing and follow-up-probe scheduling happen inside
+ * `runExternalToolChecks`, so the dashboard-load probe and a refresh-triggered
+ * probe can't race.
  */
-let inflightRefresh: Promise<void> | null = null;
-let pendingRerun = false;
-export function refreshToolAvailability(): Promise<void> {
-  if (inflightRefresh) {
-    pendingRerun = true;
-    return inflightRefresh;
-  }
-  inflightRefresh = (async () => {
-    try {
-      do {
-        pendingRerun = false;
-        await runExternalToolChecks();
-      } while (pendingRerun);
-      bus.emit('toolAvailabilityChanged', undefined);
-    } finally {
-      inflightRefresh = null;
-    }
-  })();
-  return inflightRefresh;
+export async function refreshToolAvailability(): Promise<void> {
+  await runExternalToolChecks();
+  bus.emit('toolAvailabilityChanged', undefined);
 }
 
 /**
