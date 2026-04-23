@@ -63,6 +63,8 @@ interface CachedStream {
   messages: LogMessageData[];
   toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
+  /** Whether to render this stream's logs in terminal style. */
+  terminalMode: boolean;
 }
 
 @customElement('log-list')
@@ -115,6 +117,7 @@ export class LogList extends LitElement {
       const entry = this.getOrCreateEntry(streamId);
       entry.groups = this.streamContext.taskGroups;
       entry.messages = this.streamContext.logs;
+      entry.terminalMode = this.streamContext.terminalMode;
 
       // Evict oldest non-active entries when cache exceeds cap
       this.evictStaleCacheEntries();
@@ -139,6 +142,7 @@ export class LogList extends LitElement {
           .messages=${data.messages}
           .hasStreams=${this.streamContext.hasStreams}
           .toggleStates=${data.toggleStates}
+          ?terminal=${data.terminalMode}
         ></task-group-list>
       `,
     )}`;
@@ -214,6 +218,7 @@ export class LogList extends LitElement {
       messages: [],
       toggleStates,
       ref: createRef<TaskGroupList>(),
+      terminalMode: false,
     };
     this.streamCache.set(streamId, entry);
     return entry;
