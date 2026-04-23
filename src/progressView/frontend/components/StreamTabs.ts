@@ -288,6 +288,12 @@ export class StreamTab extends LitElement {
         gap: var(--spacing-tiny);
       }
 
+      .compact-subagent-hint {
+        font-size: var(--font-size-xs);
+        opacity: 0.35;
+        flex-shrink: 0;
+      }
+
       .tab-delete::part(control) {
         padding: 0;
         border-radius: var(--border-radius-small);
@@ -378,6 +384,7 @@ export class StreamTab extends LitElement {
     const tooltip = this._tooltip;
     const agentDecorator = this._agentDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
+    const childStreamLabel = `${this.childCount} child stream${this.childCount > 1 ? 's' : ''}`;
 
     return html`
       <div
@@ -396,9 +403,7 @@ export class StreamTab extends LitElement {
               class="tab-expand"
               data-stream=${stream.name}
               data-action="toggle-children"
-              title=${this.expanded
-                ? 'Collapse child streams'
-                : `${this.childCount} child stream${this.childCount > 1 ? 's' : ''}`}
+              title=${this.expanded ? 'Collapse child streams' : childStreamLabel}
               aria-expanded=${this.expanded ? 'true' : 'false'}
             >
               <i class="codicon codicon-chevron-right"></i>
@@ -415,6 +420,14 @@ export class StreamTab extends LitElement {
               >${stream.parentStreamId ? '↳ ' : ''}${stream.label ||
               stream.name}</span
             >
+            ${this.childCount > 0 && this.compact
+              ? html`<i
+                  class="codicon codicon-chevron-right compact-subagent-hint"
+                  role="img"
+                  aria-label=${childStreamLabel}
+                  title=${childStreamLabel}
+                ></i>`
+              : nothing}
           </div>
           ${this.compact
             ? nothing
@@ -659,6 +672,7 @@ export class StreamTabs extends LitElement {
               (stream) => stream.name,
               (stream) => {
                 const children = this.childStreamsByParent.get(stream.name);
+                const rawChildCount = children?.length ?? 0;
                 // In compact mode, force childCount to 0 so the entire
                 // <div class="child-streams"> subtree is unmounted (saves
                 // memory on sessions with many child streams). In non-compact
@@ -667,12 +681,12 @@ export class StreamTabs extends LitElement {
                 // case PR #2984 optimized for). Compact toggles come from
                 // sidebar resize, which is infrequent enough that
                 // unmount/remount is acceptable and frees memory.
-                const childCount = !this.compact ? (children?.length ?? 0) : 0;
+                const childCount = !this.compact ? rawChildCount : 0;
                 const expanded =
                   childCount > 0 && this.expandedParents.has(stream.name);
 
                 // prettier-ignore
-                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${childCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded}>${repeat(children, (child) => child.name, (child) => {
+                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${rawChildCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded}>${repeat(children, (child) => child.name, (child) => {
                   const childStatus = this.getStatus(child.name);
                   const isFinished = classifyChild(this.streamStates, child.name) === 'finished';
                   // prettier-ignore
