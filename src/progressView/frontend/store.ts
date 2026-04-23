@@ -11,7 +11,6 @@ import {
   type StreamTabInfo,
   type StreamTabId,
 } from '@shared/schemas';
-import type { StreamSort } from '@shared/streams/streamSort';
 import type { ProcessOutputMap } from './contexts/streamContexts';
 
 // Re-export schema types for components (single source of truth)
@@ -27,7 +26,6 @@ export {
 
 export type StreamFilter = AgentCategoryFilter;
 export type { ContextState };
-export type { StreamSort };
 
 /** Followup options derived from schema (minus command/stream fields) */
 export type FollowupOptionsState = Omit<
@@ -59,7 +57,6 @@ export interface ProgressState {
   /** Canonical stream storage — Map preserves insertion order for iteration. */
   streamById: Map<StreamTabId, StreamTabInfo>;
   streamFilter: StreamFilter;
-  streamSort: StreamSort;
   /** Meta state per stream (status, todos, usage, ui, taskGroups, etc.) */
   streamStates: Map<StreamTabId, StreamState>;
   /** Log messages per stream — separated so log appends don't trigger meta context updates */
@@ -86,7 +83,6 @@ export function createInitialState(): ProgressState {
     activeStreamId: null,
     streamById: new Map(),
     streamFilter: 'all',
-    streamSort: 'time',
     streamStates: new Map(),
     streamLogs: new Map(),
     followupOptionsByStream: new Map(),

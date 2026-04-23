@@ -20,9 +20,6 @@ export const ELEMENT_IDS = {
   PLAN_VIEW: 'planView',
   TOOLBAR_CONTAINER: 'toolbarContainer',
   DELETE_ALL_BTN: 'deleteAllBtn',
-  SORT_TIME_BTN: 'sortTimeBtn',
-  SORT_FILE_BTN: 'sortFileBtn',
-  SORT_AGENT_BTN: 'sortAgentBtn',
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_NEW_BTN: 'runNewBtn',
   RESUME_BTN: 'resumeBtn',
@@ -185,27 +182,6 @@ export const TOOLBAR_BUTTONS = {
   workflow: WORKFLOW_TOOLBAR,
   toolUse: TOOL_USE_TOOLBAR,
 };
-
-export const SORT_BUTTONS = [
-  {
-    id: ELEMENT_IDS.SORT_TIME_BTN,
-    icon: 'clock',
-    sort: 'time',
-    title: 'Sort by time',
-  },
-  {
-    id: ELEMENT_IDS.SORT_FILE_BTN,
-    icon: 'file',
-    sort: 'inputFile',
-    title: 'Sort by file',
-  },
-  {
-    id: ELEMENT_IDS.SORT_AGENT_BTN,
-    icon: 'account',
-    sort: 'agent',
-    title: 'Sort by agent',
-  },
-];
 
 interface FilterButton {
   readonly id: string;

@@ -14,7 +14,6 @@ import {
   type ProgressState,
   type StreamFilter,
   type StreamLogs,
-  type StreamSort,
   type StreamState,
 } from './store';
 import { removePrompt, resolvedProposalIds } from './slices/permissionSlice';
@@ -27,7 +26,6 @@ import type {
   FollowupModeDetail,
   PermissionActionDetail,
   ProgressFileActionDetail,
-  SortEventDetail,
   StreamEventDetail,
   ToolbarCommandDetail,
 } from './events';
@@ -51,10 +49,8 @@ export interface FrontendEventHandlerContext {
     streamId: StreamTabId,
     updater: (prev: StreamLogs) => StreamLogs,
   ): void;
-  /** Persist filter/sort preferences to webview state. */
-  savePrefs?(
-    prefs: Partial<{ streamFilter: StreamFilter; streamSort: StreamSort }>,
-  ): void;
+  /** Persist filter preference to webview state. */
+  savePrefs?(prefs: Partial<{ streamFilter: StreamFilter }>): void;
 }
 
 export function handleStreamSwitch(
@@ -107,20 +103,6 @@ export function handleFilterChange(
   );
   ctx.savePrefs?.({ streamFilter: filter });
   postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, { filter });
-}
-
-export function handleSortChange(
-  event: CustomEvent<SortEventDetail>,
-  ctx: FrontendEventHandlerContext,
-): void {
-  const { sort } = event.detail;
-  ctx.setState((prev) =>
-    create(prev, (draft) => {
-      draft.streamSort = sort;
-    }),
-  );
-  ctx.savePrefs?.({ streamSort: sort });
-  postMessage(PROGRESS_VIEW_COMMANDS.SORT_STREAMS, { sortBy: sort });
 }
 
 export function handleDeleteAll(): void {

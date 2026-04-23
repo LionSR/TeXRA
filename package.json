@@ -783,6 +783,13 @@
     ],
     "commands": [
       {
+        "command": "texra.sortStreams",
+        "title": "Sort Streams",
+        "shortTitle": "Sort",
+        "category": "TeXRA",
+        "icon": "$(list-ordered)"
+      },
+      {
         "command": "texra.createSampleProject",
         "title": "Create Sample Project",
         "category": "TeXRA"
@@ -1292,6 +1299,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "texra.sortStreams",
+          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
+          "group": "navigation@0"
+        },
         {
           "command": "texra.indentTeX",
           "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
