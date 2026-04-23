@@ -1693,7 +1693,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return [true, messages];
     }
 
-    this.logger.warn(
+    this.logger.debug(
       'Output file exists but no end tag found - continuing from file',
     );
 

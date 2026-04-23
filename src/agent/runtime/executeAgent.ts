@@ -578,7 +578,7 @@ export async function executeAgent(
       // Pre-execution UI setup
       if (executionId) await ensureRunDir(executionId);
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
-      logger.info(`Starting task execution for ${streamId}`);
+      logger.info(`Starting task execution (streamId: ${streamId})`);
       logger.info(`Input file: ${config.inputFile}`);
       logger.debug(
         `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
