@@ -83,13 +83,17 @@ export async function runExternalToolChecks(): Promise<
         check,
         detailCheck,
       }): Promise<ExternalToolCheckResult> => {
-        const [available, statusDetail] = await Promise.all([
-          check().catch(() => null),
-          detailCheck?.().catch(() => undefined),
-        ]);
-        if (available === null) {
+        // Run check then detailCheck sequentially — some groups (Codex,
+        // Zotero, GitHub PR) share probe work between the two, so running
+        // them in parallel would duplicate that work.
+        let available: boolean;
+        try {
+          available = await check();
+        } catch {
+          const statusDetail = await detailCheck?.().catch(() => undefined);
           return { id, tools, name, status: 'unknown', statusDetail };
         }
+        const statusDetail = await detailCheck?.().catch(() => undefined);
         return {
           id,
           tools,
@@ -134,10 +138,24 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  * an input to the availability checks changes (GitHub token, workspace
  * git-repo status, extension install state) — mutators don't have to know
  * which UIs depend on the result.
+ *
+ * Concurrent calls are coalesced: while a probe is in flight, additional
+ * callers receive the same Promise. Bursts of events (e.g. workspace folder
+ * and extension changes landing together) therefore trigger one probe and
+ * one `toolAvailabilityChanged` emission.
  */
-export async function refreshToolAvailability(): Promise<void> {
-  await runExternalToolChecks();
-  bus.emit('toolAvailabilityChanged', undefined);
+let inflightRefresh: Promise<void> | null = null;
+export function refreshToolAvailability(): Promise<void> {
+  if (inflightRefresh) return inflightRefresh;
+  inflightRefresh = (async () => {
+    try {
+      await runExternalToolChecks();
+      bus.emit('toolAvailabilityChanged', undefined);
+    } finally {
+      inflightRefresh = null;
+    }
+  })();
+  return inflightRefresh;
 }
 
 /**

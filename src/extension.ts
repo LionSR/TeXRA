@@ -297,24 +297,40 @@ export async function activate(context: vscode.ExtensionContext) {
   };
   setGitHubTokenProvider(() => cachedGitHubToken);
   void refreshGitHubToken();
+  // VS Code's event emitters don't await async listeners, so we funnel
+  // fire-and-forget async work through this helper to log rejections
+  // instead of letting them become unhandled promise rejections.
+  const logRefreshFailure = (trigger: string) => (err: unknown) => {
+    logger.error(
+      'extension',
+      `Tool availability refresh failed (${trigger}): ${toErrorMessage(err)}`,
+    );
+  };
+
   context.subscriptions.push(
-    context.secrets.onDidChange(async (e) => {
+    context.secrets.onDidChange((e) => {
       if (e.key !== SecretManager.GITHUB_TOKEN_KEY) return;
       // Refresh the cached token first so availability checks see the
       // new value, then re-probe so any subscribed UI (Tools tab) and
       // the runtime cache pick up the change automatically.
-      await refreshGitHubToken();
-      await refreshToolAvailability();
+      void (async () => {
+        await refreshGitHubToken();
+        await refreshToolAvailability();
+      })().catch(logRefreshFailure('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      void refreshToolAvailability();
+      void refreshToolAvailability().catch(
+        logRefreshFailure('extension change'),
+      );
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
     // gates the GitHub PR subscription tool group.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void refreshToolAvailability();
+      void refreshToolAvailability().catch(
+        logRefreshFailure('workspace folder change'),
+      );
     }),
   );
   const disposeGitHubAuthListener = bus.on(
