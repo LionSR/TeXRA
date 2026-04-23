@@ -205,6 +205,25 @@ interface ApprovalMeta {
 }
 
 /**
+ * Defense-in-depth depth gate shared by fresh delegations and resumes.
+ * The tool-use flow already filters delegation tools from the toolset when
+ * the cap is reached, but if a rogue agent calls through anyway (fresh or
+ * via the execution_id resume path) we refuse here with a clear error so
+ * the LLM can pivot. The root orchestrator (depth 0) is never blocked.
+ */
+function depthGateError(parentDelegationDepth: number): ToolResult | null {
+  if (parentDelegationDepth <= 0) return null;
+  const { maxDepth } = readNestedDelegationConfig();
+  if (parentDelegationDepth >= maxDepth) {
+    return {
+      error: `Delegation depth cap reached (max depth ${maxDepth}). Raise Settings → Multi-Agent → Max delegation depth, or complete this task directly without delegating.`,
+      isError: true,
+    };
+  }
+  return null;
+}
+
+/**
  * Execute a subagent asynchronously.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
  * are consistent and usable with the executions tool.
@@ -224,18 +243,8 @@ async function executeSubagent(
   const parentExecutionId = parentContext?.executionId;
   const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
 
-  // Defense-in-depth: the tool-use flow already filters delegation tools out
-  // of the toolset when the depth cap is reached, but if a rogue agent calls
-  // the tool anyway we refuse here with a clear message so the LLM can pivot.
-  if (parentDelegationDepth > 0) {
-    const { maxDepth } = readNestedDelegationConfig();
-    if (parentDelegationDepth >= maxDepth) {
-      return {
-        error: `Delegation depth cap reached (max depth ${maxDepth}). Raise Settings → Multi-Agent → Max delegation depth, or complete this task directly without delegating.`,
-        isError: true,
-      };
-    }
-  }
+  const gated = depthGateError(parentDelegationDepth);
+  if (gated) return gated;
 
   const executionId = generateExecutionId();
   const startedAt = Date.now();
@@ -829,6 +838,11 @@ Git worktree support: ${
     executionId: string,
     instruction: string,
   ): Promise<ToolResult> {
+    const parentDelegationDepth =
+      getCurrentToolFileInteractionContext()?.delegationDepth ?? 0;
+    const gated = depthGateError(parentDelegationDepth);
+    if (gated) return gated;
+
     const handle = getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
       throw new Error(
