@@ -1,5 +1,5 @@
 /**
- * Poll-based {@link AsyncEventSource} for GitHub PR activity.
+ * Poll-based event source for GitHub PR activity.
  *
  * Each subscribed PR maintains per-resource cursors (last-seen ID) and ETags.
  * A single shared timer ticks every `POLL_INTERVAL_MS` and iterates all active
@@ -32,7 +32,6 @@ import {
   type ConditionalResponse,
   ghGet,
 } from './githubClient';
-import type { AsyncEventSource, Disposable } from './AsyncEventSource';
 import type {
   GhCheckRun,
   GhIssueComment,
@@ -41,10 +40,20 @@ import type {
   GhReviewComment,
 } from './prTypes';
 
+export interface Disposable {
+  dispose(): void;
+}
+
 const POLL_INTERVAL_MS = 30_000;
 const MAX_CONCURRENT_SUBSCRIPTIONS = 10;
 // Coalesce this many same-kind events in a single tick into a summary.
 const COALESCE_THRESHOLD = 3;
+// Exponential backoff on transient poll failures. After each failure the
+// subscription sleeps for min(BASE * 2^(n-1), MAX) before retrying, so the
+// schedule is 1 min → 2 → 4 → 8 → 16 → 32 → 60 min (cap). The subscription
+// is never torn down due to transient errors; it keeps retrying indefinitely.
+const BACKOFF_BASE_MS = 60_000;
+const BACKOFF_MAX_MS = 3_600_000;
 // Per-resource id history is trimmed to this many entries so long-running
 // subscriptions don't grow the state map unboundedly.
 const MAX_SEEN_IDS = 1000;
@@ -154,7 +163,7 @@ interface SubscriptionState {
   skipPollUntilMs: number;
 }
 
-export class PRPollingSource implements AsyncEventSource {
+export class PRPollingSource {
   private readonly logger = new AgentLogger('PRPollingSource');
   private readonly subscriptions = new Map<string, SubscriptionState>();
   private readonly changeListeners = new Set<
@@ -186,8 +195,8 @@ export class PRPollingSource implements AsyncEventSource {
     }
   }
 
-  subscribe(key: string, onEvent: (text: string) => void): Disposable {
-    const pr = parsePRKey(key);
+  subscribe(pr: PRKey, onEvent: (text: string) => void): Disposable {
+    const key = prKeyToString(pr);
     const slug = `${pr.owner}/${pr.repo}`;
 
     let state = this.subscriptions.get(key);
@@ -295,30 +304,24 @@ export class PRPollingSource implements AsyncEventSource {
               this.notifyKeysChanged();
               bus.emit('githubTokenInvalid', { message: err.message });
             } else if (err instanceof GitHubRateLimitError) {
-              // Rate limiting is a transient, expected condition; don't let
-              // it inflate consecutiveFailures (which trips the
-              // "halted after repeated failures" auto-unsubscribe).
+              // Rate limiting is a transient condition; skip until the reset
+              // time without touching consecutiveFailures so a rate-limit
+              // burst doesn't inflate the backoff exponent.
               state.skipPollUntilMs = err.resetAt * 1000;
               this.logger.warn(
                 `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
               );
             } else {
               state.consecutiveFailures += 1;
-              this.logger.warn(
-                `Poll failed for ${key} (${state.consecutiveFailures} in a row): ${String(err)}`,
+              const backoffMs = Math.min(
+                BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
+                BACKOFF_MAX_MS,
               );
-              if (state.consecutiveFailures >= 5) {
-                this.emit(
-                  state,
-                  formatSubscriptionError(
-                    state.slug,
-                    state.pr.pullNumber,
-                    `repeated failures: ${String(err)}`,
-                  ),
-                );
-                this.subscriptions.delete(key);
-                this.notifyKeysChanged();
-              }
+              state.skipPollUntilMs = Date.now() + backoffMs;
+              this.logger.warn(
+                `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
+                  `retrying in ${backoffMs / 1000}s): ${String(err)}`,
+              );
             }
           }
         }),
