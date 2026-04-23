@@ -26,6 +26,22 @@ const LOG_TAIL_LINES = 200;
 const MIN_TIMEOUT_MS = 10000;
 
 /**
+ * Return a human-readable display name for an output file in compile messages.
+ * Prefers the `source` field (which carries the original document name, e.g.
+ * "constrained_note.tex") over the raw run-storage basename ("output.tex").
+ */
+function getCompileDisplayName(file: OutputFileInfo): string {
+  const rawBase = path.basename(file.location.absolutePath);
+  const src = file.source;
+  if (!src || src === rawBase) return rawBase;
+  // Avoid leaking the generic stem that replaced the old descriptive names
+  const srcBase = path.basename(src);
+  return srcBase && srcBase !== 'output' && srcBase !== 'output.tex'
+    ? srcBase
+    : rawBase;
+}
+
+/**
  * Compile each .tex output of a round to verify the workflow produced a
  * buildable document. Success is silent; failures write the log tail to
  * `<runDir>/compile/<safe>.log`. Missing toolchains, runs without a run
@@ -73,7 +89,7 @@ export async function runCompileCheck(
   const compileRoot = path.join(runDirectory, 'compile');
 
   for (const outputFile of texOutputs) {
-    const displayName = path.basename(outputFile.location.absolutePath);
+    const displayName = getCompileDisplayName(outputFile);
     try {
       await compileOne(ctx, outputFile, currentRound, {
         compileRoot,
@@ -100,7 +116,7 @@ async function compileOne(
   currentRound: number,
   opts: PerFileOptions,
 ): Promise<void> {
-  const displayName = path.basename(outputFile.location.absolutePath);
+  const displayName = getCompileDisplayName(outputFile);
   // Full relative path keeps two outputs sharing a basename distinct
   // (ch1/main.tex vs ch2/main.tex).
   const safeName = getComparablePath(outputFile.location).replaceAll(

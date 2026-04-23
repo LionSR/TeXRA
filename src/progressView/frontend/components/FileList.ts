@@ -224,7 +224,11 @@ export class FileList extends LitElement {
     if (!file?.location) return nothing;
 
     const location = file.location;
-    const displayPath = this.getDisplayPath(file.lineage?.original ?? location);
+    // Prefer: workspace original → source doc name → run-storage relative path
+    const displayPath =
+      this.getDisplayPath(file.lineage?.original) ||
+      this.getSourceDisplayPath(file.source) ||
+      this.getDisplayPath(location);
     const { dir, basename } = parsePath(displayPath);
     const tooltipPath = this.getDisplayPath(location);
     const effectiveBase =
@@ -295,11 +299,24 @@ export class FileList extends LitElement {
       .sort((a, b) => a[0] - b[0]);
   }
 
-  private getDisplayPath(loc: OutputFileInfo['location']): string {
+  private getDisplayPath(
+    loc: OutputFileInfo['location'] | null | undefined,
+  ): string {
     if (!loc) return '';
     return loc.kind === 'workspace' || loc.kind === 'runStorage'
       ? loc.relativePath
       : loc.absolutePath;
+  }
+
+  /**
+   * Derive a display path from the source document name when lineage.original
+   * is absent (e.g. multi-doc extractions whose names don't match a base file).
+   * Returns empty string for generic names that shouldn't override the fallback.
+   */
+  private getSourceDisplayPath(source: string | undefined): string {
+    if (!source || source === 'output' || source === 'output.tex') return '';
+    const hasExt = source.includes('.');
+    return hasExt ? source : `${source}.tex`;
   }
 
   private renderDiffStats(
