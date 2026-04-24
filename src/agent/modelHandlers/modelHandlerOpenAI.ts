@@ -884,8 +884,27 @@ export class ModelHandlerOpenAI<
     return messages;
   }
 
-  createAssistantMessage(text: string): ChatCompletionMessageParam {
-    return { role: 'assistant', content: [{ type: 'text', text }] };
+  createAssistantMessage(
+    text: string,
+    workspaceState?: AgentWorkspaceState,
+  ): ChatCompletionMessageParam {
+    const message: ChatCompletionAssistantMessageParam & {
+      reasoning_content?: string;
+    } = {
+      role: 'assistant',
+      content: this.formatAssistantContent(text),
+    };
+
+    if (this.shouldIncludeReasoningInAssistantMessages() && workspaceState) {
+      const reasoningContent =
+        workspaceState.reasoning.thinkingBlocks[0]?.thinking;
+      if (reasoningContent) {
+        message.reasoning_content = reasoningContent;
+        workspaceState.resetReasoning();
+      }
+    }
+
+    return message;
   }
 
   override extractAssistantText(
@@ -1508,6 +1527,14 @@ export class ModelHandlerOpenAI<
    * will be included in the assistant message and cleared after use.
    */
   protected shouldIncludeReasoningInToolCalls(): boolean {
+    return false;
+  }
+
+  /**
+   * Whether final assistant messages should also replay reasoning_content.
+   * DeepSeek requires this for subsequent user turns after a thinking+tool cycle.
+   */
+  protected shouldIncludeReasoningInAssistantMessages(): boolean {
     return false;
   }
 
