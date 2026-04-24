@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
+import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
@@ -468,7 +469,8 @@ export class ProgressViewState {
           restoredCount++;
         } catch (err) {
           this.logger.warn(
-            `[Persistence] Failed to backfill legacy instruction for ${streamId}: ${String(err)}`,
+            `[Persistence] Failed to backfill legacy instruction for ${streamId}: ${toErrorMessage(err)}`,
+            { data: err },
           );
         }
       }),

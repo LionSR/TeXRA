@@ -101,21 +101,34 @@ export class PersistedState<T extends Record<string, unknown>> {
     if (result.success) {
       return result.data;
     }
-    // Fall back to schema defaults (parse undefined/empty object). Wrap in
-    // try/catch so a schema whose defaults don't cover every field can't
-    // take down the caller — a stale or malformed PersistedState key must
-    // never block webview activation or extension startup.
+    // Fall back to schema defaults via safeParse so a schema whose defaults
+    // don't cover every field can't throw out of a caller's constructor — a
+    // stale or malformed PersistedState key must never block webview
+    // activation or extension startup. Also persist the reset so the bad
+    // value is replaced and the next load doesn't keep hitting this path.
     const defaultResult = this.schema.safeParse({});
     if (defaultResult.success) {
       console.warn(
         `[PersistedState] Invalid stored data for ${this.key}, resetting.`,
+        {
+          storedType: describeStored(stored),
+          issues: summarizeIssues(result.error),
+        },
       );
+      this.storage.set(this.key, defaultResult.data);
       return defaultResult.data;
     }
     console.warn(
       `[PersistedState] Invalid stored data and no default for ${this.key}; using empty object.`,
+      {
+        storedType: describeStored(stored),
+        storedIssues: summarizeIssues(result.error),
+        defaultIssues: summarizeIssues(defaultResult.error),
+      },
     );
-    return {} as T;
+    const empty = {} as T;
+    this.storage.set(this.key, empty);
+    return empty;
   }
 
   /** Get current state (shallow copy) */
@@ -141,7 +154,16 @@ export class PersistedState<T extends Record<string, unknown>> {
 
   /** Reset to schema defaults */
   reset(): void {
-    this.state = this.schema.parse({});
+    const defaultResult = this.schema.safeParse({});
+    if (defaultResult.success) {
+      this.state = defaultResult.data;
+    } else {
+      console.warn(
+        `[PersistedState] Reset has no schema defaults for ${this.key}; using empty object.`,
+        { issues: summarizeIssues(defaultResult.error) },
+      );
+      this.state = {} as T;
+    }
     this.storage.set(this.key, this.state);
   }
 
@@ -149,4 +171,33 @@ export class PersistedState<T extends Record<string, unknown>> {
   reload(): void {
     this.state = this.load();
   }
+}
+
+/**
+ * Produce a compact, log-safe description of a stored value. Tiny fingerprint
+ * so we can tell "undefined" from "object with these keys" from "string of
+ * length N" without dumping user data into the console.
+ */
+function describeStored(value: unknown): string {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (Array.isArray(value)) return `array(len=${value.length})`;
+  const type = typeof value;
+  if (type === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>);
+    const preview = keys.slice(0, 6).join(',');
+    const suffix = keys.length > 6 ? `,+${keys.length - 6}` : '';
+    return `object{${preview}${suffix}}`;
+  }
+  if (type === 'string') return `string(len=${(value as string).length})`;
+  return type;
+}
+
+/** First few zod issues, trimmed so the console stays readable. */
+function summarizeIssues(error: z.ZodError): Array<Record<string, unknown>> {
+  return error.issues.slice(0, 5).map((issue) => ({
+    path: issue.path.join('.') || '(root)',
+    code: issue.code,
+    message: issue.message,
+  }));
 }
