@@ -99,14 +99,16 @@ export const streamMetaHandlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION]: (data, ctx) => {
     const { stream, description } = data;
-    ctx.setState((prev) => {
-      // If the stream isn't registered yet (subagent description racing
-      // UPDATE_STREAMS), buffer it; streamLifecycleSlice drains on arrival.
-      if (!prev.streamById.has(stream)) {
-        pendingDescriptions.set(stream, description);
-        return prev;
-      }
-      return create(prev, (draft) => {
+    // Subagent description can race its own UPDATE_STREAMS registration; if
+    // the stream isn't in streamById yet, buffer out-of-band so
+    // streamLifecycleSlice can drain it on arrival. Side effect lives
+    // outside the state updater so updater stays pure.
+    if (!ctx.getState().streamById.has(stream)) {
+      pendingDescriptions.set(stream, description);
+      return;
+    }
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
         const existing = draft.streamById.get(stream);
         // Replace via set() so the Map value identity changes and selectors
         // observing streamById propagate the update (mirrors the pattern in
@@ -114,8 +116,8 @@ export const streamMetaHandlers: HandlerRegistry = {
         if (existing) {
           draft.streamById.set(stream, { ...existing, description });
         }
-      });
-    });
+      }),
+    );
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS]: (data, ctx) => {

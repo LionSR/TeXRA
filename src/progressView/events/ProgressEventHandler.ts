@@ -537,10 +537,16 @@ export class ProgressEventHandler {
       StreamStatusService.set(streamId, status, { emit: false });
     }
 
-    // Drop heavy entries from memory once a stream is no longer in-flight,
-    // unless the user is currently viewing it. Disk is authoritative; the
-    // next switch back triggers ensureLoaded to rehydrate.
-    if (!isInFlightStatus(status) && streamId !== this.state.activeStream) {
+    // Keep memory bounded by stream status:
+    //  - returning to in-flight (e.g., background resume) eagerly rehydrates
+    //    previously-released entries so pending appends from the agent
+    //    runtime land on the full on-disk log instead of clobbering it via
+    //    an empty getOrCreate.
+    //  - leaving the in-flight set drops heavy entries; disk stays
+    //    authoritative and `setActiveStream` re-reads on demand.
+    if (isInFlightStatus(status)) {
+      void this.state.streamLogs.ensureLoaded(streamId);
+    } else if (streamId !== this.state.activeStream) {
       this.state.streamLogs.releaseEntries(streamId);
     }
 
