@@ -31,6 +31,17 @@ const ProviderErrorSchema = z.object({
   provider: z.string().optional(),
   retryable: z.boolean(),
   isRelayError: z.boolean(),
+  /** True when the credential (relay monthly limit OR upstream provider
+   *  account) has been exhausted. Auto-retry is skipped for these errors
+   *  and the retry panel offers a "Use your own API key" button. */
+  isCredentialExhausted: z.boolean().optional(),
+  /** True when the upstream provider account itself is out of credit
+   *  (Anthropic 400 "credit balance is too low"). Distinguishes the
+   *  "the key I have IS the broken one" case from relay monthly limit,
+   *  where the stored personal key is fine. The auto-resume handler
+   *  uses this to require a new key rather than reusing the depleted
+   *  stored credential. */
+  isUpstreamCreditDepleted: z.boolean().optional(),
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
