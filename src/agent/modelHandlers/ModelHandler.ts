@@ -776,10 +776,17 @@ export abstract class ModelHandler<
   ): Promise<M[]>;
 
   /** Build a simple assistant message from text. */
-  abstract createAssistantMessage(
-    text: string,
-    workspaceState?: AgentWorkspaceState,
-  ): M;
+  abstract createAssistantMessage(text: string): M;
+
+  /**
+   * Build an assistant message from a provider response.
+   *
+   * Providers that need to preserve response metadata in conversation history
+   * can override this while keeping createAssistantMessage() plain.
+   */
+  createAssistantMessageFromResponse(_responseObject: Resp, text: string): M {
+    return this.createAssistantMessage(text);
+  }
 
   /**
    * Extract all server tool data in a single pass.
