@@ -366,10 +366,15 @@ export class ProgressViewState {
         this.streamLogs.keys(),
         this.logger,
       );
-      await this.loadManagers(this.streamLogs.keys());
-    } else {
-      await this.loadManagers(streamIds);
     }
+
+    // Snapshot activeRunIds before loadManagers can overwrite meta files.
+    // backfillDescriptionsFromExecutionMeta (called during meta.load()) uses
+    // buildMeta which intentionally omits the legacy activeRunId field, so any
+    // stream whose description gets backfilled loses the hint.
+    const activeRunIds = await this.collectActiveRunIds();
+
+    await this.loadManagers(shouldMigrate ? this.streamLogs.keys() : streamIds);
 
     // Promote any pre-existing `runInstructions.json` disk files (from the
     // earlier memento→StreamTabStore migration) to the archival
@@ -384,7 +389,7 @@ export class ProgressViewState {
     );
 
     const restoredLegacyInstructionCount =
-      await this.backfillLegacyWorkflowInstructions();
+      await this.backfillLegacyWorkflowInstructions(activeRunIds);
     if (restoredLegacyInstructionCount > 0) {
       this.logger.info(
         `[Persistence] Restored ${restoredLegacyInstructionCount} legacy workflow instruction(s) into stream logs`,
@@ -421,13 +426,28 @@ export class ProgressViewState {
     ]);
   }
 
-  private async backfillLegacyWorkflowInstructions(): Promise<number> {
+  private async collectActiveRunIds(): Promise<Map<StreamTabId, string>> {
+    const map = new Map<StreamTabId, string>();
+    await Promise.all(
+      this.streamLogs.keys().map(async (id) => {
+        const meta = await getStreamTabStore(id).readMeta();
+        if (meta?.activeRunId) map.set(id, meta.activeRunId);
+      }),
+    );
+    return map;
+  }
+
+  private async backfillLegacyWorkflowInstructions(
+    activeRunIds: Map<StreamTabId, string>,
+  ): Promise<number> {
     let restoredCount = 0;
 
     await Promise.all(
       this.streamLogs.keys().map(async (streamId) => {
         const store = getStreamTabStore(streamId);
-        const legacyInstruction = await store.readPreferredLegacyInstruction();
+        const legacyInstruction = await store.readPreferredLegacyInstruction(
+          activeRunIds.get(streamId),
+        );
         if (!legacyInstruction) return;
 
         const text = legacyInstruction.text.trim();

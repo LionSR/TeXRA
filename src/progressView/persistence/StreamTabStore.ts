@@ -167,17 +167,18 @@ class StreamTabKVStore extends KVStore {
    * likely expect to see. Prefers `meta.activeRunId` when that migration hint
    * exists, otherwise falls back to the newest archived entry.
    */
-  async readPreferredLegacyInstruction(): Promise<LegacyInstructionEntry | null> {
+  async readPreferredLegacyInstruction(
+    activeRunId?: string | null,
+  ): Promise<LegacyInstructionEntry | null> {
     const raw = await this.read(KEYS.LEGACY_INSTRUCTIONS);
     if (!raw) return null;
 
     const result = LegacyInstructionsDataSchema.safeParse(raw);
-    if (!result.success || Object.keys(result.data).length === 0) {
+    if (Object.keys(result.data).length === 0) {
       return null;
     }
 
-    const meta = await this.readMeta();
-    return selectPreferredLegacyInstruction(result.data, meta?.activeRunId);
+    return selectPreferredLegacyInstruction(result.data, activeRunId);
   }
 
   /**

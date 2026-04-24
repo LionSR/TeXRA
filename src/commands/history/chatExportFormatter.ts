@@ -413,11 +413,11 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
           nodes.push({ kind: 'tool-result', text: textParts.join('\n') });
         }
       } else {
-        const output =
-          typeof item.output === 'string'
-            ? item.output
-            : JSON.stringify(item.output ?? '', null, 2);
-        nodes.push({ kind: 'tool-result', text: output });
+        const text =
+          typeof output === 'string'
+            ? output
+            : JSON.stringify(output ?? '', null, 2);
+        nodes.push({ kind: 'tool-result', text });
       }
       lastAssistantHadToolUse = false;
       continue;
