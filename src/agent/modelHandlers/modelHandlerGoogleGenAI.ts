@@ -420,9 +420,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       contents: countContents,
       config: {
         abortSignal: options?.signal,
-        // Cast needed: toGoogleTools returns Tool[] but generationConfig.tools
-        // is typed as ToolListUnion (includes CallableTool). We know our tools
-        // are always Tool[] since toGoogleTools creates FunctionDeclaration tools.
         ...(options?.googleTools?.length && {
           tools: options.googleTools as GeminiTool[],
         }),
@@ -500,12 +497,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (this.supportsTokenCounting) {
       try {
         // Reuse built params for token counting (build once principle)
-        // Cast: toGoogleTools always returns Tool[], but generationConfig.tools
-        // is typed as ToolListUnion (which includes CallableTool union member)
         const totalTokens = await this.estimateTokenCount(history, {
           client,
           systemPrompt,
           lastMessageParts,
+          // toGoogleTools returns Tool[], but generationConfig.tools is typed
+          // as ToolListUnion (which includes CallableTool). Cast is safe since
+          // our tools are always plain Tool[] (FunctionDeclaration-based).
           googleTools: generationConfig.tools as GeminiTool[] | undefined,
           signal,
         });

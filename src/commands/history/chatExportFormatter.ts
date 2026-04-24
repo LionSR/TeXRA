@@ -24,7 +24,6 @@ import type {
   ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
 import type {
-  ResponseFunctionCallOutputItemList,
   ResponseFunctionToolCallItem,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
@@ -403,7 +402,7 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
       const output = item.output;
       if (Array.isArray(output)) {
         const textParts: string[] = [];
-        for (const part of output as ResponseFunctionCallOutputItemList) {
+        for (const part of output) {
           if (part.type === 'input_text' && typeof part.text === 'string') {
             textParts.push(part.text);
           } else if (part.type === 'input_image') {
@@ -416,11 +415,11 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
           nodes.push({ kind: 'tool-result', text: textParts.join('\n') });
         }
       } else {
-        const output =
-          typeof item.output === 'string'
-            ? item.output
-            : JSON.stringify(item.output ?? '', null, 2);
-        nodes.push({ kind: 'tool-result', text: output });
+        const outputText =
+          typeof output === 'string'
+            ? output
+            : JSON.stringify(output ?? '', null, 2);
+        nodes.push({ kind: 'tool-result', text: outputText });
       }
       lastAssistantHadToolUse = false;
       continue;
@@ -471,11 +470,12 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
     }
 
     // OpenAI Chat Completions tool role
-    if (role === 'tool' || isToolMessage(toChatCompletionMessageParam(item))) {
+    const openaiMsg = toChatCompletionMessageParam(item);
+    if (role === 'tool' || isToolMessage(openaiMsg)) {
       const text =
-        typeof msg.content === 'string'
-          ? msg.content
-          : JSON.stringify(msg.content, null, 2);
+        typeof openaiMsg.content === 'string'
+          ? openaiMsg.content
+          : JSON.stringify(openaiMsg.content, null, 2);
       nodes.push({ kind: 'tool-result', text });
       lastAssistantHadToolUse = false;
     }
