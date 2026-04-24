@@ -178,7 +178,7 @@ export class MainApp extends MainAppBase {
     visible: false,
   });
   private readonly gettingStartedVisible = signal(false);
-  private readonly sessionHintDismissed = signal(false);
+  private readonly sessionHintDismissed = signal(true);
   private readonly loginBannerVisible = signal(false);
   private readonly instructionPlaceholder = signal(
     ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
@@ -332,6 +332,9 @@ export class MainApp extends MainAppBase {
     },
     [MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER]: () => {
       this.sessionHintDismissed.set(true);
+    },
+    [MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER]: () => {
+      this.sessionHintDismissed.set(false);
     },
     [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: () => {
       this.loginBannerVisible.set(true);

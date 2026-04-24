@@ -427,11 +427,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         'ui.showOrchestratorBanner',
         true,
       );
-      if (!showOrchestratorBanner) {
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
-        });
-      }
+      webviewView.webview.postMessage({
+        command: showOrchestratorBanner
+          ? MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER
+          : MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
+      });
     } catch (error) {
       this.logger.error(
         this.channel,
