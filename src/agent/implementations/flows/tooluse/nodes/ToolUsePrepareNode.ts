@@ -187,7 +187,10 @@ async function refreshPersistedSystemMessage(
   const updated = [...persisted];
   updated[0] = (
     supportsSystemPrompt
-      ? { ...existing, content: buildSystemContent(existing.content, systemText) }
+      ? {
+          ...existing,
+          content: buildSystemContent(existing.content, systemText),
+        }
       : withFirstBlockReplaced(existing, systemText)
   ) as ProviderMessage;
   return updated;
