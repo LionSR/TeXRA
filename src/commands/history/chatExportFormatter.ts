@@ -13,13 +13,9 @@
  */
 
 import { z } from 'zod';
-import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import latexPreamble from '../../../resources/templates/chatExport.tex';
 import type { Part } from '@google/genai';
-import type {
-  ChatCompletionMessageParam,
-  ChatCompletionMessageToolCall,
-} from 'openai/resources/chat/completions';
+import type { ChatCompletionMessageToolCall } from 'openai/resources/chat/completions';
 import type {
   ResponseFunctionCallOutputItemList,
   ResponseFunctionToolCallItem,
@@ -503,18 +499,10 @@ function isResponseFunctionCallOutputItem(
   );
 }
 
-function toChatCompletionMessageParam(
-  item: unknown,
-): ChatCompletionMessageParam {
-  return item as ChatCompletionMessageParam;
-}
-
 function getAssistantToolCalls(item: unknown): ChatCompletionMessageToolCall[] {
-  const message = toChatCompletionMessageParam(item);
-  if (!isAssistantMessage(message) || !Array.isArray(message.tool_calls)) {
-    return [];
-  }
-  return message.tool_calls;
+  const toolCalls = (item as Record<string, unknown>).tool_calls;
+  if (!Array.isArray(toolCalls)) return [];
+  return toolCalls as ChatCompletionMessageToolCall[];
 }
 
 // ============================================================
