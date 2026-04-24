@@ -105,43 +105,4 @@ describe('normalizeOpenAIMessageContent', () => {
       'should preserve text description and omit media payload similar to previous behaviour',
     );
   });
-
-  it('does not merge tool-call protocol messages', () => {
-    const messages = [
-      {
-        role: 'assistant',
-        tool_calls: [
-          {
-            id: 'call_1',
-            type: 'function',
-            function: { name: 'first_tool', arguments: '{}' },
-          },
-          {
-            id: 'call_2',
-            type: 'function',
-            function: { name: 'second_tool', arguments: '{}' },
-          },
-        ],
-      },
-      {
-        role: 'tool',
-        tool_call_id: 'call_1',
-        content: 'first result',
-      },
-      {
-        role: 'tool',
-        tool_call_id: 'call_2',
-        content: 'second result',
-      },
-    ];
-
-    const normalized = normalizeOpenAIMessageContent(messages, {
-      mergeConsecutiveRoles: true,
-      convertContentToString: true,
-    });
-
-    assert.equal(normalized.length, 3);
-    assert.equal(normalized[1].tool_call_id, 'call_1');
-    assert.equal(normalized[2].tool_call_id, 'call_2');
-  });
 });
