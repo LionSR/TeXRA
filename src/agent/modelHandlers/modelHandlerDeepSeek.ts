@@ -54,6 +54,14 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   }
 
   /**
+   * DeepSeek also requires reasoning_content on final assistant messages after
+   * a tool-use turn; otherwise the next queued follow-up can be rejected.
+   */
+  protected override shouldIncludeReasoningInAssistantMessages(): boolean {
+    return this.capabilities.supportsReasoning;
+  }
+
+  /**
    * DeepSeek's examples pass back `content` beside `reasoning_content` and
    * `tool_calls`, even when content is the empty string.
    */
