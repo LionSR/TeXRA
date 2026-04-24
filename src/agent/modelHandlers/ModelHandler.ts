@@ -776,7 +776,10 @@ export abstract class ModelHandler<
   ): Promise<M[]>;
 
   /** Build a simple assistant message from text. */
-  abstract createAssistantMessage(text: string): M;
+  abstract createAssistantMessage(
+    text: string,
+    workspaceState?: AgentWorkspaceState,
+  ): M;
 
   /**
    * Extract all server tool data in a single pass.
