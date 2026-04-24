@@ -207,6 +207,7 @@ const TokenUsageStatsParsingBaseSchema = z.object({
   outputTokens: FiniteNumber,
   cost: FiniteNumber,
   cacheReadInputTokens: FiniteNumber.optional().prefault(0),
+  cacheMissInputTokens: FiniteNumber.optional().prefault(0),
   cacheCreationInputTokens: FiniteNumber.optional().prefault(0),
 });
 
@@ -216,6 +217,7 @@ export const TokenUsageStatsParsingSchema =
     outputTokens: 0,
     cost: 0,
     cacheReadInputTokens: 0,
+    cacheMissInputTokens: 0,
     cacheCreationInputTokens: 0,
   });
 
@@ -245,6 +247,7 @@ export function isEmptyUsage(usage: TokenUsageStats): boolean {
     usage.outputTokens === 0 &&
     usage.cost === 0 &&
     (usage.cacheReadInputTokens ?? 0) === 0 &&
+    (usage.cacheMissInputTokens ?? 0) === 0 &&
     (usage.cacheCreationInputTokens ?? 0) === 0
   );
 }
