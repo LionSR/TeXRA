@@ -123,6 +123,45 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
 });
 
 describe('ModelHandlerDeepSeek tool conversion', () => {
+  it('normalizes DeepSeek cache hit and miss tokens', () => {
+    const handler = new ModelHandlerDeepSeek(buildConfig());
+
+    const usage = handler.normalizeUsage(
+      {
+        prompt_tokens: 100,
+        completion_tokens: 20,
+        total_tokens: 120,
+        prompt_cache_hit_tokens: 70,
+        prompt_cache_miss_tokens: 30,
+      },
+      2500,
+    );
+
+    assert.equal(usage.inputTokens, 100);
+    assert.equal(usage.outputTokens, 20);
+    assert.equal(usage.cachedInputTokens, 70);
+    assert.equal(usage.cacheMissInputTokens, 30);
+    assert.equal(usage.percentageCached, 70);
+  });
+
+  it('falls back to DeepSeek cache hit plus miss when prompt_tokens is absent', () => {
+    const handler = new ModelHandlerDeepSeek(buildConfig());
+
+    const usage = handler.normalizeUsage(
+      {
+        completion_tokens: 20,
+        total_tokens: 120,
+        prompt_cache_hit_tokens: 70,
+        prompt_cache_miss_tokens: 30,
+      } as any,
+      2500,
+    );
+
+    assert.equal(usage.inputTokens, 100);
+    assert.equal(usage.cachedInputTokens, 70);
+    assert.equal(usage.cacheMissInputTokens, 30);
+  });
+
   it('passes thinking toggle and low effort in OpenAI wire format', async () => {
     const handler = new ModelHandlerDeepSeek(
       buildConfig({
