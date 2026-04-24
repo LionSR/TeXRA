@@ -255,6 +255,8 @@ async function executeSubagent(
     syntheticConfig,
     agentName,
     parentExecutionId,
+    undefined,
+    parentDelegationDepth + 1,
   );
 
   // Track delivery state in the module-level map so delegate_agent (resume) can reset it.

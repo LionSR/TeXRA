@@ -26,27 +26,51 @@ export function readNestedDelegationConfig(): NestedDelegationConfig {
 }
 
 /**
- * Recover the delegation depth for a persisted execution by walking the
- * parentExecutionId chain in its metadata. Used on resume, where the
- * in-memory depth that executeAgent would normally carry is unavailable.
+ * Sentinel returned when a resumed snapshot's lineage can't be trusted
+ * (e.g. an ancestor's meta was deleted while a descendant survived).
+ * `delegationAllowed(MAX_SAFE_INTEGER, { maxDepth })` is false for any
+ * configured cap, so delegation is conservatively blocked.
+ */
+const UNKNOWN_DEPTH_SENTINEL = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Recover the delegation depth for a persisted execution on resume, where
+ * the in-memory depth that executeAgent would normally carry is unavailable.
  *
- * Returns 0 when no parent is stored (root execution or pre-feature data)
- * or if a cycle is detected defensively.
+ * Preferred source is `meta.delegationDepth`, written at register-time by
+ * `DelegationTools.executeSubagent`. Falls back to walking the
+ * `parentExecutionId` chain for pre-feature snapshots that don't have the
+ * field persisted yet.
+ *
+ * Returns 0 when no parent is stored (root execution) or the persisted
+ * depth is 0. Returns `UNKNOWN_DEPTH_SENTINEL` when the chain walk encounters
+ * a missing ancestor mid-chain — we can't safely undercount, so callers
+ * will see it as past the cap.
  */
 export async function computeDelegationDepthFromStorage(
   executionId: ExecutionId,
 ): Promise<number> {
-  const visited = new Set<string>();
-  let current: ExecutionId | undefined = executionId;
-  let depth = 0;
-  // Cap the walk as a belt-and-suspenders against corrupted chains.
+  const rootMeta = await getExecutionStore(executionId).readMeta();
+  if (!rootMeta) return 0;
+  if (rootMeta.delegationDepth !== undefined) return rootMeta.delegationDepth;
+  if (!rootMeta.parentExecutionId) return 0;
+
+  // Legacy fallback: walk the chain for snapshots created before
+  // delegationDepth was persisted.
+  const visited = new Set<string>([executionId]);
+  let current: ExecutionId | undefined = rootMeta.parentExecutionId;
+  let depth = 1;
   const MAX_WALK = 32;
   while (current && !visited.has(current) && depth < MAX_WALK) {
     visited.add(current);
     const meta: ExecutionMeta | null = await getExecutionStore(
       current,
     ).readMeta();
-    const parent: ExecutionId | undefined = meta?.parentExecutionId;
+    // Ancestor meta missing or corrupted: we can't tell how deep we are.
+    // Return a sentinel that fails the gate for any configured cap.
+    if (!meta) return UNKNOWN_DEPTH_SENTINEL;
+    if (meta.delegationDepth !== undefined) return meta.delegationDepth + depth;
+    const parent: ExecutionId | undefined = meta.parentExecutionId;
     if (!parent) break;
     depth++;
     current = parent;
