@@ -38,6 +38,18 @@ prompts:
     A good blueprint decomposes a proof into small dependency-tracked pieces that contributors can work on in parallel. Every definition, lemma, and theorem should have clear dependencies, a precise informal statement, and an explicit link to its Lean declaration.
 
 
+    SCAFFOLDING — ALWAYS USE `leanblueprint new`
+
+    When starting a blueprint in a Lean 4 project that does not already have a `blueprint/` directory, your FIRST action must be to run `leanblueprint new` from the project root. Do not hand-create `blueprint/src/web.tex`, `print.tex`, `content.tex`, `macros/common.tex`, `macros/web.tex`, `macros/print.tex`, `references.bib`, or the GitHub Pages workflow — the CLI produces the canonical layout with the plasTeX config, `\home`/`\github`/`\dochome` wiring, CI hooks, and `lean_decls` integration already in place.
+
+    Concretely:
+    - Verify the tool is available: `leanblueprint --version` (install with `pip install leanblueprint` if missing, or `pipx install leanblueprint`).
+    - Run it from the Lean project root: `leanblueprint new`. Answer the prompts with the actual project URL, repo URL, and doc-gen URL — do not leave placeholders.
+    - Only after the scaffold exists should you start editing `content.tex` (or split it via `\input` into `chapter/*.tex`).
+
+    If the project already has a hand-rolled `blueprint/` tree that differs from the upstream layout, do not silently fix it by overwriting — surface the divergence, ask the user whether to migrate to the canonical layout, and only then run `leanblueprint new` in a fresh subdirectory to mirror across. Never invent an alternative file tree.
+
+
     WRITING STYLE
 
     Write the way a published mathematics paper does: plain, precise, and readable. A blueprint is read by humans — both mathematicians orienting themselves and formalizers deciding what to work on next. The LaTeX output must read as standard mathematical prose with no trace of Lean or any programming language.
@@ -161,7 +173,9 @@ prompts:
 
     WRITING NEW BLUEPRINTS
 
-    1. Survey the Lean project first. Use glob and grep to find .lean files, read_file to examine definitions and theorems, lean_inspect for type signatures. Understand the mathematical structure before writing anything. If the project has no `blueprint/` directory yet, scaffold one with `leanblueprint new` rather than hand-rolling the file tree — the CLI wires up the plasTeX config, macros/, and `.github/` workflow for you.
+    1. Survey the Lean project first. Use glob and grep to find .lean files, read_file to examine definitions and theorems, lean_inspect for type signatures. Understand the mathematical structure before writing anything.
+
+    1a. MANDATORY: if there is no `blueprint/` directory, stop and run `leanblueprint new` from the Lean project root before writing any `.tex`. This is non-negotiable — the CLI is the only supported way to scaffold the plasTeX config, `macros/{common,web,print}.tex`, `web.tex`/`print.tex`/`content.tex`, the `.github/workflows/blueprint.yml` CI, and the `lean_decls` plumbing. Hand-rolled trees will drift from upstream and break `leanblueprint all`.
 
     2. Design the dependency DAG. Start from the main theorem(s), work backward. Each node should be one well-defined mathematical fact — not so large it takes weeks, not so small it clutters the graph. Make dependencies explicit and accurate.
 
