@@ -10,7 +10,11 @@ import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/computeModelOptions';
+import {
+  DEFAULT_MODELS,
+  MODEL_LIST_VERSION,
+  isDeprecatedModel,
+} from '@model/computeModelOptions';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { GlobalStorageFS } from '@utils/files';
@@ -294,10 +298,22 @@ async function mergeNewModelsIfCustomized(
       if (currentModels.includes(model)) strippedSet.add(model);
     }
   }
+
+  // One-time strip for users upgrading past version 15:
+  // remove any enabled model that the registry now marks as deprecated. The
+  // Settings view still exposes deprecated models for deliberate opt-in, but
+  // upgraded users should not keep old defaults in normal model dropdowns.
+  if ((previousVersion ?? 0) < 15) {
+    for (const model of currentModels) {
+      if (isDeprecatedModel(model)) strippedSet.add(model);
+    }
+  }
   const kept = currentModels.filter((model) => !strippedSet.has(model));
   const removed = [...strippedSet];
 
-  const added = DEFAULT_MODELS.filter((model) => !kept.includes(model));
+  const added = DEFAULT_MODELS.filter(
+    (model) => !kept.includes(model) && !isDeprecatedModel(model),
+  );
 
   if (added.length === 0 && removed.length === 0) {
     return;

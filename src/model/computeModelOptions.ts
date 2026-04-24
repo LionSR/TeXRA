@@ -23,6 +23,11 @@ import {
 // Local imports - sibling
 import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
 
+/** Return whether the registry marks a model as deprecated. */
+export function isDeprecatedModel(model: string): boolean {
+  return MODEL_CONFIGS[model]?.deprecated ?? false;
+}
+
 /**
  * Default models that should be present in every user's model list.
  * Update this list and increment MODEL_LIST_VERSION below when adding or
@@ -44,7 +49,7 @@ export const DEFAULT_MODELS = [
  * to get the updated defaults. A simple integer avoids hash-collision risks
  * and doesn't trigger on harmless reordering.
  */
-export const MODEL_LIST_VERSION = 14;
+export const MODEL_LIST_VERSION = 15;
 
 /**
  * Get the list of visible models from extension global state.
