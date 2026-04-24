@@ -514,7 +514,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     await getServerSideKeyService().setUseIncludedModelAccess(false);
     invalidateModelOptionsCache();
-    retryCoordinator.triggerRetry(data.stream);
+    const retried = retryCoordinator.triggerRetry(data.stream);
+    if (!retried) {
+      await vscode.window.showInformationMessage(
+        'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
+      );
+    }
   }
 
   private async handleDiffStream(
