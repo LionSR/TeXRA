@@ -13,7 +13,7 @@ import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 // ============================================================================
 
 /** Short model name passed to the Codex CLI via --model. */
-export const CODEX_CLI_MODEL = 'gpt-5.4';
+export const CODEX_CLI_MODEL = 'gpt-5.5';
 
 // ============================================================================
 // Reasoning effort
