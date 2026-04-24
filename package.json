@@ -783,6 +783,36 @@
     ],
     "commands": [
       {
+        "command": "texra.sortByTime",
+        "title": "Sort by Time",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.sortByFile",
+        "title": "Sort by File",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.sortByAgent",
+        "title": "Sort by Agent",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.sortByTimeActive",
+        "title": "$(check) Sort by Time",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.sortByFileActive",
+        "title": "$(check) Sort by File",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.sortByAgentActive",
+        "title": "$(check) Sort by Agent",
+        "category": "TeXRA"
+      },
+      {
         "command": "texra.createSampleProject",
         "title": "Create Sample Project",
         "category": "TeXRA"
@@ -1258,6 +1288,13 @@
         }
       ]
     },
+    "submenus": [
+      {
+        "id": "texra.sortStreamsSubmenu",
+        "label": "Sort Streams",
+        "icon": "$(list-ordered)"
+      }
+    ],
     "menus": {
       "editor/title": [
         {
@@ -1293,6 +1330,11 @@
       ],
       "view/title": [
         {
+          "submenu": "texra.sortStreamsSubmenu",
+          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
+          "group": "navigation@0"
+        },
+        {
           "command": "texra.indentTeX",
           "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@1"
@@ -1321,6 +1363,38 @@
           "command": "texra.showDashboard",
           "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'",
           "group": "navigation@1"
+        }
+      ],
+      "texra.sortStreamsSubmenu": [
+        {
+          "command": "texra.sortByTime",
+          "when": "texra.streamSort != 'time'",
+          "group": "1_sort@1"
+        },
+        {
+          "command": "texra.sortByFile",
+          "when": "texra.streamSort != 'inputFile'",
+          "group": "1_sort@2"
+        },
+        {
+          "command": "texra.sortByAgent",
+          "when": "texra.streamSort != 'agent'",
+          "group": "1_sort@3"
+        },
+        {
+          "command": "texra.sortByTimeActive",
+          "when": "texra.streamSort == 'time'",
+          "group": "1_sort@1"
+        },
+        {
+          "command": "texra.sortByFileActive",
+          "when": "texra.streamSort == 'inputFile'",
+          "group": "1_sort@2"
+        },
+        {
+          "command": "texra.sortByAgentActive",
+          "when": "texra.streamSort == 'agent'",
+          "group": "1_sort@3"
         }
       ],
       "editor/context": [
@@ -1762,6 +1836,7 @@
     "shell-quote": "^1.8.3",
     "signal-polyfill": "^0.2.2",
     "sortablejs": "^1.15.7",
+    "strip-ansi": "^7.2.0",
     "tar": "^7.5.13",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
