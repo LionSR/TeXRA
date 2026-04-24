@@ -876,7 +876,6 @@ const BannerMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER),
     missingTools: z.array(z.string()).optional(),
