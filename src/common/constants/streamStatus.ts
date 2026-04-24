@@ -75,6 +75,23 @@ export function isActiveStatus(status: StreamStatus | undefined): boolean {
 }
 
 /**
+ * Statuses during which an agent cycle may still be appending to the stream
+ * and it must not be evicted from memory or acquired by a new run. Superset
+ * of {@link isActiveStatus} — also covers INITIALIZING (pre-start) and
+ * WAITING (paused on user input; follow-up appends to the same log).
+ */
+const IN_FLIGHT_STATUSES: ReadonlySet<StreamStatus> = new Set<StreamStatus>([
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.RESUMING,
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.WAITING,
+]);
+
+export function isInFlightStatus(status: StreamStatus | undefined): boolean {
+  return status !== undefined && IN_FLIGHT_STATUSES.has(status);
+}
+
+/**
  * Check if a status is terminal (execution ended).
  */
 export function isTerminalStatus(status: StreamStatus | undefined): boolean {
