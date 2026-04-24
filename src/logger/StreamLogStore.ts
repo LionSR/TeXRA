@@ -46,6 +46,14 @@ export class StreamLogStore {
   private readonly pendingLoads = new Map<StreamTabId, Promise<void>>();
 
   /**
+   * Streams currently being flushed by `executeWrite`. `dirtyStreamIds` is
+   * cleared before the async `kv.write` finishes, so we also have to treat
+   * these as non-evictable — dropping the in-memory log mid-flight would
+   * leave nothing to re-mark dirty if the write fails.
+   */
+  private readonly flushing = new Set<StreamTabId>();
+
+  /**
    * Streams that went stale while still dirty, so `releaseEntries` deferred
    * the memory drop until the next save flush. Reads + new appends clear the
    * entry so a reactivated stream isn't evicted out from under the agent.
@@ -109,7 +117,10 @@ export class StreamLogStore {
       }
       return;
     }
-    if (this.dirtyStreamIds.has(streamId)) {
+    if (
+      this.dirtyStreamIds.has(streamId) ||
+      this.flushing.has(streamId)
+    ) {
       this.pendingRelease.add(streamId);
       return;
     }
@@ -227,6 +238,7 @@ export class StreamLogStore {
     this.summaries.delete(streamId);
     this.dirtyStreamIds.delete(streamId);
     this.pendingRelease.delete(streamId);
+    this.flushing.delete(streamId);
     if (!this.loaded) return;
 
     this.cancelPendingSave();
@@ -240,6 +252,7 @@ export class StreamLogStore {
     this.summaries.clear();
     this.dirtyStreamIds.clear();
     this.pendingRelease.clear();
+    this.flushing.clear();
     if (!this.loaded) return;
 
     this.cancelPendingSave();
@@ -497,6 +510,11 @@ export class StreamLogStore {
 
     log.debug(LOG_TAG, `Writing ${dirtyIds.length} dirty stream(s)`);
 
+    // Mark these as mid-flush so `releaseEntries` defers — we need the
+    // in-memory copy preserved until the write resolves, otherwise a failed
+    // write can't re-mark the stream dirty (there'd be no log entries left).
+    for (const streamId of dirtyIds) this.flushing.add(streamId);
+
     const writes = dirtyIds.flatMap((streamId) => {
       const logInstance = this.logs.get(streamId);
       return logInstance ? [this.kv.write(streamId, logInstance.toJSON())] : [];
@@ -516,6 +534,7 @@ export class StreamLogStore {
         }
       })
       .finally(() => {
+        for (const streamId of dirtyIds) this.flushing.delete(streamId);
         if (this.inFlightWrite === writePromise) {
           this.inFlightWrite = null;
           if (!this.pendingResolve) {
