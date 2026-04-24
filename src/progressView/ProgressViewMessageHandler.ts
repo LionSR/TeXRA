@@ -490,15 +490,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       providerArg,
     );
 
-    // Auto-resume when a usable personal key exists for the offending
-    // provider — including the case where the user already had one stored
-    // and simply confirmed (or cancelled) the picker. The button label
-    // "Use your own API key" advertises the mode switch, so treating an
-    // existing stored key as consent is the behaviour users expect.
-    // `anyApiKeyExists()` is deliberately NOT used: it also returns true
-    // when relay access is available, which would let a user who cancelled
-    // without any personal key flip off server-side access.
-    if (!providerArg || !(await SecretManager.hasUsableApiKey(providerArg))) {
+    // Auto-resume when a usable personal key exists. If the offending
+    // provider is known we check it specifically; otherwise (relay errors
+    // without a provider attribution, or setApiKey ran with the provider
+    // picker) we accept any usable personal key as consent to flip off
+    // server-side access. `anyApiKeyExists()` is deliberately NOT used —
+    // it also returns true when only relay access is available, which
+    // would let a user who cancelled without any personal key silently
+    // flip off server-side access.
+    const hasUsableKey = providerArg
+      ? await SecretManager.hasUsableApiKey(providerArg)
+      : (
+          await Promise.all(
+            SecretManager.API_PROVIDERS.map((p) =>
+              SecretManager.hasUsableApiKey(p),
+            ),
+          )
+        ).some(Boolean);
+
+    if (!hasUsableKey) {
       return;
     }
 
