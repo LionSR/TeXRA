@@ -188,11 +188,24 @@ export async function runCleanOutput(): Promise<void> {
   const modelsPattern = MODELS.join(',');
   const ignorePatterns = [...EXCLUDED_DIRS].map((d) => `**/${d}/**`);
 
-  const files = globSync(`**/*_{${modelsPattern}}*.{tex,pdf,xml}`, {
-    cwd: workspacePath,
-    ignore: ignorePatterns,
-    nodir: true,
-  });
+  const files = [
+    ...new Set(
+      [
+        // Legacy flat layout and mid-era round layout both carried model
+        // tokens in generated filenames.
+        `**/*_{${modelsPattern}}*.{tex,pdf,xml}`,
+        // Workspace-mode round folders from the brief r{round}/ layout did
+        // not need model tokens, so identify them by the generated folder.
+        `**/r[0-9]*/**/*.{tex,pdf,xml}`,
+      ].flatMap((pattern) =>
+        globSync(pattern, {
+          cwd: workspacePath,
+          ignore: ignorePatterns,
+          nodir: true,
+        }),
+      ),
+    ),
+  ];
 
   for (const file of files) {
     await WorkspaceFS.delete(file);

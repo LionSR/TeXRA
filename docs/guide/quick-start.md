@@ -118,7 +118,7 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 
 ### Step 7: Review Results
 
-1. When the agent completes, VS Code will open the generated output file (e.g., `yourfile_polish_r0_model.tex`).
+1. When the agent completes, VS Code will open the generated output file from the run's task storage folder (e.g., `r0/output.tex`).
 2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
 3. You can compare the original and modified versions using:
    - **VS Code's Diff View**: Right-click on the original and output files in the Explorer and select "Compare Selected" for a side-by-side source code comparison.
@@ -262,11 +262,11 @@ When TeXRA completes a task, it produces:
 2. **Log Files**: Detailed information about the process
 3. **Diff Files**: Visual comparison between original and modified versions (if applicable)
 
-Output files are saved in the same directory as your input file with a naming pattern:
-`original_filename_agent_r0_model.extension`
+Output files are saved in the run's task storage folder with a naming pattern:
+`r{round}/output.extension`
 
-For example, if your input file is `paper.tex` and you used the `polish` agent with `sonnet46` model, the output file would be named:
-`paper_polish_r0_sonnet46.tex`
+For example, if your input file is `paper.tex` and the first round produces TeX, the output path inside task storage is:
+`r0/output.tex`
 
 ## Next Steps
 

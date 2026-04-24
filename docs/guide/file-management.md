@@ -123,10 +123,11 @@ minimal example configuration might look like this:
 
 ## Output File Naming
 
-TeXRA uses a structured naming convention for output files:
+TeXRA stores workflow outputs in the run's task storage folder. Within that
+folder, round outputs use a simple path:
 
 ```
-original_filename_agent_r0_model.extension
+r{round}/output.extension
 ```
 
 For example:
@@ -134,11 +135,11 @@ For example:
 - Input: `paper.tex`
 - Agent: `polish`
 - Model: `sonnet46`
-- Output: `paper_polish_r0_sonnet46.tex`
+- Output: `r0/output.tex`
 
 When the agent definition includes reflection rounds, you may also see:
 
-- Round 1: `paper_polish_r1_sonnet46.tex`
+- Round 1: `r1/output.tex`
 
 ## File Management Commands
 
@@ -146,20 +147,20 @@ TeXRA provides several commands for managing generated files, accessible from th
 
 ### Pack
 
-The "Pack" button (<i class="codicon codicon-archive"></i>) organizes output files into a structured history folder:
+The "Pack" button (<i class="codicon codicon-archive"></i>) snapshots the run's task storage folder into a structured history folder:
 
 1. Creates a timestamped directory in the "History" folder
-2. Moves all relevant output files and logs
+2. Copies all relevant output files, logs, and mirrored dependencies
 3. Preserves the relationship between input and output files
 
 This is useful for maintaining a clean workspace while preserving previous outputs.
 
 ### Clean
 
-The "Clean" button (<i class="codicon codicon-trash"></i>) removes output files for the selected agent and model:
+The "Clean" button (<i class="codicon codicon-trash"></i>) removes output files for the selected run:
 
-1. Identifies all outputs for the current configuration
-2. Safely removes them from the workspace
+1. Identifies the task storage folder for the current run
+2. Safely removes generated artifacts from task storage
 3. Leaves original input files untouched
 
 Use this to clean up your workspace after reviewing the results.

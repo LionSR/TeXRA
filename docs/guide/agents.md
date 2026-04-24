@@ -198,7 +198,7 @@ The `merge` agent intelligently combines changes from an edited document back in
 
 **Best for:**
 
-- Applying AI-suggested edits from a `_r0_` or `_r1_` file
+- Applying AI-suggested edits from a round output such as `r0/output.tex` or `r1/output.tex`
 - Incorporating reviewer suggestions from a separate file
 - Combining different drafts or collaborator edits
 

@@ -39,18 +39,6 @@
       {
         "title": "TeXRA",
         "properties": {
-          "texra.agentOutputs.storageMode": {
-            "type": "string",
-            "enum": [
-              "workspace",
-              "taskRunStorage"
-            ],
-            "default": "workspace",
-            "description": "Deprecated and ignored. Workflow outputs now always live in task-run storage (executions/{id}/...) and are reachable via the progress-view toolbar (Accept / Pack / Open in task storage).",
-            "deprecationMessage": "Workflow outputs now always live in task-run storage. This setting is ignored.",
-            "scope": "resource",
-            "order": 50
-          },
           "texra.agentOutputs.autoOpenFinal": {
             "type": "boolean",
             "default": true,

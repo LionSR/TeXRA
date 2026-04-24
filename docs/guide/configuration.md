@@ -435,7 +435,7 @@ To capture the full prompt sent to the model, enable the `Save Input Prompt` deb
 
 - **Settings** (<i class="codicon codicon-gear"></i>): Open TeXRA extension settings.
 - **History** (<i class="codicon codicon-history"></i>): Open Agent Execution History panel.
-- **Pack** (<i class="codicon codicon-archive"></i>): Archive current Agent/Model/Input outputs to `History` folder.
-- **Clean** (<i class="codicon codicon-trash"></i>): Delete current Agent/Model/Input outputs.
+- **Pack** (<i class="codicon codicon-archive"></i>): Archive the current run's task storage folder to `History`.
+- **Clean** (<i class="codicon codicon-trash"></i>): Delete the current run's task storage folder.
 - **Magic Polish** (<i class="codicon codicon-sparkle"></i>): Use selected model to polish the instruction text.
 - **Erase Instruction** (<i class="codicon codicon-clear-all"></i>): Clear the instruction box.
