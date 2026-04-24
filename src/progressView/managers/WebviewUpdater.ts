@@ -351,10 +351,17 @@ export class WebviewUpdater {
     // filter). The frontend still applies `state.agentCategoryFilter` at the
     // sidebar display layer via `tabStreams$`.
     const streams = buildStreamInfos(state);
-    const streamNames = streams.map((info) => info.name);
 
-    // Compute valid active stream (pure query) and persist if changed
-    const activeStream = state.pickValidActiveStream(streamNames);
+    // Active-stream validation still respects the filter so a filter change
+    // auto-rotates to a matching tab instead of leaving a hidden tab selected.
+    const filter = state.agentCategoryFilter;
+    const selectableNames =
+      filter === 'all'
+        ? streams.map((info) => info.name)
+        : streams
+            .filter((info) => info.agentCategory === filter)
+            .map((info) => info.name);
+    const activeStream = state.pickValidActiveStream(selectableNames);
     if (activeStream !== state.activeStream) {
       state.activeStream = activeStream;
     }

@@ -107,6 +107,10 @@ export class StreamLogStore {
     const work = (async () => {
       try {
         const raw = await this.kv.read<unknown[]>(streamId);
+        // A concurrent `append` (e.g. the agent writing to this stream)
+        // may have populated `logs` while we awaited the disk read; its
+        // in-memory entries are newer than the file, so don't clobber.
+        if (this.logs.has(streamId)) return;
         const entries = this.parsePersistedEntries(raw);
         const logInstance = new StreamLog(entries);
         this.logs.set(streamId, logInstance);
