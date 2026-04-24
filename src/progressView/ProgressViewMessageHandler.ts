@@ -30,6 +30,7 @@ import {
   type TaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
   CHAT_INSTRUCTION_TEMPLATE,
@@ -484,23 +485,36 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? (data.provider as ApiProvider)
       : undefined;
 
+    // Snapshot the per-provider key before the picker so we can tell whether
+    // the user actually stored a new credential. Without a known provider we
+    // skip the snapshot + auto-resume path entirely — the user can still set
+    // a key via the picker and click Retry explicitly.
+    const secretName = providerArg
+      ? SecretManager.getApiKeySecretName(providerArg)
+      : undefined;
+    const keyBefore = secretName
+      ? await SecretManager.get(secretName)
+      : undefined;
+
     await vscode.commands.executeCommand(
       apiKeyCommands.setApiKey,
       providerArg,
     );
 
-    // Only auto-resume when the user has a usable personal key for the
-    // offending provider. `anyApiKeyExists()` is deliberately NOT used as a
-    // fallback: it also returns true when relay/included access is available,
-    // which would let a user who cancelled the key picker silently flip off
-    // server-side access and strand the stream with no usable credential.
-    // If we can't identify the provider or verify the key, leave the panel
-    // open — the user can click Retry explicitly.
-    if (!providerArg || !(await SecretManager.hasUsableApiKey(providerArg))) {
+    if (!providerArg || !secretName) {
+      return;
+    }
+
+    // Auto-resume only when the key value actually changed. Cancelling the
+    // picker leaves secrets unchanged even if a stale key existed, so this
+    // avoids a spurious retry after explicit cancellation.
+    const keyAfter = await SecretManager.get(secretName);
+    if (!keyAfter || keyAfter === keyBefore) {
       return;
     }
 
     await getServerSideKeyService().setUseIncludedModelAccess(false);
+    invalidateModelOptionsCache();
     retryCoordinator.triggerRetry(data.stream);
   }
 
