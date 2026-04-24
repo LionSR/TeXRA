@@ -12,6 +12,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
+import { StreamSortSchema } from '@shared/streams/streamSort';
 import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';
 import { StreamLogEntrySchema } from './log';
@@ -30,7 +31,6 @@ import {
   ToolEditPermissionSchema,
 } from './prompts';
 import { StreamStatusSchema, StreamTabInfoSchema } from './stream';
-import { StreamSortSchema } from '@shared/streams/streamSort';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
@@ -540,6 +540,22 @@ const CancelRetryRequestMessageSchema = z.object({
   stream: StreamTabIdSchema,
 });
 
+const UseOwnApiKeyMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY),
+  stream: StreamTabIdSchema,
+  provider: z.string().optional(),
+  /** True when the underlying cause is an upstream provider credit
+   *  depletion (Anthropic 400 "credit balance is too low"), meaning the
+   *  stored key IS the depleted credential. The handler requires a new
+   *  key for these rather than reusing the stored one. */
+  upstreamCreditDepleted: z.boolean().optional(),
+  /** True when the failing request went through the TeXRA relay. When
+   *  false, relay wasn't in the path (direct-key call) and the handler
+   *  must not globally disable relay access — other providers may still
+   *  be served successfully by relay. */
+  viaRelay: z.boolean().optional(),
+});
+
 const ToggleToolEditApprovalBypassMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS),
   stream: StreamTabIdSchema,
@@ -717,6 +733,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     PolishFollowUpMessageSchema,
     RetryStreamRequestMessageSchema,
     CancelRetryRequestMessageSchema,
+    UseOwnApiKeyMessageSchema,
     StartRecordingMessageSchema,
     StopRecordingMessageSchema,
     PopOutMessageSchema,

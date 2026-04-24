@@ -17,6 +17,13 @@ export interface AgentCore<C = unknown> {
   userVarChannels: UserVariableChannels;
   /** Working directory override for subagent tool calls (e.g. a git worktree). */
   workingDirectory?: string;
+  /**
+   * Delegation depth: 0 for root (user-initiated), N for a subagent N levels deep.
+   * Set by executeAgent from ExecuteAgentOptions.delegationDepth. Used by the
+   * tool-use flow to gate delegation tools and by the delegation tool itself
+   * to compute the child's depth.
+   */
+  delegationDepth?: number;
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {

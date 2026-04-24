@@ -1,4 +1,7 @@
-import { isActiveStatus } from '@common/constants/streamStatus';
+import {
+  isActiveStatus,
+  isInFlightStatus,
+} from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
@@ -7,14 +10,6 @@ import {
 } from '@shared/schemas';
 
 const statusMemory = new Map<StreamTabId, StreamStatus>();
-
-/** Statuses that prevent acquiring a new stream lock. */
-const BLOCKED_STATUSES = new Set<StreamStatus>([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.RESUMING,
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.WAITING,
-]);
 
 interface SetOptions {
   emit?: boolean;
@@ -26,8 +21,7 @@ export const StreamStatusService = {
   },
 
   tryAcquire(stream: StreamTabId): boolean {
-    const current = statusMemory.get(stream);
-    if (current && BLOCKED_STATUSES.has(current)) {
+    if (isInFlightStatus(statusMemory.get(stream))) {
       return false;
     }
     this.set(stream, STREAM_STATUS.INITIALIZING);

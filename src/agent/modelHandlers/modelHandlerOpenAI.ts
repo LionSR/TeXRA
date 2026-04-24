@@ -10,13 +10,13 @@ import {
   ChatCompletionAssistantMessageParam,
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
-  ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
   ChatCompletionToolMessageParam,
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
+import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -417,7 +417,11 @@ export class ModelHandlerOpenAI<
       if (!parallelToolCalls) {
         baseParams.parallel_tool_calls = false;
       }
-      baseParams.tools = toOpenAITools(tools);
+      // These tools are parsed by TeXRA after the response. The SDK's
+      // auto-parse validator requires strict schemas, but several TeXRA tools
+      // intentionally expose nullable or optional fields.
+      const convertedTools = toOpenAITools(tools);
+      baseParams.tools = convertedTools;
       baseParams.tool_choice = 'auto';
     }
 
@@ -751,7 +755,7 @@ export class ModelHandlerOpenAI<
       : messages;
 
     if (normalizedMessages.length !== messages.length) {
-      this.logger.info(
+      this.logger.debug(
         `Preprocessed message array from ${messages.length} to ${normalizedMessages.length} messages for ${providerLabel} model compatibility`,
       );
     }
@@ -1159,7 +1163,13 @@ export class ModelHandlerOpenAI<
   computePrice(responseUsage: ExtendedCompletionUsage | null): number {
     if (!responseUsage) return 0;
 
-    const promptTokens = responseUsage.prompt_tokens ?? 0;
+    const cachedTokens =
+      responseUsage.prompt_tokens_details?.cached_tokens ??
+      responseUsage.prompt_cache_hit_tokens ??
+      0;
+    const promptTokens =
+      responseUsage.prompt_tokens ??
+      cachedTokens + (responseUsage.prompt_cache_miss_tokens ?? 0);
     const completionTokens = responseUsage.completion_tokens ?? 0;
     // Note: OpenAI doesn't provide tool_use_tokens in their API response
 
@@ -1173,11 +1183,6 @@ export class ModelHandlerOpenAI<
     // Retrieve nested token details if present
     const reasoningTokens =
       responseUsage.completion_tokens_details?.reasoning_tokens ?? 0;
-    const cachedTokens =
-      responseUsage.prompt_tokens_details?.cached_tokens ??
-      responseUsage.prompt_cache_hit_tokens ?? // deepseek
-      0;
-
     if (reasoningTokens) {
       basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
     }
@@ -1216,14 +1221,21 @@ export class ModelHandlerOpenAI<
       };
     }
 
-    // OpenAI's prompt_tokens is the TOTAL (includes cached tokens).
-    // Cached tokens are a subset, unlike Anthropic where input_tokens excludes cached.
-    const inputTokens = rawUsage.prompt_tokens ?? 0;
     // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek: prompt_cache_hit_tokens
     const cachedTokens =
       rawUsage.prompt_tokens_details?.cached_tokens ??
       rawUsage.prompt_cache_hit_tokens ??
       0;
+    const cacheMissTokens = rawUsage.prompt_cache_miss_tokens ?? 0;
+
+    // OpenAI's prompt_tokens is the TOTAL (includes cached tokens). DeepSeek also
+    // exposes cache hit/miss fields; use their sum as a fallback if prompt_tokens
+    // is absent from an OpenAI-compatible response.
+    const inputTokens =
+      rawUsage.prompt_tokens ??
+      (cachedTokens > 0 || cacheMissTokens > 0
+        ? cachedTokens + cacheMissTokens
+        : 0);
 
     return {
       inputTokens,
@@ -1232,6 +1244,7 @@ export class ModelHandlerOpenAI<
       responseTimeMs,
       provider: this.usageProvider,
       cachedInputTokens: cachedTokens || undefined,
+      cacheMissInputTokens: cacheMissTokens || undefined,
       percentageCached: computeCachePercentage(cachedTokens, inputTokens),
       reasoningTokens:
         rawUsage.completion_tokens_details?.reasoning_tokens || undefined,
@@ -1455,29 +1468,26 @@ export class ModelHandlerOpenAI<
 
   extractToolUse(responseObject: ChatCompletion): TCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
-    if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return toolCalls
-        .filter(
-          (
-            call,
-          ): call is ChatCompletionMessageFunctionToolCall & { id: string } =>
-            Boolean(
-              call &&
-              typeof call === 'object' &&
-              (call as ChatCompletionMessageFunctionToolCall).function?.name &&
-              call.id,
-            ),
-        )
-        .map((call) => ({
-          provider: this.toolCallProvider,
-          callId: call.id,
-          name: call.function!.name,
-          input: this.parseArguments(call.function!.arguments),
-          raw: call,
-        })) as TCall[];
+    if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
+      return [];
     }
 
-    return [];
+    try {
+      assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls);
+    } catch {
+      this.logger.warn(
+        'Skipping malformed OpenAI tool_calls payload while extracting tool use.',
+      );
+      return [];
+    }
+
+    return toolCalls.map((call) => ({
+      provider: this.toolCallProvider,
+      callId: call.id,
+      name: call.function.name,
+      input: this.parseArguments(call.function.arguments),
+      raw: call,
+    })) as TCall[];
   }
 
   /**
@@ -1498,6 +1508,14 @@ export class ModelHandlerOpenAI<
    * will be included in the assistant message and cleared after use.
    */
   protected shouldIncludeReasoningInToolCalls(): boolean {
+    return false;
+  }
+
+  /**
+   * Some providers require assistant tool-call messages to include a content
+   * field even when the model emitted an empty string.
+   */
+  protected shouldIncludeEmptyAssistantToolContent(): boolean {
     return false;
   }
 
@@ -1536,8 +1554,8 @@ export class ModelHandlerOpenAI<
       }
     }
 
-    if (text) {
-      callMsg.content = this.formatAssistantContent(text);
+    if (text !== undefined || this.shouldIncludeEmptyAssistantToolContent()) {
+      callMsg.content = this.formatAssistantContent(text ?? '');
     }
 
     return callMsg;

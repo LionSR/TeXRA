@@ -8,7 +8,7 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, query } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
@@ -16,7 +16,7 @@ import { styleMap } from 'lit/directives/style-map.js';
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles';
+import { designTokens, codiconStyles } from '@shared/styles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
 
@@ -56,8 +56,8 @@ const SESSION_HINT_COPY: Record<
   },
   orchestrator: {
     lede: 'Orchestrator.',
-    body: 'Plans a pipeline of specialized agents and dispatches them for you.',
-    time: 'Name specific agents in your instruction (e.g., “use polish on the intro, then review the math”) to steer delegation — otherwise it picks. Approve tasks in Progress as they arrive.',
+    body: 'Plans a pipeline of specialized agents and dispatches them for you. Name agents to steer delegation, or ask it which one to use.',
+    time: 'E.g., “use polish on the intro, then review the math” — or leave it blank. Approve tasks in Progress as they arrive.',
     ariaLabel: 'About orchestrator mode',
   },
 };
@@ -81,6 +81,7 @@ function resolveSessionHintKey(session: SessionContextValue): SessionHintKey {
 export class InstructionPanel extends LitElement {
   static override styles = [
     designTokens,
+    codiconStyles,
     commonViewStyles,
     selectStyles,
     css`
@@ -139,7 +140,7 @@ export class InstructionPanel extends LitElement {
       .session-hint {
         display: flex;
         gap: var(--spacing-small);
-        align-items: baseline;
+        align-items: flex-start;
         margin-top: var(--spacing-small);
         padding: var(--spacing-tiny) var(--spacing-small);
         border-left: 2px solid var(--vscode-textLink-foreground);
@@ -162,6 +163,12 @@ export class InstructionPanel extends LitElement {
       .session-hint-time {
         color: var(--vscode-descriptionForeground);
         opacity: 0.85;
+      }
+
+      .session-hint-dismiss {
+        flex: 0 0 auto;
+        margin-left: var(--spacing-tiny);
+        color: var(--vscode-descriptionForeground);
       }
 
       vscode-textarea#instruction {
@@ -269,6 +276,8 @@ export class InstructionPanel extends LitElement {
   @consume({ context: sessionContext, subscribe: true })
   private sessionData?: SessionContextValue;
 
+  @property({ type: Boolean }) showSessionHint = true;
+
   /** Reference to instruction textarea for paste handling */
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
@@ -289,7 +298,11 @@ export class InstructionPanel extends LitElement {
     return options.find((o) => o.value === selectedValue)?.hint ?? '';
   }
 
-  private renderSessionHint(session: SessionContextValue): TemplateResult {
+  private renderSessionHint(
+    session: SessionContextValue,
+  ): TemplateResult | typeof nothing {
+    if (!this.showSessionHint) return nothing;
+
     const copy = SESSION_HINT_COPY[resolveSessionHintKey(session)];
     return html`
       <div class="session-hint" role="note" aria-label=${copy.ariaLabel}>
@@ -298,8 +311,21 @@ export class InstructionPanel extends LitElement {
           ${copy.body}
           <span class="session-hint-time">${copy.time}</span>
         </span>
+        <vscode-button
+          appearance="icon"
+          class="session-hint-dismiss"
+          aria-label="Dismiss this reminder"
+          title="Dismiss this reminder"
+          @click=${this.handleDismissSessionHint}
+        >
+          <i class="codicon codicon-close"></i>
+        </vscode-button>
       </div>
     `;
+  }
+
+  private handleDismissSessionHint(): void {
+    this.dispatchEvent(MainViewEvents.dismissSessionHint());
   }
 
   private handleSessionTypeChange(event: Event): void {

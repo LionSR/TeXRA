@@ -3,8 +3,8 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Internal imports
 import * as logger from '@agent/core/logger';
-import { executeCommand } from '@utils/system';
 import { getConfig } from '@agent/core/config';
+import { executeCommand } from '@utils/system';
 
 // Local file imports
 import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';

@@ -35,6 +35,7 @@ import type {
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
+import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
@@ -45,13 +46,12 @@ import {
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@tools/result';
+import { formatPostCompactionContext } from '@tools/subagentResults';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
-import { getActiveChildren } from '@agent/runtime/executionRegistry';
-import { formatPostCompactionContext } from '@tools/subagentResults';
 import { FlowTransition } from './FlowTransitions';
 import { ModelInvocationNode } from './ModelInvocationNode';
 import type { CycleParams, ToolUseCycleServices } from './CycleServices';
@@ -789,6 +789,7 @@ class ToolUseDispatchNode<C> extends Node<
           model: options.modelName ?? options.config.model,
           agentName: options.agentName,
           workingDirectory: options.workingDirectory,
+          delegationDepth: options.delegationDepth,
           onExecutionReady,
           onToolOutput,
         },

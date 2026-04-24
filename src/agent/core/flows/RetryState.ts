@@ -196,9 +196,12 @@ export abstract class RetryableInvocationNode<
     }
   }
 
-  /** Auth/permission errors (401, 403) skip auto-retries — they need human attention. */
+  /** Auth/permission errors (401, 403) and credential-exhausted errors
+   *  (relay monthly limit, upstream credit depletion) skip auto-retries —
+   *  they need human attention (switching keys, topping up). */
   shouldAutoRetry(error: Error): boolean {
     const formatted = formatProviderHttpError(error);
+    if (formatted.isCredentialExhausted) return false;
     const code = formatted.statusCode;
     return code !== 401 && code !== 403;
   }
@@ -230,14 +233,17 @@ export abstract class RetryableInvocationNode<
     if (result.shouldRetry) {
       this._persistent401Error = null;
       this._hasAttemptedTokenRefresh = false;
-      const formatted = formatProviderHttpError(error);
-      if (formatted.isRelayError && formatted.statusCode === 401) {
-        await tryRefreshClient(
-          this.services.refreshClient,
-          this.services.logger,
-          'before manual retry after relay 401',
-        );
-      }
+      // Always refresh the client on manual retry. The user may have
+      // taken actions between failure and retry that change how the
+      // client should be built — setting a new API key (quota /
+      // credit-depletion flow), toggling included-access mode, rotating
+      // a token after a relay 401, etc. Refreshing is cheap and keeps
+      // the cached client in sync with current secrets/config.
+      await tryRefreshClient(
+        this.services.refreshClient,
+        this.services.logger,
+        'before manual retry',
+      );
     }
 
     return result.shouldRetry;

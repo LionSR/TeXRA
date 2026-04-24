@@ -6,6 +6,13 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { listExecutions } from '@agent/storage';
+import {
+  WORKFLOW_OUTPUT_BASENAME,
+  legacyWorkflowOutputRoundRegex,
+  midEraWorkflowOutputStem,
+  parseWorkflowOutputRoundDir,
+} from '@agent/output/workflowOutputLayout';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -18,15 +25,6 @@ import {
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
-import {
-  WORKFLOW_OUTPUT_BASENAME,
-  legacyWorkflowOutputRoundRegex,
-  midEraWorkflowOutputStem,
-  parseWorkflowOutputRoundDir,
-} from '@agent/output/workflowOutputLayout';
-import { listExecutions } from '@agent/storage';
-import { getStreamTabId } from '@logger/streamUtils';
-import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,
@@ -34,7 +32,9 @@ import {
   describeMathMarkupOption,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
+import { getStreamTabId } from '@logger/streamUtils';
 import * as logger from '@logger/logUtils';
+import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
@@ -370,10 +370,7 @@ interface DiffOperation {
  * Recursively collect all `.tex` file paths under `dir`, returned as paths
  * relative to `dir` using forward slashes (e.g. `"chapters/main.tex"`).
  */
-async function collectTexFiles(
-  dir: string,
-  prefix = '',
-): Promise<string[]> {
+async function collectTexFiles(dir: string, prefix = ''): Promise<string[]> {
   let entries: [string, vscode.FileType][];
   try {
     entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
@@ -444,7 +441,7 @@ async function scanRunDirForOutputs(
     for (const bf of [inputFile, ...(extraBaseFiles ?? [])]) {
       const abs = toAbs(bf);
       const rel = (workspacePath ? path.relative(workspacePath, abs) : bf)
-        .replace(/\\/g, '/')
+        .replaceAll('\\', '/')
         .replace(/\.tex$/i, '');
       baseLocationByRelPath.set(rel, pathToLocation(abs));
     }
@@ -478,7 +475,6 @@ async function scanRunDirForOutputs(
           ? nonArtifact.filter((f) => f !== rawStem)
           : nonArtifact;
       for (const fileRelToRound of texFiles) {
-
         const relativePath = path.join(entryName, fileRelToRound);
         const location = createRunStorageLocation(
           path.join(runDirAbsolute, relativePath),
@@ -498,7 +494,9 @@ async function scanRunDirForOutputs(
         // single configured base only when there's no ambiguity (one candidate);
         // in multi-file runs an unmatched file gets null so it surfaces as a
         // "missing base" error rather than silently diffing against the wrong doc.
-        const fileKey = fileRelToRound.replace(/\\/g, '/').replace(/\.tex$/i, '');
+        const fileKey = fileRelToRound
+          .replaceAll('\\', '/')
+          .replace(/\.tex$/i, '');
         const originalLocation =
           baseLocationByRelPath.get(fileKey) ??
           (baseLocationByRelPath.size === 1 ? defaultBaseLocation : null);

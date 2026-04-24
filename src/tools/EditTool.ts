@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolError, ToolResult } from '@tools/result';
 import {
   recordToolFileRead,
@@ -14,7 +15,6 @@ import {
   resolveAndFormat,
   parseWorkingDirectory,
 } from '@tools/utils';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,

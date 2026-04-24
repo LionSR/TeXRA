@@ -25,10 +25,10 @@ import './TaskGroupList';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { PersistedState } from '@shared/state';
-import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { codiconStyles, designTokens } from '@shared/styles';
-import { copyWithFeedback } from '@shared/utils/clipboard';
 import { postMessage } from '@shared/vscode';
+import { ToggleStateStore } from '@shared/state/ToggleStateStore';
+import { copyWithFeedback } from '@shared/utils/clipboard';
 import { webviewStorage } from '../webviewStorage';
 
 // Local imports - progress view contexts

@@ -268,8 +268,8 @@ export class GitTab extends LitElement {
             <strong>How to get a token:</strong>
             <ol>
               <li>
-                Click <em>Create on GitHub…</em> to open the token-creation
-                page in your browser.
+                Click <em>Create on GitHub…</em> to open the token-creation page
+                in your browser.
               </li>
               <li>
                 Choose scopes: <code>repo</code> for private repos or
@@ -300,8 +300,13 @@ export class GitTab extends LitElement {
               <div class="setting-block">
                 <p class="section-title">Active PR subscriptions</p>
                 <p class="setting-description">
-                  Click <em>Stop</em> to cancel a subscription. The rest of
-                  your work continues; only updates for that PR stop arriving.
+                  An agent is monitoring these pull requests in the background,
+                  polling GitHub every ~30 seconds. New comments, review
+                  comments, and CI failures arrive as follow-up messages in the
+                  agent's conversation so it can investigate and act on them.
+                  Subscriptions end automatically when a PR is closed or merged,
+                  or after 24 hours of continuous network failure. Click
+                  <em>Stop</em> to cancel one manually.
                 </p>
                 <ul class="subscriptions-list">
                   ${this.prSubscriptions.map(
@@ -336,7 +341,7 @@ export class GitTab extends LitElement {
                               `
                             : html`
                                 <p class="subscription-owner-placeholder">
-                                  Owning agent unavailable.
+                                  Started by an agent that is no longer active.
                                 </p>
                               `}
                         </div>

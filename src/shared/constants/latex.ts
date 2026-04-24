@@ -90,10 +90,15 @@ function combineGuides(
 
 export const PDFLATEX_INSTALL_GUIDE: Guide = {
   darwin:
-    'Install MacTeX (recommended):\n' +
-    '  brew install --cask mactex\n\n' +
+    'Install TeX Live (recommended):\n' +
+    '  brew install texlive\n\n' +
     '"brew" requires Homebrew (https://brew.sh), a free\n' +
-    'macOS package manager. Or download MacTeX directly from:\n' +
+    'macOS package manager. This is the lean TeX Live\n' +
+    "distribution without MacTeX's GUI apps.\n\n" +
+    'Alternatives:\n' +
+    '  brew install --cask mactex-no-gui   (MacTeX without GUI apps)\n' +
+    '  brew install --cask mactex          (full MacTeX, ~4 GB)\n' +
+    'Or download MacTeX directly from:\n' +
     '  https://www.tug.org/mactex/mactex-download.html\n\n' +
     'After installing, restart VS Code and verify by running\n' +
     '"pdflatex --version" in Terminal.',
@@ -285,7 +290,7 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
   texDistributionInstalled: {
     darwin: [
       {
-        command: 'brew install --cask mactex',
+        command: 'brew install texlive',
         packageManager: 'brew',
       },
     ],

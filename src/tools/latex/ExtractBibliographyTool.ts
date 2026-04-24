@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { getConfig } from '@agent/core/config';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
@@ -11,7 +12,6 @@ import { ToolError } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@agent/core/config';
 
 const ExtractBibliographyInputSchema = z.strictObject({
   texPath: z

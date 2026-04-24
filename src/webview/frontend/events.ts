@@ -98,7 +98,7 @@ export const MainViewEvents = {
   dismissGettingStarted: () =>
     createEvent('dismiss-getting-started', undefined),
 
-  dismissOrchestrator: () => createEvent('dismiss-orchestrator', undefined),
+  dismissSessionHint: () => createEvent('dismiss-session-hint', undefined),
 
   // LaTeXDiffs events
   latexDiffsToggle: (detail: LatexDiffsToggleDetail) =>

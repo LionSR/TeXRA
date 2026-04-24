@@ -19,6 +19,7 @@ import {
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   getHandle,
@@ -49,6 +50,8 @@ import {
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import { delegationAllowed } from '@shared/constants/delegationPolicy';
+import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
 import type { ToolResult } from '@tools/result';
@@ -65,16 +68,16 @@ import {
   formatSubagentProgress,
   formatFollowUpInstruction,
 } from '@tools/subagentResults';
+import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
+import { parseWorkingDirectory } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - memory
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 
 // Local imports - worktree config
-import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
 
 // Local imports - utils
-import { parseWorkingDirectory } from '@tools/utils';
 import { WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
 
@@ -84,6 +87,8 @@ import { generateExecutionId } from '@utils/core/executionId';
 
 const LOG_CHANNEL = 'DelegationTools';
 logger.initialize(LOG_CHANNEL);
+
+const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
 
 // ============================================================================
 // Subagent delivery state tracking
@@ -204,6 +209,25 @@ interface ApprovalMeta {
 }
 
 /**
+ * Defense-in-depth depth gate shared by fresh delegations and resumes.
+ * The tool-use flow already filters delegation tools from the toolset when
+ * the cap is reached, but if a rogue agent calls through anyway (fresh or
+ * via the execution_id resume path) we refuse here with a clear error so
+ * the LLM can pivot.
+ *
+ * Delegates to the same `delegationAllowed` predicate the tool filter
+ * uses so NaN / sentinel depths behave identically at both gates.
+ */
+function depthGateError(parentDelegationDepth: number): ToolResult | null {
+  const config = readNestedDelegationConfig();
+  if (delegationAllowed(parentDelegationDepth, config)) return null;
+  return {
+    error: `Delegation depth cap reached (max depth ${config.maxDepth}). Raise Settings → Multi-Agent → Max delegation depth, or complete this task directly without delegating.`,
+    isError: true,
+  };
+}
+
+/**
  * Execute a subagent asynchronously.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
  * are consistent and usable with the executions tool.
@@ -219,16 +243,24 @@ async function executeSubagent(
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
+  const parentContext = getCurrentToolFileInteractionContext();
+  const parentExecutionId = parentContext?.executionId;
+  const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
+
+  const gated = depthGateError(parentDelegationDepth);
+  if (gated) return gated;
+
   const executionId = generateExecutionId();
   const startedAt = Date.now();
 
-  const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
   await registerExecution(
     executionId,
     syntheticConfig,
     agentName,
     parentExecutionId,
+    undefined,
+    parentDelegationDepth + 1,
   );
 
   // Track delivery state in the module-level map so delegate_agent (resume) can reset it.
@@ -249,6 +281,7 @@ async function executeSubagent(
     isSubagent: true,
     enforceCategory: true,
     parentStreamId: orchestratorStreamId,
+    delegationDepth: parentDelegationDepth + 1,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {
@@ -608,6 +641,50 @@ const WorkflowAgentInputSchema = z.object({
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
+function isBibFile(filePath: string): boolean {
+  const basename = filePath.replaceAll('\\', '/').split('/').at(-1);
+  return basename?.toLowerCase().endsWith('.bib') ?? false;
+}
+
+function getReferenceAndAuxiliaryFiles(input: WorkflowAgentInput): string[] {
+  return [
+    input.referenceFile,
+    ...input.referenceFiles,
+    input.auxiliaryFile,
+    ...input.auxiliaryFiles,
+  ].filter(
+    (path): path is string => typeof path === 'string' && path.length > 0,
+  );
+}
+
+/** Reject workflow proposals that attach oversized bibliography files. */
+export async function rejectOversizedBibAttachments(
+  input: WorkflowAgentInput,
+): Promise<ToolResult | null> {
+  const bibFiles = getReferenceAndAuxiliaryFiles(input).filter(isBibFile);
+
+  for (const bibFile of bibFiles) {
+    const stats = await WorkspaceFS.stat(bibFile);
+    if (stats.size <= LARGE_BIB_LIMIT_BYTES) continue;
+
+    const message = `${bibFile} is ${stats.size} bytes (${formatBytes(stats.size)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
+    return {
+      summary: `Rejected oversized BibTeX attachment`,
+      error: message,
+      output: message,
+      isError: true,
+      diagnostics: {
+        type: 'oversized_bib_attachment',
+        path: bibFile,
+        sizeBytes: stats.size,
+        limitBytes: LARGE_BIB_LIMIT_BYTES,
+      },
+    };
+  }
+
+  return null;
+}
+
 /** Tool for delegating tasks to workflow agents (document processing). */
 export class WorkflowAgentTool extends defineTool({
   name: 'delegate_workflow',
@@ -679,6 +756,9 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
     if (missing) {
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
+
+    const oversizedBibRejection = await rejectOversizedBibAttachments(input);
+    if (oversizedBibRejection) return oversizedBibRejection;
 
     // Extraction flags map to toolConfig, flowing through the proposal UI and
     // into MediaExtractionNode → LatexMediaManager at runtime.
@@ -811,6 +891,11 @@ Git worktree support: ${
     executionId: string,
     instruction: string,
   ): Promise<ToolResult> {
+    const parentDelegationDepth =
+      getCurrentToolFileInteractionContext()?.delegationDepth ?? 0;
+    const gated = depthGateError(parentDelegationDepth);
+    if (gated) return gated;
+
     const handle = getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
       throw new Error(

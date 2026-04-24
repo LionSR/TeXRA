@@ -13,6 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import stripAnsi from 'strip-ansi';
 
 // Local imports - shared schemas
 import { STREAM_STATUS } from '@shared/schemas';
@@ -49,6 +50,53 @@ interface GroupTree {
 const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
+
+// Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
+// Real null bytes in the input are stripped first so the sentinel is unambiguous.
+const ERASE_SENTINEL = '\x00';
+const ANSI_ERASE_LINE_PATTERN = new RegExp(String.raw`\u001B\[\d*K`, 'g');
+
+/** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
+function processTerminalText(text: string): string {
+  // Strip any real null bytes so \x00 is unambiguous as our internal sentinel.
+  // Then replace ANSI erase-line escapes (\x1b[K, \x1b[0K, \x1b[2K, …) with it
+  // before stripping all ANSI so the overwrite loop can honour them: an erase clears
+  // the line from that column onward instead of preserving the stale tail characters.
+
+  const preprocessed = text
+    .split(ERASE_SENTINEL)
+    .join('')
+    .replaceAll(ANSI_ERASE_LINE_PATTERN, ERASE_SENTINEL);
+  return stripAnsi(preprocessed)
+    .replaceAll('\r\n', '\n')
+    .split('\n')
+    .map((line) => {
+      const segs = line.split('\r');
+      // On a fresh line (no preceding \r), \x1b[K has nothing to clear; text after
+      // the erase point is still written at the cursor, so just strip the markers.
+      let current = segs[0]!.split(ERASE_SENTINEL).join('');
+
+      for (let i = 1; i < segs.length; i++) {
+        const seg = segs[i]!;
+        const eraseAt = seg.indexOf(ERASE_SENTINEL);
+        if (eraseAt >= 0) {
+          // \r overlays the prefix up to the erase point; \x1b[K clears from there to EOL.
+          const pre = seg.slice(0, eraseAt);
+          const post = seg
+            .slice(eraseAt + 1)
+            .split(ERASE_SENTINEL)
+            .join('');
+          current = pre + post;
+        } else {
+          // \r moves cursor to column 0 without clearing; shorter writes preserve the tail
+          current =
+            seg.length < current.length ? seg + current.slice(seg.length) : seg;
+        }
+      }
+      return current.split(ERASE_SENTINEL).join('');
+    })
+    .join('\n');
+}
 
 /** Maps group status to codicon class (with optional animation) */
 function getStatusIcon(status: string): string {
@@ -92,6 +140,11 @@ export class TaskGroupList extends LitElement {
   /** Memoized tree output from buildGroupTree() - recomputed only when inputs change */
   private cachedTree: GroupTree[] = [];
   private cachedUngrouped: LogMessageData[] = [];
+
+  /** Raw partial-line buffer: unprocessed bytes after the last '\n', capped at 64 KiB */
+  private cachedRawTail = '';
+  /** Processed complete lines for terminal mode (up to and including the last '\n') */
+  private cachedTerminalLines = '';
 
   /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
   private groupNodeIndex = new Map<string, GroupTree>();
@@ -145,6 +198,39 @@ export class TaskGroupList extends LitElement {
 
     const groupsChanged = changedProperties.has('groups');
     const messagesChanged = changedProperties.has('messages');
+
+    if (this.terminal) {
+      if (changedProperties.has('terminal')) {
+        this.rebuildTerminalText();
+      } else if (messagesChanged) {
+        const prevCount =
+          (changedProperties.get('messages') as LogMessageData[] | undefined)
+            ?.length ?? 0;
+        if (this.messages.length > prevCount) {
+          this.appendTerminalChunk(
+            this.messages
+              .slice(prevCount)
+              .map((m) => m.text)
+              .join(''),
+          );
+        } else {
+          this.rebuildTerminalText();
+        }
+      }
+    }
+
+    // Group tree, message classification, and timeline are only used by the
+    // non-terminal render path — skip them when terminal mode is active.
+    if (this.terminal) return;
+
+    // If terminal just switched off, caches weren't maintained while it was on —
+    // do a full rebuild so the non-terminal render has accurate data.
+    if (changedProperties.get('terminal') === true) {
+      [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
+      this.cachedTimeline = this.buildFullTimeline();
+      return;
+    }
+
     const prevMessages = messagesChanged
       ? (changedProperties.get('messages') as LogMessageData[] | undefined)
       : undefined;
@@ -287,6 +373,33 @@ export class TaskGroupList extends LitElement {
     const idx = this.cachedUngrouped.findIndex((m) => m.id === msg.id);
     if (idx >= 0) {
       this.cachedUngrouped[idx] = msg;
+    }
+  }
+
+  private rebuildTerminalText(): void {
+    this.cachedRawTail = '';
+    this.cachedTerminalLines = '';
+    this.appendTerminalChunk(this.messages.map((m) => m.text).join(''));
+  }
+
+  private appendTerminalChunk(newRaw: string): void {
+    const combined = this.cachedRawTail + newRaw;
+    const lastNl = combined.lastIndexOf('\n');
+    if (lastNl >= 0) {
+      this.cachedTerminalLines += processTerminalText(
+        combined.slice(0, lastNl + 1),
+      );
+      this.cachedRawTail = combined.slice(lastNl + 1);
+    } else {
+      // No newline: keep raw bytes so split ANSI sequences and cross-chunk \r
+      // overwrites are handled correctly at render time. Cap unconditionally:
+      // if the tail ends with \r (potential CRLF split) the cap still preserves
+      // that trailing \r, so the next arriving \n is correctly joined into \r\n.
+      const MAX_TAIL = 65536;
+      this.cachedRawTail =
+        combined.length > MAX_TAIL
+          ? combined.slice(combined.length - MAX_TAIL)
+          : combined;
     }
   }
 
@@ -582,6 +695,20 @@ export class TaskGroupList extends LitElement {
           @vsc-scrollable-scroll=${this.handleVscScroll}
         >
           <div class="log-placeholder">${unsafeHTML(PLACEHOLDER_HTML)}</div>
+        </vscode-scrollable>
+      `;
+    }
+
+    if (this.terminal) {
+      return html`
+        <vscode-scrollable
+          id=${ELEMENT_IDS.LOG_CONTENT}
+          class="log-container"
+          @vsc-scrollable-scroll=${this.handleVscScroll}
+        >
+          <pre class="terminal-pre">
+${this.cachedTerminalLines}${processTerminalText(this.cachedRawTail)}</pre
+          >
         </vscode-scrollable>
       `;
     }

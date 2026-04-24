@@ -9,7 +9,13 @@
  * - LatexSettingsHandlers: LaTeX tool detection and recommended settings
  */
 import * as vscode from 'vscode';
-import { MODELS, MODEL_CONFIGS, type ReasoningEffort } from 'llm-zoo';
+import {
+  MODELS,
+  MODEL_CONFIGS,
+  ModelProvider,
+  type ModelConfig,
+  type ReasoningEffort,
+} from 'llm-zoo';
 
 // Shared schemas and dispatchers
 import { getAgentsBySource, loadAgents } from '@agent/index';
@@ -82,6 +88,10 @@ import {
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
 import { isFastFirstResponseModel } from '@shared/constants/fastModels';
+import {
+  NESTED_DELEGATION_DEPTH_RANGE,
+  clampNestedDelegationDepth,
+} from '@shared/constants/delegationPolicy';
 import type {
   RemoteAgent,
   ProviderKeyStatus,
@@ -255,6 +265,14 @@ function getReasoningLevelOverrides(): Record<string, string> {
   );
 }
 
+function supportsReasoningLevel(config: ModelConfig): boolean {
+  return (
+    config.capabilities.supportsReasoningEffort ||
+    (config.provider === ModelProvider.DEEPSEEK &&
+      config.capabilities.supportsReasoning)
+  );
+}
+
 function buildModelSelectionItems(): ModelSelectionItem[] {
   const enabledSet = new Set(
     globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
@@ -266,7 +284,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
     const config = MODEL_CONFIGS[name];
     if (!config || !modelProvidersSet.has(config.provider)) continue;
 
-    const { supportsReasoningEffort, reasoningEffort } = config.capabilities;
+    const { reasoningEffort } = config.capabilities;
 
     const item: ModelSelectionItem = {
       name,
@@ -278,7 +296,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
       isFast: isFastFirstResponseModel(config.inputPrice),
     };
 
-    if (supportsReasoningEffort) {
+    if (supportsReasoningLevel(config)) {
       item.supportsReasoningLevel = true;
       // Only set defaultReasoningLevel when the effort has a UI-level equivalent.
       // XHIGH and unknown efforts get no label — the UI shows plain "Default".
@@ -433,6 +451,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
           data,
         ),
+      [SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH]: (data) =>
+        this.handleSetNestedDelegationMaxDepth(data),
 
       // ── Delegated to AgentHandlers ──
 
@@ -833,12 +853,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     );
+    const nestedDelegationMaxDepth = clampNestedDelegationDepth(
+      workspaceSM.get<number>(
+        WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+        NESTED_DELEGATION_DEPTH_RANGE.default,
+      ),
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
       enabled,
       reliabilitySettings: getReliabilitySettings(),
       allowOrchestratorKill,
       detachSubagentsOnStop,
+      nestedDelegationMaxDepth,
     });
   }
 
@@ -869,6 +896,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: { enabled: boolean },
   ): Promise<void> {
     await workspaceSM.update(key, data.enabled);
+    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
+  }
+
+  private async handleSetNestedDelegationMaxDepth(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_NESTED_DELEGATION_MAX_DEPTH>,
+  ): Promise<void> {
+    await workspaceSM.update(
+      WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+      clampNestedDelegationDepth(data.value),
+    );
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
 
@@ -991,7 +1028,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // If the current filter would hide the target stream, clear it to 'all'
     // so SET_ACTIVE_STREAM doesn't silently land on the wrong tab.
-    if (buildStreamInfo(state, data.streamId, state.agentCategoryFilter) === null) {
+    if (
+      buildStreamInfo(state, data.streamId, state.agentCategoryFilter) === null
+    ) {
       state.agentCategoryFilter = 'all';
       provider.syncFullView();
     }
