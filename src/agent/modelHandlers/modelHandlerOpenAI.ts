@@ -884,23 +884,23 @@ export class ModelHandlerOpenAI<
     return messages;
   }
 
-  createAssistantMessage(
-    text: string,
-    workspaceState?: AgentWorkspaceState,
-  ): ChatCompletionMessageParam {
-    const message: ChatCompletionAssistantMessageParam & {
-      reasoning_content?: string;
-    } = {
-      role: 'assistant',
-      content: this.formatAssistantContent(text),
-    };
+  createAssistantMessage(text: string): ChatCompletionMessageParam {
+    return { role: 'assistant', content: this.formatAssistantContent(text) };
+  }
 
-    if (this.shouldIncludeReasoningInAssistantMessages() && workspaceState) {
+  override createAssistantMessageFromResponse(
+    responseObject: ChatCompletion,
+    text: string,
+  ): ChatCompletionMessageParam {
+    const message = this.createAssistantMessage(
+      text,
+    ) as ChatCompletionAssistantMessageParam & { reasoning_content?: string };
+
+    if (this.shouldIncludeReasoningInAssistantMessages()) {
       const reasoningContent =
-        workspaceState.reasoning.thinkingBlocks[0]?.thinking;
+        this.extractReasoningFromResponse(responseObject);
       if (reasoningContent) {
         message.reasoning_content = reasoningContent;
-        workspaceState.resetReasoning();
       }
     }
 
@@ -1403,6 +1403,12 @@ export class ModelHandlerOpenAI<
     return isNonEmptyString(reasoning) ? reasoning : null;
   }
 
+  protected extractReasoningFromResponse(responseObject: any): string | null {
+    return this.extractReasoningFromMessage(
+      responseObject?.choices?.[0]?.message,
+    );
+  }
+
   /**
    * Processes thinking blocks from API response.
    * @param responseObject The response object from the API
@@ -1413,8 +1419,7 @@ export class ModelHandlerOpenAI<
     responseObject: any,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
-    const message = responseObject?.choices?.[0]?.message;
-    const reasoning = this.extractReasoningFromMessage(message);
+    const reasoning = this.extractReasoningFromResponse(responseObject);
     if (!reasoning) {
       return null;
     }

@@ -425,7 +425,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: ToolUseProcessPrepResult,
+    prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const { run, workspace, onRoundFinalized, modelHandler } = this.services;
@@ -463,7 +463,10 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.endTurn = true;
       if (execRes.text) {
         shared.messages.push(
-          modelHandler.createAssistantMessage(execRes.text, workspace),
+          modelHandler.createAssistantMessageFromResponse(
+            prepRes.response,
+            execRes.text,
+          ),
         );
         workspace.assembly.lastResponse = execRes.text;
       }
