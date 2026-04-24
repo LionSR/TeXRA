@@ -24,7 +24,6 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import type { StreamSort } from '@shared/streams/streamSort';
 
 /**
  * Extra content to include with log updates.
@@ -100,7 +99,6 @@ export class WebviewUpdater {
     streams: StreamTabInfo[],
     activeStream: StreamTabId,
     agentFilter: AgentCategoryFilter,
-    streamSort: StreamSort,
     streamStates?: Record<StreamTabId, StreamMetadata>,
   ): void {
     this.sendMessage({
@@ -108,7 +106,6 @@ export class WebviewUpdater {
       streams,
       activeStream,
       agentFilter,
-      streamSort,
       streamStates,
     });
   }
@@ -409,7 +406,6 @@ export class WebviewUpdater {
       streams,
       activeStream,
       state.agentCategoryFilter,
-      state.streamSortOrder,
       streamMetadata,
     );
 
