@@ -42,6 +42,13 @@ export const ExecutionMetaSchema = z.object({
   category: z.string().optional(),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
+  /**
+   * Delegation depth at launch time: 0 for user-initiated, N for an agent
+   * N levels deep. Optional so pre-feature snapshots don't fail validation.
+   * Read on resume to enforce the nested-delegation cap without having to
+   * walk a potentially broken parent chain.
+   */
+  delegationDepth: z.number().int().nonnegative().optional(),
 });
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 
