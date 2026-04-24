@@ -20,6 +20,7 @@ export const DEFAULT_TOTALS = {
   totalOutputTokens: 0,
   totalCost: 0,
   totalCacheReadInputTokens: 0,
+  totalCacheMissInputTokens: 0,
   totalCacheCreationInputTokens: 0,
   totalReasoningTokens: 0,
   totalToolUsePromptTokens: 0,
@@ -33,6 +34,7 @@ const RunUsageTotalsSchema = z.object({
   totalOutputTokens: z.number().prefault(0),
   totalCost: z.number().prefault(0),
   totalCacheReadInputTokens: z.number().prefault(0),
+  totalCacheMissInputTokens: z.number().prefault(0),
   totalCacheCreationInputTokens: z.number().prefault(0),
   totalReasoningTokens: z.number().prefault(0),
   totalToolUsePromptTokens: z.number().prefault(0),
@@ -86,6 +88,7 @@ export function recordNormalizedUsage(
   acc.totals.totalOutputTokens += usage.outputTokens;
   acc.totals.totalCost += usage.cost;
   acc.totals.totalCacheReadInputTokens += usage.cachedInputTokens ?? 0;
+  acc.totals.totalCacheMissInputTokens += usage.cacheMissInputTokens ?? 0;
   acc.totals.totalCacheCreationInputTokens += usage.cacheCreationTokens ?? 0;
   acc.totals.totalReasoningTokens += usage.reasoningTokens ?? 0;
   acc.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens ?? 0;
@@ -108,6 +111,7 @@ export function mergeAccumulators(
   target.totals.totalOutputTokens += src.totalOutputTokens;
   target.totals.totalCost += src.totalCost;
   target.totals.totalCacheReadInputTokens += src.totalCacheReadInputTokens;
+  target.totals.totalCacheMissInputTokens += src.totalCacheMissInputTokens;
   target.totals.totalCacheCreationInputTokens +=
     src.totalCacheCreationInputTokens;
   target.totals.totalReasoningTokens += src.totalReasoningTokens;

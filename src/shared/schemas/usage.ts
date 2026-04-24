@@ -7,6 +7,7 @@ export const TokenUsageStatsSchema = z.strictObject({
   outputTokens: z.number(),
   cost: z.number(),
   cacheReadInputTokens: z.number().optional(),
+  cacheMissInputTokens: z.number().optional(),
   cacheCreationInputTokens: z.number().optional(),
 });
 
@@ -19,6 +20,7 @@ export function emptyUsageStats(): TokenUsageStats {
     outputTokens: 0,
     cost: 0,
     cacheReadInputTokens: 0,
+    cacheMissInputTokens: 0,
     cacheCreationInputTokens: 0,
   };
 }
@@ -34,6 +36,8 @@ export function sumUsageStats(
     total.cost += usage.cost;
     total.cacheReadInputTokens =
       (total.cacheReadInputTokens ?? 0) + (usage.cacheReadInputTokens ?? 0);
+    total.cacheMissInputTokens =
+      (total.cacheMissInputTokens ?? 0) + (usage.cacheMissInputTokens ?? 0);
     total.cacheCreationInputTokens =
       (total.cacheCreationInputTokens ?? 0) +
       (usage.cacheCreationInputTokens ?? 0);

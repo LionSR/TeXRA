@@ -20,9 +20,12 @@ import type { ChatUsage as OpenRouterChatUsage } from '@openrouter/sdk/models';
  *   from the prompt cache during a completion request. This is specific to DeepSeek's
  *   caching mechanism, which aims to optimize performance by reusing previously
  *   processed prompts. A higher value indicates greater cache utilization.
+ * - `prompt_cache_miss_tokens` (optional): Represents the number of prompt tokens
+ *   that missed DeepSeek's prompt cache and are billed at the full input rate.
  */
 export interface ExtendedCompletionUsage extends CompletionUsage {
   prompt_cache_hit_tokens?: number;
+  prompt_cache_miss_tokens?: number;
 }
 
 /**
@@ -72,6 +75,7 @@ export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
   prompt_tokens: number;
   completion_tokens: number;
   cached_tokens: number;
+  cache_miss_tokens?: number;
   reasoning_tokens: number;
   accepted_prediction_tokens: number | null;
   rejected_prediction_tokens: number | null;
