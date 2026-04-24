@@ -37,10 +37,17 @@ export class RetryRequestPanel extends BaseRequestPanel {
   ];
 
   override handleKeyboardShortcut(key: string): boolean {
+    const data = this.permission.data as RetryPermission;
     switch (key) {
       case 'r':
         this.emitAction('retry');
         return true;
+      case 'k':
+        if (data.errorDetails?.isRelayQuotaExhausted) {
+          this.emitAction('useOwnApiKey');
+          return true;
+        }
+        return false;
       case 'escape':
         this.emitAction('cancel');
         return true;
@@ -52,6 +59,8 @@ export class RetryRequestPanel extends BaseRequestPanel {
   override render(): TemplateResult {
     const data = this.permission.data as RetryPermission;
     const isRelay = data.errorDetails?.isRelayError === true;
+    const isQuotaExhausted =
+      data.errorDetails?.isRelayQuotaExhausted === true;
     const retryable = data.errorDetails?.retryable !== false;
     const metaParts = [
       data.model ? `Model: ${data.model}` : null,
@@ -94,6 +103,18 @@ export class RetryRequestPanel extends BaseRequestPanel {
             : nothing}
         </div>
         <vscode-toolbar-container class="retry-request__actions">
+          ${when(
+            isQuotaExhausted,
+            () => html`
+              <vscode-toolbar-button
+                icon="key"
+                label="Use your own API key"
+                title="Use your own API key (k)"
+                @click=${() => this.emitAction('useOwnApiKey')}
+                >Use your own API key</vscode-toolbar-button
+              >
+            `,
+          )}
           <vscode-toolbar-button
             icon="refresh"
             label="Retry"

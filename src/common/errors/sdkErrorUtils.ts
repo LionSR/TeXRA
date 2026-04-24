@@ -454,11 +454,28 @@ function isRelayError(rawErrorBody: unknown): boolean {
   return isObject(nested) && '_relay' in nested;
 }
 
+/** True when the relay rejected the request due to the user's monthly
+ *  spending limit being reached (supabase/functions/relay marks this with
+ *  `limitReached: true` in the error body). */
+function isRelayQuotaExhaustedBody(rawErrorBody: unknown): boolean {
+  if (!isObject(rawErrorBody)) return false;
+  if ((rawErrorBody as { limitReached?: unknown }).limitReached === true) {
+    return true;
+  }
+  const nested = (rawErrorBody as { error?: unknown }).error;
+  return (
+    isObject(nested) &&
+    (nested as { limitReached?: unknown }).limitReached === true
+  );
+}
+
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const streamDiagnostics = detectStreamDiagnostics(err);
   const partialText = detectPartialText(err);
   const isRelay = isRelayError(rawErrorBody);
+  const isRelayQuotaExhausted =
+    isRelay && isRelayQuotaExhaustedBody(rawErrorBody);
 
   // Handle DOMException AbortError (from AbortController.abort())
   if (err instanceof DOMException && err.name === 'AbortError') {
@@ -479,6 +496,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       ...sdkMatch,
       retryable: isRelay || sdkMatch.retryable,
       isRelayError: isRelay,
+      isRelayQuotaExhausted: isRelayQuotaExhausted || undefined,
       rawErrorBody,
       streamDiagnostics,
       partialText,
@@ -516,6 +534,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     provider,
     retryable,
     isRelayError: isRelay,
+    isRelayQuotaExhausted: isRelayQuotaExhausted || undefined,
     requestId,
     rawErrorBody,
     streamDiagnostics,

@@ -540,6 +540,12 @@ const CancelRetryRequestMessageSchema = z.object({
   stream: StreamTabIdSchema,
 });
 
+const UseOwnApiKeyMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY),
+  stream: StreamTabIdSchema,
+  provider: z.string().optional(),
+});
+
 const ToggleToolEditApprovalBypassMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS),
   stream: StreamTabIdSchema,
@@ -717,6 +723,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     PolishFollowUpMessageSchema,
     RetryStreamRequestMessageSchema,
     CancelRetryRequestMessageSchema,
+    UseOwnApiKeyMessageSchema,
     StartRecordingMessageSchema,
     StopRecordingMessageSchema,
     PopOutMessageSchema,

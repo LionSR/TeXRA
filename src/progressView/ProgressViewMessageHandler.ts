@@ -12,6 +12,8 @@ import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/executionRequests';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
@@ -19,6 +21,7 @@ import {
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
 import { RecordingManager } from '@common/managers/RecordingManager';
+import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -190,6 +193,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) => {
         retryCoordinator.cancelRetry(data.stream);
       },
+      [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: (data) =>
+        this.handleUseOwnApiKey(data),
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: async (data) => {
         const taskState = this.provider.state.meta.getTaskState(data.stream);
         if (taskState) {
@@ -468,6 +473,36 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         'No retryable request is available for this stream yet.',
       );
     }
+  }
+
+  private async handleUseOwnApiKey(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY>,
+  ): Promise<void> {
+    const providerArg = (SecretManager.API_PROVIDERS as readonly string[]).includes(
+      data.provider ?? '',
+    )
+      ? (data.provider as ApiProvider)
+      : undefined;
+
+    await vscode.commands.executeCommand(
+      apiKeyCommands.setApiKey,
+      providerArg,
+    );
+
+    // Check whether a usable key is available for the offending provider.
+    // If so, disable server-side relay so the retry uses the user's key and
+    // resolve the waiting retry prompt. Otherwise leave the panel open — the
+    // user can still choose Retry or Dismiss.
+    const hasKey = providerArg
+      ? await SecretManager.hasUsableApiKey(providerArg)
+      : await SecretManager.anyApiKeyExists();
+
+    if (!hasKey) {
+      return;
+    }
+
+    await getServerSideKeyService().setUseIncludedModelAccess(false);
+    retryCoordinator.triggerRetry(data.stream);
   }
 
   private async handleDiffStream(

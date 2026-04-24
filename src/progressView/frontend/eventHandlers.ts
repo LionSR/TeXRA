@@ -285,6 +285,16 @@ export function handlePermissionAction(
       break;
     }
     case PERMISSION_KIND.RETRY:
+      if (action === 'useOwnApiKey') {
+        // Non-terminal: panel stays open. The extension handler will
+        // trigger retry on success, or leave the panel for the user
+        // to choose Retry/Dismiss if the user cancels the key picker.
+        postMessage(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY, {
+          stream: permission.data.streamId,
+          provider: permission.data.errorDetails?.provider,
+        });
+        break;
+      }
       if (action === 'retry') {
         postMessage(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST, {
           stream: permission.data.streamId,

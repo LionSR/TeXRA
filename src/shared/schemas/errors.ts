@@ -31,6 +31,10 @@ const ProviderErrorSchema = z.object({
   provider: z.string().optional(),
   retryable: z.boolean(),
   isRelayError: z.boolean(),
+  /** True when the relay returned a monthly-spending-limit 429 (limitReached).
+   *  Distinguishes quota-exhausted from transient upstream rate limits so the
+   *  UI can offer switching to a user-owned API key. */
+  isRelayQuotaExhausted: z.boolean().optional(),
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
