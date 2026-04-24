@@ -6,7 +6,7 @@ import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 
 // Local imports - tools
 import {
-  rejectOversizedLibraryBibAuxiliary,
+  rejectOversizedBibAttachments,
   type WorkflowAgentInput,
 } from '@tools/DelegationTools';
 import { WorkspaceFS } from '@utils/files';
@@ -46,33 +46,50 @@ describe('DelegationTools', () => {
     WorkspaceFS.stat = originalStat;
   });
 
-  it('rejects auxiliary library.bib files larger than 100KB', async () => {
+  it('rejects auxiliary .bib files larger than 100KB', async () => {
     WorkspaceFS.stat = async () => stat(100 * 1024 + 1);
 
-    const result = await rejectOversizedLibraryBibAuxiliary({
+    const result = await rejectOversizedBibAttachments({
       ...BASE_INPUT,
-      auxiliaryFile: 'library.bib',
+      auxiliaryFile: 'references.bib',
     });
 
     assert.strictEqual(result?.isError, true);
-    assert.strictEqual(result?.summary, 'Rejected oversized library.bib');
+    assert.strictEqual(result?.summary, 'Rejected oversized BibTeX attachment');
     assert.strictEqual(
       result?.error,
-      'library.bib is 102401 bytes (100.0 KB), over the 102400 byte (100.0 KB) limit. Call extract_bib_entries first if citations are needed, then re-propose without library.bib.',
+      'references.bib is 102401 bytes (100.0 KB), over the 102400 byte (100.0 KB) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.',
     );
     assert.strictEqual(result?.output, result?.error);
     assert.deepStrictEqual(result?.diagnostics, {
-      type: 'oversized_library_bib',
-      path: 'library.bib',
+      type: 'oversized_bib_attachment',
+      path: 'references.bib',
       sizeBytes: 102401,
       limitBytes: 102400,
     });
   });
 
-  it('allows auxiliary library.bib files at the 100KB limit', async () => {
+  it('rejects reference .bib files larger than 100KB', async () => {
+    WorkspaceFS.stat = async () => stat(150 * 1024);
+
+    const result = await rejectOversizedBibAttachments({
+      ...BASE_INPUT,
+      referenceFiles: ['paper.tex', 'bibliography/main.bib'],
+    });
+
+    assert.strictEqual(result?.isError, true);
+    assert.deepStrictEqual(result?.diagnostics, {
+      type: 'oversized_bib_attachment',
+      path: 'bibliography/main.bib',
+      sizeBytes: 153600,
+      limitBytes: 102400,
+    });
+  });
+
+  it('allows .bib files at the 100KB limit', async () => {
     WorkspaceFS.stat = async () => stat(100 * 1024);
 
-    const result = await rejectOversizedLibraryBibAuxiliary({
+    const result = await rejectOversizedBibAttachments({
       ...BASE_INPUT,
       auxiliaryFiles: ['library.bib'],
     });
@@ -80,16 +97,17 @@ describe('DelegationTools', () => {
     assert.strictEqual(result, null);
   });
 
-  it('ignores non-library auxiliary files', async () => {
+  it('ignores non-bib reference and auxiliary files', async () => {
     let statCalled = false;
     WorkspaceFS.stat = async () => {
       statCalled = true;
       return stat(500 * 1024);
     };
 
-    const result = await rejectOversizedLibraryBibAuxiliary({
+    const result = await rejectOversizedBibAttachments({
       ...BASE_INPUT,
-      auxiliaryFiles: ['references.bib'],
+      referenceFiles: ['paper.tex'],
+      auxiliaryFiles: ['preamble.tex'],
     });
 
     assert.strictEqual(result, null);
