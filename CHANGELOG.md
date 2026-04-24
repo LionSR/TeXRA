@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
   progress view, open the run's task storage folder, accept selected outputs,
   or pack the run into `History/`.
 
+### Features
+
+- **GPT-5.5** — added OpenAI's GPT-5.5 (`gpt55`, `gpt55-`, `gpt55--`) to the default model list as the new flagship OpenAI model. See the [OpenAI API docs](https://developers.openai.com/api/docs) for full capabilities. The Codex CLI integration is also pinned to `gpt-5.5` so delegated Codex turns use the latest model.
+
 ## [0.37.5] - 2026-04-24
 
 ### Features

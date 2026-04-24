@@ -29,9 +29,14 @@ Claude Opus 4.7 uses adaptive thinking only (extended thinking with a manual `bu
 
 | Model ID  | Use Case             | Cost | Speed  |
 | :-------- | :------------------- | :--- | :----- |
-| `gpt54`   | Flagship reasoning   | $$$  | Medium |
-| `gpt54-`  | Lower-cost reasoning | $$   | Fast   |
-| `gpt54--` | Budget reasoning     | $    | Fast   |
+| `gpt55`   | Flagship reasoning   | $$$  | Medium |
+| `gpt55-`  | Lower-cost reasoning | $$   | Fast   |
+| `gpt55--` | Budget reasoning     | $    | Fast   |
+| `gpt54`   | Previous flagship    | $$$  | Medium |
+| `gpt54-`  | GPT-5.4 mini         | $$   | Fast   |
+| `gpt54--` | GPT-5.4 nano         | $    | Fast   |
+
+GPT-5.5 is OpenAI's latest flagship reasoning model — see the [API reference](https://developers.openai.com/api/docs) for full capabilities. It is the default OpenAI model and is also the model TeXRA pins the [Codex CLI](./codex-cli.md) to.
 
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
@@ -103,7 +108,7 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 ## Choosing a Model
 
 - **Simple tasks**: Fast, cheap models (`qwenturbo`, `deepseek`, `haiku45`)
-- **Complex tasks**: Powerful models (`opus47`, `gpt54`, `gemini31p`)
+- **Complex tasks**: Powerful models (`opus47`, `gpt55`, `gemini31p`)
 - **Code-heavy / LaTeX editing**: Strong editing models (`opus47T`, `sonnet46T`, `qwenplus`)
 - **Reasoning-heavy**: Thinking models (`opus47T`, `sonnet46T`, `deepseekT`, `kimi26T`)
 - **Large documents**: High-context models (`gemini31p`, `sonnet46`, `opus47`)
@@ -117,7 +122,7 @@ Customize available models in VS Code Settings under `texra.models`:
   "gemini31p",
   "sonnet46T",
   "opus47T",
-  "gpt54",
+  "gpt55",
   "deepseekT"
 ]
 ```
