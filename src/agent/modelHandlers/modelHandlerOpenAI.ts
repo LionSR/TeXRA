@@ -16,9 +16,7 @@ import {
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
-import {
-  assertToolCallsAreChatCompletionFunctionToolCalls,
-} from 'openai/lib/parser';
+import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
