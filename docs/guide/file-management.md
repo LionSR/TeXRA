@@ -108,7 +108,8 @@ TeXRA intelligently handles file paths to ensure proper document processing:
 
 - **Display**: Files are displayed with paths relative to the workspace root
 - **Processing**: TeXRA resolves paths to their absolute form when needed
-- **Output**: Output files are typically saved in the same directory as their corresponding input files
+- **Output**: Workflow outputs are saved in task storage. Use **Accept** or
+  **Pack** when you want to copy reviewed outputs back into the workspace.
 
 ### File Path Configuration
 
@@ -178,7 +179,7 @@ Every time you run an agent, TeXRA creates a folder under its workspace storage
 directory:
 
 ```text
-.vscode/texra/taskRuns/<executionId>/
+executions/<executionId>/
 ```
 
 This folder stores intermediate artifacts such as the optional debug JSON

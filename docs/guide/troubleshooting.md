@@ -309,8 +309,8 @@ Even the best research assistants (human or AI) have off days. This guide helps 
 **Solutions**:
 
 1. **Check file paths**:
-   - Verify where TeXRA is saving output files
-   - Look in the same directory as the input file
+   - Open the generated file from the ProgressBoard file list
+   - Use **Open in task storage** from the ProgressBoard toolbar to browse the run folder
    - Check the ProgressBoard log for file paths
 
 2. **Permission issues**:

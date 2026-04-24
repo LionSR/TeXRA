@@ -121,11 +121,11 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 1. When the agent completes, VS Code will open the generated output file from the run's task storage folder (e.g., `r0/output.tex`).
 2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
 3. You can compare the original and modified versions using:
-   - **VS Code's Diff View**: Right-click on the original and output files in the Explorer and select "Compare Selected" for a side-by-side source code comparison.
+   - **ProgressBoard Diff**: Click the <i class="codicon codicon-diff-multiple"></i> Diff button on the completed stream to compare the original file against the generated task-storage output.
 
      ![VS Code Compare View](/images/vscode-compare.png)
 
-     You can accept individual changes by clicking the arrow icons that appear between the two panels. The left arrow (<i class="codicon codicon-arrow-left"></i>) restores the original text, while the right arrow (<i class="codicon codicon-arrow-right"></i>) accepts the AI's changes. This makes it easy to cherry-pick which modifications you want to keep.
+     You can accept reviewed outputs from the ProgressBoard after comparing the changes.
 
    - **TeXRA's LaTeXdiff feature**: Use the LaTeXdiffs section in the TeXRA panel for a compiled, visual comparison. This creates a PDF with additions highlighted in blue and deletions in red.
 
