@@ -60,6 +60,15 @@ export class StreamLogStore {
    */
   private readonly pendingRelease = new Set<StreamTabId>();
 
+  /**
+   * Streams whose rehydrate read from disk failed. While marked, saves skip
+   * them so we never overwrite the authoritative disk copy with a fresh
+   * empty-log-plus-new-appends that would drop persisted history.
+   * Cleared when `ensureLoaded` eventually succeeds (subsequent `append`s
+   * opportunistically retry the load).
+   */
+  private readonly loadFailed = new Set<StreamTabId>();
+
   /** Guards persistence — tests create store without calling load(). */
   private loaded = false;
 
@@ -160,20 +169,27 @@ export class StreamLogStore {
           this.markDirty(streamId);
           void this.save();
           this.notify(streamId);
-          return;
-        }
-        const logInstance = new StreamLog(diskEntries);
-        this.logs.set(streamId, logInstance);
-        this.refreshSummary(streamId, logInstance);
-        // A `releaseEntries` that arrived while the load was in flight gets
-        // queued; honor it now (unless a reactivation cleared the intent).
-        if (this.pendingRelease.has(streamId)) {
-          this.pendingRelease.delete(streamId);
-          if (!this.dirtyStreamIds.has(streamId)) {
-            this.logs.delete(streamId);
+        } else {
+          const logInstance = new StreamLog(diskEntries);
+          this.logs.set(streamId, logInstance);
+          this.refreshSummary(streamId, logInstance);
+          // A `releaseEntries` that arrived while the load was in flight gets
+          // queued; honor it now (unless a reactivation cleared the intent).
+          if (this.pendingRelease.has(streamId)) {
+            this.pendingRelease.delete(streamId);
+            if (!this.dirtyStreamIds.has(streamId)) {
+              this.logs.delete(streamId);
+            }
           }
         }
+        // Load recovered — saves can persist this stream again.
+        this.loadFailed.delete(streamId);
       } catch {
+        // Rehydrate failed. Mark so `executeWrite` skips this stream and
+        // doesn't overwrite the on-disk history with whatever empty/partial
+        // log the agent may now be appending to. `append` retries the load
+        // in the background; once it succeeds the merge path runs.
+        this.loadFailed.add(streamId);
         log.warn(LOG_TAG, `Failed to reload stream ${streamId} from disk`);
       }
     })();
@@ -188,6 +204,12 @@ export class StreamLogStore {
   append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {
     // New writes mean the stream is live again — cancel any deferred release.
     this.pendingRelease.delete(streamId);
+    // If a previous rehydrate errored, retry in the background so the
+    // eventual merge can combine disk history with these new entries
+    // before we're allowed to save.
+    if (this.loadFailed.has(streamId) && !this.logs.has(streamId)) {
+      void this.ensureLoaded(streamId);
+    }
     const logInstance = this.getOrCreate(streamId);
     const appended = logInstance.append(entry);
     this.refreshSummary(streamId, logInstance);
@@ -239,6 +261,7 @@ export class StreamLogStore {
     this.dirtyStreamIds.delete(streamId);
     this.pendingRelease.delete(streamId);
     this.flushing.delete(streamId);
+    this.loadFailed.delete(streamId);
     if (!this.loaded) return;
 
     this.cancelPendingSave();
@@ -253,6 +276,7 @@ export class StreamLogStore {
     this.dirtyStreamIds.clear();
     this.pendingRelease.clear();
     this.flushing.clear();
+    this.loadFailed.clear();
     if (!this.loaded) return;
 
     this.cancelPendingSave();
@@ -303,6 +327,7 @@ export class StreamLogStore {
     this.dirtyStreamIds.clear();
     this.pendingRelease.clear();
     this.flushing.clear();
+    this.loadFailed.clear();
 
     // 1. Scan directory — filenames decode back to stream IDs
     const streamIds = await this.kv.listKeys();
@@ -502,8 +527,20 @@ export class StreamLogStore {
       return Promise.resolve();
     }
 
-    const dirtyIds = [...this.dirtyStreamIds];
+    // Skip streams whose rehydrate read failed — writing now would clobber
+    // the authoritative on-disk history with a fresh empty-plus-new-appends
+    // log. Keep them dirty so the next save retries once ensureLoaded has
+    // merged disk entries back in.
+    const allDirty = [...this.dirtyStreamIds];
     this.dirtyStreamIds.clear();
+    const dirtyIds: StreamTabId[] = [];
+    for (const streamId of allDirty) {
+      if (this.loadFailed.has(streamId)) {
+        this.dirtyStreamIds.add(streamId);
+      } else {
+        dirtyIds.push(streamId);
+      }
+    }
 
     if (dirtyIds.length === 0) {
       resolve?.();
