@@ -15,6 +15,7 @@ import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { getGlobalState } from '@agent/core/stateStore';
+import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
 import { GlobalStateKey } from '@common/state';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
@@ -24,6 +25,10 @@ import {
   type EndGroupStatus,
 } from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
+import {
+  delegationAllowed,
+  type NestedDelegationConfig,
+} from '@shared/constants/delegationPolicy';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -81,11 +86,13 @@ function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
-  isSubagent?: boolean,
-): ToolDefinition[] {
+  delegationDepth: number,
+  nestedConfig: NestedDelegationConfig,
+): { tools: ToolDefinition[]; delegationTrimmed: boolean } {
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
   const missingDependency: string[] = [];
+  const canDelegate = delegationAllowed(delegationDepth, nestedConfig);
 
   // Don't warn on routine filtering outcomes (user-disabled, unavailable,
   // not in registry): they fire on every tool-use cycle and drown out real
@@ -93,10 +100,14 @@ function resolveTools(
   // `resolveToolDefinitions`; missing external deps are surfaced via
   // `notifyUnavailableTools` below.
   const toolConfigs = Array.isArray(tools) ? tools : [];
+  let delegationTrimmed = false;
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
-      if (isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
+      if (DELEGATION_TOOLS.has(def.name) && !canDelegate) {
+        delegationTrimmed = true;
+        return false;
+      }
       if (disabled.has(def.name)) return false;
       if (unavailable.has(def.name)) {
         missingDependency.push(def.name);
@@ -125,7 +136,7 @@ function resolveTools(
     notifyUnavailableTools(missingDependency);
   }
 
-  return resolved;
+  return { tools: resolved, delegationTrimmed };
 }
 
 export async function runToolUseFlow<C = unknown>(
@@ -136,11 +147,14 @@ export async function runToolUseFlow<C = unknown>(
   const { logger, streamId, executionId, setting, onInterrupt } = input;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
-  const resolvedTools = resolveTools(
+  const delegationDepth = input.delegationDepth ?? 0;
+  const nestedConfig = readNestedDelegationConfig();
+  const { tools: resolvedTools, delegationTrimmed } = resolveTools(
     setting.tools,
     registry,
     logger,
-    input.isSubagent,
+    delegationDepth,
+    nestedConfig,
   );
 
   const kv = getExecutionStore(executionId);
@@ -153,6 +167,8 @@ export async function runToolUseFlow<C = unknown>(
     snapshot: input.resumeSnapshot ?? null,
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
+    delegationDepth,
+    delegationTrimmed,
   };
 
   const flowContext: ToolUseFlowContext = {

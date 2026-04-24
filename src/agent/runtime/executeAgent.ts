@@ -37,6 +37,7 @@ import {
   type AgentLoadOptions,
 } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
+import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
@@ -531,6 +532,12 @@ export interface ExecuteAgentOptions {
   enforceCategory?: boolean;
   /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
   parentStreamId?: StreamTabId;
+  /**
+   * Depth of this execution in the delegation chain. Root (user-initiated) is 0;
+   * each delegate_agent / delegate_workflow call increments it. Used to gate
+   * nested delegation based on the Multi-Agent settings. Defaults to 0.
+   */
+  delegationDepth?: number;
   /** Fires with the real streamId before the stream is activated (before UI sync). */
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
@@ -553,6 +560,7 @@ export async function executeAgent(
     onBeforeActivation: options?.onStreamResolved,
     enforceCategory: options?.enforceCategory,
   });
+  ctx.delegationDepth = options?.delegationDepth ?? 0;
   const { setting, streamId, config } = ctx;
   const { agent: agentName } = config;
   const { isSubagent } = options ?? {};
@@ -735,6 +743,12 @@ export async function resumeToolUseFromSnapshot(
     snapshot.executionId,
     { streamTabIdOverride: snapshot.streamId },
   );
+  // Recover delegation depth from the persisted parent-execution chain
+  // so resumed subagents remain gated by the nested-delegation policy
+  // instead of silently promoting to root.
+  ctx.delegationDepth = await computeDelegationDepthFromStorage(
+    snapshot.executionId,
+  );
   const { setting, streamId } = ctx;
 
   if (setting.agentCategory !== AgentCategory.ToolUse) {
@@ -758,6 +772,11 @@ export async function resumeToolUseFromSnapshot(
             ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
+          // Derive from the recovered parent chain: any execution with a
+          // parent is a subagent. Without this, the rebuilt system prompt
+          // would drop subagent-specific instructions (e.g. the shared
+          // /memories protocol) that the fresh run had included.
+          isSubagent: (ctx.delegationDepth ?? 0) > 0,
           onFollowUpConsumed: () =>
             bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
         },
