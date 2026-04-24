@@ -12,6 +12,8 @@ import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/executionRequests';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
 import {
   BaseViewMessageHandler,
@@ -19,6 +21,7 @@ import {
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
 import { RecordingManager } from '@common/managers/RecordingManager';
+import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -27,6 +30,7 @@ import {
   type TaskState,
   type WorkflowTaskState,
 } from '@logger/TaskState';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
   CHAT_INSTRUCTION_TEMPLATE,
@@ -190,6 +194,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) => {
         retryCoordinator.cancelRetry(data.stream);
       },
+      [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: (data) =>
+        this.handleUseOwnApiKey(data),
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: async (data) => {
         const taskState = this.provider.state.meta.getTaskState(data.stream);
         if (taskState) {
@@ -466,6 +472,87 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (!success) {
       await vscode.window.showInformationMessage(
         'No retryable request is available for this stream yet.',
+      );
+    }
+  }
+
+  private async handleUseOwnApiKey(
+    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY>,
+  ): Promise<void> {
+    const providerArg = (SecretManager.API_PROVIDERS as readonly string[]).includes(
+      data.provider ?? '',
+    )
+      ? (data.provider as ApiProvider)
+      : undefined;
+
+    // The gate depends on WHICH credential is exhausted:
+    //   - Upstream credit depletion (Anthropic 400 "credit balance is
+    //     too low"): the STORED key is the broken one, so we require
+    //     evidence of a key change.
+    //   - Relay monthly limit (or unknown provider): the stored key is
+    //     fine, so any usable key counts as consent.
+    // `anyApiKeyExists()` is deliberately NOT used — it also returns
+    // true when only relay access is available.
+    const providersToCheck = providerArg
+      ? [providerArg]
+      : SecretManager.API_PROVIDERS;
+    const readKey = (p: ApiProvider) =>
+      SecretManager.get(SecretManager.getApiKeySecretName(p));
+
+    const requireChange = data.upstreamCreditDepleted === true;
+    const before = requireChange
+      ? new Map(
+          await Promise.all(
+            providersToCheck.map(async (p) => [p, await readKey(p)] as const),
+          ),
+        )
+      : undefined;
+
+    await vscode.commands.executeCommand(
+      apiKeyCommands.setApiKey,
+      providerArg,
+    );
+
+    let shouldProceed: boolean;
+    if (requireChange) {
+      const after = new Map(
+        await Promise.all(
+          providersToCheck.map(async (p) => [p, await readKey(p)] as const),
+        ),
+      );
+      shouldProceed = providersToCheck.some((p) => {
+        const next = after.get(p);
+        return (
+          typeof next === 'string' &&
+          next.trim().length > 0 &&
+          next !== before!.get(p)
+        );
+      });
+    } else {
+      const usable = await Promise.all(
+        providersToCheck.map((p) => SecretManager.hasUsableApiKey(p)),
+      );
+      shouldProceed = usable.some(Boolean);
+    }
+
+    if (!shouldProceed) {
+      return;
+    }
+
+    // Only disable relay access when the failing call actually went
+    // through relay. If the error came from a direct-key call (e.g.
+    // user's own Anthropic key ran out of credit on a tier that
+    // routes Anthropic directly while other providers still go via
+    // relay), flipping the global mode would revoke relay for the
+    // other providers too.
+    if (data.viaRelay === true) {
+      await getServerSideKeyService().setUseIncludedModelAccess(false);
+      invalidateModelOptionsCache();
+    }
+    const retried = retryCoordinator.triggerRetry(data.stream);
+    if (!retried) {
+      await vscode.window.showInformationMessage(
+        'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
       );
     }
   }
