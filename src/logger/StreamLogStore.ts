@@ -45,6 +45,13 @@ export class StreamLogStore {
   /** Deduplicates concurrent `ensureLoaded` calls for the same stream. */
   private readonly pendingLoads = new Map<StreamTabId, Promise<void>>();
 
+  /**
+   * Streams that went stale while still dirty, so `releaseEntries` deferred
+   * the memory drop until the next save flush. Reads + new appends clear the
+   * entry so a reactivated stream isn't evicted out from under the agent.
+   */
+  private readonly pendingRelease = new Set<StreamTabId>();
+
   /** Guards persistence — tests create store without calling load(). */
   private loaded = false;
 
@@ -86,13 +93,18 @@ export class StreamLogStore {
 
   /**
    * Drop heavy entries from memory while keeping the on-disk copy authoritative.
-   * Skips streams with pending writes so `save()` can flush first. Subsequent
-   * access must go through `ensureLoaded` to rehydrate.
+   * If there are pending writes, queue the release so `executeWrite` can flush
+   * first and actually evict afterwards; otherwise releases immediately.
+   * Subsequent access must go through `ensureLoaded` to rehydrate.
    */
   releaseEntries(streamId: StreamTabId): void {
     const logInstance = this.logs.get(streamId);
     if (!logInstance) return;
-    if (this.dirtyStreamIds.has(streamId)) return;
+    if (this.dirtyStreamIds.has(streamId)) {
+      this.pendingRelease.add(streamId);
+      return;
+    }
+    this.pendingRelease.delete(streamId);
     this.refreshSummary(streamId, logInstance);
     this.logs.delete(streamId);
   }
@@ -102,6 +114,9 @@ export class StreamLogStore {
    * resident or when the stream is unknown.
    */
   async ensureLoaded(streamId: StreamTabId): Promise<void> {
+    // Reactivation cancels any deferred release so the fresh agent work
+    // doesn't get evicted mid-run.
+    this.pendingRelease.delete(streamId);
     if (this.logs.has(streamId)) return;
     if (!this.summaries.has(streamId)) return;
     const existing = this.pendingLoads.get(streamId);
@@ -109,12 +124,25 @@ export class StreamLogStore {
     const work = (async () => {
       try {
         const raw = await this.kv.read<unknown[]>(streamId);
-        // A concurrent `append` (e.g. the agent writing to this stream)
-        // may have populated `logs` while we awaited the disk read; its
-        // in-memory entries are newer than the file, so don't clobber.
-        if (this.logs.has(streamId)) return;
-        const entries = this.parsePersistedEntries(raw);
-        const logInstance = new StreamLog(entries);
+        // If `delete` ran during the read, don't resurrect the stream.
+        if (!this.summaries.has(streamId)) return;
+        const diskEntries = this.parsePersistedEntries(raw);
+        const live = this.logs.get(streamId);
+        if (live && live.size > 0) {
+          // A concurrent `append` populated `logs` during the disk read.
+          // Merge disk (history) before the live appends so `save()` writes
+          // the union instead of clobbering the authoritative disk copy
+          // with just the new entries. StreamLog's constructor re-numbers
+          // seqNos so the merged view stays contiguous.
+          const merged = new StreamLog([...diskEntries, ...live.toJSON()]);
+          this.logs.set(streamId, merged);
+          this.refreshSummary(streamId, merged);
+          this.markDirty(streamId);
+          void this.save();
+          this.notify(streamId);
+          return;
+        }
+        const logInstance = new StreamLog(diskEntries);
         this.logs.set(streamId, logInstance);
         this.refreshSummary(streamId, logInstance);
       } catch {
@@ -130,6 +158,8 @@ export class StreamLogStore {
   }
 
   append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {
+    // New writes mean the stream is live again — cancel any deferred release.
+    this.pendingRelease.delete(streamId);
     const logInstance = this.getOrCreate(streamId);
     const appended = logInstance.append(entry);
     this.refreshSummary(streamId, logInstance);
@@ -179,6 +209,7 @@ export class StreamLogStore {
     this.logs.delete(streamId);
     this.summaries.delete(streamId);
     this.dirtyStreamIds.delete(streamId);
+    this.pendingRelease.delete(streamId);
     if (!this.loaded) return;
 
     this.cancelPendingSave();
@@ -191,6 +222,7 @@ export class StreamLogStore {
     this.logs.clear();
     this.summaries.clear();
     this.dirtyStreamIds.clear();
+    this.pendingRelease.clear();
     if (!this.loaded) return;
 
     this.cancelPendingSave();
@@ -465,11 +497,30 @@ export class StreamLogStore {
             this.savePromise = null;
           }
         }
+        this.drainPendingReleases();
         resolve?.();
       });
 
     this.inFlightWrite = writePromise;
     return writePromise;
+  }
+
+  /**
+   * Evict streams whose release was deferred while they were dirty. Called
+   * after every write flush. Any reactivation (append / ensureLoaded /
+   * delete) will have cleared the pending entry, so only streams that stayed
+   * idle and clean through the flush are actually released here.
+   */
+  private drainPendingReleases(): void {
+    if (this.pendingRelease.size === 0) return;
+    for (const streamId of [...this.pendingRelease]) {
+      if (this.dirtyStreamIds.has(streamId)) continue;
+      this.pendingRelease.delete(streamId);
+      const logInstance = this.logs.get(streamId);
+      if (!logInstance) continue;
+      this.refreshSummary(streamId, logInstance);
+      this.logs.delete(streamId);
+    }
   }
 }
 
