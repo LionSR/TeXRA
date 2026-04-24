@@ -27,6 +27,7 @@ import {
   isApprovalBypassedForStream,
   isProposalBypassedForStream,
 } from '@tools/approval';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 
 import { registerHandlers } from './registerHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
@@ -244,9 +245,9 @@ export class ProgressEventHandler {
     }
   }
 
-  private handleSetActiveStream(
+  private async handleSetActiveStream(
     payload: ProgressEventPayloads['setActiveStream'],
-  ): void {
+  ): Promise<void> {
     const { streamId, isRemote, hasMultipleOutputs } = payload;
     if (!streamId) return;
 
@@ -287,10 +288,27 @@ export class ProgressEventHandler {
       // which may exclude the current stream and override state.activeStream —
       // completely bypassing the pending-permissions guard.
       this.maybeUpdateFilterForCategory(agentCategory);
+      const previous = this.state.activeStream;
       this.state.activeStream = streamId;
+      // Release the previously-active stream if it reached a terminal
+      // status while visible — setStreamStatus skips release for the
+      // active stream, so this switch is our only chance.
+      if (previous && previous !== streamId) {
+        this.state.releasePreviousActive(previous);
+      }
     }
 
     if (!this.webviewUpdater.isAvailable()) return;
+
+    // Rehydrate a potentially-evicted stream before syncing content, so the
+    // webview doesn't get an empty log. All synchronous state mutations are
+    // already done above; the await here only gates webview delivery.
+    await this.state.streamLogs.ensureLoaded(streamId);
+
+    // A newer handleSetActiveStream may have resolved during our await and
+    // already taken over the active tab; skip webview sync so we don't
+    // overwrite its content with stale data.
+    if (shouldSwitch && this.state.activeStream !== streamId) return;
 
     const filterChanged = this.state.agentCategoryFilter !== previousFilter;
     if (!wasKnownStream || filterChanged) {
@@ -534,6 +552,19 @@ export class ProgressEventHandler {
   ): void {
     if (previousStatus === undefined) {
       StreamStatusService.set(streamId, status, { emit: false });
+    }
+
+    // Keep memory bounded by stream status:
+    //  - returning to in-flight (e.g., background resume) eagerly rehydrates
+    //    previously-released entries so pending appends from the agent
+    //    runtime land on the full on-disk log instead of clobbering it via
+    //    an empty getOrCreate.
+    //  - leaving the in-flight set drops heavy entries; disk stays
+    //    authoritative and `setActiveStream` re-reads on demand.
+    if (isInFlightStatus(status)) {
+      void this.state.streamLogs.ensureLoaded(streamId);
+    } else if (streamId !== this.state.activeStream) {
+      this.state.streamLogs.releaseEntries(streamId);
     }
 
     if (!this.webviewUpdater.isAvailable()) return;

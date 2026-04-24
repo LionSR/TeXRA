@@ -390,7 +390,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     // Sync replacement active stream in the active progress target.
     if (wasActive && this.provider.state.activeStream) {
-      this.provider.setActiveStream(this.provider.state.activeStream);
+      await this.provider.setActiveStream(this.provider.state.activeStream);
     }
   }
 

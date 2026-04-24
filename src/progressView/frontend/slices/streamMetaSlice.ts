@@ -6,13 +6,28 @@
 import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import { STREAM_STATUS } from '@shared/schemas';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { getStreamState, isToolUseState } from '../store';
 import type {
   HandlerRegistry,
   MessageHandlerContext,
 } from '../messageDispatcher';
+
+/**
+ * Buffer for subagent descriptions that race their own UPDATE_STREAMS
+ * registration. Lives as module state because it's purely transient plumbing
+ * between two slices, not state the UI needs to observe.
+ */
+export const pendingDescriptions = new Map<StreamTabId, string>();
+
+export function takePendingDescription(
+  streamId: StreamTabId,
+): string | undefined {
+  const desc = pendingDescriptions.get(streamId);
+  if (desc !== undefined) pendingDescriptions.delete(streamId);
+  return desc;
+}
 
 /** Max characters retained per output stream (stdout/stderr) per process. */
 const MAX_OUTPUT = 100_000;
@@ -84,12 +99,23 @@ export const streamMetaHandlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION]: (data, ctx) => {
     const { stream, description } = data;
+    // Subagent description can race its own UPDATE_STREAMS registration; if
+    // the stream isn't in streamById yet, buffer out-of-band so
+    // streamLifecycleSlice can drain it on arrival. Side effect lives
+    // outside the state updater so updater stays pure.
+    if (!ctx.getState().streamById.has(stream)) {
+      pendingDescriptions.set(stream, description);
+      return;
+    }
     ctx.setState((prev) =>
       create(prev, (draft) => {
-        draft.streamDescriptions.set(stream, description);
-        // Also update streamById entry if it exists (for consistency).
-        const draftInfo = draft.streamById.get(stream);
-        if (draftInfo) draftInfo.description = description;
+        const existing = draft.streamById.get(stream);
+        // Replace via set() so the Map value identity changes and selectors
+        // observing streamById propagate the update (mirrors the pattern in
+        // stateUtils.updateParentStreamId).
+        if (existing) {
+          draft.streamById.set(stream, { ...existing, description });
+        }
       }),
     );
   },
