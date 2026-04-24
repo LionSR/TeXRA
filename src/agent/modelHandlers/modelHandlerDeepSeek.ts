@@ -18,7 +18,8 @@ import type { DeepSeekToolCall } from './types/IModelHandler';
  *
  * Reasoning content lifecycle:
  * - Captured in processThinkingBlock() on each model response
- * - Consumed (and cleared) when creating tool-use follow-up messages
+ * - Copied into tool-use assistant messages, which remain in conversation history
+ * - Cleared from transient workspace state after the follow-up message is built
  * - Overwritten on next model response if not consumed (no leak between turns)
  *
  * Note: Handler instances are created per-agent-run, not shared across requests.
@@ -47,6 +48,21 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    */
   protected override shouldIncludeReasoningInToolCalls(): boolean {
     return this.capabilities.supportsReasoning;
+  }
+
+  /**
+   * DeepSeek documents OpenAI SDK `thinking` as an `extra_body` field.
+   */
+  protected override shouldSendThinkingInExtraBody(): boolean {
+    return true;
+  }
+
+  /**
+   * DeepSeek's examples pass back `content` beside `reasoning_content` and
+   * `tool_calls`, even when content is the empty string.
+   */
+  protected override shouldIncludeEmptyAssistantToolContent(): boolean {
+    return true;
   }
 
   protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
