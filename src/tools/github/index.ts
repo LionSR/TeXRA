@@ -7,4 +7,4 @@ export {
   listPRSubscriptionBindings,
   unbindAllForPR,
 } from './PRSubscriptionBinder';
-export type { AsyncEventSource, Disposable } from './AsyncEventSource';
+export type { Disposable } from './PRPollingSource';
