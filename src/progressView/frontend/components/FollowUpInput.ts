@@ -86,7 +86,6 @@ export class FollowUpInput extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
       }
-
     `,
   ];
 
@@ -194,7 +193,10 @@ export class FollowUpInput extends LitElement {
                 title="Polish follow-up with AI"
                 @click=${this.emitPolish}
               ></vscode-toolbar-button>
-              ${when(this.polishing, () => html`<vscode-progress-ring></vscode-progress-ring>`)}
+              ${when(
+                this.polishing,
+                () => html`<vscode-progress-ring></vscode-progress-ring>`,
+              )}
               <vscode-toolbar-button
                 id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
                 icon=${this.recordingController.state.icon}
