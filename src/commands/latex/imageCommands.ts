@@ -3,13 +3,13 @@ import * as vscode from 'vscode';
 
 // Local imports - errors
 import { showLoggedErrorMessage } from '@common/errors';
+import * as dialogUtils from '@frontend/ui/dialogs';
+import * as logger from '@logger/logUtils';
 import {
   countPdfPages,
   getBase64EncodedMedia,
   processPdf2Png,
 } from '@utils/media/img';
-import * as dialogUtils from '@frontend/ui/dialogs';
-import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

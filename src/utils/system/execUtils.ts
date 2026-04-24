@@ -1,4 +1,6 @@
 // Third-party imports
+import * as path from 'path';
+
 import { execa, type Options, type ResultPromise, ExecaError } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
@@ -6,18 +8,6 @@ import { quote as shellQuote } from 'shell-quote';
  * Encoding options compatible with execa v9.
  * execa uses a stricter encoding type than Node's BufferEncoding.
  */
-type ExecaEncodingOption =
-  | 'utf8'
-  | 'utf16le'
-  | 'buffer'
-  | 'hex'
-  | 'base64'
-  | 'base64url'
-  | 'latin1'
-  | 'ascii';
-
-import * as path from 'path';
-
 // Local imports - log
 import type { ExecResult } from '@agent/types/ResultTypes';
 
@@ -32,6 +22,16 @@ import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
+
+type ExecaEncodingOption =
+  | 'utf8'
+  | 'utf16le'
+  | 'buffer'
+  | 'hex'
+  | 'base64'
+  | 'base64url'
+  | 'latin1'
+  | 'ascii';
 
 const MAX_OUTPUT_LENGTH = 150;
 const FORCE_KILL_DELAY_MS = 5_000;

@@ -9,8 +9,8 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared styles
 import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
-import { markdownStyles } from '@shared/styles/markdownStyles';
 import type { MemoryViewItem } from '@shared/schemas';
+import { markdownStyles } from '@shared/styles/markdownStyles';
 import {
   formatBytes,
   formatLineCount,

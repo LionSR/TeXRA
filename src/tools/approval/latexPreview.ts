@@ -9,9 +9,9 @@ import path from 'path';
 
 import { sync as globSync } from 'glob';
 
+import { getConfig } from '@agent/core/config';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import { getConfig } from '@agent/core/config';
 import { WorkspaceFS, pathToLocation, type FileLocation } from '@utils/files';
 
 type BuildDisplayFn = (
