@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 - **Terminal-quality command output** — command-heavy runs are much easier to read, especially during builds, installs, and diagnostics.
 - **Clearer pull-request awareness** — GitHub-related work is easier to monitor and return to from the settings and progress views.
+- **DeepSeek V4 models** — DeepSeek V4 Flash and DeepSeek V4 Pro are now available in the model catalog.
 
 ### Improvements
 
@@ -28,7 +29,7 @@ All notable changes to this project will be documented in this file.
 - **Restored output and diff displays** — generated outputs and diff views display correctly again.
 - **Cleaner command-stream labels** — background command streams no longer show irrelevant labels.
 - **More complete chat exports** — exported conversations preserve more of the visible interaction.
-- **DeepSeek reliability fixes** — DeepSeek thinking-mode requests avoid provider-specific request issues.
+- **DeepSeek reliability fixes** — DeepSeek V4 Flash and DeepSeek V4 Pro thinking-mode requests avoid provider-specific request issues and report prompt-cache usage more accurately.
 
 ## [0.37.4] - 2026-04-21
 
