@@ -196,9 +196,12 @@ export abstract class RetryableInvocationNode<
     }
   }
 
-  /** Auth/permission errors (401, 403) skip auto-retries — they need human attention. */
+  /** Auth/permission errors (401, 403) and credential-exhausted errors
+   *  (relay monthly limit, upstream credit depletion) skip auto-retries —
+   *  they need human attention (switching keys, topping up). */
   shouldAutoRetry(error: Error): boolean {
     const formatted = formatProviderHttpError(error);
+    if (formatted.isCredentialExhausted) return false;
     const code = formatted.statusCode;
     return code !== 401 && code !== 403;
   }

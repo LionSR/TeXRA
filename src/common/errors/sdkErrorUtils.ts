@@ -457,7 +457,7 @@ function isRelayError(rawErrorBody: unknown): boolean {
 /** True when the relay rejected the request due to the user's monthly
  *  spending limit being reached (supabase/functions/relay marks this with
  *  `limitReached: true` in the error body). */
-function isRelayQuotaExhaustedBody(rawErrorBody: unknown): boolean {
+function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
   if (!isObject(rawErrorBody)) return false;
   if ((rawErrorBody as { limitReached?: unknown }).limitReached === true) {
     return true;
@@ -469,13 +469,49 @@ function isRelayQuotaExhaustedBody(rawErrorBody: unknown): boolean {
   );
 }
 
+/** True when the upstream provider (Anthropic today) returned a credit-
+ *  balance-depleted 400. Match on the message prefix because Anthropic's
+ *  type is generic `invalid_request_error` — the message is the reliable
+ *  signal. Covers both the direct format and the enveloped format. */
+function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
+  if (!isObject(rawErrorBody)) return false;
+  const body = rawErrorBody as { type?: unknown; message?: unknown; error?: unknown };
+  const pick = (v: unknown): { type?: string; message?: string } | undefined =>
+    isObject(v)
+      ? {
+          type: isString((v as { type?: unknown }).type)
+            ? ((v as { type: string }).type)
+            : undefined,
+          message: isString((v as { message?: unknown }).message)
+            ? ((v as { message: string }).message)
+            : undefined,
+        }
+      : undefined;
+  const candidates = [pick(body), pick(body.error)];
+  return candidates.some(
+    (c) =>
+      c?.type === 'invalid_request_error' &&
+      typeof c.message === 'string' &&
+      c.message.toLowerCase().includes('credit balance is too low'),
+  );
+}
+
+function isCredentialExhaustedBody(rawErrorBody: unknown): boolean {
+  return (
+    isRelayMonthlyLimitBody(rawErrorBody) ||
+    isUpstreamCreditDepletedBody(rawErrorBody)
+  );
+}
+
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const streamDiagnostics = detectStreamDiagnostics(err);
   const partialText = detectPartialText(err);
   const isRelay = isRelayError(rawErrorBody);
-  const isRelayQuotaExhausted =
-    isRelay && isRelayQuotaExhaustedBody(rawErrorBody);
+  // Credit exhaustion matches regardless of relay status: a direct
+  // Anthropic 400 "credit balance is too low" still wants the "Use your
+  // own API key" affordance so the user can switch credentials.
+  const isCredentialExhausted = isCredentialExhaustedBody(rawErrorBody);
 
   // Handle DOMException AbortError (from AbortController.abort())
   if (err instanceof DOMException && err.name === 'AbortError') {
@@ -494,9 +530,13 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   if (sdkMatch) {
     return {
       ...sdkMatch,
-      retryable: isRelay || sdkMatch.retryable,
+      // Credential-exhausted errors are not auto-retried (see
+      // RetryableInvocationNode.shouldAutoRetry) but the retry panel
+      // still surfaces with the "Use your own API key" button, so the
+      // `retryable` flag stays true here.
+      retryable: isRelay || sdkMatch.retryable || isCredentialExhausted,
       isRelayError: isRelay,
-      isRelayQuotaExhausted: isRelayQuotaExhausted || undefined,
+      isCredentialExhausted: isCredentialExhausted || undefined,
       rawErrorBody,
       streamDiagnostics,
       partialText,
@@ -517,7 +557,9 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // No status code on an unrecognized error likely means a network-level failure
   // (DNS, proxy, TLS, etc.) — treat as retryable for safety.
   const retryable =
-    isRelay || (statusCode ? isRetryableStatusCode(statusCode) : true);
+    isRelay ||
+    isCredentialExhausted ||
+    (statusCode ? isRetryableStatusCode(statusCode) : true);
 
   let message = finalMessage;
   if (statusCode) {
@@ -534,7 +576,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     provider,
     retryable,
     isRelayError: isRelay,
-    isRelayQuotaExhausted: isRelayQuotaExhausted || undefined,
+    isCredentialExhausted: isCredentialExhausted || undefined,
     requestId,
     rawErrorBody,
     streamDiagnostics,

@@ -43,7 +43,7 @@ export class RetryRequestPanel extends BaseRequestPanel {
         this.emitAction('retry');
         return true;
       case 'k':
-        if (data.errorDetails?.isRelayQuotaExhausted) {
+        if (data.errorDetails?.isCredentialExhausted) {
           this.emitAction('useOwnApiKey');
           return true;
         }
@@ -59,8 +59,8 @@ export class RetryRequestPanel extends BaseRequestPanel {
   override render(): TemplateResult {
     const data = this.permission.data as RetryPermission;
     const isRelay = data.errorDetails?.isRelayError === true;
-    const isQuotaExhausted =
-      data.errorDetails?.isRelayQuotaExhausted === true;
+    const isCredentialExhausted =
+      data.errorDetails?.isCredentialExhausted === true;
     const retryable = data.errorDetails?.retryable !== false;
     const metaParts = [
       data.model ? `Model: ${data.model}` : null,
@@ -104,7 +104,7 @@ export class RetryRequestPanel extends BaseRequestPanel {
         </div>
         <vscode-toolbar-container class="retry-request__actions">
           ${when(
-            isQuotaExhausted,
+            isCredentialExhausted,
             () => html`
               <vscode-toolbar-button
                 icon="key"

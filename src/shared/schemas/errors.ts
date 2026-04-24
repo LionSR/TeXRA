@@ -31,10 +31,14 @@ const ProviderErrorSchema = z.object({
   provider: z.string().optional(),
   retryable: z.boolean(),
   isRelayError: z.boolean(),
-  /** True when the relay returned a monthly-spending-limit 429 (limitReached).
-   *  Distinguishes quota-exhausted from transient upstream rate limits so the
-   *  UI can offer switching to a user-owned API key. */
-  isRelayQuotaExhausted: z.boolean().optional(),
+  /** True when the credential (relay monthly limit OR upstream provider
+   *  account) has been exhausted. Auto-retry is skipped for these errors
+   *  and the retry panel offers a "Use your own API key" button. Covers:
+   *   - relay 429 with limitReached=true (relay's own monthly cap)
+   *   - Anthropic 400 invalid_request_error with "credit balance is too
+   *     low" (upstream account out of credit — same whether the request
+   *     came via relay or a direct key). */
+  isCredentialExhausted: z.boolean().optional(),
   requestId: z.string().optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
