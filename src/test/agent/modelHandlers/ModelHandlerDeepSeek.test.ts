@@ -37,7 +37,9 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
   });
 
   it('deepseek-reasoner defaults ON: disables explicitly when reasoning off', () => {
-    assert.deepEqual(thinkingFor('deepseek-reasoner', false), { type: 'disabled' });
+    assert.deepEqual(thinkingFor('deepseek-reasoner', false), {
+      type: 'disabled',
+    });
   });
 
   it('deepseek-v4-flash defaults ON: omits param when reasoning requested', () => {
@@ -45,7 +47,9 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
   });
 
   it('deepseek-v4-flash defaults ON: disables explicitly when reasoning off', () => {
-    assert.deepEqual(thinkingFor('deepseek-v4-flash', false), { type: 'disabled' });
+    assert.deepEqual(thinkingFor('deepseek-v4-flash', false), {
+      type: 'disabled',
+    });
   });
 
   it('deepseek-v4-pro defaults ON: omits param when reasoning requested', () => {
@@ -53,12 +57,16 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
   });
 
   it('deepseek-v4-pro defaults ON: disables explicitly when reasoning off', () => {
-    assert.deepEqual(thinkingFor('deepseek-v4-pro', false), { type: 'disabled' });
+    assert.deepEqual(thinkingFor('deepseek-v4-pro', false), {
+      type: 'disabled',
+    });
   });
 
   it('unlisted fullName is treated as default-ON (matches V4+ convention)', () => {
     // Update getThinkingParameter if a new non-thinking model is added.
     assert.equal(thinkingFor('deepseek-future', true), undefined);
-    assert.deepEqual(thinkingFor('deepseek-future', false), { type: 'disabled' });
+    assert.deepEqual(thinkingFor('deepseek-future', false), {
+      type: 'disabled',
+    });
   });
 });

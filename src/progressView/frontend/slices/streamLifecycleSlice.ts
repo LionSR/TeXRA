@@ -17,10 +17,7 @@ import {
 
 import { firstStreamId, type ProgressState, type StreamState } from '../store';
 import { clearResolvedProposalIds } from './permissionSlice';
-import {
-  pendingDescriptions,
-  takePendingDescription,
-} from './streamMetaSlice';
+import { pendingDescriptions, takePendingDescription } from './streamMetaSlice';
 import { clearCopyContentStore } from '../formatters/copyContentStore';
 import { clearProposalInputStore } from '../formatters/proposalInputStore';
 import {
@@ -134,10 +131,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
     let nextActiveStreamId: StreamTabId | null;
     if (data.activeStream === '') {
       nextActiveStreamId = null;
-    } else if (
-      data.activeStream &&
-      updated.streamById.has(data.activeStream)
-    ) {
+    } else if (data.activeStream && updated.streamById.has(data.activeStream)) {
       nextActiveStreamId = data.activeStream;
     } else {
       nextActiveStreamId = firstStreamId(updated.streamById);
