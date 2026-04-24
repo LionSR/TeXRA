@@ -16,8 +16,12 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId } from '@shared/schemas';
 
-import { prKeyToString, prPollingSource, type PRKey } from './PRPollingSource';
-import type { Disposable } from './AsyncEventSource';
+import {
+  prKeyToString,
+  prPollingSource,
+  type Disposable,
+  type PRKey,
+} from './PRPollingSource';
 
 const logger = new AgentLogger('PRSubscriptionBinder');
 
@@ -82,7 +86,7 @@ function ensureReleaseHook(): void {
     emitBindingsChanged();
   });
   // PRPollingSource can delete subscriptions unilaterally (PR closed/merged,
-  // auth error, repeated failures). Without this prune the binder's
+  // auth error). Without this prune the binder's
   // `perStream` map would keep stale disposables and re-subscribe calls
   // would incorrectly short-circuit as "already subscribed".
   bus.on('prSubscriptionsChanged', ({ keys }) => {
@@ -118,7 +122,7 @@ export function bindPRSubscription(streamId: StreamTabId, pr: PRKey): boolean {
   const keyIsNew = !prPollingSource.activeKeys().includes(key);
   let disposable: Disposable;
   try {
-    disposable = prPollingSource.subscribe(key, (text) => {
+    disposable = prPollingSource.subscribe(pr, (text) => {
       void sendFollowUp(streamId, text).then((result) => {
         if (result.status === 'sent' || result.status === 'queued') {
           bus.emit('updateQueuedFollowUps', { streamId });
