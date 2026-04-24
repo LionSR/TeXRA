@@ -27,6 +27,7 @@ import {
   isApprovalBypassedForStream,
   isProposalBypassedForStream,
 } from '@tools/approval';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 
 import { registerHandlers } from './registerHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
@@ -36,20 +37,6 @@ export type { UICallbacks };
 
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
-
-/**
- * A stream is "in-flight" when any agent cycle may still append to its log.
- * Non-in-flight streams have their entries released from memory (kept on
- * disk) to bound session memory as many subagent tabs accumulate.
- */
-function isInFlight(status: StreamStatus | undefined): boolean {
-  return (
-    status === STREAM_STATUS.RUNNING ||
-    status === STREAM_STATUS.RESUMING ||
-    status === STREAM_STATUS.INITIALIZING ||
-    status === STREAM_STATUS.WAITING
-  );
-}
 
 type StreamBadgeSnapshot = {
   activeSubagents: StreamExecutionState['activeSubagents'];
@@ -553,7 +540,7 @@ export class ProgressEventHandler {
     // Drop heavy entries from memory once a stream is no longer in-flight,
     // unless the user is currently viewing it. Disk is authoritative; the
     // next switch back triggers ensureLoaded to rehydrate.
-    if (!isInFlight(status) && streamId !== this.state.activeStream) {
+    if (!isInFlightStatus(status) && streamId !== this.state.activeStream) {
       this.state.streamLogs.releaseEntries(streamId);
     }
 

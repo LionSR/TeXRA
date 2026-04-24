@@ -63,12 +63,14 @@ export class StreamLogStore {
   }
 
   has(streamId: StreamTabId): boolean {
-    return this.logs.has(streamId) || this.summaries.has(streamId);
+    // `summaries` is the authoritative registry of known streams and is
+    // always a superset of `logs` (every entry we ever write to `logs`
+    // also lands in `summaries`; eviction drops `logs` but keeps summary).
+    return this.summaries.has(streamId);
   }
 
   keys(): StreamTabId[] {
-    // Union of loaded + summary-only streams; Set dedupes.
-    return [...new Set([...this.logs.keys(), ...this.summaries.keys()])];
+    return [...this.summaries.keys()];
   }
 
   ensureStream(streamId: StreamTabId): void {

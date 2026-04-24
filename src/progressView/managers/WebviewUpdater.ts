@@ -355,12 +355,9 @@ export class WebviewUpdater {
     // Active-stream validation still respects the filter so a filter change
     // auto-rotates to a matching tab instead of leaving a hidden tab selected.
     const filter = state.agentCategoryFilter;
-    const selectableNames =
-      filter === 'all'
-        ? streams.map((info) => info.name)
-        : streams
-            .filter((info) => info.agentCategory === filter)
-            .map((info) => info.name);
+    const selectableNames = streams
+      .filter((info) => filter === 'all' || info.agentCategory === filter)
+      .map((info) => info.name);
     const activeStream = state.pickValidActiveStream(selectableNames);
     if (activeStream !== state.activeStream) {
       state.activeStream = activeStream;
