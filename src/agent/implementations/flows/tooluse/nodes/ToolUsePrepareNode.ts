@@ -146,30 +146,40 @@ export class ToolUsePrepareNode<C> extends Node<
  * policy (e.g. Max delegation depth) rather than whatever was frozen at
  * snapshot time. Only OpenAI-family providers keep system in the messages
  * array; everything else is a no-op on the message list.
+ *
+ * Only the FIRST message is examined: when the persisted prompt exists it
+ * always lives at index 0 (see `initializeMessages` across providers).
+ * Later role='system' entries — e.g. the OpenAI `supportsIntermDevMsgs`
+ * path stores the user request as a developer/system message at index 1 —
+ * must not be touched, otherwise resume would overwrite the task with
+ * system text.
  */
 async function refreshPersistedSystemMessage(
   persisted: ProviderMessage[],
   rebuild: () => Promise<{ systemPrompt: string; instructionSuffix: string }>,
 ): Promise<ProviderMessage[]> {
-  const systemIdx = persisted.findIndex(
-    (m) =>
-      typeof m === 'object' && m !== null && (m as { role?: unknown }).role === 'system',
-  );
-  if (systemIdx < 0) return persisted;
+  const first = persisted[0];
+  if (
+    !first ||
+    typeof first !== 'object' ||
+    (first as { role?: unknown }).role !== 'system'
+  ) {
+    return persisted;
+  }
 
   const { systemPrompt, instructionSuffix } = await rebuild();
   const systemText = systemPrompt
     ? `${systemPrompt}\n${instructionSuffix}`
     : instructionSuffix;
 
-  const existing = persisted[systemIdx] as Record<string, unknown>;
+  const existing = first as Record<string, unknown>;
   // Preserve the existing content shape AND block type: OpenAI Chat uses
   // { type: 'text' }, OpenAI Responses uses { type: 'input_text' }. If we
   // unconditionally stamped 'text', resumed Responses snapshots would be
   // rejected by the API.
   const content = buildSystemContent(existing.content, systemText);
   const updated = [...persisted];
-  updated[systemIdx] = { ...existing, content } as ProviderMessage;
+  updated[0] = { ...existing, content } as ProviderMessage;
   return updated;
 }
 
