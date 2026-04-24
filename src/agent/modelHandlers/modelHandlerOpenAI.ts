@@ -18,7 +18,6 @@ import {
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import {
   assertToolCallsAreChatCompletionFunctionToolCalls,
-  validateInputTools,
 } from 'openai/lib/parser';
 
 // Local imports - agent components
@@ -420,8 +419,10 @@ export class ModelHandlerOpenAI<
       if (!parallelToolCalls) {
         baseParams.parallel_tool_calls = false;
       }
+      // These tools are parsed by TeXRA after the response. The SDK's
+      // auto-parse validator requires strict schemas, but several TeXRA tools
+      // intentionally expose nullable or optional fields.
       const convertedTools = toOpenAITools(tools);
-      validateInputTools(convertedTools);
       baseParams.tools = convertedTools;
       baseParams.tool_choice = 'auto';
     }
