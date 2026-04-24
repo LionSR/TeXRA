@@ -411,6 +411,11 @@ export class StreamLogStore {
     // appends that landed on a resumed stream. Bound the loop by the set
     // of streams that could still make progress — if the only dirty
     // entries are persistently `loadFailed`, we can't persist them.
+    // Cap the write retries so a persistent write error (disk full, perm
+    // denied) doesn't hang shutdown forever — `executeWrite`'s catch
+    // re-marks failed streams dirty, which would otherwise spin.
+    const MAX_WRITE_RETRIES = 3;
+    let writeAttempts = 0;
     /* eslint-disable no-await-in-loop */
     while (true) {
       if (this.saveTimer !== null) {
@@ -419,6 +424,7 @@ export class StreamLogStore {
         const resolve = this.pendingResolve;
         this.pendingResolve = null;
         await this.executeWrite(resolve);
+        writeAttempts++;
       } else if (this.inFlightWrite) {
         await this.inFlightWrite;
       } else if (this.pendingLoads.size > 0) {
@@ -430,7 +436,16 @@ export class StreamLogStore {
           (id) => !this.loadFailed.has(id),
         );
         if (!canRetry) return;
+        if (writeAttempts >= MAX_WRITE_RETRIES) {
+          log.warn(
+            LOG_TAG,
+            `flush() gave up after ${MAX_WRITE_RETRIES} retries; ` +
+              `${this.dirtyStreamIds.size} stream(s) still dirty`,
+          );
+          return;
+        }
         await this.executeWrite(null);
+        writeAttempts++;
       }
     }
     /* eslint-enable no-await-in-loop */
