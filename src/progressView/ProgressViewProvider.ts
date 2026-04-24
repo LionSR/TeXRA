@@ -4,8 +4,6 @@ import { computeAgentOptionsData } from '@agent/index';
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import {
   BaseWebviewProvider,
   getSharedLocalResourceRoots,
@@ -454,9 +452,7 @@ export class ProgressViewProvider
     // release (the setStreamStatus guard excludes the active stream). Now
     // that the user has moved on, it's eligible.
     if (previous && previous !== streamId) {
-      if (!isInFlightStatus(StreamStatusService.get(previous))) {
-        this.state.streamLogs.releaseEntries(previous);
-      }
+      this.state.releasePreviousActive(previous);
     }
 
     if (!this.canSendToWebview()) return;

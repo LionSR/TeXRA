@@ -294,9 +294,7 @@ export class ProgressEventHandler {
       // status while visible — setStreamStatus skips release for the
       // active stream, so this switch is our only chance.
       if (previous && previous !== streamId) {
-        if (!isInFlightStatus(StreamStatusService.get(previous))) {
-          this.state.streamLogs.releaseEntries(previous);
-        }
+        this.state.releasePreviousActive(previous);
       }
     }
 

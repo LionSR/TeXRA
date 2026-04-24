@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
 
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
@@ -374,12 +372,8 @@ export class WebviewUpdater {
       // setStreamStatus skipped release for the active tab, and the
       // filter-driven switch path doesn't go through setActiveStream.
       // Release here so the completed log doesn't stay pinned.
-      if (
-        previousActive &&
-        previousActive !== activeStream &&
-        !isInFlightStatus(StreamStatusService.get(previousActive))
-      ) {
-        state.streamLogs.releaseEntries(previousActive);
+      if (previousActive && previousActive !== activeStream) {
+        state.releasePreviousActive(previousActive);
       }
     }
 

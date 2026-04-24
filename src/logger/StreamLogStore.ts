@@ -146,7 +146,11 @@ export class StreamLogStore {
     // Reactivation cancels any deferred release so the fresh agent work
     // doesn't get evicted mid-run.
     this.pendingRelease.delete(streamId);
-    if (this.logs.has(streamId)) return;
+    // Normally skip when already resident. But after a failed rehydrate a
+    // subsequent `append` may have populated a fresh empty log — we still
+    // need to retry the disk read so the merge path can reunite it with
+    // the persisted history before saves are re-enabled.
+    if (this.logs.has(streamId) && !this.loadFailed.has(streamId)) return;
     if (!this.summaries.has(streamId)) return;
     const existing = this.pendingLoads.get(streamId);
     if (existing) return existing;
