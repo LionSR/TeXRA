@@ -40,12 +40,12 @@ prompts:
 
     SCAFFOLDING — ALWAYS USE `leanblueprint new`
 
-    When starting a blueprint in a Lean 4 project that does not already have a `blueprint/` directory, your FIRST action must be to run `leanblueprint new` from the project root. Do not hand-create `blueprint/src/web.tex`, `print.tex`, `content.tex`, `macros/common.tex`, `macros/web.tex`, `macros/print.tex`, `references.bib`, or the GitHub Pages workflow — the CLI produces the canonical layout with the plasTeX config, `\home`/`\github`/`\dochome` wiring, CI hooks, and `lean_decls` integration already in place.
+    When starting a blueprint in a Lean 4 project that does not already have a `blueprint/` directory, your FIRST action must be to run `leanblueprint new` from the project root. Do not hand-create `blueprint/src/web.tex`, `blueprint/src/print.tex`, `blueprint/src/content.tex`, `blueprint/src/macros/common.tex`, `blueprint/src/macros/web.tex`, `blueprint/src/macros/print.tex`, `blueprint/src/references.bib`, or `.github/workflows/blueprint.yml` — the CLI produces the canonical layout with the plasTeX config, `\home`/`\github`/`\dochome` wiring, the generated GitHub Actions CI/deployment workflow, and `lean_decls` integration already in place.
 
     Concretely:
     - Verify the tool is available: `leanblueprint --version` (install with `pip install leanblueprint` if missing, or `pipx install leanblueprint`).
     - Run it from the Lean project root: `leanblueprint new`. Answer the prompts with the actual project URL, repo URL, and doc-gen URL — do not leave placeholders.
-    - Only after the scaffold exists should you start editing `content.tex` (or split it via `\input` into `chapter/*.tex`).
+    - Only after the scaffold exists should you start editing `blueprint/src/content.tex` (or split it via `\input` into `blueprint/src/chapter/*.tex`).
 
     If the project already has a hand-rolled `blueprint/` tree that differs from the upstream layout, do not silently fix it by overwriting — surface the divergence, ask the user whether to migrate to the canonical layout, and only then run `leanblueprint new` in a fresh subdirectory to mirror across. Never invent an alternative file tree.
 
@@ -175,7 +175,7 @@ prompts:
 
     1. Survey the Lean project first. Use glob and grep to find .lean files, read_file to examine definitions and theorems, lean_inspect for type signatures. Understand the mathematical structure before writing anything.
 
-    1a. MANDATORY: if there is no `blueprint/` directory, stop and run `leanblueprint new` from the Lean project root before writing any `.tex`. This is non-negotiable — the CLI is the only supported way to scaffold the plasTeX config, `macros/{common,web,print}.tex`, `web.tex`/`print.tex`/`content.tex`, the `.github/workflows/blueprint.yml` CI, and the `lean_decls` plumbing. Hand-rolled trees will drift from upstream and break `leanblueprint all`.
+    1a. MANDATORY: if there is no `blueprint/` directory, stop and run `leanblueprint new` from the Lean project root before writing any `.tex`. This is non-negotiable — the CLI is the only supported way to scaffold the plasTeX config, `blueprint/src/macros/common.tex`, `blueprint/src/macros/web.tex`, `blueprint/src/macros/print.tex`, `blueprint/src/web.tex`, `blueprint/src/print.tex`, `blueprint/src/content.tex`, the `.github/workflows/blueprint.yml` CI, and the `lean_decls` plumbing. Hand-rolled trees will drift from upstream and break `leanblueprint all`.
 
     2. Design the dependency DAG. Start from the main theorem(s), work backward. Each node should be one well-defined mathematical fact — not so large it takes weeks, not so small it clutters the graph. Make dependencies explicit and accurate.
 
