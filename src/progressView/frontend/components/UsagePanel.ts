@@ -167,6 +167,7 @@ export class UsagePanel extends LitElement {
 
     const { inputTokens, outputTokens, cost } = this.usage;
     const cacheRead = this.usage.cacheReadInputTokens ?? 0;
+    const cacheMiss = this.usage.cacheMissInputTokens ?? 0;
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
     return html`
@@ -184,6 +185,16 @@ export class UsagePanel extends LitElement {
                 title="Cache read tokens (discounted)"
               ></i>
               ${formatTokens(cacheRead)}`,
+        )}
+        ${when(
+          cacheMiss > 0,
+          () =>
+            html` ·
+              <i
+                class="codicon codicon-cloud-upload"
+                title="Cache miss tokens (full price)"
+              ></i>
+              ${formatTokens(cacheMiss)}`,
         )}
         ${when(
           cacheWrite > 0,

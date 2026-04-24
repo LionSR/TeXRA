@@ -21,6 +21,7 @@ export const UsageLogStatsSchema = z.object({
   cost: z.number().nonnegative(),
   responseTimeMs: z.number().nonnegative().optional(),
   cachedInputTokens: z.int().nonnegative().optional(),
+  cacheMissInputTokens: z.int().nonnegative().optional(),
   cacheCreationInputTokens: z.int().nonnegative().optional(),
   reasoningTokens: z.int().nonnegative().optional(),
 });

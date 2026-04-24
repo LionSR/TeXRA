@@ -147,6 +147,7 @@ describe('AgentUsageReporter', () => {
       outputTokens: 50,
       cost: 1.5,
       cacheReadInputTokens: 80, // Cache hits (discounted)
+      cacheMissInputTokens: 20, // Cache misses (full price)
       cacheCreationInputTokens: 20, // Cache writes (1.25x for Anthropic)
     };
 
@@ -163,6 +164,7 @@ describe('AgentUsageReporter', () => {
           outputTokens: 50,
           cost: 1.5,
           cacheReadInputTokens: 80,
+          cacheMissInputTokens: 20,
           cacheCreationInputTokens: 20,
         },
       });
