@@ -485,30 +485,53 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? (data.provider as ApiProvider)
       : undefined;
 
+    // Snapshot all per-provider key values so we can detect which
+    // provider the user set or changed when providerArg is unknown.
+    // `anyApiKeyExists()` is deliberately NOT used — it also returns true
+    // when only relay access is available, which would let a user who
+    // cancelled without any personal key silently flip off server-side
+    // access.
+    const snapshotKeys = async () =>
+      new Map(
+        await Promise.all(
+          SecretManager.API_PROVIDERS.map(
+            async (p) =>
+              [
+                p,
+                await SecretManager.get(SecretManager.getApiKeySecretName(p)),
+              ] as const,
+          ),
+        ),
+      );
+    const before = providerArg ? undefined : await snapshotKeys();
+
     await vscode.commands.executeCommand(
       apiKeyCommands.setApiKey,
       providerArg,
     );
 
-    // Auto-resume when a usable personal key exists. If the offending
-    // provider is known we check it specifically; otherwise (relay errors
-    // without a provider attribution, or setApiKey ran with the provider
-    // picker) we accept any usable personal key as consent to flip off
-    // server-side access. `anyApiKeyExists()` is deliberately NOT used —
-    // it also returns true when only relay access is available, which
-    // would let a user who cancelled without any personal key silently
-    // flip off server-side access.
-    const hasUsableKey = providerArg
-      ? await SecretManager.hasUsableApiKey(providerArg)
-      : (
-          await Promise.all(
-            SecretManager.API_PROVIDERS.map((p) =>
-              SecretManager.hasUsableApiKey(p),
-            ),
-          )
-        ).some(Boolean);
+    let shouldProceed: boolean;
+    if (providerArg) {
+      // Known provider: any usable key for THAT provider counts as
+      // consent to switch modes (the button label advertises the flip).
+      shouldProceed = await SecretManager.hasUsableApiKey(providerArg);
+    } else {
+      // Unknown provider: require evidence that the user actually stored
+      // or changed a per-provider key in this flow. Without this check
+      // a stale key for an unrelated provider would satisfy the gate
+      // and strand the stream with no credential for the failing one.
+      const after = await snapshotKeys();
+      shouldProceed = SecretManager.API_PROVIDERS.some((p) => {
+        const next = after.get(p);
+        return (
+          typeof next === 'string' &&
+          next.trim().length > 0 &&
+          next !== before!.get(p)
+        );
+      });
+    }
 
-    if (!hasUsableKey) {
+    if (!shouldProceed) {
       return;
     }
 
