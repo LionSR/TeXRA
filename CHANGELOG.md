@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **GPT-5.5** — added OpenAI's GPT-5.5 (`gpt55`, `gpt55-`, `gpt55--`) to the default model list as the new flagship OpenAI model. See the [OpenAI API docs](https://developers.openai.com/api/docs) for full capabilities. The Codex CLI integration is also pinned to `gpt-5.5` so delegated Codex turns use the latest model.
+- **GPT-5.5** — added OpenAI's GPT-5.5 (`gpt55`, `gpt55-`, `gpt55--`) to the default model list as the new flagship OpenAI model, replacing GPT-5.4 in the default lineup (GPT-5.4 stays available as an opt-in). GPT-5.5 reaches strong results with fewer reasoning tokens than prior models, follows instructions more literally, is more precise on large tool surfaces, and produces more polished and concise answers by default. The default reasoning effort is now **medium** — raise to `high`/`xhigh` only when evals show a measurable gain. Image inputs also preserve more visual detail by default, improving figure and screenshot understanding. The [Codex CLI](docs/guide/codex-cli.md) integration is pinned to `gpt-5.5` so delegated Codex turns use the latest model. See the [OpenAI API docs](https://developers.openai.com/api/docs) for full capabilities.
 
 ## [0.37.5] - 2026-04-24
 

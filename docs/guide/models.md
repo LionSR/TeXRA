@@ -36,7 +36,7 @@ Claude Opus 4.7 uses adaptive thinking only (extended thinking with a manual `bu
 | `gpt54-`  | GPT-5.4 mini         | $$   | Fast   |
 | `gpt54--` | GPT-5.4 nano         | $    | Fast   |
 
-GPT-5.5 is OpenAI's latest flagship reasoning model — see the [API reference](https://developers.openai.com/api/docs) for full capabilities. It is the default OpenAI model and is also the model TeXRA pins the [Codex CLI](./codex-cli.md) to.
+GPT-5.5 is OpenAI's latest flagship reasoning model — see the [API reference](https://developers.openai.com/api/docs) for full capabilities. Compared with GPT-5.4 it reaches strong results with fewer reasoning tokens, follows instructions more literally, picks tools more precisely on large surfaces, and produces more polished, concise answers by default. The default reasoning effort on GPT-5.5 is **medium**, which is the recommended balanced starting point — only raise to `high`/`xhigh` when evals show a measurable gain. GPT-5.5 also preserves more image detail by default for better figure and screenshot understanding (raise `texra.maxImageDimension` if you want to take advantage). It is the default OpenAI model and the model TeXRA pins the [Codex CLI](./codex-cli.md) to.
 
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
