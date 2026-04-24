@@ -25,7 +25,7 @@ Follow the checklist on the left. Each step links to the right command.
 3. **Add your API key** -- You'll need one from Anthropic, OpenAI, Google, or similar. Chat subscriptions (ChatGPT Plus, Claude Pro) don't include API access.
 4. **Or just sign in** -- The Researcher Access Program gives you free model access, no API key needed. Signing in also unlocks extra agents.
 5. **Pick your files** -- At minimum, just add your manuscript as an Input file.
-6. **Use the orchestrator** -- It'll coordinate everything for you.
+6. **Use the orchestrator** -- It plans a pipeline and dispatches agents. Ask it which agent to use, or leave the instruction blank and the orchestrator decides.
 7. **Pick your field** -- Choose a preset (Physicist, Mathematician, Lean) so the orchestrator has the right tools.
 8. **Auto-extract figures** -- Optional. Pulls out figures and TikZ blocks before editing.
 9. **Hit Execute!** -- The orchestrator proposes tasks for you to approve in the Progress view. Press **y** to approve or **n** to reject.
