@@ -1,3 +1,6 @@
+// Third-party imports
+import { ReasoningEffort } from 'llm-zoo';
+
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
@@ -51,18 +54,29 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   }
 
   /**
-   * DeepSeek documents OpenAI SDK `thinking` as an `extra_body` field.
-   */
-  protected override shouldSendThinkingInExtraBody(): boolean {
-    return true;
-  }
-
-  /**
    * DeepSeek's examples pass back `content` beside `reasoning_content` and
    * `tool_calls`, even when content is the empty string.
    */
   protected override shouldIncludeEmptyAssistantToolContent(): boolean {
     return true;
+  }
+
+  /**
+   * DeepSeek V4 thinking supports effort control. llm-zoo 1.4.2 does not mark
+   * these models as configurable yet, so treat DeepSeek thinking models as
+   * effort-capable here.
+   */
+  protected override getEffectiveReasoningEffort(): ReasoningEffort | null {
+    if (!this.capabilities.supportsReasoning) return null;
+    return this.capabilities.reasoningEffort ?? ReasoningEffort.HIGH;
+  }
+
+  /**
+   * DeepSeek's OpenAI-format API accepts only high/max. Its compatibility layer
+   * maps low/medium to high and xhigh to max, so do that explicitly.
+   */
+  protected override validateReasoningEffort(effort: string): string {
+    return effort === ReasoningEffort.XHIGH ? 'max' : 'high';
   }
 
   protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
