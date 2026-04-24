@@ -14,7 +14,7 @@ import type { Tool as GeminiTool } from '@google/genai';
 import type { FunctionTool } from 'openai/resources/responses/responses';
 
 describe('toOpenAITools', () => {
-  it('marks Chat Completions function tools as strict for SDK validation', () => {
+  it('leaves Chat Completions function tools non-strict', () => {
     const defs: ToolDefinition[] = [
       {
         name: 'delegate_workflow',
@@ -32,7 +32,7 @@ describe('toOpenAITools', () => {
     assert.equal(tools.length, 1);
     assert.equal(tools[0].type, 'function');
     assert.equal(tools[0].function.name, 'delegate_workflow');
-    assert.equal(tools[0].function.strict, true);
+    assert.equal(tools[0].function.strict, undefined);
   });
 });
 

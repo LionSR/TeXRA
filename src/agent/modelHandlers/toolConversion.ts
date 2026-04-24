@@ -70,7 +70,6 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
       name: d.name,
       description: d.description,
       parameters: convertToolSchema(d),
-      strict: true,
     },
   })) as ChatCompletionTool[];
 }
