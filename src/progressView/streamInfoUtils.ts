@@ -26,6 +26,12 @@ function matchesFilter(
   return resolved === expected ? resolved : null;
 }
 
+function compareByCreationTime(a: StreamTabInfo, b: StreamTabInfo): number {
+  return (
+    a.creationTimestamp - b.creationTimestamp || a.name.localeCompare(b.name)
+  );
+}
+
 /**
  * Build a StreamTabInfo object for a single stream ID.
  * Returns null if the stream doesn't match the filter.
@@ -106,5 +112,5 @@ export function buildStreamInfos(
     .map((id) => buildStreamInfo(state, id, filter))
     .filter((info): info is StreamTabInfo => info !== null);
 
-  return infos;
+  return infos.sort(compareByCreationTime);
 }
