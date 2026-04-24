@@ -122,6 +122,109 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
 });
 
 describe('ModelHandlerDeepSeek tool conversion', () => {
+  it('passes thinking toggle through extra_body for the OpenAI SDK', async () => {
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsVision: false,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    let capturedParams: any;
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: any) => {
+            capturedParams = params;
+            return {
+              id: 'test-completion',
+              choices: [
+                {
+                  index: 0,
+                  message: { role: 'assistant', content: 'ok' },
+                  finish_reason: 'stop',
+                },
+              ],
+            };
+          },
+        },
+      },
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think' }],
+      temperature: 0,
+    });
+
+    assert.equal(capturedParams.thinking, undefined);
+    assert.deepEqual(capturedParams.extra_body, {
+      thinking: { type: 'enabled' },
+    });
+  });
+
+  it('passes back content and reasoning_content in tool-call messages', async () => {
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsVision: false,
+        },
+      }),
+    );
+    const workspace = {
+      reasoning: {
+        thinkingBlocks: [
+          { type: 'thinking', thinking: 'Need to call both tools.' },
+        ],
+      },
+      resetReasoning() {
+        this.reasoning.thinkingBlocks = [];
+      },
+    };
+
+    const messages = await handler.createBatchedToolUseFollowUpMessages(
+      [
+        {
+          raw: {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'first_tool', arguments: '{}' },
+          },
+        },
+        {
+          raw: {
+            id: 'call_2',
+            type: 'function',
+            function: { name: 'second_tool', arguments: '{}' },
+          },
+        },
+      ] as any,
+      [{ output: 'first result' }, { output: 'second result' }],
+      [[], []],
+      workspace as any,
+      '',
+    );
+
+    assert.equal(messages.length, 3);
+    assert.equal(messages[0].role, 'assistant');
+    assert.equal((messages[0] as any).content, '');
+    assert.equal(
+      (messages[0] as any).reasoning_content,
+      'Need to call both tools.',
+    );
+    assert.equal(messages[1].role, 'tool');
+    assert.equal((messages[1] as any).tool_call_id, 'call_1');
+    assert.equal(messages[2].role, 'tool');
+    assert.equal((messages[2] as any).tool_call_id, 'call_2');
+  });
+
   it('sends nullable Chat Completions tools without SDK strict auto-parse validation', async () => {
     const handler = new ModelHandlerDeepSeek(buildConfig());
     handler.setLogger(createLoggerStub() as AgentLogger);
