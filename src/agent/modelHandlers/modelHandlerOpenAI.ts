@@ -87,9 +87,15 @@ type ChatCompletionRequestBase = Omit<
 >;
 type ChatCompletionRequestWithThinking = ChatCompletionRequestBase & {
   thinking?: { type: 'enabled' | 'disabled' };
+  extra_body?: {
+    thinking?: { type: 'enabled' | 'disabled' };
+  };
 };
 type ChatCompletionSummaryParams = ChatCompletionCreateParamsNonStreaming & {
   thinking?: { type: 'disabled' };
+  extra_body?: {
+    thinking?: { type: 'disabled' };
+  };
 };
 
 // Reasoning content type for DeepSeek, o1 models (not in SDK)
@@ -271,7 +277,7 @@ export class ModelHandlerOpenAI<
       // Disable thinking for the summary call — reasoning models
       // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
       if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
-        summaryParams.thinking = { type: 'disabled' };
+        this.applyThinkingParameter(summaryParams, { type: 'disabled' });
       }
       const summaryResponse = await client.chat.completions.create(
         summaryParams,
@@ -370,6 +376,31 @@ export class ModelHandlerOpenAI<
     return undefined;
   }
 
+  /**
+   * Some OpenAI-compatible providers only accept non-OpenAI extensions through
+   * the SDK passthrough body. DeepSeek documents `thinking` this way.
+   */
+  protected shouldSendThinkingInExtraBody(): boolean {
+    return false;
+  }
+
+  protected applyThinkingParameter<
+    T extends {
+      thinking?: { type: 'enabled' | 'disabled' };
+      extra_body?: { thinking?: { type: 'enabled' | 'disabled' } };
+    },
+  >(params: T, thinking: { type: 'enabled' | 'disabled' }): void {
+    if (this.shouldSendThinkingInExtraBody()) {
+      params.extra_body = {
+        ...params.extra_body,
+        thinking,
+      };
+      return;
+    }
+
+    params.thinking = thinking;
+  }
+
   protected buildChatBaseParams(
     messages: ChatCompletionMessageParam[],
     temperature?: number,
@@ -406,7 +437,7 @@ export class ModelHandlerOpenAI<
     // Add thinking parameter if specified by subclass (Kimi K2.5, DeepSeek)
     const thinking = this.getThinkingParameter();
     if (thinking) {
-      baseParams.thinking = thinking;
+      this.applyThinkingParameter(baseParams, thinking);
     }
 
     if (tools?.length) {
@@ -1503,6 +1534,14 @@ export class ModelHandlerOpenAI<
   }
 
   /**
+   * Some providers require assistant tool-call messages to include a content
+   * field even when the model emitted an empty string.
+   */
+  protected shouldIncludeEmptyAssistantToolContent(): boolean {
+    return false;
+  }
+
+  /**
    * Builds an assistant message with tool calls and optional reasoning_content.
    *
    * For providers that support thinking mode with tool calls (DeepSeek, Kimi),
@@ -1537,8 +1576,8 @@ export class ModelHandlerOpenAI<
       }
     }
 
-    if (text) {
-      callMsg.content = this.formatAssistantContent(text);
+    if (text !== undefined || this.shouldIncludeEmptyAssistantToolContent()) {
+      callMsg.content = this.formatAssistantContent(text ?? '');
     }
 
     return callMsg;
