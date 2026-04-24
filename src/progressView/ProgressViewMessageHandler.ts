@@ -485,31 +485,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? (data.provider as ApiProvider)
       : undefined;
 
-    // Snapshot the per-provider key before the picker so we can tell whether
-    // the user actually stored a new credential. Without a known provider we
-    // skip the snapshot + auto-resume path entirely — the user can still set
-    // a key via the picker and click Retry explicitly.
-    const secretName = providerArg
-      ? SecretManager.getApiKeySecretName(providerArg)
-      : undefined;
-    const keyBefore = secretName
-      ? await SecretManager.get(secretName)
-      : undefined;
-
     await vscode.commands.executeCommand(
       apiKeyCommands.setApiKey,
       providerArg,
     );
 
-    if (!providerArg || !secretName) {
-      return;
-    }
-
-    // Auto-resume only when the key value actually changed. Cancelling the
-    // picker leaves secrets unchanged even if a stale key existed, so this
-    // avoids a spurious retry after explicit cancellation.
-    const keyAfter = await SecretManager.get(secretName);
-    if (!keyAfter || keyAfter === keyBefore) {
+    // Auto-resume when a usable personal key exists for the offending
+    // provider — including the case where the user already had one stored
+    // and simply confirmed (or cancelled) the picker. The button label
+    // "Use your own API key" advertises the mode switch, so treating an
+    // existing stored key as consent is the behaviour users expect.
+    // `anyApiKeyExists()` is deliberately NOT used: it also returns true
+    // when relay access is available, which would let a user who cancelled
+    // without any personal key flip off server-side access.
+    if (!providerArg || !(await SecretManager.hasUsableApiKey(providerArg))) {
       return;
     }
 
