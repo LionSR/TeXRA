@@ -34,7 +34,7 @@ export const DEFAULT_MODELS = [
   'opus47T',
   'gpt54',
   'deepseekT',
-  'dsv4proT',
+  'deepseekproT',
   'kimi26T',
 ];
 
