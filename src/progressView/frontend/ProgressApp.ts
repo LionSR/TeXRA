@@ -86,18 +86,18 @@ import {
 
 // Local imports - progress view contexts
 import {
-  EMPTY_DESCRIPTIONS,
   EMPTY_LOG_CONTEXT,
   EMPTY_PROCESS_OUTPUTS,
+  EMPTY_STREAM_BY_ID,
   EMPTY_STREAM_CONTEXT,
   permissionsContext,
   processOutputContext,
-  streamDescriptionsContext,
+  streamByIdContext,
   streamLogContext,
   streamStateContext,
   type ProcessOutputMap,
+  type StreamByIdMap,
   type StreamContextValue,
-  type StreamDescriptionMap,
   type StreamLogContextValue,
 } from './contexts/streamContexts';
 import type { FrontendEventHandlerContext } from './eventHandlers';
@@ -262,9 +262,9 @@ export class ProgressApp extends ProgressAppBase {
   @state()
   private processOutputContextValue: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
 
-  @provide({ context: streamDescriptionsContext })
+  @provide({ context: streamByIdContext })
   @state()
-  private descriptionsContextValue: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
+  private streamByIdContextValue: StreamByIdMap = EMPTY_STREAM_BY_ID;
 
   // --- Selector computeds: extract fields, auto-memoized by Object.is ---
   private streamById$ = select(this.appState, (s) => s.streamById);
@@ -278,10 +278,6 @@ export class ProgressApp extends ProgressAppBase {
     (s) => s.followupOptionsByStream,
   );
   private processOutputs$ = select(this.appState, (s) => s.processOutputs);
-  private streamDescriptions$ = select(
-    this.appState,
-    (s) => s.streamDescriptions,
-  );
 
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
@@ -342,8 +338,14 @@ export class ProgressApp extends ProgressAppBase {
     return id ? (this.streamById$.get().get(id) ?? null) : null;
   });
 
+  /**
+   * True when the current filter yields at least one tab. Gates the
+   * "no streams match" placeholder — backend now sends every stream
+   * unfiltered, so `streamById.size` alone can't distinguish "nothing
+   * visible" from "everything hidden by filter".
+   */
   private hasStreams$ = new Signal.Computed(
-    () => this.streamById$.get().size > 0,
+    () => this.tabStreams$.get().length > 0,
   );
 
   /** Only changes when the ACTIVE stream's state changes, not any stream. */
@@ -468,7 +470,7 @@ export class ProgressApp extends ProgressAppBase {
     this.streamLogContextValue = this.logContext$.get();
     this.permissionsContextValue = this.permissions$.get();
     this.processOutputContextValue = this.activeProcessOutputs$.get();
-    this.descriptionsContextValue = this.streamDescriptions$.get();
+    this.streamByIdContextValue = this.streamById$.get();
   }
 
   render(): TemplateResult {
