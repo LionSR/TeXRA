@@ -40,7 +40,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'leanSearch',
       'leanSimplifier',
       'leanBlueprint',
-      'review',
+      'progressCheck',
       'leanOrchestrator',
     ],
   },
