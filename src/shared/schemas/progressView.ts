@@ -549,6 +549,11 @@ const UseOwnApiKeyMessageSchema = z.object({
    *  stored key IS the depleted credential. The handler requires a new
    *  key for these rather than reusing the stored one. */
   upstreamCreditDepleted: z.boolean().optional(),
+  /** True when the failing request went through the TeXRA relay. When
+   *  false, relay wasn't in the path (direct-key call) and the handler
+   *  must not globally disable relay access — other providers may still
+   *  be served successfully by relay. */
+  viaRelay: z.boolean().optional(),
 });
 
 const ToggleToolEditApprovalBypassMessageSchema = z.object({

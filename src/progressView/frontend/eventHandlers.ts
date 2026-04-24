@@ -296,6 +296,10 @@ export function handlePermissionAction(
             permission.data.errorDetails?.isUpstreamCreditDepleted === true
               ? true
               : undefined,
+          viaRelay:
+            permission.data.errorDetails?.isRelayError === true
+              ? true
+              : undefined,
         });
         break;
       }

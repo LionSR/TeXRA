@@ -539,8 +539,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    await getServerSideKeyService().setUseIncludedModelAccess(false);
-    invalidateModelOptionsCache();
+    // Only disable relay access when the failing call actually went
+    // through relay. If the error came from a direct-key call (e.g.
+    // user's own Anthropic key ran out of credit on a tier that
+    // routes Anthropic directly while other providers still go via
+    // relay), flipping the global mode would revoke relay for the
+    // other providers too.
+    if (data.viaRelay === true) {
+      await getServerSideKeyService().setUseIncludedModelAccess(false);
+      invalidateModelOptionsCache();
+    }
     const retried = retryCoordinator.triggerRetry(data.stream);
     if (!retried) {
       await vscode.window.showInformationMessage(
