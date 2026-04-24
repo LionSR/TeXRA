@@ -311,7 +311,7 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     assert.equal((messages[2] as any).tool_call_id, 'call_2');
   });
 
-  it('passes back reasoning_content on final assistant messages after tools', () => {
+  it('passes back response reasoning_content on final assistant messages', () => {
     const handler = new ModelHandlerDeepSeek(
       buildConfig({
         capabilities: {
@@ -321,20 +321,21 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
         },
       }),
     );
-    const workspace = {
-      reasoning: {
-        thinkingBlocks: [
-          { type: 'thinking', thinking: 'Tool result is sufficient.' },
-        ],
-      },
-      resetReasoning() {
-        this.reasoning.thinkingBlocks = [];
-      },
+    const response = {
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: 'final answer',
+            reasoning_content: 'Tool result is sufficient.',
+          },
+        },
+      ],
     };
 
-    const message = handler.createAssistantMessage(
+    const message = handler.createAssistantMessageFromResponse(
+      response as any,
       'final answer',
-      workspace as any,
     );
 
     assert.equal(message.role, 'assistant');
@@ -343,7 +344,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
       (message as any).reasoning_content,
       'Tool result is sufficient.',
     );
-    assert.deepEqual(workspace.reasoning.thinkingBlocks, []);
   });
 
   it('sends nullable Chat Completions tools without SDK strict auto-parse validation', async () => {
