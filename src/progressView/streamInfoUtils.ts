@@ -66,6 +66,15 @@ export function buildStreamInfo(
   // so the tab doesn't display a misleading label.
   const processAgent = isProcessAgent(config?.agent);
 
+  // For process streams, config.instruction holds the full command (set by
+  // bash.ts when registering the child stream). Expose it untruncated so the
+  // process stream view can display the exact command, while `description`
+  // stays capped for tab/tooltip rendering. AgentConfigSchema prefaults
+  // instruction to '' — normalise empty to undefined so nullish-coalescing
+  // fallbacks work as intended downstream.
+  const rawInstruction = processAgent ? config?.instruction : undefined;
+  const command = rawInstruction ? rawInstruction : undefined;
+
   return {
     name: id,
     label,
@@ -82,6 +91,7 @@ export function buildStreamInfo(
     executionId: state.meta.getExecutionId(id),
     parentStreamId: state.meta.getParentStreamId(id),
     description: state.meta.getDescription(id),
+    command,
   };
 }
 
