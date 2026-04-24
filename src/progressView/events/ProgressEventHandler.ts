@@ -251,10 +251,6 @@ export class ProgressEventHandler {
     const { streamId, isRemote, hasMultipleOutputs } = payload;
     if (!streamId) return;
 
-    // Rehydrate a potentially-evicted stream before syncing content,
-    // otherwise syncStreamContent hands an empty log to the webview.
-    await this.state.streamLogs.ensureLoaded(streamId);
-
     const wasKnownStream = this.state.streamLogs.has(streamId);
     const previousFilter = this.state.agentCategoryFilter;
     this.state.streamLogs.ensureStream(streamId);
@@ -305,6 +301,16 @@ export class ProgressEventHandler {
     }
 
     if (!this.webviewUpdater.isAvailable()) return;
+
+    // Rehydrate a potentially-evicted stream before syncing content, so the
+    // webview doesn't get an empty log. All synchronous state mutations are
+    // already done above; the await here only gates webview delivery.
+    await this.state.streamLogs.ensureLoaded(streamId);
+
+    // A newer handleSetActiveStream may have resolved during our await and
+    // already taken over the active tab; skip webview sync so we don't
+    // overwrite its content with stale data.
+    if (shouldSwitch && this.state.activeStream !== streamId) return;
 
     const filterChanged = this.state.agentCategoryFilter !== previousFilter;
     if (!wasKnownStream || filterChanged) {

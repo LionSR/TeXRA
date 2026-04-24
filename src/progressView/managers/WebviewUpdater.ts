@@ -358,7 +358,13 @@ export class WebviewUpdater {
     const selectableNames = streams
       .filter((info) => filter === 'all' || info.agentCategory === filter)
       .map((info) => info.name);
-    const activeStream = state.pickValidActiveStream(selectableNames);
+    // When the filter excludes every stream, there's no valid tab to keep
+    // active; pickValidActiveStream's `[] || current` fallback would sticky
+    // on a hidden-category stream, so clear instead.
+    const activeStream =
+      selectableNames.length === 0
+        ? ('' as StreamTabId)
+        : state.pickValidActiveStream(selectableNames);
     if (activeStream !== state.activeStream) {
       state.activeStream = activeStream;
     }

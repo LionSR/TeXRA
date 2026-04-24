@@ -99,7 +99,16 @@ export class StreamLogStore {
    */
   releaseEntries(streamId: StreamTabId): void {
     const logInstance = this.logs.get(streamId);
-    if (!logInstance) return;
+    if (!logInstance) {
+      // Can't drop what isn't resident — but if a rehydrate is in flight,
+      // queue the intent so it runs once the load completes. Otherwise the
+      // rapid in-flight → stale flip would finish the load into memory
+      // with no subsequent eviction trigger.
+      if (this.pendingLoads.has(streamId)) {
+        this.pendingRelease.add(streamId);
+      }
+      return;
+    }
     if (this.dirtyStreamIds.has(streamId)) {
       this.pendingRelease.add(streamId);
       return;
@@ -145,6 +154,14 @@ export class StreamLogStore {
         const logInstance = new StreamLog(diskEntries);
         this.logs.set(streamId, logInstance);
         this.refreshSummary(streamId, logInstance);
+        // A `releaseEntries` that arrived while the load was in flight gets
+        // queued; honor it now (unless a reactivation cleared the intent).
+        if (this.pendingRelease.has(streamId)) {
+          this.pendingRelease.delete(streamId);
+          if (!this.dirtyStreamIds.has(streamId)) {
+            this.logs.delete(streamId);
+          }
+        }
       } catch {
         log.warn(LOG_TAG, `Failed to reload stream ${streamId} from disk`);
       }
