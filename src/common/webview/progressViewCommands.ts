@@ -36,6 +36,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   COMPACT_RESPONSE: 'compactResponse',
   RETRY_STREAM_REQUEST: 'retryStreamRequest',
   CANCEL_RETRY_REQUEST: 'cancelRetryRequest',
+  USE_OWN_API_KEY: 'useOwnApiKey',
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
   SORT_STREAMS: 'sortStreams',
