@@ -57,12 +57,6 @@
             "description": "Show API key reminders in the status bar and main view when no API keys are configured",
             "scope": "resource"
           },
-          "texra.ui.showDependencyReminders": {
-            "type": "boolean",
-            "default": true,
-            "description": "Show dependency check reminders in the main view when core dependencies are missing",
-            "scope": "resource"
-          },
           "texra.ui.showLoginBanner": {
             "type": "boolean",
             "default": true,
@@ -134,12 +128,6 @@
             "type": "boolean",
             "default": false,
             "description": "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-            "scope": "resource"
-          },
-          "texra.model.useCopilot": {
-            "type": "boolean",
-            "default": false,
-            "description": "Use the Copilot language model via VS Code's Language Model API for polishing instructions and best connection detection.",
             "scope": "resource"
           }
         }
@@ -692,29 +680,6 @@
             "type": "boolean",
             "default": false,
             "description": "Save the final input prompt sent to the model as an XML file for debugging purposes",
-            "scope": "resource"
-          }
-        }
-      },
-      {
-        "title": "Progress",
-        "properties": {
-          "texra.progressBoard.streamSortOrder": {
-            "type": "string",
-            "default": "time",
-            "enum": [
-              "none",
-              "time",
-              "inputFile",
-              "agent"
-            ],
-            "enumDescriptions": [
-              "No sorting (maintain order of creation)",
-              "Sort by last active time (newest first)",
-              "Sort alphabetically by input file name",
-              "Sort alphabetically by agent type"
-            ],
-            "description": "Default sort order for streams in Progress",
             "scope": "resource"
           }
         }

@@ -58,8 +58,7 @@ Configure how TeXRA connects to AI model providers:
 "texra.model.useImprovedConnection": false,
 "texra.model.improvedConnectionDomain": "",
 "texra.model.useOpenAIResponsesAPI": true,
-"texra.model.gpt5ReasoningSummary": false,
-"texra.model.useCopilot": false
+"texra.model.gpt5ReasoningSummary": false
 ```
 
 - **OpenRouter**: To route all API calls through OpenRouter, expand the OpenRouter row in the Dashboard → Models tab → API Configuration and enable **"Use OpenRouter for All Models"**
@@ -68,7 +67,6 @@ Configure how TeXRA connects to AI model providers:
   - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
 - `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.4 and GPT-5.4 Pro (requires verified account and user tier)
-- `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
 | Provider         | Proxy path                  | Supported |
 | ---------------- | --------------------------- | --------- |
