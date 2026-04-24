@@ -819,7 +819,7 @@
       },
       {
         "command": "texra.runSetupAssistant",
-        "title": "Run Setup Assistant",
+        "title": "Run Setup Assistant Agent (Setup Wizard)",
         "category": "TeXRA",
         "icon": "$(rocket)"
       },
@@ -1140,8 +1140,8 @@
         "steps": [
           {
             "id": "texra.gettingStarted.setupAssistant",
-            "title": "Let TeXRA set itself up",
-            "description": "One click. TeXRA's setup assistant will check your environment, install any missing LaTeX tools, add an API key or sign you in, and get you ready to go. It asks before every command and explains what it's doing.\n\n[Run Setup Assistant](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The remaining steps walk you through the same checklist manually.",
+            "title": "Run the setup assistant agent",
+            "description": "Start here. TeXRA's setup assistant agent checks your environment, installs any missing LaTeX tools, adds an API key or signs you in, and verifies that you're ready to go. It asks before every command and explains what it's doing.\n\n[Run Setup Assistant Agent](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The remaining steps walk you through the same checklist manually.",
             "media": {
               "markdown": "resources/walkthroughs/getting-started.md"
             },
