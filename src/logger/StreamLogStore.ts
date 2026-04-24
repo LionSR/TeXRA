@@ -301,6 +301,8 @@ export class StreamLogStore {
     this.logs.clear();
     this.summaries.clear();
     this.dirtyStreamIds.clear();
+    this.pendingRelease.clear();
+    this.flushing.clear();
 
     // 1. Scan directory — filenames decode back to stream IDs
     const streamIds = await this.kv.listKeys();
