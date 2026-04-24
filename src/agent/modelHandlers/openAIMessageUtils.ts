@@ -9,8 +9,6 @@ export interface NormalizeOpenAIMessageContentOptions {
 type MessageLike = {
   role?: string;
   content?: unknown;
-  tool_calls?: unknown;
-  tool_call_id?: unknown;
 };
 
 type ContentArray = Array<Record<string, unknown>>;
@@ -80,18 +78,6 @@ function mergeMessageContent(
   }
 }
 
-function canMergeMessages(previous: MessageLike, current: MessageLike): boolean {
-  if (previous.role !== current.role) return false;
-
-  return (
-    previous.role !== 'tool' &&
-    previous.tool_calls == null &&
-    current.tool_calls == null &&
-    previous.tool_call_id == null &&
-    current.tool_call_id == null
-  );
-}
-
 /**
  * Normalize OpenAI chat messages according to provided options.
  *
@@ -119,7 +105,7 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
 
     for (const message of working) {
       const previous = merged.at(-1);
-      if (!previous || !canMergeMessages(previous, message)) {
+      if (!previous || previous.role !== message.role) {
         merged.push(message);
         continue;
       }
