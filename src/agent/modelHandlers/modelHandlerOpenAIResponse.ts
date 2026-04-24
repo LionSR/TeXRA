@@ -839,33 +839,41 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // signals streaming instability (see the [TOKEN_DIAG] branch below);
     // chaining from such responses has produced stale-id and token-count
     // drift in practice, so treat it the same as a non-completed status.
-    const safeToChain =
-      response.status === 'completed' && !!response.usage?.input_tokens;
+    // Use a typeof check rather than truthiness so a legitimate 0 wouldn't
+    // be misclassified.
+    const hasInputTokens = typeof response.usage?.input_tokens === 'number';
+    const safeToChain = response.status === 'completed' && hasInputTokens;
     if (safeToChain) {
       this.previousResponseId = response.id;
+      this.conversationState.sentMessages = effectiveMessagesCount;
     } else {
       const errorDetail =
         response.error?.message ?? response.incomplete_details?.reason;
       this.logger.debug(
-        `Response ${response.id} not safe for chaining (status="${response.status}", hasUsage=${!!response.usage})`,
+        `Response ${response.id} not safe for chaining (status="${response.status}", hasInputTokens=${hasInputTokens})`,
         {
           data: {
             responseId: response.id,
             status: response.status,
             hasUsage: !!response.usage,
-            hasInputTokens: !!response.usage?.input_tokens,
+            hasInputTokens,
             errorDetail,
           },
         },
       );
+      // Rejecting the chain anchor invalidates the client-side bookkeeping:
+      // sentMessages counts against server-side history that we're now
+      // refusing to reference, so slicing from it on the next turn would
+      // drop context (PR#3142 review). Reset so the next turn sends full
+      // history via `input` and triggers compaction fresh. Mirrors the
+      // invalid-id recovery path below.
       this.previousResponseId = null;
+      this.resetConversationState();
     }
 
     // Clear any pending background response ID - a successful finalization means
     // any previous pending ID is stale and should not be resumed
     this.clearPendingBackgroundResponse();
-
-    this.conversationState.sentMessages = effectiveMessagesCount;
 
     // Set cumulative input tokens from actual usage (not additive - this IS the total).
     // The response's input_tokens reflects the full context including server-side history.
