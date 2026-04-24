@@ -496,13 +496,6 @@ function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
   );
 }
 
-function isCredentialExhaustedBody(rawErrorBody: unknown): boolean {
-  return (
-    isRelayMonthlyLimitBody(rawErrorBody) ||
-    isUpstreamCreditDepletedBody(rawErrorBody)
-  );
-}
-
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const streamDiagnostics = detectStreamDiagnostics(err);
@@ -511,7 +504,9 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Credit exhaustion matches regardless of relay status: a direct
   // Anthropic 400 "credit balance is too low" still wants the "Use your
   // own API key" affordance so the user can switch credentials.
-  const isCredentialExhausted = isCredentialExhaustedBody(rawErrorBody);
+  const isUpstreamCreditDepleted = isUpstreamCreditDepletedBody(rawErrorBody);
+  const isCredentialExhausted =
+    isRelayMonthlyLimitBody(rawErrorBody) || isUpstreamCreditDepleted;
 
   // Handle DOMException AbortError (from AbortController.abort())
   if (err instanceof DOMException && err.name === 'AbortError') {
@@ -537,6 +532,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       retryable: isRelay || sdkMatch.retryable || isCredentialExhausted,
       isRelayError: isRelay,
       isCredentialExhausted: isCredentialExhausted || undefined,
+      isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
       rawErrorBody,
       streamDiagnostics,
       partialText,

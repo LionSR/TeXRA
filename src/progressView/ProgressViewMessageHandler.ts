@@ -485,25 +485,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ? (data.provider as ApiProvider)
       : undefined;
 
-    // Snapshot all per-provider key values so we can detect which
-    // provider the user set or changed when providerArg is unknown.
-    // `anyApiKeyExists()` is deliberately NOT used — it also returns true
-    // when only relay access is available, which would let a user who
-    // cancelled without any personal key silently flip off server-side
-    // access.
-    const snapshotKeys = async () =>
-      new Map(
-        await Promise.all(
-          SecretManager.API_PROVIDERS.map(
-            async (p) =>
-              [
-                p,
-                await SecretManager.get(SecretManager.getApiKeySecretName(p)),
-              ] as const,
+    // The gate depends on WHICH credential is exhausted:
+    //   - Upstream credit depletion (Anthropic 400 "credit balance is
+    //     too low"): the STORED key is the broken one, so we require
+    //     evidence of a key change.
+    //   - Relay monthly limit (or unknown provider): the stored key is
+    //     fine, so any usable key counts as consent.
+    // `anyApiKeyExists()` is deliberately NOT used — it also returns
+    // true when only relay access is available.
+    const providersToCheck = providerArg
+      ? [providerArg]
+      : SecretManager.API_PROVIDERS;
+    const readKey = (p: ApiProvider) =>
+      SecretManager.get(SecretManager.getApiKeySecretName(p));
+
+    const requireChange = data.upstreamCreditDepleted === true;
+    const before = requireChange
+      ? new Map(
+          await Promise.all(
+            providersToCheck.map(async (p) => [p, await readKey(p)] as const),
           ),
-        ),
-      );
-    const before = providerArg ? undefined : await snapshotKeys();
+        )
+      : undefined;
 
     await vscode.commands.executeCommand(
       apiKeyCommands.setApiKey,
@@ -511,17 +514,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
 
     let shouldProceed: boolean;
-    if (providerArg) {
-      // Known provider: any usable key for THAT provider counts as
-      // consent to switch modes (the button label advertises the flip).
-      shouldProceed = await SecretManager.hasUsableApiKey(providerArg);
-    } else {
-      // Unknown provider: require evidence that the user actually stored
-      // or changed a per-provider key in this flow. Without this check
-      // a stale key for an unrelated provider would satisfy the gate
-      // and strand the stream with no credential for the failing one.
-      const after = await snapshotKeys();
-      shouldProceed = SecretManager.API_PROVIDERS.some((p) => {
+    if (requireChange) {
+      const after = new Map(
+        await Promise.all(
+          providersToCheck.map(async (p) => [p, await readKey(p)] as const),
+        ),
+      );
+      shouldProceed = providersToCheck.some((p) => {
         const next = after.get(p);
         return (
           typeof next === 'string' &&
@@ -529,6 +528,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           next !== before!.get(p)
         );
       });
+    } else {
+      const usable = await Promise.all(
+        providersToCheck.map((p) => SecretManager.hasUsableApiKey(p)),
+      );
+      shouldProceed = usable.some(Boolean);
     }
 
     if (!shouldProceed) {

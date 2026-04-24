@@ -292,6 +292,10 @@ export function handlePermissionAction(
         postMessage(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY, {
           stream: permission.data.streamId,
           provider: permission.data.errorDetails?.provider,
+          upstreamCreditDepleted:
+            permission.data.errorDetails?.isUpstreamCreditDepleted === true
+              ? true
+              : undefined,
         });
         break;
       }

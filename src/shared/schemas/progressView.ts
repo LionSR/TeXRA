@@ -544,6 +544,11 @@ const UseOwnApiKeyMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY),
   stream: StreamTabIdSchema,
   provider: z.string().optional(),
+  /** True when the underlying cause is an upstream provider credit
+   *  depletion (Anthropic 400 "credit balance is too low"), meaning the
+   *  stored key IS the depleted credential. The handler requires a new
+   *  key for these rather than reusing the stored one. */
+  upstreamCreditDepleted: z.boolean().optional(),
 });
 
 const ToggleToolEditApprovalBypassMessageSchema = z.object({
