@@ -15,7 +15,10 @@ This guide outlines a workflow to clone your Overleaf project, leverage TeXRA lo
 
 - Overleaf account with Git access enabled for your project (check Overleaf plans).
 - An **Overleaf Git authentication token** (starts with `olp_`). Generate one from [Account Settings → Git Integration](https://www.overleaf.com/user/settings). See [Overleaf's token documentation](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens) for step-by-step instructions.
-- Git installed locally ([git-scm.com](https://git-scm.com/downloads)).
+- Git installed locally. Install it using your platform's package manager:
+  - **macOS:** `brew install git` (via [Homebrew](./installation.md#homebrew)), or run `xcode-select --install` to get git as part of the Xcode Command Line Tools.
+  - **Windows:** Download the installer from [git-scm.com](https://git-scm.com/downloads), or install via `winget install --id Git.Git -e`.
+  - **Linux (Ubuntu/Debian):** `sudo apt-get install git`.
 - TeXRA installed in VS Code ([Installation Guide](./installation.md)).
 
 ## Workflow Steps
