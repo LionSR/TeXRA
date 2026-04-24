@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -166,6 +168,18 @@ export class ProgressViewState {
       return current;
     }
     return availableStreams[0] || current;
+  }
+
+  /**
+   * Release a previously-active stream's entries if its status is not
+   * in-flight. `ProgressEventHandler.setStreamStatus` intentionally skips
+   * eviction for the active tab, so every active-stream switch path must
+   * call this on the stream being moved away from to close the loop.
+   */
+  releasePreviousActive(streamId: StreamTabId): void {
+    if (!isInFlightStatus(StreamStatusService.get(streamId))) {
+      this.streamLogs.releaseEntries(streamId);
+    }
   }
 
   get streamSortOrder(): StreamSort {

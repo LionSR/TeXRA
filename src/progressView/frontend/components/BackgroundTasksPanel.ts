@@ -33,12 +33,12 @@ import { ProgressEvents } from '../events';
 
 // Local imports - contexts
 import {
-  EMPTY_DESCRIPTIONS,
   EMPTY_PROCESS_OUTPUTS,
+  EMPTY_STREAM_BY_ID,
   processOutputContext,
-  streamDescriptionsContext,
+  streamByIdContext,
   type ProcessOutputMap,
-  type StreamDescriptionMap,
+  type StreamByIdMap,
 } from '../contexts/streamContexts';
 
 // Side-effect imports - sibling components
@@ -215,9 +215,9 @@ export class BackgroundTasksPanel extends LitElement {
   @state()
   private processOutputs: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
 
-  @consume({ context: streamDescriptionsContext, subscribe: true })
+  @consume({ context: streamByIdContext, subscribe: true })
   @state()
-  private descriptions: StreamDescriptionMap = EMPTY_DESCRIPTIONS;
+  private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
 
   /** Track previous active count to detect transitions. */
   private prevActiveCount = 0;
@@ -314,7 +314,7 @@ export class BackgroundTasksPanel extends LitElement {
     const entry = this.processOutputs.get(child.executionId);
     const isClickable = Boolean(child.childStreamId);
     const description = child.childStreamId
-      ? this.descriptions.get(child.childStreamId)
+      ? this.streamById.get(child.childStreamId)?.description
       : undefined;
     const waiting = isWaiting(child);
 
