@@ -479,9 +479,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleUseOwnApiKey(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY>,
   ): Promise<void> {
-    const providerArg = (SecretManager.API_PROVIDERS as readonly string[]).includes(
-      data.provider ?? '',
-    )
+    const providerArg = (
+      SecretManager.API_PROVIDERS as readonly string[]
+    ).includes(data.provider ?? '')
       ? (data.provider as ApiProvider)
       : undefined;
 
@@ -508,10 +508,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         )
       : undefined;
 
-    await vscode.commands.executeCommand(
-      apiKeyCommands.setApiKey,
-      providerArg,
-    );
+    await vscode.commands.executeCommand(apiKeyCommands.setApiKey, providerArg);
 
     let shouldProceed: boolean;
     if (requireChange) {
