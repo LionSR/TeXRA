@@ -77,7 +77,6 @@ export function prKeyToString(k: PRKey): string {
   return `${k.owner}/${k.repo}#${k.pullNumber}`;
 }
 
-
 function withSince(url: string, since: string | undefined): string {
   if (!since) return url;
   const sep = url.includes('?') ? '&' : '?';
@@ -352,7 +351,10 @@ export class PRPollingSource {
                 // the detach deadline by the rate-limit duration so time spent
                 // waiting on rate limits doesn't erode the 24 h failure window.
                 if (state.detachDeadlineMs !== undefined) {
-                  state.detachDeadlineMs += Math.max(0, rateLimitEndsAt - failNow);
+                  state.detachDeadlineMs += Math.max(
+                    0,
+                    rateLimitEndsAt - failNow,
+                  );
                 }
                 state.skipPollUntilMs = rateLimitEndsAt;
                 this.logger.warn(
