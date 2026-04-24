@@ -107,6 +107,7 @@ import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-t
 import './components/StreamTabs';
 import './components/ToolUseStreamContent';
 import './components/WorkflowStreamContent';
+import './components/ProcessStreamContent';
 import './components/UserMessage';
 import './components/StatisticsPanel';
 import './components/LatexdiffResults';
@@ -207,7 +208,8 @@ export class ProgressApp extends ProgressAppBase {
 
       /* Stream content containers - pass-through for layout */
       tool-use-stream-content,
-      workflow-stream-content {
+      workflow-stream-content,
+      process-stream-content {
         display: contents;
       }
     `,
@@ -553,6 +555,16 @@ export class ProgressApp extends ProgressAppBase {
     if (!streamInfo || !streamState) {
       // No active stream - show empty log-list
       return html`<log-list></log-list>`;
+    }
+
+    // Process agents (e.g. bash) proxy raw stdout/stderr — render them with a
+    // dedicated terminal-style container, not the LLM workflow/tool-use chrome.
+    if (isProcessAgent(streamInfo.agent)) {
+      return html`
+        <process-stream-content
+          @toolbar-command=${this.onToolbarCommand}
+        ></process-stream-content>
+      `;
     }
 
     // Single branch point: delegate to typed container component
