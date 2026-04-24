@@ -755,7 +755,7 @@ export class ModelHandlerOpenAI<
       : messages;
 
     if (normalizedMessages.length !== messages.length) {
-      this.logger.info(
+      this.logger.debug(
         `Preprocessed message array from ${messages.length} to ${normalizedMessages.length} messages for ${providerLabel} model compatibility`,
       );
     }
