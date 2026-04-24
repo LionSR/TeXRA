@@ -11,6 +11,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   createStreamState,
   type StreamMetadata,
+  type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 
@@ -121,16 +122,26 @@ function updateStreamInfo(
 export const streamLifecycleHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data, ctx) => {
     const previousState = ctx.getState();
-    const activeStream = data.activeStream || null;
     const updated = updateStreamInfo(
       previousState,
       data.streams,
       data.streamStates,
     );
-    const nextActiveStreamId =
-      activeStream && updated.streamById.has(activeStream)
-        ? activeStream
-        : firstStreamId(updated.streamById);
+    // Honor explicit empty-string as "no selection" — backend sends this
+    // when the current filter excludes every stream. Since the backend now
+    // emits all streams unfiltered, falling back to firstStreamId would
+    // re-pick a filtered-out tab and render hidden-category content.
+    let nextActiveStreamId: StreamTabId | null;
+    if (data.activeStream === '') {
+      nextActiveStreamId = null;
+    } else if (
+      data.activeStream &&
+      updated.streamById.has(data.activeStream)
+    ) {
+      nextActiveStreamId = data.activeStream;
+    } else {
+      nextActiveStreamId = firstStreamId(updated.streamById);
+    }
 
     ctx.setState(() =>
       create(updated, (draft) => {
