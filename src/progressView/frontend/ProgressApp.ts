@@ -338,8 +338,14 @@ export class ProgressApp extends ProgressAppBase {
     return id ? (this.streamById$.get().get(id) ?? null) : null;
   });
 
+  /**
+   * True when the current filter yields at least one tab. Gates the
+   * "no streams match" placeholder — backend now sends every stream
+   * unfiltered, so `streamById.size` alone can't distinguish "nothing
+   * visible" from "everything hidden by filter".
+   */
   private hasStreams$ = new Signal.Computed(
-    () => this.streamById$.get().size > 0,
+    () => this.tabStreams$.get().length > 0,
   );
 
   /** Only changes when the ACTIVE stream's state changes, not any stream. */

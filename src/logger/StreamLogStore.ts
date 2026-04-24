@@ -214,10 +214,9 @@ export class StreamLogStore {
     this.pendingRelease.delete(streamId);
     // If a previous rehydrate errored, retry in the background so the
     // eventual merge can combine disk history with these new entries
-    // before we're allowed to save.
-    if (this.loadFailed.has(streamId) && !this.logs.has(streamId)) {
-      void this.ensureLoaded(streamId);
-    }
+    // before we're allowed to save. `ensureLoaded` dedupes via
+    // `pendingLoads` so repeated appends don't spam overlapping reads.
+    if (this.loadFailed.has(streamId)) void this.ensureLoaded(streamId);
     const logInstance = this.getOrCreate(streamId);
     const appended = logInstance.append(entry);
     this.refreshSummary(streamId, logInstance);
@@ -431,10 +430,19 @@ export class StreamLogStore {
   }
 
   private refreshSummary(streamId: StreamTabId, logInstance: StreamLog): void {
-    this.summaries.set(streamId, {
-      firstTimestamp: logInstance.firstTimestamp,
-      lastTimestamp: logInstance.lastTimestamp,
-    });
+    // Mutate in place — no observer watches summary object identity, and
+    // this runs on the per-append hot path (~200/s during streaming), so
+    // avoiding the per-call allocation is worthwhile.
+    const existing = this.summaries.get(streamId);
+    if (existing) {
+      existing.firstTimestamp = logInstance.firstTimestamp;
+      existing.lastTimestamp = logInstance.lastTimestamp;
+    } else {
+      this.summaries.set(streamId, {
+        firstTimestamp: logInstance.firstTimestamp,
+        lastTimestamp: logInstance.lastTimestamp,
+      });
+    }
   }
 
   private markDirty(streamId: StreamTabId): void {
