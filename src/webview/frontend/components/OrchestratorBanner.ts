@@ -52,8 +52,13 @@ export class OrchestratorBanner extends LitElement {
       }
 
       .orchestrator-tip {
+        display: block;
         font-size: var(--font-size-xs);
         opacity: 0.8;
+      }
+
+      .orchestrator-tip + .orchestrator-tip {
+        margin-top: var(--spacing-small);
       }
 
       .got-it-btn {
@@ -113,9 +118,8 @@ export class OrchestratorBanner extends LitElement {
     return html`
       <div class="orchestrator-banner">
         <span class="orchestrator-tip">
-          <strong>Not sure which agent?</strong> Just ask — type something
-          like "which agent should handle my intro?" and the orchestrator will
-          pick and dispatch the right one for you.
+          <strong>Ask the orchestrator which agent to use</strong> — type your
+          question and it will pick and dispatch the right one for you.
         </span>
         <span class="orchestrator-tip">
           <strong>Tip:</strong> press <strong>y</strong>/<strong>n</strong> in
