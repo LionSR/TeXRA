@@ -90,13 +90,19 @@ function updateStreamInfo(
     );
   }
 
+  // Clean up removed streams' pending-description buffer outside the
+  // mutative draft callback so the side effect doesn't run if the draft
+  // later throws.
+  for (const key of state.streamStates.keys()) {
+    if (!newStreamById.has(key)) pendingDescriptions.delete(key);
+  }
+
   return create(state, (draft) => {
     for (const key of draft.streamStates.keys()) {
       if (!newStreamById.has(key)) {
         draft.streamStates.delete(key);
         draft.streamLogs.delete(key);
         draft.processOutputs.delete(key);
-        pendingDescriptions.delete(key);
       }
     }
 
