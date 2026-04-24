@@ -311,6 +311,41 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     assert.equal((messages[2] as any).tool_call_id, 'call_2');
   });
 
+  it('passes back reasoning_content on final assistant messages after tools', () => {
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsVision: false,
+        },
+      }),
+    );
+    const workspace = {
+      reasoning: {
+        thinkingBlocks: [
+          { type: 'thinking', thinking: 'Tool result is sufficient.' },
+        ],
+      },
+      resetReasoning() {
+        this.reasoning.thinkingBlocks = [];
+      },
+    };
+
+    const message = handler.createAssistantMessage(
+      'final answer',
+      workspace as any,
+    );
+
+    assert.equal(message.role, 'assistant');
+    assert.equal((message as any).content, 'final answer');
+    assert.equal(
+      (message as any).reasoning_content,
+      'Tool result is sufficient.',
+    );
+    assert.deepEqual(workspace.reasoning.thinkingBlocks, []);
+  });
+
   it('sends nullable Chat Completions tools without SDK strict auto-parse validation', async () => {
     const handler = new ModelHandlerDeepSeek(buildConfig());
     handler.setLogger(createLoggerStub() as AgentLogger);
