@@ -573,6 +573,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     retryable,
     isRelayError: isRelay,
     isCredentialExhausted: isCredentialExhausted || undefined,
+    isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
     requestId,
     rawErrorBody,
     streamDiagnostics,
