@@ -345,13 +345,36 @@ export class WebviewUpdater {
     statuses?: Map<string, StreamStatus>,
     theme?: 'dark' | 'light',
   ): StreamTabId {
-    const streams = buildStreamInfos(state, state.agentCategoryFilter);
-    const streamNames = streams.map((info) => info.name);
+    // Send every stream so streamById stays comprehensive for consumers like
+    // BackgroundTasksPanel that need to render cross-filter subagent children
+    // (e.g., tool-use subagents of a workflow orchestrator under a workflow
+    // filter). The frontend still applies `state.agentCategoryFilter` at the
+    // sidebar display layer via `tabStreams$`.
+    const streams = buildStreamInfos(state);
 
-    // Compute valid active stream (pure query) and persist if changed
-    const activeStream = state.pickValidActiveStream(streamNames);
-    if (activeStream !== state.activeStream) {
+    // Active-stream validation still respects the filter so a filter change
+    // auto-rotates to a matching tab instead of leaving a hidden tab selected.
+    const filter = state.agentCategoryFilter;
+    const selectableNames = streams
+      .filter((info) => filter === 'all' || info.agentCategory === filter)
+      .map((info) => info.name);
+    // When the filter excludes every stream, there's no valid tab to keep
+    // active; pickValidActiveStream's `[] || current` fallback would sticky
+    // on a hidden-category stream, so clear instead.
+    const activeStream =
+      selectableNames.length === 0
+        ? ('' as StreamTabId)
+        : state.pickValidActiveStream(selectableNames);
+    const previousActive = state.activeStream;
+    if (activeStream !== previousActive) {
       state.activeStream = activeStream;
+      // The previously-active stream may have finished while visible —
+      // setStreamStatus skipped release for the active tab, and the
+      // filter-driven switch path doesn't go through setActiveStream.
+      // Release here so the completed log doesn't stay pinned.
+      if (previousActive && previousActive !== activeStream) {
+        state.releasePreviousActive(previousActive);
+      }
     }
 
     if (!this.isAvailable()) {

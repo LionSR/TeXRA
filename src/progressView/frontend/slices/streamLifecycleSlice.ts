@@ -11,11 +11,16 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   createStreamState,
   type StreamMetadata,
+  type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 
 import { firstStreamId, type ProgressState, type StreamState } from '../store';
 import { clearResolvedProposalIds } from './permissionSlice';
+import {
+  pendingDescriptions,
+  takePendingDescription,
+} from './streamMetaSlice';
 import { clearCopyContentStore } from '../formatters/copyContentStore';
 import { clearProposalInputStore } from '../formatters/proposalInputStore';
 import {
@@ -57,8 +62,11 @@ function updateStreamInfo(
   backendMetadata?: Record<string, StreamMetadata>,
 ): ProgressState {
   // Pre-compute merged states outside the draft (mergeBackendOwnedState uses
-  // create() internally, which cannot operate on draft proxies).
+  // create() internally, which cannot operate on draft proxies). Fold the
+  // pending-description drain into the same pass — no extra iteration.
+  // Explicit description on StreamTabInfo wins over the pending buffer.
   const mergedStates = new Map<string, StreamState>();
+  const newStreamById = new Map<string, StreamTabInfo>();
   for (const stream of streams) {
     const existing = state.streamStates.get(stream.name);
     const metadata = backendMetadata?.[stream.name];
@@ -72,9 +80,23 @@ function updateStreamInfo(
     } else if (!existing) {
       mergedStates.set(stream.name, createStreamState(stream.agentCategory));
     }
+    // Always drain the pending buffer so stale entries don't linger once the
+    // stream registers, even if the payload already carries a description.
+    // Stream-payload description wins (it's the authoritative value).
+    const pending = takePendingDescription(stream.name);
+    const description = stream.description ?? pending;
+    newStreamById.set(
+      stream.name,
+      description !== stream.description ? { ...stream, description } : stream,
+    );
   }
 
-  const newStreamById = new Map(streams.map((s) => [s.name, s]));
+  // Clean up removed streams' pending-description buffer outside the
+  // mutative draft callback so the side effect doesn't run if the draft
+  // later throws.
+  for (const key of state.streamStates.keys()) {
+    if (!newStreamById.has(key)) pendingDescriptions.delete(key);
+  }
 
   return create(state, (draft) => {
     for (const key of draft.streamStates.keys()) {
@@ -82,21 +104,11 @@ function updateStreamInfo(
         draft.streamStates.delete(key);
         draft.streamLogs.delete(key);
         draft.processOutputs.delete(key);
-        draft.streamDescriptions.delete(key);
       }
     }
 
     for (const [name, merged] of mergedStates) {
       draft.streamStates.set(name, merged);
-    }
-
-    // Hydrate streamDescriptions from StreamTabInfo (initial load / refresh).
-    // Only set — never delete here, because descriptions may have arrived via
-    // UPDATE_STREAM_DESCRIPTION before the stream payload carries them.
-    for (const stream of streams) {
-      if (stream.description) {
-        draft.streamDescriptions.set(stream.name, stream.description);
-      }
     }
 
     draft.streamById = newStreamById;
@@ -110,16 +122,26 @@ function updateStreamInfo(
 export const streamLifecycleHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data, ctx) => {
     const previousState = ctx.getState();
-    const activeStream = data.activeStream || null;
     const updated = updateStreamInfo(
       previousState,
       data.streams,
       data.streamStates,
     );
-    const nextActiveStreamId =
-      activeStream && updated.streamById.has(activeStream)
-        ? activeStream
-        : firstStreamId(updated.streamById);
+    // Honor explicit empty-string as "no selection" — backend sends this
+    // when the current filter excludes every stream. Since the backend now
+    // emits all streams unfiltered, falling back to firstStreamId would
+    // re-pick a filtered-out tab and render hidden-category content.
+    let nextActiveStreamId: StreamTabId | null;
+    if (data.activeStream === '') {
+      nextActiveStreamId = null;
+    } else if (
+      data.activeStream &&
+      updated.streamById.has(data.activeStream)
+    ) {
+      nextActiveStreamId = data.activeStream;
+    } else {
+      nextActiveStreamId = firstStreamId(updated.streamById);
+    }
 
     ctx.setState(() =>
       create(updated, (draft) => {
@@ -162,12 +184,12 @@ export const streamLifecycleHandlers: HandlerRegistry = {
     const cleaned = removePermissionsForStream(ctx.getPermissions(), streamId);
     ctx.setPermissions(cleaned);
 
+    pendingDescriptions.delete(streamId);
     ctx.setState((prev) =>
       create(prev, (draft) => {
         draft.streamStates.delete(streamId);
         draft.streamLogs.delete(streamId);
         draft.processOutputs.delete(streamId);
-        draft.streamDescriptions.delete(streamId);
         draft.streamById.delete(streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;
@@ -181,6 +203,7 @@ export const streamLifecycleHandlers: HandlerRegistry = {
     clearResolvedProposalIds();
     clearCopyContentStore();
     clearProposalInputStore();
+    pendingDescriptions.clear();
 
     // Clear all permissions — no streams means no valid permissions
     ctx.setPermissions([]);
@@ -191,7 +214,6 @@ export const streamLifecycleHandlers: HandlerRegistry = {
         draft.streamStates = new Map();
         draft.streamLogs = new Map();
         draft.processOutputs = new Map();
-        draft.streamDescriptions = new Map();
         draft.activeStreamId = null;
         draft.followupOptionsByStream = new Map();
       }),

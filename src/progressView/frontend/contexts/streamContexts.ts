@@ -94,13 +94,14 @@ export const processOutputContext = createContext<ProcessOutputMap>(
 );
 
 /**
- * Descriptions context: streamId → AI-generated session description.
+ * streamById context: Map<streamId, StreamTabInfo>. Single source of truth
+ * for per-stream metadata including AI-generated descriptions.
  * Consumed by BackgroundTasksPanel to label subagent entries.
  */
-export type StreamDescriptionMap = Map<StreamTabId, string>;
+export type StreamByIdMap = ReadonlyMap<StreamTabId, StreamTabInfo>;
 
-export const EMPTY_DESCRIPTIONS: StreamDescriptionMap = new Map();
+export const EMPTY_STREAM_BY_ID: StreamByIdMap = new Map();
 
-export const streamDescriptionsContext = createContext<StreamDescriptionMap>(
-  'progress-stream-descriptions',
+export const streamByIdContext = createContext<StreamByIdMap>(
+  'progress-stream-by-id',
 );
