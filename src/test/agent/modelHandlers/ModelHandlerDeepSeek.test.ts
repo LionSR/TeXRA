@@ -11,6 +11,10 @@ import {
 // Local imports - agent
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 
+// Type imports
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { ToolDefinition } from '@model';
+
 function thinkingFor(
   fullName: string,
   supportsReasoning: boolean,
@@ -21,6 +25,52 @@ function thinkingFor(
     capabilities: { ...DEFAULT_MODEL_CAPABILITIES, supportsReasoning },
   } as ModelConfig);
   return (handler as any).getThinkingParameter();
+}
+
+function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
+  return {
+    name: 'deepseek-chat',
+    fullName: 'deepseek-chat',
+    shortName: 'deepseek-chat',
+    provider: ModelProvider.DEEPSEEK,
+    maxOutputTokens: 1024,
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow: 200000,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsReasoning: false,
+      supportsVision: false,
+      ...(overrides.capabilities ?? {}),
+    },
+    openRouterOnly: false,
+    label: 'DeepSeek Chat',
+    ...overrides,
+  };
+}
+
+function createLoggerStub(): Partial<AgentLogger> {
+  return {
+    streamId: 'test-channel',
+    debug: () => {
+      /* no-op */
+    },
+    info: () => {
+      /* no-op */
+    },
+    warn: () => {
+      /* no-op */
+    },
+    error: () => {
+      /* no-op */
+    },
+    withCurrentGroup: () => undefined,
+    runWithinCurrentGroup: async <T>(fn: () => T | Promise<T>) => fn(),
+    runWithGroup: async <T>(
+      _groupId: string | undefined,
+      fn: () => T | Promise<T>,
+    ) => fn(),
+  };
 }
 
 describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
@@ -68,5 +118,59 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
     assert.deepEqual(thinkingFor('deepseek-future', false), {
       type: 'disabled',
     });
+  });
+});
+
+describe('ModelHandlerDeepSeek tool conversion', () => {
+  it('sends nullable Chat Completions tools without SDK strict auto-parse validation', async () => {
+    const handler = new ModelHandlerDeepSeek(buildConfig());
+    handler.setLogger(createLoggerStub() as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    let capturedParams: any;
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: any) => {
+            capturedParams = params;
+            return {
+              id: 'test-completion',
+              choices: [
+                {
+                  index: 0,
+                  message: { role: 'assistant', content: 'ok' },
+                  finish_reason: 'stop',
+                },
+              ],
+            };
+          },
+        },
+      },
+    };
+    const tools: ToolDefinition[] = [
+      {
+        name: 'delegate_workflow',
+        description: 'Delegate workflow',
+        parameters: {
+          type: 'object',
+          properties: {
+            instruction: { type: 'string' },
+            model: { type: 'string' },
+          },
+          required: ['instruction'],
+          additionalProperties: false,
+        },
+      },
+    ];
+
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'delegate this' }],
+      temperature: 0,
+      tools,
+    });
+
+    assert.equal(capturedParams.tools[0].function.name, 'delegate_workflow');
+    assert.equal(capturedParams.tools[0].function.strict, undefined);
   });
 });
