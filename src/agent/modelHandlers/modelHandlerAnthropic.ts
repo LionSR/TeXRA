@@ -1,6 +1,6 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
-import { basename } from 'node:path';
+import { basename, dirname } from 'node:path';
 
 // Third-party imports
 import {
@@ -13,11 +13,7 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import {
-  type AgentSetting,
-  hasEndTag,
-  requireWorkflowSetting,
-} from '@agent/core/AgentDataclass';
+import { type AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
   AnthropicAPIResponseUsage,
   AnthropicUsage,
@@ -50,7 +46,7 @@ import replacementEngine from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { flexibleFS, type FileLocation } from '@utils/files';
+import { AbsoluteFS, flexibleFS, type FileLocation } from '@utils/files';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { objectToLogString } from '@utils/text/stringUtils';
 
@@ -1636,19 +1632,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, MessageParam[]]> {
-    const workflowSetting = requireWorkflowSetting(agentSetting);
-
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       if (this.capabilities.supportsAssistantPrefill) {
         this.logger.debug(`Adding prefill message:\n${prefill}`);
-        if (
-          workspaceState.assembly.accumulatedOutput.includes('<scratchpad>') &&
-          prefill === '<scratchpad>' // this is not so neat
-        ) {
-          await flexibleFS.write(outputLocation, prefill);
-        } else if (workflowSetting.outputExt === 'xml') {
-          await flexibleFS.write(outputLocation, prefill + '\n');
-        }
+        workspaceState.assembly.accumulatedOutput = `${prefill}\n`;
+        await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
+        await flexibleFS.write(
+          outputLocation,
+          workspaceState.assembly.accumulatedOutput,
+        );
         messages.push({
           role: 'assistant',
           content: [{ type: 'text', text: prefill }],

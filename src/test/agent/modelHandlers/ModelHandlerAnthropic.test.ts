@@ -1,5 +1,8 @@
 // Standard library imports
 import { strict as assert } from 'assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 // Third-party imports
 import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
@@ -12,7 +15,9 @@ import {
   ModelProvider,
   ReasoningEffort,
 } from 'llm-zoo';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory, AgentSettingSchema } from '@agent/core/AgentDataclass';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 
 // Type imports
@@ -1299,6 +1304,57 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(eventData.tokensBefore, 185000);
     assert.equal(eventData.tokensAfter, 25600);
     assert.equal(eventData.summary, '<summary>state</summary>');
+  });
+});
+
+describe('ModelHandlerAnthropic output prefill initialization', () => {
+  it('writes assistant prefills for non-XML workflow outputs', async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'anthropic-prefill-'),
+    );
+    const outputPath = path.join(tempDir, 'r0', 'output.xml');
+
+    try {
+      const handler = createAnthropicHandler({
+        supportsAssistantPrefill: true,
+      });
+      stubHandlerForTest(handler);
+
+      const agentSetting = AgentSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'latex_document',
+        endTag: '</latex_document>',
+        outputExt: 'tex',
+      });
+      const messages: MessageParam[] = [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'revise the document' }],
+        },
+      ];
+      const prefill = '<latex_document>';
+      const workspaceState = AgentWorkspaceState.create();
+
+      const [isComplete, updatedMessages] =
+        await handler.initializeOutputAndPrefill(
+          {} as AgentConfig,
+          agentSetting,
+          messages,
+          workspaceState,
+          pathToLocation(outputPath),
+          prefill,
+        );
+
+      assert.equal(isComplete, false);
+      assert.equal(fs.readFileSync(outputPath, 'utf8'), `${prefill}\n`);
+      assert.equal(workspaceState.assembly.accumulatedOutput, `${prefill}\n`);
+      assert.equal(updatedMessages.at(-1)?.role, 'assistant');
+      assert.deepEqual(updatedMessages.at(-1)?.content, [
+        { type: 'text', text: prefill },
+      ]);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 
