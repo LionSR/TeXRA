@@ -1163,7 +1163,13 @@ export class ModelHandlerOpenAI<
   computePrice(responseUsage: ExtendedCompletionUsage | null): number {
     if (!responseUsage) return 0;
 
-    const promptTokens = responseUsage.prompt_tokens ?? 0;
+    const cachedTokens =
+      responseUsage.prompt_tokens_details?.cached_tokens ??
+      responseUsage.prompt_cache_hit_tokens ??
+      0;
+    const promptTokens =
+      responseUsage.prompt_tokens ??
+      cachedTokens + (responseUsage.prompt_cache_miss_tokens ?? 0);
     const completionTokens = responseUsage.completion_tokens ?? 0;
     // Note: OpenAI doesn't provide tool_use_tokens in their API response
 
@@ -1177,11 +1183,6 @@ export class ModelHandlerOpenAI<
     // Retrieve nested token details if present
     const reasoningTokens =
       responseUsage.completion_tokens_details?.reasoning_tokens ?? 0;
-    const cachedTokens =
-      responseUsage.prompt_tokens_details?.cached_tokens ??
-      responseUsage.prompt_cache_hit_tokens ?? // deepseek
-      0;
-
     if (reasoningTokens) {
       basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
     }
@@ -1220,14 +1221,21 @@ export class ModelHandlerOpenAI<
       };
     }
 
-    // OpenAI's prompt_tokens is the TOTAL (includes cached tokens).
-    // Cached tokens are a subset, unlike Anthropic where input_tokens excludes cached.
-    const inputTokens = rawUsage.prompt_tokens ?? 0;
     // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek: prompt_cache_hit_tokens
     const cachedTokens =
       rawUsage.prompt_tokens_details?.cached_tokens ??
       rawUsage.prompt_cache_hit_tokens ??
       0;
+    const cacheMissTokens = rawUsage.prompt_cache_miss_tokens ?? 0;
+
+    // OpenAI's prompt_tokens is the TOTAL (includes cached tokens). DeepSeek also
+    // exposes cache hit/miss fields; use their sum as a fallback if prompt_tokens
+    // is absent from an OpenAI-compatible response.
+    const inputTokens =
+      rawUsage.prompt_tokens ??
+      (cachedTokens > 0 || cacheMissTokens > 0
+        ? cachedTokens + cacheMissTokens
+        : 0);
 
     return {
       inputTokens,
@@ -1236,6 +1244,7 @@ export class ModelHandlerOpenAI<
       responseTimeMs,
       provider: this.usageProvider,
       cachedInputTokens: cachedTokens || undefined,
+      cacheMissInputTokens: cacheMissTokens || undefined,
       percentageCached: computeCachePercentage(cachedTokens, inputTokens),
       reasoningTokens:
         rawUsage.completion_tokens_details?.reasoning_tokens || undefined,

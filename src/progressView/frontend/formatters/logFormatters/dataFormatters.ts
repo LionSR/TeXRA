@@ -136,6 +136,12 @@ const STAT_FIELDS: readonly StatFieldConfig[] = [
   ['inputTokens', 'codicon-arrow-up', 'Input tokens', formatTokens],
   ['outputTokens', 'codicon-arrow-down', 'Output tokens', formatTokens],
   ['cacheReadInputTokens', 'codicon-history', 'Cache hits', formatTokens],
+  [
+    'cacheMissInputTokens',
+    'codicon-cloud-upload',
+    'Cache misses',
+    formatTokens,
+  ],
   ['cacheCreationInputTokens', 'codicon-save', 'Cache writes', formatTokens],
   [
     'percentageCached',
