@@ -489,15 +489,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       providerArg,
     );
 
-    // Check whether a usable key is available for the offending provider.
-    // If so, disable server-side relay so the retry uses the user's key and
-    // resolve the waiting retry prompt. Otherwise leave the panel open — the
-    // user can still choose Retry or Dismiss.
-    const hasKey = providerArg
-      ? await SecretManager.hasUsableApiKey(providerArg)
-      : await SecretManager.anyApiKeyExists();
-
-    if (!hasKey) {
+    // Only auto-resume when the user has a usable personal key for the
+    // offending provider. `anyApiKeyExists()` is deliberately NOT used as a
+    // fallback: it also returns true when relay/included access is available,
+    // which would let a user who cancelled the key picker silently flip off
+    // server-side access and strand the stream with no usable credential.
+    // If we can't identify the provider or verify the key, leave the panel
+    // open — the user can click Retry explicitly.
+    if (!providerArg || !(await SecretManager.hasUsableApiKey(providerArg))) {
       return;
     }
 
