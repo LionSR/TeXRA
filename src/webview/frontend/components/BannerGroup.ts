@@ -23,7 +23,6 @@ import './AgentConfigBanner';
 import './DependencyBanner';
 import './GettingStartedBanner';
 import './LoginBanner';
-import './OrchestratorBanner';
 
 @customElement('banner-group')
 export class BannerGroup extends LitElement {
@@ -49,8 +48,6 @@ export class BannerGroup extends LitElement {
 
   @property({ attribute: false }) loginBannerVisible = false;
 
-  @property({ attribute: false }) orchestratorVisible = false;
-
   override render(): TemplateResult {
     return html`
       <api-key-banner .state=${this.apiKeyBanner}></api-key-banner>
@@ -62,9 +59,6 @@ export class BannerGroup extends LitElement {
         .visible=${this.gettingStartedVisible}
       ></getting-started-banner>
       <login-banner .visible=${this.loginBannerVisible}></login-banner>
-      <orchestrator-banner
-        .visible=${this.orchestratorVisible}
-      ></orchestrator-banner>
     `;
   }
 }

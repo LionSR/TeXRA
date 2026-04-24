@@ -90,7 +90,7 @@
           "texra.ui.showOrchestratorBanner": {
             "type": "boolean",
             "default": true,
-            "description": "Show orchestrator workflow explanation when the orchestrator agent is selected",
+            "description": "Show orchestrator and session reminder text in the main view",
             "scope": "resource"
           },
           "texra.auth.enableVSCodeGitHub": {
