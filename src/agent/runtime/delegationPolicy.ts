@@ -58,17 +58,19 @@ async function readMetaSafely(
  * `parentExecutionId` chain for pre-feature snapshots that don't have the
  * field persisted yet.
  *
- * Returns 0 when no parent is stored (root execution) or the persisted
- * depth is 0. Returns `UNKNOWN_DEPTH_SENTINEL` when the chain walk
- * encounters a missing or unreadable ancestor mid-chain — we can't safely
- * undercount, so callers will see it as past the cap.
+ * Fail-closed: any corrupted, unreadable, or missing meta in the lineage —
+ * including the resumed execution's own meta — returns
+ * `UNKNOWN_DEPTH_SENTINEL`. A valid resumable snapshot always has a valid
+ * `meta.json`, so `null` here is corruption, not a legitimate root. Treating
+ * it as depth 0 would let a broken-meta subagent bypass the delegation gate.
+ * Resume itself still succeeds on the surviving message snapshot; the LLM
+ * just can't delegate from that session.
  */
 export async function computeDelegationDepthFromStorage(
   executionId: ExecutionId,
 ): Promise<number> {
   const rootMeta = await readMetaSafely(executionId);
-  if (rootMeta === 'error') return UNKNOWN_DEPTH_SENTINEL;
-  if (!rootMeta) return 0;
+  if (rootMeta === 'error' || rootMeta === null) return UNKNOWN_DEPTH_SENTINEL;
   if (rootMeta.delegationDepth !== undefined) return rootMeta.delegationDepth;
   if (!rootMeta.parentExecutionId) return 0;
 
