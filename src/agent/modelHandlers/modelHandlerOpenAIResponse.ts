@@ -864,11 +864,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Rejecting the chain anchor invalidates the client-side bookkeeping:
       // sentMessages counts against server-side history that we're now
       // refusing to reference, so slicing from it on the next turn would
-      // drop context (PR#3142 review). Reset so the next turn sends full
-      // history via `input` and triggers compaction fresh. Mirrors the
-      // invalid-id recovery path below.
+      // drop context. Reset sentMessages so the next turn sends full
+      // history via `input`, and clear isCompacted so the send-all branch
+      // isn't wrongly re-entered. Preserve cumulativeInputTokens so
+      // shouldCompact() can still trigger proactively — otherwise a
+      // large conversation that hits a transient missing-usage response
+      // would lose its compaction baseline and fail hard on the next
+      // turn, bypassing the context-window recovery below (which also
+      // requires previousResponseId to be set).
       this.previousResponseId = null;
-      this.resetConversationState();
+      this.conversationState.sentMessages = 0;
+      this.conversationState.isCompacted = false;
     }
 
     // Clear any pending background response ID - a successful finalization means
