@@ -392,7 +392,7 @@ export interface IModelHandler<
   /**
    * Build a simple assistant message from plain text.
    */
-  createAssistantMessage(text: string): M;
+  createAssistantMessage(text: string, workspaceState?: AgentWorkspaceState): M;
 
   /**
    * Determine if the stop reason represents an end-turn marker.
