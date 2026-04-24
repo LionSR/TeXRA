@@ -485,10 +485,18 @@ export class StreamLogStore {
       return logInstance ? [this.kv.write(streamId, logInstance.toJSON())] : [];
     });
 
+    let writeSucceeded = false;
     const writePromise = Promise.all(writes)
-      .then(() => {})
+      .then(() => {
+        writeSucceeded = true;
+      })
       .catch(() => {
-        // Keep writes non-throwing on hot path.
+        // Failed writes re-mark their streams dirty so the next save
+        // retries, and prevent eviction below (disk wouldn't have the
+        // entries yet; releasing memory would lose them).
+        for (const streamId of dirtyIds) {
+          if (this.logs.has(streamId)) this.dirtyStreamIds.add(streamId);
+        }
       })
       .finally(() => {
         if (this.inFlightWrite === writePromise) {
@@ -497,7 +505,7 @@ export class StreamLogStore {
             this.savePromise = null;
           }
         }
-        this.drainPendingReleases();
+        if (writeSucceeded) this.drainPendingReleases();
         resolve?.();
       });
 

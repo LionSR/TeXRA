@@ -245,11 +245,15 @@ export class ProgressEventHandler {
     }
   }
 
-  private handleSetActiveStream(
+  private async handleSetActiveStream(
     payload: ProgressEventPayloads['setActiveStream'],
-  ): void {
+  ): Promise<void> {
     const { streamId, isRemote, hasMultipleOutputs } = payload;
     if (!streamId) return;
+
+    // Rehydrate a potentially-evicted stream before syncing content,
+    // otherwise syncStreamContent hands an empty log to the webview.
+    await this.state.streamLogs.ensureLoaded(streamId);
 
     const wasKnownStream = this.state.streamLogs.has(streamId);
     const previousFilter = this.state.agentCategoryFilter;
@@ -288,7 +292,16 @@ export class ProgressEventHandler {
       // which may exclude the current stream and override state.activeStream —
       // completely bypassing the pending-permissions guard.
       this.maybeUpdateFilterForCategory(agentCategory);
+      const previous = this.state.activeStream;
       this.state.activeStream = streamId;
+      // Release the previously-active stream if it reached a terminal
+      // status while visible — setStreamStatus skips release for the
+      // active stream, so this switch is our only chance.
+      if (previous && previous !== streamId) {
+        if (!isInFlightStatus(StreamStatusService.get(previous))) {
+          this.state.streamLogs.releaseEntries(previous);
+        }
+      }
     }
 
     if (!this.webviewUpdater.isAvailable()) return;
