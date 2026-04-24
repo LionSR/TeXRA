@@ -60,5 +60,8 @@ export const StreamTabInfoSchema = z.object({
   parentStreamId: StreamTabIdSchema.optional(),
   /** AI-generated summary of what this session aims to accomplish. */
   description: z.string().optional(),
+  /** Full, untruncated command that spawned a process-agent stream (e.g. bash).
+   * Set only for process streams; used by the process stream view. */
+  command: z.string().optional(),
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
