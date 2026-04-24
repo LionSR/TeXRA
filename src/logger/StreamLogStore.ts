@@ -126,10 +126,7 @@ export class StreamLogStore {
       }
       return;
     }
-    if (
-      this.dirtyStreamIds.has(streamId) ||
-      this.flushing.has(streamId)
-    ) {
+    if (this.dirtyStreamIds.has(streamId) || this.flushing.has(streamId)) {
       this.pendingRelease.add(streamId);
       return;
     }

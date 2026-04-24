@@ -38,7 +38,10 @@ export class GitHubRateLimitError extends Error {
 
 /** Thrown for HTTP statuses that won't recover on retry (404, 410, 422). */
 export class GitHubPermanentError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
     super(message);
     this.name = 'GitHubPermanentError';
   }
