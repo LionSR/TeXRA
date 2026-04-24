@@ -19,6 +19,8 @@ import {
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
+import { delegationAllowed } from '@shared/constants/delegationPolicy';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   getHandle,
@@ -204,6 +206,25 @@ interface ApprovalMeta {
 }
 
 /**
+ * Defense-in-depth depth gate shared by fresh delegations and resumes.
+ * The tool-use flow already filters delegation tools from the toolset when
+ * the cap is reached, but if a rogue agent calls through anyway (fresh or
+ * via the execution_id resume path) we refuse here with a clear error so
+ * the LLM can pivot.
+ *
+ * Delegates to the same `delegationAllowed` predicate the tool filter
+ * uses so NaN / sentinel depths behave identically at both gates.
+ */
+function depthGateError(parentDelegationDepth: number): ToolResult | null {
+  const config = readNestedDelegationConfig();
+  if (delegationAllowed(parentDelegationDepth, config)) return null;
+  return {
+    error: `Delegation depth cap reached (max depth ${config.maxDepth}). Raise Settings → Multi-Agent → Max delegation depth, or complete this task directly without delegating.`,
+    isError: true,
+  };
+}
+
+/**
  * Execute a subagent asynchronously.
  * Pre-generates executionId so all IDs (tool return, XML delivery, error)
  * are consistent and usable with the executions tool.
@@ -219,16 +240,24 @@ async function executeSubagent(
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
+  const parentContext = getCurrentToolFileInteractionContext();
+  const parentExecutionId = parentContext?.executionId;
+  const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
+
+  const gated = depthGateError(parentDelegationDepth);
+  if (gated) return gated;
+
   const executionId = generateExecutionId();
   const startedAt = Date.now();
 
-  const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
   await registerExecution(
     executionId,
     syntheticConfig,
     agentName,
     parentExecutionId,
+    undefined,
+    parentDelegationDepth + 1,
   );
 
   // Track delivery state in the module-level map so delegate_agent (resume) can reset it.
@@ -249,6 +278,7 @@ async function executeSubagent(
     isSubagent: true,
     enforceCategory: true,
     parentStreamId: orchestratorStreamId,
+    delegationDepth: parentDelegationDepth + 1,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {
@@ -811,6 +841,11 @@ Git worktree support: ${
     executionId: string,
     instruction: string,
   ): Promise<ToolResult> {
+    const parentDelegationDepth =
+      getCurrentToolFileInteractionContext()?.delegationDepth ?? 0;
+    const gated = depthGateError(parentDelegationDepth);
+    if (gated) return gated;
+
     const handle = getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
       throw new Error(
