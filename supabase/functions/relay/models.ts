@@ -78,8 +78,8 @@ const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
 
 /**
  * Ultra-only models: reserved for Ultra-tier users even during the
- * sponsor-credit promotion. Matches gpt-5-pro, gpt-5.2-pro, gpt-5.4-pro, etc.
- * Accepts optional provider prefixes like "openai/gpt-5.4-pro".
+ * sponsor-credit promotion. Matches gpt-5-pro, gpt-5.2-pro, gpt-5.5-pro, etc.
+ * Accepts optional provider prefixes like "openai/gpt-5.5-pro".
  */
 const ULTRA_ONLY_PATTERN =
   /^(?:[a-z0-9_-]+\/)?gpt-5(?:\.\d+)?-pro(?:$|[-:@/])/i;
