@@ -399,6 +399,16 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       return;
     }
     await super.handleWebviewReady(undefined, webviewView);
+    const showOrchestratorBanner = getConfig<boolean>(
+      'ui.showOrchestratorBanner',
+      true,
+    );
+    webviewView.webview.postMessage({
+      command: showOrchestratorBanner
+        ? MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER
+        : MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
+    });
+
     try {
       const [{ modelOptions, agentOptions }, authStatus] = await Promise.all([
         loadOptions(),
@@ -422,16 +432,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           ? MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER
           : MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
       });
-
-      const showOrchestratorBanner = getConfig<boolean>(
-        'ui.showOrchestratorBanner',
-        true,
-      );
-      if (!showOrchestratorBanner) {
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
-        });
-      }
     } catch (error) {
       this.logger.error(
         this.channel,
