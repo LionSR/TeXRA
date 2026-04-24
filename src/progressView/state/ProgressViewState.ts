@@ -456,6 +456,19 @@ export class ProgressViewState {
         const log = this.streamLogs.get(streamId);
         if (!log) return;
 
+        // If a legacyInstruction entry was already backfilled on a prior load,
+        // skip entirely — regardless of which instruction gets selected now.
+        // This prevents a different instruction from being appended on
+        // subsequent loads once activeRunId is no longer in the snapshot.
+        const alreadyBackfilled = log
+          .getRange(0, log.head)
+          .some(
+            (entry) =>
+              (entry.data as Record<string, unknown> | undefined)?.source ===
+              'legacyInstruction',
+          );
+        if (alreadyBackfilled) return;
+
         const alreadyPresent = log
           .getRange(0, log.head)
           .some(

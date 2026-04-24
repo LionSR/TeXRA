@@ -173,12 +173,14 @@ class StreamTabKVStore extends KVStore {
     const raw = await this.read(KEYS.LEGACY_INSTRUCTIONS);
     if (!raw) return null;
 
-    const result = LegacyInstructionsDataSchema.safeParse(raw);
-    if (Object.keys(result.data).length === 0) {
+    // parse() is safe here: LegacyInstructionsDataSchema ends with .catch({})
+    // so it never throws; it always returns a valid (possibly empty) record.
+    const data = LegacyInstructionsDataSchema.parse(raw);
+    if (Object.keys(data).length === 0) {
       return null;
     }
 
-    return selectPreferredLegacyInstruction(result.data, activeRunId);
+    return selectPreferredLegacyInstruction(data, activeRunId);
   }
 
   /**
