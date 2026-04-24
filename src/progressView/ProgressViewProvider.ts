@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { computeAgentOptionsData } from '@agent/index';
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
@@ -18,7 +19,6 @@ import {
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
-import { computeAgentOptionsData } from '@agent/index';
 import type {
   AgentProposalPermission,
   BashPermission,

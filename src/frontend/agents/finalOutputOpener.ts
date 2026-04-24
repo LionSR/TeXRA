@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
-import * as logger from '@logger/logUtils';
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
+import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 
 const CHANNEL = 'FinalOutputOpener';

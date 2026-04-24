@@ -11,7 +11,6 @@ import {
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
-import type { StreamState } from '../store';
 import {
   designTokens,
   animationStyles,
@@ -27,6 +26,7 @@ import { layoutStyles } from '../styles/logStyles';
 import { ELEMENT_IDS, FILTER_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement, getRadioValue, setsEqual } from '../utils';
+import type { StreamState } from '../store';
 import type { StreamFilter } from '../store';
 
 /** Stream statuses considered active (non-terminal) for child stream display. */

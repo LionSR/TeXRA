@@ -12,6 +12,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
+import { StreamSortSchema } from '@shared/streams/streamSort';
 import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';
 import { StreamLogEntrySchema } from './log';
@@ -30,7 +31,6 @@ import {
   ToolEditPermissionSchema,
 } from './prompts';
 import { StreamStatusSchema, StreamTabInfoSchema } from './stream';
-import { StreamSortSchema } from '@shared/streams/streamSort';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,

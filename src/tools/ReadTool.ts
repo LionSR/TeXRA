@@ -5,6 +5,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@tools/result';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import {
@@ -15,7 +16,6 @@ import {
   parseWorkingDirectory,
   type WorkspacePathResolution,
 } from '@tools/utils';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml } from '@tools/emlParser';
 import {

@@ -26,6 +26,7 @@ import { ExecutionIdSchema } from '@shared/schemas';
 // Local imports - tools
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
+import { formatResultCount, pluralize } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import {
   buildApprovalRejectedResult,
@@ -33,7 +34,6 @@ import {
   getApprovedContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { formatResultCount, pluralize } from '@tools/utils';
 
 // Local imports - utils
 import {
