@@ -827,6 +827,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     };
   }
 
+  /** Drop server-side chain state while preserving local token history. */
+  private invalidateResponseChain(): void {
+    this.previousResponseId = null;
+    this.conversationState.sentMessages = 0;
+    this.conversationState.isCompacted = false;
+  }
+
   /**
    * Finalize response state after a successful API call.
    * Updates previousResponseId, conversation state, and token counts.
@@ -878,9 +885,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // would lose its compaction baseline and fail hard on the next
       // turn, bypassing the context-window recovery below (which also
       // requires previousResponseId to be set).
-      this.previousResponseId = null;
-      this.conversationState.sentMessages = 0;
-      this.conversationState.isCompacted = false;
+      this.invalidateResponseChain();
     }
 
     // Clear any pending background response ID - a successful finalization means
@@ -2025,8 +2030,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           `Clearing previousResponseId=${this.previousResponseId} due to invalid/expired response - ` +
             'next retry will rebuild conversation from local history',
         );
-        this.previousResponseId = null;
-        this.resetConversationState();
+        this.invalidateResponseChain();
         // Also clear pending background response if present
         this.clearPendingBackgroundResponse();
       } else if (
