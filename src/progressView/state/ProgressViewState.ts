@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
+import { isInFlightStatus } from '@common/constants/streamStatus';
+import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
@@ -20,6 +23,9 @@ import {
 import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
   TodoItemSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
@@ -102,9 +108,9 @@ export function cleanupToolUseAgentRegistry(meta: StreamMetaManager): void {
  * Core state management for the progress view.
  *
  * Coordinates four persistence managers (streamLogs, outputFiles, usageStats,
- * meta) plus ephemeral in-memory state and preferences. Instructions are
- * emitted as user-message log entries, so they live inside the log stream
- * (not in state).
+ * meta) plus ephemeral in-memory state and preferences. Workflow instructions
+ * live in the log stream (new runs write them directly; legacy runs are
+ * backfilled there during load), not in separate progress-view state.
  */
 export class ProgressViewState {
   // -- Persistence managers ---------------------------------------------------
@@ -162,6 +168,18 @@ export class ProgressViewState {
       return current;
     }
     return availableStreams[0] || current;
+  }
+
+  /**
+   * Release a previously-active stream's entries if its status is not
+   * in-flight. `ProgressEventHandler.setStreamStatus` intentionally skips
+   * eviction for the active tab, so every active-stream switch path must
+   * call this on the stream being moved away from to close the loop.
+   */
+  releasePreviousActive(streamId: StreamTabId): void {
+    if (!isInFlightStatus(StreamStatusService.get(streamId))) {
+      this.streamLogs.releaseEntries(streamId);
+    }
   }
 
   get streamSortOrder(): StreamSort {
@@ -370,8 +388,8 @@ export class ProgressViewState {
 
     // Promote any pre-existing `runInstructions.json` disk files (from the
     // earlier memento→StreamTabStore migration) to the archival
-    // `legacyInstructions.json` so the instruction text survives on disk
-    // even though the new UI no longer displays it.
+    // `legacyInstructions.json` so older workflow tabs can still restore
+    // their original instruction into the log stream.
     await Promise.all(
       this.streamLogs.keys().map((id) =>
         getStreamTabStore(id)
@@ -379,6 +397,14 @@ export class ProgressViewState {
           .catch(() => {}),
       ),
     );
+
+    const restoredLegacyInstructionCount =
+      await this.backfillLegacyWorkflowInstructions();
+    if (restoredLegacyInstructionCount > 0) {
+      this.logger.info(
+        `[Persistence] Restored ${restoredLegacyInstructionCount} legacy workflow instruction(s) into stream logs`,
+      );
+    }
 
     this.logger.info('[Persistence] Managers loaded');
 
@@ -408,6 +434,63 @@ export class ProgressViewState {
       this.usageStats.load(streamIds),
       this.meta.load(streamIds),
     ]);
+  }
+
+  private async backfillLegacyWorkflowInstructions(): Promise<number> {
+    let restoredCount = 0;
+
+    await Promise.all(
+      this.streamLogs.keys().map(async (streamId) => {
+        try {
+          const store = getStreamTabStore(streamId);
+          const legacyInstruction =
+            await store.readPreferredLegacyInstruction();
+          if (!legacyInstruction) return;
+
+          const text = legacyInstruction.text.trim();
+          if (!text) return;
+
+          const log = this.streamLogs.get(streamId);
+          if (!log) return;
+
+          const alreadyPresent = log
+            .getRange(0, log.head)
+            .some(
+              (entry) =>
+                entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
+                entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
+                entry.text?.trim() === text,
+            );
+          if (alreadyPresent) return;
+
+          const firstTimestamp = log.firstTimestamp;
+          const baseTimestamp =
+            legacyInstruction.timestamp ?? firstTimestamp ?? Date.now();
+          const timestamp =
+            firstTimestamp == null
+              ? baseTimestamp
+              : Math.max(0, Math.min(baseTimestamp, firstTimestamp - 1));
+
+          this.streamLogs.append(streamId, {
+            id: `legacy-instruction:${streamId}:${timestamp}`,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: LOG_LEVELS.INFO,
+            timestamp,
+            messageType: MESSAGE_TYPES.USER_MESSAGE,
+            text: legacyInstruction.text,
+            data: { source: 'legacyInstruction' },
+          });
+          restoredCount++;
+        } catch (err) {
+          this.logger.warn(
+            `[Persistence] Failed to backfill legacy instruction for ${streamId}: ${toErrorMessage(err)}`,
+            { data: err },
+          );
+        }
+      }),
+    );
+
+    return restoredCount;
   }
 
   /** Validate activeStream against available streams after load */

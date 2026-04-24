@@ -13,10 +13,16 @@
  */
 
 import { z } from 'zod';
-import { isAssistantMessage, isToolMessage } from 'openai/lib/chatCompletionUtils';
+import {
+  isAssistantMessage,
+  isToolMessage,
+} from 'openai/lib/chatCompletionUtils';
 import latexPreamble from '../../../resources/templates/chatExport.tex';
 import type { Part } from '@google/genai';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
+} from 'openai/resources/chat/completions';
 import type {
   ResponseFunctionToolCallItem,
   ResponseInputItem,
@@ -449,26 +455,23 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
       }
 
       // OpenAI Chat Completions: tool_calls array on assistant messages
-      const openaiMsg = msg as ChatCompletionMessageParam;
-      if (isAssistantMessage(openaiMsg) && Array.isArray(openaiMsg.tool_calls)) {
-        for (const tc of openaiMsg.tool_calls) {
-          const fn = tc.type === 'function' ? tc.function : undefined;
-          if (fn?.name) {
-            nodes.push({
-              kind: 'tool-call',
-              name: fn.name,
-              input: fn.arguments ?? '{}',
-            });
-            lastAssistantHadToolUse = true;
-          }
+      for (const tc of getAssistantToolCalls(item)) {
+        const fn = tc.type === 'function' ? tc.function : undefined;
+        if (fn?.name) {
+          nodes.push({
+            kind: 'tool-call',
+            name: fn.name,
+            input: fn.arguments ?? '{}',
+          });
+          lastAssistantHadToolUse = true;
         }
       }
       continue;
     }
 
     // OpenAI Chat Completions tool role
-    const openaiMsg = msg as ChatCompletionMessageParam;
-    if (isToolMessage(openaiMsg)) {
+    const openaiMsg = toChatCompletionMessageParam(item);
+    if (role === 'tool' || isToolMessage(openaiMsg)) {
       const text =
         typeof openaiMsg.content === 'string'
           ? openaiMsg.content
@@ -501,6 +504,20 @@ function isResponseFunctionCallOutputItem(
     'type' in item &&
     item.type === 'function_call_output'
   );
+}
+
+function toChatCompletionMessageParam(
+  item: unknown,
+): ChatCompletionMessageParam {
+  return item as ChatCompletionMessageParam;
+}
+
+function getAssistantToolCalls(item: unknown): ChatCompletionMessageToolCall[] {
+  const message = toChatCompletionMessageParam(item);
+  if (!isAssistantMessage(message) || !Array.isArray(message.tool_calls)) {
+    return [];
+  }
+  return message.tool_calls;
 }
 
 // ============================================================

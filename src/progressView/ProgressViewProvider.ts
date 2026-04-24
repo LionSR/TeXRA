@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { computeAgentOptionsData } from '@agent/index';
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
@@ -18,7 +19,6 @@ import {
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
-import { computeAgentOptionsData } from '@agent/index';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -328,7 +328,18 @@ export class ProgressViewProvider
     // Skip content sync when streams exist but filter excludes all of them
     const hasStreams = this.state.streamLogs.keys().length > 0;
     if (activeStream || !hasStreams) {
-      this.eventHandler.syncStreamContent(activeStream);
+      // If the active stream's entries were released (e.g. filter change
+      // moved active to a previously-evicted stream), rehydrate before
+      // syncing so the webview doesn't render an empty log. Fall back to
+      // an immediate sync when the log is already resident.
+      if (activeStream && !this.state.streamLogs.get(activeStream)) {
+        void this.state.streamLogs.ensureLoaded(activeStream).then(() => {
+          if (this.state.activeStream !== activeStream) return;
+          this.eventHandler.syncStreamContent(activeStream);
+        });
+      } else {
+        this.eventHandler.syncStreamContent(activeStream);
+      }
     }
 
     this._pendingUpdateOptions = null;
@@ -432,10 +443,27 @@ export class ProgressViewProvider
     }
   }
 
-  public setActiveStream(streamId: StreamTabId): void {
+  public async setActiveStream(streamId: StreamTabId): Promise<void> {
+    const previous = this.state.activeStream;
     this.state.activeStream = streamId;
 
+    // Catches the "terminal-while-active" case: a stream that reached a
+    // non-in-flight status while it was the visible tab never triggered
+    // release (the setStreamStatus guard excludes the active stream). Now
+    // that the user has moved on, it's eligible.
+    if (previous && previous !== streamId) {
+      this.state.releasePreviousActive(previous);
+    }
+
     if (!this.canSendToWebview()) return;
+
+    // Rehydrate entries released by the status-change eviction so the
+    // newly-active tab shows its full log instead of an empty view.
+    if (streamId) await this.state.streamLogs.ensureLoaded(streamId);
+
+    // Another setActiveStream may have run while we awaited rehydration;
+    // let the newer call own the webview sync so we don't overwrite it.
+    if (this.state.activeStream !== streamId) return;
 
     this.webviewUpdater.setActiveStream(streamId);
     // Hydrate content (logs, todos, follow-ups, instruction, bypass state) + active-state metadata

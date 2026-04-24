@@ -2,6 +2,7 @@
 import * as path from 'path';
 
 // Local imports - result types
+import { getCleanAgentName } from '@agent/index';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Local imports - log
@@ -9,7 +10,6 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { getCleanAgentName } from '@agent/index';
 
 // Local file imports
 import {

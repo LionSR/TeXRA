@@ -3,8 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Platform imports
-import { getFileSystem } from '@agent/core/filesystem';
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
+import { getFileSystem } from '@agent/core/filesystem';
 import { isFile, isDirectory } from '@common/files/fsEntryType';
 
 /** Convert content to Buffer for writing. */

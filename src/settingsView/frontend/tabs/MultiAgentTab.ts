@@ -21,6 +21,10 @@ import {
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
+import {
+  NESTED_DELEGATION_DEPTH_RANGE,
+  clampNestedDelegationDepth,
+} from '@shared/constants/delegationPolicy';
 
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {
@@ -275,6 +279,8 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) allowOrchestratorKill = true;
   @property({ attribute: false }) detachSubagentsOnStop = false;
   @property({ attribute: false }) worktreeSupport = false;
+  @property({ attribute: false }) nestedDelegationMaxDepth =
+    NESTED_DELEGATION_DEPTH_RANGE.default;
   @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
@@ -301,6 +307,19 @@ export class MultiAgentTab extends LitElement {
 
   private handleWorktreeSupportToggle(event: Event): void {
     this.emitToggle('worktree-support-toggle', event);
+  }
+
+  private handleNestedDelegationMaxDepthChange(input: HTMLInputElement): void {
+    const parsed = Number(input.value);
+    if (Number.isNaN(parsed)) {
+      input.value = String(this.nestedDelegationMaxDepth);
+      return;
+    }
+    const clamped = clampNestedDelegationDepth(parsed);
+    if (clamped !== parsed) input.value = String(clamped);
+    this.dispatchEvent(
+      createEvent('nested-delegation-max-depth-change', { value: clamped }),
+    );
   }
 
   private handlePresetClick(preset: AgentModePreset): void {
@@ -510,6 +529,29 @@ export class MultiAgentTab extends LitElement {
             When enabled, delegated agents can operate in git worktrees outside
             the main workspace. All tool calls within the subagent automatically
             use the worktree as their root directory.
+          </p>
+        </div>
+
+        <div class="setting-block">
+          <div class="reliability-row">
+            <label>Max delegation depth</label>
+            <vscode-textfield
+              class="reliability-input"
+              type="number"
+              .value=${String(this.nestedDelegationMaxDepth)}
+              min=${NESTED_DELEGATION_DEPTH_RANGE.min}
+              max=${NESTED_DELEGATION_DEPTH_RANGE.max}
+              @change=${(e: Event) =>
+                this.handleNestedDelegationMaxDepthChange(
+                  e.target as HTMLInputElement,
+                )}
+            ></vscode-textfield>
+          </div>
+          <p class="reliability-description">
+            Depth 1 (default): only the top-level orchestrator may delegate;
+            subagents cannot delegate further. Depth 2 lets a sub-orchestrator
+            delegate once more (orchestrator → sub-orchestrator → leaf). Higher
+            values allow deeper chains.
           </p>
         </div>
 

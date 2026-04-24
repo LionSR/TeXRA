@@ -5,6 +5,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { toErrorMessage } from '@common/errors';
 import { isFile, isDirectory } from '@common/files/fsEntryType';
 import { ToolError, ToolResult } from '@tools/result';
@@ -16,7 +17,6 @@ import {
   pluralize,
   parseWorkingDirectory,
 } from '@tools/utils';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';

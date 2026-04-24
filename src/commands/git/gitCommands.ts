@@ -7,6 +7,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'gitCommands';
 logger.initialize(CHANNEL);
@@ -266,11 +267,62 @@ function buildTokenResult(token: string): {
 
 const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
+/**
+ * Platform-specific package-manager install options surfaced when `git` is
+ * missing from PATH. Each option pairs the package-manager binary (used to
+ * probe whether the PM is installed) with the full install command.
+ */
+const GIT_INSTALL_OPTIONS: Partial<
+  Record<NodeJS.Platform, { tool: string; command: string }>
+> = {
+  darwin: { tool: 'brew', command: 'brew install git' },
+  win32: { tool: 'winget', command: 'winget install --id Git.Git -e' },
+  linux: { tool: 'apt-get', command: 'sudo apt-get install git' },
+};
+
+const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
+
+function isToolAvailable(tool: string): boolean {
+  return (
+    execaSync(tool, ['--version'], {
+      reject: false,
+      env: { ...process.env, PATH: extendEnvPath() },
+    }).exitCode === 0
+  );
+}
+
+async function promptGitMissing(): Promise<void> {
+  const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
+  const command =
+    option && isToolAvailable(option.tool) ? option.command : null;
+
+  const message = command
+    ? `Git not found in PATH. Install it with:\n  ${command}`
+    : option
+      ? `Git not found in PATH. Install ${option.tool} and run "${option.command}", or download git from ${GIT_DOWNLOAD_URL}.`
+      : `Git not found in PATH. See ${GIT_DOWNLOAD_URL} to install it.`;
+
+  const actions = command
+    ? (['Copy Command', 'Run in Terminal', 'Open git-scm.com'] as const)
+    : (['Open git-scm.com'] as const);
+
+  const selected = await vscode.window.showErrorMessage(message, ...actions);
+  if (selected === 'Copy Command' && command) {
+    await vscode.env.clipboard.writeText(command);
+  } else if (selected === 'Run in Terminal' && command) {
+    const terminal = vscode.window.createTerminal('Install Git');
+    terminal.show();
+    terminal.sendText(command);
+  } else if (selected === 'Open git-scm.com') {
+    void vscode.env.openExternal(vscode.Uri.parse(GIT_DOWNLOAD_URL));
+  }
+}
+
 async function checkClonePreconditions(
   workspacePath: string,
 ): Promise<boolean> {
   if (execaSync('git', ['--version'], { reject: false }).exitCode !== 0) {
-    vscode.window.showErrorMessage('Git not found in PATH.');
+    await promptGitMissing();
     return false;
   }
 

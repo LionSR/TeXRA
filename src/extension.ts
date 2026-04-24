@@ -6,9 +6,9 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
+import { initPlatform } from '@platform/platform';
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
-import { initPlatform } from '@platform/platform';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
@@ -19,6 +19,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@auth/UriHandler';
 import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
+import { getAuthStatus } from '@auth/authCommands';
 import { toErrorMessage } from '@common/errors';
 import {
   getActiveSidebarView,
@@ -50,6 +51,12 @@ import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolE
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
 import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
+import { getLinterMessages } from '@frontend/latex/linter';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
+import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
+import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
+import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
@@ -57,21 +64,14 @@ import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
-import { getAuthStatus } from '@auth/authCommands';
 import { setGitHubTokenProvider, prPollingSource } from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
-import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { setLinterProvider } from '@tools/DiagnosticsTool';
+import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
-import { getLinterMessages } from '@frontend/latex/linter';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
-import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
-import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
-import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
-import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';

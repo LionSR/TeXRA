@@ -54,6 +54,7 @@ const PLACEHOLDER_HTML = getGettingStartedHtml(
 // Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
 // Real null bytes in the input are stripped first so the sentinel is unambiguous.
 const ERASE_SENTINEL = '\x00';
+const ANSI_ERASE_LINE_PATTERN = new RegExp(String.raw`\u001B\[\d*K`, 'g');
 
 /** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
 function processTerminalText(text: string): string {
@@ -61,10 +62,13 @@ function processTerminalText(text: string): string {
   // Then replace ANSI erase-line escapes (\x1b[K, \x1b[0K, \x1b[2K, …) with it
   // before stripping all ANSI so the overwrite loop can honour them: an erase clears
   // the line from that column onward instead of preserving the stale tail characters.
-  // eslint-disable-next-line no-control-regex
-  const preprocessed = text.split(ERASE_SENTINEL).join('').replace(/\x1b\[\d*K/g, ERASE_SENTINEL);
+
+  const preprocessed = text
+    .split(ERASE_SENTINEL)
+    .join('')
+    .replaceAll(ANSI_ERASE_LINE_PATTERN, ERASE_SENTINEL);
   return stripAnsi(preprocessed)
-    .replace(/\r\n/g, '\n')
+    .replaceAll('\r\n', '\n')
     .split('\n')
     .map((line) => {
       const segs = line.split('\r');
@@ -78,11 +82,15 @@ function processTerminalText(text: string): string {
         if (eraseAt >= 0) {
           // \r overlays the prefix up to the erase point; \x1b[K clears from there to EOL.
           const pre = seg.slice(0, eraseAt);
-          const post = seg.slice(eraseAt + 1).split(ERASE_SENTINEL).join('');
+          const post = seg
+            .slice(eraseAt + 1)
+            .split(ERASE_SENTINEL)
+            .join('');
           current = pre + post;
         } else {
           // \r moves cursor to column 0 without clearing; shorter writes preserve the tail
-          current = seg.length < current.length ? seg + current.slice(seg.length) : seg;
+          current =
+            seg.length < current.length ? seg + current.slice(seg.length) : seg;
         }
       }
       return current.split(ERASE_SENTINEL).join('');
@@ -200,7 +208,10 @@ export class TaskGroupList extends LitElement {
             ?.length ?? 0;
         if (this.messages.length > prevCount) {
           this.appendTerminalChunk(
-            this.messages.slice(prevCount).map((m) => m.text).join(''),
+            this.messages
+              .slice(prevCount)
+              .map((m) => m.text)
+              .join(''),
           );
         } else {
           this.rebuildTerminalText();
@@ -375,7 +386,9 @@ export class TaskGroupList extends LitElement {
     const combined = this.cachedRawTail + newRaw;
     const lastNl = combined.lastIndexOf('\n');
     if (lastNl >= 0) {
-      this.cachedTerminalLines += processTerminalText(combined.slice(0, lastNl + 1));
+      this.cachedTerminalLines += processTerminalText(
+        combined.slice(0, lastNl + 1),
+      );
       this.cachedRawTail = combined.slice(lastNl + 1);
     } else {
       // No newline: keep raw bytes so split ANSI sequences and cross-chunk \r
@@ -384,7 +397,9 @@ export class TaskGroupList extends LitElement {
       // that trailing \r, so the next arriving \n is correctly joined into \r\n.
       const MAX_TAIL = 65536;
       this.cachedRawTail =
-        combined.length > MAX_TAIL ? combined.slice(combined.length - MAX_TAIL) : combined;
+        combined.length > MAX_TAIL
+          ? combined.slice(combined.length - MAX_TAIL)
+          : combined;
     }
   }
 
@@ -691,7 +706,9 @@ export class TaskGroupList extends LitElement {
           class="log-container"
           @vsc-scrollable-scroll=${this.handleVscScroll}
         >
-          <pre class="terminal-pre">${this.cachedTerminalLines}${processTerminalText(this.cachedRawTail)}</pre>
+          <pre class="terminal-pre">
+${this.cachedTerminalLines}${processTerminalText(this.cachedRawTail)}</pre
+          >
         </vscode-scrollable>
       `;
     }
