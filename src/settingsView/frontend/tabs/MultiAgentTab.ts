@@ -550,8 +550,8 @@ export class MultiAgentTab extends LitElement {
           <p class="reliability-description">
             Depth 1 (default): only the top-level orchestrator may delegate;
             subagents cannot delegate further. Depth 2 lets a sub-orchestrator
-            delegate once more (orchestrator → sub-orchestrator → leaf).
-            Higher values allow deeper chains.
+            delegate once more (orchestrator → sub-orchestrator → leaf). Higher
+            values allow deeper chains.
           </p>
         </div>
 

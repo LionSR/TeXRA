@@ -293,7 +293,8 @@ function isToolAvailable(tool: string): boolean {
 
 async function promptGitMissing(): Promise<void> {
   const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
-  const command = option && isToolAvailable(option.tool) ? option.command : null;
+  const command =
+    option && isToolAvailable(option.tool) ? option.command : null;
 
   const message = command
     ? `Git not found in PATH. Install it with:\n  ${command}`
