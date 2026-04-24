@@ -11,25 +11,15 @@ import {
 // Local imports - agent
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 
-function buildConfig(
-  fullName: string,
-  supportsReasoning: boolean,
-): ModelConfig {
-  return {
-    fullName,
-    provider: ModelProvider.DEEPSEEK,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning,
-    },
-  } as ModelConfig;
-}
-
 function thinkingFor(
   fullName: string,
   supportsReasoning: boolean,
 ): { type: 'enabled' | 'disabled' } | undefined {
-  const handler = new ModelHandlerDeepSeek(buildConfig(fullName, supportsReasoning));
+  const handler = new ModelHandlerDeepSeek({
+    fullName,
+    provider: ModelProvider.DEEPSEEK,
+    capabilities: { ...DEFAULT_MODEL_CAPABILITIES, supportsReasoning },
+  } as ModelConfig);
   return (handler as any).getThinkingParameter();
 }
 
@@ -67,7 +57,7 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
   });
 
   it('unlisted fullName is treated as default-ON (matches V4+ convention)', () => {
-    // Update THINKING_DEFAULT_OFF_FULLNAMES if a new non-thinking model is added.
+    // Update getThinkingParameter if a new non-thinking model is added.
     assert.equal(thinkingFor('deepseek-future', true), undefined);
     assert.deepEqual(thinkingFor('deepseek-future', false), { type: 'disabled' });
   });
