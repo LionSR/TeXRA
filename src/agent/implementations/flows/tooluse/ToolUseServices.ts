@@ -27,6 +27,12 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;
   /** True when this agent was launched as a subagent by an orchestrator. */
   readonly isSubagent?: boolean;
+  /**
+   * True when the agent's YAML requested delegation tools but they were filtered
+   * out by the nested-delegation gate (disabled or depth cap reached). The
+   * prepare node uses this to tell the LLM it cannot delegate further.
+   */
+  readonly delegationTrimmed?: boolean;
 }
 
 export type { FlowParams as ToolUseFlowParams };
