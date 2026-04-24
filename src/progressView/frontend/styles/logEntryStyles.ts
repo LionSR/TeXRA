@@ -313,4 +313,16 @@ export const logEntryStyles = css`
   :host([terminal]) .message-error {
     color: var(--vscode-terminal-ansiRed, var(--color-error));
   }
+
+  /* Pre-formatted text block for terminal-mode streams.
+     Inherits font/color from the terminal .log-container. */
+  :host([terminal]) .terminal-pre {
+    margin: 0;
+    padding: 0;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
 `;
