@@ -1,8 +1,8 @@
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getConfig } from '@agent/core/config';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@tools/result';
-import { getConfig } from '@agent/core/config';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { isApprovalBypassedForStream } from './toolEditApproval';

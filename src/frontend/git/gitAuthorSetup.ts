@@ -11,8 +11,8 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_MARK_COMMITS,
 } from '@shared/constants/git';
-import { setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { setWorktreeSupportEnabled } from '@tools/worktreeConfig';
+import { setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 /** Read the current git author settings from workspace state with defaults. */
 export function readGitAuthorSettings(): {
