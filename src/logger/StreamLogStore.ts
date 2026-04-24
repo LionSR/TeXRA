@@ -35,7 +35,7 @@ export class StreamLogStore {
   /**
    * Lightweight summary per stream (first/last timestamp). Populated at load
    * and refreshed on append/update. Survives `releaseEntries` so sidebar
-   * sorting keeps working for streams whose heavy entries have been evicted.
+   * metadata stays available for streams whose heavy entries have been evicted.
    */
   private readonly summaries = new Map<
     StreamTabId,
@@ -352,8 +352,15 @@ export class StreamLogStore {
         }),
       );
 
+      const sortedResults = [...results].sort(
+        ([aStreamId, aEntries], [bStreamId, bEntries]) =>
+          (aEntries[0]?.timestamp ?? Number.POSITIVE_INFINITY) -
+            (bEntries[0]?.timestamp ?? Number.POSITIVE_INFINITY) ||
+          aStreamId.localeCompare(bStreamId),
+      );
+
       let totalEntries = 0;
-      for (const [streamId, entries] of results) {
+      for (const [streamId, entries] of sortedResults) {
         if (entries.length > 0) {
           const logInstance = new StreamLog(entries);
           this.logs.set(streamId as StreamTabId, logInstance);
@@ -413,7 +420,6 @@ export class StreamLogStore {
     // re-marks failed streams dirty, which would otherwise spin.
     const MAX_WRITE_RETRIES = 3;
     let writeAttempts = 0;
-    /* eslint-disable no-await-in-loop */
     while (true) {
       if (this.saveTimer !== null) {
         clearTimeout(this.saveTimer);
@@ -445,7 +451,6 @@ export class StreamLogStore {
         writeAttempts++;
       }
     }
-    /* eslint-enable no-await-in-loop */
   }
 
   private getOrCreate(streamId: StreamTabId): StreamLog {
