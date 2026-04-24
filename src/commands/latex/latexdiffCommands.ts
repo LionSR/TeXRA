@@ -6,6 +6,13 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { listExecutions } from '@agent/storage';
+import {
+  WORKFLOW_OUTPUT_BASENAME,
+  legacyWorkflowOutputRoundRegex,
+  midEraWorkflowOutputStem,
+  parseWorkflowOutputRoundDir,
+} from '@agent/output/workflowOutputLayout';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -18,15 +25,6 @@ import {
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
-import {
-  WORKFLOW_OUTPUT_BASENAME,
-  legacyWorkflowOutputRoundRegex,
-  midEraWorkflowOutputStem,
-  parseWorkflowOutputRoundDir,
-} from '@agent/output/workflowOutputLayout';
-import { listExecutions } from '@agent/storage';
-import { getStreamTabId } from '@logger/streamUtils';
-import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,
@@ -34,7 +32,9 @@ import {
   describeMathMarkupOption,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
+import { getStreamTabId } from '@logger/streamUtils';
 import * as logger from '@logger/logUtils';
+import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
@@ -441,7 +441,7 @@ async function scanRunDirForOutputs(
     for (const bf of [inputFile, ...(extraBaseFiles ?? [])]) {
       const abs = toAbs(bf);
       const rel = (workspacePath ? path.relative(workspacePath, abs) : bf)
-        .replace(/\\/g, '/')
+        .replaceAll('\\', '/')
         .replace(/\.tex$/i, '');
       baseLocationByRelPath.set(rel, pathToLocation(abs));
     }
@@ -495,7 +495,7 @@ async function scanRunDirForOutputs(
         // in multi-file runs an unmatched file gets null so it surfaces as a
         // "missing base" error rather than silently diffing against the wrong doc.
         const fileKey = fileRelToRound
-          .replace(/\\/g, '/')
+          .replaceAll('\\', '/')
           .replace(/\.tex$/i, '');
         const originalLocation =
           baseLocationByRelPath.get(fileKey) ??

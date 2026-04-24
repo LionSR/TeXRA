@@ -9,11 +9,6 @@ import pMap from 'p-map';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import {
-  countPdfPages,
-  getBase64EncodedMedia,
-  processPdf2Png,
-} from '@utils/media/img';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Type imports
@@ -23,6 +18,11 @@ import {
   getShortDisplayPath,
   type FileLocation,
 } from '@utils/files';
+import {
+  countPdfPages,
+  getBase64EncodedMedia,
+  processPdf2Png,
+} from '@utils/media/img';
 import type { ModelCapabilities } from 'llm-zoo';
 
 /**

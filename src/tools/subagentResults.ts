@@ -149,7 +149,7 @@ export async function computeAndWriteWorkflowDiffs(
           const truncated = truncateDiff(diff, limit);
           // Use full relativePath (with separators replaced) to avoid collisions
           // when multiple files share the same basename in different directories.
-          const safeName = o.relativePath.replace(/[\\/]/g, '_');
+          const safeName = o.relativePath.replaceAll(/[\\/]/g, '_');
           const diffRelPath = `diffs/${safeName}.diff`;
           results.set(o.absolutePath, { diffRelPath, largeChange });
           diffsToWrite.push({ diffRelPath, content: truncated });

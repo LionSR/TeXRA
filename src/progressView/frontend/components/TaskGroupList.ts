@@ -54,6 +54,7 @@ const PLACEHOLDER_HTML = getGettingStartedHtml(
 // Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
 // Real null bytes in the input are stripped first so the sentinel is unambiguous.
 const ERASE_SENTINEL = '\x00';
+const ANSI_ERASE_LINE_PATTERN = new RegExp(String.raw`\u001B\[\d*K`, 'g');
 
 /** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
 function processTerminalText(text: string): string {
@@ -61,13 +62,13 @@ function processTerminalText(text: string): string {
   // Then replace ANSI erase-line escapes (\x1b[K, \x1b[0K, \x1b[2K, …) with it
   // before stripping all ANSI so the overwrite loop can honour them: an erase clears
   // the line from that column onward instead of preserving the stale tail characters.
-  // eslint-disable-next-line no-control-regex
+
   const preprocessed = text
     .split(ERASE_SENTINEL)
     .join('')
-    .replace(/\x1b\[\d*K/g, ERASE_SENTINEL);
+    .replaceAll(ANSI_ERASE_LINE_PATTERN, ERASE_SENTINEL);
   return stripAnsi(preprocessed)
-    .replace(/\r\n/g, '\n')
+    .replaceAll('\r\n', '\n')
     .split('\n')
     .map((line) => {
       const segs = line.split('\r');
