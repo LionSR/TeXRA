@@ -16,21 +16,13 @@ function buildConfig(
   supportsReasoning: boolean,
 ): ModelConfig {
   return {
-    name: fullName,
-    label: fullName,
     fullName,
-    shortName: fullName,
     provider: ModelProvider.DEEPSEEK,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsReasoning,
     },
-    openRouterOnly: false,
-  };
+  } as ModelConfig;
 }
 
 function thinkingFor(
@@ -75,9 +67,7 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
   });
 
   it('unlisted fullName is treated as default-ON (matches V4+ convention)', () => {
-    // Documented behavior: unknown DeepSeek fullNames are assumed to default ON,
-    // aligned with the V4 family. Update THINKING_DEFAULT_OFF_FULLNAMES if a new
-    // non-thinking model is added.
+    // Update THINKING_DEFAULT_OFF_FULLNAMES if a new non-thinking model is added.
     assert.equal(thinkingFor('deepseek-future', true), undefined);
     assert.deepEqual(thinkingFor('deepseek-future', false), { type: 'disabled' });
   });
