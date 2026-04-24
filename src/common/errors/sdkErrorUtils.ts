@@ -269,8 +269,8 @@ function detectProvider(err: unknown): string | undefined {
   // canonical API-provider names used by SecretManager / model handlers.
   // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
   // (class name contains "kimi") maps to "moonshot".
-  const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
-    (p) => lowered.includes(p),
+  const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find((p) =>
+    lowered.includes(p),
   );
   if (match === 'kimi') return 'moonshot';
   return match;
@@ -481,15 +481,19 @@ function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
  *  signal. Covers both the direct format and the enveloped format. */
 function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
   if (!isObject(rawErrorBody)) return false;
-  const body = rawErrorBody as { type?: unknown; message?: unknown; error?: unknown };
+  const body = rawErrorBody as {
+    type?: unknown;
+    message?: unknown;
+    error?: unknown;
+  };
   const pick = (v: unknown): { type?: string; message?: string } | undefined =>
     isObject(v)
       ? {
           type: isString((v as { type?: unknown }).type)
-            ? ((v as { type: string }).type)
+            ? (v as { type: string }).type
             : undefined,
           message: isString((v as { message?: unknown }).message)
-            ? ((v as { message: string }).message)
+            ? (v as { message: string }).message
             : undefined,
         }
       : undefined;
