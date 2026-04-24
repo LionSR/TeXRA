@@ -259,6 +259,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   private pendingBackgroundResponseId: string | null = null;
 
+  /**
+   * Guards against concurrent createResponse() calls on the same handler.
+   * The handler's mutable conversation state (previousResponseId, sentMessages,
+   * etc.) assumes a single in-flight turn; concurrent calls would race on
+   * previousResponseId and corrupt the chain. See the class doc ("THREAD SAFETY")
+   * for the contract.
+   */
+  private inFlight = false;
+
   /** DIAGNOSTIC: Pre-flight token estimate for comparison with actual usage */
   private _diagPreFlightTokens: number | null = null;
 
@@ -826,19 +835,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.applyCompactionState();
     }
 
-    // Only chain from completed responses - failed/incomplete can't be used
-    if (response.status === 'completed') {
+    // Only chain from completed responses with usage data. Missing usage
+    // signals streaming instability (see the [TOKEN_DIAG] branch below);
+    // chaining from such responses has produced stale-id and token-count
+    // drift in practice, so treat it the same as a non-completed status.
+    const safeToChain =
+      response.status === 'completed' && !!response.usage?.input_tokens;
+    if (safeToChain) {
       this.previousResponseId = response.id;
     } else {
       const errorDetail =
         response.error?.message ?? response.incomplete_details?.reason;
       this.logger.debug(
-        `Response ${response.id} has status "${response.status}" - not safe for chaining`,
+        `Response ${response.id} not safe for chaining (status="${response.status}", hasUsage=${!!response.usage})`,
         {
           data: {
             responseId: response.id,
             status: response.status,
             hasUsage: !!response.usage,
+            hasInputTokens: !!response.usage?.input_tokens,
             errorDetail,
           },
         },
@@ -1537,6 +1552,26 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
+    // Single-turn contract: concurrent callers would race on previousResponseId
+    // and conversationState. Fail loudly so the caller bug surfaces instead of
+    // corrupting the conversation silently.
+    if (this.inFlight) {
+      throw new Error(
+        'modelHandlerOpenAIResponse.createResponse invoked while a prior ' +
+          'call is still in flight; this handler is single-turn per instance.',
+      );
+    }
+    this.inFlight = true;
+    try {
+      return await this.createResponseImpl(options);
+    } finally {
+      this.inFlight = false;
+    }
+  }
+
+  private async createResponseImpl(
+    options: CreateResponseOptions<ResponseInputItem, OpenAI>,
+  ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     // Clear any stale compaction result from previous attempts (ensures clean state on retries)
     this.compactionResult = undefined;
 
@@ -1998,7 +2033,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this._diagPreFlightTokens = null;
         // Retry internally: the recursive call will compact (shouldCompact()=true)
         // and send all messages without server-side state.
-        return this.createResponse({
+        // Call the impl directly — we're still inside the outer createResponse's
+        // inFlight guard, and the public entry would trip the assertion.
+        return this.createResponseImpl({
           client,
           messages,
           temperature,

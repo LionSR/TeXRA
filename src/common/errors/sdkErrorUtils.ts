@@ -554,9 +554,23 @@ export function isMissingFinishReasonError(err: unknown): boolean {
   return err.message.includes('missing finish_reason');
 }
 
-/** Checks if an error indicates the previous_response_id is invalid (OpenAI Responses API). */
+/**
+ * Checks if an error indicates the previous_response_id is invalid or expired
+ * (OpenAI Responses API).
+ *
+ * OpenAI surfaces this in two shapes depending on how the SDK serializes the
+ * error body:
+ *   1. `... param: 'previous_response_id' ...` (parameter name in message)
+ *   2. `Previous response with id 'resp_...' not found.` (user-facing message)
+ * Both forms indicate the stored id is unusable and the chain must be rebuilt.
+ */
 export function isPreviousResponseIdError(err: unknown): boolean {
-  return err instanceof Error && err.message.includes('previous_response_id');
+  if (!(err instanceof Error)) return false;
+  const m = err.message.toLowerCase();
+  return (
+    m.includes('previous_response_id') ||
+    (m.includes('previous response') && m.includes('not found'))
+  );
 }
 
 /** Builds consistent error data for logging with MESSAGE_TYPES.ERROR. */
