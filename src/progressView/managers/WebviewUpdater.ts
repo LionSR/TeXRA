@@ -345,7 +345,12 @@ export class WebviewUpdater {
     statuses?: Map<string, StreamStatus>,
     theme?: 'dark' | 'light',
   ): StreamTabId {
-    const streams = buildStreamInfos(state, state.agentCategoryFilter);
+    // Send every stream so streamById stays comprehensive for consumers like
+    // BackgroundTasksPanel that need to render cross-filter subagent children
+    // (e.g., tool-use subagents of a workflow orchestrator under a workflow
+    // filter). The frontend still applies `state.agentCategoryFilter` at the
+    // sidebar display layer via `tabStreams$`.
+    const streams = buildStreamInfos(state);
     const streamNames = streams.map((info) => info.name);
 
     // Compute valid active stream (pure query) and persist if changed

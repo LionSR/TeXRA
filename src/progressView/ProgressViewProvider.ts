@@ -441,6 +441,10 @@ export class ProgressViewProvider
     // newly-active tab shows its full log instead of an empty view.
     if (streamId) await this.state.streamLogs.ensureLoaded(streamId);
 
+    // Another setActiveStream may have run while we awaited rehydration;
+    // let the newer call own the webview sync so we don't overwrite it.
+    if (this.state.activeStream !== streamId) return;
+
     this.webviewUpdater.setActiveStream(streamId);
     // Hydrate content (logs, todos, follow-ups, instruction, bypass state) + active-state metadata
     this.eventHandler.syncStreamContent(streamId, { includeActiveState: true });

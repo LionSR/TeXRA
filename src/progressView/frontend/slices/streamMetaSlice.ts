@@ -107,8 +107,13 @@ export const streamMetaHandlers: HandlerRegistry = {
         return prev;
       }
       return create(prev, (draft) => {
-        const draftInfo = draft.streamById.get(stream);
-        if (draftInfo) draftInfo.description = description;
+        const existing = draft.streamById.get(stream);
+        // Replace via set() so the Map value identity changes and selectors
+        // observing streamById propagate the update (mirrors the pattern in
+        // stateUtils.updateParentStreamId).
+        if (existing) {
+          draft.streamById.set(stream, { ...existing, description });
+        }
       });
     });
   },

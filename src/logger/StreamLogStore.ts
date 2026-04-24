@@ -71,8 +71,15 @@ export class StreamLogStore {
     return [...new Set([...this.logs.keys(), ...this.summaries.keys()])];
   }
 
-  ensureStream(streamId: StreamTabId): StreamLog {
-    return this.getOrCreate(streamId);
+  ensureStream(streamId: StreamTabId): void {
+    // No-op if the stream is already known — either resident in `logs` or
+    // released with metadata in `summaries`. Creating a fresh empty log here
+    // for a released stream would shadow the on-disk copy from
+    // `ensureLoaded`, leaving switches to that stream showing an empty view.
+    if (this.logs.has(streamId) || this.summaries.has(streamId)) return;
+    const logInstance = new StreamLog();
+    this.logs.set(streamId, logInstance);
+    this.summaries.set(streamId, {});
   }
 
   /**

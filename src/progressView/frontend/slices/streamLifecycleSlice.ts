@@ -79,8 +79,15 @@ function updateStreamInfo(
     } else if (!existing) {
       mergedStates.set(stream.name, createStreamState(stream.agentCategory));
     }
-    const pending = stream.description ? undefined : takePendingDescription(stream.name);
-    newStreamById.set(stream.name, pending ? { ...stream, description: pending } : stream);
+    // Always drain the pending buffer so stale entries don't linger once the
+    // stream registers, even if the payload already carries a description.
+    // Stream-payload description wins (it's the authoritative value).
+    const pending = takePendingDescription(stream.name);
+    const description = stream.description ?? pending;
+    newStreamById.set(
+      stream.name,
+      description !== stream.description ? { ...stream, description } : stream,
+    );
   }
 
   return create(state, (draft) => {
