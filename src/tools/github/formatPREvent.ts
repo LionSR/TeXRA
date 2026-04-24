@@ -114,7 +114,11 @@ export function formatCheckFailure(
   run: GhCheckRun,
 ): string {
   return wrap(
-    `CI check "${run.name}" on ${slug}#${prNumber} completed with conclusion: ${run.conclusion}.\n\n${run.html_url}`,
+    `The following CI check failed on the PR. Investigate the failure and determine what action (if any) is needed.\n\n` +
+      `PR: ${slug}#${prNumber}\n` +
+      `Check: ${run.name}\n` +
+      `Conclusion: ${run.conclusion}\n` +
+      `Details: ${run.html_url}`,
   );
 }
 
@@ -123,11 +127,16 @@ export function formatCheckFailureSummary(
   prNumber: number,
   runs: GhCheckRun[],
 ): string {
-  const lines = runs.map(
-    (r) => `  • ${r.name} → ${r.conclusion} (${r.html_url})`,
-  );
+  const entries = runs
+    .map(
+      (r) =>
+        `Check: ${r.name}\nConclusion: ${r.conclusion}\nDetails: ${r.html_url}`,
+    )
+    .join('\n\n');
   return wrap(
-    `${runs.length} CI checks on ${slug}#${prNumber} failed:\n${lines.join('\n')}`,
+    `${runs.length} CI checks failed on the PR. Investigate the failures and determine what action (if any) is needed.\n\n` +
+      `PR: ${slug}#${prNumber}\n\n` +
+      entries,
   );
 }
 

@@ -1,5 +1,5 @@
 /**
- * Poll-based {@link AsyncEventSource} for GitHub PR activity.
+ * Poll-based event source for GitHub PR activity.
  *
  * Each subscribed PR maintains per-resource cursors (last-seen ID) and ETags.
  * A single shared timer ticks every `POLL_INTERVAL_MS` and iterates all active
@@ -28,11 +28,11 @@ import {
 } from './formatPREvent';
 import {
   GitHubAuthError,
+  GitHubPermanentError,
   GitHubRateLimitError,
   type ConditionalResponse,
   ghGet,
 } from './githubClient';
-import type { AsyncEventSource, Disposable } from './AsyncEventSource';
 import type {
   GhCheckRun,
   GhIssueComment,
@@ -41,10 +41,21 @@ import type {
   GhReviewComment,
 } from './prTypes';
 
+export interface Disposable {
+  dispose(): void;
+}
+
 const POLL_INTERVAL_MS = 30_000;
 const MAX_CONCURRENT_SUBSCRIPTIONS = 10;
 // Coalesce this many same-kind events in a single tick into a summary.
 const COALESCE_THRESHOLD = 3;
+// Exponential backoff on transient poll failures. After each failure the
+// subscription sleeps for min(BASE * 2^(n-1), MAX) before retrying, so the
+// schedule is 1 min → 2 → 4 → 8 → 16 → 32 → 60 min (cap). After 24 h of
+// continuous failure the subscription is detached.
+const BACKOFF_BASE_MS = 60_000;
+const BACKOFF_MAX_MS = 3_600_000;
+const MAX_FAILURE_DURATION_MS = 24 * 3_600_000;
 // Per-resource id history is trimmed to this many entries so long-running
 // subscriptions don't grow the state map unboundedly.
 const MAX_SEEN_IDS = 1000;
@@ -66,15 +77,6 @@ export function prKeyToString(k: PRKey): string {
   return `${k.owner}/${k.repo}#${k.pullNumber}`;
 }
 
-export function parsePRKey(key: string): PRKey {
-  const match = key.match(/^([^/]+)\/([^#]+)#(\d+)$/);
-  if (!match) throw new Error(`Invalid PR key: ${key}`);
-  return {
-    owner: match[1],
-    repo: match[2],
-    pullNumber: Number(match[3]),
-  };
-}
 
 function withSince(url: string, since: string | undefined): string {
   if (!since) return url;
@@ -150,11 +152,18 @@ interface SubscriptionState {
     reviewComments?: string;
   };
   consecutiveFailures: number;
-  /** Epoch-ms until which this subscription skips polling (rate-limit backoff). */
+  /**
+   * Epoch-ms at which the subscription will be detached if still failing.
+   * Set to `now + MAX_FAILURE_DURATION_MS` on the first transient failure and
+   * extended by the rate-limit duration on each rate-limit hit, so rate-limit
+   * wait time doesn't count toward the 24 h window. Cleared on success.
+   */
+  detachDeadlineMs: number | undefined;
+  /** Epoch-ms until which this subscription skips polling (rate-limit or backoff). */
   skipPollUntilMs: number;
 }
 
-export class PRPollingSource implements AsyncEventSource {
+export class PRPollingSource {
   private readonly logger = new AgentLogger('PRPollingSource');
   private readonly subscriptions = new Map<string, SubscriptionState>();
   private readonly changeListeners = new Set<
@@ -186,8 +195,8 @@ export class PRPollingSource implements AsyncEventSource {
     }
   }
 
-  subscribe(key: string, onEvent: (text: string) => void): Disposable {
-    const pr = parsePRKey(key);
+  subscribe(pr: PRKey, onEvent: (text: string) => void): Disposable {
+    const key = prKeyToString(pr);
     const slug = `${pr.owner}/${pr.repo}`;
 
     let state = this.subscriptions.get(key);
@@ -214,6 +223,7 @@ export class PRPollingSource implements AsyncEventSource {
         etags: {},
         sinceCursors: {},
         consecutiveFailures: 0,
+        detachDeadlineMs: undefined,
         skipPollUntilMs: 0,
       };
       this.subscriptions.set(key, state);
@@ -278,7 +288,12 @@ export class PRPollingSource implements AsyncEventSource {
           try {
             await this.pollOne(state);
             state.consecutiveFailures = 0;
+            state.detachDeadlineMs = undefined;
           } catch (err) {
+            // Capture time of failure (not tick start) so that backoff and
+            // deadline calculations are not shortened by the duration of
+            // pollOne(), which can take many seconds across multiple HTTP calls.
+            const failNow = Date.now();
             if (err instanceof GitHubAuthError) {
               this.logger.warn(
                 `Auth error for ${key}; stopping subscription. ${err.message}`,
@@ -294,30 +309,88 @@ export class PRPollingSource implements AsyncEventSource {
               this.subscriptions.delete(key);
               this.notifyKeysChanged();
               bus.emit('githubTokenInvalid', { message: err.message });
+            } else if (err instanceof GitHubPermanentError) {
+              this.logger.warn(
+                `Permanent error for ${key} (HTTP ${err.status}); stopping subscription. ${err.message}`,
+              );
+              this.emit(
+                state,
+                formatSubscriptionError(
+                  state.slug,
+                  state.pr.pullNumber,
+                  err.message,
+                ),
+              );
+              this.subscriptions.delete(key);
+              this.notifyKeysChanged();
             } else if (err instanceof GitHubRateLimitError) {
-              // Rate limiting is a transient, expected condition; don't let
-              // it inflate consecutiveFailures (which trips the
-              // "halted after repeated failures" auto-unsubscribe).
-              state.skipPollUntilMs = err.resetAt * 1000;
-              this.logger.warn(
-                `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
-              );
-            } else {
-              state.consecutiveFailures += 1;
-              this.logger.warn(
-                `Poll failed for ${key} (${state.consecutiveFailures} in a row): ${String(err)}`,
-              );
-              if (state.consecutiveFailures >= 5) {
+              const rateLimitEndsAt = err.resetAt * 1000;
+              // If the detach deadline has already passed, treat this like any
+              // other terminal failure rather than letting the rate-limit
+              // extension keep the slot alive beyond the 24 h window.
+              if (
+                state.detachDeadlineMs !== undefined &&
+                failNow >= state.detachDeadlineMs
+              ) {
+                this.logger.warn(
+                  `Rate limited while polling ${key} and detach deadline already passed; stopping subscription.`,
+                );
                 this.emit(
                   state,
                   formatSubscriptionError(
                     state.slug,
                     state.pr.pullNumber,
-                    `repeated failures: ${String(err)}`,
+                    `unreachable for over 24 h; detaching`,
                   ),
                 );
                 this.subscriptions.delete(key);
                 this.notifyKeysChanged();
+              } else {
+                // Rate limiting is a transient condition; skip until the reset
+                // time without touching consecutiveFailures so a rate-limit
+                // burst doesn't inflate the backoff exponent. Extend (not reset)
+                // the detach deadline by the rate-limit duration so time spent
+                // waiting on rate limits doesn't erode the 24 h failure window.
+                if (state.detachDeadlineMs !== undefined) {
+                  state.detachDeadlineMs += Math.max(0, rateLimitEndsAt - failNow);
+                }
+                state.skipPollUntilMs = rateLimitEndsAt;
+                this.logger.warn(
+                  `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
+                );
+              }
+            } else {
+              state.detachDeadlineMs ??= failNow + MAX_FAILURE_DURATION_MS;
+              state.consecutiveFailures += 1;
+              const backoffMs = Math.min(
+                BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
+                BACKOFF_MAX_MS,
+              );
+              // Jitter ±20% to spread retries when many subscriptions fail
+              // simultaneously (e.g. network outage), preventing thundering herd.
+              const jitter = 0.8 + Math.random() * 0.4;
+              const actualDelayMs = Math.round(backoffMs * jitter);
+              state.skipPollUntilMs = failNow + actualDelayMs;
+              if (failNow >= state.detachDeadlineMs) {
+                this.logger.warn(
+                  `Poll failed for ${key} (failure #${state.consecutiveFailures}); ` +
+                    `detach deadline reached, stopping subscription: ${String(err)}`,
+                );
+                this.emit(
+                  state,
+                  formatSubscriptionError(
+                    state.slug,
+                    state.pr.pullNumber,
+                    `unreachable for over 24 h; detaching`,
+                  ),
+                );
+                this.subscriptions.delete(key);
+                this.notifyKeysChanged();
+              } else {
+                this.logger.warn(
+                  `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
+                    `retrying in ${Math.round(actualDelayMs / 1000)}s): ${String(err)}`,
+                );
               }
             }
           }
