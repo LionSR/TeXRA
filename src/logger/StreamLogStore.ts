@@ -405,18 +405,35 @@ export class StreamLogStore {
   async flush(): Promise<void> {
     if (!this.loaded) return;
 
-    if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-      const resolve = this.pendingResolve;
-      this.pendingResolve = null;
-      await this.executeWrite(resolve);
-      return;
+    // Drain iteratively: executeWrite may re-queue streams that are still
+    // rehydrating (`pendingLoads`) or whose prior load failed. Wait for
+    // those to resolve and then re-run the save, so shutdown doesn't lose
+    // appends that landed on a resumed stream. Bound the loop by the set
+    // of streams that could still make progress — if the only dirty
+    // entries are persistently `loadFailed`, we can't persist them.
+    /* eslint-disable no-await-in-loop */
+    while (true) {
+      if (this.saveTimer !== null) {
+        clearTimeout(this.saveTimer);
+        this.saveTimer = null;
+        const resolve = this.pendingResolve;
+        this.pendingResolve = null;
+        await this.executeWrite(resolve);
+      } else if (this.inFlightWrite) {
+        await this.inFlightWrite;
+      } else if (this.pendingLoads.size > 0) {
+        await Promise.allSettled([...this.pendingLoads.values()]);
+      } else {
+        // No in-flight work. Decide whether anything deferred can still
+        // be persisted in another save cycle.
+        const canRetry = [...this.dirtyStreamIds].some(
+          (id) => !this.loadFailed.has(id),
+        );
+        if (!canRetry) return;
+        await this.executeWrite(null);
+      }
     }
-
-    if (this.inFlightWrite) {
-      await this.inFlightWrite;
-    }
+    /* eslint-enable no-await-in-loop */
   }
 
   private getOrCreate(streamId: StreamTabId): StreamLog {
