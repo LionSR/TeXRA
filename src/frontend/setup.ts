@@ -299,10 +299,10 @@ async function mergeNewModelsIfCustomized(
     }
   }
 
-  // One-time strip for users upgrading past version 15:
-  // remove any enabled model that the registry now marks as deprecated. The
-  // Settings view still exposes deprecated models for deliberate opt-in, but
-  // upgraded users should not keep old defaults in normal model dropdowns.
+  // One-time strip for users upgrading past version 15: remove any currently
+  // enabled model that the registry now marks as deprecated. This can remove
+  // previous deliberate opt-ins during the upgrade so deprecated models do not
+  // stay in normal dropdowns by default; users can re-enable them from Settings.
   if ((previousVersion ?? 0) < 15) {
     for (const model of currentModels) {
       if (isDeprecatedModel(model)) strippedSet.add(model);
