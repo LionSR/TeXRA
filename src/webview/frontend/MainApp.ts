@@ -178,12 +178,7 @@ export class MainApp extends MainAppBase {
     visible: false,
   });
   private readonly gettingStartedVisible = signal(false);
-  private readonly orchestratorBannerDismissed = signal(false);
-  private readonly orchestratorBannerVisible$ = new Signal.Computed(() =>
-    this.isSelectedAgentOrchestrator()
-      ? !this.orchestratorBannerDismissed.get()
-      : false,
-  );
+  private readonly sessionHintDismissed = signal(true);
   private readonly loginBannerVisible = signal(false);
   private readonly instructionPlaceholder = signal(
     ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
@@ -336,7 +331,10 @@ export class MainApp extends MainAppBase {
       this.gettingStartedVisible.set(false);
     },
     [MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER]: () => {
-      this.orchestratorBannerDismissed.set(true);
+      this.sessionHintDismissed.set(true);
+    },
+    [MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER]: () => {
+      this.sessionHintDismissed.set(false);
     },
     [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: () => {
       this.loginBannerVisible.set(true);
@@ -1700,9 +1698,9 @@ export class MainApp extends MainAppBase {
     this.gettingStartedVisible.set(false);
   }
 
-  private handleComponentDismissOrchestrator(): void {
+  private handleComponentDismissSessionHint(): void {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER);
-    this.orchestratorBannerDismissed.set(true);
+    this.sessionHintDismissed.set(true);
   }
 
   private handleComponentLatexDiffsToggle(
@@ -1972,6 +1970,7 @@ export class MainApp extends MainAppBase {
           </div>
 
           <instruction-panel
+            .showSessionHint=${!this.sessionHintDismissed.get()}
             @session-type-change=${this.handleComponentSessionTypeChange}
             @agent-change=${this.handleComponentAgentChange}
             @model-change=${this.handleComponentModelChange}
@@ -1982,6 +1981,7 @@ export class MainApp extends MainAppBase {
             @agent-settings=${this.handleComponentAgentSettings}
             @model-settings=${this.handleComponentModelSettings}
             @focus-instruction=${this.handleComponentFocusInstruction}
+            @dismiss-session-hint=${this.handleComponentDismissSessionHint}
           ></instruction-panel>
 
           <banner-group
@@ -2001,7 +2001,6 @@ export class MainApp extends MainAppBase {
             }}
             .gettingStartedVisible=${this.gettingStartedVisible.get()}
             .loginBannerVisible=${this.loginBannerVisible.get()}
-            .orchestratorVisible=${this.orchestratorBannerVisible$.get()}
             @api-key-action=${this.handleComponentApiKeyAction}
             @agent-config-action=${this.handleComponentAgentConfigAction}
             @dependency-dismiss=${this.handleComponentDependencyDismiss}
@@ -2011,7 +2010,6 @@ export class MainApp extends MainAppBase {
             @dismiss-login=${this.handleComponentDismissLogin}
             @dismiss-getting-started=${this
               .handleComponentDismissGettingStarted}
-            @dismiss-orchestrator=${this.handleComponentDismissOrchestrator}
           ></banner-group>
         </div>
 
