@@ -14,7 +14,7 @@ function buildAgentTooltip(opt: AgentOptionData): string {
 
   if (opt.isOrchestrator)
     hints.push(
-      'Plans a pipeline of specialized agents. Name them in your instruction to steer delegation.',
+      'Plans a pipeline of specialized agents. Ask it which agent to use, or name agents in your instruction to steer delegation.',
     );
   if (opt.isRemote) hints.push(properties.remote.hint);
   if (opt.isCustom) hints.push(properties.custom.hint);
