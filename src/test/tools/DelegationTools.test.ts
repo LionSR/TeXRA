@@ -1,4 +1,4 @@
-// Third-party imports
+// Node.js built-in imports
 import * as assert from 'assert';
 
 // Platform imports
@@ -58,7 +58,7 @@ describe('DelegationTools', () => {
     assert.strictEqual(result?.summary, 'Rejected oversized library.bib');
     assert.strictEqual(
       result?.error,
-      'library.bib is 101KB, over the 100KB limit. Call extract_bib_entries first if citations are needed, then re-propose without library.bib.',
+      'library.bib is 102401 bytes (100.0 KB), over the 102400 byte (100.0 KB) limit. Call extract_bib_entries first if citations are needed, then re-propose without library.bib.',
     );
     assert.strictEqual(result?.output, result?.error);
     assert.deepStrictEqual(result?.diagnostics, {

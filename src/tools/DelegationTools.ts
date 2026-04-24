@@ -51,6 +51,7 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { delegationAllowed } from '@shared/constants/delegationPolicy';
+import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
 import type { ToolResult } from '@tools/result';
@@ -646,10 +647,6 @@ function isLibraryBib(filePath: string): boolean {
   return basename?.toLowerCase() === LARGE_LIBRARY_BIB_NAME;
 }
 
-function formatBytes(bytes: number): string {
-  return `${Math.ceil(bytes / 1024)}KB`;
-}
-
 function getAuxiliaryFiles(input: WorkflowAgentInput): string[] {
   return [input.auxiliaryFile, ...input.auxiliaryFiles].filter(
     (path): path is string => typeof path === 'string' && path.length > 0,
@@ -666,7 +663,7 @@ export async function rejectOversizedLibraryBibAuxiliary(
     const stats = await WorkspaceFS.stat(libraryBib);
     if (stats.size <= LARGE_LIBRARY_BIB_LIMIT_BYTES) continue;
 
-    const message = `${libraryBib} is ${formatBytes(stats.size)}, over the ${formatBytes(LARGE_LIBRARY_BIB_LIMIT_BYTES)} limit. Call extract_bib_entries first if citations are needed, then re-propose without ${LARGE_LIBRARY_BIB_NAME}.`;
+    const message = `${libraryBib} is ${stats.size} bytes (${formatBytes(stats.size)}), over the ${LARGE_LIBRARY_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_LIBRARY_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without ${LARGE_LIBRARY_BIB_NAME}.`;
     return {
       summary: `Rejected oversized ${LARGE_LIBRARY_BIB_NAME}`,
       error: message,
