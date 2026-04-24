@@ -10,11 +10,11 @@ import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
+import { CopyButtonController } from '@shared/controllers';
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - controllers
-import { CopyButtonController } from '@shared/controllers';
 
 // Local imports - formatter helpers
 import { formatTimestamp } from '../formatters/timestampUtils';

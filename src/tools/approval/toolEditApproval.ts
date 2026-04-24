@@ -6,10 +6,10 @@ import {
 } from 'diff-match-patch';
 
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getConfig } from '@agent/core/config';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
 import { type LineChanges, type ToolResult } from '@tools/result';
-import { getConfig } from '@agent/core/config';
 import { WorkspaceFS } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
 

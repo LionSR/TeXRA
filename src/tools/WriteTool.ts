@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Internal imports
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
 import { ToolResult } from '@tools/result';
@@ -14,7 +15,6 @@ import {
   resolveAndFormat,
   parseWorkingDirectory,
 } from '@tools/utils';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
