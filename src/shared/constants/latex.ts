@@ -94,7 +94,7 @@ export const PDFLATEX_INSTALL_GUIDE: Guide = {
     '  brew install texlive\n\n' +
     '"brew" requires Homebrew (https://brew.sh), a free\n' +
     'macOS package manager. This is the lean TeX Live\n' +
-    'distribution without MacTeX\'s GUI apps.\n\n' +
+    "distribution without MacTeX's GUI apps.\n\n" +
     'Alternatives:\n' +
     '  brew install --cask mactex-no-gui   (MacTeX without GUI apps)\n' +
     '  brew install --cask mactex          (full MacTeX, ~4 GB)\n' +
