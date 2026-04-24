@@ -162,9 +162,9 @@ export const ONBOARDING_PLACEHOLDERS = {
     'Use polish on the intro, then have review audit the math.',
     'Run correct across the paper, then have review check every derivation.',
     'Leave blank — the orchestrator will plan the pipeline for you.',
-    'Ask the orchestrator which agent to use for your lit review.',
-    'Ask which agent should tighten the conclusion — it picks and dispatches.',
-    'Ask the orchestrator what to run on the methodology section.',
+    'Ask the orchestrator which agent to use for your literature review.',
+    'Ask which agent should tighten the conclusion — the orchestrator picks and dispatches.',
+    'Ask the orchestrator which agent should work on the methodology section.',
   ],
 } satisfies Record<SessionType | 'orchestrator', string[]>;
 
