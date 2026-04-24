@@ -16,6 +16,11 @@ export interface ToolFileInteractionContext {
   agentName?: string;
   /** Working directory override for tool calls (e.g. a git worktree path). */
   workingDirectory?: string;
+  /**
+   * Delegation depth of the agent executing this tool call. 0 for root (user-initiated),
+   * N for an agent N levels deep. Read by delegation tools to compute the child's depth.
+   */
+  delegationDepth?: number;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;

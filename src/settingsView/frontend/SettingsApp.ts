@@ -60,6 +60,7 @@ import {
   DEFAULT_GIT_MARK_COMMITS,
 } from '@shared/constants/git';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
+import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolicy';
 
 // Local imports - settings view
 import type { AgentCategory } from '@shared/schemas/agent';
@@ -185,6 +186,9 @@ export class SettingsApp extends SettingsAppBase {
   private readonly reliabilitySettings = signal<NumberVscodeSetting[]>([]);
   private readonly allowOrchestratorKill = signal(true);
   private readonly detachSubagentsOnStop = signal(false);
+  private readonly nestedDelegationMaxDepth = signal<number>(
+    NESTED_DELEGATION_DEPTH_RANGE.default,
+  );
 
   // Approval settings state
   private readonly bashApprovalEnabled = signal(true);
@@ -346,6 +350,7 @@ export class SettingsApp extends SettingsAppBase {
         this.reliabilitySettings.set(data.reliabilitySettings);
         this.allowOrchestratorKill.set(data.allowOrchestratorKill);
         this.detachSubagentsOnStop.set(data.detachSubagentsOnStop);
+        this.nestedDelegationMaxDepth.set(data.nestedDelegationMaxDepth);
         return;
       }
 
@@ -603,6 +608,10 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleDetachSubagentsOnStopToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
+  );
+
+  private handleNestedDelegationMaxDepthChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH,
   );
 
   private handleApplyAgentModePreset = forwardDetail(
@@ -879,12 +888,15 @@ export class SettingsApp extends SettingsAppBase {
               .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
               .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
               .worktreeSupport=${this.gitWorktreeSupport.get()}
+              .nestedDelegationMaxDepth=${this.nestedDelegationMaxDepth.get()}
               @super-yolo-toggle=${this.handleSuperYoloToggle}
               @allow-orchestrator-kill-toggle=${this
                 .handleAllowOrchestratorKillToggle}
               @detach-subagents-on-stop-toggle=${this
                 .handleDetachSubagentsOnStopToggle}
               @worktree-support-toggle=${this.handleWorktreeSupportToggle}
+              @nested-delegation-max-depth-change=${this
+                .handleNestedDelegationMaxDepthChange}
               @reliability-setting-change=${this.handleSetProviderVscodeSetting}
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
