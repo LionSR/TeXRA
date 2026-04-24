@@ -58,8 +58,12 @@ function normalizeAgentSettingInput(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) {
     return input;
   }
-  const { agentType, maxRounds, xmlStructureMode: _xmlStructureMode, ...rest } =
-    input as Record<string, unknown>;
+  const {
+    agentType,
+    maxRounds,
+    xmlStructureMode: _xmlStructureMode,
+    ...rest
+  } = input as Record<string, unknown>;
 
   // Migrate legacy maxRounds → rounds
   if (maxRounds !== undefined && rest.rounds === undefined) {
