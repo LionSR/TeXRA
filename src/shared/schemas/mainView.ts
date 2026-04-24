@@ -555,6 +555,10 @@ export const HideGettingStartedBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER),
 });
 
+export const ShowOrchestratorBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER),
+});
+
 export const HideOrchestratorBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER),
 });
@@ -654,6 +658,7 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   HideDependencyBannerMessageSchema,
   ShowGettingStartedBannerMessageSchema,
   HideGettingStartedBannerMessageSchema,
+  ShowOrchestratorBannerMessageSchema,
   HideOrchestratorBannerMessageSchema,
   ShowLoginBannerMessageSchema,
   HideLoginBannerMessageSchema,
