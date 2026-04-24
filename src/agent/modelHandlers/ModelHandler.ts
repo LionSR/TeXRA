@@ -8,6 +8,7 @@ import {
   type ModelCapabilities,
   ReasoningEffort,
 } from 'llm-zoo';
+import { platform } from '@platform/platform';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import type {
@@ -23,13 +24,12 @@ import { MAX_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 
 // Local imports - platform
-import { platform } from '@platform/platform';
 
 // Local imports - model
+import { AgentLogger } from '@logger/AgentLogger';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - tools

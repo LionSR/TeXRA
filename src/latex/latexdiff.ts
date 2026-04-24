@@ -3,11 +3,11 @@ import * as path from 'path';
 import { z } from 'zod';
 
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
-import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@agent/core/logger';
+import { getConfig } from '@agent/core/config';
+import { formatError, toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
-import { getConfig } from '@agent/core/config';
 import { executeCommand } from '@utils/system';
 import { runLatexFormatter } from './texFormatter';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';

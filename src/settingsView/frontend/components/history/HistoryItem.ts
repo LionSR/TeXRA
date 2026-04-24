@@ -12,13 +12,13 @@ import Mark from 'mark.js';
 
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import {
   badgeStyles,
   codiconStyles,
   commonViewStyles,
   designTokens,
 } from '@shared/styles';
+import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';

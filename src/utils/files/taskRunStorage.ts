@@ -2,9 +2,9 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
+import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import {
   AgentFileLocationSchema,
   ExternalFileLocationSchema,

@@ -386,8 +386,8 @@ export function stripCriticizeAnnotations(content: string): {
     return '';
   };
   const out = content
-    .replace(CRITICIZE_WHOLE_LINE_RE, tally)
-    .replace(CRITICIZE_INLINE_RE, tally);
+    .replaceAll(CRITICIZE_WHOLE_LINE_RE, tally)
+    .replaceAll(CRITICIZE_INLINE_RE, tally);
   return { content: out, count };
 }
 
