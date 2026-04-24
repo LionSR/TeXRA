@@ -88,8 +88,7 @@ import { generateExecutionId } from '@utils/core/executionId';
 const LOG_CHANNEL = 'DelegationTools';
 logger.initialize(LOG_CHANNEL);
 
-const LARGE_LIBRARY_BIB_LIMIT_BYTES = 100 * 1024;
-const LARGE_LIBRARY_BIB_NAME = 'library.bib';
+const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
 
 // ============================================================================
 // Subagent delivery state tracking
@@ -642,38 +641,43 @@ const WorkflowAgentInputSchema = z.object({
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
-function isLibraryBib(filePath: string): boolean {
+function isBibFile(filePath: string): boolean {
   const basename = filePath.replaceAll('\\', '/').split('/').at(-1);
-  return basename?.toLowerCase() === LARGE_LIBRARY_BIB_NAME;
+  return basename?.toLowerCase().endsWith('.bib') ?? false;
 }
 
-function getAuxiliaryFiles(input: WorkflowAgentInput): string[] {
-  return [input.auxiliaryFile, ...input.auxiliaryFiles].filter(
+function getReferenceAndAuxiliaryFiles(input: WorkflowAgentInput): string[] {
+  return [
+    input.referenceFile,
+    ...input.referenceFiles,
+    input.auxiliaryFile,
+    ...input.auxiliaryFiles,
+  ].filter(
     (path): path is string => typeof path === 'string' && path.length > 0,
   );
 }
 
-/** Reject workflow proposals that attach an oversized default bibliography. */
-export async function rejectOversizedLibraryBibAuxiliary(
+/** Reject workflow proposals that attach oversized bibliography files. */
+export async function rejectOversizedBibAttachments(
   input: WorkflowAgentInput,
 ): Promise<ToolResult | null> {
-  const libraryBibFiles = getAuxiliaryFiles(input).filter(isLibraryBib);
+  const bibFiles = getReferenceAndAuxiliaryFiles(input).filter(isBibFile);
 
-  for (const libraryBib of libraryBibFiles) {
-    const stats = await WorkspaceFS.stat(libraryBib);
-    if (stats.size <= LARGE_LIBRARY_BIB_LIMIT_BYTES) continue;
+  for (const bibFile of bibFiles) {
+    const stats = await WorkspaceFS.stat(bibFile);
+    if (stats.size <= LARGE_BIB_LIMIT_BYTES) continue;
 
-    const message = `${libraryBib} is ${stats.size} bytes (${formatBytes(stats.size)}), over the ${LARGE_LIBRARY_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_LIBRARY_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without ${LARGE_LIBRARY_BIB_NAME}.`;
+    const message = `${bibFile} is ${stats.size} bytes (${formatBytes(stats.size)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
     return {
-      summary: `Rejected oversized ${LARGE_LIBRARY_BIB_NAME}`,
+      summary: `Rejected oversized BibTeX attachment`,
       error: message,
       output: message,
       isError: true,
       diagnostics: {
-        type: 'oversized_library_bib',
-        path: libraryBib,
+        type: 'oversized_bib_attachment',
+        path: bibFile,
         sizeBytes: stats.size,
-        limitBytes: LARGE_LIBRARY_BIB_LIMIT_BYTES,
+        limitBytes: LARGE_BIB_LIMIT_BYTES,
       },
     };
   }
@@ -753,8 +757,8 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
-    const libraryBibRejection = await rejectOversizedLibraryBibAuxiliary(input);
-    if (libraryBibRejection) return libraryBibRejection;
+    const oversizedBibRejection = await rejectOversizedBibAttachments(input);
+    if (oversizedBibRejection) return oversizedBibRejection;
 
     // Extraction flags map to toolConfig, flowing through the proposal UI and
     // into MediaExtractionNode → LatexMediaManager at runtime.
