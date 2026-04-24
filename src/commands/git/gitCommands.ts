@@ -266,11 +266,43 @@ function buildTokenResult(token: string): {
 
 const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
+/**
+ * Platform-specific install commands surfaced when `git` is missing from PATH.
+ * Mac prefers Homebrew; Windows prefers winget; Linux uses apt.
+ */
+const GIT_INSTALL_COMMANDS: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: 'brew install git',
+  win32: 'winget install --id Git.Git -e',
+  linux: 'sudo apt-get install git',
+};
+
+async function promptGitMissing(): Promise<void> {
+  const command = GIT_INSTALL_COMMANDS[process.platform] ?? null;
+  const message = command
+    ? `Git not found in PATH. Install it with:\n  ${command}`
+    : 'Git not found in PATH. See https://git-scm.com/downloads to install it.';
+  const actions = command
+    ? (['Copy Command', 'Run in Terminal'] as const)
+    : (['Open git-scm.com'] as const);
+  const selected = await vscode.window.showErrorMessage(message, ...actions);
+  if (selected === 'Copy Command' && command) {
+    await vscode.env.clipboard.writeText(command);
+  } else if (selected === 'Run in Terminal' && command) {
+    const terminal = vscode.window.createTerminal('Install Git');
+    terminal.show();
+    terminal.sendText(command);
+  } else if (selected === 'Open git-scm.com') {
+    void vscode.env.openExternal(
+      vscode.Uri.parse('https://git-scm.com/downloads'),
+    );
+  }
+}
+
 async function checkClonePreconditions(
   workspacePath: string,
 ): Promise<boolean> {
   if (execaSync('git', ['--version'], { reject: false }).exitCode !== 0) {
-    vscode.window.showErrorMessage('Git not found in PATH.');
+    await promptGitMissing();
     return false;
   }
 
