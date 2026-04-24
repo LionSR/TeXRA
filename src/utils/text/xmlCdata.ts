@@ -9,6 +9,13 @@
  */
 const CDATA_PATTERN = /<!\[CDATA\[([\s\S]*?)\]\]>/g;
 
+function isCdataWrapped(content: string): boolean {
+  return (
+    content.trimStart().startsWith('<![CDATA[') &&
+    content.trimEnd().endsWith(']]>')
+  );
+}
+
 /**
  * Remove CDATA sections from content.
  * Centralized function to eliminate duplicate CDATA removal patterns.
@@ -17,7 +24,12 @@ const CDATA_PATTERN = /<!\[CDATA\[([\s\S]*?)\]\]>/g;
  * @returns Content with CDATA wrappers removed
  */
 export function removeCDATA(content: string): string {
-  return content.replaceAll(CDATA_PATTERN, '$1');
+  let current = content;
+  while (true) {
+    const cleaned = current.replaceAll(CDATA_PATTERN, '$1');
+    if (cleaned === current) return cleaned;
+    current = cleaned;
+  }
 }
 
 /**
@@ -26,7 +38,11 @@ export function removeCDATA(content: string): string {
 export function addCdataToTags(xmlData: string, tags: string[]): string {
   return tags.reduce((result, tag) => {
     const pattern = new RegExp(`(<${tag}>)(.*?)(</${tag}>)`, 'gs');
-    return result.replace(pattern, '$1<![CDATA[$2]]>$3');
+    return result.replace(pattern, (_, openTag, body, closeTag) =>
+      isCdataWrapped(body)
+        ? `${openTag}${body}${closeTag}`
+        : `${openTag}<![CDATA[${body}]]>${closeTag}`,
+    );
   }, xmlData);
 }
 
@@ -42,6 +58,10 @@ export function addCdataToTagsMultiple(
       `(<${tag}(?:\\s+[^>]*)?>)(.*?)(</${tag}>)`,
       'gs',
     );
-    return result.replace(pattern, '$1<![CDATA[$2]]>$3');
+    return result.replace(pattern, (_, openTag, body, closeTag) =>
+      isCdataWrapped(body)
+        ? `${openTag}${body}${closeTag}`
+        : `${openTag}<![CDATA[${body}]]>${closeTag}`,
+    );
   }, xmlData);
 }
