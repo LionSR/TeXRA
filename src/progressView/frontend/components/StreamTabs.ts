@@ -403,7 +403,9 @@ export class StreamTab extends LitElement {
               class="tab-expand"
               data-stream=${stream.name}
               data-action="toggle-children"
-              title=${this.expanded ? 'Collapse child streams' : childStreamLabel}
+              title=${this.expanded
+                ? 'Collapse child streams'
+                : childStreamLabel}
               aria-expanded=${this.expanded ? 'true' : 'false'}
             >
               <i class="codicon codicon-chevron-right"></i>
