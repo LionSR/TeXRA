@@ -20,6 +20,7 @@ import {
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
+import { delegationAllowed } from '@shared/constants/delegationPolicy';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   getHandle,
@@ -209,18 +210,18 @@ interface ApprovalMeta {
  * The tool-use flow already filters delegation tools from the toolset when
  * the cap is reached, but if a rogue agent calls through anyway (fresh or
  * via the execution_id resume path) we refuse here with a clear error so
- * the LLM can pivot. The root orchestrator (depth 0) is never blocked.
+ * the LLM can pivot.
+ *
+ * Delegates to the same `delegationAllowed` predicate the tool filter
+ * uses so NaN / sentinel depths behave identically at both gates.
  */
 function depthGateError(parentDelegationDepth: number): ToolResult | null {
-  if (parentDelegationDepth <= 0) return null;
-  const { maxDepth } = readNestedDelegationConfig();
-  if (parentDelegationDepth >= maxDepth) {
-    return {
-      error: `Delegation depth cap reached (max depth ${maxDepth}). Raise Settings → Multi-Agent → Max delegation depth, or complete this task directly without delegating.`,
-      isError: true,
-    };
-  }
-  return null;
+  const config = readNestedDelegationConfig();
+  if (delegationAllowed(parentDelegationDepth, config)) return null;
+  return {
+    error: `Delegation depth cap reached (max depth ${config.maxDepth}). Raise Settings → Multi-Agent → Max delegation depth, or complete this task directly without delegating.`,
+    isError: true,
+  };
 }
 
 /**

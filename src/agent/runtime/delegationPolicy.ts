@@ -34,6 +34,22 @@ export function readNestedDelegationConfig(): NestedDelegationConfig {
 const UNKNOWN_DEPTH_SENTINEL = Number.MAX_SAFE_INTEGER;
 
 /**
+ * Read meta without letting filesystem/IO errors bubble up — safeParse
+ * already handles malformed JSON by returning null, but the underlying
+ * storage layer can throw on permission or IO failures. Resume must
+ * not hard-fail on a single corrupted ancestor.
+ */
+async function readMetaSafely(
+  executionId: ExecutionId,
+): Promise<ExecutionMeta | null | 'error'> {
+  try {
+    return await getExecutionStore(executionId).readMeta();
+  } catch {
+    return 'error';
+  }
+}
+
+/**
  * Recover the delegation depth for a persisted execution on resume, where
  * the in-memory depth that executeAgent would normally carry is unavailable.
  *
@@ -43,14 +59,15 @@ const UNKNOWN_DEPTH_SENTINEL = Number.MAX_SAFE_INTEGER;
  * field persisted yet.
  *
  * Returns 0 when no parent is stored (root execution) or the persisted
- * depth is 0. Returns `UNKNOWN_DEPTH_SENTINEL` when the chain walk encounters
- * a missing ancestor mid-chain — we can't safely undercount, so callers
- * will see it as past the cap.
+ * depth is 0. Returns `UNKNOWN_DEPTH_SENTINEL` when the chain walk
+ * encounters a missing or unreadable ancestor mid-chain — we can't safely
+ * undercount, so callers will see it as past the cap.
  */
 export async function computeDelegationDepthFromStorage(
   executionId: ExecutionId,
 ): Promise<number> {
-  const rootMeta = await getExecutionStore(executionId).readMeta();
+  const rootMeta = await readMetaSafely(executionId);
+  if (rootMeta === 'error') return UNKNOWN_DEPTH_SENTINEL;
   if (!rootMeta) return 0;
   if (rootMeta.delegationDepth !== undefined) return rootMeta.delegationDepth;
   if (!rootMeta.parentExecutionId) return 0;
@@ -63,12 +80,11 @@ export async function computeDelegationDepthFromStorage(
   const MAX_WALK = 32;
   while (current && !visited.has(current) && depth < MAX_WALK) {
     visited.add(current);
-    const meta: ExecutionMeta | null = await getExecutionStore(
-      current,
-    ).readMeta();
-    // Ancestor meta missing or corrupted: we can't tell how deep we are.
-    // Return a sentinel that fails the gate for any configured cap.
-    if (!meta) return UNKNOWN_DEPTH_SENTINEL;
+    const meta = await readMetaSafely(current);
+    // Ancestor meta missing, corrupted, or unreadable: we can't tell how
+    // deep we are. Return a sentinel that fails the gate for any configured
+    // cap. Preserves resumability; conservatively blocks delegation.
+    if (meta === 'error' || meta === null) return UNKNOWN_DEPTH_SENTINEL;
     if (meta.delegationDepth !== undefined) return meta.delegationDepth + depth;
     const parent: ExecutionId | undefined = meta.parentExecutionId;
     if (!parent) break;
