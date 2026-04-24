@@ -10,6 +10,14 @@ import type { DeepSeekToolCall } from './types/IModelHandler';
 // already handles via rawUsage.prompt_cache_hit_tokens in normalizeUsage().
 
 /**
+ * DeepSeek fullNames whose API default is thinking OFF.
+ * All other recognized DeepSeek models default thinking ON, including:
+ * - deepseek-reasoner (legacy V3.2 thinking alias)
+ * - deepseek-v4-flash, deepseek-v4-pro (V4 series, thinking default per DeepSeek docs)
+ */
+const THINKING_DEFAULT_OFF_FULLNAMES = new Set<string>(['deepseek-chat']);
+
+/**
  * Handler for DeepSeek models using OpenAI-compatible API.
  *
  * Supports DeepSeek's thinking mode with tool calls. When thinking mode is enabled:
@@ -66,25 +74,24 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   }
 
   /**
-   * DeepSeek supports thinking mode via:
-   * - model="deepseek-reasoner" (thinking enabled by default)
-   * - model="deepseek-chat" with thinking: {"type": "enabled"}
+   * DeepSeek supports thinking mode via an optional `thinking: {type}` param.
+   * The API default differs per model:
+   * - deepseek-chat (legacy V3.2 non-thinking): default OFF
+   * - deepseek-reasoner (legacy V3.2 thinking alias): default ON
+   * - deepseek-v4-flash, deepseek-v4-pro (V4 series): default ON
+   *
+   * We only send an explicit param when the desired mode differs from the
+   * model's default; otherwise we omit it to stay compatible with providers
+   * that don't understand the field.
    */
   protected override getThinkingParameter():
     | { type: 'enabled' | 'disabled' }
     | undefined {
     const { fullName } = this.config;
-    // deepseek-chat has thinking OFF by default, enable if supportsReasoning
-    if (fullName === 'deepseek-chat' && this.capabilities.supportsReasoning) {
-      return { type: 'enabled' };
-    }
-    // deepseek-reasoner has thinking ON by default, disable if !supportsReasoning
-    if (
-      fullName === 'deepseek-reasoner' &&
-      !this.capabilities.supportsReasoning
-    ) {
-      return { type: 'disabled' };
-    }
+    const defaultsOff = THINKING_DEFAULT_OFF_FULLNAMES.has(fullName);
+    const wantsThinking = this.capabilities.supportsReasoning;
+    if (defaultsOff && wantsThinking) return { type: 'enabled' };
+    if (!defaultsOff && !wantsThinking) return { type: 'disabled' };
     return undefined;
   }
 }
