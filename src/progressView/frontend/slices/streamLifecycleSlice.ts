@@ -101,6 +101,7 @@ function updateStreamInfo(
         draft.streamStates.delete(key);
         draft.streamLogs.delete(key);
         draft.processOutputs.delete(key);
+        draft.followupOptionsByStream.delete(key);
       }
     }
 
@@ -142,11 +143,6 @@ export const streamLifecycleHandlers: HandlerRegistry = {
         draft.activeStreamId = nextActiveStreamId;
         draft.streamFilter = data.agentFilter;
         if (data.streamSort) draft.streamSort = data.streamSort;
-        for (const key of draft.followupOptionsByStream.keys()) {
-          if (!updated.streamById.has(key)) {
-            draft.followupOptionsByStream.delete(key);
-          }
-        }
       }),
     );
   },
@@ -184,11 +180,11 @@ export const streamLifecycleHandlers: HandlerRegistry = {
         draft.streamStates.delete(streamId);
         draft.streamLogs.delete(streamId);
         draft.processOutputs.delete(streamId);
+        draft.followupOptionsByStream.delete(streamId);
         draft.streamById.delete(streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;
         }
-        draft.followupOptionsByStream.delete(streamId);
       }),
     );
   },
@@ -208,8 +204,8 @@ export const streamLifecycleHandlers: HandlerRegistry = {
         draft.streamStates = new Map();
         draft.streamLogs = new Map();
         draft.processOutputs = new Map();
-        draft.activeStreamId = null;
         draft.followupOptionsByStream = new Map();
+        draft.activeStreamId = null;
       }),
     );
   },

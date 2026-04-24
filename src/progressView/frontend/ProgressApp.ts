@@ -67,16 +67,16 @@ import {
   handleDeleteAll,
   handleFileAction,
   handleFilterChange,
+  handleFollowupRequestOptions,
   handleFollowUpChange,
   handleFollowUpClear,
   handleFollowUpPolish,
   handleFollowUpSend,
-  handleFollowupModeChange,
-  handleFollowupRequestOptions,
   handlePermissionAction,
   handleStreamDelete,
   handleStreamSwitch,
   handleToolbarCommand,
+  runCompileFixer,
   sendFollowupCommand,
 } from './eventHandlers';
 import {
@@ -273,11 +273,11 @@ export class ProgressApp extends ProgressAppBase {
   private streamStates$ = select(this.appState, (s) => s.streamStates);
   private streamLogs$ = select(this.appState, (s) => s.streamLogs);
   private activeStreamId$ = select(this.appState, (s) => s.activeStreamId);
+  private processOutputs$ = select(this.appState, (s) => s.processOutputs);
   private followupOptions$ = select(
     this.appState,
     (s) => s.followupOptionsByStream,
   );
-  private processOutputs$ = select(this.appState, (s) => s.processOutputs);
 
   // --- Derived computeds: only re-evaluate when selector inputs propagate ---
 
@@ -398,13 +398,12 @@ export class ProgressApp extends ProgressAppBase {
     const isToolUse = streamState ? isToolUseState(streamState) : false;
     const followupOptions =
       this.followupOptions$.get().get(activeStreamInfo.name) ?? null;
-
     return {
       streamInfo: activeStreamInfo,
       streamState,
-      followupOptions,
       isToolUse,
       hasStreams,
+      followupOptions,
     };
   });
 
@@ -591,8 +590,8 @@ export class ProgressApp extends ProgressAppBase {
         @toolbar-command=${this.onToolbarCommand}
         @permission-action=${this.onPermissionAction}
         @file-action=${this.onFileAction}
+        @compile-fixer-run=${this.onCompileFixerRun}
         @followup-request-options=${this.onFollowupRequestOptions}
-        @followup-mode-change=${this.onFollowupModeChange}
         @followup-setup=${this.onFollowupSetup}
         @followup-run=${this.onFollowupRun}
       ></workflow-stream-content>
@@ -746,11 +745,11 @@ export class ProgressApp extends ProgressAppBase {
   private onFollowUpClear = (): void =>
     handleFollowUpClear(this.getEventHandlerContext());
 
+  private onCompileFixerRun = (): void =>
+    runCompileFixer(this.getEventHandlerContext());
+
   private onFollowupRequestOptions = (): void =>
     handleFollowupRequestOptions(this.getEventHandlerContext());
-
-  private onFollowupModeChange = (e: CustomEvent): void =>
-    handleFollowupModeChange(e, this.getEventHandlerContext());
 
   private onFollowupSetup = (e: CustomEvent): void =>
     sendFollowupCommand(

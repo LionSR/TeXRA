@@ -6,10 +6,10 @@ import {
   type AgentCategoryFilter,
   type ContextState,
   type LogMessageData,
-  type SetFollowupOptionsMessage,
   type StreamState,
   type StreamTabInfo,
   type StreamTabId,
+  type SetFollowupOptionsMessage,
 } from '@shared/schemas';
 import type { StreamSort } from '@shared/streams/streamSort';
 import type { ProcessOutputMap } from './contexts/streamContexts';
@@ -18,7 +18,6 @@ import type { ProcessOutputMap } from './contexts/streamContexts';
 export {
   isToolUseState,
   isWorkflowState,
-  type FollowupMode,
   type StreamState,
   type ToolUseStreamState,
   type ToolUseUIState,
@@ -27,8 +26,6 @@ export {
 
 export type StreamFilter = AgentCategoryFilter;
 export type { ContextState, StreamSort };
-
-/** Followup options derived from schema (minus command/stream fields) */
 export type FollowupOptionsState = Omit<
   SetFollowupOptionsMessage,
   'command' | 'stream'
@@ -64,10 +61,11 @@ export interface ProgressState {
   streamStates: Map<StreamTabId, StreamState>;
   /** Log messages per stream — separated so log appends don't trigger meta context updates */
   streamLogs: Map<StreamTabId, StreamLogs>;
-  followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
   /** Background process outputs per stream — separated so output appends don't trigger meta context updates.
    *  Outer key: streamId, inner key: executionId → { stdout, stderr }. */
   processOutputs: Map<StreamTabId, ProcessOutputMap>;
+  /** Workflow-result follow-up option data, keyed per stream. */
+  followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
 }
 
 /** Return the first stream ID from a streamById Map, or null if empty. */
@@ -85,8 +83,8 @@ export function createInitialState(): ProgressState {
     streamSort: 'time',
     streamStates: new Map(),
     streamLogs: new Map(),
-    followupOptionsByStream: new Map(),
     processOutputs: new Map(),
+    followupOptionsByStream: new Map(),
   };
 }
 

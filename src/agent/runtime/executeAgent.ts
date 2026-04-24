@@ -75,7 +75,11 @@ import {
 } from './executionRegistry';
 import { generateSessionDescription } from './sessionDescription';
 import { getRunStorageService } from './RunStorageService';
-import type { AgentFlowResult, OutputFileSummary } from './AgentFlowResult';
+import type {
+  AgentFlowResult,
+  CompileFailureSummary,
+  OutputFileSummary,
+} from './AgentFlowResult';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -324,6 +328,23 @@ function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
       originalPath: o.lineage?.original?.absolutePath ?? null,
       added: o.diff?.added ?? null,
       removed: o.diff?.removed ?? null,
+    })),
+  );
+}
+
+function toCompileFailureSummaries(
+  roundOutputs: RoundOutput[],
+): CompileFailureSummary[] {
+  return roundOutputs.flatMap((r) =>
+    r.compileFailures.map((failure) => ({
+      round: failure.round,
+      displayName: failure.displayName,
+      outputPath:
+        failure.output.kind === 'external'
+          ? failure.output.absolutePath
+          : failure.output.relativePath,
+      logPath: failure.logRelativePath,
+      logAbsolutePath: failure.log.absolutePath,
     })),
   );
 }
@@ -665,6 +686,7 @@ export async function executeAgent(
           category: 'workflow' as const,
           status: result.status,
           outputs: toOutputSummaries(result.roundOutputs),
+          compileFailures: toCompileFailureSummaries(result.roundOutputs),
           executionId: ctx.executionId,
           streamId,
         };
@@ -727,6 +749,7 @@ export async function executeMergeAgent(
         category: 'workflow' as const,
         status: result.status,
         outputs: toOutputSummaries(result.roundOutputs),
+        compileFailures: toCompileFailureSummaries(result.roundOutputs),
         executionId: ctx.executionId,
         streamId,
       };

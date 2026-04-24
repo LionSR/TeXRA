@@ -5,28 +5,12 @@ import {
   AgentCategorySchema,
   type AgentCategory,
 } from './agent';
-import { OutputFileInfoSchema } from './output';
+import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
 import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
-
-// Followup Mode
-
-export const FOLLOWUP_MODE = {
-  CHAT: 'chat',
-  WORKFLOW: 'workflow',
-  MERGE: 'merge',
-} as const;
-
-export const FollowupModeSchema = z.enum([
-  FOLLOWUP_MODE.CHAT,
-  FOLLOWUP_MODE.WORKFLOW,
-  FOLLOWUP_MODE.MERGE,
-]);
-
-export type FollowupMode = z.infer<typeof FollowupModeSchema>;
 
 // Active Child Info (shared shape for subagent and process badges)
 
@@ -137,7 +121,7 @@ export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
   files: RoundIndexedRecord(OutputFileInfoSchema),
   missingOutputs: RoundIndexedRecord(z.string()),
-  followupMode: FollowupModeSchema.prefault(FOLLOWUP_MODE.CHAT),
+  compileFailures: RoundIndexedRecord(CompileFailureSchema),
 });
 
 export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;

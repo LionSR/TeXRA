@@ -1,6 +1,6 @@
 /**
- * Follow-up handlers: UPDATE_FOLLOW_UP_TEXT, SET_FOLLOWUP_OPTIONS,
- * UPDATE_RECORDING, UPDATE_QUEUED_FOLLOW_UPS.
+ * Follow-up handlers: UPDATE_FOLLOW_UP_TEXT, UPDATE_RECORDING,
+ * UPDATE_QUEUED_FOLLOW_UPS.
  *
  * Owns setActiveStreamRecording helper.
  */
@@ -72,26 +72,21 @@ export const followUpHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING]: (data, ctx) =>
     setActiveStreamRecording(ctx, data.status === 'started'),
 
-  [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
-    const { command: _command, stream, ...options } = data;
-    if (!stream) {
-      console.warn('SET_FOLLOWUP_OPTIONS missing stream ID.', { data });
-      return;
-    }
-    // Guard: ignore late-arriving messages for deleted streams
-    if (!ctx.getState().streamStates.has(stream)) return;
-
-    ctx.setState((prev) =>
-      create(prev, (draft) => {
-        draft.followupOptionsByStream.set(stream, options);
-      }),
-    );
-  },
-
   [PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]: (data, ctx) => {
     updateToolUseState(ctx, data.stream, (prev) =>
       create(prev, (draft) => {
         draft.queuedFollowUps = data.messages;
+      }),
+    );
+  },
+
+  [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
+        draft.followupOptionsByStream.set(data.stream, {
+          toolUseAgentsData: data.toolUseAgentsData,
+          modelOptionsData: data.modelOptionsData,
+        });
       }),
     );
   },
