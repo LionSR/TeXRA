@@ -9,7 +9,13 @@
  * - LatexSettingsHandlers: LaTeX tool detection and recommended settings
  */
 import * as vscode from 'vscode';
-import { MODELS, MODEL_CONFIGS, type ReasoningEffort } from 'llm-zoo';
+import {
+  MODELS,
+  MODEL_CONFIGS,
+  ModelProvider,
+  type ModelConfig,
+  type ReasoningEffort,
+} from 'llm-zoo';
 
 // Shared schemas and dispatchers
 import { getAgentsBySource, loadAgents } from '@agent/index';
@@ -259,6 +265,14 @@ function getReasoningLevelOverrides(): Record<string, string> {
   );
 }
 
+function supportsReasoningLevel(config: ModelConfig): boolean {
+  return (
+    config.capabilities.supportsReasoningEffort ||
+    (config.provider === ModelProvider.DEEPSEEK &&
+      config.capabilities.supportsReasoning)
+  );
+}
+
 function buildModelSelectionItems(): ModelSelectionItem[] {
   const enabledSet = new Set(
     globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
@@ -270,7 +284,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
     const config = MODEL_CONFIGS[name];
     if (!config || !modelProvidersSet.has(config.provider)) continue;
 
-    const { supportsReasoningEffort, reasoningEffort } = config.capabilities;
+    const { reasoningEffort } = config.capabilities;
 
     const item: ModelSelectionItem = {
       name,
@@ -282,7 +296,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
       isFast: isFastFirstResponseModel(config.inputPrice),
     };
 
-    if (supportsReasoningEffort) {
+    if (supportsReasoningLevel(config)) {
       item.supportsReasoningLevel = true;
       // Only set defaultReasoningLevel when the effort has a UI-level equivalent.
       // XHIGH and unknown efforts get no label — the UI shows plain "Default".
