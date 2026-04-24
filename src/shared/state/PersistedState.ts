@@ -101,11 +101,21 @@ export class PersistedState<T extends Record<string, unknown>> {
     if (result.success) {
       return result.data;
     }
+    // Fall back to schema defaults (parse undefined/empty object). Wrap in
+    // try/catch so a schema whose defaults don't cover every field can't
+    // take down the caller — a stale or malformed PersistedState key must
+    // never block webview activation or extension startup.
+    const defaultResult = this.schema.safeParse({});
+    if (defaultResult.success) {
+      console.warn(
+        `[PersistedState] Invalid stored data for ${this.key}, resetting.`,
+      );
+      return defaultResult.data;
+    }
     console.warn(
-      `[PersistedState] Invalid stored data for ${this.key}, resetting.`,
+      `[PersistedState] Invalid stored data and no default for ${this.key}; using empty object.`,
     );
-    // Fall back to schema defaults (parse undefined/empty object)
-    return this.schema.parse({});
+    return {} as T;
   }
 
   /** Get current state (shallow copy) */
