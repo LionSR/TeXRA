@@ -23,6 +23,7 @@ import {
   AgentSourceSchema,
 } from './agent';
 import { AgentModePresetSchema } from './agentPresets';
+import { NESTED_DELEGATION_DEPTH_RANGE } from '../constants/delegationPolicy';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
@@ -216,6 +217,12 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
   reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
   allowOrchestratorKill: z.boolean().prefault(true),
   detachSubagentsOnStop: z.boolean().prefault(false),
+  nestedDelegationMaxDepth: z
+    .number()
+    .int()
+    .min(NESTED_DELEGATION_DEPTH_RANGE.min)
+    .max(NESTED_DELEGATION_DEPTH_RANGE.max)
+    .prefault(NESTED_DELEGATION_DEPTH_RANGE.default),
 });
 export type UpdateSuperYoloEnabledMessage = z.infer<
   typeof UpdateSuperYoloEnabledMessageSchema
@@ -593,6 +600,15 @@ const SetDetachSubagentsOnStopMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
+const SetNestedDelegationMaxDepthMessageSchema = z.object({
+  command: z.literal(CMD.SET_NESTED_DELEGATION_MAX_DEPTH),
+  value: z
+    .number()
+    .int()
+    .min(NESTED_DELEGATION_DEPTH_RANGE.min)
+    .max(NESTED_DELEGATION_DEPTH_RANGE.max),
+});
+
 // Agent mode preset inbound messages
 const GetAgentModePresetsMessageSchema = commandOnly(
   CMD.GET_AGENT_MODE_PRESETS,
@@ -805,6 +821,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetSuperYoloEnabledMessageSchema,
     SetAllowOrchestratorKillMessageSchema,
     SetDetachSubagentsOnStopMessageSchema,
+    SetNestedDelegationMaxDepthMessageSchema,
     // Git author settings messages
     GetGitAuthorSettingsMessageSchema,
     SetGitMarkCommitsMessageSchema,

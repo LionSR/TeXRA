@@ -82,6 +82,10 @@ import {
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
 import { isFastFirstResponseModel } from '@shared/constants/fastModels';
+import {
+  NESTED_DELEGATION_DEPTH_RANGE,
+  clampNestedDelegationDepth,
+} from '@shared/constants/delegationPolicy';
 import type {
   RemoteAgent,
   ProviderKeyStatus,
@@ -433,6 +437,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
           data,
         ),
+      [SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH]: (data) =>
+        this.handleSetNestedDelegationMaxDepth(data),
 
       // ── Delegated to AgentHandlers ──
 
@@ -833,12 +839,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     );
+    const nestedDelegationMaxDepth = clampNestedDelegationDepth(
+      workspaceSM.get<number>(
+        WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+        NESTED_DELEGATION_DEPTH_RANGE.default,
+      ),
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
       enabled,
       reliabilitySettings: getReliabilitySettings(),
       allowOrchestratorKill,
       detachSubagentsOnStop,
+      nestedDelegationMaxDepth,
     });
   }
 
@@ -869,6 +882,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: { enabled: boolean },
   ): Promise<void> {
     await workspaceSM.update(key, data.enabled);
+    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
+  }
+
+  private async handleSetNestedDelegationMaxDepth(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_NESTED_DELEGATION_MAX_DEPTH>,
+  ): Promise<void> {
+    await workspaceSM.update(
+      WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+      clampNestedDelegationDepth(data.value),
+    );
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
 
