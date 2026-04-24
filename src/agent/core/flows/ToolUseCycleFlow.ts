@@ -462,7 +462,9 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.shouldStop = true;
       shared.endTurn = true;
       if (execRes.text) {
-        shared.messages.push(modelHandler.createAssistantMessage(execRes.text));
+        shared.messages.push(
+          modelHandler.createAssistantMessage(execRes.text, workspace),
+        );
         workspace.assembly.lastResponse = execRes.text;
       }
       workspace.resetServerToolContent();
