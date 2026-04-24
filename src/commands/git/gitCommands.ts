@@ -7,6 +7,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'gitCommands';
 logger.initialize(CHANNEL);
@@ -282,7 +283,12 @@ const GIT_INSTALL_OPTIONS: Partial<
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
 function isToolAvailable(tool: string): boolean {
-  return execaSync(tool, ['--version'], { reject: false }).exitCode === 0;
+  return (
+    execaSync(tool, ['--version'], {
+      reject: false,
+      env: { ...process.env, PATH: extendEnvPath() },
+    }).exitCode === 0
+  );
 }
 
 async function promptGitMissing(): Promise<void> {
