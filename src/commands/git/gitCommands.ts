@@ -267,23 +267,38 @@ function buildTokenResult(token: string): {
 const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
 /**
- * Platform-specific install commands surfaced when `git` is missing from PATH.
- * Mac prefers Homebrew; Windows prefers winget; Linux uses apt.
+ * Platform-specific package-manager install options surfaced when `git` is
+ * missing from PATH. Each option pairs the package-manager binary (used to
+ * probe whether the PM is installed) with the full install command.
  */
-const GIT_INSTALL_COMMANDS: Partial<Record<NodeJS.Platform, string>> = {
-  darwin: 'brew install git',
-  win32: 'winget install --id Git.Git -e',
-  linux: 'sudo apt-get install git',
+const GIT_INSTALL_OPTIONS: Partial<
+  Record<NodeJS.Platform, { tool: string; command: string }>
+> = {
+  darwin: { tool: 'brew', command: 'brew install git' },
+  win32: { tool: 'winget', command: 'winget install --id Git.Git -e' },
+  linux: { tool: 'apt-get', command: 'sudo apt-get install git' },
 };
 
+const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
+
+function isToolAvailable(tool: string): boolean {
+  return execaSync(tool, ['--version'], { reject: false }).exitCode === 0;
+}
+
 async function promptGitMissing(): Promise<void> {
-  const command = GIT_INSTALL_COMMANDS[process.platform] ?? null;
+  const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
+  const command = option && isToolAvailable(option.tool) ? option.command : null;
+
   const message = command
     ? `Git not found in PATH. Install it with:\n  ${command}`
-    : 'Git not found in PATH. See https://git-scm.com/downloads to install it.';
+    : option
+      ? `Git not found in PATH. Install ${option.tool} and run "${option.command}", or download git from ${GIT_DOWNLOAD_URL}.`
+      : `Git not found in PATH. See ${GIT_DOWNLOAD_URL} to install it.`;
+
   const actions = command
-    ? (['Copy Command', 'Run in Terminal'] as const)
+    ? (['Copy Command', 'Run in Terminal', 'Open git-scm.com'] as const)
     : (['Open git-scm.com'] as const);
+
   const selected = await vscode.window.showErrorMessage(message, ...actions);
   if (selected === 'Copy Command' && command) {
     await vscode.env.clipboard.writeText(command);
@@ -292,9 +307,7 @@ async function promptGitMissing(): Promise<void> {
     terminal.show();
     terminal.sendText(command);
   } else if (selected === 'Open git-scm.com') {
-    void vscode.env.openExternal(
-      vscode.Uri.parse('https://git-scm.com/downloads'),
-    );
+    void vscode.env.openExternal(vscode.Uri.parse(GIT_DOWNLOAD_URL));
   }
 }
 
