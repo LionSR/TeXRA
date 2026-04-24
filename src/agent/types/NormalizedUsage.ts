@@ -34,6 +34,8 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.extend({
   // Optional metrics (when supported by provider)
   /** Tokens served from cache (reduces cost) */
   cachedInputTokens: z.number().optional(),
+  /** Tokens that missed provider prompt cache and were billed at full input rate */
+  cacheMissInputTokens: z.number().optional(),
   /** Tokens written to cache - Anthropic only (increases cost by 1.25x) */
   cacheCreationTokens: z.number().optional(),
   /** Percentage of input tokens served from cache */

@@ -111,6 +111,8 @@ export class UsageMonitor {
       const roundInputTokens = latestUsage?.inputTokens ?? 0;
       const roundOutputTokens = latestUsage?.outputTokens ?? 0;
       const roundCacheReadTokens = latestUsage?.cachedInputTokens ?? 0;
+      const roundCacheMissTokens = latestUsage?.cacheMissInputTokens;
+      const roundCacheMissTokensForDisplay = roundCacheMissTokens ?? 0;
       const roundCacheCreationTokens = latestUsage?.cacheCreationTokens ?? 0;
       const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
       const roundCost = latestUsage?.cost ?? 0;
@@ -138,6 +140,9 @@ export class UsageMonitor {
         ...(roundCacheReadTokens > 0 && {
           cacheReadInputTokens: roundCacheReadTokens,
         }),
+        ...(roundCacheMissTokensForDisplay > 0 && {
+          cacheMissInputTokens: roundCacheMissTokensForDisplay,
+        }),
         ...(roundCacheCreationTokens > 0 && {
           cacheCreationInputTokens: roundCacheCreationTokens,
         }),
@@ -161,6 +166,9 @@ export class UsageMonitor {
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
         cachedInputTokens: roundCacheReadTokens,
+        ...(roundCacheMissTokens != null && {
+          cacheMissInputTokens: roundCacheMissTokens,
+        }),
         cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
@@ -198,6 +206,7 @@ export class UsageMonitor {
       inputTokens: number;
       outputTokens: number;
       cachedInputTokens?: number;
+      cacheMissInputTokens?: number;
       cacheCreationInputTokens?: number;
       reasoningTokens?: number;
       cost: number;
@@ -209,6 +218,9 @@ export class UsageMonitor {
         config.provider.toLowerCase(),
       );
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
+      const cacheMissInputTokens =
+        usage.cacheMissInputTokens ??
+        Math.max(0, usage.inputTokens - cachedInputTokens);
 
       UsageLogService.log({
         model: config.fullName,
@@ -216,11 +228,14 @@ export class UsageMonitor {
         agentName: this.metadata?.agentName,
         agentCategory: this.metadata?.agentCategory,
         isMultipleOutput: this.metadata?.isMultipleOutput,
-        inputTokens: Math.max(0, usage.inputTokens - cachedInputTokens),
+        inputTokens: cacheMissInputTokens,
         outputTokens: usage.outputTokens,
         cost: Number(usage.cost.toFixed(6)),
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens,
+        ...(usage.cacheMissInputTokens != null && {
+          cacheMissInputTokens: usage.cacheMissInputTokens,
+        }),
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usedRelay: getServerSideKeyService().shouldUseServerSideKeysSync(
