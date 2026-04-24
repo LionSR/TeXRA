@@ -56,8 +56,8 @@ const SESSION_HINT_COPY: Record<
   },
   orchestrator: {
     lede: 'Orchestrator.',
-    body: 'Plans a pipeline of specialized agents and dispatches them for you.',
-    time: 'Name specific agents in your instruction (e.g., “use polish on the intro, then review the math”) to steer delegation — otherwise it picks. Approve tasks in Progress as they arrive.',
+    body: 'Plans a pipeline of specialized agents and dispatches them for you. Name agents to steer delegation, or ask it which one to use.',
+    time: 'E.g., “use polish on the intro, then review the math” — or leave it blank. Approve tasks in Progress as they arrive.',
     ariaLabel: 'About orchestrator mode',
   },
 };
