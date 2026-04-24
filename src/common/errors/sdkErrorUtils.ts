@@ -265,9 +265,15 @@ function detectProvider(err: unknown): string | undefined {
   const lowered = candidate.constructor?.name?.toLowerCase();
   if (!lowered) return undefined;
 
-  return (['openai', 'anthropic', 'google', 'kimi'] as const).find((p) =>
-    lowered.includes(p),
+  // Match SDK class-name fragments, then normalize aliases to the
+  // canonical API-provider names used by SecretManager / model handlers.
+  // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
+  // (class name contains "kimi") maps to "moonshot".
+  const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
+    (p) => lowered.includes(p),
   );
+  if (match === 'kimi') return 'moonshot';
+  return match;
 }
 
 /** Extract request ID from SDK errors (property or headers). */
