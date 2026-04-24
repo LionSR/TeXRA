@@ -36,7 +36,7 @@ All Codex options live on the Codex card in **Dashboard → Tools** and are scop
 | **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                            | `high`            | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
 | **Require approval** | checkbox under _Approval & Safety_ (<i class="codicon codicon-shield"></i>) | on                | Show a confirmation prompt before every Codex call.                        |
 
-TeXRA always drives Codex with the short model name `gpt-5.4`. Everything else (providers, MCP servers, custom instructions) comes from Codex's own `~/.codex/config.toml`.
+TeXRA always drives Codex with the short model name `gpt-5.5`. Everything else (providers, MCP servers, custom instructions) comes from Codex's own `~/.codex/config.toml`.
 
 ## Running Codex
 
