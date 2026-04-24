@@ -270,6 +270,7 @@ export class StreamLogStore {
     this.pendingRelease.delete(streamId);
     this.flushing.delete(streamId);
     this.loadFailed.delete(streamId);
+    this.pendingLoads.delete(streamId);
     if (!this.loaded) return;
 
     this.cancelPendingSave();
@@ -285,6 +286,7 @@ export class StreamLogStore {
     this.pendingRelease.clear();
     this.flushing.clear();
     this.loadFailed.clear();
+    this.pendingLoads.clear();
     if (!this.loaded) return;
 
     this.cancelPendingSave();
@@ -336,6 +338,7 @@ export class StreamLogStore {
     this.pendingRelease.clear();
     this.flushing.clear();
     this.loadFailed.clear();
+    this.pendingLoads.clear();
 
     // 1. Scan directory — filenames decode back to stream IDs
     const streamIds = await this.kv.listKeys();
@@ -563,23 +566,27 @@ export class StreamLogStore {
     // write can't re-mark the stream dirty (there'd be no log entries left).
     for (const streamId of dirtyIds) this.flushing.add(streamId);
 
-    const writes = dirtyIds.flatMap((streamId) => {
-      const logInstance = this.logs.get(streamId);
-      return logInstance ? [this.kv.write(streamId, logInstance.toJSON())] : [];
-    });
-
-    let writeSucceeded = false;
-    const writePromise = Promise.all(writes)
-      .then(() => {
-        writeSucceeded = true;
-      })
-      .catch(() => {
+    // `Promise.allSettled` keeps per-stream outcomes so a single failed
+    // write doesn't poison the drain for the other streams in the batch —
+    // `pendingRelease` entries for streams that wrote fine still get evicted.
+    const writePromise = Promise.allSettled(
+      dirtyIds.map((streamId) => {
+        const logInstance = this.logs.get(streamId);
+        return logInstance
+          ? this.kv.write(streamId, logInstance.toJSON())
+          : Promise.resolve();
+      }),
+    )
+      .then((results) => {
         // Failed writes re-mark their streams dirty so the next save
-        // retries, and prevent eviction below (disk wouldn't have the
-        // entries yet; releasing memory would lose them).
-        for (const streamId of dirtyIds) {
-          if (this.logs.has(streamId)) this.dirtyStreamIds.add(streamId);
-        }
+        // retries. Successful streams are now persisted and safe to evict
+        // (drainPendingReleases' dirtyStreamIds check excludes failed ones).
+        results.forEach((result, i) => {
+          if (result.status === 'rejected') {
+            const streamId = dirtyIds[i];
+            if (this.logs.has(streamId)) this.dirtyStreamIds.add(streamId);
+          }
+        });
       })
       .finally(() => {
         for (const streamId of dirtyIds) this.flushing.delete(streamId);
@@ -589,7 +596,7 @@ export class StreamLogStore {
             this.savePromise = null;
           }
         }
-        if (writeSucceeded) this.drainPendingReleases();
+        this.drainPendingReleases();
         resolve?.();
       });
 
