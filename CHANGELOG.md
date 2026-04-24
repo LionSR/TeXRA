@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 
 - **More dependable long-running work** — extended agent sessions recover more smoothly from interruptions.
 - **Sharper model defaults** — new and upgrading users get a cleaner default model lineup while advanced options remain available.
-- **Better research-paper context** — agents now handle detailed paper context more effectively, especially when working from source material.
+- **Sharper literature workflows** — agents are better at turning full-paper context into focused, usable research guidance.
 - **More helpful guidance** — setup, orchestration, Git, LaTeX, and Lean workflows now present clearer next steps.
 - **More polished progress UI** — streams, controls, and dropdowns are more compact, consistent, and easier to scan.
 - **Quieter diagnostics** — routine messages stay out of the way, and user-facing errors focus on recovery.
