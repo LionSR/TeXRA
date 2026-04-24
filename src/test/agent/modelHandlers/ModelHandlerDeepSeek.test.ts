@@ -6,6 +6,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
   ModelProvider,
+  ReasoningEffort,
 } from 'llm-zoo';
 
 // Local imports - agent
@@ -122,13 +123,14 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
 });
 
 describe('ModelHandlerDeepSeek tool conversion', () => {
-  it('passes thinking toggle through extra_body for the OpenAI SDK', async () => {
+  it('passes thinking toggle and low effort in OpenAI wire format', async () => {
     const handler = new ModelHandlerDeepSeek(
       buildConfig({
         capabilities: {
           ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
+          reasoningEffort: ReasoningEffort.LOW,
         },
       }),
     );
@@ -162,10 +164,55 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
       temperature: 0,
     });
 
-    assert.equal(capturedParams.thinking, undefined);
-    assert.deepEqual(capturedParams.extra_body, {
-      thinking: { type: 'enabled' },
+    assert.deepEqual(capturedParams.thinking, { type: 'enabled' });
+    assert.equal(capturedParams.extra_body, undefined);
+    assert.equal(capturedParams.reasoning_effort, 'high');
+  });
+
+  it('maps xhigh reasoning effort to DeepSeek max effort', async () => {
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        fullName: 'deepseek-v4-pro',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsVision: false,
+          reasoningEffort: ReasoningEffort.XHIGH,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentLogger);
+    (handler as any).getStreamingConfig = () => false;
+
+    let capturedParams: any;
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: any) => {
+            capturedParams = params;
+            return {
+              id: 'test-completion',
+              choices: [
+                {
+                  index: 0,
+                  message: { role: 'assistant', content: 'ok' },
+                  finish_reason: 'stop',
+                },
+              ],
+            };
+          },
+        },
+      },
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think harder' }],
+      temperature: 0,
     });
+
+    assert.equal(capturedParams.thinking, undefined);
+    assert.equal(capturedParams.reasoning_effort, 'max');
   });
 
   it('passes back content and reasoning_content in tool-call messages', async () => {

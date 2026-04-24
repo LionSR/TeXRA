@@ -87,15 +87,9 @@ type ChatCompletionRequestBase = Omit<
 >;
 type ChatCompletionRequestWithThinking = ChatCompletionRequestBase & {
   thinking?: { type: 'enabled' | 'disabled' };
-  extra_body?: {
-    thinking?: { type: 'enabled' | 'disabled' };
-  };
 };
 type ChatCompletionSummaryParams = ChatCompletionCreateParamsNonStreaming & {
   thinking?: { type: 'disabled' };
-  extra_body?: {
-    thinking?: { type: 'disabled' };
-  };
 };
 
 // Reasoning content type for DeepSeek, o1 models (not in SDK)
@@ -277,7 +271,7 @@ export class ModelHandlerOpenAI<
       // Disable thinking for the summary call — reasoning models
       // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
       if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
-        this.applyThinkingParameter(summaryParams, { type: 'disabled' });
+        summaryParams.thinking = { type: 'disabled' };
       }
       const summaryResponse = await client.chat.completions.create(
         summaryParams,
@@ -376,31 +370,6 @@ export class ModelHandlerOpenAI<
     return undefined;
   }
 
-  /**
-   * Some OpenAI-compatible providers only accept non-OpenAI extensions through
-   * the SDK passthrough body. DeepSeek documents `thinking` this way.
-   */
-  protected shouldSendThinkingInExtraBody(): boolean {
-    return false;
-  }
-
-  protected applyThinkingParameter<
-    T extends {
-      thinking?: { type: 'enabled' | 'disabled' };
-      extra_body?: { thinking?: { type: 'enabled' | 'disabled' } };
-    },
-  >(params: T, thinking: { type: 'enabled' | 'disabled' }): void {
-    if (this.shouldSendThinkingInExtraBody()) {
-      params.extra_body = {
-        ...params.extra_body,
-        thinking,
-      };
-      return;
-    }
-
-    params.thinking = thinking;
-  }
-
   protected buildChatBaseParams(
     messages: ChatCompletionMessageParam[],
     temperature?: number,
@@ -437,7 +406,7 @@ export class ModelHandlerOpenAI<
     // Add thinking parameter if specified by subclass (Kimi K2.5, DeepSeek)
     const thinking = this.getThinkingParameter();
     if (thinking) {
-      this.applyThinkingParameter(baseParams, thinking);
+      baseParams.thinking = thinking;
     }
 
     if (tools?.length) {

@@ -55,7 +55,10 @@ export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
  * user has set an override.
  */
 function withReasoningOverride<T extends ModelHandler>(handler: T): T {
-  if (!handler.capabilities.supportsReasoningEffort) return handler;
+  const supportsReasoningOverride =
+    handler.capabilities.supportsReasoningEffort ||
+    (handler.isDeepSeek && handler.capabilities.supportsReasoning);
+  if (!supportsReasoningOverride) return handler;
 
   const level = getGlobalState().get<Record<string, string>>(
     GlobalStateKey.REASONING_LEVELS,
