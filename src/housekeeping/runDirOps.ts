@@ -3,8 +3,8 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 
 // Local imports
-import type { FileOpResult } from '@agent/types/ResultTypes';
 import { getCleanAgentName } from '@agent/index';
+import type { FileOpResult } from '@agent/types/ResultTypes';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
@@ -46,7 +46,7 @@ export async function runPackRunDir(
   // Include an executionId fragment in the destination folder so two packs
   // of the same input+agent+model within the same second (the timestamp's
   // granularity) don't collide and silently merge via `errorOnExist: false`.
-  const idFragment = executionId.replace(/-/g, '').slice(0, 8);
+  const idFragment = executionId.replaceAll('-', '').slice(0, 8);
   const destinationRelative = path.join(
     HISTORY_DIR,
     `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}_${idFragment}`,

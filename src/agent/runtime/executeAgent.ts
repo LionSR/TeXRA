@@ -39,6 +39,7 @@ import {
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -60,7 +61,6 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { TaskRunFileService } from '@utils/files';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 
