@@ -75,23 +75,25 @@ export async function computeDelegationDepthFromStorage(
   if (!rootMeta.parentExecutionId) return 0;
 
   // Legacy fallback: walk the chain for snapshots created before
-  // delegationDepth was persisted.
+  // delegationDepth was persisted. All loop-exit corruption signals
+  // (cycle, MAX_WALK) fail closed via the sentinel; only a clean walk
+  // that terminates at a root (no parentExecutionId) returns the depth.
   const visited = new Set<string>([executionId]);
   let current: ExecutionId | undefined = rootMeta.parentExecutionId;
   let depth = 1;
   const MAX_WALK = 32;
-  while (current && !visited.has(current) && depth < MAX_WALK) {
+  while (depth < MAX_WALK) {
+    if (!current) return depth; // clean terminus
+    if (visited.has(current)) return UNKNOWN_DEPTH_SENTINEL; // cycle
     visited.add(current);
     const meta = await readMetaSafely(current);
-    // Ancestor meta missing, corrupted, or unreadable: we can't tell how
-    // deep we are. Return a sentinel that fails the gate for any configured
-    // cap. Preserves resumability; conservatively blocks delegation.
     if (meta === 'error' || meta === null) return UNKNOWN_DEPTH_SENTINEL;
     if (meta.delegationDepth !== undefined) return meta.delegationDepth + depth;
     const parent: ExecutionId | undefined = meta.parentExecutionId;
-    if (!parent) break;
+    if (!parent) return depth; // clean terminus
     depth++;
     current = parent;
   }
-  return depth;
+  // MAX_WALK exceeded: chain longer than any legitimate depth — treat as corrupt.
+  return UNKNOWN_DEPTH_SENTINEL;
 }
