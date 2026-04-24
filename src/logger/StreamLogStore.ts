@@ -182,8 +182,12 @@ export class StreamLogStore {
             }
           }
         }
-        // Load recovered — saves can persist this stream again.
+        // Load recovered — saves can persist this stream again. If a save
+        // was deferred while the load was in flight (dirty stream re-queued
+        // by executeWrite), flush it now so we don't wait for another
+        // append to unblock it.
         this.loadFailed.delete(streamId);
+        if (this.dirtyStreamIds.has(streamId)) void this.save();
       } catch {
         // Rehydrate failed. Mark so `executeWrite` skips this stream and
         // doesn't overwrite the on-disk history with whatever empty/partial
@@ -527,15 +531,16 @@ export class StreamLogStore {
       return Promise.resolve();
     }
 
-    // Skip streams whose rehydrate read failed — writing now would clobber
-    // the authoritative on-disk history with a fresh empty-plus-new-appends
-    // log. Keep them dirty so the next save retries once ensureLoaded has
-    // merged disk entries back in.
+    // Skip streams whose rehydrate is pending or errored — writing now
+    // would clobber the authoritative on-disk history with a fresh
+    // empty-plus-new-appends log before `ensureLoaded` merges disk entries
+    // back in. Keep them dirty so the next save retries after the load
+    // resolves.
     const allDirty = [...this.dirtyStreamIds];
     this.dirtyStreamIds.clear();
     const dirtyIds: StreamTabId[] = [];
     for (const streamId of allDirty) {
-      if (this.loadFailed.has(streamId)) {
+      if (this.loadFailed.has(streamId) || this.pendingLoads.has(streamId)) {
         this.dirtyStreamIds.add(streamId);
       } else {
         dirtyIds.push(streamId);
