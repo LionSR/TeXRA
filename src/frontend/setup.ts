@@ -76,7 +76,7 @@ export async function copyDefaultAgents(
 
   if (
     currentVersion === lastKnownVersion &&
-    !(await hasMissingBundledAgentFiles(context).catch(() => false))
+    !(await hasMissingBundledAgentFiles(context).catch(() => true))
   ) {
     return;
   }
