@@ -13,7 +13,7 @@ import {
   PartMediaResolutionLevel,
   type FunctionCall,
   type FunctionResponsePart,
-  type Tool as GeminiTool,
+  type ToolListUnion,
   File,
   createPartFromText,
   createPartFromUri,
@@ -395,7 +395,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       /** Parts for the upcoming user message to include in count */
       lastMessageParts?: Part[];
       /** Google-format tools to include in count (from toGoogleTools) */
-      googleTools?: GeminiTool[];
+      googleTools?: ToolListUnion;
     },
   ): Promise<number> {
     const client = options?.client ?? (await this.getClient());
@@ -420,9 +420,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       contents: countContents,
       config: {
         abortSignal: options?.signal,
-        ...(options?.googleTools?.length && {
-          tools: options.googleTools,
-        }),
+        ...(options?.googleTools?.length && { tools: options.googleTools }),
       },
     });
 
@@ -501,10 +499,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           client,
           systemPrompt,
           lastMessageParts,
-          // toGoogleTools returns Tool[], but generationConfig.tools is typed
-          // as ToolListUnion (which includes CallableTool). Cast is safe since
-          // our tools are always plain Tool[] (FunctionDeclaration-based).
-          googleTools: generationConfig.tools as GeminiTool[] | undefined,
+          googleTools: generationConfig.tools,
           signal,
         });
 

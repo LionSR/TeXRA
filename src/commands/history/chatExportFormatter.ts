@@ -18,7 +18,6 @@ import latexPreamble from '../../../resources/templates/chatExport.tex';
 import type { Part } from '@google/genai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type {
-  ResponseFunctionCallOutputItemList,
   ResponseFunctionToolCallItem,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
@@ -397,7 +396,7 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
       const output = item.output;
       if (Array.isArray(output)) {
         const textParts: string[] = [];
-        for (const part of output as ResponseFunctionCallOutputItemList) {
+        for (const part of output) {
           if (part.type === 'input_text' && typeof part.text === 'string') {
             textParts.push(part.text);
           } else if (part.type === 'input_image') {
