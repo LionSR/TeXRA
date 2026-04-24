@@ -51,10 +51,11 @@ const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
 
+const ESCAPE_CHARACTER = String.fromCharCode(27);
 // Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
 // Real null bytes in the input are stripped first so the sentinel is unambiguous.
 const ERASE_SENTINEL = '\x00';
-const ANSI_ERASE_LINE_PATTERN = new RegExp(String.raw`\u001B\[\d*K`, 'g');
+const ANSI_ERASE_LINE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[\\d*K`, 'g');
 
 /** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
 function processTerminalText(text: string): string {
