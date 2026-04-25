@@ -23,7 +23,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
 import { renderAgentTemplateFromBundle } from '@commands/agent/agentTemplateRenderer';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
-import { showLoggedErrorMessage } from '@common/errors';
+import { isFileNotFoundError, showLoggedErrorMessage } from '@common/errors';
 import {
   WorkspaceStateKey,
   GlobalStateKey,
@@ -489,10 +489,7 @@ export class AgentHandlers {
             await AbsoluteFS.delete(entry.multiplePath, { recursive: false });
           } catch (err) {
             // Only ignore FileNotFound; surface other errors
-            if (
-              !(err instanceof vscode.FileSystemError) ||
-              err.code !== 'FileNotFound'
-            ) {
+            if (!isFileNotFoundError(err)) {
               throw err;
             }
           }
