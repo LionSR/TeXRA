@@ -29,6 +29,12 @@ export {
 
 const registry = new Map<string, ExecutionHandle>();
 const changeCallbacks = new Map<string, Array<() => void>>();
+// Persistent listeners — stay attached across notifications (unlike one-shot
+// waiters in `changeCallbacks`). Used by the executions subscribe action.
+const persistentListeners = new Map<
+  string,
+  Set<(handle: ExecutionHandle | undefined) => void>
+>();
 
 // Notify waiters and refresh UI badges when stream status changes (e.g. RUNNING → WAITING).
 // Without this, waitForExecutionChange only resolves on progress/kill/untrack,
@@ -485,8 +491,54 @@ function removeChangeCallback(executionId: string, cb: () => void): void {
 }
 
 function notifyWaiters(executionId: string): void {
+  const listeners = persistentListeners.get(executionId);
   const callbacks = changeCallbacks.get(executionId);
-  if (!callbacks) return;
-  changeCallbacks.delete(executionId);
-  for (const cb of callbacks) cb();
+  if (!listeners && !callbacks) return;
+
+  // Persistent listeners fire first and stay attached so subscribers keep
+  // receiving every transition (status, progress, untrack) until they
+  // dispose themselves.
+  if (listeners) {
+    const handle = registry.get(executionId);
+    // Iterate a snapshot so a listener disposing itself mid-fire is safe.
+    for (const cb of [...listeners]) cb(handle);
+  }
+
+  if (callbacks) {
+    changeCallbacks.delete(executionId);
+    for (const cb of callbacks) cb();
+  }
+
+  // Backstop against listener leaks: if the execution is no longer tracked,
+  // any still-registered persistent listener is firing into the void. The
+  // binder's listener self-disposes on untrack, but a third-party caller
+  // that forgets the disposer would otherwise leak indefinitely.
+  if (!registry.has(executionId)) {
+    persistentListeners.delete(executionId);
+  }
+}
+
+/**
+ * Add a persistent listener invoked on every change to `executionId`
+ * (status transition, progress update, kill, untrack). Returns a disposer.
+ *
+ * The callback receives the current `ExecutionHandle`, or `undefined` once
+ * the execution has been untracked (terminal event).
+ */
+export function addExecutionListener(
+  executionId: string,
+  cb: (handle: ExecutionHandle | undefined) => void,
+): () => void {
+  let set = persistentListeners.get(executionId);
+  if (!set) {
+    set = new Set();
+    persistentListeners.set(executionId, set);
+  }
+  set.add(cb);
+  return () => {
+    const s = persistentListeners.get(executionId);
+    if (!s) return;
+    s.delete(cb);
+    if (s.size === 0) persistentListeners.delete(executionId);
+  };
 }
