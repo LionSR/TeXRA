@@ -39,18 +39,6 @@
       {
         "title": "TeXRA",
         "properties": {
-          "texra.agentOutputs.storageMode": {
-            "type": "string",
-            "enum": [
-              "workspace",
-              "taskRunStorage"
-            ],
-            "default": "workspace",
-            "description": "Deprecated and ignored. Workflow outputs now always live in task-run storage (executions/{id}/...) and are reachable via the progress-view toolbar (Accept / Pack / Open in task storage).",
-            "deprecationMessage": "Workflow outputs now always live in task-run storage. This setting is ignored.",
-            "scope": "resource",
-            "order": 50
-          },
           "texra.agentOutputs.autoOpenFinal": {
             "type": "boolean",
             "default": true,
@@ -67,12 +55,6 @@
             "type": "boolean",
             "default": true,
             "description": "Show API key reminders in the status bar and main view when no API keys are configured",
-            "scope": "resource"
-          },
-          "texra.ui.showDependencyReminders": {
-            "type": "boolean",
-            "default": true,
-            "description": "Show dependency check reminders in the main view when core dependencies are missing",
             "scope": "resource"
           },
           "texra.ui.showLoginBanner": {
@@ -146,12 +128,6 @@
             "type": "boolean",
             "default": false,
             "description": "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-            "scope": "resource"
-          },
-          "texra.model.useCopilot": {
-            "type": "boolean",
-            "default": false,
-            "description": "Use the Copilot language model via VS Code's Language Model API for polishing instructions and best connection detection.",
             "scope": "resource"
           }
         }
@@ -709,29 +685,6 @@
         }
       },
       {
-        "title": "Progress",
-        "properties": {
-          "texra.progressBoard.streamSortOrder": {
-            "type": "string",
-            "default": "time",
-            "enum": [
-              "none",
-              "time",
-              "inputFile",
-              "agent"
-            ],
-            "enumDescriptions": [
-              "No sorting (maintain order of creation)",
-              "Sort by last active time (newest first)",
-              "Sort alphabetically by input file name",
-              "Sort alphabetically by agent type"
-            ],
-            "description": "Default sort order for streams in Progress",
-            "scope": "resource"
-          }
-        }
-      },
-      {
         "title": "Tool Use Agents",
         "properties": {
           "texra.toolUse.requireEditApproval": {
@@ -782,36 +735,6 @@
       }
     ],
     "commands": [
-      {
-        "command": "texra.sortByTime",
-        "title": "Sort by Time",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.sortByFile",
-        "title": "Sort by File",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.sortByAgent",
-        "title": "Sort by Agent",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.sortByTimeActive",
-        "title": "$(check) Sort by Time",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.sortByFileActive",
-        "title": "$(check) Sort by File",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.sortByAgentActive",
-        "title": "$(check) Sort by Agent",
-        "category": "TeXRA"
-      },
       {
         "command": "texra.createSampleProject",
         "title": "Create Sample Project",
@@ -1288,13 +1211,6 @@
         }
       ]
     },
-    "submenus": [
-      {
-        "id": "texra.sortStreamsSubmenu",
-        "label": "Sort Streams",
-        "icon": "$(list-ordered)"
-      }
-    ],
     "menus": {
       "editor/title": [
         {
@@ -1330,11 +1246,6 @@
       ],
       "view/title": [
         {
-          "submenu": "texra.sortStreamsSubmenu",
-          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
-          "group": "navigation@0"
-        },
-        {
           "command": "texra.indentTeX",
           "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
           "group": "navigation@1"
@@ -1363,38 +1274,6 @@
           "command": "texra.showDashboard",
           "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'",
           "group": "navigation@1"
-        }
-      ],
-      "texra.sortStreamsSubmenu": [
-        {
-          "command": "texra.sortByTime",
-          "when": "texra.streamSort != 'time'",
-          "group": "1_sort@1"
-        },
-        {
-          "command": "texra.sortByFile",
-          "when": "texra.streamSort != 'inputFile'",
-          "group": "1_sort@2"
-        },
-        {
-          "command": "texra.sortByAgent",
-          "when": "texra.streamSort != 'agent'",
-          "group": "1_sort@3"
-        },
-        {
-          "command": "texra.sortByTimeActive",
-          "when": "texra.streamSort == 'time'",
-          "group": "1_sort@1"
-        },
-        {
-          "command": "texra.sortByFileActive",
-          "when": "texra.streamSort == 'inputFile'",
-          "group": "1_sort@2"
-        },
-        {
-          "command": "texra.sortByAgentActive",
-          "when": "texra.streamSort == 'agent'",
-          "group": "1_sort@3"
         }
       ],
       "editor/context": [

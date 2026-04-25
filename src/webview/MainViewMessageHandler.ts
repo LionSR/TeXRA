@@ -284,8 +284,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.postToActiveView(m),
       [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: (m) =>
         this.postToActiveView(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: (m) =>
-        updateConfig('ui.showDependencyReminders', m.value),
       [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: (m) => {
         const cmd = getToolDocsCommand(m.tool);
         if (cmd) {

@@ -181,10 +181,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.withToolbarTaskState(data.stream, (ts) =>
           this.handleFileOperation(data.stream, ts, 'texra.clean'),
         ),
-      [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: (data) => {
-        this.provider.state.streamSortOrder = data.sortBy;
-        this.provider.syncFullView();
-      },
       [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) => {
         this.provider.state.agentCategoryFilter = data.filter;
         this.provider.syncFullView();

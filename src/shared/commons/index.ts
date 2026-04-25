@@ -107,9 +107,6 @@ export * from '@shared/utils/icons';
 export * from '@shared/utils/selectTemplates';
 export * from '@shared/utils/textarea';
 
-// Shared: Streams
-export * from '@shared/streams/streamSort';
-
 // Shared: Files
 export * from '@shared/files/pastedImageConstants';
 

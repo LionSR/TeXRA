@@ -12,7 +12,6 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
-import { StreamSortSchema } from '@shared/streams/streamSort';
 import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';
 import { StreamLogEntrySchema } from './log';
@@ -125,7 +124,6 @@ export const UpdateStreamsMessageSchema = z.object({
   streams: z.array(StreamTabInfoSchema),
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
   agentFilter: AgentCategoryFilterSchema,
-  streamSort: StreamSortSchema.optional(),
   streamStates: z.record(z.string(), StreamMetadataSchema).optional(),
 });
 
@@ -612,11 +610,6 @@ const RetryStreamRequestMessageSchema = z.object({
   feedback: z.string().optional(),
 });
 
-const SortStreamsMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SORT_STREAMS),
-  sortBy: z.enum(['time', 'inputFile', 'agent']).prefault('time'),
-});
-
 const FilterStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS),
   filter: AgentCategoryFilterSchema,
@@ -738,10 +731,6 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     RestoreStateMessageSchema,
     OpenTaskStorageMessageSchema,
     RunCompileFixerMessageSchema,
-    GetFollowupOptionsMessageSchema,
-    SetupFollowupMessageSchema,
-    RunFollowupMessageSchema,
-    SortStreamsMessageSchema,
     FilterStreamsMessageSchema,
     SendFollowUpMessageSchema,
     PolishFollowUpMessageSchema,
@@ -771,6 +760,9 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     MergeFileMessageSchema,
     LatexdiffFileMessageSchema,
     OpenLabelMessageSchema,
+    GetFollowupOptionsMessageSchema,
+    SetupFollowupMessageSchema,
+    RunFollowupMessageSchema,
   ],
 );
 

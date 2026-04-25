@@ -142,7 +142,6 @@ export const streamLifecycleHandlers: HandlerRegistry = {
       create(updated, (draft) => {
         draft.activeStreamId = nextActiveStreamId;
         draft.streamFilter = data.agentFilter;
-        if (data.streamSort) draft.streamSort = data.streamSort;
       }),
     );
   },

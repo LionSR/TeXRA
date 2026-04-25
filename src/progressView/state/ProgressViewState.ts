@@ -3,9 +3,9 @@ import { z } from 'zod';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
@@ -40,7 +40,6 @@ import {
   PersistedState,
   createBackendStorage,
 } from '@shared/state/PersistedState';
-import { StreamSortSchema, type StreamSort } from '@shared/streams/streamSort';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = z.object({
@@ -68,7 +67,6 @@ export type ActiveStreamId = StreamTabId | '';
 /** Schema for consolidated progress view preferences. */
 const ProgressViewPrefsSchema = z.object({
   activeStream: z.string().prefault('') as z.ZodType<ActiveStreamId>,
-  streamSortOrder: StreamSortSchema.prefault('time'),
   agentCategoryFilter: AgentCategoryFilterSchema.prefault('all'),
 });
 
@@ -180,14 +178,6 @@ export class ProgressViewState {
     if (!isInFlightStatus(StreamStatusService.get(streamId))) {
       this.streamLogs.releaseEntries(streamId);
     }
-  }
-
-  get streamSortOrder(): StreamSort {
-    return this._prefs.get('streamSortOrder');
-  }
-
-  set streamSortOrder(order: StreamSort) {
-    this._prefs.update({ streamSortOrder: order });
   }
 
   get agentCategoryFilter(): AgentCategoryFilter {
