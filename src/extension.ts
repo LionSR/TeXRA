@@ -98,11 +98,16 @@ async function refreshApiKeyStatus() {
     return;
   }
 
+  // `anyApiKeyExists()` already falls back to `canUseServerSideKeys()`
+  // internally. Don't catch here: a transient probe failure shouldn't
+  // regress a signed-in user to the "Get Started" CTA — let the outer
+  // wrapper log it and leave the pill in its prior state.
   const exists = await SecretManager.anyApiKeyExists();
   if (!exists) {
-    apiKeyStatusBarItem.text = '$(warning) TeXRA: API Key Required';
-    apiKeyStatusBarItem.tooltip = 'No API keys configured — click to set up';
-    apiKeyStatusBarItem.command = 'texra.setApiKey';
+    apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
+    apiKeyStatusBarItem.tooltip =
+      'Click to run the setup assistant — sign in for free or add an API key';
+    apiKeyStatusBarItem.command = 'texra.runSetupAssistant';
     apiKeyStatusBarItem.show();
   } else {
     apiKeyStatusBarItem.hide();
@@ -406,11 +411,25 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.StatusBarAlignment.Left,
   );
   context.subscriptions.push(apiKeyStatusBarItem);
-  void refreshApiKeyStatus().catch((err) =>
-    logger.error(
-      'extension',
-      `API key status refresh failed: ${toErrorMessage(err)}`,
-    ),
+  const safeRefreshApiKeyStatus = () =>
+    refreshApiKeyStatus().catch((err) =>
+      logger.error(
+        'extension',
+        `API key status refresh failed: ${toErrorMessage(err)}`,
+      ),
+    );
+  void safeRefreshApiKeyStatus();
+  // Without these listeners the pill stayed on "Get Started" forever after
+  // a Researcher Access sign-in or after the first API key was stored.
+  context.subscriptions.push(
+    vscode.authentication.onDidChangeSessions((e) => {
+      if (e.provider.id === 'texra-supabase') {
+        void safeRefreshApiKeyStatus();
+      }
+    }),
+    getServerSideKeyService().onDidChangeModelAccess(() => {
+      void safeRefreshApiKeyStatus();
+    }),
   );
 
   const runningStreams = new Set<string>();
@@ -489,8 +508,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
-    // Opening the VS Code walkthrough is enough — don't double up with a
-    // popup asking the user to open the walkthrough they just saw.
+    // Opening the VS Code walkthrough is enough — its first step is the
+    // setup assistant CTA, so don't double up with a popup.
     void vscode.commands
       .executeCommand('texra.openGettingStarted')
       .then(() => context.globalState.update(welcomeKey, true));
