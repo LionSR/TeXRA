@@ -22,6 +22,7 @@ export { SetApiKeyTool } from './SetApiKeyTool';
 export { UnsetApiKeyTool } from './UnsetApiKeyTool';
 export { InvokeCommandTool } from './InvokeCommandTool';
 export { InstallVscodeExtensionTool } from './InstallVscodeExtensionTool';
+export { ReadConfigTool, UpdateConfigTool } from './ConfigTools';
 export {
   setSetupPlatform,
   getSetupPlatform,
@@ -30,4 +31,5 @@ export {
   type SetupCommandAdapter,
   type SetupExtensionAdapter,
   type SetupAuthAdapter,
+  type SetupConfigAdapter,
 } from './platform';

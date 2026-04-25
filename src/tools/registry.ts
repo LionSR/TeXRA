@@ -63,6 +63,8 @@ import {
   UnsetApiKeyTool,
   InvokeCommandTool,
   InstallVscodeExtensionTool,
+  ReadConfigTool,
+  UpdateConfigTool,
 } from './setup';
 
 /** Singleton IToolRegistry instance for the default tools. */
@@ -130,6 +132,8 @@ function createDefaultTools() {
     unset_api_key: new UnsetApiKeyTool(),
     invoke_command: new InvokeCommandTool(),
     install_vscode_extension: new InstallVscodeExtensionTool(),
+    read_config: new ReadConfigTool(),
+    update_config: new UpdateConfigTool(),
   } satisfies Record<string, ITool>;
 }
 
