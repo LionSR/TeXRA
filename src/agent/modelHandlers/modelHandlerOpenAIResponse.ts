@@ -216,15 +216,26 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Check if background mode is active for this handler.
-   * Background mode is enabled when the config toggle is on AND
-   * this model/agent is eligible for background execution.
+   * Background mode is enabled when this handler supports it, the config
+   * toggle is on, and this model/agent is eligible for background execution.
    */
   public override isBackgroundModeActive(): boolean {
-    const useBackgroundResponses = getConfig<boolean>(
-      'texra.model.useBackgroundResponses',
-      true,
+    return this.shouldUseBackgroundResponses();
+  }
+
+  private isBackgroundModeToggleEnabled(): boolean {
+    return getConfig<boolean>('texra.model.useBackgroundResponses', true);
+  }
+
+  private shouldUseBackgroundResponses(
+    backgroundToggleEnabled = this.isBackgroundModeToggleEnabled(),
+    backgroundModeEligible = this.isBackgroundModeEligible(),
+  ): boolean {
+    return (
+      this.backgroundModeSupported &&
+      backgroundToggleEnabled &&
+      backgroundModeEligible
     );
-    return useBackgroundResponses && this.isBackgroundModeEligible();
   }
 
   protected override backgroundModeSupported = true;
@@ -1597,25 +1608,26 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
-    const streamingToggleEnabled = this.getStreamingConfig();
-    const backgroundToggleEnabled = getConfig<boolean>(
-      'texra.model.useBackgroundResponses',
-      true,
+    const backgroundToggleEnabled = this.isBackgroundModeToggleEnabled();
+    const backgroundModeEligible = this.isBackgroundModeEligible();
+    const useBackgroundResponses = this.shouldUseBackgroundResponses(
+      backgroundToggleEnabled,
+      backgroundModeEligible,
     );
-    const useBackgroundResponses =
-      this.backgroundModeSupported &&
-      backgroundToggleEnabled &&
-      this.isBackgroundModeEligible();
+    const streamingToggleEnabled = useBackgroundResponses
+      ? super.getStreamingConfig()
+      : this.getStreamingConfig();
     const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
     const useWebSocket =
       this.isWebSocketModeEnabled() && !useBackgroundResponses;
 
-    if (backgroundToggleEnabled && !useBackgroundResponses) {
-      const reason = !this.backgroundModeSupported
-        ? 'this handler does not support background execution'
-        : 'not eligible for this model/agent type (requires a GPT model with a workflow agent)';
+    if (
+      backgroundToggleEnabled &&
+      backgroundModeEligible &&
+      !useBackgroundResponses
+    ) {
       this.logger.debug(
-        `Background mode toggle is enabled but ${reason}. Falling back to synchronous requests.`,
+        'Background mode toggle is enabled but this handler does not support background execution. Proceeding without background mode.',
       );
     } else if (streamingToggleEnabled && useBackgroundResponses) {
       this.logger.debug(
