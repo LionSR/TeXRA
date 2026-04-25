@@ -1698,7 +1698,7 @@
     "identifiers-arxiv": "^0.1.1",
     "katex": "^0.16.45",
     "lit": "^3.3.2",
-    "llm-zoo": "^1.4.2",
+    "llm-zoo": "^1.5.0",
     "mark.js": "^8.11.1",
     "markdown-it": "^14.1.1",
     "markdown-it-texmath": "^1.0.0",
