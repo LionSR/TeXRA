@@ -51,7 +51,7 @@ This guide outlines a workflow to clone your Overleaf project, leverage TeXRA lo
     - Select files, agent, model.
     - Write instructions.
     - Execute (<i class="codicon codicon-play"></i>).
-    - Review outputs (`*_r0_*.tex`, etc.).
+    - Review outputs (`r0/output.tex`, etc.) from task storage.
     - Use `latexdiff` (<i class="codicon codicon-diff-single"></i>) or merge (<i class="codicon codicon-merge"></i>).
     - Leverage features like auto-extract (<i class="codicon codicon-wand"></i>) and tool options (<i class="codicon codicon-tools"></i>).
     - Optionally use LaTeX Workshop for local previews ([Setup](./latex-compilation.md)).
