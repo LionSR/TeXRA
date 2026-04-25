@@ -338,6 +338,7 @@ describe('buildCodexUsageStats', () => {
       input_tokens: 1200,
       output_tokens: 80,
       cached_input_tokens: 300,
+      reasoning_output_tokens: 0,
     });
 
     assert.deepEqual(usage, {

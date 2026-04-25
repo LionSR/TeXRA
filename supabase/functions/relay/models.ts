@@ -8,7 +8,7 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
-import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.4.0';
+import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.5.0';
 
 // =============================================================================
 // Types
@@ -78,8 +78,8 @@ const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
 
 /**
  * Ultra-only models: reserved for Ultra-tier users even during the
- * sponsor-credit promotion. Matches gpt-5-pro, gpt-5.2-pro, gpt-5.4-pro, etc.
- * Accepts optional provider prefixes like "openai/gpt-5.4-pro".
+ * sponsor-credit promotion. Matches gpt-5-pro, gpt-5.2-pro, gpt-5.5-pro, etc.
+ * Accepts optional provider prefixes like "openai/gpt-5.5-pro".
  */
 const ULTRA_ONLY_PATTERN =
   /^(?:[a-z0-9_-]+\/)?gpt-5(?:\.\d+)?-pro(?:$|[-:@/])/i;
