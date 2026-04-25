@@ -160,6 +160,10 @@ export class TaskGroupList extends LitElement {
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
 
+  /** Terminal committed-line node, managed imperatively to avoid full text rewrites. */
+  @query('.terminal-pre--committed')
+  private terminalCommittedPre?: HTMLPreElement;
+
   /**
    * Sticky scroll state: when true, new content auto-scrolls to bottom.
    * Flips false when user scrolls away, true when user scrolls back to bottom.
@@ -168,6 +172,15 @@ export class TaskGroupList extends LitElement {
 
   /** Threshold for detecting "near bottom" in scroll listener (px) */
   private static readonly STICKY_THRESHOLD = 150;
+
+  /** Text node currently attached to terminalCommittedPre. */
+  private terminalCommittedTextNode: Text | null = null;
+
+  /** Number of committed terminal characters already written to the DOM. */
+  private renderedTerminalLinesLength = 0;
+
+  /** True after a terminal cache rebuild, when incremental append is invalid. */
+  private terminalCommittedNeedsReset = true;
 
   /** Handle scroll events from vscode-scrollable to track user intent */
   private handleVscScroll = (): void => {
@@ -283,6 +296,17 @@ export class TaskGroupList extends LitElement {
     }
   }
 
+  override updated(): void {
+    if (this.terminal) {
+      this.syncTerminalCommittedText();
+      return;
+    }
+
+    this.terminalCommittedTextNode = null;
+    this.renderedTerminalLinesLength = 0;
+    this.terminalCommittedNeedsReset = true;
+  }
+
   /**
    * Incrementally classify messages appended since `startIndex`.
    * Avoids full tree rebuilds by classifying only new messages and inserting by timestamp.
@@ -380,6 +404,7 @@ export class TaskGroupList extends LitElement {
   private rebuildTerminalText(): void {
     this.cachedRawTail = '';
     this.cachedTerminalLines = '';
+    this.terminalCommittedNeedsReset = true;
     this.appendTerminalChunk(this.messages.map((m) => m.text).join(''));
   }
 
@@ -686,6 +711,54 @@ export class TaskGroupList extends LitElement {
     `;
   }
 
+  private renderTerminalOutput(): TemplateResult {
+    const tailText = processTerminalText(this.cachedRawTail);
+    const committedClass = 'terminal-pre terminal-pre--committed';
+    const tailClass = 'terminal-pre terminal-pre--tail';
+    const committed = html`<pre class=${committedClass}></pre>`;
+    const tail = html`<pre class=${tailClass}>${tailText}</pre>`;
+
+    return html`<div class="terminal-container">${[committed, tail]}</div>`;
+  }
+
+  private syncTerminalCommittedText(): void {
+    const pre = this.terminalCommittedPre;
+    if (!pre) return;
+
+    const next = this.cachedTerminalLines;
+    const hasAttachedNode = this.terminalCommittedTextNode?.parentNode === pre;
+    const shouldReset =
+      this.terminalCommittedNeedsReset ||
+      !hasAttachedNode ||
+      next.length < this.renderedTerminalLinesLength;
+
+    if (shouldReset) {
+      pre.textContent = '';
+      this.terminalCommittedTextNode =
+        next.length > 0 ? document.createTextNode(next) : null;
+      if (this.terminalCommittedTextNode) {
+        pre.append(this.terminalCommittedTextNode);
+      }
+      this.renderedTerminalLinesLength = next.length;
+      this.terminalCommittedNeedsReset = false;
+      return;
+    }
+
+    if (next.length > this.renderedTerminalLinesLength) {
+      if (!this.terminalCommittedTextNode) {
+        this.terminalCommittedTextNode = document.createTextNode('');
+        pre.append(this.terminalCommittedTextNode);
+      }
+
+      this.terminalCommittedTextNode.appendData(
+        next.slice(this.renderedTerminalLinesLength),
+      );
+      this.renderedTerminalLinesLength = next.length;
+    }
+
+    this.terminalCommittedNeedsReset = false;
+  }
+
   override render(): TemplateResult {
     // Show placeholder only when there are no streams in the current filter
     if (!this.hasStreams) {
@@ -707,9 +780,7 @@ export class TaskGroupList extends LitElement {
           class="log-container"
           @vsc-scrollable-scroll=${this.handleVscScroll}
         >
-          <pre class="terminal-pre">
-${this.cachedTerminalLines}${processTerminalText(this.cachedRawTail)}</pre
-          >
+          ${this.renderTerminalOutput()}
         </vscode-scrollable>
       `;
     }
