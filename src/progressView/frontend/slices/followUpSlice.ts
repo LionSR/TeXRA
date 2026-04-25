@@ -81,6 +81,8 @@ export const followUpHandlers: HandlerRegistry = {
   },
 
   [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
+    if (!ctx.getState().streamStates.has(data.stream)) return;
+
     ctx.setState((prev) =>
       create(prev, (draft) => {
         draft.followupOptionsByStream.set(data.stream, {

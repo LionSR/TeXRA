@@ -46,7 +46,7 @@ function getCompileDisplayName(file: OutputFileInfo): string {
 /**
  * Compile each .tex output of a round to verify the workflow produced a
  * buildable document. Success is silent; failures write the log tail to
- * `<runDir>/compile/<safe>.log`. Missing toolchains, runs without a run
+ * `<runDir>/compile/r<round>_<safe>.log`. Missing toolchains, runs without a run
  * directory, and non-root fragments are skipped gracefully.
  */
 export async function runCompileCheck(
@@ -145,9 +145,12 @@ async function compileOne(
     safeName,
   );
   const logDest = pathToLocation(
-    path.join(opts.compileRoot, `${safeName}.log`),
+    path.join(opts.compileRoot, `r${currentRound}_${safeName}.log`),
   );
-  const logRelativePath = path.join('compile', `${safeName}.log`);
+  const logRelativePath = path.join(
+    'compile',
+    `r${currentRound}_${safeName}.log`,
+  );
 
   // Clear any stale log from a previous round so "no log = success" holds.
   await flexibleFS.delete(logDest).catch(() => undefined);
