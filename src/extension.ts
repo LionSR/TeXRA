@@ -100,10 +100,11 @@ async function refreshApiKeyStatus() {
 
   // `anyApiKeyExists()` already falls back to `canUseServerSideKeys()`
   // internally, so a Researcher Access user with no local key is treated
-  // as set up. Catch here so a transient server-key probe failure
-  // doesn't leave the pill stuck — better to hide than to show a stale
-  // CTA on top of a working credential.
-  const exists = await SecretManager.anyApiKeyExists().catch(() => false);
+  // as set up. Don't catch here: a transient probe failure shouldn't
+  // regress a signed-in user back to the "Get Started" CTA. Let the
+  // outer `safeRefreshApiKeyStatus` log it and leave the pill in its
+  // prior state.
+  const exists = await SecretManager.anyApiKeyExists();
   if (!exists) {
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =
