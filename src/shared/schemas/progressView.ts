@@ -16,7 +16,7 @@ import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';
 import { StreamLogEntrySchema } from './log';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from './mainView';
-import { OutputFileInfoSchema } from './output';
+import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
   AgentProposalSchema,
   AgentProposalPermissionSchema,
@@ -195,6 +195,13 @@ export const UpdateMissingOutputsMessageSchema = z.object({
   reset: z.boolean().optional(),
 });
 
+export const UpdateCompileFailuresMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES),
+  stream: StreamTabIdSchema,
+  rounds: z.record(z.string(), z.array(CompileFailureSchema)).optional(),
+  reset: z.boolean().optional(),
+});
+
 export const UpdateTodosMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
   stream: StreamTabIdSchema,
@@ -219,6 +226,16 @@ export const UpdateQueuedFollowUpsMessageSchema = z.object({
   stream: StreamTabIdSchema,
   messages: z.array(z.string()),
 });
+
+export const SetFollowupOptionsMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
+  stream: StreamTabIdSchema,
+  toolUseAgentsData: z.array(AgentOptionDataSchema).optional(),
+  modelOptionsData: z.array(ModelOptionDataSchema).optional(),
+});
+export type SetFollowupOptionsMessage = z.infer<
+  typeof SetFollowupOptionsMessageSchema
+>;
 
 const PermissionKindSchema = z.enum([
   'toolEdit',
@@ -308,15 +325,6 @@ export const UpdateRecordingMessageSchema = z.object({
   error: z.string().optional(),
 });
 
-export const SetFollowupOptionsMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
-  stream: StreamTabIdSchema,
-  workflowAgentsData: z.array(AgentOptionDataSchema).optional(),
-  toolUseAgentsData: z.array(AgentOptionDataSchema).optional(),
-  modelOptionsData: z.array(ModelOptionDataSchema).optional(),
-  defaultMergeModel: z.string().optional(),
-});
-
 export const SyncStreamContentMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
   stream: z.union([StreamTabIdSchema, z.literal('')]),
@@ -324,6 +332,9 @@ export const SyncStreamContentMessageSchema = z.object({
   // Workflow flat files (one run per tab)
   workflowFiles: z.record(z.string(), z.array(OutputFileInfoSchema)).optional(),
   workflowMissingOutputs: z.record(z.string(), z.array(z.string())).optional(),
+  workflowCompileFailures: z
+    .record(z.string(), z.array(CompileFailureSchema))
+    .optional(),
   // Per-run usage map — used by both workflow and tool-use so resume
   // correctly accumulates. Frontend derives sessionUsage as the sum.
   runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
@@ -381,16 +392,17 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     LogDeltaMessageSchema,
     UpdateFilesMessageSchema,
     UpdateMissingOutputsMessageSchema,
+    UpdateCompileFailuresMessageSchema,
     UpdateTodosMessageSchema,
     UpdatePlanMessageSchema,
     UpdateRunUsageMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
+    SetFollowupOptionsMessageSchema,
     SyncStreamContentMessageSchema,
     UpdatePermissionMessageSchema,
     UpdateBypassMessageSchema,
     UpdateFollowUpTextMessageSchema,
     UpdateRecordingMessageSchema,
-    SetFollowupOptionsMessageSchema,
     SetPlacementMessageSchema,
     ProgressSetThemeMessageSchema,
     ProgressDeleteStreamMessageSchema,
@@ -400,10 +412,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
 
 export type ProgressViewOutboundMessage = z.infer<
   typeof ProgressViewOutboundMessageSchema
->;
-
-export type SetFollowupOptionsMessage = z.infer<
-  typeof SetFollowupOptionsMessageSchema
 >;
 
 // ============================================================
@@ -445,11 +453,6 @@ const OpenProfileMessageSchema = z.object({
 
 const OpenMemoryViewMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW),
-});
-
-const GetFollowupOptionsMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS),
-  stream: StreamTabIdSchema,
 });
 
 const StartRecordingMessageSchema = z.object({
@@ -531,6 +534,31 @@ const RestoreStateMessageSchema = z.object({
 const OpenTaskStorageMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE),
   stream: StreamTabIdSchema,
+});
+
+const RunCompileFixerMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER),
+  stream: StreamTabIdSchema,
+});
+
+const GetFollowupOptionsMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS),
+  stream: StreamTabIdSchema,
+});
+
+const FollowupConfigSchema = z.object({
+  stream: StreamTabIdSchema,
+  agent: TrimmedStringSchema,
+  model: TrimmedStringSchema,
+  initialQuestion: z.string().optional(),
+});
+
+const SetupFollowupMessageSchema = FollowupConfigSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP),
+});
+
+const RunFollowupMessageSchema = FollowupConfigSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP),
 });
 
 const CancelRetryRequestMessageSchema = z.object({
@@ -683,24 +711,6 @@ const OpenLabelMessageSchema = z.object({
   label: z.string().min(1),
 });
 
-const FollowupConfigSchema = z.object({
-  stream: StreamTabIdSchema,
-  mode: z.enum(['chat', 'workflow', 'merge']),
-  agent: z.string().min(1),
-  model: z.string().min(1),
-  includeInstruction: z.boolean().optional(),
-  initialQuestion: z.string().optional(),
-  attachAgentOutputs: z.boolean().optional(),
-});
-
-const SetupFollowupMessageSchema = FollowupConfigSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP),
-});
-
-const RunFollowupMessageSchema = FollowupConfigSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP),
-});
-
 export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
   'command',
   [
@@ -720,6 +730,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     CleanStreamMessageSchema,
     RestoreStateMessageSchema,
     OpenTaskStorageMessageSchema,
+    RunCompileFixerMessageSchema,
     FilterStreamsMessageSchema,
     SendFollowUpMessageSchema,
     PolishFollowUpMessageSchema,

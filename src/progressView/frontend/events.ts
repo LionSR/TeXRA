@@ -6,9 +6,8 @@
 import type { StringValueDetail } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 
-import type { FollowupFormData } from './components/FollowupSection';
 import type { PermissionState } from './components/PermissionCard';
-import type { FollowupMode, StreamFilter } from './store';
+import type { StreamFilter } from './store';
 
 // =============================================================================
 // Event Detail Types
@@ -29,11 +28,13 @@ export interface ToolbarCommandDetail {
 /** Alias for semantic clarity - uses shared StringValueDetail */
 export type FollowUpChangeDetail = StringValueDetail;
 
-export interface FollowupModeDetail {
-  mode: FollowupMode;
+export interface WorkflowFollowupFormData {
+  agent: string;
+  model: string;
+  initialQuestion: string;
 }
 
-export type FollowupCommandDetail = FollowupFormData & { mode: string };
+export type FollowupCommandDetail = WorkflowFollowupFormData;
 
 export interface PermissionActionDetail {
   permission: PermissionState;
@@ -92,14 +93,13 @@ export const ProgressEvents = {
   followupRequestOptions: () =>
     createEvent('followup-request-options', undefined),
 
-  followupModeChange: (detail: FollowupModeDetail) =>
-    createEvent('followup-mode-change', detail),
-
   followupSetup: (detail: FollowupCommandDetail) =>
     createEvent('followup-setup', detail),
 
   followupRun: (detail: FollowupCommandDetail) =>
     createEvent('followup-run', detail),
+
+  compileFixerRun: () => createEvent('compile-fixer-run', undefined),
 
   permissionAction: (detail: PermissionActionDetail) =>
     createEvent('permission-action', detail),

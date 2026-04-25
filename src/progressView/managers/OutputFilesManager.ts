@@ -3,8 +3,10 @@ import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import {
+  CompileFailureSchema,
   collectOutputFileLocations,
   OutputFileInfoListSchema,
+  type CompileFailure,
   type OutputFileInfo,
 } from '@shared/schemas/output';
 import type { StreamTabId } from '@shared/schemas/identifiers';
@@ -16,10 +18,16 @@ import type { StreamTabId } from '@shared/schemas/identifiers';
 export class OutputFilesManager {
   private items: Map<StreamTabId, Map<number, OutputFileInfo[]>> = new Map();
   private _missingOutputs: Map<StreamTabId, Map<number, string[]>> = new Map();
+  private _compileFailures: Map<StreamTabId, Map<number, CompileFailure[]>> =
+    new Map();
   private loaded = false;
   private readonly logger: AgentLogger;
   private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
   private readonly pendingMissingWrites = new Map<StreamTabId, Promise<void>>();
+  private readonly pendingCompileFailureWrites = new Map<
+    StreamTabId,
+    Promise<void>
+  >();
 
   constructor() {
     this.logger = new AgentLogger('OutputFilesManager');
@@ -87,6 +95,34 @@ export class OutputFilesManager {
     this.saveMissingOutputs(stream);
   }
 
+  /** Update compile failures for a stream, keyed by round. */
+  async updateCompileFailures(
+    stream: StreamTabId,
+    filesByRound: { [key: number]: CompileFailure[] },
+  ): Promise<void> {
+    const rounds = this.getOrCreate(this._compileFailures, stream);
+
+    for (const [round, failures] of Object.entries(filesByRound)) {
+      const roundResult = RoundKeySchema.safeParse(round);
+      if (!roundResult.success) {
+        this.logger.warn(
+          `Invalid compile-failure round '${round}' for stream ${stream}`,
+        );
+        continue;
+      }
+      const normalizedFailures = CompileFailureSchema.array().parse(
+        Array.isArray(failures) ? failures : [],
+      );
+      if (normalizedFailures.length === 0) {
+        rounds.delete(roundResult.data);
+        continue;
+      }
+      rounds.set(roundResult.data, normalizedFailures);
+    }
+
+    this.saveCompileFailures(stream);
+  }
+
   /** Get output files for a stream (copy). */
   getFiles(stream: StreamTabId): Map<number, OutputFileInfo[]> {
     return new Map(this.items.get(stream) ?? []);
@@ -133,6 +169,11 @@ export class OutputFilesManager {
     return new Map(this._missingOutputs.get(stream) ?? []);
   }
 
+  /** Get compile failures for a stream */
+  getCompileFailures(stream: StreamTabId): Map<number, CompileFailure[]> {
+    return new Map(this._compileFailures.get(stream) ?? []);
+  }
+
   /** Clear missing outputs for a stream (in-memory + disk) */
   async clearMissingOutputs(stream: StreamTabId): Promise<void> {
     if (!this._missingOutputs.delete(stream)) {
@@ -145,35 +186,45 @@ export class OutputFilesManager {
   evict(stream: StreamTabId): void {
     this.items.delete(stream);
     this._missingOutputs.delete(stream);
+    this._compileFailures.delete(stream);
     this.pendingWrites.delete(stream);
     this.pendingMissingWrites.delete(stream);
+    this.pendingCompileFailureWrites.delete(stream);
   }
 
   /** Clear all in-memory state. Disk cleanup owned by caller. */
   evictAll(): void {
     this.items.clear();
     this._missingOutputs.clear();
+    this._compileFailures.clear();
     this.pendingWrites.clear();
     this.pendingMissingWrites.clear();
+    this.pendingCompileFailureWrites.clear();
   }
 
   /** Load output files from disk-backed StreamTabStore */
   async load(streamIds: StreamTabId[]): Promise<void> {
     this.items.clear();
     this._missingOutputs.clear();
+    this._compileFailures.clear();
 
     await Promise.all(
       streamIds.map(async (streamId) => {
         const store = getStreamTabStore(streamId);
-        const [outputFiles, missingOutputs] = await Promise.all([
-          store.readOutputFiles(),
-          store.readMissingOutputs(),
-        ]);
+        const [outputFiles, missingOutputs, compileFailures] =
+          await Promise.all([
+            store.readOutputFiles(),
+            store.readMissingOutputs(),
+            store.readCompileFailures(),
+          ]);
         if (outputFiles?.size) {
           this.items.set(streamId, outputFiles);
         }
         if (missingOutputs?.size) {
           this._missingOutputs.set(streamId, missingOutputs);
+        }
+        if (compileFailures?.size) {
+          this._compileFailures.set(streamId, compileFailures);
         }
       }),
     );
@@ -186,6 +237,7 @@ export class OutputFilesManager {
     await Promise.all([
       ...this.pendingWrites.values(),
       ...this.pendingMissingWrites.values(),
+      ...this.pendingCompileFailureWrites.values(),
     ]);
   }
 
@@ -204,6 +256,15 @@ export class OutputFilesManager {
     this.chainWrite(stream, this.pendingMissingWrites, () => {
       const data = this._missingOutputs.get(stream);
       return getStreamTabStore(stream).writeMissingOutputs(
+        data ? mapToRecord(data) : {},
+      );
+    });
+  }
+
+  private saveCompileFailures(stream: StreamTabId): void {
+    this.chainWrite(stream, this.pendingCompileFailureWrites, () => {
+      const data = this._compileFailures.get(stream);
+      return getStreamTabStore(stream).writeCompileFailures(
         data ? mapToRecord(data) : {},
       );
     });

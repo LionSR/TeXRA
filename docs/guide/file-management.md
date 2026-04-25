@@ -164,28 +164,34 @@ The "Clean" button (<i class="codicon codicon-trash"></i>) removes output files 
 2. Safely removes generated artifacts from task storage
 3. Leaves original input files untouched
 
-Use this to clean up your workspace after reviewing the results.
+Use this to remove generated artifacts from task-run storage after reviewing the results.
 
 ### Opening Generated Files
 
-Click the file names listed in the ProgressBoard to view the outputs. Files now
-open using VS Code's default viewer, so PDFs and images display correctly while
-`.tex` documents open in the editor. Absolute paths are also handled
-properly.
+Workflow outputs are listed in the ProgressBoard under **Generated Files**.
+Click a file name to preview it in VS Code. Files open using VS Code's default
+viewer, so PDFs and images display correctly while `.tex` documents open in the
+editor.
+
+To browse the whole run folder, use the
+<i class="codicon codicon-folder-opened"></i> **Open in task storage** toolbar
+button. This reveals the task-run storage folder with generated files, compile
+logs, mirrored LaTeX dependencies, and intermediate artifacts.
 
 ### Task Run Storage
 
-Every time you run an agent, TeXRA creates a folder under its workspace storage
-directory:
+Every workflow run gets an isolated task-run storage folder under TeXRA's
+workspace storage directory:
 
 ```text
 executions/<executionId>/
 ```
 
-This folder stores intermediate artifacts such as the optional debug JSON
-files written when the `texra.debug.saveDebugObjects` setting is enabled
-(saves both message and response objects for debugging). These directories
-are safe to delete if you need to reclaim space.
+Workflow outputs are written there first, not directly over your workspace
+files. Use **Accept** to copy reviewed outputs back into the workspace, **Pack**
+to archive the whole run, and **Clean** to remove the run folder when you no
+longer need it. The folder also stores intermediate artifacts such as optional
+debug JSON files written when `texra.debug.saveDebugObjects` is enabled.
 
 ## Working with LaTeX Projects
 
