@@ -53,6 +53,12 @@ function createPlatform(): {
         return { authenticated: false };
       },
     },
+    config: {
+      get() {
+        return undefined;
+      },
+      async update() {},
+    },
   };
   return { platform, invocations };
 }
