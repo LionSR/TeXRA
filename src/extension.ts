@@ -287,6 +287,20 @@ export async function activate(context: vscode.ExtensionContext) {
     auth: {
       getStatus: () => getAuthStatus(),
     },
+    config: {
+      get: (key) => {
+        const cfg = vscode.workspace.getConfiguration();
+        return cfg.get(key);
+      },
+      update: async (key, value, target) => {
+        const cfg = vscode.workspace.getConfiguration();
+        const scope =
+          target === 'workspace'
+            ? vscode.ConfigurationTarget.Workspace
+            : vscode.ConfigurationTarget.Global;
+        await cfg.update(key, value, scope);
+      },
+    },
   });
   // GitHub token lives in SecretStorage (managed via the Git settings tab).
   // The tool layer only supports a synchronous token lookup, so we cache here

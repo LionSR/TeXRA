@@ -53,12 +53,25 @@ export interface SetupAuthAdapter {
   }>;
 }
 
+/** Configuration-value surface. Reads/writes scoped to `texra.*` keys. */
+export interface SetupConfigAdapter {
+  /** Read the effective value of a `texra.*` setting. */
+  get(key: string): unknown;
+  /** Write a `texra.*` setting. `target` selects user vs. workspace scope. */
+  update(
+    key: string,
+    value: unknown,
+    target: 'user' | 'workspace',
+  ): Promise<void>;
+}
+
 /** Aggregated setup platform. */
 export interface SetupPlatform {
   secrets: SetupSecretsAdapter;
   commands: SetupCommandAdapter;
   extensions: SetupExtensionAdapter;
   auth: SetupAuthAdapter;
+  config: SetupConfigAdapter;
 }
 
 let platform: SetupPlatform | undefined;
