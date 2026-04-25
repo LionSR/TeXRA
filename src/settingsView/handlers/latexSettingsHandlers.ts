@@ -24,6 +24,7 @@ import {
 } from '@shared/constants/latex';
 import {
   getConfig,
+  inspectConfig,
   isConfigExplicitlySet,
   updateConfig,
 } from '@utils/config/configUtils';
@@ -115,11 +116,8 @@ export class LatexSettingsHandlers {
           const recommended = value as Record<string, unknown>;
           // Read only the user's explicit global entries — not VS Code defaults —
           // so we don't leak built-in defaults into settings.json.
-          const inspection = vscode.workspace.getConfiguration().inspect(key);
-          const globalObj = (inspection?.globalValue ?? {}) as Record<
-            string,
-            unknown
-          >;
+          const inspection = inspectConfig<Record<string, unknown>>(key);
+          const globalObj = inspection?.globalValue ?? {};
           const remaining = { ...globalObj };
 
           // Always clean up legacy keys from older TeXRA versions.

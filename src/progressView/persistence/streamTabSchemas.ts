@@ -166,9 +166,12 @@ function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
 // ============================================================================
 
 const OutputFileListSchema = z
-  .array(OutputFileInfoSchema.catch(null as unknown as OutputFileInfo))
+  .array(z.unknown())
   .transform((items) =>
-    items.filter((item): item is OutputFileInfo => item !== null),
+    items.flatMap((item) => {
+      const parsed = OutputFileInfoSchema.safeParse(item);
+      return parsed.success ? [parsed.data] : [];
+    }),
   )
   .catch([]);
 
