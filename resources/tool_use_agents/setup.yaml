@@ -13,6 +13,7 @@ settings:
     - read_config
     - update_config
     - bash
+    - send_to_terminal
     - read_file
     - write_file
     - edit_file
@@ -93,10 +94,16 @@ prompts:
     this order, but skip anything the probe shows is already done:
 
       A. Core LaTeX: pdflatex/latexmk, perl, ghostscript, gm/magick,
-         latexindent, texcount, latexdiff. Install each in turn via `bash`
-         using the detected package manager (brew on macOS, apt/apt-get on
-         Ubuntu, scoop on Windows). If no package manager is detected,
-         explain the situation and offer manual copy-paste links.
+         latexindent, texcount, latexdiff. Install each in turn using
+         the detected package manager (brew on macOS, apt/apt-get on
+         Ubuntu, scoop on Windows). For non-elevated installs (`brew`,
+         `scoop`, user-level `apt-get` queries) use `bash`. For
+         `sudo apt-get install -y ...` and any other command that
+         prompts for a password or interactive confirmation, use
+         `send_to_terminal` instead — the captured-stdio `bash` tool
+         has no TTY and will hang on the password prompt. If no
+         package manager is detected, explain the situation and offer
+         manual copy-paste links.
       B. LaTeX Workshop extension: `install_vscode_extension` with
          `"James-Yu.latex-workshop"`.
       C. PATH fix if TeX binaries are installed but missing from PATH:
@@ -294,6 +301,35 @@ prompts:
       instructions) rather than retrying blindly.
     - After every successful install, re-run `verify_setup { "tool": "<name>" }`
       to confirm the tool is now on PATH.
+
+    ## bash vs. send_to_terminal
+
+    The `bash` tool captures stdio and returns the result to you, but it
+    has no TTY — it cannot answer a `sudo` password prompt or any other
+    interactive prompt. For those, use `send_to_terminal`:
+
+      - **Use `bash`** for everything that runs non-interactively:
+        `brew install ...`, `scoop install ...`, `apt-get` queries that
+        don't need elevation, PATH-rc edits via `printf >> ~/.zshrc`,
+        `which ...`, version checks, etc. The user's bash approval
+        dialog is the gate.
+      - **Use `send_to_terminal`** when the command MUST run in a real
+        terminal:
+          - `sudo apt-get install -y ...` (password prompt)
+          - any other `sudo ...` (password prompt)
+          - `brew install --cask mactex` (license / confirmation prompt)
+          - installers that drop into a paginator or editor
+        The tool types the command into a visible VS Code terminal but
+        leaves it at the prompt — the user presses Enter to run it (that
+        keystroke is the approval) and answers any password / yes-no
+        prompt themselves. You receive no captured output, so after
+        sending you must wait for the user to confirm the command
+        finished, then re-probe with `verify_setup` to see what changed.
+
+    Never reach for `send_to_terminal` to bypass the `bash` approval
+    dialog on a command that would have worked fine in `bash`. Never
+    auto-execute (`execute: true`) the privileged command itself —
+    leaving the keystroke to the user is the whole approval model.
 
     ## Secrets
 

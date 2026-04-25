@@ -65,6 +65,7 @@ import {
   InstallVscodeExtensionTool,
   ReadConfigTool,
   UpdateConfigTool,
+  SendToTerminalTool,
 } from './setup';
 
 /** Singleton IToolRegistry instance for the default tools. */
@@ -134,6 +135,7 @@ function createDefaultTools() {
     install_vscode_extension: new InstallVscodeExtensionTool(),
     read_config: new ReadConfigTool(),
     update_config: new UpdateConfigTool(),
+    send_to_terminal: new SendToTerminalTool(),
   } satisfies Record<string, ITool>;
 }
 

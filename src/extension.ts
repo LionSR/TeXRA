@@ -313,6 +313,18 @@ export async function activate(context: vscode.ExtensionContext) {
         await vscode.workspace.getConfiguration().update(key, value, scope);
       },
     },
+    terminal: {
+      sendCommand: async ({ name, command, execute }) => {
+        // Reuse a terminal with the same name when present so repeated
+        // calls don't clutter the user's terminal panel with tabs.
+        const existing = vscode.window.terminals.find((t) => t.name === name);
+        const terminal = existing ?? vscode.window.createTerminal({ name });
+        terminal.show();
+        // `addNewLine` controls whether the command is auto-executed.
+        // Default is unexecuted so the user's Enter is the approval gate.
+        terminal.sendText(command, execute);
+      },
+    },
   });
   // GitHub token lives in SecretStorage (managed via the Git settings tab).
   // The tool layer only supports a synchronous token lookup, so we cache here

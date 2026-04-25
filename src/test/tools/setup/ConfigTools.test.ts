@@ -60,6 +60,9 @@ function createPlatform(initial: Record<string, unknown> = {}): {
         store[key] = value;
       },
     },
+    terminal: {
+      async sendCommand() {},
+    },
   };
   return { platform, store, updates };
 }

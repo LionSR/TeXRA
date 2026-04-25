@@ -65,6 +65,25 @@ export interface SetupConfigAdapter {
   ): Promise<void>;
 }
 
+/**
+ * Integrated-terminal surface. The setup agent uses this for commands
+ * the captured-stdio `bash` tool cannot handle: `sudo` password prompts,
+ * other interactive TTY prompts, and any flow where the user must type
+ * into the running process.
+ */
+export interface SetupTerminalAdapter {
+  /**
+   * Reveal a VS Code integrated terminal and type `command` into it.
+   * When `execute` is `false`, the command is left at the prompt so the
+   * user must press Enter — that keystroke is the approval gate.
+   */
+  sendCommand(args: {
+    name: string;
+    command: string;
+    execute: boolean;
+  }): Promise<void>;
+}
+
 /** Aggregated setup platform. */
 export interface SetupPlatform {
   secrets: SetupSecretsAdapter;
@@ -72,6 +91,7 @@ export interface SetupPlatform {
   extensions: SetupExtensionAdapter;
   auth: SetupAuthAdapter;
   config: SetupConfigAdapter;
+  terminal: SetupTerminalAdapter;
 }
 
 let platform: SetupPlatform | undefined;

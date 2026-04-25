@@ -59,6 +59,9 @@ function createPlatform(): {
       },
       async update() {},
     },
+    terminal: {
+      async sendCommand() {},
+    },
   };
   return { platform, invocations };
 }
