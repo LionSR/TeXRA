@@ -184,9 +184,8 @@ export class ModelSelectionList extends LitElement {
             );
           }}
         >
-          <span class="model-name" title=${model.name}
-            >${model.label}<span class="model-shortname"> (${model.name})</span></span
-          >
+          <span class="model-name">${model.label}</span>
+          <span class="model-shortname">(${model.name})</span>
           ${!available
             ? html`<span
                 class="codicon codicon-key model-key-icon"
