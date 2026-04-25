@@ -20,3 +20,12 @@ export function isFile(type: number): boolean {
 export function isDirectory(type: number): boolean {
   return (type & FileType.Directory) === FileType.Directory;
 }
+
+/**
+ * Check if a file system entry type represents a symbolic link.
+ * Callers that traverse directories should skip symlinks (or maintain a
+ * realpath/visited set) to avoid cycles.
+ */
+export function isSymlink(type: number): boolean {
+  return (type & FileType.SymbolicLink) === FileType.SymbolicLink;
+}

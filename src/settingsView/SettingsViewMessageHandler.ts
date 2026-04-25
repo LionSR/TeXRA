@@ -142,7 +142,7 @@ import {
   getProviderDisplayName,
   getProviderKeyUrl,
 } from '@utils/config/providerConfig';
-import { getConfig } from '@utils/config/configUtils';
+import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
@@ -1065,8 +1065,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     configKey: string,
     enabled: boolean,
   ): Promise<void> {
-    const config = vscode.workspace.getConfiguration();
-    await config.update(configKey, enabled, vscode.ConfigurationTarget.Global);
+    await updateConfig(configKey, enabled, {
+      target: vscode.ConfigurationTarget.Global,
+      prefix: false,
+    });
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
@@ -1578,12 +1580,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     if (def?.globalStateKey) {
       await globalSM?.update(def.globalStateKey, data.value);
     } else {
-      const config = vscode.workspace.getConfiguration();
-      await config.update(
-        data.key,
-        data.value,
-        vscode.ConfigurationTarget.Global,
-      );
+      await updateConfig(data.key, data.value, {
+        target: vscode.ConfigurationTarget.Global,
+        prefix: false,
+      });
     }
 
     await this.withActiveWebview(async (w) => {
