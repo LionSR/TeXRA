@@ -46,28 +46,31 @@ function createLoggerStub(): LoggerStub {
   };
 }
 
-function createConfig(): ModelConfig {
+function createConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
   return {
     name: 'gpt-4.1',
     fullName: 'gpt-4.1',
     shortName: 'gpt-4.1',
     label: 'GPT 4.1',
     provider: ModelProvider.OPENAI,
-    maxOutputTokens: 1024,
+    maxOutputTokens: overrides.maxOutputTokens ?? 1024,
     inputPrice: 0,
     outputPrice: 0,
-    contextWindow: 200000,
+    contextWindow: overrides.contextWindow ?? 200000,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsReasoning: false,
       supportsVision: false,
+      ...(overrides.capabilities ?? {}),
     },
-    openRouterOnly: true,
+    openRouterOnly: overrides.openRouterOnly ?? true,
   };
 }
 
-function createHandler(): ModelHandlerOpenAIResponse {
-  const handler = new ModelHandlerOpenAIResponse(createConfig());
+function createHandler(
+  configOverrides: Partial<ModelConfig> = {},
+): ModelHandlerOpenAIResponse {
+  const handler = new ModelHandlerOpenAIResponse(createConfig(configOverrides));
   handler.setLogger(createLoggerStub() as unknown as AgentLogger);
   handler.getStreamingConfig = () => false;
   return handler;
@@ -153,5 +156,69 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(requests[0].previous_response_id, undefined);
     assert.equal(requests[1].previous_response_id, undefined);
     assert.deepEqual(requests[1].input, secondTurnMessages);
+  });
+
+  it('uses the preserved token baseline after an invalid previous response id clears chaining', async () => {
+    const handler = createHandler({
+      openRouterOnly: false,
+      maxOutputTokens: 120000,
+      contextWindow: 200000,
+    });
+    const requests: any[] = [];
+    let tokenCountCalls = 0;
+    const client = {
+      responses: {
+        inputTokens: {
+          count: async () => {
+            tokenCountCalls += 1;
+            if (tokenCountCalls === 3) {
+              throw new Error('token counting unavailable');
+            }
+            return { input_tokens: 1000 };
+          },
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          if (requests.length === 1) {
+            return createResponse('resp-baseline', { input_tokens: 100000 });
+          }
+          if (requests.length === 2) {
+            throw new Error(
+              "Previous response with id 'resp-baseline' not found.",
+            );
+          }
+          return createResponse('resp-rebuilt', { input_tokens: 100500 });
+        },
+      },
+    };
+    const firstTurnMessages = createMessages(2);
+    const rebuiltMessages = createMessages(3);
+
+    await handler.createResponse({
+      client: client as any,
+      messages: firstTurnMessages,
+      temperature: 0,
+    });
+
+    await assert.rejects(
+      handler.createResponse({
+        client: client as any,
+        messages: rebuiltMessages,
+        temperature: 0,
+      }),
+      /Previous response/,
+    );
+    await handler.createResponse({
+      client: client as any,
+      messages: rebuiltMessages,
+      temperature: 0,
+    });
+
+    assert.equal(requests.length, 3);
+    assert.equal(requests[1].previous_response_id, 'resp-baseline');
+    assert.equal(requests[2].previous_response_id, undefined);
+    assert.deepEqual(requests[2].input, rebuiltMessages);
+    assert.equal(tokenCountCalls, 3);
+    assert.equal(requests[2].max_output_tokens, 99990);
   });
 });
