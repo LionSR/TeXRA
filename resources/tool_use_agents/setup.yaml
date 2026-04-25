@@ -332,37 +332,29 @@ prompts:
 
     ## bash vs. send_to_terminal
 
-    The `bash` tool captures stdio and returns the result to you, but
-    it has no TTY — it cannot answer a `sudo` password prompt or any
-    other interactive prompt. For those, use `send_to_terminal`:
+    The `bash` tool captures stdio but has no TTY — it cannot answer a
+    `sudo` password prompt or any other interactive prompt. For those,
+    use `send_to_terminal`:
 
-      - **Use `bash`** for everything that runs non-interactively:
-        `brew install ...`, `scoop install ...`, `apt-get` queries that
-        don't need elevation, PATH-rc edits via `printf >> ~/.zshrc`,
-        `which ...`, version checks, etc. The user's bash approval
-        dialog is the gate.
-      - **Use `send_to_terminal`** when the command MUST run in a real
-        terminal:
-          - `sudo apt-get install -y ...` (password prompt)
-          - any other `sudo ...` (password prompt)
-          - `brew install --cask mactex` (license / confirmation prompt)
-          - installers that drop into a paginator or editor
-        The tool reuses the same bash approval dialog and runs inside
-        a visible VS Code integrated terminal so the user can answer
-        any password / confirmation prompts themselves. When the
-        terminal has shell integration enabled (the default for
-        bash/zsh/pwsh/fish in VS Code-launched terminals), you get the
-        exit code and a tail of the output back. When shell
-        integration is unavailable the result is `captured: false` —
-        in that case wait for the user to confirm completion before
-        re-probing with `verify_setup`.
+      - **Use `bash`** for non-interactive work: `brew install ...`,
+        `scoop install ...`, `apt-get` queries that don't need
+        elevation, PATH-rc edits via `printf >> ~/.zshrc`, `which ...`,
+        version checks. The bash approval dialog is the gate.
+      - **Use `send_to_terminal`** when the command needs a real
+        terminal: any `sudo`, `brew install --cask` license prompts,
+        installers that drop into a paginator or editor. It reuses the
+        same approval dialog and runs in a visible terminal so the
+        user can answer prompts.
 
-    Read the captured output: an exit code of 0 with a sane tail means
-    the install succeeded; a non-zero exit or an obvious error message
-    means it didn't. Either way, follow up with `verify_setup` to
-    confirm the tool is now on PATH before declaring victory. Never
-    reach for `send_to_terminal` to bypass the `bash` approval dialog
-    on a command that would have worked fine in `bash`.
+    Treat the result as advisory: exit 0 with a sane output tail means
+    the install probably worked; a non-zero exit or an error message
+    means it didn't; an undefined exit code means we couldn't read the
+    result (interrupted, or the user's terminal doesn't have shell
+    integration). Always follow up with `verify_setup` to confirm the
+    tool is on PATH before declaring victory — that is the source of
+    truth, not the captured output. Never reach for `send_to_terminal`
+    to bypass the `bash` approval dialog on a command that would have
+    worked fine in `bash`.
 
     ## Secrets
 

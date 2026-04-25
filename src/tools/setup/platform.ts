@@ -73,10 +73,10 @@ export interface SetupConfigAdapter {
  *
  * Implementations should prefer VS Code's stable `Terminal.shellIntegration`
  * API (since 1.93) so the agent can read back exit code + output. When
- * shell integration isn't available (custom shell, user disabled the
- * auto-inject, remote edge case), the implementation falls back to
- * `sendText` and reports `captured: false` — the agent then has to ask
- * the user to confirm completion and re-probe.
+ * shell integration is unavailable the implementation may return an
+ * `undefined` exit code with empty output — the caller treats that the
+ * same as "user interrupted", since neither path tells us anything
+ * actionable.
  */
 export interface SetupTerminalAdapter {
   runCommand(args: {
@@ -87,16 +87,13 @@ export interface SetupTerminalAdapter {
   }): Promise<TerminalRunResult>;
 }
 
-export type TerminalRunResult =
-  | {
-      captured: true;
-      /** `undefined` if the shell didn't report one (e.g. user Ctrl+C). */
-      exitCode: number | undefined;
-      /** ANSI-stripped, length-capped tail of the command's output. */
-      output: string;
-      timedOut: boolean;
-    }
-  | { captured: false };
+export interface TerminalRunResult {
+  /** `undefined` if shell integration was unavailable, or the run was interrupted. */
+  exitCode: number | undefined;
+  /** ANSI-stripped, length-capped tail of the command's output. May be empty. */
+  output: string;
+  timedOut: boolean;
+}
 
 /** Aggregated setup platform. */
 export interface SetupPlatform {

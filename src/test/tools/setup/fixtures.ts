@@ -62,7 +62,7 @@ export function createFakeSetupPlatform(
     },
     terminal: {
       async runCommand(): Promise<TerminalRunResult> {
-        return { captured: false };
+        return { exitCode: undefined, output: '', timedOut: false };
       },
       ...overrides.terminal,
     },

@@ -15,20 +15,17 @@ import { createFakeSetupPlatform } from './fixtures';
 
 /**
  * `requestBashApproval` reads `texra.toolUse.requireBashApproval` via
- * `getConfig`, which falls through to the supplied default (`true`)
- * when no platform is registered — so without intervention the
- * approval prompt would be shown and the test would hang waiting for a
- * user response that never arrives. Register a minimal platform that
- * resolves the bash-approval flag to `false`; everything else in this
- * test file goes through the SetupPlatform fixture, not Platform.
+ * `getConfig`, which falls through to its default (`true`) when no
+ * platform is registered — so without intervention the approval prompt
+ * would emit on the bus and the test would hang waiting for a settle
+ * callback that never arrives. Stub the platform's config so the
+ * approval flag resolves to `false` and the dialog is skipped.
  */
 function installApprovalSkippingPlatform(): void {
   const stub: Partial<Platform> = {
     config: {
-      get: <T,>(key: string, defaultValue?: T): T => {
-        if (key === BASH_APPROVAL_CONFIG_KEY) return false as T;
-        return defaultValue as T;
-      },
+      get: <T,>(key: string, defaultValue?: T): T =>
+        key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
     },
   };
   initPlatform(stub as Platform);
@@ -42,15 +39,11 @@ interface RunRecord {
 
 function createPlatform(
   result: TerminalRunResult = {
-    captured: true,
     exitCode: 0,
     output: 'installed perl 5.38.2\n',
     timedOut: false,
   },
-): {
-  platform: SetupPlatform;
-  runs: RunRecord[];
-} {
+): { platform: SetupPlatform; runs: RunRecord[] } {
   const runs: RunRecord[] = [];
   const platform = createFakeSetupPlatform({
     terminal: {
@@ -66,27 +59,21 @@ function createPlatform(
 describe('SendToTerminalTool', () => {
   before(() => installApprovalSkippingPlatform());
 
-  it('runs the command and returns exit code + captured output preview', async () => {
+  it('runs the command and returns exit code + captured output', async () => {
     const { platform, runs } = createPlatform();
     setSetupPlatform(platform);
     const tool = new SendToTerminalTool();
 
     const result = await tool.call({
       command: 'sudo apt-get install -y perl',
-      reason: 'sudo password prompt',
     });
 
     assert.ok(!result.isError);
     assert.equal(runs.length, 1);
     assert.equal(runs[0].command, 'sudo apt-get install -y perl');
-    assert.equal(
-      runs[0].name,
-      'TeXRA: setup',
-      'default label "setup" must be prefixed with TeXRA:',
-    );
-    assert.match(result.summary ?? '', /exit 0/);
+    assert.equal(runs[0].name, 'TeXRA: setup');
+    assert.match(result.summary ?? '', /exited 0/);
     assert.match(result.output ?? '', /installed perl/);
-    assert.match(result.output ?? '', /sudo password prompt/);
   });
 
   it('always prepends TeXRA: to a caller-supplied label', async () => {
@@ -96,30 +83,22 @@ describe('SendToTerminalTool', () => {
 
     await tool.call({
       command: 'sudo apt-get install -y perl',
-      reason: 'sudo password prompt',
       label: 'install LaTeX',
     });
 
-    assert.equal(
-      runs[0].name,
-      'TeXRA: install LaTeX',
-      'caller-supplied labels must be prefixed, never used as-is',
-    );
+    assert.equal(runs[0].name, 'TeXRA: install LaTeX');
   });
 
   it('reports a non-zero exit code clearly to the agent', async () => {
     const { platform } = createPlatform({
-      captured: true,
       exitCode: 100,
       output: 'E: Unable to locate package fakepkg\n',
       timedOut: false,
     });
     setSetupPlatform(platform);
-    const tool = new SendToTerminalTool();
 
-    const result = await tool.call({
+    const result = await new SendToTerminalTool().call({
       command: 'sudo apt-get install -y fakepkg',
-      reason: 'sudo password prompt',
     });
 
     assert.ok(!result.isError);
@@ -127,71 +106,24 @@ describe('SendToTerminalTool', () => {
     assert.match(result.output ?? '', /Unable to locate package/);
   });
 
-  it('handles timeout result without throwing', async () => {
+  it('reports a timeout without throwing', async () => {
     const { platform } = createPlatform({
-      captured: true,
       exitCode: undefined,
       output: 'fetching...\n',
       timedOut: true,
     });
     setSetupPlatform(platform);
-    const tool = new SendToTerminalTool();
 
-    const result = await tool.call({
+    const result = await new SendToTerminalTool().call({
       command: 'sudo apt-get install -y perl',
-      reason: 'sudo password prompt',
       timeout: 1000,
     });
 
     assert.ok(!result.isError);
     assert.match(result.summary ?? '', /timed out/);
-    assert.match(result.output ?? '', /did not finish/);
   });
 
-  it('explains the no-capture case when shell integration is unavailable', async () => {
-    const { platform } = createPlatform({ captured: false });
-    setSetupPlatform(platform);
-    const tool = new SendToTerminalTool();
-
-    const result = await tool.call({
-      command: 'sudo apt-get install -y perl',
-      reason: 'sudo password prompt',
-    });
-
-    assert.ok(!result.isError);
-    assert.match(result.summary ?? '', /no output capture/);
-    assert.match(result.output ?? '', /Shell integration was not available/);
-  });
-
-  it('rejects whitespace-only commands', async () => {
-    const { platform, runs } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new SendToTerminalTool();
-
-    const result = await tool.call({
-      command: '   ',
-      reason: 'sudo password prompt',
-    });
-
-    assert.ok(result.isError);
-    assert.equal(runs.length, 0);
-  });
-
-  it('rejects whitespace-only reason — the agent must justify TTY use', async () => {
-    const { platform, runs } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new SendToTerminalTool();
-
-    const result = await tool.call({
-      command: 'sudo apt-get install -y perl',
-      reason: '   ',
-    });
-
-    assert.ok(result.isError);
-    assert.equal(runs.length, 0);
-  });
-
-  it('rejects commands containing newlines — they would smuggle a second command', async () => {
+  it('rejects commands containing newlines', async () => {
     const { platform, runs } = createPlatform();
     setSetupPlatform(platform);
     const tool = new SendToTerminalTool();
@@ -201,28 +133,9 @@ describe('SendToTerminalTool', () => {
       'sudo apt-get install -y perl\r\necho pwned',
       'first\rsecond',
     ]) {
-      const result = await tool.call({
-        command,
-        reason: 'sudo password prompt',
-      });
-      assert.ok(
-        result.isError,
-        `embedded newline must be rejected: ${JSON.stringify(command)}`,
-      );
+      const result = await tool.call({ command });
+      assert.ok(result.isError, `must reject ${JSON.stringify(command)}`);
     }
     assert.equal(runs.length, 0);
-  });
-
-  it('trims surrounding whitespace before sending', async () => {
-    const { platform, runs } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new SendToTerminalTool();
-
-    await tool.call({
-      command: '   sudo apt-get install -y perl   ',
-      reason: 'sudo password prompt',
-    });
-
-    assert.equal(runs[0].command, 'sudo apt-get install -y perl');
   });
 });

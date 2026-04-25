@@ -1,13 +1,12 @@
 /**
  * Setup-tool integrated-terminal runner.
  *
- * Implements `SetupTerminalAdapter.runCommand` for `extension.ts`. Prefers
- * VS Code's stable `Terminal.shellIntegration` API (since 1.93) so the
- * setup agent can read back exit code + output. When shell integration
- * isn't available — custom shell, user disabled the auto-inject, remote
- * SSH edge cases — falls back to `terminal.sendText(command, true)` and
- * reports `captured: false` so the agent knows to ask the user to
- * confirm completion and re-probe.
+ * Implements `SetupTerminalAdapter.runCommand`. Prefers VS Code's stable
+ * `Terminal.shellIntegration` API (since 1.93) so the agent gets exit
+ * code + output. When integration isn't available — custom shell, user
+ * disabled the auto-inject, remote SSH edge cases — falls back to
+ * `sendText` and returns an empty captured result; the caller sees the
+ * same shape as a Ctrl+C interruption and re-probes with `verify_setup`.
  */
 
 // Third-party imports
@@ -17,87 +16,58 @@ import stripAnsi from 'strip-ansi';
 // Local imports
 import type { TerminalRunResult } from '@tools/setup';
 
-/** Length cap for the captured output tail. */
 const OUTPUT_MAX_CHARS = 12_000;
-/** How long to wait for shell integration to finish activating on a fresh terminal. */
 const SHELL_INTEGRATION_WAIT_MS = 2_000;
+const READER_DRAIN_MS = 250;
 
-/**
- * Run a command in a named integrated terminal and (when possible)
- * return its captured output and exit code.
- *
- * The caller is responsible for approval gating — by the time
- * `runCommand` is called, the user has already approved the command
- * through the normal bash approval surface.
- */
 export async function runTerminalCommand(args: {
   name: string;
   command: string;
   timeoutMs: number;
 }): Promise<TerminalRunResult> {
   const { name, command, timeoutMs } = args;
-
-  // Reuse a terminal with the same name when present so repeated calls
-  // don't clutter the user's terminal panel with duplicate tabs. A
-  // terminal that has already exited keeps appearing in `terminals`
-  // until the user closes it manually — skip those, otherwise our
-  // command would silently land in a dead tab.
-  const existing = vscode.window.terminals.find(
-    (t) => t.name === name && t.exitStatus === undefined,
-  );
-  const terminal = existing ?? vscode.window.createTerminal({ name });
-  terminal.show();
-
+  const terminal = revealTerminal(name);
   const integration = await waitForShellIntegration(
     terminal,
     SHELL_INTEGRATION_WAIT_MS,
   );
 
   if (!integration) {
-    // No shell integration → run the command but give up on capture.
-    // Auto-execute (`addNewLine: true`) — the bash approval dialog is
-    // the gate, so requiring an extra Enter keystroke would just
-    // confuse the user.
     terminal.sendText(command, true);
-    return { captured: false };
+    return { exitCode: undefined, output: '', timedOut: false };
   }
 
   return captureExecution(integration, command, timeoutMs);
 }
 
 /**
- * Wait briefly for `shellIntegration` to populate on a freshly-created
- * terminal. Returns `undefined` if it doesn't show up in time.
+ * Reuse a same-named, still-running terminal so repeated calls don't
+ * pile up tabs. Already-exited terminals stay in `terminals` until the
+ * user closes them; treat those as gone.
  */
+function revealTerminal(name: string): vscode.Terminal {
+  const existing = vscode.window.terminals.find(
+    (t) => t.name === name && t.exitStatus === undefined,
+  );
+  const terminal = existing ?? vscode.window.createTerminal({ name });
+  terminal.show();
+  return terminal;
+}
+
 async function waitForShellIntegration(
   terminal: vscode.Terminal,
   timeoutMs: number,
 ): Promise<vscode.TerminalShellIntegration | undefined> {
   if (terminal.shellIntegration) return terminal.shellIntegration;
-
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      disposable.dispose();
-      resolve(undefined);
-    }, timeoutMs);
-    const disposable = vscode.window.onDidChangeTerminalShellIntegration(
-      (event) => {
-        if (event.terminal === terminal) {
-          clearTimeout(timer);
-          disposable.dispose();
-          resolve(event.shellIntegration);
-        }
-      },
-    );
-  });
+  const raced = await raceWithTimeout<vscode.TerminalShellIntegration>(
+    (resolve) =>
+      vscode.window.onDidChangeTerminalShellIntegration((event) => {
+        if (event.terminal === terminal) resolve(event.shellIntegration);
+      }),
+    timeoutMs,
+  );
+  return raced.timedOut ? undefined : raced.value;
 }
-
-/**
- * Sentinel returned by the timeout race so callers can distinguish
- * "we gave up waiting" from "the shell reported no exit code" (Ctrl+C
- * before completion). Plain `undefined` means the latter.
- */
-const TIMEOUT_SENTINEL: unique symbol = Symbol('terminal-timeout');
 
 async function captureExecution(
   integration: vscode.TerminalShellIntegration,
@@ -107,78 +77,78 @@ async function captureExecution(
   const execution = integration.executeCommand(command);
 
   // Exit code is delivered via the global end-event, not the execution
-  // object itself, so subscribe BEFORE we start reading. Hoist the
-  // disposable so the timeout branch below can also dispose it —
-  // otherwise the listener stays registered for the rest of the
-  // session and fires on every unrelated terminal execution.
-  let endDisposable: vscode.Disposable | undefined;
-  const exitCodePromise = new Promise<number | undefined>((resolve) => {
-    endDisposable = vscode.window.onDidEndTerminalShellExecution((event) => {
-      if (event.execution !== execution) return;
-      endDisposable?.dispose();
-      endDisposable = undefined;
-      resolve(event.exitCode);
-    });
-  });
+  // object itself, so subscribe before reading.
+  const raced = raceWithTimeout<number | undefined>(
+    (resolve) =>
+      vscode.window.onDidEndTerminalShellExecution((event) => {
+        if (event.execution === execution) resolve(event.exitCode);
+      }),
+    timeoutMs,
+  );
 
-  // Sliding-window tail: keep at most OUTPUT_MAX_CHARS of the most
-  // recent output. The previous version flipped a `truncated` flag and
-  // skipped all subsequent chunks, which discarded the actual end of
-  // the run (the success / error line the agent needs to interpret).
-  // Add a `.catch` so a stream error after we abandon the reader
-  // (e.g. on timeout, or if the user closes the terminal) cannot
-  // surface as an unhandled rejection.
-  let output = '';
-  const reader = (async () => {
-    for await (const chunk of execution.read()) {
-      output += chunk;
-      if (output.length > OUTPUT_MAX_CHARS) {
-        output = output.slice(-OUTPUT_MAX_CHARS);
-      }
-    }
-  })().catch(() => {
-    // Swallow — the captured output we have so far is still useful,
-    // and the agent already has a `timedOut` / undefined-exit signal
-    // for the failure case.
-  });
+  // Drain the stream into a sliding-window tail. `.catch` swallows
+  // late stream errors (terminal closed after we stopped awaiting)
+  // so they cannot bubble up as unhandled rejections.
+  const reader = tail(execution.read(), OUTPUT_MAX_CHARS).catch(() => '');
 
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  const raced = await Promise.race([
-    exitCodePromise,
-    new Promise<typeof TIMEOUT_SENTINEL>((resolve) => {
-      timeoutHandle = setTimeout(() => resolve(TIMEOUT_SENTINEL), timeoutMs);
-    }),
+  const result = await raced;
+
+  // Drain any final chunks; bound the wait so a hung reader can't
+  // block the agent forever.
+  const output = await Promise.race([
+    reader,
+    new Promise<string>((resolve) =>
+      setTimeout(() => resolve(''), READER_DRAIN_MS),
+    ),
   ]);
-  const timedOut = raced === TIMEOUT_SENTINEL;
-  const exitCode = timedOut ? undefined : raced;
-  // Clear the timer when the exit-code event won. Without this the
-  // pending timeout (up to 15 min) sits on the event loop holding the
-  // sentinel-resolving closure alive long after the command finished.
-  if (!timedOut && timeoutHandle !== undefined) {
-    clearTimeout(timeoutHandle);
-  }
-
-  // On timeout, dispose the now-stranded end-event listener. It would
-  // otherwise stay registered for the rest of the session and fire on
-  // every unrelated terminal execution that ends afterward.
-  if (timedOut) {
-    endDisposable?.dispose();
-    endDisposable = undefined;
-  }
-
-  // Drain any final chunks unless we timed out; bound the wait so a
-  // hung reader can't block the agent forever.
-  if (!timedOut) {
-    await Promise.race([
-      reader,
-      new Promise<void>((resolve) => setTimeout(resolve, 250)),
-    ]);
-  }
 
   return {
-    captured: true,
-    exitCode,
+    exitCode: result.timedOut ? undefined : result.value,
     output: stripAnsi(output),
-    timedOut,
+    timedOut: result.timedOut,
   };
+}
+
+type Raced<T> = { timedOut: false; value: T } | { timedOut: true };
+
+/**
+ * Race a one-shot event subscription against a timeout. Disposes the
+ * subscription and clears the timer in whichever branch wins so we
+ * never leak listeners or pending timers.
+ */
+function raceWithTimeout<T>(
+  subscribe: (resolve: (value: T) => void) => vscode.Disposable,
+  timeoutMs: number,
+): Promise<Raced<T>> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (result: Raced<T>) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      disposable.dispose();
+      resolve(result);
+    };
+    const disposable = subscribe((value) =>
+      settle({ timedOut: false, value }),
+    );
+    const timer = setTimeout(() => settle({ timedOut: true }), timeoutMs);
+  });
+}
+
+/**
+ * Drain an async iterable into a length-capped sliding-window tail.
+ * Caller may abandon the returned promise; chunk errors are surfaced
+ * to the caller for them to decide whether to swallow.
+ */
+async function tail(
+  stream: AsyncIterable<string>,
+  maxChars: number,
+): Promise<string> {
+  let buf = '';
+  for await (const chunk of stream) {
+    buf += chunk;
+    if (buf.length > maxChars) buf = buf.slice(-maxChars);
+  }
+  return buf;
 }
