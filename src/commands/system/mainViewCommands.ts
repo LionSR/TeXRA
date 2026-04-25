@@ -141,6 +141,11 @@ export function registerMainViewCommands(
               command: sampleProjectCommands.createSampleProject,
             },
             {
+              label: '$(rocket) Run the setup assistant agent',
+              description: 'Check tools, credentials, and LaTeX setup',
+              command: 'texra.runSetupAssistant',
+            },
+            {
               label: '$(book) Walk me through setup',
               description: 'Open the getting started walkthrough',
               command: 'texra.openGettingStarted',

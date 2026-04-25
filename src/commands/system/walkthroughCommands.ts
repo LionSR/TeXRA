@@ -1,6 +1,8 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+const GETTING_STARTED_WALKTHROUGH_ID = 'texra.gettingStarted';
+
 export function registerWalkthroughCommands(
   context: vscode.ExtensionContext,
 ): void {
@@ -8,7 +10,7 @@ export function registerWalkthroughCommands(
     vscode.commands.registerCommand('texra.openGettingStarted', () =>
       vscode.commands.executeCommand(
         'workbench.action.openWalkthrough',
-        'texra.gettingStarted',
+        `${context.extension.id}#${GETTING_STARTED_WALKTHROUGH_ID}`,
       ),
     ),
   );
