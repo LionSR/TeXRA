@@ -402,7 +402,10 @@ function formatAgentList(
 ): string {
   return agents
     .map((agent) => {
-      const desc = agent.description || 'No description';
+      const desc =
+        agent.name === 'chat'
+          ? `${agent.description || 'No description'} Fallback-only: use this only after ruling out every specialized tool-use agent.`
+          : agent.description || 'No description';
       const toolsSuffix = agent.tools?.length
         ? `\n  Tools: ${agent.tools.join(', ')}`
         : '';
@@ -837,13 +840,13 @@ export class DelegateAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
 
-Agent selection: prefer specialized agents over chat (the general-purpose fallback). Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks.
+Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. Do not choose chat just because the task is a targeted edit, file operation, or mixed research/editing request; choose chat only when no listed specialized agent covers the work, and state that reason in the instruction.
 
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
 Example (new, specialized): agent=research, instruction="Derive the asymptotic expansion of the partition function in appendix_A.tex using saddle-point methods. Verify with Wolfram."
-Example (new, general): agent=chat, instruction="Fix the \\cite commands on slides 3 and 7 in slides/talk.tex using refs.bib."
+Example (new, targeted LaTeX repair): agent=latexFixer, instruction="Fix the unresolved citation commands on slides 3 and 7 in slides/talk.tex using refs.bib."
 Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."
 
 Git worktree support: ${
