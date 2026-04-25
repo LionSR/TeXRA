@@ -286,8 +286,19 @@ export function formatSubagentDelivery(
   const wdElement = workingDirectoryElement(options?.workingDirectory);
   if (wdElement) lines.push(wdElement);
 
-  if (result.category === 'workflow' && result.outputs.length > 0) {
-    lines.push(...formatWorkflowOutputs(result.outputs, options?.diffInfos));
+  if (result.category === 'workflow') {
+    if (result.outputs.length > 0) {
+      lines.push(...formatWorkflowOutputs(result.outputs, options?.diffInfos));
+    }
+    if (result.compileFailures.length > 0) {
+      lines.push('<compile-failures>');
+      for (const failure of result.compileFailures) {
+        lines.push(
+          `<failure round="${failure.round}" file="${escapeAttr(failure.displayName)}" output="${escapeAttr(failure.outputPath)}" log="${escapeAttr(failure.logPath)}" />`,
+        );
+      }
+      lines.push('</compile-failures>');
+    }
   } else if (result.category === 'toolUse') {
     if (result.lastResponse) {
       lines.push('<response>', result.lastResponse, '</response>');

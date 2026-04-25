@@ -13,6 +13,7 @@ import type {
   ConversationProgress,
   ContextState,
   OutputFileInfo,
+  CompileFailure,
   PermissionPayload,
   ProgressPermissionKind,
   ProgressViewPlacement,
@@ -39,6 +40,8 @@ export interface LogContentExtras {
   workflowFiles?: Record<string, OutputFileInfo[]>;
   /** Workflow missing outputs by round */
   workflowMissingOutputs?: Record<string, string[]>;
+  /** Workflow compile failures by round */
+  workflowCompileFailures?: Record<string, CompileFailure[]>;
   /** Per-run usage map (both workflow and tool-use; frontend derives sum) */
   runUsage?: Record<string, TokenUsageStats>;
   /** Context window utilization state */
@@ -51,6 +54,7 @@ export interface SyncStreamContentPayload {
   action?: 'render' | 'clear';
   workflowFiles?: Record<string, OutputFileInfo[]>;
   workflowMissingOutputs?: Record<string, string[]>;
+  workflowCompileFailures?: Record<string, CompileFailure[]>;
   runUsage?: Record<string, TokenUsageStats>;
   contextState?: ContextState;
   todos: TodoItem[];
@@ -134,6 +138,20 @@ export class WebviewUpdater {
   ): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+      stream,
+      ...payload,
+    });
+  }
+
+  updateCompileFailures(
+    stream: StreamTabId,
+    payload: {
+      rounds?: { [key: number]: CompileFailure[] };
+      reset?: boolean;
+    },
+  ): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
       stream,
       ...payload,
     });

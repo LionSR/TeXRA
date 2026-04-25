@@ -43,18 +43,6 @@ export const ELEMENT_IDS = {
   FILTER_ALL_BTN: 'filterAllBtn',
   FILTER_WORKFLOW_BTN: 'filterWorkflowBtn',
   FILTER_TOOL_BTN: 'filterToolBtn',
-  // Followup section
-  FOLLOWUP_COLLAPSIBLE: 'followupCollapsible',
-  FOLLOWUP_MODE_CHAT: 'followupModeChat',
-  FOLLOWUP_MODE_WORKFLOW: 'followupModeWorkflow',
-  FOLLOWUP_MODE_MERGE: 'followupModeMerge',
-  FOLLOWUP_AGENT: 'followupAgent',
-  FOLLOWUP_MODEL: 'followupModel',
-  FOLLOWUP_INITIAL_QUESTION: 'followupInitialQuestion',
-  FOLLOWUP_INCLUDE_INSTRUCTION: 'followupIncludeInstruction',
-  FOLLOWUP_ATTACH_OUTPUTS: 'followupAttachOutputs',
-  FOLLOWUP_SETUP_BTN: 'followupSetupBtn',
-  FOLLOWUP_RUN_BTN: 'followupRunBtn',
 };
 
 export const GROUP_DOM_IDS = Object.freeze({
@@ -86,7 +74,7 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   icon: 'folder-opened',
   command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
-  title: 'Open the workspace storage folder for this run',
+  title: 'Open in task storage: reveal this run folder and generated files',
   className: 'storage-button',
   disabled: true,
 });

@@ -23,20 +23,21 @@ import type { PermissionState } from '../components/PermissionCard';
 export interface StreamContextValue {
   streamInfo: StreamTabInfo | null;
   streamState: StreamState | null;
-  followupOptions: FollowupOptionsState | null;
   /** Pre-computed stream type flag - true for tool-use, false for workflow */
   isToolUse: boolean;
   /** Whether there are any streams in the current filter (for placeholder logic) */
   hasStreams: boolean;
+  /** Tool-use follow-up options for completed workflow streams. */
+  followupOptions: FollowupOptionsState | null;
 }
 
 /** Default empty stream context value. */
 export const EMPTY_STREAM_CONTEXT: StreamContextValue = {
   streamInfo: null,
   streamState: null,
-  followupOptions: null,
   isToolUse: false,
   hasStreams: false,
+  followupOptions: null,
 };
 
 export const streamStateContext = createContext<StreamContextValue>(

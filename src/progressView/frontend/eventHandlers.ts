@@ -17,13 +17,12 @@ import {
   type StreamState,
 } from './store';
 import { removePrompt, resolvedProposalIds } from './slices/permissionSlice';
-import { updateToolUseState, updateWorkflowState } from './stateUtils';
+import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
 import type {
   FilterEventDetail,
-  FollowUpChangeDetail,
   FollowupCommandDetail,
-  FollowupModeDetail,
+  FollowUpChangeDetail,
   PermissionActionDetail,
   ProgressFileActionDetail,
   StreamEventDetail,
@@ -79,11 +78,11 @@ export function handleStreamDelete(
       draft.streamStates.delete(streamId);
       draft.streamLogs.delete(streamId);
       draft.processOutputs.delete(streamId);
+      draft.followupOptionsByStream.delete(streamId);
       draft.streamById.delete(streamId);
       if (draft.activeStreamId === streamId) {
         draft.activeStreamId = firstStreamId(draft.streamById);
       }
-      draft.followupOptionsByStream.delete(streamId);
     }),
   );
 
@@ -200,53 +199,34 @@ export function handleFollowUpClear(ctx: FrontendEventHandlerContext): void {
   );
 }
 
+export function runCompileFixer(ctx: FrontendEventHandlerContext): void {
+  const stream = ctx.getState().activeStreamId;
+  if (!stream) return;
+  postMessage(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER, { stream });
+}
+
 export function handleFollowupRequestOptions(
   ctx: FrontendEventHandlerContext,
 ): void {
-  const streamId = ctx.getState().activeStreamId;
-  if (!streamId) return;
-  postMessage(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS, {
-    stream: streamId,
-  });
-}
-
-export function handleFollowupModeChange(
-  event: CustomEvent<FollowupModeDetail>,
-  ctx: FrontendEventHandlerContext,
-): void {
-  const streamId = ctx.getState().activeStreamId;
-  if (!streamId) return;
-  updateWorkflowState(ctx, streamId, (prev) =>
-    create(prev, (draft) => {
-      draft.followupMode = event.detail.mode;
-    }),
-  );
+  const stream = ctx.getState().activeStreamId;
+  if (!stream) return;
+  postMessage(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS, { stream });
 }
 
 export function sendFollowupCommand(
-  command: string,
+  command:
+    | typeof PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP
+    | typeof PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
   event: CustomEvent<FollowupCommandDetail>,
   ctx: FrontendEventHandlerContext,
 ): void {
   const stream = ctx.getState().activeStreamId;
   if (!stream) return;
-
-  const {
-    mode,
-    agent,
-    model,
-    includeInstruction,
-    attachOutputs,
-    initialQuestion,
-  } = event.detail;
-
+  const { agent, model, initialQuestion } = event.detail;
   postMessage(command, {
     stream,
-    mode,
     agent,
     model,
-    includeInstruction: mode === 'workflow' ? includeInstruction : false,
-    attachAgentOutputs: mode === 'workflow' ? attachOutputs : false,
     initialQuestion,
   });
 }
