@@ -141,7 +141,6 @@ export const streamLifecycleHandlers: HandlerRegistry = {
       create(updated, (draft) => {
         draft.activeStreamId = nextActiveStreamId;
         draft.streamFilter = data.agentFilter;
-        if (data.streamSort) draft.streamSort = data.streamSort;
         for (const key of draft.followupOptionsByStream.keys()) {
           if (!updated.streamById.has(key)) {
             draft.followupOptionsByStream.delete(key);
