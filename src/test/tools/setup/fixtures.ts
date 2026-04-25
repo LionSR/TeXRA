@@ -1,8 +1,7 @@
 // Local imports
-import {
-  setSetupPlatform,
-  type SetupPlatform,
-  type TerminalRunResult,
+import type {
+  SetupPlatform,
+  TerminalRunResult,
 } from '@tools/setup/platform';
 
 /**
@@ -68,13 +67,4 @@ export function createFakeSetupPlatform(
       ...overrides.terminal,
     },
   };
-}
-
-/** Convenience: build the fake platform and register it in one step. */
-export function installFakeSetupPlatform(
-  overrides: Partial<SetupPlatform> = {},
-): SetupPlatform {
-  const platform = createFakeSetupPlatform(overrides);
-  setSetupPlatform(platform);
-  return platform;
 }

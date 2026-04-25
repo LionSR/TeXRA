@@ -142,14 +142,21 @@ async function captureExecution(
     // for the failure case.
   });
 
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   const raced = await Promise.race([
     exitCodePromise,
-    new Promise<typeof TIMEOUT_SENTINEL>((resolve) =>
-      setTimeout(() => resolve(TIMEOUT_SENTINEL), timeoutMs),
-    ),
+    new Promise<typeof TIMEOUT_SENTINEL>((resolve) => {
+      timeoutHandle = setTimeout(() => resolve(TIMEOUT_SENTINEL), timeoutMs);
+    }),
   ]);
   const timedOut = raced === TIMEOUT_SENTINEL;
   const exitCode = timedOut ? undefined : raced;
+  // Clear the timer when the exit-code event won. Without this the
+  // pending timeout (up to 15 min) sits on the event loop holding the
+  // sentinel-resolving closure alive long after the command finished.
+  if (!timedOut && timeoutHandle !== undefined) {
+    clearTimeout(timeoutHandle);
+  }
 
   // On timeout, dispose the now-stranded end-event listener. It would
   // otherwise stay registered for the rest of the session and fire on
