@@ -35,12 +35,11 @@ const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
   'texra.showMultiAgent',
   'texra.showTools',
   'texra.showGitSettings',
-  // Native VS Code settings (filterable to texra.*)
+  // Native VS Code settings, search-filterable to texra.*
   'texra.openSettings',
   // Workspace bootstrap
   'texra.createSampleProject',
   'texra.showMainView',
-  // Project sourcing
   'texra.cloneOverleafProject',
   'texra.downloadArXivSource',
   // Refresh helpers

@@ -14,32 +14,18 @@
 import {
   addExecutionListener,
   getHandle,
+  type ExecutionHandle,
 } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId } from '@shared/schemas';
+import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
 
 const logger = new AgentLogger('ExecutionSubscriptionBinder');
 
-const OPEN_TAG = '<execution-activity>';
-const CLOSE_TAG = '</execution-activity>';
-
-/**
- * Strip any literal `<execution-activity>` / `</execution-activity>` tokens
- * from interpolated content so a malicious agent name or report cannot escape
- * the wrapper. Mirrors the sanitizer in formatPREvent.ts.
- */
-function sanitize(s: string): string {
-  return s.replaceAll(/<\s*\/?\s*execution-activity\s*>/gi, (match) =>
-    match.replace(/execution-activity/i, 'execution-​activity'),
-  );
-}
-
-function wrap(inner: string): string {
-  return `${OPEN_TAG}\n${sanitize(inner)}\n${CLOSE_TAG}`;
-}
+const TAG = 'execution-activity';
 
 interface Disposable {
   dispose: () => void;
@@ -95,9 +81,7 @@ interface SnapshotState {
   round: string | null;
 }
 
-function snapshot(executionId: string): SnapshotState | null {
-  const handle = getHandle(executionId);
-  if (!handle) return null;
+function snapshot(handle: ExecutionHandle): SnapshotState {
   const info = handle.getStatus();
   return {
     status: info.status,
@@ -106,15 +90,24 @@ function snapshot(executionId: string): SnapshotState | null {
   };
 }
 
+function send(streamId: StreamTabId, text: string): void {
+  void sendFollowUp(streamId, wrapAndSanitizeTag(TAG, text)).then((result) => {
+    if (result.status === 'sent' || result.status === 'queued') {
+      bus.emit('updateQueuedFollowUps', { streamId });
+    }
+  });
+}
+
 /**
- * Returns true if a new subscription was created, false if it already
- * existed for this (stream, execution) pair. Throws if the execution is
- * not currently tracked — terminal executions cannot be subscribed.
+ * Subscribe `streamId` to status, progress, and termination events for
+ * `executionId`. Subsequent calls for the same pair are no-ops. Throws if
+ * the execution is not currently tracked — terminal executions cannot be
+ * subscribed (use `executions view` to read the final report).
  */
 export function bindExecutionSubscription(
   streamId: StreamTabId,
   executionId: string,
-): boolean {
+): void {
   ensureReleaseHook();
 
   const handle = getHandle(executionId);
@@ -129,15 +122,11 @@ export function bindExecutionSubscription(
     bound = new Map();
     perStream.set(streamId, bound);
   }
-  if (bound.has(executionId)) return false;
+  if (bound.has(executionId)) return;
 
   const agentName = handle.agentName;
   const category = handle.category;
-  let last: SnapshotState | null = snapshot(executionId);
-
-  // Sentinel so a synchronous re-entry sees the slot as taken.
-  const sentinel: Disposable = { dispose: () => {} };
-  bound.set(executionId, sentinel);
+  let last: SnapshotState | null = snapshot(handle);
 
   let removeListener: (() => void) | null = null;
   let disposed = false;
@@ -149,27 +138,18 @@ export function bindExecutionSubscription(
     if (current) removeBoundKey(streamId, current, executionId);
   };
 
-  const send = (text: string): void => {
-    void sendFollowUp(streamId, wrap(text)).then((result) => {
-      if (result.status === 'sent' || result.status === 'queued') {
-        bus.emit('updateQueuedFollowUps', { streamId });
-      }
-    });
-  };
-
-  removeListener = addExecutionListener(executionId, () => {
-    const current = snapshot(executionId);
-
-    if (!current) {
-      // Handle gone — execution finished. Emit one final event then dispose.
+  removeListener = addExecutionListener(executionId, (h) => {
+    if (!h) {
       const previous = last?.status ?? 'unknown';
       send(
+        streamId,
         `${executionId} (${agentName}, ${category}) finished. Last known status: ${previous}. Use executions { path: '/executions/${executionId}/report' } for the result.`,
       );
       dispose();
       return;
     }
 
+    const current = snapshot(h);
     const statusChanged = !last || last.status !== current.status;
     const roundChanged = last?.round !== current.round;
     if (!statusChanged && !roundChanged) {
@@ -177,24 +157,35 @@ export function bindExecutionSubscription(
       return;
     }
 
-    const transition = last
-      ? `${last.status} → ${current.status}`
-      : current.status;
+    const transition =
+      last && statusChanged
+        ? `${last.status} → ${current.status}`
+        : current.status;
+    const elapsed = current.elapsed ? ` (${current.elapsed} elapsed)` : '';
     const lines = [
-      `${executionId} (${agentName}, ${category}) ${transition}${
-        current.elapsed ? ` (${current.elapsed} elapsed)` : ''
-      }`,
+      `${executionId} (${agentName}, ${category}) ${transition}${elapsed}`,
     ];
     if (current.round) lines.push(current.round);
-    send(lines.join('\n'));
+    send(streamId, lines.join('\n'));
     last = current;
   });
+
+  // TOCTOU: handle could untrack between the initial getHandle() check
+  // and addExecutionListener registration. Re-check; if gone, fire the
+  // terminal event synchronously and dispose so the listener never leaks.
+  if (!getHandle(executionId)) {
+    send(
+      streamId,
+      `${executionId} (${agentName}, ${category}) finished. Last known status: ${last?.status ?? 'unknown'}. Use executions { path: '/executions/${executionId}/report' } for the result.`,
+    );
+    dispose();
+    return;
+  }
 
   bound.set(executionId, { dispose });
   logger.info(
     `Bound execution subscription ${executionId} → stream ${streamId}`,
   );
-  return true;
 }
 
 /**

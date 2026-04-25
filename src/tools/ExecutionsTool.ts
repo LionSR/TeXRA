@@ -704,25 +704,29 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   }
 
   private handleSubscribe(executionId: ExecutionId): ToolResult {
-    const streamId = getCurrentToolFileInteractionContext()?.streamId;
+    const ctx = getCurrentToolFileInteractionContext();
+    const streamId = ctx?.streamId;
     if (!streamId) {
       throw new ToolError(
         'subscribe must be called from within an agent stream.',
       );
     }
-    let created: boolean;
+    // Subscribing to your own execution would feed every status transition
+    // back into the same session, creating a self-sustaining loop of
+    // <execution-activity> follow-ups.
+    if (ctx?.executionId === executionId) {
+      throw new ToolError(
+        `Cannot subscribe to your own execution (${executionId}).`,
+      );
+    }
     try {
-      created = bindExecutionSubscription(streamId, executionId);
+      bindExecutionSubscription(streamId, executionId);
     } catch (err) {
       throw new ToolError(err instanceof Error ? err.message : String(err));
     }
     return {
-      summary: created
-        ? `Subscribed to ${executionId}`
-        : `Already subscribed to ${executionId}`,
-      output: created
-        ? `Subscribed to ${executionId}. Status, round, and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`
-        : `Already subscribed to ${executionId}. You will continue to receive <execution-activity> events until the execution finishes, this stream is released, or you call action='unsubscribe'.`,
+      summary: `Subscribed to ${executionId}`,
+      output: `Subscribed to ${executionId}. Status, round, and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`,
     };
   }
 

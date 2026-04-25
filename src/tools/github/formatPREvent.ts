@@ -7,6 +7,8 @@
  * detail via its tools if needed.
  */
 
+import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
+
 import type {
   GhCheckRun,
   GhIssueComment,
@@ -14,33 +16,8 @@ import type {
   GhReviewComment,
 } from './prTypes';
 
-const OPEN_TAG = '<github-webhook-activity>';
-const CLOSE_TAG = '</github-webhook-activity>';
-
+const TAG = 'github-webhook-activity';
 const MAX_BODY = 500;
-
-/**
- * Remove anything that could close or re-open our wrapper tag. Every string
- * interpolated inside `<github-webhook-activity>…</github-webhook-activity>`
- * flows through `wrap` and therefore through this sanitizer. That includes
- * comment/review bodies, usernames, CI check names (configurable in workflow
- * YAML — attacker-controlled by the PR author), file paths, and URLs.
- * Without this, any of those fields could inject `</github-webhook-activity>`
- * and escape the wrapper, feeding arbitrary text to the agent as if it were
- * direct user input.
- *
- * Matches liberally (whitespace inside the tag, case-insensitive) because
- * LLMs and HTML parsers both accept `</github-webhook-activity >`,
- * `< / github-webhook-activity >`, and similar variants as closing tags.
- * The replacement injects a zero-width space into the tag *name* so no
- * re-parser can reconstruct it — not just guards on the outside, which
- * left the middle structurally intact.
- */
-function sanitize(s: string): string {
-  return s.replaceAll(/<\s*\/?\s*github-webhook-activity\s*>/gi, (match) =>
-    match.replace(/github-webhook-activity/i, 'github-\u200Bwebhook-activity'),
-  );
-}
 
 function truncate(s: string | null | undefined): string {
   const body = (s ?? '').trim();
@@ -49,13 +26,13 @@ function truncate(s: string | null | undefined): string {
 }
 
 /**
- * Sanitize every field by sanitizing the fully-assembled inner text before
- * wrapping. Per-field sanitization is easy to forget when a new formatter is
- * added; doing it at the wrap boundary closes the whole attack surface by
- * construction.
+ * Sanitizing per-field is easy to forget when a new formatter is added;
+ * doing it at the wrap boundary closes the attack surface by construction.
+ * Every comment/review body, username, CI check name, file path, or URL
+ * interpolated into the wrapper flows through here.
  */
 function wrap(inner: string): string {
-  return `${OPEN_TAG}\n${sanitize(inner)}\n${CLOSE_TAG}`;
+  return wrapAndSanitizeTag(TAG, inner);
 }
 
 export function formatIssueComment(

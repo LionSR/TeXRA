@@ -16,10 +16,6 @@ import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
 
-// ---------------------------------------------------------------------------
-// Allowlist
-// ---------------------------------------------------------------------------
-
 /**
  * Per-key value validators for `update_config`. Read access (`read_config`)
  * is open across all `texra.*` keys, but writes must clear a strict schema
@@ -107,10 +103,6 @@ function describeAllowlist(): string {
   ).join('\n');
 }
 
-// ---------------------------------------------------------------------------
-// read_config
-// ---------------------------------------------------------------------------
-
 const ReadConfigInputSchema = z.strictObject({
   key: z
     .string()
@@ -140,10 +132,6 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
     };
   }
 }
-
-// ---------------------------------------------------------------------------
-// update_config
-// ---------------------------------------------------------------------------
 
 const UpdateConfigInputSchema = z.strictObject({
   key: z

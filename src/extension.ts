@@ -289,16 +289,28 @@ export async function activate(context: vscode.ExtensionContext) {
     },
     config: {
       get: (key) => {
-        const cfg = vscode.workspace.getConfiguration();
-        return cfg.get(key);
+        // Defense in depth: the only consumers today validate keys before
+        // reaching here, but the adapter is documented as `texra.*`-scoped
+        // and a future tool wiring through `platform.config` should not be
+        // able to read arbitrary VS Code settings by accident.
+        if (!key.startsWith('texra.')) {
+          throw new Error(
+            `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
+          );
+        }
+        return vscode.workspace.getConfiguration().get(key);
       },
       update: async (key, value, target) => {
-        const cfg = vscode.workspace.getConfiguration();
+        if (!key.startsWith('texra.')) {
+          throw new Error(
+            `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
+          );
+        }
         const scope =
           target === 'workspace'
             ? vscode.ConfigurationTarget.Workspace
             : vscode.ConfigurationTarget.Global;
-        await cfg.update(key, value, scope);
+        await vscode.workspace.getConfiguration().update(key, value, scope);
       },
     },
   });
