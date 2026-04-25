@@ -6,6 +6,7 @@ import type {
   ActiveChildInfo,
   AgentProposalPermission,
   BashPermission,
+  CompileFailure,
   ConversationProgress,
   ExecutionId,
   ExternalInquiryPermission,
@@ -65,6 +66,9 @@ export interface ProgressEventPayloads {
   };
   updateMissingOutputs: StreamScopedPayload & {
     filesByRound: { [key: number]: string[] };
+  };
+  updateCompileFailures: StreamScopedPayload & {
+    filesByRound: { [key: number]: CompileFailure[] };
   };
   /**
    * Clear the "missing outputs" marker. Either target a specific tab via

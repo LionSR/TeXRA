@@ -1,5 +1,6 @@
 /**
- * Run tracking handlers: UPDATE_FILES, UPDATE_MISSING_OUTPUTS, UPDATE_RUN_USAGE.
+ * Run tracking handlers: UPDATE_FILES, UPDATE_MISSING_OUTPUTS,
+ * UPDATE_COMPILE_FAILURES, UPDATE_RUN_USAGE.
  *
  * Workflow streams are one run per tab. Tool-use streams keep their own
  * per-run usage map (resume produces multiple runs in one tab). Instructions
@@ -30,6 +31,18 @@ export const runTrackingHandlers: HandlerRegistry = {
     updateWorkflowState(ctx, stream, (prev) =>
       create(prev, (draft) => {
         draft.missingOutputs = updateRounds(prev.missingOutputs, {
+          rounds,
+          reset,
+        });
+      }),
+    );
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES]: (data, ctx) => {
+    const { stream, rounds, reset } = data;
+    updateWorkflowState(ctx, stream, (prev) =>
+      create(prev, (draft) => {
+        draft.compileFailures = updateRounds(prev.compileFailures, {
           rounds,
           reset,
         });
