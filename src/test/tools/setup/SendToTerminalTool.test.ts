@@ -19,7 +19,15 @@ import { createFakeSetupPlatform } from './fixtures';
  * platform is registered — so without intervention the approval prompt
  * would emit on the bus and the test would hang waiting for a settle
  * callback that never arrives. Stub the platform's config so the
- * approval flag resolves to `false` and the dialog is skipped.
+ * approval flag resolves to `false`.
+ *
+ * `initPlatform` mutates module-scope state and the platform stays
+ * registered for the rest of the mocha process; we don't reset it in an
+ * `after` hook because there's no public reset API. That's fine here:
+ * the stub returns `defaultValue` verbatim for every key except
+ * `BASH_APPROVAL_CONFIG_KEY`, so any test that runs after this file in
+ * the same process sees behaviour identical to "no platform registered"
+ * unless it also checks the approval flag.
  */
 function installApprovalSkippingPlatform(): void {
   const stub: Partial<Platform> = {

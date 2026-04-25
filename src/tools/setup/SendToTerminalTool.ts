@@ -15,6 +15,7 @@ import { getSetupPlatform } from './platform';
 
 const DEFAULT_TIMEOUT_MS = 300_000;
 const OUTPUT_PREVIEW_MAX = 4_000;
+const TERMINAL_NAME_PREFIX = 'TeXRA: ';
 
 const SendToTerminalInputSchema = z.strictObject({
   // The single non-cosmetic guard: VS Code normalizes \n / \r when typed
@@ -33,7 +34,7 @@ const SendToTerminalInputSchema = z.strictObject({
     .string()
     .prefault('setup')
     .describe(
-      'Short suffix for the terminal tab name; the tool prepends "TeXRA: ".',
+      `Short suffix for the terminal tab name; the tool prepends "${TERMINAL_NAME_PREFIX}".`,
     ),
   timeout: z
     .int()
@@ -60,7 +61,7 @@ export class SendToTerminalTool extends defineTool({
       return buildBashApprovalRejectedResult(command, approval.userMessage);
     }
 
-    const name = `TeXRA: ${input.label.trim() || 'setup'}`;
+    const name = TERMINAL_NAME_PREFIX + input.label.trim();
     const timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS;
 
     const { exitCode, output, timedOut } = await getSetupPlatform()
