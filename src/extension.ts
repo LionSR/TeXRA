@@ -185,7 +185,10 @@ export async function activate(context: vscode.ExtensionContext) {
         if (choice === 'Retry') {
           void loadAgents().catch(() => undefined);
         } else if (choice === 'View Logs') {
-          void vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+          // `toggleOutput` would *hide* the panel if already visible —
+          // not what "View Logs" implies. Use `panel.output.focus` so
+          // the action consistently reveals the Output view.
+          void vscode.commands.executeCommand('workbench.panel.output.focus');
         }
       });
   });
