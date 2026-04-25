@@ -4,7 +4,6 @@ import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 import { isProcessAgent } from '@shared/streams/agentKind';
-import { sortStreams } from '@shared/streams/streamSort';
 import type { ProgressViewState } from './state/ProgressViewState';
 
 /**
@@ -25,6 +24,12 @@ function matchesFilter(
     filter === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
 
   return resolved === expected ? resolved : null;
+}
+
+function compareByCreationTime(a: StreamTabInfo, b: StreamTabInfo): number {
+  return (
+    a.creationTimestamp - b.creationTimestamp || a.name.localeCompare(b.name)
+  );
 }
 
 /**
@@ -107,8 +112,5 @@ export function buildStreamInfos(
     .map((id) => buildStreamInfo(state, id, filter))
     .filter((info): info is StreamTabInfo => info !== null);
 
-  return sortStreams(infos, state.streamSortOrder, {
-    getLastActivityTimestamp: (stream) =>
-      state.streamLogs.getLastTimestamp(stream.name),
-  });
+  return infos.sort(compareByCreationTime);
 }
