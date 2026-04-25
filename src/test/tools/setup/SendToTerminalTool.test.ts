@@ -2,6 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports
+import { initPlatform, type Platform } from '@platform/platform';
+import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 import {
   setSetupPlatform,
@@ -10,6 +12,27 @@ import {
 } from '@tools/setup/platform';
 
 import { createFakeSetupPlatform } from './fixtures';
+
+/**
+ * `requestBashApproval` reads `texra.toolUse.requireBashApproval` via
+ * `getConfig`, which falls through to the supplied default (`true`)
+ * when no platform is registered — so without intervention the
+ * approval prompt would be shown and the test would hang waiting for a
+ * user response that never arrives. Register a minimal platform that
+ * resolves the bash-approval flag to `false`; everything else in this
+ * test file goes through the SetupPlatform fixture, not Platform.
+ */
+function installApprovalSkippingPlatform(): void {
+  const stub: Partial<Platform> = {
+    config: {
+      get: <T,>(key: string, defaultValue?: T): T => {
+        if (key === BASH_APPROVAL_CONFIG_KEY) return false as T;
+        return defaultValue as T;
+      },
+    },
+  };
+  initPlatform(stub as Platform);
+}
 
 interface RunRecord {
   name: string;
@@ -41,6 +64,8 @@ function createPlatform(
 }
 
 describe('SendToTerminalTool', () => {
+  before(() => installApprovalSkippingPlatform());
+
   it('runs the command and returns exit code + captured output preview', async () => {
     const { platform, runs } = createPlatform();
     setSetupPlatform(platform);
