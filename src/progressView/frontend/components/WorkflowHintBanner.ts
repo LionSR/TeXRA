@@ -40,18 +40,6 @@ export class WorkflowHintBanner extends LitElement {
       font-weight: 600;
       margin-right: 4px;
     }
-    button {
-      background: transparent;
-      border: none;
-      color: var(--vscode-foreground);
-      opacity: 0.7;
-      cursor: pointer;
-      padding: 0 4px;
-      font-size: 1em;
-    }
-    button:hover {
-      opacity: 1;
-    }
   `;
 
   @state()
@@ -71,14 +59,12 @@ export class WorkflowHintBanner extends LitElement {
           It reduces hallucinations and cuts fluff, so expect 10–30 minutes per
           run. Use Stop to cancel; pick Tool-Use mode for fast, iterative edits.
         </div>
-        <button
-          type="button"
-          @click=${this.handleDismiss}
-          title="Dismiss"
+        <vscode-toolbar-button
+          icon="close"
+          title="Dismiss this reminder"
           aria-label="Dismiss workflow mode reminder"
-        >
-          ✕
-        </button>
+          @click=${this.handleDismiss}
+        ></vscode-toolbar-button>
       </div>
     `;
   }
