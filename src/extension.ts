@@ -314,15 +314,17 @@ export async function activate(context: vscode.ExtensionContext) {
       },
     },
     terminal: {
-      sendCommand: async ({ name, command, execute }) => {
+      sendCommand: async ({ name, command }) => {
         // Reuse a terminal with the same name when present so repeated
         // calls don't clutter the user's terminal panel with tabs.
         const existing = vscode.window.terminals.find((t) => t.name === name);
         const terminal = existing ?? vscode.window.createTerminal({ name });
         terminal.show();
-        // `addNewLine` controls whether the command is auto-executed.
-        // Default is unexecuted so the user's Enter is the approval gate.
-        terminal.sendText(command, execute);
+        // `addNewLine: false` leaves the command unexecuted at the prompt.
+        // The user's Enter keystroke is the approval gate — auto-execute
+        // would defeat the entire purpose of this tool, so it is not
+        // exposed to callers.
+        terminal.sendText(command, false);
       },
     },
   });

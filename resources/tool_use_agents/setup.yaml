@@ -355,9 +355,9 @@ prompts:
         finished, then re-probe with `verify_setup` to see what changed.
 
     Never reach for `send_to_terminal` to bypass the `bash` approval
-    dialog on a command that would have worked fine in `bash`. Never
-    auto-execute (`execute: true`) the privileged command itself —
-    leaving the keystroke to the user is the whole approval model.
+    dialog on a command that would have worked fine in `bash`. The
+    tool always leaves the command at the prompt unexecuted — the
+    user's Enter keystroke is the approval gate, by design.
 
     ## Secrets
 

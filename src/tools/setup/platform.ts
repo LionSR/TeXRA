@@ -74,14 +74,10 @@ export interface SetupConfigAdapter {
 export interface SetupTerminalAdapter {
   /**
    * Reveal a VS Code integrated terminal and type `command` into it.
-   * When `execute` is `false`, the command is left at the prompt so the
-   * user must press Enter — that keystroke is the approval gate.
+   * The command is left at the prompt unexecuted — the user must press
+   * Enter to run it. That keystroke is the approval gate.
    */
-  sendCommand(args: {
-    name: string;
-    command: string;
-    execute: boolean;
-  }): Promise<void>;
+  sendCommand(args: { name: string; command: string }): Promise<void>;
 }
 
 /** Aggregated setup platform. */
