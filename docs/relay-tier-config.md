@@ -208,6 +208,7 @@ Available to Ultra tier subscribers (includes all lower tier models).
 | `gpt5`     | gpt-5                      | OpenAI    | $1.25/$10.00            |
 | `gpt51`    | gpt-5.1                    | OpenAI    | $1.25/$10.00            |
 | `gpt52`    | gpt-5.2                    | OpenAI    | $1.75/$14.00            |
+| `gpt55`    | gpt-5.5                    | OpenAI    | $5.00/$30.00            |
 | `grok4`    | grok-4-0709                | xAI       | $3.00/$15.00            |
 
 ## Implementation Details
