@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
+  type ActiveStreamId,
   ProgressViewState,
   type StreamExecutionState,
 } from '@progressView/state/ProgressViewState';
@@ -24,7 +25,6 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import type { StreamSort } from '@shared/streams/streamSort';
 
 /**
  * Extra content to include with log updates.
@@ -98,9 +98,8 @@ export class WebviewUpdater {
    */
   updateStreams(
     streams: StreamTabInfo[],
-    activeStream: StreamTabId,
+    activeStream: ActiveStreamId,
     agentFilter: AgentCategoryFilter,
-    streamSort: StreamSort,
     streamStates?: Record<StreamTabId, StreamMetadata>,
   ): void {
     this.sendMessage({
@@ -108,7 +107,6 @@ export class WebviewUpdater {
       streams,
       activeStream,
       agentFilter,
-      streamSort,
       streamStates,
     });
   }
@@ -344,7 +342,7 @@ export class WebviewUpdater {
     state: ProgressViewState,
     statuses?: Map<string, StreamStatus>,
     theme?: 'dark' | 'light',
-  ): StreamTabId {
+  ): ActiveStreamId {
     // Send every stream so streamById stays comprehensive for consumers like
     // BackgroundTasksPanel that need to render cross-filter subagent children
     // (e.g., tool-use subagents of a workflow orchestrator under a workflow
@@ -363,7 +361,7 @@ export class WebviewUpdater {
     // on a hidden-category stream, so clear instead.
     const activeStream =
       selectableNames.length === 0
-        ? ('' as StreamTabId)
+        ? ''
         : state.pickValidActiveStream(selectableNames);
     const previousActive = state.activeStream;
     if (activeStream !== previousActive) {
@@ -409,7 +407,6 @@ export class WebviewUpdater {
       streams,
       activeStream,
       state.agentCategoryFilter,
-      state.streamSortOrder,
       streamMetadata,
     );
 
