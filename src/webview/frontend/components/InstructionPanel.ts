@@ -168,9 +168,6 @@ export class InstructionPanel extends LitElement {
       .session-hint-dismiss {
         flex: 0 0 auto;
         margin-left: var(--spacing-tiny);
-        font-size: 1em;
-        line-height: 1;
-        color: var(--vscode-descriptionForeground);
       }
 
       vscode-textarea#instruction {
@@ -313,15 +310,13 @@ export class InstructionPanel extends LitElement {
           ${copy.body}
           <span class="session-hint-time">${copy.time}</span>
         </span>
-        <button
-          type="button"
-          class="icon-btn-reset session-hint-dismiss"
+        <vscode-toolbar-button
+          icon="close"
+          class="session-hint-dismiss"
+          title="Dismiss this reminder"
           aria-label="Dismiss this reminder"
-          title="Dismiss"
           @click=${this.handleDismissSessionHint}
-        >
-          ✕
-        </button>
+        ></vscode-toolbar-button>
       </div>
     `;
   }
