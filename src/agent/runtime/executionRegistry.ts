@@ -29,6 +29,9 @@ export {
 
 const registry = new Map<string, ExecutionHandle>();
 const changeCallbacks = new Map<string, Array<() => void>>();
+// Persistent listeners — stay attached across notifications (unlike one-shot
+// waiters in `changeCallbacks`). Used by the executions subscribe action.
+const persistentListeners = new Map<string, Set<() => void>>();
 
 // Notify waiters and refresh UI badges when stream status changes (e.g. RUNNING → WAITING).
 // Without this, waitForExecutionChange only resolves on progress/kill/untrack,
@@ -485,8 +488,43 @@ function removeChangeCallback(executionId: string, cb: () => void): void {
 }
 
 function notifyWaiters(executionId: string): void {
+  // Persistent listeners fire first and stay attached so subscribers keep
+  // receiving every transition (status, progress, untrack) until they
+  // dispose themselves.
+  const listeners = persistentListeners.get(executionId);
+  if (listeners) {
+    // Iterate a snapshot so a listener disposing itself mid-fire is safe.
+    for (const cb of [...listeners]) cb();
+  }
+
   const callbacks = changeCallbacks.get(executionId);
   if (!callbacks) return;
   changeCallbacks.delete(executionId);
   for (const cb of callbacks) cb();
+}
+
+/**
+ * Add a persistent listener invoked on every change to `executionId`
+ * (status transition, progress update, kill, untrack). Returns a disposer.
+ *
+ * The listener is fired with no arguments; query `getHandle(executionId)`
+ * inside to read current state, or treat `getHandle === undefined` as
+ * "execution finished and was removed from the registry".
+ */
+export function addExecutionListener(
+  executionId: string,
+  cb: () => void,
+): () => void {
+  let set = persistentListeners.get(executionId);
+  if (!set) {
+    set = new Set();
+    persistentListeners.set(executionId, set);
+  }
+  set.add(cb);
+  return () => {
+    const s = persistentListeners.get(executionId);
+    if (!s) return;
+    s.delete(cb);
+    if (s.size === 0) persistentListeners.delete(executionId);
+  };
 }

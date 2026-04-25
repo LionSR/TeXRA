@@ -109,11 +109,14 @@ prompts:
        view and, for `orchestrator`, that they will see further proposals
        there as it dispatches subagents.
     4. After delegating, you can monitor with the `executions` tool:
-       `executions { path: "/executions/<id>", action: "wait" }` blocks
-       until the subagent's status changes; `action: "view"` reads the
-       latest summary, todos, and report. Do not poll in a tight loop.
-       Report progress to the user in one sentence per status change, and
-       stop when the subagent reaches `completed`.
+       `action: "wait"` blocks until the subagent's status changes;
+       `action: "subscribe"` enrolls this stream to receive future
+       transitions as `<execution-activity>` follow-ups so you can keep
+       chatting with the user while the run progresses (it auto-disposes
+       when the subagent finishes); `action: "view"` reads the latest
+       summary, todos, and report. Do not poll in a tight loop. Report
+       progress to the user in one sentence per status change, and stop
+       when the subagent reaches `completed`.
     5. If the user declines, do not push — say "you're set; hit Execute in
        the main view whenever you're ready" and finish.
 

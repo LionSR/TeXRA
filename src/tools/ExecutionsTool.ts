@@ -34,6 +34,10 @@ import {
   waitForAnyExecutionChange,
   killExecution,
 } from '@agent/runtime/executionRegistry';
+import {
+  bindExecutionSubscription,
+  unbindExecutionSubscription,
+} from '@agent/runtime/ExecutionSubscriptionBinder';
 
 // Local imports - utils
 import { WorkspaceStateKey, workspaceSM } from '@common/state';
@@ -133,12 +137,14 @@ const ExecutionsToolInputSchema = z.strictObject({
 
   /** Action to perform. */
   action: z
-    .enum(['view', 'wait', 'kill'])
+    .enum(['view', 'wait', 'kill', 'subscribe', 'unsubscribe'])
     .prefault('view')
     .describe(
       'view: read execution data (returns immediately). ' +
         'wait: wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops). ' +
-        'kill: terminate a running execution by ID (use on /executions/{id}).',
+        'kill: terminate a running execution by ID (use on /executions/{id}). ' +
+        'subscribe: receive future status/progress changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released. ' +
+        'unsubscribe: stop receiving <execution-activity> follow-ups for /executions/{id}.',
     ),
 
   /** Optional line range [start, end] for large outputs (action="view" only). */
@@ -323,7 +329,8 @@ Use offset/limit to paginate the /executions listing (default: offset 0, limit 1
 Use view_range: [start, end] to paginate conversation, output, and file content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
-Use action: "kill" on /executions/{id} to terminate a running execution.`,
+Use action: "kill" on /executions/{id} to terminate a running execution.
+Use action: "subscribe" on /executions/{id} to receive future status, progress, and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
@@ -338,6 +345,11 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     // /executions - list all executions
     if (!id) {
+      if (input.action === 'subscribe' || input.action === 'unsubscribe') {
+        throw new ToolError(
+          `action='${input.action}' requires a specific execution: use /executions/{id}.`,
+        );
+      }
       if (input.action === 'wait')
         await this.waitForAnyChange(input.timeout ?? 300, input.ids);
       return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
@@ -350,6 +362,12 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       // Kill action: terminate a running execution (only valid on /executions/{id})
       if (input.action === 'kill') {
         return this.handleKill(executionId);
+      }
+      if (input.action === 'subscribe') {
+        return this.handleSubscribe(executionId);
+      }
+      if (input.action === 'unsubscribe') {
+        return this.handleUnsubscribe(executionId);
       }
       if (input.action === 'wait')
         await this.waitForChange(executionId, input.timeout ?? 300);
@@ -682,6 +700,44 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     return {
       output: `Execution ${executionId} could not be terminated.`,
       isError: true,
+    };
+  }
+
+  private handleSubscribe(executionId: ExecutionId): ToolResult {
+    const streamId = getCurrentToolFileInteractionContext()?.streamId;
+    if (!streamId) {
+      throw new ToolError(
+        'subscribe must be called from within an agent stream.',
+      );
+    }
+    let created: boolean;
+    try {
+      created = bindExecutionSubscription(streamId, executionId);
+    } catch (err) {
+      throw new ToolError(err instanceof Error ? err.message : String(err));
+    }
+    return {
+      summary: created
+        ? `Subscribed to ${executionId}`
+        : `Already subscribed to ${executionId}`,
+      output: created
+        ? `Subscribed to ${executionId}. Status, round, and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`
+        : `Already subscribed to ${executionId}. You will continue to receive <execution-activity> events until the execution finishes, this stream is released, or you call action='unsubscribe'.`,
+    };
+  }
+
+  private handleUnsubscribe(executionId: ExecutionId): ToolResult {
+    const streamId = getCurrentToolFileInteractionContext()?.streamId;
+    if (!streamId) {
+      throw new ToolError(
+        'unsubscribe must be called from within an agent stream.',
+      );
+    }
+    const removed = unbindExecutionSubscription(streamId, executionId);
+    return {
+      output: removed
+        ? `Unsubscribed from ${executionId}.`
+        : `No active subscription to ${executionId} on this stream.`,
     };
   }
 
