@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.37.5] - 2026-04-24
+
 ### Breaking Changes
 
 - **Workflow outputs stay in task storage** — generated workflow files no
@@ -13,23 +15,19 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **GPT-5.5** — added OpenAI's GPT-5.5 (`gpt55`) to the default model list as the new flagship OpenAI model. GPT-5.5 reaches strong results with fewer reasoning tokens than prior models, follows instructions more literally, is more precise on large tool surfaces, and produces more polished and concise answers by default. The default reasoning effort is now **medium** — raise to `high`/`xhigh` only when evals show a measurable gain. Image inputs also preserve more visual detail by default, improving figure and screenshot understanding. The [Codex CLI](docs/guide/codex-cli.md) integration is pinned to `gpt-5.5` so delegated Codex turns use the latest model. GPT-5.4 (`gpt54`, `gpt54-`, `gpt54--`) remains available as the lower-cost option. See the [OpenAI API docs](https://developers.openai.com/api/docs) for full capabilities.
-
-## [0.37.5] - 2026-04-24
-
-### Features
-
+- **GPT-5.5** — OpenAI's GPT-5.5 (`gpt55`) is now the flagship OpenAI model in the default lineup. It reaches strong results with fewer reasoning tokens, follows instructions more literally, is more precise on large tool surfaces, and produces more polished and concise answers by default. The default reasoning effort is **medium** — raise to `high`/`xhigh` only when it makes a measurable difference. Image inputs preserve more visual detail by default, improving figure and screenshot understanding. The [Codex CLI](docs/guide/codex-cli.md) integration uses `gpt-5.5` for delegated Codex turns. GPT-5.4 (`gpt54`, `gpt54-`, `gpt54--`) remains available as a lower-cost option.
 - **Terminal-quality command output** — command-heavy runs are much easier to read, especially during builds, installs, and diagnostics.
 - **Clearer pull-request awareness** — GitHub-related work is easier to monitor and return to from the settings and progress views.
 - **DeepSeek V4 models** — DeepSeek V4 Flash and DeepSeek V4 Pro are now available in the model catalog.
 
 ### Improvements
 
-- **More dependable long-running work** — extended agent sessions recover more smoothly from interruptions.
+- **More guided first run** — the welcome banner now surfaces the setup walkthrough so new users can step through environment, tools, and model access without hunting for it.
+- **More dependable long-running work** — extended agent sessions recover more smoothly from interruptions and ambiguous turns.
 - **Sharper model defaults** — new and upgrading users get a cleaner default model lineup while advanced options remain available.
 - **Sharper literature workflows** — agents are better at turning full-paper context into focused, usable research guidance.
 - **More helpful guidance** — setup, orchestration, Git, LaTeX, and Lean workflows now present clearer next steps.
-- **More polished progress UI** — streams, controls, and dropdowns are more compact, consistent, and easier to scan.
+- **More polished progress UI** — streams, controls, and dropdowns are more compact, consistent, and easier to scan, and session hints dismiss with a subtler control.
 - **Quieter diagnostics** — routine messages stay out of the way, and user-facing errors focus on recovery.
 
 ### Bug Fixes
@@ -41,6 +39,9 @@ All notable changes to this project will be documented in this file.
 - **Cleaner command-stream labels** — background command streams no longer show irrelevant labels.
 - **More complete chat exports** — exported conversations preserve more of the visible interaction.
 - **DeepSeek cache reporting** — DeepSeek V4 Flash and DeepSeek V4 Pro usage now distinguishes prompt-cache hits and misses more clearly.
+- **Fuller Anthropic responses** — prefilled content now reaches the final output instead of being dropped.
+- **Crisper terminal-style logs** — command output is easier to scan and no longer runs together.
+- **Smarter delegation choices** — the orchestrator reaches for a real agent when one fits the task.
 
 ## [0.37.4] - 2026-04-21
 
