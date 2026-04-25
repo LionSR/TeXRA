@@ -8,6 +8,7 @@
  *       meta.json              → StreamTabMeta
  *       outputFiles.json       → round → OutputFileInfo[]
  *       missingOutputs.json    → round → string[]
+ *       compileFailures.json   → round → CompileFailure[]
  *       usageStats.json        → runId → TokenUsageStats
  *
  * Legacy data shapes (from before one-run-per-tab refactor) are transparently
@@ -21,6 +22,7 @@ import * as path from 'path';
 import { KVStore } from '@common/storage';
 
 import type {
+  CompileFailure,
   OutputFileInfo,
   StreamTabId,
   TokenUsageStats,
@@ -30,6 +32,7 @@ import {
   LegacyInstructionsDataSchema,
   OutputFilesDataSchema,
   MissingOutputsDataSchema,
+  CompileFailuresDataSchema,
   UsageDataSchema,
   flattenLegacyRuns,
   isLegacyNested,
@@ -38,6 +41,7 @@ import {
   type StreamTabMeta,
   type OutputFilesRecord,
   type MissingOutputsRecord,
+  type CompileFailuresRecord,
   type UsageStatsRecord,
 } from './streamTabSchemas';
 
@@ -49,6 +53,7 @@ const KEYS = {
   META: 'meta',
   OUTPUT_FILES: 'outputFiles',
   MISSING_OUTPUTS: 'missingOutputs',
+  COMPILE_FAILURES: 'compileFailures',
   USAGE_STATS: 'usageStats',
   /** Legacy per-run instruction text preserved from pre-refactor memento. */
   LEGACY_INSTRUCTIONS: 'legacyInstructions',
@@ -136,6 +141,20 @@ class StreamTabKVStore extends KVStore {
 
   async writeMissingOutputs(data: MissingOutputsRecord): Promise<void> {
     await this.write(KEYS.MISSING_OUTPUTS, data);
+  }
+
+  // -- Compile failures -----------------------------------------------------
+
+  async readCompileFailures(): Promise<Map<number, CompileFailure[]> | null> {
+    const raw = await this.read(KEYS.COMPILE_FAILURES);
+    if (!raw) return null;
+    const migrated = await this.preferActiveRunFlattening(raw);
+    const result = CompileFailuresDataSchema.safeParse(migrated);
+    return result.success && result.data.size > 0 ? result.data : null;
+  }
+
+  async writeCompileFailures(data: CompileFailuresRecord): Promise<void> {
+    await this.write(KEYS.COMPILE_FAILURES, data);
   }
 
   // -- Usage stats ----------------------------------------------------------
