@@ -63,6 +63,7 @@ import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
   buildCodexMcpToolLog,
+  buildCodexUsageStats,
 } from './codexShared';
 
 // Type-only imports (kept separate for bundler efficiency)
@@ -447,11 +448,7 @@ function startCodexLoop(params: {
             streamId: childStreamId,
             storageKey: executionId as StorageKey,
             executionId,
-            usage: {
-              inputTokens: turn.usage.input_tokens,
-              outputTokens: turn.usage.output_tokens,
-              cost: 0,
-            },
+            usage: buildCodexUsageStats(turn.usage),
           });
         }
 
