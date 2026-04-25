@@ -98,14 +98,13 @@ async function refreshApiKeyStatus() {
     return;
   }
 
-  const hasApiKey = await SecretManager.anyApiKeyExists();
-  // Researcher Access users have no local API key but can run models via
-  // server-side keys. Treat them as "set up" so the pill doesn't keep
-  // pestering them after sign-in.
-  const hasServerKeys = await getServerSideKeyService()
-    .canUseServerSideKeys()
-    .catch(() => false);
-  if (!hasApiKey && !hasServerKeys) {
+  // `anyApiKeyExists()` already falls back to `canUseServerSideKeys()`
+  // internally, so a Researcher Access user with no local key is treated
+  // as set up. Catch here so a transient server-key probe failure
+  // doesn't leave the pill stuck — better to hide than to show a stale
+  // CTA on top of a working credential.
+  const exists = await SecretManager.anyApiKeyExists().catch(() => false);
+  if (!exists) {
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =
       'Click to run the setup assistant — sign in for free or add an API key';
