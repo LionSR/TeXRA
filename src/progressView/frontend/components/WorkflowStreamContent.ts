@@ -31,7 +31,8 @@ import './TaskGroupList';
 import './LogList';
 import './UsagePanel';
 import './FileList';
-import './FollowupSection';
+import './CompileFailurePanel';
+import './WorkflowToolUseFollowupSection';
 import './BackgroundTasksPanel';
 import './RequestPanels';
 import './WorkflowHintBanner';
@@ -81,8 +82,6 @@ export class WorkflowStreamContent extends LitElement {
       return nothing;
     }
 
-    const hasFiles = hasOutputFiles(state.files);
-
     return html`
       <stream-header
         .stream=${streamInfo}
@@ -114,14 +113,17 @@ export class WorkflowStreamContent extends LitElement {
         .showRoundHeaders=${true}
       ></file-list>
 
-      <followup-section
-        .agentCategory=${streamInfo.agentCategory}
+      <compile-failure-panel
+        .failuresByRound=${state.compileFailures}
         .status=${state.status}
-        .hasOutputFiles=${hasFiles}
+      ></compile-failure-panel>
+
+      <workflow-tool-use-followup-section
+        .status=${state.status}
+        .hasOutputFiles=${hasOutputFiles(state.files)}
         .options=${this.streamContext.followupOptions}
-        .mode=${state.followupMode}
         .streamModel=${streamInfo.model ?? null}
-      ></followup-section>
+      ></workflow-tool-use-followup-section>
     `;
   }
 }

@@ -1,15 +1,19 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
+import { webviewStorage } from '../webviewStorage';
+
+const STORAGE_HINT_DISMISS_KEY = 'generatedFilesStorageHint.dismissed';
 
 /** Parsed path components for display */
 interface ParsedPath {
@@ -33,6 +37,7 @@ function parsePath(path: string): ParsedPath {
 export class FileList extends LitElement {
   static override styles = [
     designTokens,
+    codiconIconClasses,
     commonViewStyles,
     css`
       :host {
@@ -49,6 +54,30 @@ export class FileList extends LitElement {
         overflow-y: auto;
         max-height: var(--height-large);
         flex-shrink: 0;
+      }
+
+      .storage-hint {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-small);
+        padding: var(--spacing-tiny) 0 var(--spacing-small);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+        line-height: 1.4;
+      }
+
+      .storage-hint .codicon {
+        flex-shrink: 0;
+      }
+
+      .storage-hint__text {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .storage-hint__dismiss {
+        flex-shrink: 0;
+        color: var(--color-text-secondary);
       }
 
       .file-item {
@@ -164,6 +193,10 @@ export class FileList extends LitElement {
   > = {};
   @property({ attribute: false }) showRoundHeaders = true;
 
+  @state()
+  private storageHintDismissed =
+    webviewStorage.get(STORAGE_HINT_DISMISS_KEY) === true;
+
   override render(): TemplateResult | typeof nothing {
     const rounds = this.getSortedRounds();
     if (rounds.length === 0) {
@@ -177,6 +210,7 @@ export class FileList extends LitElement {
         title="Generated Files"
         open
       >
+        ${this.renderStorageHint()}
         <div
           id=${ELEMENT_IDS.GENERATED_FILES}
           class="files-container"
@@ -191,6 +225,33 @@ export class FileList extends LitElement {
       </vscode-collapsible>
     `;
   }
+
+  private renderStorageHint(): TemplateResult | typeof nothing {
+    if (this.storageHintDismissed) return nothing;
+
+    return html`
+      <div class="storage-hint" role="note">
+        <i class="codicon codicon-folder-opened" aria-hidden="true"></i>
+        <span class="storage-hint__text">
+          Files stay in task-run storage until accepted. Click a file to preview
+          it, use Accept to copy it into your workspace, or use the folder
+          button to open the full run.
+        </span>
+        <vscode-toolbar-button
+          class="storage-hint__dismiss"
+          icon="close"
+          label="Dismiss storage explanation"
+          title="Dismiss storage explanation"
+          @click=${this.handleDismissStorageHint}
+        ></vscode-toolbar-button>
+      </div>
+    `;
+  }
+
+  private handleDismissStorageHint = (): void => {
+    webviewStorage.set(STORAGE_HINT_DISMISS_KEY, true);
+    this.storageHintDismissed = true;
+  };
 
   private renderRound(round: number, files: OutputFileInfo[]): TemplateResult {
     if (!this.showRoundHeaders) {
