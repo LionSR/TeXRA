@@ -65,6 +65,36 @@ export interface SetupConfigAdapter {
   ): Promise<void>;
 }
 
+/**
+ * Integrated-terminal surface. The setup agent uses this for commands
+ * the captured-stdio `bash` tool cannot handle: `sudo` password prompts,
+ * other interactive TTY prompts, and any flow where the user must type
+ * into the running process.
+ *
+ * Implementations should prefer VS Code's stable `Terminal.shellIntegration`
+ * API (since 1.93) so the agent can read back exit code + output. When
+ * shell integration is unavailable the implementation may return an
+ * `undefined` exit code with empty output — the caller treats that the
+ * same as "user interrupted", since neither path tells us anything
+ * actionable.
+ */
+export interface SetupTerminalAdapter {
+  runCommand(args: {
+    name: string;
+    command: string;
+    /** Hard cap on how long to wait for the captured run before giving up. */
+    timeoutMs: number;
+  }): Promise<TerminalRunResult>;
+}
+
+export interface TerminalRunResult {
+  /** `undefined` if shell integration was unavailable, or the run was interrupted. */
+  exitCode: number | undefined;
+  /** ANSI-stripped, length-capped tail of the command's output. May be empty. */
+  output: string;
+  timedOut: boolean;
+}
+
 /** Aggregated setup platform. */
 export interface SetupPlatform {
   secrets: SetupSecretsAdapter;
@@ -72,6 +102,7 @@ export interface SetupPlatform {
   extensions: SetupExtensionAdapter;
   auth: SetupAuthAdapter;
   config: SetupConfigAdapter;
+  terminal: SetupTerminalAdapter;
 }
 
 let platform: SetupPlatform | undefined;
