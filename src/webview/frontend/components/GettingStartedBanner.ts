@@ -78,8 +78,8 @@ export class GettingStartedBanner extends LitElement {
       <div id="gettingStartedBanner" class="getting-started-banner">
         <div class="getting-started-header">
           <span class="getting-started-text">
-            <strong>Welcome to TeXRA!</strong> Open a workspace with LaTeX
-            files, or get started with one of these:
+            <strong>Welcome to TeXRA!</strong> No LaTeX files here yet — pick
+            how you'd like to start:
           </span>
           <vscode-toolbar-button
             icon="close"
