@@ -164,6 +164,7 @@ export type ReasoningLevel = z.infer<typeof ReasoningLevelSchema>;
 
 export const ModelSelectionItemSchema = z.object({
   name: z.string(),
+  label: z.string(),
   provider: z.string(),
   enabled: z.boolean(),
   deprecated: z.boolean(),

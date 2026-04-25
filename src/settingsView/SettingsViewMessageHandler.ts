@@ -288,6 +288,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
 
     const item: ModelSelectionItem = {
       name,
+      label: config.label,
       provider: config.provider,
       enabled: enabledSet.has(name),
       deprecated: config.deprecated ?? false,
