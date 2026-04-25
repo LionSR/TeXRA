@@ -216,7 +216,7 @@ async function buildModelOptionData(
   const available = await isModelAvailable(model, config, ctx);
   return {
     value: model,
-    label: model,
+    label: config.label,
     provider: config.provider,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
@@ -237,7 +237,7 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
     if (!config) return { value: model, label: model };
     return {
       value: model,
-      label: model,
+      label: config.label,
       provider: config.provider,
       context: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
