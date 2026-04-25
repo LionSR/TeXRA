@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **Workflow outputs stay in task storage** — generated workflow files no
+  longer appear directly beside your source files. Review them from the
+  progress view, open the run's task storage folder, accept selected outputs,
+  or pack the run into `History/`.
+
 ## [0.37.5] - 2026-04-24
 
 ### Features
