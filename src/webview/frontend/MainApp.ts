@@ -1863,9 +1863,6 @@ export class MainApp extends MainAppBase {
   // =========================================================================
 
   private handleDependencyDismiss(): void {
-    postMessage(MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING, {
-      value: false,
-    });
     this.dependencyBanner.set({ visible: false });
   }
 

@@ -20,6 +20,7 @@ import {
   TEMP_EXTENSIONS,
   PACK_EXTENSIONS,
   DEFAULT_MAX_ROUNDS,
+  HISTORY_DIR,
 } from './constants';
 import { getFilePatterns, findFilesFromPatterns } from './utils';
 
@@ -186,8 +187,14 @@ export async function runCleanOutput(): Promise<void> {
   }
 
   const modelsPattern = MODELS.join(',');
-  const ignorePatterns = [...EXCLUDED_DIRS].map((d) => `**/${d}/**`);
+  const ignorePatterns = [...new Set([...EXCLUDED_DIRS, HISTORY_DIR])].map(
+    (d) => `**/${d}/**`,
+  );
 
+  // Workspace-wide cleanup only uses legacy generated filename tokens.
+  // Round-folder layouts like `r0/output.tex` are intentionally excluded:
+  // without an active run context they are indistinguishable from user-owned
+  // revision folders. Toolbar cleanup removes task-run storage directly.
   const files = globSync(`**/*_{${modelsPattern}}*.{tex,pdf,xml}`, {
     cwd: workspacePath,
     ignore: ignorePatterns,

@@ -46,7 +46,7 @@ graph TB
 1. Analyze your input files and instructions
 2. Plan and execute changes via LLM calls
 3. Optionally reflect on their output and iterate
-4. Produce versioned output files (`*_r0_*`, `*_r1_*`) with diffs
+4. Produce task-scoped output files (`r0/output.*`, `r1/output.*`) with diffs
 
 **Interactive agents** include `ask`, `research`, `review`, `lean`, and `presenter`, which operate conversationally with tool access:
 

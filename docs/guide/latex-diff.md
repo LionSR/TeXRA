@@ -2,7 +2,7 @@
 
 A core design philosophy of TeXRA is to provide transparency and control over the AI's modifications. The integrated LaTeX diff functionality is central to this, allowing you to precisely see and evaluate the changes suggested by AI agents before deciding how to incorporate them.
 
-TeXRA automatically generates diff files after agent runs that modify `.tex` files (like `correct` or `polish`), comparing the agent's output (`*_r0_*.tex` or `*_r1_*.tex`) against the original input or the previous round's output. This provides immediate observability into the agent's actions.
+TeXRA automatically generates diff files after agent runs that modify `.tex` files (like `correct` or `polish`), comparing the agent's task-storage output (`r0/output.tex` or `r1/output.tex`) against the original input or the previous round's output. This provides immediate observability into the agent's actions.
 
 This guide explains how to use TeXRA's dedicated LaTeXdiff features for comparing arbitrary file versions and understanding the results.
 
