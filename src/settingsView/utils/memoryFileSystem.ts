@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 
-import { isDirectory } from '@common/files/fsEntryType';
+import { isDirectory, isSymlink } from '@common/files/fsEntryType';
 import type { MemoryViewItem } from '@shared/schemas/settingsViewMessages';
 import {
   MEMORY_STORAGE_ROOT,
@@ -62,6 +62,11 @@ export async function walkMemoryDirectory(
 
   for (const [name, type] of entries) {
     if (shouldSkipEntry(name)) {
+      continue;
+    }
+
+    // Skip symlinks to avoid cycles; we have no realpath/visited guard.
+    if (isSymlink(type)) {
       continue;
     }
 
