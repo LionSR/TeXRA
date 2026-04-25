@@ -90,6 +90,12 @@ export class GettingStartedBanner extends LitElement {
         </div>
         <ul class="getting-started-list">
           <li>
+            <a href=${COMMAND_LINKS.RUN_SETUP_ASSISTANT}
+              >Run the setup assistant agent</a
+            >
+            -- checks tools, credentials, and LaTeX setup
+          </li>
+          <li>
             <a href=${COMMAND_LINKS.GETTING_STARTED}>Walk me through setup</a>
             -- takes a few minutes
           </li>
