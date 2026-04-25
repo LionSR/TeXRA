@@ -1,0 +1,91 @@
+# Source of truth for issue/PR labels. Synced to GitHub by .github/workflows/label-sync.yml.
+# Schema: EndBug/label-sync@v2. Use `aliases` for renames so existing usage is preserved.
+
+# ---- type: what kind of change (mutually exclusive in practice) ----
+- name: 'type:bug'
+  color: 'd73a4a'
+  description: 'Defect in shipped behavior'
+  aliases: ['bug']
+
+- name: 'type:feature'
+  color: '0e8a16'
+  description: 'New user-facing capability'
+  aliases: ['enhancement']
+
+- name: 'type:refactor'
+  color: '5319e7'
+  description: 'Code restructure or tech-debt; no behavior change'
+  aliases: ['tech-debt']
+
+- name: 'type:docs'
+  color: '0075ca'
+  description: 'Documentation only'
+  aliases: ['documentation']
+
+- name: 'type:chore'
+  color: 'cfd3d7'
+  description: 'Build, deps, tooling, CI'
+
+# ---- area: which part of the codebase (multi-select) ----
+# Only the areas with proven issue/PR volume. Add more when they earn it.
+- name: 'area:agent'
+  color: '1d76db'
+  description: 'src/agent/** (core, flows, runtime)'
+
+- name: 'area:model'
+  color: '1d76db'
+  description: 'src/model/**, src/agent/modelHandlers/**'
+
+- name: 'area:latex'
+  color: '1d76db'
+  description: 'src/latex/**'
+
+- name: 'area:progress'
+  color: '1d76db'
+  description: 'src/progressView/**'
+
+- name: 'area:webview'
+  color: '1d76db'
+  description: 'src/webview/**, src/settingsView/**'
+
+- name: 'area:ci'
+  color: '1d76db'
+  description: '.github/workflows/**, build configs'
+
+- name: 'area:deps'
+  color: '1d76db'
+  description: 'Dependency bumps (Dependabot, package*.json)'
+
+# ---- priority: only the one that means something ----
+- name: 'priority:p0'
+  color: 'b60205'
+  description: 'Drop everything: blocker, data loss, or security'
+
+# ---- status: lifecycle states the predictor and humans both consume ----
+- name: 'status:blocked'
+  color: '000000'
+  description: 'Waiting on external dependency or upstream'
+
+- name: 'status:needs-info'
+  color: 'd4c5f9'
+  description: 'Awaiting reporter clarification'
+  aliases: ['question']
+
+# ---- lifecycle: GitHub-recognized community labels ----
+- name: 'good-first-issue'
+  color: '7057ff'
+  description: 'Onboarding-friendly'
+
+- name: 'help-wanted'
+  color: '008672'
+  description: 'Maintainer welcomes external contributions'
+  aliases: ['help wanted']
+
+# ---- workflow hooks: consumed by automation ----
+- name: 'follow-up'
+  color: 'fbca04'
+  description: 'Created by post-merge agent from review feedback or deferred scope'
+
+- name: 'tracking'
+  color: '8a2be2'
+  description: 'Umbrella issue with sub-issue children'

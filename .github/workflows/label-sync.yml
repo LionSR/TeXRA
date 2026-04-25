@@ -1,0 +1,23 @@
+name: Label Sync
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/labels.yml', '.github/workflows/label-sync.yml']
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: EndBug/label-sync@v2
+        with:
+          config-file: .github/labels.yml
+          # Keep legacy labels (Later, ambitious) until manually deleted.
+          # Renames are handled via the `aliases` field in labels.yml.
+          delete-other-labels: false
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,72 @@
+name: Auto-label PR
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: auto-label-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply type and area labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          labels=()
+
+          # Type from conventional-commit prefix in title.
+          # [codex] is intentionally not mapped; type comes from the rest of the title.
+          shopt -s nocasematch
+          case "$TITLE" in
+            'fix:'*|'fix('*|'bug:'*)
+              labels+=('type:bug') ;;
+            'feat:'*|'feat('*)
+              labels+=('type:feature') ;;
+            'refactor:'*|'refactor('*|'perf:'*|'perf('*)
+              labels+=('type:refactor') ;;
+            'docs:'*|'docs('*)
+              labels+=('type:docs') ;;
+            'chore(deps'*|'build(deps'*)
+              labels+=('type:chore' 'area:deps') ;;
+            'chore:'*|'chore('*|'ci:'*|'ci('*|'test:'*|'test('*|'style:'*|'style('*)
+              labels+=('type:chore') ;;
+          esac
+          shopt -u nocasematch
+
+          # Area from changed file paths.
+          files=$(gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path')
+          grep_files() { printf '%s\n' "$files" | grep -qE "$1"; }
+
+          grep_files '^src/agent/(modelHandlers|modelRegistry)/' && labels+=('area:model') || true
+          grep_files '^src/model/' && labels+=('area:model') || true
+          grep_files '^src/agent/' && labels+=('area:agent') || true
+          grep_files '^src/latex/' && labels+=('area:latex') || true
+          grep_files '^src/progressView/' && labels+=('area:progress') || true
+          grep_files '^src/(webview|settingsView)/' && labels+=('area:webview') || true
+          grep_files '^\.github/workflows/' && labels+=('area:ci') || true
+          grep_files '^(package(-lock)?\.json|\.github/dependabot\.yml)$' && labels+=('area:deps') || true
+
+          if [ ${#labels[@]} -eq 0 ]; then
+            echo "No labels matched."
+            exit 0
+          fi
+
+          # Dedupe.
+          mapfile -t unique < <(printf '%s\n' "${labels[@]}" | sort -u)
+
+          # Apply each label individually so a single missing label doesn't abort the rest.
+          for l in "${unique[@]}"; do
+            gh pr edit "$PR" --repo "$REPO" --add-label "$l" 2>&1 | sed "s/^/[$l] /" || true
+          done

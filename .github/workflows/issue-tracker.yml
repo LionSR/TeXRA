@@ -132,7 +132,7 @@ jobs:
             - Speculative future work not discussed in the PR
             - Bot suggestions already addressed or dismissed
 
-            For each genuine follow-up, create an issue:
+            For each genuine follow-up, draft an issue with:
             - **Title**: Short, imperative (e.g. "Add error handling for X")
             - **Body**:
               ```
@@ -148,15 +148,41 @@ jobs:
               - PR: #<PR-number>
               - <Related issues or review comments>
               ```
-            - **Labels**: "follow-up" plus any relevant labels ("bug", "enhancement",
-              "tech-debt", "documentation")
+            - **Labels**: always `follow-up`, plus exactly one `type:*` label
+              (`type:bug`, `type:feature`, `type:refactor`, `type:docs`, `type:chore`),
+              plus any `area:*` labels that match the parent PR's changed paths
+              (`area:agent`, `area:model`, `area:latex`, `area:progress`,
+              `area:webview`, `area:ci`, `area:deps`).
+
+            **Umbrella vs flat decision.**
+
+            - **0 follow-ups**: skip B2 entirely.
+            - **1 follow-up**: create the issue flat. Reference the parent PR in the body.
+              Do NOT create an umbrella — sub-issue overhead is not worth it for a single child.
+            - **2+ follow-ups from the same PR**: create a tracking umbrella first,
+              then create each child as a native sub-issue of the umbrella:
+              1. Create umbrella with `mcp__github__issue_write` (method=create):
+                 - Title: `Tracking: follow-ups from #<PR-number> (<short PR title>)`
+                 - Body: brief context + bulleted preview of child titles + link to parent PR
+                 - Labels: `tracking`, plus the parent PR's `area:*` labels
+                 - **Capture both `number` AND `id` from the response** — `id` is the
+                   global node ID needed by sub_issue_write below.
+              2. For each child, call `mcp__github__issue_write` (method=create) with
+                 the body, `follow-up` + one `type:*` + matching `area:*` labels.
+                 **Capture both `number` AND `id` from each child response.**
+              3. For each child, attach to the umbrella:
+                 `mcp__github__sub_issue_write` with method=`add`,
+                 `issue_number=<umbrella-number>`, `sub_issue_id=<child-id>`.
+                 Note: `sub_issue_id` is the child's global `id`, NOT its `number`.
 
             Then add new issues to relevant tracking issue checklists:
-            - Append `- [ ] #<issue> - <title>` to the relevant section
-            - Comment: "📋 Added follow-up issues from #<PR>: #<issue1>, #<issue2>, ..."
+            - For flat (1 follow-up): append `- [ ] #<issue> - <title>` to the relevant section
+            - For umbrella (2+): append `- [ ] #<umbrella> - Tracking: ...` (single line for the umbrella)
+            - Comment on the parent PR: "📋 Filed follow-ups from this PR: #<umbrella-or-issue>"
 
             **Be conservative.** Only create issues for genuine, actionable follow-ups.
-            When in doubt, skip it. False positives create noise.
+            When in doubt, skip it. False positives create noise. Two real follow-ups
+            justify an umbrella; two speculative ones do not.
 
             ---
 
