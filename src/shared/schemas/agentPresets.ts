@@ -81,4 +81,22 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'orchestrator',
     ],
   },
+  {
+    id: 'cs-ml',
+    name: 'Computer Scientist (ML)',
+    description:
+      'For ML/CS papers -- algorithm design, experiments and ablations, literature search, critical review, and reproducibility.',
+    icon: 'codicon-symbol-method',
+    workflowAgents: ['criticize', 'generic', 'devise', 'apply', 'polish'],
+    toolUseAgents: [
+      'orchestrator',
+      'numerics',
+      'search',
+      'review',
+      'presenter',
+      'simplifier',
+      'latexFixer',
+      'progressCheck',
+    ],
+  },
 ];
