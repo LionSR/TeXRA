@@ -287,6 +287,32 @@ export async function activate(context: vscode.ExtensionContext) {
     auth: {
       getStatus: () => getAuthStatus(),
     },
+    config: {
+      get: (key) => {
+        // Defense in depth: the only consumers today validate keys before
+        // reaching here, but the adapter is documented as `texra.*`-scoped
+        // and a future tool wiring through `platform.config` should not be
+        // able to read arbitrary VS Code settings by accident.
+        if (!key.startsWith('texra.')) {
+          throw new Error(
+            `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
+          );
+        }
+        return vscode.workspace.getConfiguration().get(key);
+      },
+      update: async (key, value, target) => {
+        if (!key.startsWith('texra.')) {
+          throw new Error(
+            `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
+          );
+        }
+        const scope =
+          target === 'workspace'
+            ? vscode.ConfigurationTarget.Workspace
+            : vscode.ConfigurationTarget.Global;
+        await vscode.workspace.getConfiguration().update(key, value, scope);
+      },
+    },
   });
   // GitHub token lives in SecretStorage (managed via the Git settings tab).
   // The tool layer only supports a synchronous token lookup, so we cache here
