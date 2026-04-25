@@ -102,24 +102,27 @@ async function captureExecution(
   const execution = integration.executeCommand(command);
 
   // Exit code is delivered via the global end-event, not the execution
-  // object itself, so subscribe BEFORE we start reading. The promise
-  // resolves with the real exit code when the matching end-event
-  // fires, never with the timeout sentinel — that's the outer race's
-  // job below.
+  // object itself, so subscribe BEFORE we start reading. Hoist the
+  // disposable so the timeout branch below can also dispose it —
+  // otherwise the listener stays registered for the rest of the
+  // session and fires on every unrelated terminal execution.
+  let endDisposable: vscode.Disposable | undefined;
   const exitCodePromise = new Promise<number | undefined>((resolve) => {
-    const disposable = vscode.window.onDidEndTerminalShellExecution(
-      (event) => {
-        if (event.execution !== execution) return;
-        disposable.dispose();
-        resolve(event.exitCode);
-      },
-    );
+    endDisposable = vscode.window.onDidEndTerminalShellExecution((event) => {
+      if (event.execution !== execution) return;
+      endDisposable?.dispose();
+      endDisposable = undefined;
+      resolve(event.exitCode);
+    });
   });
 
   // Sliding-window tail: keep at most OUTPUT_MAX_CHARS of the most
   // recent output. The previous version flipped a `truncated` flag and
   // skipped all subsequent chunks, which discarded the actual end of
   // the run (the success / error line the agent needs to interpret).
+  // Add a `.catch` so a stream error after we abandon the reader
+  // (e.g. on timeout, or if the user closes the terminal) cannot
+  // surface as an unhandled rejection.
   let output = '';
   const reader = (async () => {
     for await (const chunk of execution.read()) {
@@ -128,7 +131,11 @@ async function captureExecution(
         output = output.slice(-OUTPUT_MAX_CHARS);
       }
     }
-  })();
+  })().catch(() => {
+    // Swallow — the captured output we have so far is still useful,
+    // and the agent already has a `timedOut` / undefined-exit signal
+    // for the failure case.
+  });
 
   const raced = await Promise.race([
     exitCodePromise,
@@ -138,6 +145,14 @@ async function captureExecution(
   ]);
   const timedOut = raced === TIMEOUT_SENTINEL;
   const exitCode = timedOut ? undefined : raced;
+
+  // On timeout, dispose the now-stranded end-event listener. It would
+  // otherwise stay registered for the rest of the session and fire on
+  // every unrelated terminal execution that ends afterward.
+  if (timedOut) {
+    endDisposable?.dispose();
+    endDisposable = undefined;
+  }
 
   // Drain any final chunks unless we timed out; bound the wait so a
   // hung reader can't block the agent forever.

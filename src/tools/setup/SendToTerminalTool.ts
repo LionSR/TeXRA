@@ -95,11 +95,6 @@ const COMMAND_PREVIEW_MAX = 80;
 /** Length cap for the captured-output tail surfaced to the agent. */
 const OUTPUT_PREVIEW_MAX = 4_000;
 
-function commandPreview(command: string): string {
-  if (command.length <= COMMAND_PREVIEW_MAX) return command;
-  return `${command.slice(0, COMMAND_PREVIEW_MAX)}…`;
-}
-
 export class SendToTerminalTool extends defineTool({
   name: 'send_to_terminal',
   description: `Run a command in a VS Code integrated terminal — use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. When the terminal has shell integration enabled (bash/zsh/pwsh/fish in a VS Code-launched terminal), the tool returns the exit code and a tail of the captured output. When shell integration is unavailable the tool reports \`captured: false\` and you must wait for the user to confirm completion before re-probing. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
@@ -123,7 +118,7 @@ export class SendToTerminalTool extends defineTool({
     const name = `TeXRA: ${label}`;
     const timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS;
     const reason = input.reason.trim();
-    const preview = commandPreview(command);
+    const preview = truncateWithEllipsis(command, COMMAND_PREVIEW_MAX);
 
     const result = await platform.terminal.runCommand({
       name,
