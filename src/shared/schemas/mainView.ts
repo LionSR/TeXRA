@@ -881,10 +881,6 @@ const BannerMessages = [
     missingTools: z.array(z.string()).optional(),
   }),
   z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING),
-    value: z.boolean(),
-  }),
-  z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE),
     tool: z.string().min(1),
   }),

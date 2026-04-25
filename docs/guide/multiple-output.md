@@ -34,15 +34,15 @@ When you provide multiple input files, TeXRA typically combines their content (o
 
 This is the crucial part for generating multiple distinct files:
 
-1. **User Specifies Outputs:** You list the desired output filenames in the "Multiple Outputs" UI section (e.g., `chapter2_polish_r0_model.tex`, `appendixA_polish_r0_model.tex`).
+1. **User Specifies Outputs:** You list the desired output filenames in the "Multiple Outputs" UI section (e.g., `chapter2.tex`, `appendixA.tex`).
 2. **Agent Generates Structured XML:** The selected agent must be designed (through its `prompts`) to produce a _single XML response_ containing separate blocks for each intended output file, using a structure like this:
 
    ```xml
    <latex_documents>  <!-- Or agent's specific documentTag -->
-     <document name="chapter2_polish_r0_model.tex">
+     <document name="chapter2.tex">
        % ... content for the first output file ...
      </document>
-     <document name="appendixA_polish_r0_model.tex">
+     <document name="appendixA.tex">
        % ... content for the second output file ...
      </document>
      ...
