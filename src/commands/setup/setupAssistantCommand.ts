@@ -36,7 +36,7 @@ const SIGNED_IN_SETUP_MODEL = 'gemini31p';
  */
 const API_KEY_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   anthropic: 'opus47T',
-  openai: 'gpt54',
+  openai: 'gpt55',
   google: 'gemini31p',
   deepseek: 'deepseekT',
   openRouter: 'sonnet46T',
