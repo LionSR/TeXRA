@@ -99,11 +99,9 @@ async function refreshApiKeyStatus() {
   }
 
   // `anyApiKeyExists()` already falls back to `canUseServerSideKeys()`
-  // internally, so a Researcher Access user with no local key is treated
-  // as set up. Don't catch here: a transient probe failure shouldn't
-  // regress a signed-in user back to the "Get Started" CTA. Let the
-  // outer `safeRefreshApiKeyStatus` log it and leave the pill in its
-  // prior state.
+  // internally. Don't catch here: a transient probe failure shouldn't
+  // regress a signed-in user to the "Get Started" CTA — let the outer
+  // wrapper log it and leave the pill in its prior state.
   const exists = await SecretManager.anyApiKeyExists();
   if (!exists) {
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
@@ -167,33 +165,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   await refreshModelListIfNeeded();
 
-  const promptAgentLoadFailure = (err: unknown) => {
+  loadAgents().catch((err) => {
     logger.error(
       'extension',
       `Failed to initialize agent index: ${toErrorMessage(err)}`,
     );
-    // Silent failures here leave the agent dropdown empty with no
-    // explanation. Surface a one-shot, dismissible message so a brand-new
-    // user knows what's wrong and how to recover. Recurses on retry so a
-    // second failure re-prompts instead of looking like success.
-    void vscode.window
-      .showWarningMessage(
-        'TeXRA could not load its agent definitions. Some agents may be missing from the dropdown.',
-        'Retry',
-        'View Logs',
-      )
-      .then((choice) => {
-        if (choice === 'Retry') {
-          loadAgents().catch(promptAgentLoadFailure);
-        } else if (choice === 'View Logs') {
-          // `toggleOutput` would *hide* the panel if already visible —
-          // not what "View Logs" implies. Use `panel.output.focus` so
-          // the action consistently reveals the Output view.
-          void vscode.commands.executeCommand('workbench.panel.output.focus');
-        }
-      });
-  };
-  loadAgents().catch(promptAgentLoadFailure);
+  });
 
   try {
     setRuntimeExtensionId(context.extension.id);

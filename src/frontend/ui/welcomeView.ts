@@ -43,18 +43,8 @@ function renderWelcomeHtml(): string {
     }
     p { margin: 0 0 12px; }
     .muted { color: var(--vscode-descriptionForeground); }
-    .step {
-      margin: 0 0 12px;
-      padding-left: 22px;
-      position: relative;
-    }
-    .step .num {
-      position: absolute;
-      left: 0;
-      top: 0;
-      font-weight: 600;
-      color: var(--vscode-textLink-foreground);
-    }
+    ol { margin: 0 0 12px; padding-left: 22px; }
+    li { margin-bottom: 6px; }
     .actions { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
     a {
       color: var(--vscode-textLink-foreground);
@@ -70,9 +60,11 @@ function renderWelcomeHtml(): string {
     figures, and verify proofs.
   </p>
   <p class="muted"><strong>To get started:</strong></p>
-  <div class="step"><span class="num">1.</span>Open a folder containing your LaTeX project (or create a sample).</div>
-  <div class="step"><span class="num">2.</span>TeXRA will reload and walk you through sign-in or API key setup.</div>
-  <div class="step"><span class="num">3.</span>Pick an input file, choose the orchestrator, and hit Execute.</div>
+  <ol>
+    <li>Open a folder containing your LaTeX project (or create a sample).</li>
+    <li>TeXRA will reload and walk you through sign-in or API key setup.</li>
+    <li>Pick an input file, choose the orchestrator, and hit Execute.</li>
+  </ol>
   <div class="actions">
     <a href="${openFolder}">Open Folder</a>
     <a href="${cloneRepo}">Clone Repository</a>
