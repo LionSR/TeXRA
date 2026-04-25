@@ -43,6 +43,18 @@ function renderWelcomeHtml(): string {
     }
     p { margin: 0 0 12px; }
     .muted { color: var(--vscode-descriptionForeground); }
+    .step {
+      margin: 0 0 12px;
+      padding-left: 22px;
+      position: relative;
+    }
+    .step .num {
+      position: absolute;
+      left: 0;
+      top: 0;
+      font-weight: 600;
+      color: var(--vscode-textLink-foreground);
+    }
     .actions { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
     a {
       color: var(--vscode-textLink-foreground);
@@ -53,20 +65,23 @@ function renderWelcomeHtml(): string {
 </head>
 <body>
   <p>
-    TeXRA is a multi-agent orchestration system for LaTeX research. An
-    orchestrator coordinates specialized agents that derive results, verify
-    proofs, run symbolic computation, generate figures, and assemble
-    manuscripts &mdash; every step auditable, every citation grounded.
+    <strong>Welcome to TeXRA</strong> — an AI research assistant for LaTeX. It
+    coordinates specialized agents to edit manuscripts, derive results, draw
+    figures, and verify proofs.
   </p>
-  <p class="muted">
-    Open a folder to begin. The TeXRA tour and commands become available once
-    a workspace is open.
-  </p>
+  <p class="muted"><strong>To get started:</strong></p>
+  <div class="step"><span class="num">1.</span>Open a folder containing your LaTeX project (or create a sample).</div>
+  <div class="step"><span class="num">2.</span>TeXRA will reload and walk you through sign-in or API key setup.</div>
+  <div class="step"><span class="num">3.</span>Pick an input file, choose the orchestrator, and hit Execute.</div>
   <div class="actions">
     <a href="${openFolder}">Open Folder</a>
     <a href="${cloneRepo}">Clone Repository</a>
     <a href="${docs}">Read the docs</a>
   </div>
+  <p class="muted">
+    TeXRA needs a single-folder workspace. Multi-root workspaces aren't
+    supported &mdash; open one folder at a time.
+  </p>
 </body>
 </html>`;
 }

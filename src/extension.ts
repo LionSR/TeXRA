@@ -100,9 +100,10 @@ async function refreshApiKeyStatus() {
 
   const exists = await SecretManager.anyApiKeyExists();
   if (!exists) {
-    apiKeyStatusBarItem.text = '$(warning) TeXRA: API Key Required';
-    apiKeyStatusBarItem.tooltip = 'No API keys configured — click to set up';
-    apiKeyStatusBarItem.command = 'texra.setApiKey';
+    apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
+    apiKeyStatusBarItem.tooltip =
+      'Click to run the setup assistant — sign in for free or add an API key';
+    apiKeyStatusBarItem.command = 'texra.runSetupAssistant';
     apiKeyStatusBarItem.show();
   } else {
     apiKeyStatusBarItem.hide();
@@ -165,6 +166,22 @@ export async function activate(context: vscode.ExtensionContext) {
       'extension',
       `Failed to initialize agent index: ${toErrorMessage(err)}`,
     );
+    // Silent failures here leave the agent dropdown empty with no
+    // explanation. Surface a one-shot, dismissible message so a brand-new
+    // user knows what's wrong and how to recover.
+    void vscode.window
+      .showWarningMessage(
+        'TeXRA could not load its agent definitions. Some agents may be missing from the dropdown.',
+        'Retry',
+        'View Logs',
+      )
+      .then((choice) => {
+        if (choice === 'Retry') {
+          void loadAgents().catch(() => undefined);
+        } else if (choice === 'View Logs') {
+          void vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+        }
+      });
   });
 
   try {
@@ -489,11 +506,28 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
-    // Opening the VS Code walkthrough is enough — don't double up with a
-    // popup asking the user to open the walkthrough they just saw.
+    // Open the walkthrough AND surface a notification with a one-click
+    // path to the setup assistant. Walkthroughs can be dismissed or buried
+    // behind other tabs, leaving brand-new users with no obvious next
+    // step. The notification gives them an action button they can click
+    // immediately; the walkthrough is still there if they want the full
+    // tour.
     void vscode.commands
       .executeCommand('texra.openGettingStarted')
       .then(() => context.globalState.update(welcomeKey, true));
+    void vscode.window
+      .showInformationMessage(
+        'Welcome to TeXRA! The setup assistant can sign you in (free) or set up an API key in one go.',
+        'Run Setup Assistant',
+        'Open Walkthrough',
+      )
+      .then((choice) => {
+        if (choice === 'Run Setup Assistant') {
+          void vscode.commands.executeCommand('texra.runSetupAssistant');
+        } else if (choice === 'Open Walkthrough') {
+          void vscode.commands.executeCommand('texra.openGettingStarted');
+        }
+      });
   }
 }
 
