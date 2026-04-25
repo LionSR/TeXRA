@@ -216,36 +216,6 @@ export class SettingsApp extends SettingsAppBase {
   });
   private readonly latexSettingsLoaded = signal(false);
 
-  protected override get readyCommand(): string | null {
-    return null;
-  }
-
-  /** Commands sent on load to populate all tabs with initial data. */
-  private static readonly INIT_COMMANDS = [
-    SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA,
-    SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED,
-    SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA,
-    SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA,
-    SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION,
-    SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION,
-    SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR,
-    SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED,
-    SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS,
-    SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS,
-    SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA,
-    SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
-    SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS,
-    SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS,
-    SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS,
-  ] as const;
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    for (const command of SettingsApp.INIT_COMMANDS) {
-      postMessage(command);
-    }
-  }
-
   private parseMessage<T>(
     raw: unknown,
     schema: {
