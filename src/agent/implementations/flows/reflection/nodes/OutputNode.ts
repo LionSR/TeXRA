@@ -1,7 +1,12 @@
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import { hasRoundOutputs, getStorageKey } from '@agent/output/outputState';
+import {
+  hasCompileFailures,
+  hasRoundOutputs,
+  getStorageKey,
+  setCompileFailures,
+} from '@agent/output/outputState';
 import { runCompileCheck } from '@agent/output/compileCheck';
 import { extractFilesFromXml } from '@agent/output/xmlExtraction';
 import { traceFileLineage } from '@agent/output/lineageMapping';
@@ -14,7 +19,7 @@ import {
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
-import type { RoundOutput } from '@shared/schemas';
+import type { CompileFailure, RoundOutput } from '@shared/schemas';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
@@ -33,6 +38,8 @@ interface OutputPrepInput {
 interface OutputExecResult {
   roundOutput: RoundOutput;
   summary: RoundSummary;
+  compileFailures: CompileFailure[];
+  emitCompileFailures: boolean;
 }
 
 /** Execute an operation that can fail gracefully (logs warnings, doesn't throw). */
@@ -73,6 +80,8 @@ export class OutputNode<C = unknown> extends Node<
     const { outputLocation, currentRound, endTurn } = prepRes;
 
     let mapping: RoundFileMapping | undefined;
+    let compileFailures: CompileFailure[] = [];
+    let emitCompileFailures = false;
 
     // Only process if turn ended (model completed response)
     if (endTurn) {
@@ -118,7 +127,19 @@ export class OutputNode<C = unknown> extends Node<
 
         await tryOperation(
           'Compile check',
-          () => runCompileCheck(this.services, currentRound),
+          async () => {
+            const hadCompileFailures = hasCompileFailures(
+              outputState,
+              currentRound,
+            );
+            compileFailures = await runCompileCheck(
+              this.services,
+              currentRound,
+            );
+            setCompileFailures(outputState, currentRound, compileFailures);
+            emitCompileFailures =
+              compileFailures.length > 0 || hadCompileFailures;
+          },
           logger,
         );
       }
@@ -141,7 +162,7 @@ export class OutputNode<C = unknown> extends Node<
       { isRewrite: setting.isRewrite },
     );
 
-    return { roundOutput, summary };
+    return { roundOutput, summary, compileFailures, emitCompileFailures };
   }
 
   async execFallback(
@@ -178,6 +199,7 @@ export class OutputNode<C = unknown> extends Node<
         round: currentRound,
         rawOutput: null,
         outputs: [],
+        compileFailures: [],
         xmlSummary: {
           tagContents: {},
           documents: [],
@@ -186,6 +208,8 @@ export class OutputNode<C = unknown> extends Node<
         },
       },
       summary,
+      compileFailures: [],
+      emitCompileFailures: false,
     };
   }
 
@@ -203,6 +227,13 @@ export class OutputNode<C = unknown> extends Node<
       streamId,
       filesByRound: { [currentRound]: summary.fileInfos },
     });
+
+    if (execRes.emitCompileFailures) {
+      bus.emit('updateCompileFailures', {
+        streamId,
+        filesByRound: { [currentRound]: execRes.compileFailures },
+      });
+    }
 
     // Open files that haven't been opened yet
     for (const location of summary.filesToOpen) {

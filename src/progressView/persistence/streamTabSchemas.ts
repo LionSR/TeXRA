@@ -16,8 +16,10 @@ import { z } from 'zod';
 
 import { TaskStateSchema } from '@logger/TaskState';
 import {
+  CompileFailureSchema,
   OutputFileInfoSchema,
   TokenUsageStatsSchema,
+  type CompileFailure,
   type OutputFileInfo,
   type TokenUsageStats,
 } from '@shared/schemas';
@@ -192,6 +194,15 @@ export const MissingOutputsDataSchema = z
   .catch(new Map()) as z.ZodType<Map<number, string[]>>;
 
 // ============================================================================
+// Compile failures: { round: CompileFailure[] } (caller pre-flattens legacy input).
+// ============================================================================
+
+export const CompileFailuresDataSchema = z
+  .record(z.string(), z.array(CompileFailureSchema).catch([]))
+  .transform(recordToRoundMap)
+  .catch(new Map()) as z.ZodType<Map<number, CompileFailure[]>>;
+
+// ============================================================================
 // Usage stats — per-run map kept (tool-use can resume → multiple runs).
 // Workflow consumers collapse to a single value via sumUsageStats.
 // ============================================================================
@@ -274,4 +285,5 @@ export const UsageDataSchema = z
 
 export type OutputFilesRecord = Record<string, OutputFileInfo[]>;
 export type MissingOutputsRecord = Record<string, string[]>;
+export type CompileFailuresRecord = Record<string, CompileFailure[]>;
 export type UsageStatsRecord = Record<string, TokenUsageStats>;

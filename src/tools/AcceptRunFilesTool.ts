@@ -1,11 +1,9 @@
 /**
  * Tool for accepting output files from a completed run into the workspace.
  *
- * After a workflow agent completes, its output files may live in run storage
- * (executions/{executionId}/) or directly in the workspace, depending on the
- * agent's storage mode. This tool locates files in either location and copies
- * them into the workspace — the programmatic equivalent of the "Accept" button
- * in the progress view.
+ * After a workflow agent completes, its output files live in task-run storage
+ * (executions/{executionId}/). This tool copies those files into the workspace
+ * — the programmatic equivalent of the "Accept" button in the progress view.
  *
  * Each file goes through the standard tool edit approval flow (same diff
  * panel as write_file), so the user can review, edit, or reject each file.
@@ -102,9 +100,8 @@ Use this tool ONLY for workflow subagent results (category="workflow").
 Do NOT use it for tool-use subagent results — those produce text responses,
 not output files.
 
-Locates output files in run storage or the workspace (depending on storage
-mode) and writes them to the workspace. Each file goes through an approval
-step before writing and may be rejected.
+Locates output files in task-run storage and writes them to the workspace.
+Each file goes through an approval step before writing and may be rejected.
 
 Parameters map directly to subagent-result delivery attributes:
   execution_id ← <subagent-result id="...">

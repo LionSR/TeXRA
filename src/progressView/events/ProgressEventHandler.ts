@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -27,7 +28,6 @@ import {
   isApprovalBypassedForStream,
   isProposalBypassedForStream,
 } from '@tools/approval';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 
 import { registerHandlers } from './registerHandlers';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
@@ -152,6 +152,19 @@ export class ProgressEventHandler {
             const rounds = ctx.state.outputFiles.getMissingOutputs(streamId);
             ctx.webviewUpdater.updateMissingOutputs(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
+            });
+          });
+        },
+        updateCompileFailures: async (ctx, { streamId, filesByRound }) => {
+          await ctx.state.outputFiles.updateCompileFailures(
+            streamId,
+            filesByRound,
+          );
+          this.sendIfActive(streamId, () => {
+            const rounds = ctx.state.outputFiles.getCompileFailures(streamId);
+            ctx.webviewUpdater.updateCompileFailures(streamId, {
+              rounds: rounds.size ? mapToRecord(rounds) : undefined,
+              reset: true,
             });
           });
         },
@@ -526,6 +539,9 @@ export class ProgressEventHandler {
     const workflowMissingOutputs = mapToRecord(
       this.state.outputFiles.getMissingOutputs(stream),
     );
+    const workflowCompileFailures = mapToRecord(
+      this.state.outputFiles.getCompileFailures(stream),
+    );
 
     // Per-run usage map — shared by workflow and tool-use. Frontend derives
     // sessionUsage as the sum so cumulative totals survive resume.
@@ -539,6 +555,7 @@ export class ProgressEventHandler {
       extras: {
         workflowFiles,
         workflowMissingOutputs,
+        workflowCompileFailures,
         runUsage,
         contextState,
       },
