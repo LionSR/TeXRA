@@ -93,8 +93,8 @@ function shouldUseResponsesAPI(
 
 /**
  * Apply the user's "prefer short model names" setting.
- * When enabled, uses the model's shortName (e.g. "gpt-5.4") instead of the
- * date-pinned fullName (e.g. "gpt-5.4-2026-03-05"). Useful for proxies/gateways
+ * When enabled, uses the model's shortName (e.g. "gpt-5.5") instead of the
+ * date-pinned fullName (e.g. "gpt-5.5-2026-04-15"). Useful for proxies/gateways
  * that only accept unpinned model identifiers.
  */
 function withShortModelName(config: ModelConfig): ModelConfig {

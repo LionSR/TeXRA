@@ -303,7 +303,7 @@ export class ModelSelectionList extends LitElement {
             Use short model names
           </vscode-checkbox>
           <span class="short-names-description">
-            Send unpinned names (e.g. gpt-5.4 instead of gpt-5.4-2026-03-05)
+            Send unpinned names (e.g. gpt-5.5 instead of gpt-5.5-2026-04-15)
           </span>
         </div>
         ${groups.map((g) => this.renderProviderGroup(g))}
