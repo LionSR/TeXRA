@@ -98,8 +98,14 @@ async function refreshApiKeyStatus() {
     return;
   }
 
-  const exists = await SecretManager.anyApiKeyExists();
-  if (!exists) {
+  const hasApiKey = await SecretManager.anyApiKeyExists();
+  // Researcher Access users have no local API key but can run models via
+  // server-side keys. Treat them as "set up" so the pill doesn't keep
+  // pestering them after sign-in.
+  const hasServerKeys = await getServerSideKeyService()
+    .canUseServerSideKeys()
+    .catch(() => false);
+  if (!hasApiKey && !hasServerKeys) {
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =
       'Click to run the setup assistant — sign in for free or add an API key';
@@ -423,11 +429,25 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.StatusBarAlignment.Left,
   );
   context.subscriptions.push(apiKeyStatusBarItem);
-  void refreshApiKeyStatus().catch((err) =>
-    logger.error(
-      'extension',
-      `API key status refresh failed: ${toErrorMessage(err)}`,
-    ),
+  const safeRefreshApiKeyStatus = () =>
+    refreshApiKeyStatus().catch((err) =>
+      logger.error(
+        'extension',
+        `API key status refresh failed: ${toErrorMessage(err)}`,
+      ),
+    );
+  void safeRefreshApiKeyStatus();
+  // Without these listeners the pill stayed on "Get Started" forever after
+  // a Researcher Access sign-in or after the first API key was stored.
+  context.subscriptions.push(
+    vscode.authentication.onDidChangeSessions((e) => {
+      if (e.provider.id === 'texra-supabase') {
+        void safeRefreshApiKeyStatus();
+      }
+    }),
+    getServerSideKeyService().onDidChangeModelAccess(() => {
+      void safeRefreshApiKeyStatus();
+    }),
   );
 
   const runningStreams = new Set<string>();
@@ -506,28 +526,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
-    // Open the walkthrough AND surface a notification with a one-click
-    // path to the setup assistant. Walkthroughs can be dismissed or buried
-    // behind other tabs, leaving brand-new users with no obvious next
-    // step. The notification gives them an action button they can click
-    // immediately; the walkthrough is still there if they want the full
-    // tour.
+    // Opening the VS Code walkthrough is enough — its first step is the
+    // setup assistant CTA, so don't double up with a popup.
     void vscode.commands
       .executeCommand('texra.openGettingStarted')
       .then(() => context.globalState.update(welcomeKey, true));
-    void vscode.window
-      .showInformationMessage(
-        'Welcome to TeXRA! The setup assistant can sign you in (free) or set up an API key in one go.',
-        'Run Setup Assistant',
-        'Open Walkthrough',
-      )
-      .then((choice) => {
-        if (choice === 'Run Setup Assistant') {
-          void vscode.commands.executeCommand('texra.runSetupAssistant');
-        } else if (choice === 'Open Walkthrough') {
-          void vscode.commands.executeCommand('texra.openGettingStarted');
-        }
-      });
   }
 }
 
