@@ -11,6 +11,8 @@ type MessageLike = {
   content?: unknown;
   tool_calls?: unknown;
   tool_call_id?: unknown;
+  /** Tracked so merging assistant messages preserves DeepSeek-style reasoning that must round-trip to the API. */
+  reasoning_content?: unknown;
 };
 
 type ContentArray = Array<Record<string, unknown>>;
@@ -27,10 +29,32 @@ function isTextContentItem(
   );
 }
 
+function mergeReasoningContent(
+  previous: MessageLike,
+  current: MessageLike,
+): void {
+  const prevReasoning = previous.reasoning_content;
+  const currReasoning = current.reasoning_content;
+  if (currReasoning == null) return;
+  if (prevReasoning == null) {
+    previous.reasoning_content = currReasoning;
+    return;
+  }
+  if (typeof prevReasoning === 'string' && typeof currReasoning === 'string') {
+    if (prevReasoning === '' || currReasoning === '') {
+      previous.reasoning_content = prevReasoning || currReasoning;
+    } else {
+      previous.reasoning_content = `${prevReasoning}\n${currReasoning}`;
+    }
+  }
+}
+
 function mergeMessageContent(
   previous: MessageLike,
   current: MessageLike,
 ): void {
+  mergeReasoningContent(previous, current);
+
   const prevContent = previous.content;
   const currContent = current.content;
 
