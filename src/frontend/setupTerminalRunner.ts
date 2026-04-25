@@ -87,6 +87,13 @@ async function waitForShellIntegration(
   });
 }
 
+/**
+ * Sentinel returned by the timeout race so callers can distinguish
+ * "we gave up waiting" from "the shell reported no exit code" (Ctrl+C
+ * before completion). Plain `undefined` means the latter.
+ */
+const TIMEOUT_SENTINEL: unique symbol = Symbol('terminal-timeout');
+
 async function captureExecution(
   integration: vscode.TerminalShellIntegration,
   command: string,
@@ -95,61 +102,51 @@ async function captureExecution(
   const execution = integration.executeCommand(command);
 
   // Exit code is delivered via the global end-event, not the execution
-  // object itself, so subscribe BEFORE we start reading. We resolve
-  // when the matching end-event fires, or `undefined` on timeout.
+  // object itself, so subscribe BEFORE we start reading. The promise
+  // resolves with the real exit code when the matching end-event
+  // fires, never with the timeout sentinel — that's the outer race's
+  // job below.
   const exitCodePromise = new Promise<number | undefined>((resolve) => {
-    const timer = setTimeout(() => {
-      disposable.dispose();
-      resolve(undefined);
-    }, timeoutMs);
     const disposable = vscode.window.onDidEndTerminalShellExecution(
       (event) => {
         if (event.execution !== execution) return;
-        clearTimeout(timer);
         disposable.dispose();
         resolve(event.exitCode);
       },
     );
   });
 
+  // Sliding-window tail: keep at most OUTPUT_MAX_CHARS of the most
+  // recent output. The previous version flipped a `truncated` flag and
+  // skipped all subsequent chunks, which discarded the actual end of
+  // the run (the success / error line the agent needs to interpret).
   let output = '';
-  let truncated = false;
   const reader = (async () => {
     for await (const chunk of execution.read()) {
-      if (truncated) continue;
       output += chunk;
       if (output.length > OUTPUT_MAX_CHARS) {
-        // Keep the tail — for installer / package-manager output the
-        // last few lines (success / error message) are what the agent
-        // actually needs to interpret.
         output = output.slice(-OUTPUT_MAX_CHARS);
-        truncated = true;
       }
     }
   })();
 
-  // Race the exit-code subscription against an explicit timeout. The
-  // timer inside `exitCodePromise` resolves with `undefined` after
-  // `timeoutMs`; treat that as a timeout signal so the agent can
-  // distinguish "command interrupted before completion" from "we gave
-  // up waiting".
-  let timedOut = false;
-  const exitCode = await Promise.race([
+  const raced = await Promise.race([
     exitCodePromise,
-    new Promise<undefined>((resolve) => {
-      setTimeout(() => {
-        timedOut = true;
-        resolve(undefined);
-      }, timeoutMs + 50);
-    }),
+    new Promise<typeof TIMEOUT_SENTINEL>((resolve) =>
+      setTimeout(() => resolve(TIMEOUT_SENTINEL), timeoutMs),
+    ),
   ]);
+  const timedOut = raced === TIMEOUT_SENTINEL;
+  const exitCode = timedOut ? undefined : raced;
 
-  // Drain any final chunks; bound the wait so a hung reader can't
-  // block the agent forever.
-  await Promise.race([
-    reader,
-    new Promise<void>((resolve) => setTimeout(resolve, 250)),
-  ]);
+  // Drain any final chunks unless we timed out; bound the wait so a
+  // hung reader can't block the agent forever.
+  if (!timedOut) {
+    await Promise.race([
+      reader,
+      new Promise<void>((resolve) => setTimeout(resolve, 250)),
+    ]);
+  }
 
   return {
     captured: true,
