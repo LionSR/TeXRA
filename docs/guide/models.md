@@ -27,14 +27,15 @@ Claude Opus 4.7 uses adaptive thinking only (extended thinking with a manual `bu
 
 ## OpenAI Models
 
-| Model ID  | Use Case             | Cost | Speed  |
-| :-------- | :------------------- | :--- | :----- |
-| `gpt55`   | Flagship reasoning   | $$$$ | Medium |
-| `gpt54`   | Mid-tier reasoning   | $$$  | Medium |
-| `gpt54-`  | Lower-cost reasoning | $$   | Fast   |
-| `gpt54--` | Budget reasoning     | $    | Fast   |
+| Model ID   | Use Case                       | Cost  | Speed  |
+| :--------- | :----------------------------- | :---- | :----- |
+| `gpt55pro` | Top-tier reasoning, 1M context | $$$$$ | Slow   |
+| `gpt55`    | Flagship reasoning             | $$$$  | Medium |
+| `gpt54`    | Mid-tier reasoning             | $$$   | Medium |
+| `gpt54-`   | Lower-cost reasoning           | $$    | Fast   |
+| `gpt54--`  | Budget reasoning               | $     | Fast   |
 
-GPT-5.5 is OpenAI's latest flagship and the model TeXRA pins the [Codex CLI](./codex-cli.md) to. `gpt54` and its mini/nano variants remain the lower-cost option for most workloads. See the [API reference](https://developers.openai.com/api/docs) for full capabilities.
+GPT-5.5 is OpenAI's latest flagship and the model TeXRA pins the [Codex CLI](./codex-cli.md) to. GPT-5.5 Pro (`gpt55pro`) extends GPT-5.5 with a 1.05M context window and `xhigh` default reasoning for the hardest planning and long-horizon tasks, at premium pricing. `gpt54` and its mini/nano variants remain the lower-cost option for most workloads. See the [API reference](https://developers.openai.com/api/docs) for full capabilities.
 
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
