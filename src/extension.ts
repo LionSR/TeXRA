@@ -167,14 +167,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
   await refreshModelListIfNeeded();
 
-  loadAgents().catch((err) => {
+  const promptAgentLoadFailure = (err: unknown) => {
     logger.error(
       'extension',
       `Failed to initialize agent index: ${toErrorMessage(err)}`,
     );
     // Silent failures here leave the agent dropdown empty with no
     // explanation. Surface a one-shot, dismissible message so a brand-new
-    // user knows what's wrong and how to recover.
+    // user knows what's wrong and how to recover. Recurses on retry so a
+    // second failure re-prompts instead of looking like success.
     void vscode.window
       .showWarningMessage(
         'TeXRA could not load its agent definitions. Some agents may be missing from the dropdown.',
@@ -183,7 +184,7 @@ export async function activate(context: vscode.ExtensionContext) {
       )
       .then((choice) => {
         if (choice === 'Retry') {
-          void loadAgents().catch(() => undefined);
+          loadAgents().catch(promptAgentLoadFailure);
         } else if (choice === 'View Logs') {
           // `toggleOutput` would *hide* the panel if already visible —
           // not what "View Logs" implies. Use `panel.output.focus` so
@@ -191,7 +192,8 @@ export async function activate(context: vscode.ExtensionContext) {
           void vscode.commands.executeCommand('workbench.panel.output.focus');
         }
       });
-  });
+  };
+  loadAgents().catch(promptAgentLoadFailure);
 
   try {
     setRuntimeExtensionId(context.extension.id);
