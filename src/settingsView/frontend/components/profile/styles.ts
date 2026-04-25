@@ -528,6 +528,11 @@ export const profileViewStyles: CSSResult = css`
     white-space: nowrap;
   }
 
+  .model-shortname {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+  }
+
   .model-metadata {
     display: flex;
     gap: var(--spacing-medium);
