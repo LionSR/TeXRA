@@ -304,7 +304,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'orchestrator',
-  'Reads your paper, figures out what needs work, and hands each task to the right agent. You approve proposals as they come in.',
+  'Coordinates multi-agent work on LaTeX research projects. It reads project context, turns broad goals into focused tasks, routes each task to the right specialist, tracks results, reviews generated files, and keeps follow-up work organized.',
   'tool-use/orchestrator.yaml',
   ARRAY['public'],
   'toolUse',
@@ -404,7 +404,7 @@ ON CONFLICT (name) DO UPDATE SET
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
   'leanBlueprint',
-  'Creates and maintains LeanBlueprint documents — dependency-tracked LaTeX that bridges informal math and Lean 4 formalization.',
+  'Creates and maintains LeanBlueprint documents following Patrick Massot''s plasTeX plugin (https://github.com/PatrickMassot/leanblueprint) — dependency-tracked LaTeX that bridges informal math and Lean 4 formalization.',
   'tool-use-lean/leanBlueprint.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
