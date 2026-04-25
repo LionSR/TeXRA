@@ -4,7 +4,12 @@ import { strict as assert } from 'assert';
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';
 import { InvokeCommandTool } from '@tools/setup/InvokeCommandTool';
-import { setSetupPlatform, type SetupPlatform } from '@tools/setup/platform';
+import {
+  setSetupPlatform,
+  type SetupPlatform,
+} from '@tools/setup/platform';
+
+import { createFakeSetupPlatform } from './fixtures';
 
 interface InvokeRecord {
   command: string;
@@ -16,50 +21,13 @@ function createPlatform(): {
   invocations: InvokeRecord[];
 } {
   const invocations: InvokeRecord[] = [];
-  const platform: SetupPlatform = {
-    secrets: {
-      async setApiKey() {},
-      async deleteApiKey() {},
-      async apiKeyExists() {
-        return false;
-      },
-      async hasUsableApiKey() {
-        return false;
-      },
-      async storedApiKeyExists() {
-        return false;
-      },
-      async anyApiKeyExists() {
-        return false;
-      },
-      async gitHubTokenExists() {
-        return 'none';
-      },
-      providers: [],
-    },
+  const platform = createFakeSetupPlatform({
     commands: {
       async invoke(command, ...args) {
         invocations.push({ command, args });
       },
     },
-    extensions: {
-      isInstalled() {
-        return false;
-      },
-      async install() {},
-    },
-    auth: {
-      async getStatus() {
-        return { authenticated: false };
-      },
-    },
-    config: {
-      get() {
-        return undefined;
-      },
-      async update() {},
-    },
-  };
+  });
   return { platform, invocations };
 }
 

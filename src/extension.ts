@@ -41,6 +41,7 @@ import {
   refreshModelListIfNeeded,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
+import { runTerminalCommand } from '@frontend/setupTerminalRunner';
 import { agentDirectories } from '@frontend/agents';
 import { FileLister } from '@frontend/files';
 import { killActiveRecording } from '@frontend/media/audio';
@@ -317,6 +318,9 @@ export async function activate(context: vscode.ExtensionContext) {
             : vscode.ConfigurationTarget.Global;
         await vscode.workspace.getConfiguration().update(key, value, scope);
       },
+    },
+    terminal: {
+      runCommand: (args) => runTerminalCommand(args),
     },
   });
   // GitHub token lives in SecretStorage (managed via the Git settings tab).
