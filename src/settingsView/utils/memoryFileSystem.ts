@@ -6,8 +6,8 @@
  */
 
 import * as path from 'path';
-import * as vscode from 'vscode';
 
+import { isDirectory } from '@common/files/fsEntryType';
 import type { MemoryViewItem } from '@shared/schemas/settingsViewMessages';
 import {
   MEMORY_STORAGE_ROOT,
@@ -68,7 +68,7 @@ export async function walkMemoryDirectory(
     const nextRelative = relativeRoot ? path.join(relativeRoot, name) : name;
     const nextStoragePath = path.join(MEMORY_STORAGE_ROOT, nextRelative);
 
-    if (type === vscode.FileType.Directory) {
+    if (isDirectory(type)) {
       results.push(
         ...(await walkMemoryDirectory(nextStoragePath, nextRelative)),
       );

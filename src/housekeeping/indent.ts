@@ -1,8 +1,7 @@
 import * as path from 'path';
 
-import * as vscode from 'vscode';
-
-import { showLoggedErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage, showLoggedMessage } from '@common/errors';
+import { isDirectory, isFile } from '@common/files/fsEntryType';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -41,11 +40,8 @@ export async function indentLatexFilesInDirectory(
   logger.debug(CHANNEL, `Formatter: ${formatter}, Config: ${config}`);
 
   if (config && !(await AbsoluteFS.exists(config))) {
-    logger.error(
+    await showLoggedMessage(
       CHANNEL,
-      `Error: Formatter config file not found at ${config}`,
-    );
-    vscode.window.showErrorMessage(
       `Formatter config file not found at ${config}`,
     );
     return 0;
@@ -65,9 +61,9 @@ export async function indentLatexFilesInDirectory(
 
       const fullPath = path.join(dirPath, name);
 
-      if (type === vscode.FileType.Directory) {
+      if (isDirectory(type)) {
         await walkDirectory(fullPath, onFile);
-      } else if (type === vscode.FileType.File) {
+      } else if (isFile(type)) {
         await onFile(fullPath, name);
       }
     }
