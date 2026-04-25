@@ -70,15 +70,37 @@ export interface SetupConfigAdapter {
  * the captured-stdio `bash` tool cannot handle: `sudo` password prompts,
  * other interactive TTY prompts, and any flow where the user must type
  * into the running process.
+ *
+ * Implementations should prefer VS Code's stable `Terminal.shellIntegration`
+ * API (since 1.93) so the agent can read back exit code + output. When
+ * shell integration isn't available (custom shell, user disabled the
+ * auto-inject, remote edge case), the implementation falls back to
+ * `sendText` and reports `captured: false` — the agent then has to ask
+ * the user to confirm completion and re-probe.
  */
 export interface SetupTerminalAdapter {
-  /**
-   * Reveal a VS Code integrated terminal and type `command` into it.
-   * The command is left at the prompt unexecuted — the user must press
-   * Enter to run it. That keystroke is the approval gate.
-   */
-  sendCommand(args: { name: string; command: string }): Promise<void>;
+  runCommand(args: {
+    name: string;
+    command: string;
+    /** Hard cap on how long to wait for the captured run before giving up. */
+    timeoutMs: number;
+  }): Promise<TerminalRunResult>;
 }
+
+export type TerminalRunResult =
+  | {
+      captured: true;
+      /** `undefined` if the shell didn't report one (e.g. user Ctrl+C). */
+      exitCode: number | undefined;
+      /** ANSI-stripped, length-capped tail of the command's output. */
+      output: string;
+      timedOut: boolean;
+    }
+  | {
+      captured: false;
+      /** Why we couldn't capture — surfaced to the agent for context. */
+      reason: 'no-shell-integration' | 'unavailable';
+    };
 
 /** Aggregated setup platform. */
 export interface SetupPlatform {

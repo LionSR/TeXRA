@@ -3,6 +3,11 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolError, type ToolResult } from '@tools/result';
+import {
+  buildBashApprovalRejectedResult,
+  requestBashApproval,
+} from '@tools/approval/bashApproval';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/define';
@@ -15,27 +20,28 @@ import { getSetupPlatform } from './platform';
  *   - `brew install --cask mactex` and similar prompt for confirmation
  *   - shells that drop the process into a paginator / editor
  *
- * For those cases the agent types the command into a real VS Code
- * integrated terminal. The terminal is shown to the user; the command
- * is left at the prompt unexecuted so the user's Enter keystroke is the
- * explicit approval (and gives them a chance to edit or cancel). The
- * tool intentionally does NOT expose an auto-execute switch — that
- * would defeat the entire approval model.
+ * For those cases the agent runs the command inside a real VS Code
+ * integrated terminal. Approval re-uses the regular `bash` approval
+ * dialog — there's no second gate to maintain, and the user already
+ * understands that surface.
  *
- * This is intentionally a separate tool from `bash`:
- *   - `bash`: captured stdio, agent reads the result, approval dialog gates execution.
- *   - `send_to_terminal`: interactive TTY, no captured output, the visible terminal + Enter keystroke is the approval.
- *
- * Use the right one for the job — never reach for this tool to bypass
- * `bash` approvals on commands that would have worked in `bash`.
+ * When the terminal has shell integration active (the default for
+ * bash/zsh/pwsh/fish in VS Code-launched terminals since 1.93), the
+ * tool reads back the exit code and output via
+ * `Terminal.shellIntegration.executeCommand`. When integration isn't
+ * available, the tool falls back to `terminal.sendText` and reports
+ * `captured: false` — the agent must then ask the user to confirm the
+ * command finished and re-probe.
  */
+
+const DEFAULT_TIMEOUT_MS = 300_000; // 5 min — installs can be slow
+
 /**
- * Reject any control character that VS Code's terminal would treat as an
- * Enter / line-feed, defeating the approval gate. `terminal.sendText`
- * normalizes both `\n` and `\r` into a CR the shell reads as Enter, so
- * `"cmd1\ncmd2"` with execute=false would still auto-run `cmd1`. We
- * reject the raw string at parse time rather than stripping silently —
- * the agent should rewrite multi-line input as a single command.
+ * Reject any control character that would behave as Enter inside the
+ * terminal. Even with shell integration, embedded `\n` / `\r` would
+ * smuggle a second command past the user's view of what they
+ * approved — keep the schema strict and let the agent rewrite
+ * multi-line input as a single command.
  */
 const FORBIDDEN_COMMAND_CHARS = /[\r\n]/;
 
@@ -46,10 +52,10 @@ const SendToTerminalInputSchema = z.strictObject({
     .max(2048)
     .refine((s) => !FORBIDDEN_COMMAND_CHARS.test(s), {
       message:
-        'command must not contain newline / carriage-return characters — they would auto-execute past the Enter approval gate.',
+        'command must not contain newline / carriage-return characters — they would smuggle a second command past the approval surface.',
     })
     .describe(
-      'The command to type into the integrated terminal. One command per call (a script is fine if it is the user-visible operation, but no chaining unrelated steps). Must not contain newline or carriage-return characters; those would auto-execute past the Enter approval gate.',
+      'The command to run inside the integrated terminal. One command per call. Must not contain newline or carriage-return characters.',
     ),
   reason: z
     .string()
@@ -59,7 +65,7 @@ const SendToTerminalInputSchema = z.strictObject({
       message: 'reason must include non-whitespace text',
     })
     .describe(
-      'One short sentence stating why this needs an interactive terminal instead of the regular `bash` tool — typically "sudo password prompt" or "interactive confirmation". The reason is shown back to the user.',
+      'One short sentence stating why this needs an interactive terminal instead of the regular `bash` tool — typically "sudo password prompt" or "interactive confirmation". Shown back to the user.',
     ),
   label: z
     .string()
@@ -70,22 +76,25 @@ const SendToTerminalInputSchema = z.strictObject({
       message: 'label must include non-whitespace text',
     })
     .describe(
-      'Short suffix for the terminal tab name. The tool always prepends "TeXRA: " so the terminal cannot be made to impersonate other terminals or extensions. Examples: "setup", "install LaTeX", "PATH fix".',
+      'Short suffix for the terminal tab name. The tool always prepends "TeXRA: " so the terminal cannot impersonate other terminals or extensions.',
+    ),
+  timeout: z
+    .int()
+    .min(1_000)
+    .max(900_000)
+    .nullish()
+    .describe(
+      'Hard cap (ms) on how long the tool waits for the captured run before giving up. Defaults to 300,000 ms (5 min). Ignored when shell integration is unavailable.',
     ),
 });
 
 type SendToTerminalInput = z.infer<typeof SendToTerminalInputSchema>;
 
-/** Cap on the command preview echoed back into the tool transcript. */
+/** Length cap for the command preview in tool output. */
 const COMMAND_PREVIEW_MAX = 80;
+/** Length cap for the captured-output tail surfaced to the agent. */
+const OUTPUT_PREVIEW_MAX = 4_000;
 
-/**
- * Build a short, transcript-safe preview of the command. The user can
- * already see the command in the revealed terminal, so we deliberately
- * avoid echoing the full text into the saved transcript / exports —
- * that would mirror a known footgun where secrets ride along in tool
- * output (cf. `InvokeCommandTool`'s arg redaction).
- */
 function commandPreview(command: string): string {
   if (command.length <= COMMAND_PREVIEW_MAX) return command;
   return `${command.slice(0, COMMAND_PREVIEW_MAX)}…`;
@@ -93,31 +102,82 @@ function commandPreview(command: string): string {
 
 export class SendToTerminalTool extends defineTool({
   name: 'send_to_terminal',
-  description: `Type a command into a VS Code integrated terminal and reveal the terminal to the user. Use this — instead of \`bash\` — when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. The command is left at the prompt unexecuted; the user must press Enter to run it (that keystroke is the approval). The terminal tab is always named "TeXRA: <label>" so it cannot impersonate other terminals. You receive no captured output and only a redacted preview of the command — after sending, ask the user to confirm completion before continuing, then re-probe with \`verify_setup\` or \`probe_environment\`. Do NOT use this to bypass \`bash\` approvals for commands that would work in \`bash\`.`,
+  description: `Run a command in a VS Code integrated terminal — use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. When the terminal has shell integration enabled (bash/zsh/pwsh/fish in a VS Code-launched terminal), the tool returns the exit code and a tail of the captured output. When shell integration is unavailable the tool reports \`captured: false\` and you must wait for the user to confirm completion before re-probing. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
   schema: SendToTerminalInputSchema,
 }) {
   protected async execute(input: SendToTerminalInput): Promise<ToolResult> {
-    const platform = getSetupPlatform();
     const command = input.command.trim();
-
     if (command.length === 0) {
       throw new ToolError('Refusing to send an empty command to the terminal.');
     }
 
+    // Reuse the same approval dialog the `bash` tool uses. The user
+    // sees the exact command before anything is sent to the terminal.
+    const approval = await requestBashApproval({ command });
+    if (!approval.accepted) {
+      return buildBashApprovalRejectedResult(command, approval.userMessage);
+    }
+
+    const platform = getSetupPlatform();
     const label = input.label.trim();
     const name = `TeXRA: ${label}`;
-    await platform.terminal.sendCommand({ name, command });
-
+    const timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS;
     const reason = input.reason.trim();
     const preview = commandPreview(command);
+
+    const result = await platform.terminal.runCommand({
+      name,
+      command,
+      timeoutMs,
+    });
+
+    if (!result.captured) {
+      return {
+        summary: `Ran command in terminal "${name}" (no output capture)`,
+        output:
+          `Ran a command in the integrated terminal "${name}" — preview: \`${preview}\`. ` +
+          `Reason: ${reason}. ` +
+          'Shell integration was not available on this terminal, so I cannot read back the exit code or output. ' +
+          'Wait for the user to tell you the command finished (and any password / confirmation prompts are answered) before re-probing with `verify_setup` or `probe_environment`.',
+      };
+    }
+
+    if (result.timedOut) {
+      return {
+        summary: `Command in terminal "${name}" timed out after ${(timeoutMs / 1000).toFixed(0)}s`,
+        output:
+          `The command was running in "${name}" — preview: \`${preview}\` — but did not finish within ${(timeoutMs / 1000).toFixed(0)}s. ` +
+          'It may still be running in the terminal; ask the user whether to keep waiting, raise the `timeout`, or interrupt it (Ctrl+C in the terminal). ' +
+          (result.output
+            ? 'Captured output so far is appended below.\n\n' +
+              wrapOutput(truncateWithEllipsis(result.output, OUTPUT_PREVIEW_MAX))
+            : 'No output was captured before the timeout.'),
+      };
+    }
+
+    const exit = result.exitCode;
+    const ok = exit === 0;
+    const exitLabel =
+      exit === undefined
+        ? 'unknown (terminal interrupted before completion)'
+        : String(exit);
+
+    const outputBlock = result.output.trim()
+      ? wrapOutput(truncateWithEllipsis(result.output, OUTPUT_PREVIEW_MAX))
+      : '(no output captured)';
+
     return {
-      summary: `Typed command into terminal "${name}" (awaiting Enter)`,
+      summary: ok
+        ? `Ran command in terminal "${name}" (exit 0)`
+        : `Command in terminal "${name}" exited ${exitLabel}`,
       output:
-        `Typed a command into the integrated terminal "${name}" — preview: \`${preview}\`. ` +
-        `Reason: ${reason}. ` +
-        "The command is sitting at the user's prompt; they need to press Enter to run it, then complete any password or confirmation prompts in the terminal. " +
-        'Wait for the user to tell you it finished before re-probing. ' +
-        '(Full command text is intentionally not echoed into the transcript — the user can see it in the revealed terminal.)',
+        `Ran in integrated terminal "${name}" — preview: \`${preview}\`. ` +
+        `Reason: ${reason}. Exit code: ${exitLabel}.\n\n` +
+        outputBlock,
     };
   }
+}
+
+function wrapOutput(text: string): string {
+  return '```\n' + text + '\n```';
 }

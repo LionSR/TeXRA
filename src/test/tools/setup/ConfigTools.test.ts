@@ -61,7 +61,9 @@ function createPlatform(initial: Record<string, unknown> = {}): {
       },
     },
     terminal: {
-      async sendCommand() {},
+      async runCommand() {
+        return { captured: false, reason: 'unavailable' };
+      },
     },
   };
   return { platform, store, updates };

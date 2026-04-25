@@ -60,7 +60,9 @@ function createPlatform(): {
       async update() {},
     },
     terminal: {
-      async sendCommand() {},
+      async runCommand() {
+        return { captured: false, reason: 'unavailable' };
+      },
     },
   };
   return { platform, invocations };

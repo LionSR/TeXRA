@@ -36,4 +36,5 @@ export {
   type SetupAuthAdapter,
   type SetupConfigAdapter,
   type SetupTerminalAdapter,
+  type TerminalRunResult,
 } from './platform';

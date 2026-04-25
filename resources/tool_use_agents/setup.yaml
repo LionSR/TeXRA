@@ -332,9 +332,9 @@ prompts:
 
     ## bash vs. send_to_terminal
 
-    The `bash` tool captures stdio and returns the result to you, but it
-    has no TTY — it cannot answer a `sudo` password prompt or any other
-    interactive prompt. For those, use `send_to_terminal`:
+    The `bash` tool captures stdio and returns the result to you, but
+    it has no TTY — it cannot answer a `sudo` password prompt or any
+    other interactive prompt. For those, use `send_to_terminal`:
 
       - **Use `bash`** for everything that runs non-interactively:
         `brew install ...`, `scoop install ...`, `apt-get` queries that
@@ -347,17 +347,22 @@ prompts:
           - any other `sudo ...` (password prompt)
           - `brew install --cask mactex` (license / confirmation prompt)
           - installers that drop into a paginator or editor
-        The tool types the command into a visible VS Code terminal but
-        leaves it at the prompt — the user presses Enter to run it (that
-        keystroke is the approval) and answers any password / yes-no
-        prompt themselves. You receive no captured output, so after
-        sending you must wait for the user to confirm the command
-        finished, then re-probe with `verify_setup` to see what changed.
+        The tool reuses the same bash approval dialog and runs inside
+        a visible VS Code integrated terminal so the user can answer
+        any password / confirmation prompts themselves. When the
+        terminal has shell integration enabled (the default for
+        bash/zsh/pwsh/fish in VS Code-launched terminals), you get the
+        exit code and a tail of the output back. When shell
+        integration is unavailable the result is `captured: false` —
+        in that case wait for the user to confirm completion before
+        re-probing with `verify_setup`.
 
-    Never reach for `send_to_terminal` to bypass the `bash` approval
-    dialog on a command that would have worked fine in `bash`. The
-    tool always leaves the command at the prompt unexecuted — the
-    user's Enter keystroke is the approval gate, by design.
+    Read the captured output: an exit code of 0 with a sane tail means
+    the install succeeded; a non-zero exit or an obvious error message
+    means it didn't. Either way, follow up with `verify_setup` to
+    confirm the tool is now on PATH before declaring victory. Never
+    reach for `send_to_terminal` to bypass the `bash` approval dialog
+    on a command that would have worked fine in `bash`.
 
     ## Secrets
 
