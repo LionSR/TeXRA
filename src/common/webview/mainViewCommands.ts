@@ -81,7 +81,6 @@ export const MAIN_VIEW_COMMANDS = {
   HIDE_AGENT_CONFIG_BANNER: 'hideAgentConfigBanner',
   SHOW_DEPENDENCY_BANNER: 'showDependencyBanner',
   HIDE_DEPENDENCY_BANNER: 'hideDependencyBanner',
-  UPDATE_DEPENDENCY_REMINDER_SETTING: 'updateDependencyReminderSetting',
   SHOW_GETTING_STARTED_BANNER: 'showGettingStartedBanner',
   HIDE_GETTING_STARTED_BANNER: 'hideGettingStartedBanner',
   SHOW_LOGIN_BANNER: 'showLoginBanner',
