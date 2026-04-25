@@ -1,7 +1,7 @@
 import * as path from 'path';
 
 import { showLoggedErrorMessage, showLoggedMessage } from '@common/errors';
-import { isDirectory, isFile } from '@common/files/fsEntryType';
+import { isDirectory, isFile, isSymlink } from '@common/files/fsEntryType';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -56,6 +56,11 @@ export async function indentLatexFilesInDirectory(
     const entries = await WorkspaceFS.readDir(dirPath);
     for (const [name, type] of entries) {
       if (EXCLUDED_DIRS.has(name.toLowerCase()) || name.includes('Diffs')) {
+        continue;
+      }
+
+      // Skip symlinks to avoid cycles; we have no realpath/visited guard.
+      if (isSymlink(type)) {
         continue;
       }
 
