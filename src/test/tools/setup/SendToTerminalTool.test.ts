@@ -9,6 +9,8 @@ import {
   type TerminalRunResult,
 } from '@tools/setup/platform';
 
+import { createFakeSetupPlatform } from './fixtures';
+
 interface RunRecord {
   name: string;
   command: string;
@@ -27,54 +29,14 @@ function createPlatform(
   runs: RunRecord[];
 } {
   const runs: RunRecord[] = [];
-  const platform: SetupPlatform = {
-    secrets: {
-      async setApiKey() {},
-      async deleteApiKey() {},
-      async apiKeyExists() {
-        return false;
-      },
-      async hasUsableApiKey() {
-        return false;
-      },
-      async storedApiKeyExists() {
-        return false;
-      },
-      async anyApiKeyExists() {
-        return false;
-      },
-      async gitHubTokenExists() {
-        return 'none';
-      },
-      providers: [],
-    },
-    commands: {
-      async invoke() {},
-    },
-    extensions: {
-      isInstalled() {
-        return false;
-      },
-      async install() {},
-    },
-    auth: {
-      async getStatus() {
-        return { authenticated: false };
-      },
-    },
-    config: {
-      get() {
-        return undefined;
-      },
-      async update() {},
-    },
+  const platform = createFakeSetupPlatform({
     terminal: {
       async runCommand(args) {
         runs.push(args);
         return result;
       },
     },
-  };
+  });
   return { platform, runs };
 }
 
@@ -162,10 +124,7 @@ describe('SendToTerminalTool', () => {
   });
 
   it('explains the no-capture case when shell integration is unavailable', async () => {
-    const { platform } = createPlatform({
-      captured: false,
-      reason: 'no-shell-integration',
-    });
+    const { platform } = createPlatform({ captured: false });
     setSetupPlatform(platform);
     const tool = new SendToTerminalTool();
 

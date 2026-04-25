@@ -96,11 +96,7 @@ export type TerminalRunResult =
       output: string;
       timedOut: boolean;
     }
-  | {
-      captured: false;
-      /** Why we couldn't capture — surfaced to the agent for context. */
-      reason: 'no-shell-integration' | 'unavailable';
-    };
+  | { captured: false };
 
 /** Aggregated setup platform. */
 export interface SetupPlatform {

@@ -38,8 +38,13 @@ export async function runTerminalCommand(args: {
   const { name, command, timeoutMs } = args;
 
   // Reuse a terminal with the same name when present so repeated calls
-  // don't clutter the user's terminal panel with duplicate tabs.
-  const existing = vscode.window.terminals.find((t) => t.name === name);
+  // don't clutter the user's terminal panel with duplicate tabs. A
+  // terminal that has already exited keeps appearing in `terminals`
+  // until the user closes it manually — skip those, otherwise our
+  // command would silently land in a dead tab.
+  const existing = vscode.window.terminals.find(
+    (t) => t.name === name && t.exitStatus === undefined,
+  );
   const terminal = existing ?? vscode.window.createTerminal({ name });
   terminal.show();
 
@@ -54,7 +59,7 @@ export async function runTerminalCommand(args: {
     // the gate, so requiring an extra Enter keystroke would just
     // confuse the user.
     terminal.sendText(command, true);
-    return { captured: false, reason: 'no-shell-integration' };
+    return { captured: false };
   }
 
   return captureExecution(integration, command, timeoutMs);
