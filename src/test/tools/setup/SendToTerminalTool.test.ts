@@ -146,4 +146,31 @@ describe('SendToTerminalTool', () => {
     }
     assert.equal(runs.length, 0);
   });
+
+  it('truncates from the head, not the tail — the success/error line is at the end', async () => {
+    // Output longer than the tool's preview cap. We sentinel the start
+    // and end so we can see which side survived truncation.
+    const head = 'BEGIN_MARKER\n' + 'x'.repeat(8_000);
+    const end = 'Setting up perl ... done\nEND_MARKER';
+    const { platform } = createPlatform({
+      exitCode: 0,
+      output: head + '\n' + end,
+      timedOut: false,
+    });
+    setSetupPlatform(platform);
+
+    const result = await new SendToTerminalTool().call({
+      command: 'sudo apt-get install -y perl',
+    });
+
+    assert.ok(!result.isError);
+    assert.ok(
+      (result.output ?? '').includes('END_MARKER'),
+      'tail (success line) must survive truncation',
+    );
+    assert.ok(
+      !(result.output ?? '').includes('BEGIN_MARKER'),
+      'head must be elided when output exceeds the preview cap',
+    );
+  });
 });
