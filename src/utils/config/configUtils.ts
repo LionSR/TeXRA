@@ -78,11 +78,19 @@ export async function updateConfig<T>(
 }
 
 /**
+ * Inspect a configuration key to retrieve its raw global/workspace/folder values
+ * (without VS Code defaults). Returns `undefined` if the key is not registered.
+ */
+export function inspectConfig<T = unknown>(key: string) {
+  return vscode.workspace.getConfiguration().inspect<T>(key);
+}
+
+/**
  * Checks if a configuration setting has been explicitly set by the user
  * (global, workspace, or workspace folder), rather than using defaults.
  */
 export function isConfigExplicitlySet(key: string): boolean {
-  const inspection = vscode.workspace.getConfiguration().inspect(key);
+  const inspection = inspectConfig(key);
   if (!inspection) return false;
   return (
     inspection.globalValue !== undefined ||
