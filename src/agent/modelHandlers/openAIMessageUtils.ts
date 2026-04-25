@@ -11,11 +11,7 @@ type MessageLike = {
   content?: unknown;
   tool_calls?: unknown;
   tool_call_id?: unknown;
-  /**
-   * DeepSeek/Kimi/GLM thinking-mode reasoning that must round-trip with the
-   * assistant turn. Tracked here so message normalization preserves it instead
-   * of dropping it when consecutive assistant messages merge.
-   */
+  /** Tracked so merging assistant messages preserves DeepSeek-style reasoning that must round-trip to the API. */
   reasoning_content?: unknown;
 };
 
@@ -45,10 +41,11 @@ function mergeReasoningContent(
     return;
   }
   if (typeof prevReasoning === 'string' && typeof currReasoning === 'string') {
-    previous.reasoning_content =
-      prevReasoning && currReasoning
-        ? `${prevReasoning}\n${currReasoning}`
-        : prevReasoning || currReasoning;
+    if (prevReasoning === '' || currReasoning === '') {
+      previous.reasoning_content = prevReasoning || currReasoning;
+    } else {
+      previous.reasoning_content = `${prevReasoning}\n${currReasoning}`;
+    }
   }
 }
 
