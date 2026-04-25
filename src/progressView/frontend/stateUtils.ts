@@ -29,23 +29,6 @@ export function updateRounds<T>(
 }
 
 /**
- * Check if any output files exist in the per-round files record.
- * Returns true as soon as a non-empty array is found.
- */
-export function hasOutputFiles(
-  files: Record<string, OutputFileInfo[]> | undefined,
-): boolean {
-  if (!files) return false;
-  for (const key in files) {
-    if (Object.hasOwn(files, key)) {
-      const arr = files[key];
-      if (arr && arr.length > 0) return true;
-    }
-  }
-  return false;
-}
-
-/**
  * Filter permissions to those relevant to a specific stream.
  * Keeps permissions that have no streamId or match the given streamId.
  */
@@ -72,6 +55,12 @@ export function removePermissionsForStream(
     (permission) =>
       !permission.data.streamId || permission.data.streamId !== streamId,
   );
+}
+
+export function hasOutputFiles(
+  filesByRound: Record<string, OutputFileInfo[]>,
+): boolean {
+  return Object.values(filesByRound).some((files) => files.length > 0);
 }
 
 // =============================================================================

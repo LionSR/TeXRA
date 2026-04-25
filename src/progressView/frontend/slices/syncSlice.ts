@@ -18,7 +18,8 @@ export const syncHandlers: HandlerRegistry = {
 
     const hasWorkflowFiles =
       data.workflowFiles !== undefined ||
-      data.workflowMissingOutputs !== undefined;
+      data.workflowMissingOutputs !== undefined ||
+      data.workflowCompileFailures !== undefined;
     const hasTaskData =
       data.todos !== undefined ||
       data.plan !== undefined ||
@@ -50,6 +51,9 @@ export const syncHandlers: HandlerRegistry = {
             if (data.workflowFiles) d.files = { ...data.workflowFiles };
             if (data.workflowMissingOutputs) {
               d.missingOutputs = { ...data.workflowMissingOutputs };
+            }
+            if (data.workflowCompileFailures) {
+              d.compileFailures = { ...data.workflowCompileFailures };
             }
           }
 

@@ -50,6 +50,10 @@ The header provides a summary and actions for the selected stream:
   - <i class="codicon codicon-reply"></i> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA webview interface. This allows you to easily modify and re-run a previous task.
   - <i class="codicon codicon-diff-multiple"></i> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA automatically falls back to the original file. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
   - <i class="codicon codicon-check"></i> **Accept**: After reviewing a diff, replace the base file with the edited version.
+  - <i class="codicon codicon-folder-opened"></i> **Open in task storage**:
+    Reveals the run folder under task-run storage so you can browse generated
+    files, compile logs, mirrored dependencies, and intermediate artifacts
+    manually.
   - <i class="codicon codicon-archive"></i> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
   - <i class="codicon codicon-trash"></i> **Clean**: Deletes the task storage folder associated with this stream.
   - <i class="codicon codicon-clear-all"></i> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.

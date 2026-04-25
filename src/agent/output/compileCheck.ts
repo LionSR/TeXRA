@@ -4,8 +4,9 @@ import { getConfig } from '@agent/core/config';
 import { toErrorMessage } from '@common/errors';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { OutputFileInfo } from '@shared/schemas';
+import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import {
+  createRunStorageLocation,
   flexibleFS,
   getComparablePath,
   pathToLocation,
@@ -45,27 +46,27 @@ function getCompileDisplayName(file: OutputFileInfo): string {
 /**
  * Compile each .tex output of a round to verify the workflow produced a
  * buildable document. Success is silent; failures write the log tail to
- * `<runDir>/compile/<safe>.log`. Missing toolchains, runs without a run
+ * `<runDir>/compile/r<round>_<safe>.log`. Missing toolchains, runs without a run
  * directory, and non-root fragments are skipped gracefully.
  */
 export async function runCompileCheck(
   ctx: CompileCheckContext,
   currentRound: number,
-): Promise<void> {
+): Promise<CompileFailure[]> {
   if (!getConfig<boolean>('texra.workflow.autoCompileAfterOutput', true)) {
-    return;
+    return [];
   }
 
   const runDirectory = ctx.fileService.metadata.runDirectory;
   if (!runDirectory) {
     ctx.logger.debug('Compile check skipped: no run directory');
-    return;
+    return [];
   }
 
   const texOutputs = (
     getOutputFilesByRound(ctx.outputState)[currentRound] ?? []
   ).filter((f) => f.location.absolutePath.toLowerCase().endsWith('.tex'));
-  if (texOutputs.length === 0) return;
+  if (texOutputs.length === 0) return [];
 
   // Skip gracefully when no LaTeX toolchain is installed so the run doesn't
   // leave stray `compile/<name>.log` artifacts that the orchestrator would
@@ -77,7 +78,7 @@ export async function runCompileCheck(
     ctx.logger.debug(
       'Compile check skipped: neither latexmk nor pdflatex is installed',
     );
-    return;
+    return [];
   }
 
   const timeoutMs = Math.max(
@@ -88,21 +89,31 @@ export async function runCompileCheck(
   // no trace — the orchestrator can use "no compile/*.log entries" as proof
   // the build succeeded.
   const compileRoot = path.join(runDirectory, 'compile');
+  const failures: CompileFailure[] = [];
 
   for (const outputFile of texOutputs) {
     const displayName = getCompileDisplayName(outputFile);
     try {
-      await compileOne(ctx, outputFile, currentRound, displayName, {
-        compileRoot,
-        runDirectory,
-        timeoutMs,
-      });
+      const failure = await compileOne(
+        ctx,
+        outputFile,
+        currentRound,
+        displayName,
+        {
+          compileRoot,
+          runDirectory,
+          timeoutMs,
+        },
+      );
+      if (failure) failures.push(failure);
     } catch (err) {
       ctx.logger.warn(
         `Compile check: ${displayName} skipped — ${toErrorMessage(err)}`,
       );
     }
   }
+
+  return failures;
 }
 
 interface PerFileOptions {
@@ -117,7 +128,7 @@ async function compileOne(
   currentRound: number,
   displayName: string,
   opts: PerFileOptions,
-): Promise<void> {
+): Promise<CompileFailure | null> {
   // compiledBasename is the actual on-disk filename LaTeX engines use when
   // naming their .log; it may differ from displayName when file.source is set.
   const compiledBasename = path.basename(outputFile.location.absolutePath);
@@ -134,7 +145,11 @@ async function compileOne(
     safeName,
   );
   const logDest = pathToLocation(
-    path.join(opts.compileRoot, `${safeName}.log`),
+    path.join(opts.compileRoot, `r${currentRound}_${safeName}.log`),
+  );
+  const logRelativePath = path.join(
+    'compile',
+    `r${currentRound}_${safeName}.log`,
   );
 
   // Clear any stale log from a previous round so "no log = success" holds.
@@ -145,7 +160,7 @@ async function compileOne(
     ctx.logger.debug(
       `Compile check: ${displayName} has no \\documentclass, skipping`,
     );
-    return;
+    return null;
   }
 
   // execa's timeout option kills the child process on expiry, so we don't
@@ -158,7 +173,7 @@ async function compileOne(
 
   if (ok) {
     ctx.logger.debug(`Compile check: ${displayName} built successfully`);
-    return;
+    return null;
   }
 
   const tail = await readLogTail(buildDir, compiledBasename);
@@ -170,6 +185,21 @@ async function compileOne(
   ctx.logger.warn(
     `Compile check: ${displayName} failed — wrote ${path.relative(opts.runDirectory, logDest.absolutePath)}`,
   );
+  const executionId = ctx.fileService.metadata.executionId;
+  const logLocation = executionId
+    ? createRunStorageLocation(
+        logDest.absolutePath,
+        logRelativePath,
+        executionId,
+      )
+    : logDest;
+  return {
+    round: currentRound,
+    displayName,
+    output: outputFile.location,
+    log: logLocation,
+    logRelativePath,
+  };
 }
 
 async function readLogTail(
