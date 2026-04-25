@@ -80,7 +80,10 @@ function mergeMessageContent(
   }
 }
 
-function canMergeMessages(previous: MessageLike, current: MessageLike): boolean {
+function canMergeMessages(
+  previous: MessageLike,
+  current: MessageLike,
+): boolean {
   if (previous.role !== current.role) return false;
 
   return (
