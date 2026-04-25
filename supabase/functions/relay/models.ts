@@ -71,9 +71,9 @@ function toRelayModel(config: ModelConfig): RelayModel {
 // Model Definitions (derived from llm-zoo)
 // =============================================================================
 
-/** All models from llm-zoo, converted to relay format */
+/** All relay-compatible models from llm-zoo, converted to relay format. */
 const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
-  .filter((m) => !m.openRouterOnly) // Exclude OpenRouter-only models
+  .filter((m) => !m.openRouterOnly)
   .map(toRelayModel);
 
 /**
