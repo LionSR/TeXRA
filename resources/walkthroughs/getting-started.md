@@ -8,9 +8,9 @@ You can also run individual agents yourself if you want to do one specific thing
 
 ## First-time setup
 
-**The quickest path:** run the **Setup Assistant**. It's a conversational agent that probes your environment, installs any missing LaTeX tools, sets up a credential, and verifies everything end-to-end.
+**The quickest path:** run the **Setup Assistant Agent**. It's a conversational agent that probes your environment, installs any missing LaTeX tools, sets up a credential, and verifies everything end-to-end.
 
-- Command Palette > **TeXRA: Run Setup Assistant**, or click **Run Setup Assistant** in the first step of the walkthrough on the left.
+- Command Palette > **TeXRA: Run Setup Assistant Agent (Setup Wizard)**, or click **Run Setup Assistant Agent** in the first step of the walkthrough on the left.
 - The assistant asks before every command and explains what it's about to do. You stay in control.
 - Already have LaTeX and a credential? It'll say so and skip straight to verification.
 
@@ -20,7 +20,7 @@ You can also run individual agents yourself if you want to do one specific thing
 
 Follow the checklist on the left. Each step links to the right command.
 
-1. **Let TeXRA set itself up** -- One click; the setup assistant handles the rest. (Or skip and follow the manual steps below.)
+1. **Run the setup assistant agent** -- One click; the setup assistant agent handles the rest. (Or skip and follow the manual steps below.)
 2. **Try the sample project** -- A small LaTeX project you can play with safely.
 3. **Add your API key** -- You'll need one from Anthropic, OpenAI, Google, or similar. Chat subscriptions (ChatGPT Plus, Claude Pro) don't include API access.
 4. **Or just sign in** -- The Researcher Access Program gives you free model access, no API key needed. Signing in also unlocks extra agents.
