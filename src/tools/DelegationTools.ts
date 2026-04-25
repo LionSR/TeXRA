@@ -576,7 +576,7 @@ const WorkflowAgentInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Model short name (e.g., opus46T, sonnet46T, gpt54, gemini31p). Defaults to the current model if omitted.',
+      'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
   instruction: z.string().describe('Plain prose instruction for the agent'),
   inputFile: z.string().describe('Primary input file to process (required)'),
@@ -808,7 +808,7 @@ const DelegateAgentInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Model short name (e.g., opus46T, sonnet46T, gpt54, gemini31p). Defaults to the current model if omitted.',
+      'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
   instruction: z
     .string()

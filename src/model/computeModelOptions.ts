@@ -37,6 +37,7 @@ export const DEFAULT_MODELS = [
   'gemini31p',
   'sonnet46T',
   'opus47T',
+  'gpt55',
   'gpt54',
   'deepseekT',
   'deepseekproT',
