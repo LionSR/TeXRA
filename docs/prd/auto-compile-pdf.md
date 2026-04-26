@@ -109,7 +109,7 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 ### 6.6 Latexdiff bib quality
 
 - Default `latexdiff` invocation passes `--exclude-textcmd="cite,citep,citet,citeauthor,citeyear,..."` so citations remain unwrapped and bibtex resolves them.
-- `latexmk` invoked with `BIBINPUTS`/`BSTINPUTS` env vars set to the workspace TeX roots, in addition to symlinked deps.
+- `latexmk` invoked with `BIBINPUTS`/`BSTINPUTS` env vars **prepended** to the kpathsea default search path, not replacing it. Use the trailing-separator convention so kpathsea's compiled-in defaults are preserved: `BIBINPUTS="<workspace-roots>:"` on POSIX, `BIBINPUTS="<workspace-roots>;"` on Windows (likewise for `BSTINPUTS`). Without the trailing separator, standard `.bst` files such as `plain.bst` would no longer resolve and otherwise-valid latexdiff builds would fail at bibtex.
 - Verify the symlink mirroring covers fragment wraps and diff `.tex` (not just main compiles).
 
 ### 6.7 Latexdiff changes-only
