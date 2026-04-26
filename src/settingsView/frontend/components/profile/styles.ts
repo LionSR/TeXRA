@@ -592,7 +592,10 @@ export const profileViewStyles: CSSResult = css`
 
   .model-warning-icon {
     font-size: var(--font-size-xs);
-    color: var(--vscode-list-warningForeground, var(--color-text-secondary));
+    color: var(
+      --vscode-list-warningForeground,
+      var(--vscode-editorWarning-foreground)
+    );
     margin-left: var(--spacing-tiny);
   }
 `;

@@ -98,20 +98,20 @@ export function formatCost(
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
+const prefixHint = (prefix: string, base: string): string =>
+  base ? `${prefix} | ${base}` : prefix;
+
 /**
  * Build the model tooltip string, prepending an attention-grabbing nudge
- * when the model is either an unusually cheap fast option or an unusually
- * expensive Pro variant we want to steer users away from.
+ * for unusually cheap fast options or unusually expensive Pro variants.
+ * Expensive takes precedence — no current model is both.
  */
 function buildModelHint(config: ModelConfig): string {
   const base = hint(config);
-  if (isExpensiveModel(config)) {
-    return base ? `${EXPENSIVE_MODEL_HINT} | ${base}` : EXPENSIVE_MODEL_HINT;
-  }
-  if (!isFastFirstResponseModel(config.inputPrice)) return base;
-  return base
-    ? `${FAST_FIRST_RESPONSE_HINT} | ${base}`
-    : FAST_FIRST_RESPONSE_HINT;
+  if (isExpensiveModel(config)) return prefixHint(EXPENSIVE_MODEL_HINT, base);
+  if (isFastFirstResponseModel(config.inputPrice))
+    return prefixHint(FAST_FIRST_RESPONSE_HINT, base);
+  return base;
 }
 
 /** Check if a model is available via personal API keys. */

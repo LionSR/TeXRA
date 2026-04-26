@@ -15,7 +15,10 @@ import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_PROVIDERS_ORDER,
 } from '@shared/constants/providers';
-import { EXPENSIVE_MODEL_HINT } from '@shared/constants/expensiveModels';
+import {
+  EXPENSIVE_MODEL_HINT,
+  isExpensiveModel,
+} from '@shared/constants/expensiveModels';
 
 // Local imports - profile view styles and events
 import {
@@ -194,7 +197,7 @@ export class ModelSelectionList extends LitElement {
                 model.provider} API key — set via TeXRA: Set API Key command"
               ></span>`
             : nothing}
-          ${model.isExpensive
+          ${isExpensiveModel(model)
             ? html`<span
                 class="codicon codicon-warning model-warning-icon"
                 title=${EXPENSIVE_MODEL_HINT}
