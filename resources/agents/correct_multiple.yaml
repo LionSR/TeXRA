@@ -6,8 +6,6 @@ settings:
   documentTag: latex_documents
   endTag: </latex_documents>
   outputExt: tex
-  prefills:
-    - <scratchpad>
 
 prompts:
   systemPrompt: |
@@ -45,33 +43,14 @@ prompts:
     {% endif %}
 
   userRequest: |
-    In the scratchpad below, brainstorm concrete ways to significantly improve the quality of all latex documents that are directly relevant to the instruction above. Do not consider any other aspects of the papers. Be as concrete as to change what in which section of which paper in what ways. Use the scratchpad as an opportunity to formulate as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change, and the concrete steps to be taken to implement the changes starting from the beginning of each document.
-
-    <scratchpad>
-
-    1. [Specific improvement 1 addressing the instruction]
-        - Affected documents: [List of documents]
-        - Rationale: [explanation]
-        - Implementation: [Concrete steps]
-    2. [Specific improvement 2 addressing the instruction]
-        - Affected documents: [List of documents]
-        - Rationale: [explanation]
-        - Implementation: [Concrete steps]
-    3. [Specific improvement 3 addressing the instruction]
-        - Affected documents: [List of documents]
-        - Rationale: [explanation]
-        - Implementation: [Concrete steps]
-
-    </scratchpad>
-
-    Then, following your plan in the scratchpad, please output updated versions of all \LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+    Output updated versions of all \LaTeX documents with targeted corrections that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
 
     <latex_documents>
-    <document name="{OUTPUT_FILES_ORDER[0]}">
+    <document name="{{ OUTPUT_FILES_ORDER[0] }}">
     % 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
     </document>
-    <document name="{OUTPUT_FILES_ORDER[1]}">
-    {{ 1ST_UPDATED_LATEX_DOCUMENT_2 }}
+    <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+    % 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
     </document>
     ... (repeat for all output files)
     </latex_documents>

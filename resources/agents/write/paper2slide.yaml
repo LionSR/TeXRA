@@ -4,9 +4,6 @@ settings:
   documentTag: beamer_presentation
   endTag: </beamer_presentation>
   outputExt: tex
-  prefills:
-    - <scratchpad>
-    - <scratchpad>
   requiredFilesInternal:
     TEMPLATE_SLIDE: template_slide.tex
 
@@ -66,23 +63,7 @@ prompts:
       </instruction>
       {% endif %}
 
-      Based on the research paper provided, please create a professional LaTeX Beamer presentation for a scientific audience. The presentation should consist of 10-15 slides that effectively communicate the paper's key findings. In the scratchpad below, outline the structure and key points you plan to include in each section of the presentation.
-
-      <scratchpad>
-
-      1. [Title slide content]
-      2. [Introduction/Motivation]
-      3. [Key point 1]
-      4. [Key point 2]
-      5. [Key point 3]
-      6. [Methodology]
-      7. [Results]
-      8. [Conclusions]
-      9. [Future work]
-
-      </scratchpad>
-
-      Then, please create a complete, self-contained LaTeX Beamer presentation, incorporating the key points outlined in the scratchpad. The presentation should be professional, condensed, and effectively highlight the main aspects of the research paper. Use the following format:
+      Create a complete, self-contained LaTeX Beamer presentation that effectively communicates the paper's key findings in 10-15 slides. The presentation should be professional, condensed, and highlight the main aspects of the research paper. Use the following format:
 
       <beamer_presentation>
       \documentclass{beamer}
@@ -125,10 +106,7 @@ prompts:
       \end{document}
       </beamer_presentation>
     - |
-      Please review your draft LaTeX Beamer presentation critically, focusing on the following points:
-
-      <scratchpad>
-      <reflection>
+      Critically review your draft and output a revised version. Check these aspects and fix any issues found:
       \begin{enumerate}
           \item Does the presentation effectively communicate the key findings and methodology?
           \item Are the slides well-organized and logically structured?
@@ -139,31 +117,8 @@ prompts:
           \item Are transitions between slides smooth and logical?
           \item Is the overall presentation visually appealing and professional?
       \end{enumerate}
-      </reflection>
 
-      <improvements>
-      \begin{enumerate}
-          \item [Potential improvement 1]
-              \begin{itemize}
-                  \item Rationale: [Brief explanation]
-                  \item Implementation: [Concrete steps]
-              \end{itemize}
-          \item [Potential improvement 2]
-              \begin{itemize}
-                  \item Rationale: [Brief explanation]
-                  \item Implementation: [Concrete steps]
-              \end{itemize}
-          \item [Potential improvement 3]
-              \begin{itemize}
-                  \item Rationale: [Brief explanation]
-                  \item Implementation: [Concrete steps]
-              \end{itemize}
-          \item[\ldots]
-      \end{enumerate}
-      </improvements>
-      </scratchpad>
-
-      Based on this reflection, please revise your presentation to address any identified issues while maintaining its professional quality and technical accuracy. Output the complete, self-contained revised version based on the previous version you just wrote. Use the following format:
+      Output the complete, self-contained revised version based on the previous version, maintaining its professional quality and technical accuracy. Use the following format:
 
       <beamer_presentation>
       % Complete revised LaTeX Beamer presentation here
