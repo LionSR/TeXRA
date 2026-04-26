@@ -1,10 +1,6 @@
 # PRD: Automatic LaTeX Compilation, Fragment Handling, and latexFixer Agent
 
-**Owner:** TBD
-**Status:** Draft
-**Branch:** `claude/auto-compile-pdf-output-rhqla`
-
----
+## Status: Draft
 
 ## 1. Summary
 
@@ -14,7 +10,7 @@ After every workflow round, TeXRA must automatically produce a viewable PDF (or 
 
 Today:
 
-- Compile-after-output exists (`compileCheck.ts`) but failures are silent — user only sees them by digging into a log file.
+- Compile-after-output exists (`compileCheck.ts`) and failures *are* surfaced — `OutputNode` emits `updateCompileFailures` events that render in the progress view via `compile-failure-panel` (with an "Open log" action). But failures are not promoted as primary output: the resulting PDF is not auto-opened on success, the log is not auto-opened on failure, and the user has to switch to the progress view to act on either.
 - Fragments (no `\documentclass`) are silently skipped — never compiled.
 - Latexdiff `.tex` files are written **inside the user's workspace**, polluting git and the file tree (`LatexDiffManager.buildSiblingDiffLocation`, comment at line 306–310).
 - Compile errors are not fed back to the orchestrator; subsequent rounds don't know the previous round failed to compile.
@@ -57,7 +53,7 @@ Today:
 
 After each round, in `finalOutputOpener.ts`:
 
-- If compile succeeded: `vscode.commands.executeCommand('vscode.open', pdfUri, { viewColumn: Beside })`.
+- If compile succeeded: `vscode.commands.executeCommand('vscode.open', pdfUri, { viewColumn: vscode.ViewColumn.Beside })`.
 - If compile failed: open the truncated `.log`.
 - Same path used for the diff PDF when available.
 - Gated by `WORKFLOW_AUTO_OPEN_PDF` (default on).
@@ -85,21 +81,19 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
 
 ### 6.4 latexFixer agent
 
-- New agent YAML: `resources/agents/latexFixer.yml`.
-- Built on existing `src/agent/implementations/flows/tool-use/` substrate.
-- Default model: cheap (Haiku-class).
-- **Tools available:**
-  - `compile_tex(path)` → `{ success, logExcerpt, pdfPath? }`. New tool in `src/tools/`. Body stays `vscode`-free — delegates to `src/latex/texTools.ts` (`compileLatex2Pdf`).
-  - `read_file(path)` — existing.
-  - `edit_file(path, ...)` — existing.
-  - `open_pdf(path)` — new tool in `src/tools/`. Body stays `vscode`-free; it invokes an injectable opener callback (mirrors the `setExtensionChecker()` pattern in `src/tools/external/externalToolDefs.ts`). The callback is registered at extension activation from the command/frontend layer and performs `vscode.commands.executeCommand('vscode.open', ...)`. If no callback is registered the tool returns a structured "not available" result instead of importing `vscode`.
+- **The agent already exists** at `resources/tool_use_agents/latexFixer.yaml` and runs on the existing `src/agent/implementations/flows/tooluse/` substrate. This PRD wires it into the post-compile failure path; it does not introduce a new YAML.
+- Default model: kept as configured in the existing YAML (cheap / tool-use class).
+- **Tools (already declared in the YAML):** `bash`, `read_file`, `edit_file`, `glob`, `grep`, `ls`, `diagnostics`, `executions`. No `compile_tex` tool is introduced — `bash` already runs `latexmk -pdf -interaction=nonstopmode` per the existing system prompt.
+- **New optional tool:** `open_pdf(path)` in `src/tools/`. Body stays `vscode`-free; it invokes an injectable opener callback (mirrors the `setExtensionChecker()` pattern in `src/tools/external/externalToolDefs.ts`). The callback is registered at extension activation from the command/frontend layer and performs `vscode.commands.executeCommand('vscode.open', ...)`. If no callback is registered the tool returns a structured "not available" result instead of importing `vscode`. **Whether to expose this to latexFixer or to keep PDF opening orchestrator-driven is open (§10 Q5).**
+- **File-tool path scope (important architectural constraint):** the existing `read_file`/`edit_file` tools operate on **workspace** paths only; they cannot read or edit `<runDir>/...`. The existing latexFixer prompt encodes this: run-storage is read-only via the `executions` tool; edits happen post-`accept_run_files` on the workspace. This contradicts an earlier draft of this PRD that restricted edits to `<runDir>/...`. The chosen approach (see §10 Q4):
+  - **Default:** invoke latexFixer **post-accept** on workspace files. Matches the existing tool semantics; no new file-tool work.
+  - **Pre-accept (shadow-mode) compile-fix is deferred** until a follow-up effort introduces run-storage-aware file tools (either by extending `read_file`/`edit_file` with explicit path-scoping/authorization or by adding `read_run_file`/`edit_run_file` variants).
 - **Constraints:**
-  - 3 internal turns max.
+  - 3 internal turns max (orchestrator-enforced ceiling on top of whatever the YAML allows).
   - Wall-clock cap: `WORKFLOW_AUTO_COMPILE_TIMEOUT_MS × 3`.
-  - Edits restricted to `<runDir>/...`. User's workspace files are read-only.
   - Single attempt — no retry of the agent itself.
 - Triggered when deterministic compile fails and `WORKFLOW_AUTO_FIX_COMPILE` is on (default on).
-- Used for both fragment-wrap failures and full-file failures — one path.
+- Used for both fragment-wrap failures and full-file failures — one wiring point.
 
 ### 6.5 Compile result → round loop
 
@@ -119,7 +113,7 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 ### 6.7 Latexdiff changes-only
 
 - Default on (`LATEXDIFF_CHANGES_ONLY`). Apply via the appropriate latexdiff flag — exact spelling pinned at implementation time after verifying the shipped binary.
-- If unavailable in the shipped version: fallback is post-process the diff PDF with `pdftk` keeping pages containing `\DIFadd`/`\DIFdel` markers. If neither works in our deployment, surface the setting as no-op and document the version requirement.
+- **No PDF post-processing fallback.** A previously sketched "scan rendered PDF text for `\DIFadd`/`\DIFdel` and keep those pages with `pdftk`" approach does not work — those are LaTeX source macros that latexdiff transforms into typeset markup at compile time and are *not* preserved as literal strings in the PDF text layer. If the shipped `latexdiff` lacks the changes-only flag, `LATEXDIFF_CHANGES_ONLY` becomes a no-op with a one-time warning logged and a documented minimum-version requirement. Any source-side fallback (e.g., wrapping changed blocks with `\includeonly` regions or using `latexdiff --append-mboxcmd` patterns to introduce markers we can read from compile metadata) is deferred and not in scope for this phase.
 
 ### 6.8 PDF persistence
 
@@ -127,7 +121,7 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 - Final round's main PDF and final diff PDF symlinked to:
   - `<runDir>/output/<name>.pdf`
   - `<runDir>/output/<name>-diff.pdf`
-- The latexFixer agent and `open_pdf` tool reference `<runDir>/output/...` for stable paths.
+- The `open_pdf` tool and the auto-open code reference `<runDir>/output/...` for stable paths. latexFixer itself operates on workspace files post-`accept_run_files`; it inspects PDFs (when needed) via `bash` or `executions`, not via `open_pdf`.
 
 ### 6.9 Settings storage migration + LaTeX tab
 
@@ -152,7 +146,7 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 | `WORKFLOW_REJECT_ON_COMPILE_FAILURE` | bool | true | Compile failure rejects round, feeds log to next |
 | `LATEXDIFF_CHANGES_ONLY` | bool | true | Render only changed pages in diff PDF |
 
-**Migration:** on activation, for each migrated key, if storage has no value but `vscode.workspace.getConfiguration` does, copy it over once. Then remove from `package.json` `contributes.configuration`. Migration commit lands first, isolated from feature work.
+**Migration:** on activation, for each migrated key, copy a value into storage **only when the user (or workspace) has explicitly set it**. Use `vscode.workspace.getConfiguration().inspect(key)` and consider only `workspaceFolderValue`, `workspaceValue`, `globalValue` (in that precedence order) — never `defaultValue`. This avoids persisting VS Code's compiled-in defaults into workspace state, which would otherwise prevent future default changes from taking effect and create silent config drift across upgrades. Gate the entire pass behind `GlobalStateKey.LATEX_CONFIG_VERSION` so the copy runs at most once per user. Then remove the entries from `package.json` `contributes.configuration`. Migration commit lands first, isolated from feature work.
 
 **UI:** Surface all keys in the existing **LaTeX** tab (`src/settingsView/handlers/latexSettingsHandlers.ts`, `src/settingsView/frontend/SettingsApp.ts`).
 
@@ -177,9 +171,9 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 | `src/agent/output/fragmentWrap.ts` (new) | Resolve preamble → wrap fragment → return location to compile. ~100 lines. |
 | `src/latex/extractFileDependencies.ts` (or sibling) | Add `extractPreamble()`; add `buildParentMap()`. |
 | `src/agent/node/roundPersistedFlow.ts` | One clause in `shouldContinueNextRound`; one line of context injection. |
-| `src/tools/` | New `compile_tex` tool (delegates to `src/latex/texTools.ts`); new `open_pdf` tool (body `vscode`-free, calls an injectable opener callback). |
+| `src/tools/` | New `open_pdf` tool (body `vscode`-free, calls an injectable opener callback). No `compile_tex` — latexFixer already calls `latexmk` via the existing `bash` tool. |
 | `src/extension.ts` (or equivalent activation site) | Register the `open_pdf` opener callback that invokes `vscode.commands.executeCommand('vscode.open', ...)`. Mirrors the `setExtensionChecker()` pattern. |
-| `resources/agents/latexFixer.yml` | New agent definition. |
+| `resources/tool_use_agents/latexFixer.yaml` | Existing agent — wired into the post-compile failure path. No definition changes required for the default flow; if pre-accept shadow-mode is later pursued, the YAML's tool list and prompt are revisited. |
 | `src/agent/implementations/flows/reflection/nodes/OutputNode.ts` | Hand off to latexFixer on failure when setting is on. |
 | `src/frontend/agents/finalOutputOpener.ts` | Open PDF or log via `vscode.open`. |
 | `src/housekeeping/` | Exclude `*.pdf` from cleanup under runDir. |
@@ -192,8 +186,8 @@ Each phase is independently shippable.
 2. **Diff → shadow storage.** Fixes the workspace-pollution bug.
 3. **Auto-open PDF / log** + PDF persistence (housekeeping rule + output symlinks).
 4. **Fragment wrap** (deterministic, no agent).
-5. **Tools:** `compile_tex`, `open_pdf`.
-6. **latexFixer agent + wiring** on failure.
+5. **`open_pdf` tool** (vscode-free body, injectable opener callback registered at activation). No `compile_tex` — latexFixer already runs latexmk via `bash`.
+6. **latexFixer wiring** on failure (post-accept). Existing YAML reused; orchestrator hand-off and per-call iteration cap added.
 7. **Compile result → round loop** (reject + log injection).
 8. **Latexdiff bib quality** (`--exclude-textcmd`, `BIBINPUTS`).
 9. **Latexdiff changes-only** (after verifying flag in shipped binary).
@@ -201,9 +195,11 @@ Each phase is independently shippable.
 ## 10. Open questions
 
 1. **Round-loop semantics on rejection:** does a rejected round consume a slot from the user's requested round count (replace), or extend total rounds by up to N (extend)? *Recommendation: replace. Same total cost, simpler.*
-2. **Diff location confirmation:** `<runDir>/diff/...` (real on-disk path under extension storage) — confirm this satisfies "real filesystem" and the latexFixer agent can drive it. If the intent was actually "in the user's workspace," reopen.
+2. **Diff location confirmation:** `<runDir>/diff/...` (real on-disk path under extension storage) — confirm this satisfies "real filesystem" and the diff is reachable from the eventual fixer pass. If the intent was actually "in the user's workspace," reopen. (Note: latexFixer in default mode operates on workspace files post-accept, so diff in shadow doesn't block it; this question matters for any future pre-accept shadow-mode fixer.)
 3. **Workspace PDF copy:** off entirely, or off-by-default with a setting (`WORKFLOW_COPY_PDF_TO_WORKSPACE`, gitignore-friendly subdir)?
 4. **Latexdiff `--only-changes` exact flag and version floor:** verify at implementation time.
+5. **latexFixer invocation timing:** post-accept (default; works with existing tools) vs. pre-accept shadow-mode (requires new run-storage-aware file tools or extending `read_file`/`edit_file` semantics). *Recommendation: post-accept now; defer shadow-mode until there's a measured reason.*
+6. **`open_pdf` exposure:** keep PDF opening orchestrator-driven (auto-open on success / failure log on failure), or expose `open_pdf` as a tool latexFixer can call? *Recommendation: orchestrator-driven only in this phase; expose to latexFixer later if there's a clear use case.*
 
 ## 11. Out of scope / future work
 
