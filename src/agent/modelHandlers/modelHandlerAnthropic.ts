@@ -1653,19 +1653,27 @@ export class ModelHandlerAnthropic extends ModelHandler<
           content: [{ type: 'text', text: prefill }],
         });
       } else {
-        // For thinking-enabled models that don't support assistant prefill,
-        // add prefill as part of the user message like OpenAI handler
-        const pseudoPrefillText = `Start your response with:\n${prefill}`;
-        const lastMsg = messages.at(-1);
-        if (lastMsg && Array.isArray(lastMsg.content)) {
-          lastMsg.content.push({
-            type: 'text',
-            text: pseudoPrefillText,
-          } as ContentBlockParam);
+        if (prefill.length === 0) {
+          // No prefill declared --- skip the pseudo-prefill instruction so the
+          // model isn't told `Start your response with:\n` (an empty directive).
+          this.logger.debug(
+            'No prefill provided; skipping pseudo-prefill instruction',
+          );
+        } else {
+          // For thinking-enabled models that don't support assistant prefill,
+          // add prefill as part of the user message like OpenAI handler
+          const pseudoPrefillText = `Start your response with:\n${prefill}`;
+          const lastMsg = messages.at(-1);
+          if (lastMsg && Array.isArray(lastMsg.content)) {
+            lastMsg.content.push({
+              type: 'text',
+              text: pseudoPrefillText,
+            } as ContentBlockParam);
+          }
+          this.logger.debug(
+            `Added pseudo prefill message to messages:\n${pseudoPrefillText}`,
+          );
         }
-        this.logger.debug(
-          `Added pseudo prefill message to messages:\n${pseudoPrefillText}`,
-        );
       }
       return [false, messages];
     }
@@ -1864,6 +1872,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
           } as ContentBlockParam,
         ];
       }
+    } else if (lastMessage?.role === 'user') {
+      // No prefill was pushed (agent declared empty prefill). Add the model's
+      // response as a new assistant message so multi-round conversation history
+      // is preserved.
+      messages.push({
+        role: 'assistant',
+        content: [
+          {
+            type: 'text',
+            text: bestConnector + newResponse,
+          } as ContentBlockParam,
+        ],
+      });
     }
   }
 
