@@ -449,6 +449,11 @@ source (Built-in, Setup & utility, Custom) and surfaces explicit
 Use / Edit / Duplicate / Delete actions so the Agents-tab-and-back-again
 dance disappears.
 
+The current implementation at `MultiAgentTab.ts:420–574` (preset grid +
+Team Coordination toggles) is **replaced wholesale** by the layout below;
+file-line citations to the current code in this section name what is
+removed, not what stays.
+
 ### Team grid
 
 ```
@@ -884,6 +889,30 @@ team` after Save in the launcher both call the same internal selector;
     Disabled agents are kept in team storage and appear unchecked-and-grey
     in the team editor — re-enabling restores the team to working order
     without re-saving.
+12. **Invalid `defaultLeadAgentId` at load time.** If a team's stored
+    `defaultLeadAgentId` no longer resolves (agent removed, custom agent
+    deleted, source key changed) the launcher uses the first resolvable
+    entry of `leadAgentIds` as the effective default and surfaces a
+    one-time toast naming the team. If no entry of `leadAgentIds`
+    resolves, the team is marked as `broken` in the Multi-Agent grid (no
+    `Use` button, an inline "Open editor to repair" link); the launcher
+    silently falls back to `mathematician` if the broken team was active.
+13. **Saving a team with disabled agents.** The team editor allows saving
+    a team that contains agents currently disabled in the Agents tab. A
+    yellow note in the editor explains this: _"This team includes agents
+    you've disabled. They will be hidden from the launcher until you
+    re-enable them."_ Saving is allowed because the disabled state is a
+    user preference, not a deletion; teams should survive enable/disable
+    toggles without losing membership.
+14. **Workflow agent picked from the agent dropdown.** Selecting a
+    `workflow`-role agent from the launcher's agent picker — whether
+    in-team or out-of-team — switches the launcher to its
+    workflow-session UI inline: file selectors slide in below, the
+    textarea label changes to optional notes, the run button label
+    changes to `▶ Run`. The team chip and roster strip remain. This is
+    the only place where selecting an agent changes the launcher's
+    surrounding chrome; the change is driven by `agentRole === 'workflow'`,
+    not by a separate session-type toggle.
 
 ---
 
