@@ -536,18 +536,19 @@ async function promptLatexWorkshopInstall(): Promise<void> {
 }
 
 /**
- * One-shot per-key migration for LaTeX/compile/diff settings that moved
+ * One-shot per-workspace migration for LaTeX/compile/diff settings that moved
  * from `package.json` `contributes.configuration` to TeXRA workspace state.
  *
- * Rule: for each key, if workspace storage is currently empty, copy the
- * user's existing VS Code config value into workspaceSM. If storage already
- * has a value, leave it alone — workspaceSM is now the authoritative source
- * (the LaTeX settings tab reads and writes through it).
+ * Gating: a single workspace-scoped marker (`LATEX_SETTINGS_MIGRATED`) is set
+ * after the first run. Subsequent activations skip the entire pass. This is
+ * essential for correctness — without a marker, a per-key "skip if storage has
+ * any value" gate would re-import the legacy settings.json value the moment a
+ * user resets a key to default via the LaTeX tab UI (`update(key, undefined)`
+ * removes the key from storage; the next activation would read it back from
+ * settings.json again). Marker prevents that footgun.
  *
- * Per-key idempotent: re-running on subsequent activations no-ops on
- * already-migrated keys. Per-workspace gating is implicit: the destination
- * is `WorkspaceStateKey` (per-workspace storage). No global marker is used —
- * a once-per-user gate would let the first opened workspace consume the
+ * Per-workspace, not per-user: workspace state is per-workspace and a global
+ * once-per-user marker would let the first opened workspace consume the
  * migration and silently skip every other workspace.
  *
  * Source detection has two paths:
@@ -564,8 +565,7 @@ async function promptLatexWorkshopInstall(): Promise<void> {
  *
  * Once migrated, the LaTeX tab UI writes to workspaceSM directly. A user who
  * later edits the legacy `texra.*` keys in settings.json sees no effect —
- * that path is no longer authoritative. The migration intentionally does not
- * re-sync, so UI writes cannot be clobbered.
+ * that path is no longer authoritative.
  */
 const LATEX_CONFIG_MIGRATION_KEYS: readonly WorkspaceStateKey[] = [
   WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
@@ -577,13 +577,16 @@ const LATEX_CONFIG_MIGRATION_KEYS: readonly WorkspaceStateKey[] = [
 ] as const;
 
 export async function migrateLatexConfigToStorage(): Promise<void> {
+  // One-shot gate. Once this workspace has been migrated, never run again —
+  // post-migration the LaTeX tab UI is the only authoritative writer. Re-
+  // running would re-import stale settings.json entries and silently undo
+  // any "reset to default" the user performed in the UI.
+  if (workspaceSM.get<boolean>(WorkspaceStateKey.LATEX_SETTINGS_MIGRATED)) {
+    return;
+  }
+
   const cfg = vscode.workspace.getConfiguration();
   for (const key of LATEX_CONFIG_MIGRATION_KEYS) {
-    // Skip if already migrated: workspaceSM is authoritative, and a user-set
-    // value here (via the LaTeX tab UI) must not be clobbered by a stale
-    // settings.json entry.
-    if (workspaceSM.get(key) !== undefined) continue;
-
     const inspection = cfg.inspect(key);
     let explicit: unknown;
     if (inspection) {
@@ -620,5 +623,18 @@ export async function migrateLatexConfigToStorage(): Promise<void> {
         `Failed to migrate ${key} to workspace storage: ${toErrorMessage(err)}`,
       );
     }
+  }
+
+  // Always mark migration done — even if a particular key failed to copy or
+  // had no value. Otherwise a transient failure would force a retry on every
+  // activation forever, and the user's UI resets would be silently undone in
+  // the meantime.
+  try {
+    await workspaceSM.update(WorkspaceStateKey.LATEX_SETTINGS_MIGRATED, true);
+  } catch (err) {
+    logger.warn(
+      'extension',
+      `Failed to set LATEX_SETTINGS_MIGRATED marker: ${toErrorMessage(err)}`,
+    );
   }
 }

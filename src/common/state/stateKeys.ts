@@ -58,6 +58,14 @@ export enum WorkspaceStateKey {
   LATEXDIFF_TIMEOUT_MS = 'texra.latexdiff.timeoutMs',
   LATEXDIFF_MATH_MARKUP = 'texra.latexdiff.mathMarkup',
   LATEX_FORMATTER = 'texra.latex.formatter',
+  /**
+   * One-shot per-workspace marker for the legacy `texra.*` config migration.
+   * Set after `migrateLatexConfigToStorage()` runs; subsequent activations
+   * skip the migration entirely. This is what distinguishes "key never
+   * migrated" (no marker) from "user explicitly reset via UI" (marker set,
+   * key absent) so reset-to-default isn't silently undone on next start.
+   */
+  LATEX_SETTINGS_MIGRATED = 'texra.latexSettingsMigrated',
 }
 
 export enum GlobalStateKey {
