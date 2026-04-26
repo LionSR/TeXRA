@@ -73,7 +73,7 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
    1. Workspace parent map: scan `.tex` files via `extractFileDependencies.ts`, build `child → parent`. If `X` (or `X.tex`) has a parent with `\documentclass`, use that parent's preamble.
    2. Agent input file's preamble, if it has `\documentclass`.
    3. Newest workspace `.tex` with `\documentclass` (mtime tiebreak).
-   4. Skip with a clear log line — do not compile, do not invoke latexFixer.
+   4. **No preamble found:** set `lastCompileResult = { status: "failed", reason: "fragment-no-preamble", logExcerpt: "<one-line: no preamble source available for fragment <X>" }` so §6.1 (auto-open log) and §6.5 (round rejection) have a concrete terminal status to branch on. Do not compile, do not invoke latexFixer. Same handling as a wrap-compile failure (step 4 below) — log auto-opens, round is rejected per `WORKFLOW_REJECT_ON_COMPILE_FAILURE`.
 2. **Wrap**: `<preamble>\n\begin{document}\n<fragment>\n\end{document}`. `extractPreamble()` returns content up to but excluding `\begin{document}` (conventional definition), so the wrap explicitly inserts the document boundary. Save to `<runDir>/compile/r<round>/<name>__wrap.tex`.
 3. **Compile** via existing `compileLatex2Pdf` with `latexmk -pdf`.
 4. **On wrap-compile failure**, surface the truncated log via the auto-open path (§6.1). **latexFixer is *not* invoked for fragment-wrap failures.** The wrap lives in `<runDir>/compile/r<round>/<name>__wrap.tex`, and post-accept the workspace contains only the raw unwrapped fragment (no `\documentclass`); latexFixer's `read_file`/`edit_file` are workspace-scoped and would have nothing meaningful to compile or fix without re-wrapping (which is unspecified). Pre-accept fixing of the wrap requires the run-storage-aware file tools deferred in §6.4. So fragment-wrap failures fall through to the user until that follow-up lands.
@@ -121,10 +121,13 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 ### 6.8 PDF persistence
 
 - Housekeeping cleanup excludes `*.pdf` under `<runDir>/compile/` and `<runDir>/diff/`.
-- Final round's main PDF and final diff PDF symlinked to:
-  - `<runDir>/output/<name>.pdf`
-  - `<runDir>/output/<name>-diff.pdf`
-- The `open_pdf` tool and the auto-open code reference `<runDir>/output/...` for stable paths. latexFixer itself operates on workspace files post-`accept_run_files`; it inspects PDFs (when needed) via `bash` or `executions`, not via `open_pdf`.
+- **Per-round stable paths.** After every round (not just the final one), update symlinks:
+  - `<runDir>/output/r<round>/<name>.pdf` — the round's main PDF.
+  - `<runDir>/output/r<round>/<name>-diff.pdf` — the round's diff PDF, when one was generated.
+- **"Latest" convenience symlinks** also refreshed every round:
+  - `<runDir>/output/latest/<name>.pdf` and `<runDir>/output/latest/<name>-diff.pdf` always point at the most recently compiled round. The auto-open path (§6.1) uses `latest/` so the user sees fresh artifacts each round; the per-round paths exist for archival/reference (e.g. user clicking back to round 2's PDF after round 3 has run).
+- `open_pdf` and the auto-open code reference `<runDir>/output/r<round>/...` for round-specific opens and `<runDir>/output/latest/...` for the default after-round behavior. **Never** the bare `<runDir>/output/<name>.pdf` (which doesn't exist) — that earlier draft was final-round-only and conflicted with §6.1's per-round contract.
+- latexFixer operates on workspace files post-`accept_run_files`; it inspects PDFs (when needed) via `bash` or `executions`, not via `open_pdf`.
 
 ### 6.9 Settings storage migration + LaTeX tab
 
