@@ -76,8 +76,9 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
    4. Skip with a clear log line — do not compile, do not invoke latexFixer.
 2. **Wrap**: `<preamble>\n\begin{document}\n<fragment>\n\end{document}`. `extractPreamble()` returns content up to but excluding `\begin{document}` (conventional definition), so the wrap explicitly inserts the document boundary. Save to `<runDir>/compile/r<round>/<name>__wrap.tex`.
 3. **Compile** via existing `compileLatex2Pdf` with `latexmk -pdf`.
-4. Resolution source is logged: `Compile (fragment): preamble from <source description>`.
-5. Gated by `WORKFLOW_FRAGMENT_COMPILE` (default on).
+4. **On wrap-compile failure**, surface the truncated log via the auto-open path (§6.1). **latexFixer is *not* invoked for fragment-wrap failures.** The wrap lives in `<runDir>/compile/r<round>/<name>__wrap.tex`, and post-accept the workspace contains only the raw unwrapped fragment (no `\documentclass`); latexFixer's `read_file`/`edit_file` are workspace-scoped and would have nothing meaningful to compile or fix without re-wrapping (which is unspecified). Pre-accept fixing of the wrap requires the run-storage-aware file tools deferred in §6.4. So fragment-wrap failures fall through to the user until that follow-up lands.
+5. Resolution source is logged: `Compile (fragment): preamble from <source description>`.
+6. Gated by `WORKFLOW_FRAGMENT_COMPILE` (default on).
 
 ### 6.4 latexFixer agent
 
@@ -92,8 +93,8 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
   - 3 internal turns max (orchestrator-enforced ceiling on top of whatever the YAML allows).
   - Wall-clock cap: `WORKFLOW_AUTO_COMPILE_TIMEOUT_MS × 3`.
   - Single attempt — no retry of the agent itself.
-- Triggered when deterministic compile fails and `WORKFLOW_AUTO_FIX_COMPILE` is on (default on).
-- Used for both fragment-wrap failures and full-file failures — one wiring point.
+- Triggered when a **full-file** post-accept compile fails and `WORKFLOW_AUTO_FIX_COMPILE` is on (default on).
+- **Scope: full-file failures only.** Fragment-wrap failures (per §6.3 step 4) are surfaced to the user via the log-open path and do not invoke latexFixer; the wrapped `.tex` lives only in `<runDir>/...` and the workspace contains the raw fragment, neither of which the current workspace-scoped file tools can act on usefully. Extending latexFixer to the fragment case is part of the same deferred run-storage-aware-tools effort.
 
 ### 6.5 Compile result → round loop
 
