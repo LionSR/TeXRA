@@ -29,6 +29,9 @@ jobs:
           # Strip leading bracketed bot tag like "[codex] " before prefix matching
           # so that "[codex] fix: ..." derives type:bug from the rest of the title.
           stripped="${TITLE#\[*\] }"
+          # Normalize Conventional Commits breaking-change marker so `feat!:` and
+          # `feat(scope)!:` are matched the same as `feat:` / `feat(scope):`.
+          stripped="${stripped/!:/:}"
 
           # Type from conventional-commit prefix in title.
           shopt -s nocasematch
