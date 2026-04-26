@@ -18,7 +18,8 @@ jobs:
       - uses: EndBug/label-sync@v2
         with:
           config-file: .github/labels.yml
-          # Keep legacy labels (Later, ambitious) until manually deleted.
-          # Renames are handled via the `aliases` field in labels.yml.
+          # Don't delete labels that aren't in labels.yml; the repo carries
+          # legacy labels (Later, ambitious, question, help wanted spelling
+          # variants) that should be removed manually if at all.
           delete-other-labels: false
           token: ${{ secrets.GITHUB_TOKEN }}

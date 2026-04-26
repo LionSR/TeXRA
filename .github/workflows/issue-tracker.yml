@@ -173,16 +173,18 @@ jobs:
                  - Title: `Tracking: follow-ups from #<PR-number> (<short PR title>)`
                  - Body: brief context + bulleted preview of child titles + link to parent PR
                  - Labels: `tracking`, plus the parent PR's `area:*` labels
-                 - **Capture both `number` AND `id` from the response** — `id` is the
-                   global node ID needed by sub_issue_write below.
+                 - **Capture both `number` AND `id` from the response.** `id` is the
+                   numeric REST database id (integer), NOT `node_id` (the GraphQL
+                   string). `sub_issue_write` below requires the integer `id`.
               2. For each child, call `mcp__github__issue_write` (method=create) with
                  the body and labels (`follow-up` + applicable type/area/risk/status
                  from the list above).
-                 **Capture both `number` AND `id` from each child response.**
+                 **Capture both `number` AND `id` (integer) from each child response.**
               3. For each child, attach to the umbrella:
                  `mcp__github__sub_issue_write` with method=`add`,
                  `issue_number=<umbrella-number>`, `sub_issue_id=<child-id>`.
-                 Note: `sub_issue_id` is the child's global `id`, NOT its `number`.
+                 Note: `sub_issue_id` is the child's numeric REST `id` (integer),
+                 NOT its issue `number` and NOT its `node_id`.
 
             Then add new issues to relevant tracking issue checklists:
             - For flat (1 follow-up): append `- [ ] #<issue> - <title>` to the relevant section
