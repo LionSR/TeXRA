@@ -11,6 +11,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import {
+  LatexConfigValuesSchema,
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
   type LatexConfigValues,
@@ -216,14 +217,32 @@ export class LatexSettingsHandlers {
 
   /**
    * Persist a single LaTeX/compile/diff config value to workspace storage.
-   * `value === undefined` clears the key (returns to documented default).
+   * `value === undefined` (or `null`) clears the key (returns to documented
+   * default). Per-field validation is intentionally done here rather than in
+   * the inbound message schema — the outer SettingsViewInboundMessageSchema
+   * is a discriminatedUnion('command', …) and a nested per-field
+   * discriminator on the same command literal would crash Zod with a
+   * duplicate-discriminator error at parse time.
    */
   async handleSetLatexConfigValue(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_LATEX_CONFIG_VALUE>,
   ): Promise<void> {
     const key = LATEX_CONFIG_FIELD_TO_KEY[data.field];
+    // Validate value against the per-field schema in LatexConfigValuesSchema.
+    // Both schemas mark the property optional, so undefined/null both parse to
+    // undefined and clear the key.
+    const fieldSchema = LatexConfigValuesSchema.shape[data.field];
+    const parsed = fieldSchema.safeParse(data.value ?? undefined);
+    if (!parsed.success) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        `Invalid value for ${data.field}`,
+        parsed.error,
+      );
+      return;
+    }
     try {
-      await workspaceSM.update(key, data.value);
+      await workspaceSM.update(key, parsed.data);
       await this.ctx.withActiveWebview((w) => this.sendLatexConfigValues(w));
     } catch (error) {
       await showLoggedErrorMessage(

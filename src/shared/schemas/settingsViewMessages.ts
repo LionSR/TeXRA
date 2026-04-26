@@ -770,43 +770,34 @@ const GetLatexConfigValuesMessageSchema = commandOnly(
   CMD.GET_LATEX_CONFIG_VALUES,
 );
 /**
- * Single-property write — frontend sends one value at a time. The discriminated
- * shape lets the backend route to the right WorkspaceStateKey while keeping
- * type-safety on the value. `value: undefined` clears the key (returns to
- * default).
+ * Single-property write — frontend sends one value at a time. Surface a flat
+ * shape (single outer branch keyed on `command`) so it composes into the
+ * outer `SettingsViewInboundMessageSchema` discriminatedUnion('command', ...)
+ * without producing duplicate command discriminators (which would crash the
+ * whole inbound dispatcher at parse time, taking down every Settings view
+ * interaction). Per-field value validation happens in the backend handler
+ * using `LatexConfigValuesSchema.shape[field]`.
  */
-const SetLatexConfigValueMessageSchema = z.discriminatedUnion('field', [
-  z.object({
-    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
-    field: z.literal('workflowAutoCompile'),
-    value: z.boolean().optional(),
-  }),
-  z.object({
-    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
-    field: z.literal('workflowAutoCompileTimeoutMs'),
-    value: z.number().int().min(10000).optional(),
-  }),
-  z.object({
-    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
-    field: z.literal('latexdiffBetweenRounds'),
-    value: z.boolean().optional(),
-  }),
-  z.object({
-    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
-    field: z.literal('latexdiffTimeoutMs'),
-    value: z.number().int().min(1000).max(80000).optional(),
-  }),
-  z.object({
-    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
-    field: z.literal('latexdiffMathMarkup'),
-    value: LatexdiffMathMarkupSchema.optional(),
-  }),
-  z.object({
-    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
-    field: z.literal('latexFormatter'),
-    value: LatexFormatterSchema.optional(),
-  }),
+const LatexConfigFieldSchema = z.enum([
+  'workflowAutoCompile',
+  'workflowAutoCompileTimeoutMs',
+  'latexdiffBetweenRounds',
+  'latexdiffTimeoutMs',
+  'latexdiffMathMarkup',
+  'latexFormatter',
 ]);
+export type LatexConfigField = z.infer<typeof LatexConfigFieldSchema>;
+
+const SetLatexConfigValueMessageSchema = z.object({
+  command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
+  field: LatexConfigFieldSchema,
+  // Loose at the schema level — the handler validates per-field via
+  // LatexConfigValuesSchema.shape[field] before writing to workspace state.
+  // `undefined` clears the key (returns to documented default).
+  value: z
+    .union([z.boolean(), z.number(), z.string(), z.null()])
+    .optional(),
+});
 
 // Approval settings inbound messages
 const GetApprovalSettingsMessageSchema = commandOnly(CMD.GET_APPROVAL_SETTINGS);
@@ -850,7 +841,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     InstallLatexWorkshopMessageSchema,
     RunInstallCommandMessageSchema,
     GetLatexConfigValuesMessageSchema,
-    ...SetLatexConfigValueMessageSchema.options,
+    SetLatexConfigValueMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,
