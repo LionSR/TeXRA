@@ -576,6 +576,34 @@ const LATEX_CONFIG_MIGRATION_KEYS: readonly WorkspaceStateKey[] = [
   WorkspaceStateKey.LATEX_FORMATTER,
 ] as const;
 
+/** Keys that the new schema requires to be integers. */
+const LATEX_INTEGER_KEYS: ReadonlySet<WorkspaceStateKey> = new Set([
+  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+  WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+]);
+
+/**
+ * Coerce a legacy VS Code config value to a shape the new storage / webview
+ * schemas accept. The old `number` config schema permitted decimals; the new
+ * `LatexConfigValuesSchema` uses `.int()` so an unmodified decimal would fail
+ * the webview parse and revert the UI to defaults. Round timeout numbers.
+ * Non-numeric or already-integer values pass through unchanged.
+ */
+function normalizeLegacyLatexConfigValue(
+  key: WorkspaceStateKey,
+  value: unknown,
+): unknown {
+  if (
+    LATEX_INTEGER_KEYS.has(key) &&
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    !Number.isInteger(value)
+  ) {
+    return Math.round(value);
+  }
+  return value;
+}
+
 export async function migrateLatexConfigToStorage(): Promise<void> {
   // One-shot gate. Once this workspace has been migrated, never run again —
   // post-migration the LaTeX tab UI is the only authoritative writer. Re-
@@ -611,8 +639,14 @@ export async function migrateLatexConfigToStorage(): Promise<void> {
     }
     if (explicit === undefined) continue;
 
+    // Normalize legacy values that the old `number` VS Code config schema
+    // accepted but the new storage / settings-view schema treats as integers.
+    // A decimal timeout in settings.json would otherwise crash the webview's
+    // discriminated-union parse and silently fall back to defaults.
+    const normalized = normalizeLegacyLatexConfigValue(key, explicit);
+
     try {
-      await workspaceSM.update(key, explicit);
+      await workspaceSM.update(key, normalized);
       logger.info(
         'extension',
         `Migrated ${key} from VS Code config to workspace storage`,
