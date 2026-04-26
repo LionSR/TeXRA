@@ -100,7 +100,7 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
 In `RoundPersistedFlow.shouldContinueNextRound()`:
 
 - Add one clause: if `lastCompileResult.status === "failed"` and `WORKFLOW_REJECT_ON_COMPILE_FAILURE` is on, the round is marked rejected.
-- The truncated compile log is injected into the next round's context (whether the next round is the user's planned next round or a follow-up triggered by rejection — semantics confirmed in §10 Q1).
+- The truncated compile log is injected into the next round's context. **Round-loop semantics on rejection: replace, not extend** — a rejected round consumes a slot from the user's requested round count, so total rounds (and total cost) are unchanged regardless of how many compile failures occur. The next round is therefore always the user's already-planned next round (carrying compile-log context); there is no separate "fix-only" round inserted on top.
 - Compile result stored in `shared.lastCompileResult` for the orchestrator to consume.
 - No new node, no new metadata fields on `WorkflowFlowResult` for round-level decisions until UI consumes them.
 
@@ -146,7 +146,7 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 | `WORKFLOW_REJECT_ON_COMPILE_FAILURE` | bool | true | Compile failure rejects round, feeds log to next |
 | `LATEXDIFF_CHANGES_ONLY` | bool | true | Render only changed pages in diff PDF |
 
-**Migration:** on activation, for each migrated key, copy a value into storage **only when the user (or workspace) has explicitly set it**. Use `vscode.workspace.getConfiguration().inspect(key)` and consider only `workspaceFolderValue`, `workspaceValue`, `globalValue` (in that precedence order) — never `defaultValue`. This avoids persisting VS Code's compiled-in defaults into workspace state, which would otherwise prevent future default changes from taking effect and create silent config drift across upgrades. Gate the entire pass behind `GlobalStateKey.LATEX_CONFIG_VERSION` so the copy runs at most once per user. Then remove the entries from `package.json` `contributes.configuration`. Migration commit lands first, isolated from feature work.
+**Migration:** on activation, for each migrated key, copy a value into storage **only when the user (or workspace) has explicitly set it**. Use `vscode.workspace.getConfiguration().inspect(key)` and consider only `workspaceFolderValue`, `workspaceValue`, `globalValue` (in that precedence order) — never `defaultValue`. This avoids persisting VS Code's compiled-in defaults into workspace state, which would otherwise prevent future default changes from taking effect and create silent config drift across upgrades. **Gate per workspace, not per user.** The migration writes to `WorkspaceStateKey` (per-workspace storage), so a global once-per-user marker (e.g. `GlobalStateKey.LATEX_CONFIG_VERSION`) would let the first opened workspace consume the migration and silently drop config in every other workspace. Use either a workspace-scoped marker (e.g. a new `WorkspaceStateKey.LATEX_SETTINGS_MIGRATED`) **or**, simpler and equivalent, a per-key idempotent rule: only copy a key when its workspace storage is currently empty. The per-key rule is preferred — no marker needed, naturally idempotent, and rerunning on a future TeXRA upgrade just no-ops. Then remove the entries from `package.json` `contributes.configuration`. Migration commit lands first, isolated from feature work.
 
 **UI:** Surface all keys in the existing **LaTeX** tab (`src/settingsView/handlers/latexSettingsHandlers.ts`, `src/settingsView/frontend/SettingsApp.ts`).
 
@@ -194,7 +194,7 @@ Each phase is independently shippable.
 
 ## 10. Open questions
 
-1. **Round-loop semantics on rejection:** does a rejected round consume a slot from the user's requested round count (replace), or extend total rounds by up to N (extend)? *Recommendation: replace. Same total cost, simpler.*
+1. **Round-loop semantics on rejection — DECIDED: replace.** A rejected round consumes a slot from the user's requested round count. Total rounds and total cost are unchanged whether or not compile fails. Spelled out in §6.5.
 2. **Diff location confirmation:** `<runDir>/diff/...` (real on-disk path under extension storage) — confirm this satisfies "real filesystem" and the diff is reachable from the eventual fixer pass. If the intent was actually "in the user's workspace," reopen. (Note: latexFixer in default mode operates on workspace files post-accept, so diff in shadow doesn't block it; this question matters for any future pre-accept shadow-mode fixer.)
 3. **Workspace PDF copy:** off entirely, or off-by-default with a setting (`WORKFLOW_COPY_PDF_TO_WORKSPACE`, gitignore-friendly subdir)?
 4. **Latexdiff `--only-changes` exact flag and version floor:** verify at implementation time.
