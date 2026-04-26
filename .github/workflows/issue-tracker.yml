@@ -132,7 +132,7 @@ jobs:
             - Speculative future work not discussed in the PR
             - Bot suggestions already addressed or dismissed
 
-            For each genuine follow-up, draft an issue with:
+            For each genuine follow-up, create an issue with:
             - **Title**: Short, imperative (e.g. "Add error handling for X")
             - **Body**:
               ```

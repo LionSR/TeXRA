@@ -26,10 +26,13 @@ jobs:
           set -euo pipefail
           labels=()
 
+          # Strip leading bracketed bot tag like "[codex] " before prefix matching
+          # so that "[codex] fix: ..." derives type:bug from the rest of the title.
+          stripped="${TITLE#\[*\] }"
+
           # Type from conventional-commit prefix in title.
-          # [codex] is intentionally not mapped; type comes from the rest of the title.
           shopt -s nocasematch
-          case "$TITLE" in
+          case "$stripped" in
             'fix:'*|'fix('*|'bug:'*)
               labels+=('type:bug') ;;
             'feat:'*|'feat('*)
@@ -49,9 +52,14 @@ jobs:
           files=$(gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path')
           grep_files() { printf '%s\n' "$files" | grep -qE "$1"; }
 
+          # area:model is broader than agent/modelHandlers + model/, so check it first.
           grep_files '^src/agent/(modelHandlers|modelRegistry)/' && labels+=('area:model') || true
           grep_files '^src/model/' && labels+=('area:model') || true
-          grep_files '^src/agent/' && labels+=('area:agent') || true
+          # area:agent excludes the model-handler subdirs so PRs that only touch
+          # modelHandlers don't double-tag as both area:agent and area:model.
+          if printf '%s\n' "$files" | grep -E '^src/agent/' | grep -qvE '^src/agent/(modelHandlers|modelRegistry)/'; then
+            labels+=('area:agent')
+          fi
           grep_files '^src/latex/' && labels+=('area:latex') || true
           grep_files '^src/progressView/' && labels+=('area:progress') || true
           grep_files '^src/(webview|settingsView)/' && labels+=('area:webview') || true

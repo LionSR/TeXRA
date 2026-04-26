@@ -72,14 +72,15 @@
   aliases: ['question']
 
 # ---- lifecycle: GitHub-recognized community labels ----
-- name: 'good-first-issue'
+# Names match GitHub's canonical defaults so contributor-surfacing features
+# (repo "Contribute" view, external discovery filters) recognize them.
+- name: 'good first issue'
   color: '7057ff'
   description: 'Onboarding-friendly'
 
-- name: 'help-wanted'
+- name: 'help wanted'
   color: '008672'
   description: 'Maintainer welcomes external contributions'
-  aliases: ['help wanted']
 
 # ---- workflow hooks: consumed by automation ----
 - name: 'follow-up'
