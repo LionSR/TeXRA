@@ -171,9 +171,10 @@ its display surface.
 - Redesigning file selectors, output management, or progress view behavior.
 - Re-deciding the textarea-as-hero, Ctrl+Enter, inline orchestrator tip, or
   placeholder copy from `orchestrator-ui-redesign.md` — those still ship.
-- Replacing the VS Code walkthrough (`texra.gettingStarted`). The
-  walkthrough remains the canonical "manual" onboarding path; the launcher
-  is the conversational one.
+- Replacing the VS Code walkthrough framework. The walkthrough remains the
+  canonical "manual" onboarding path; the launcher is the conversational
+  one. Walkthrough _step copy_ is updated to match team-first vocabulary
+  (see "First-open flow"), but the surface is unchanged.
 - Designing a sharing or marketplace flow for custom teams.
 
 ---
@@ -406,20 +407,29 @@ clarification).
 └────────────────────────────────────────┘
 ```
 
-When the setup conversation flips the credential bit:
+When the setup conversation reaches phase 8 (see "First-open flow"):
 
-- the welcome banner disappears,
-- the team picker auto-promotes to an **intent-derived** default — derived
-  from what the user told the setup agent (Lean Project if Lean was
-  mentioned, Physicist if numerics were mentioned, otherwise Mathematician),
-- the previous Onboarding state is preserved — re-selecting Onboarding from
-  the team picker works at any time, including for re-running setup after
-  upgrades.
+- the agent recommends a research team to the user based on their stated
+  intent and waits for confirmation,
+- on confirmation the agent writes `selectedTeamId` through
+  `update_config`; the launcher's team picker switches and the welcome
+  banner disappears,
+- if the user declines without picking another team, the launcher stays
+  on Onboarding with an inline note pointing at the team picker,
+- the previous Onboarding state is always preserved — re-selecting
+  Onboarding from the team picker re-runs the setup conversation at any
+  time, including after upgrades.
+
+The full phase sequence (probe → install → credentials → workspace →
+verify → pick team → launch) and the intent-mapping table that
+phase 8 uses are specified in the "First-open flow" section.
 
 The `texra.gettingStarted` walkthrough and the "🚀 TeXRA: Get Started"
-status-bar pill (`extension.ts:108–112`) are unchanged. They remain the
-canonical entry points for users who close the launcher; clicking either
-selects the Onboarding team and opens the launcher.
+status-bar pill (`extension.ts:108–112`) gain team-aware copy and one
+new pill state ("🛠 Finish setup" when a credential exists but the
+user is still on Onboarding); both are detailed in "First-open flow".
+Clicking either entry point selects the Onboarding team and opens the
+launcher.
 
 ### Out-of-team specialist or workflow run
 
@@ -439,6 +449,216 @@ and the team chip remains stable.
 The next session restores the team's default lead. This preserves the
 "team is your home" mental model while keeping every specialist and
 workflow agent one click away from the launcher.
+
+---
+
+## First-open flow
+
+The team-first reframing changes _what_ first-open accomplishes, not just
+the UI it's accomplished in. Today's setup story (`setup.yaml`,
+`texra.gettingStarted` walkthrough, `setupAssistantCommand.ts`) ends with
+the setup agent delegating directly to `orchestrator` or a workflow
+agent. Under this PRD, first-open ends with the user **landing in a
+research team** with their first task either already running or queued
+in the launcher. The setup agent's job widens slightly: it picks the
+team for the user and sets it before handing off.
+
+### The seven phases
+
+The setup agent's existing phase letters (A–H in
+`resources/tool_use_agents/setup.yaml:120–162`) are renamed and one new
+phase is inserted between "verify" and "launch". The phases run in
+order; the agent skips any phase the probe shows is already done.
+
+| #     | Phase                 | Today                                           | After                                                                                                           |
+| ----- | --------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 1     | **Probe**             | `probe_environment` once                        | unchanged                                                                                                       |
+| 2     | **Core LaTeX**        | install missing TeX dependencies                | unchanged                                                                                                       |
+| 3     | **Editor extension**  | install LaTeX Workshop                          | unchanged                                                                                                       |
+| 4     | **Credentials**       | sign-in OR API key                              | unchanged                                                                                                       |
+| 5     | **Optional extras**   | Zotero / Lean / SoX                             | unchanged                                                                                                       |
+| 6     | **Project source**    | sample / Overleaf / arXiv                       | unchanged                                                                                                       |
+| 7     | **Verify**            | `verify_setup`, plain-language summary          | unchanged                                                                                                       |
+| **8** | **Pick a team**       | _(missing — today goes straight to delegation)_ | **NEW: pick a research team based on the user's intent, set it as the launcher's active team**                  |
+| 9     | **Launch first task** | delegate to `orchestrator` or `correct`         | delegate via the picked team's lead, or hand off to the launcher with the team selected and the textarea seeded |
+
+### Phase 8 — Pick a team
+
+After verify, the setup agent asks one short question: _"You'll work with
+TeXRA in a team. Based on what you told me, I'd start you on
+**{recommendation}** — does that sound right, or would you rather pick
+something else?"_ The recommendation is derived from what the user said
+in their intro turn:
+
+| User intent signal                                                     | Recommended team |
+| ---------------------------------------------------------------------- | ---------------- |
+| mentions "Lean", "formalization", "blueprint"                          | `lean-project`   |
+| mentions "physics", "numerics", "Wolfram", "experiment"                | `physicist`      |
+| mentions "ML", "machine learning", "transformer", "neural", "training" | `cs-ml`          |
+| anything else, including silence                                       | `mathematician`  |
+
+If the user accepts, the agent writes `texra.launcher.selectedTeamId`
+through `update_config` (the allowlist gains this key) and confirms in
+one sentence: _"Set you up on Mathematician — `orchestrator` is your
+lead, with research, review, lean, and others on the roster."_ If the
+user declines and asks to see options, the agent lists the four research
+teams in one paragraph and waits for a choice.
+
+The agent **does not enumerate every specialist or workflow on the
+team**. The launcher's roster strip will show that the moment the user
+opens it. The setup conversation ends with at most one short paragraph
+of team explanation.
+
+### Phase 9 — Launch (or hand off)
+
+Two paths replace today's "delegate-or-stop" branch:
+
+1. **Delegate within the team.** If the user named a concrete first task
+   ("review my paper", "fix grammar in main.tex"), the setup agent
+   delegates to the team's lead with that instruction. The team's
+   roster reaches the lead via the effective-roster dispatch payload
+   already specified in the data model section, so the lead can
+   dispatch only over the team's agents.
+2. **Hand off to the launcher.** If the user is exploring or wants to
+   pick their own task, the setup agent says one closing sentence
+   (_"You're set. Hit Execute in the main view whenever you're ready."_)
+   and stops. The launcher already has the team selected from phase 8;
+   the welcome banner has already been dismissed; the textarea is empty
+   with the launcher's normal placeholder.
+
+The setup agent never "completes" by leaving the user on the Onboarding
+team. Either it transitions them to a research team (phase 8) or, if
+the user explicitly declines team selection, it stays on Onboarding
+with a clear note: _"You can pick a team any time from the team
+dropdown — Mathematician, Physicist, Lean Project, or Computer Scientist
+(ML)."_
+
+### `setup.yaml` changes
+
+The system prompt in `resources/tool_use_agents/setup.yaml` is rewritten
+so that:
+
+- The "What TeXRA actually is" section leads with **teams** instead of
+  agents. The orchestrator/specialist/workflow/setup role decomposition
+  is mentioned once as the structure inside a team, not as a peer
+  enumeration.
+- Phase H is split into phase 8 (pick a team) and phase 9 (launch).
+- Phase 8 includes the intent-mapping table above as a short paragraph.
+- The opening question gains a third clause: _"If you already know
+  whether you're working on math, physics, ML, or Lean, tell me — I'll
+  set the team for you when we're done."_ — so the agent has a
+  recommendation ready by phase 8 even when the probe is silent.
+- The "Bash etiquette", "bash vs send_to_terminal", "Secrets" sections
+  are unchanged.
+
+### `update_config` allowlist gains team selection
+
+Today's `update_config` allowlist (in
+`src/tools/setup/UpdateConfigTool.ts` or equivalent) covers
+bibliography path, Zotero port, SoX path, LaTeX formatter, TikZ input
+directory, auto-compile toggle, git commit depth, max image dimension.
+
+It gains:
+
+- `texra.launcher.selectedTeamId` — write only when the value is in
+  `{mathematician, physicist, lean-project, cs-ml, onboarding,
+custom-*}` (regex). Writes target `user`, not `workspace`, so the
+  team carries across projects.
+
+The setup agent uses this once per session, in phase 8, after the user
+confirms.
+
+### Walkthrough changes
+
+`package.json` `contributes.walkthroughs.texra.gettingStarted` is
+rewritten so the manual checklist matches the team-first story. Steps
+collapse from eleven to nine; the "Use the orchestrator" and "Pick your
+field" steps merge.
+
+| Today (step id, title)                           | After                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setupAssistant` "Run the setup assistant agent" | unchanged — title becomes "Set up TeXRA in one conversation"                                                                                                                                                                                                                                                                                                                                                                           |
+| `sampleWorkspace` "Try the sample project"       | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `apiKeys` "Add your API key"                     | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `signIn` "Or just sign in"                       | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `stageFiles` "Pick your files"                   | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `agentModel` "Use the orchestrator"              | **merged into `pickTeam`** (below)                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `multiAgent` "Pick your field"                   | renamed to **`pickTeam`** "Pick a team" — completes when `selectedTeamId !== 'onboarding'`. Description: _"You'll work in a team — Mathematician, Physicist, Lean Project, or Computer Scientist (ML). The team's lead orchestrator handles your message; the team's specialists and workflows are pre-populated for the work you do. Tweak any team in the Multi-Agent tab; tweak just-this-session in the launcher's roster strip."_ |
+| `autoExtract` "Auto-extract figures (optional)"  | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `progress` "Hit Execute!"                        | unchanged — copy updated to refer to "the team's lead" instead of "the orchestrator"                                                                                                                                                                                                                                                                                                                                                   |
+| `review` "Check what it did"                     | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `housekeeping` "Clean up when you're done"       | unchanged                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+Total step count goes from 11 to 10. Step 6 (`agentModel`) is removed
+because picking a team _is_ picking a default lead orchestrator; the
+launcher's agent picker still exposes the choice on every session for
+users who want to swap.
+
+### Status-bar pill changes
+
+The pill at `extension.ts:108–112` ("🚀 TeXRA: Get Started") shows when
+no credential is present. Today it stays hidden once a credential
+exists. After this PRD, it has one additional state:
+
+| Condition                                             | Pill                                                                  |
+| ----------------------------------------------------- | --------------------------------------------------------------------- |
+| No credential                                         | "🚀 TeXRA: Get Started" → `texra.runSetupAssistant` (unchanged)       |
+| Credential present, `selectedTeamId === 'onboarding'` | "🛠 Finish setup" → `texra.runSetupAssistant` (small, less prominent) |
+| Credential present, `selectedTeamId !== 'onboarding'` | hidden (unchanged)                                                    |
+
+The middle state catches users who installed credentials manually
+(through API key or sign-in) outside the setup agent — they have no
+team yet and would otherwise sit on Onboarding indefinitely. The pill
+nudges them to either run the setup agent (which now ends in team
+selection) or pick a team in the Multi-Agent tab.
+
+### Re-running setup
+
+Setup is a team like any other; users can re-enter it any time from the
+team picker. Two additional entry points exist for upgrades and
+re-installs:
+
+1. The `texra.runSetupAssistant` command (existing) is unchanged.
+   Selecting Onboarding from the team picker is equivalent.
+2. After a TeXRA upgrade introduces new dependencies (e.g., a new
+   default tool), the setup agent's `verify_setup` reports them as
+   missing on next run. The launcher surfaces a small one-time banner:
+   _"TeXRA updated. Re-run setup to check your environment? [Run
+   setup] [Dismiss]"_, gated on a workspace-state version key.
+
+### Behaviour when credentials are removed
+
+If a user removes their last credential (signs out, deletes API key)
+while running TeXRA, `extension.ts`'s credential watcher already shows
+the "🚀 Get Started" pill again. After this PRD, the launcher also:
+
+- preserves `selectedTeamId` (Mathematician / etc.) so when credentials
+  return the user lands back on the same team,
+- displays a single inline banner above the team picker: _"Your
+  credentials were removed. The setup assistant can sort that out — or
+  add a key in the Models tab."_, with `[Run setup]` and `[Open
+Models]` actions,
+- does **not** auto-switch to the Onboarding team. Switching teams on
+  every credential blip would lose the user's place. The Onboarding
+  team is one click away from the team picker for users who want it.
+
+### Failure-mode behaviour during setup
+
+The setup agent is conversational and may hit dead ends (no package
+manager detected, network failure during install, user cancels a
+dialog). Two rules ensure the launcher is never stranded:
+
+1. **Setup agent failures do not change `selectedTeamId`.** The team is
+   set only in phase 8 after the user confirms. If setup fails before
+   phase 8 (e.g., during install), the launcher remains on Onboarding
+   and the user can re-run setup or proceed manually via the
+   walkthrough.
+2. **Phase 8 never silently writes the team.** If the user does not
+   confirm the recommendation, the setup agent does not call
+   `update_config` for `selectedTeamId`. The launcher stays on
+   Onboarding until a credential exists and the user picks a team
+   themselves (from the team picker, the Multi-Agent tab, or by
+   re-running setup).
 
 ---
 
@@ -1105,11 +1325,17 @@ team` after Save in the launcher both call the same internal selector;
 8. **Default lead rule.** Saving or editing a team requires
    `defaultLeadAgentId` to be set and ∈ `leadAgentIds`. Save is disabled
    in the editor when this is not satisfied.
-9. **Setup team auto-promotion.** When the setup agent calls
-   `verify_setup` and reports a usable credential present, the launcher
-   posts a follow-up notice: _"You're set. Switch to a research team like
-   Mathematician or Physicist?"_ Accepting selects that team and seeds the
-   textarea empty; declining keeps the user in Onboarding.
+9. **Setup-driven team selection.** The setup agent owns team selection
+   for first-run users via phase 8 of the first-open flow: it recommends
+   a research team based on the user's stated intent and writes
+   `selectedTeamId` through `update_config` only after the user
+   confirms. The launcher does not auto-promote based on probe signals
+   alone — silent team changes are confusing. If the user declines or
+   the conversation ends before phase 8, the launcher stays on
+   Onboarding with the team picker one click away. The launcher does
+   subscribe to the `selectedTeamId` workspace-state key so the team
+   picker, agent picker, and welcome banner update without a reload
+   when the setup agent writes.
 10. **Built-in team immutability.** `Edit` is hidden on built-in cards.
     Any handler that receives a write request for a `builtIn: true` team
     rejects it.
@@ -1233,10 +1459,13 @@ your enabled agents."_
 | Grouped option rendering (team-aware)                      | `src/shared/utils/selectTemplates.ts`                                                                                                         |
 | Launcher persisted state + session override                | `src/shared/schemas/mainView.ts`, `src/webview/frontend/MainApp.ts`                                                                           |
 | First-run team selection + welcome banner                  | `src/webview/frontend/MainApp.ts`, `src/commands/setup/setupAssistantCommand.ts`                                                              |
-| Setup auto-promotion follow-up                             | `src/commands/setup/setupAssistantCommand.ts`                                                                                                 |
+| Setup agent system prompt — phases 8 and 9, intent table   | `resources/tool_use_agents/setup.yaml`                                                                                                        |
+| `update_config` allowlist gains `selectedTeamId`           | `src/tools/setup/UpdateConfigTool.ts` (or current update_config implementation)                                                               |
+| Walkthrough rewrite — collapse step 6 into 7, retitle      | `package.json` `contributes.walkthroughs.texra.gettingStarted`, `resources/walkthroughs/getting-started.md`                                   |
+| Status-bar pill third state ("Finish setup")               | `src/extension.ts:108–112`                                                                                                                    |
+| Re-run-setup banner after upgrade                          | `src/webview/frontend/MainApp.ts` (gated on workspace-state version key)                                                                      |
+| Credentials-removed inline banner                          | `src/webview/frontend/MainApp.ts`                                                                                                             |
 | Effective-roster dispatch payload to lead                  | `src/agent/runtime/` (lead receives `effectiveRoster: AgentRef[]` in its delegate context)                                                    |
-| Status-bar pill (unchanged)                                | `src/extension.ts:108–112`                                                                                                                    |
-| Walkthrough (unchanged)                                    | `package.json` `contributes.walkthroughs.texra.gettingStarted`                                                                                |
 
 ### Implementation order
 
@@ -1277,15 +1506,27 @@ your enabled agents."_
     model section).
 14. **History team filter** added as a single chip alongside the existing
     search box.
-15. **First-run rule** (Onboarding team auto-selected, welcome banner,
-    setup auto-promotion) once the launcher renders teams.
-16. **Flip the flag** in a single release once the migration paths are
+15. **First-run rule** (Onboarding team auto-selected, welcome banner)
+    once the launcher renders teams.
+16. **Setup agent phases 8–9.** Update `setup.yaml` system prompt to add
+    phase 8 (pick a team) and split phase 9 (launch or hand off). Add
+    `texra.launcher.selectedTeamId` to the `update_config` allowlist.
+    Add intent-mapping table to the prompt.
+17. **Walkthrough rewrite.** Collapse `agentModel` step into `pickTeam`;
+    rename and rewrite descriptions to use "team" vocabulary. Update
+    `resources/walkthroughs/getting-started.md`.
+18. **Status-bar pill third state** ("🛠 Finish setup" when credential
+    present + `selectedTeamId === 'onboarding'`). Add the
+    re-run-setup-after-upgrade banner gated on a workspace-state version
+    key. Add the credentials-removed inline banner.
+19. **Flip the flag** in a single release once the migration paths are
     verified against held-out fixtures of all four persisted shapes.
 
 Steps 2–5 are pure consolidation and ship before any team-first UI. Steps
 6–9 land the data model and feature-flagged UI. Steps 10–14 fill in the
-new surfaces. Step 15 turns the system on for first-run users. Step 16
-removes the flag.
+new settings surfaces. Step 15 turns the system on for first-run users in
+the launcher. Steps 16–18 update the conversational and walkthrough
+on-ramps so they match. Step 19 removes the flag.
 
 A small migration-fixture suite (`src/shared/schemas/__fixtures__/`) holds
 serialized snapshots of each persisted shape: built-in-only, custom with
@@ -1454,7 +1695,8 @@ the contracts above from the start and do not contribute to the debt.
 - Textarea-as-hero, Ctrl+Enter, inline orchestrator tip, smooth file-panel
   collapse, placeholder copy revision — these belong to
   `docs/prd/orchestrator-ui-redesign.md` and ship independently.
-- Replacing the `texra.gettingStarted` walkthrough.
+- Replacing the walkthrough framework — only step copy changes, see
+  "First-open flow".
 - Sharing or marketplace flows for custom teams.
 - Per-team overrides of Team Coordination toggles (auto-approve, kill
   switch, max delegation depth).
