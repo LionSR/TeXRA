@@ -64,6 +64,9 @@ jobs:
           grep_files '^src/progressView/' && labels+=('area:progress') || true
           grep_files '^src/(webview|settingsView)/' && labels+=('area:webview') || true
           grep_files '^\.github/workflows/' && labels+=('area:ci') || true
+          # Build/lint/tsconfig at the repo root also belong to area:ci per labels.yml.
+          grep_files '^(esbuild|vite|webpack|eslint|prettier|babel|jest|rollup)\.config\.(mjs|cjs|js|ts)$' && labels+=('area:ci') || true
+          grep_files '^tsconfig(\..+)?\.json$' && labels+=('area:ci') || true
           grep_files '^(package(-lock)?\.json|\.github/dependabot\.yml)$' && labels+=('area:deps') || true
 
           if [ ${#labels[@]} -eq 0 ]; then
