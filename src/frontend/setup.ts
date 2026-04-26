@@ -536,21 +536,32 @@ async function promptLatexWorkshopInstall(): Promise<void> {
 }
 
 /**
- * Per-key idempotent migration for LaTeX/compile/diff settings that moved
- * from `package.json` `contributes.configuration` to TeXRA workspace state.
+ * Per-key migration for LaTeX/compile/diff settings that moved from
+ * `package.json` `contributes.configuration` to TeXRA workspace state.
  *
- * For each key, copy a value into `workspaceSM` only when:
- * - workspace storage is currently empty (idempotent — re-running no-ops), and
- * - the user has explicitly set the legacy VS Code config (workspaceFolder,
- *   workspace, or global value — *not* the compiled-in default).
+ * Runs on every activation. For each key, copies the user's current
+ * VS Code config value (workspaceFolder/workspace/global, never default)
+ * into workspaceSM whenever it differs from what's already there.
  *
- * Using `inspect()` avoids persisting VS Code's defaults into workspace state,
- * which would otherwise prevent future default changes from taking effect.
+ * Why re-sync rather than copy-once: during the multi-commit transition
+ * window where storage keys exist but readers still consume VS Code
+ * config, a user editing settings.json after the first activation must
+ * stay authoritative. A "skip if workspaceSM has any value" gate would
+ * snapshot the user's pre-edit value at sub-commit 1 and silently
+ * resurrect it once sub-commit 2 switches readers to workspaceSM.
+ *
+ * Using `inspect()` avoids persisting VS Code's compiled-in defaults into
+ * workspace state, which would otherwise block future default changes.
  *
  * Per-workspace gating is implicit: the destination is `WorkspaceStateKey`
- * (per-workspace storage). A global once-per-user marker would be wrong here
- * because it would let the first opened workspace consume the migration and
+ * (per-workspace storage). No global marker is used — a once-per-user
+ * gate would let the first opened workspace consume the migration and
  * silently skip every other workspace.
+ *
+ * After chunk 3 wires writeable UI in the LaTeX tab, this re-sync rule
+ * needs to be reconsidered (UI writes would be clobbered if VS Code
+ * config still holds an older value); a follow-up will gate re-sync
+ * behind a "VS Code config is no longer authoritative" flag.
  */
 const LATEX_CONFIG_MIGRATION_KEYS: readonly WorkspaceStateKey[] = [
   WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
@@ -564,7 +575,6 @@ const LATEX_CONFIG_MIGRATION_KEYS: readonly WorkspaceStateKey[] = [
 export async function migrateLatexConfigToStorage(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration();
   for (const key of LATEX_CONFIG_MIGRATION_KEYS) {
-    if (workspaceSM.get(key) !== undefined) continue;
     const inspection = cfg.inspect(key);
     if (!inspection) continue;
     const explicit =
@@ -572,16 +582,18 @@ export async function migrateLatexConfigToStorage(): Promise<void> {
       inspection.workspaceValue ??
       inspection.globalValue;
     if (explicit === undefined) continue;
+    // All migrated keys are scalars (bool / number / string), so === is sound.
+    if (workspaceSM.get(key) === explicit) continue;
     try {
       await workspaceSM.update(key, explicit);
       logger.info(
         'extension',
-        `Migrated ${key} from VS Code config to workspace storage`,
+        `Synced ${key} from VS Code config to workspace storage`,
       );
     } catch (err) {
       logger.warn(
         'extension',
-        `Failed to migrate ${key} to workspace storage: ${toErrorMessage(err)}`,
+        `Failed to sync ${key} to workspace storage: ${toErrorMessage(err)}`,
       );
     }
   }
