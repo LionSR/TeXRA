@@ -1,0 +1,25 @@
+name: Label Sync
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/labels.yml', '.github/workflows/label-sync.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: EndBug/label-sync@v2
+        with:
+          config-file: .github/labels.yml
+          # Don't delete labels that aren't in labels.yml; the repo carries
+          # legacy labels (Later, ambitious, question, help wanted spelling
+          # variants) that should be removed manually if at all.
+          delete-other-labels: false
+          token: ${{ secrets.GITHUB_TOKEN }}
