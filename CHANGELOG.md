@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Features
+
+- **GPT-5.5 Pro** — OpenAI's GPT-5.5 Pro (`gpt55pro`) is now available in the model catalog as an opt-in choice for the hardest planning, long-horizon, and large-codebase tasks. It extends GPT-5.5 with a 1.05M-token context window and `xhigh` default reasoning effort. Premium pricing ($30/M input, $180/M output) and Ultra-tier only on the relay — enable it from Settings → Models when GPT-5.5 isn't enough.
+
+### Improvements
+
+- **Premium-pricing advisory for GPT Pro models** — `gpt5pro`, `gpt52pro`, and `gpt55pro` now show a warning in the model dropdown tooltip and the Settings → Models tab pointing users to the External Inquiry tool, which lets agents ask you to paste an answer from your own ChatGPT subscription instead of paying per-token API rates for these flagship Pro models.
+
 ## [0.37.5] - 2026-04-24
 
 ### Breaking Changes
