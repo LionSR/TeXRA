@@ -19,6 +19,10 @@ import {
   FAST_FIRST_RESPONSE_HINT,
   isFastFirstResponseModel,
 } from '@shared/constants/fastModels';
+import {
+  EXPENSIVE_MODEL_HINT,
+  isExpensiveModel,
+} from '@shared/constants/expensiveModels';
 
 // Local imports - sibling
 import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
@@ -95,11 +99,15 @@ export function formatCost(
 }
 
 /**
- * Build the model tooltip string, prepending the "fast first response" nudge
- * for cheap non-reasoning variants so free-tier users can spot snappy options.
+ * Build the model tooltip string, prepending an attention-grabbing nudge
+ * when the model is either an unusually cheap fast option or an unusually
+ * expensive Pro variant we want to steer users away from.
  */
 function buildModelHint(config: ModelConfig): string {
   const base = hint(config);
+  if (isExpensiveModel(config)) {
+    return base ? `${EXPENSIVE_MODEL_HINT} | ${base}` : EXPENSIVE_MODEL_HINT;
+  }
   if (!isFastFirstResponseModel(config.inputPrice)) return base;
   return base
     ? `${FAST_FIRST_RESPONSE_HINT} | ${base}`

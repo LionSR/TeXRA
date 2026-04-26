@@ -179,6 +179,8 @@ export const ModelSelectionItemSchema = z.object({
   reasoningLevel: ReasoningLevelSchema.optional(),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: z.boolean().optional(),
+  /** Whether this model has premium API pricing and we recommend External Inquiry instead. */
+  isExpensive: z.boolean().optional(),
 });
 export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
 

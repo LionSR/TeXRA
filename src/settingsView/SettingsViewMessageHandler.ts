@@ -88,6 +88,7 @@ import {
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
 import { isFastFirstResponseModel } from '@shared/constants/fastModels';
+import { isExpensiveModel } from '@shared/constants/expensiveModels';
 import {
   NESTED_DELEGATION_DEPTH_RANGE,
   clampNestedDelegationDepth,
@@ -295,6 +296,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
       contextWindow: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),
       isFast: isFastFirstResponseModel(config.inputPrice),
+      isExpensive: isExpensiveModel(config),
     };
 
     if (supportsReasoningLevel(config)) {
