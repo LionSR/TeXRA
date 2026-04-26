@@ -108,7 +108,8 @@ const prefixHint = (prefix: string, base: string): string =>
  */
 function buildModelHint(config: ModelConfig): string {
   const base = hint(config);
-  if (isExpensiveModel(config)) return prefixHint(EXPENSIVE_MODEL_HINT, base);
+  if (isExpensiveModel(config.provider, config.name))
+    return prefixHint(EXPENSIVE_MODEL_HINT, base);
   if (isFastFirstResponseModel(config.inputPrice))
     return prefixHint(FAST_FIRST_RESPONSE_HINT, base);
   return base;

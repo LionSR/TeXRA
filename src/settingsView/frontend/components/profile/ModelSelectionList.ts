@@ -192,14 +192,14 @@ export class ModelSelectionList extends LitElement {
           <span class="model-shortname">(${model.name})</span>
           ${!available
             ? html`<span
-                class="codicon codicon-key model-key-icon"
+                class="codicon codicon-key model-row-icon"
                 title="Requires ${PROVIDER_DISPLAY_NAMES[model.provider] ??
                 model.provider} API key — set via TeXRA: Set API Key command"
               ></span>`
             : nothing}
-          ${isExpensiveModel(model)
+          ${isExpensiveModel(model.provider, model.name)
             ? html`<span
-                class="codicon codicon-warning model-warning-icon"
+                class="codicon codicon-warning model-row-icon model-row-icon--warning"
                 title=${EXPENSIVE_MODEL_HINT}
               ></span>`
             : nothing}

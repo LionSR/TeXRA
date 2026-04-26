@@ -15,15 +15,9 @@
 export const EXPENSIVE_MODEL_HINT =
   '💸 Premium API pricing — consider the External Inquiry tool to use your own ChatGPT/Claude subscription instead';
 
-/** Matches OpenAI Pro short names: gpt5pro, gpt52pro, gpt55pro, ... */
 const GPT_PRO_NAME = /^gpt\d+pro$/;
 
-interface ExpensivePredicateInput {
-  readonly provider: string;
-  readonly name: string;
-}
-
 /** Returns true when API use of the model is expensive enough to warn about. */
-export function isExpensiveModel(config: ExpensivePredicateInput): boolean {
-  return config.provider === 'openai' && GPT_PRO_NAME.test(config.name);
+export function isExpensiveModel(provider: string, name: string): boolean {
+  return provider === 'openai' && GPT_PRO_NAME.test(name);
 }
