@@ -43,7 +43,7 @@ jobs:
               labels+=('type:docs') ;;
             'chore(deps'*|'build(deps'*)
               labels+=('type:chore' 'area:deps') ;;
-            'chore:'*|'chore('*|'ci:'*|'ci('*|'test:'*|'test('*|'style:'*|'style('*)
+            'chore:'*|'chore('*|'ci:'*|'ci('*|'test:'*|'test('*|'style:'*|'style('*|'build:'*|'build('*)
               labels+=('type:chore') ;;
           esac
           shopt -u nocasematch
