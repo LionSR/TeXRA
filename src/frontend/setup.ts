@@ -5,7 +5,12 @@ import { glob } from 'glob';
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';
-import { GlobalStateKey, globalSM } from '@common/state';
+import {
+  GlobalStateKey,
+  WorkspaceStateKey,
+  globalSM,
+  workspaceSM,
+} from '@common/state';
 import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -528,4 +533,56 @@ async function promptLatexWorkshopInstall(): Promise<void> {
       },
     ],
   );
+}
+
+/**
+ * Per-key idempotent migration for LaTeX/compile/diff settings that moved
+ * from `package.json` `contributes.configuration` to TeXRA workspace state.
+ *
+ * For each key, copy a value into `workspaceSM` only when:
+ * - workspace storage is currently empty (idempotent — re-running no-ops), and
+ * - the user has explicitly set the legacy VS Code config (workspaceFolder,
+ *   workspace, or global value — *not* the compiled-in default).
+ *
+ * Using `inspect()` avoids persisting VS Code's defaults into workspace state,
+ * which would otherwise prevent future default changes from taking effect.
+ *
+ * Per-workspace gating is implicit: the destination is `WorkspaceStateKey`
+ * (per-workspace storage). A global once-per-user marker would be wrong here
+ * because it would let the first opened workspace consume the migration and
+ * silently skip every other workspace.
+ */
+const LATEX_CONFIG_MIGRATION_KEYS: readonly WorkspaceStateKey[] = [
+  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+  WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+  WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+  WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+  WorkspaceStateKey.LATEX_FORMATTER,
+] as const;
+
+export async function migrateLatexConfigToStorage(): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration();
+  for (const key of LATEX_CONFIG_MIGRATION_KEYS) {
+    if (workspaceSM.get(key) !== undefined) continue;
+    const inspection = cfg.inspect(key);
+    if (!inspection) continue;
+    const explicit =
+      inspection.workspaceFolderValue ??
+      inspection.workspaceValue ??
+      inspection.globalValue;
+    if (explicit === undefined) continue;
+    try {
+      await workspaceSM.update(key, explicit);
+      logger.info(
+        'extension',
+        `Migrated ${key} from VS Code config to workspace storage`,
+      );
+    } catch (err) {
+      logger.warn(
+        'extension',
+        `Failed to migrate ${key} to workspace storage: ${toErrorMessage(err)}`,
+      );
+    }
+  }
 }

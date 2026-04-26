@@ -37,6 +37,14 @@ export enum WorkspaceStateKey {
 
   // Git worktree support
   GIT_WORKTREE_SUPPORT = 'texra.git.worktreeSupport',
+
+  // LaTeX/compile/diff settings (migrated from VS Code config)
+  WORKFLOW_AUTO_COMPILE = 'texra.workflow.autoCompileAfterOutput',
+  WORKFLOW_AUTO_COMPILE_TIMEOUT_MS = 'texra.workflow.autoCompileTimeoutMs',
+  LATEXDIFF_BETWEEN_ROUNDS = 'texra.latexdiff.generateBetweenRoundDiffs',
+  LATEXDIFF_TIMEOUT_MS = 'texra.latexdiff.timeoutMs',
+  LATEXDIFF_MATH_MARKUP = 'texra.latexdiff.mathMarkup',
+  LATEX_FORMATTER = 'texra.latex.formatter',
 }
 
 export enum GlobalStateKey {
