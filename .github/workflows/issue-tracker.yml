@@ -4,7 +4,10 @@ on:
   issues:
     types: [closed]
   pull_request:
-    types: [closed, opened, labeled, review_requested]
+    # `labeled` is intentionally omitted — Playbook C does nothing for label
+    # events, and auto-label.yml fires labeled events on every push, which
+    # otherwise cascades into duplicate, costly track runs.
+    types: [closed, opened, review_requested]
   pull_request_review:
     types: [submitted]
 
