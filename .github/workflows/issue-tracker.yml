@@ -4,7 +4,10 @@ on:
   issues:
     types: [closed]
   pull_request:
-    types: [closed, opened, labeled, review_requested]
+    # `labeled` is intentionally omitted — Playbook C does nothing for label
+    # events, and auto-label.yml fires labeled events on every push, which
+    # otherwise cascades into duplicate, costly track runs.
+    types: [closed, opened, review_requested]
   pull_request_review:
     types: [submitted]
 
@@ -36,7 +39,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          allowed_bots: 'dependabot[bot],github-actions[bot],Copilot,chatgpt-codex-connector,claude[bot]'
+          allowed_bots: 'dependabot[bot],github-actions[bot],Copilot,chatgpt-codex-connector,claude[bot],cursor[bot]'
           claude_args: |
             --model claude-opus-4-7
             --allowedTools "mcp__github__*" "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"
@@ -133,7 +136,7 @@ jobs:
             - Speculative future work not discussed in the PR
             - Bot suggestions already addressed or dismissed
 
-            For each genuine follow-up, create an issue:
+            For each genuine follow-up, create an issue with:
             - **Title**: Short, imperative (e.g. "Add error handling for X")
             - **Body**:
               ```
@@ -149,15 +152,48 @@ jobs:
               - PR: #<PR-number>
               - <Related issues or review comments>
               ```
-            - **Labels**: "follow-up" plus any relevant labels ("bug", "enhancement",
-              "tech-debt", "documentation")
+            - **Labels**: always `follow-up`. Plus, when applicable:
+              - One type-equivalent: `bug`, `enhancement`, `tech-debt`, or `documentation`.
+              - Any matching `area:*` from the parent PR's changed paths:
+                `area:agent-runtime`, `area:model-handlers`, `area:progress-view`,
+                `area:latex-workflow`, `area:docs`, `area:webview`, `area:ci`, `area:deps`.
+              - One `risk:*` (`risk:low`, `risk:medium`, `risk:high`) reflecting blast radius.
+              - One `status:*` (`status:needs-triage`, `status:needs-validation`,
+                `status:ready-review`, `status:blocked-external`) reflecting current state.
+              - `priority:p0` only for blocker / data-loss / security follow-ups.
+
+            **Umbrella vs flat decision.**
+
+            - **0 follow-ups**: skip B2 entirely.
+            - **1 follow-up**: create the issue flat. Reference the parent PR in the body.
+              Do NOT create an umbrella — sub-issue overhead is not worth it for a single child.
+            - **2+ follow-ups from the same PR**: create a tracking umbrella first,
+              then create each child as a native sub-issue of the umbrella:
+              1. Create umbrella with `mcp__github__issue_write` (method=create):
+                 - Title: `Tracking: follow-ups from #<PR-number> (<short PR title>)`
+                 - Body: brief context + bulleted preview of child titles + link to parent PR
+                 - Labels: `tracking`, plus the parent PR's `area:*` labels
+                 - **Capture both `number` AND `id` from the response.** `id` is the
+                   numeric REST database id (integer), NOT `node_id` (the GraphQL
+                   string). `sub_issue_write` below requires the integer `id`.
+              2. For each child, call `mcp__github__issue_write` (method=create) with
+                 the body and labels (`follow-up` + applicable type/area/risk/status
+                 from the list above).
+                 **Capture both `number` AND `id` (integer) from each child response.**
+              3. For each child, attach to the umbrella:
+                 `mcp__github__sub_issue_write` with method=`add`,
+                 `issue_number=<umbrella-number>`, `sub_issue_id=<child-id>`.
+                 Note: `sub_issue_id` is the child's numeric REST `id` (integer),
+                 NOT its issue `number` and NOT its `node_id`.
 
             Then add new issues to relevant tracking issue checklists:
-            - Append `- [ ] #<issue> - <title>` to the relevant section
-            - Comment: "📋 Added follow-up issues from #<PR>: #<issue1>, #<issue2>, ..."
+            - For flat (1 follow-up): append `- [ ] #<issue> - <title>` to the relevant section
+            - For umbrella (2+): append `- [ ] #<umbrella> - Tracking: ...` (single line for the umbrella)
+            - Comment on the parent PR: "📋 Filed follow-ups from this PR: #<umbrella-or-issue>"
 
             **Be conservative.** Only create issues for genuine, actionable follow-ups.
-            When in doubt, skip it. False positives create noise.
+            When in doubt, skip it. False positives create noise. Two real follow-ups
+            justify an umbrella; two speculative ones do not.
 
             ---
 
