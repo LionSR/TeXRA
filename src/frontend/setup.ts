@@ -536,32 +536,36 @@ async function promptLatexWorkshopInstall(): Promise<void> {
 }
 
 /**
- * Per-key migration for LaTeX/compile/diff settings that moved from
- * `package.json` `contributes.configuration` to TeXRA workspace state.
+ * One-shot per-key migration for LaTeX/compile/diff settings that moved
+ * from `package.json` `contributes.configuration` to TeXRA workspace state.
  *
- * Runs on every activation. For each key, copies the user's current
- * VS Code config value (workspaceFolder/workspace/global, never default)
- * into workspaceSM whenever it differs from what's already there.
+ * Rule: for each key, if workspace storage is currently empty, copy the
+ * user's existing VS Code config value into workspaceSM. If storage already
+ * has a value, leave it alone — workspaceSM is now the authoritative source
+ * (the LaTeX settings tab reads and writes through it).
  *
- * Why re-sync rather than copy-once: during the multi-commit transition
- * window where storage keys exist but readers still consume VS Code
- * config, a user editing settings.json after the first activation must
- * stay authoritative. A "skip if workspaceSM has any value" gate would
- * snapshot the user's pre-edit value at sub-commit 1 and silently
- * resurrect it once sub-commit 2 switches readers to workspaceSM.
+ * Per-key idempotent: re-running on subsequent activations no-ops on
+ * already-migrated keys. Per-workspace gating is implicit: the destination
+ * is `WorkspaceStateKey` (per-workspace storage). No global marker is used —
+ * a once-per-user gate would let the first opened workspace consume the
+ * migration and silently skip every other workspace.
  *
- * Using `inspect()` avoids persisting VS Code's compiled-in defaults into
- * workspace state, which would otherwise block future default changes.
+ * Source detection has two paths:
+ * 1. `inspect()` — for keys that were declared in `contributes.configuration`
+ *    at upgrade time. Considers only `workspaceFolderValue`, `workspaceValue`,
+ *    `globalValue`, never `defaultValue` (avoids persisting VS Code's
+ *    compiled-in defaults into workspace state, which would block future
+ *    default changes).
+ * 2. `get()` fallback — for users who upgrade directly past the package.json
+ *    deregistration. VS Code may treat the now-unregistered keys' settings.json
+ *    entries as opaque, so `inspect()` can return undefined or all-undefined.
+ *    `get()` reads the merged config; for unregistered keys this is just the
+ *    user's settings.json entry (no compiled-in default to confuse the result).
  *
- * Per-workspace gating is implicit: the destination is `WorkspaceStateKey`
- * (per-workspace storage). No global marker is used — a once-per-user
- * gate would let the first opened workspace consume the migration and
- * silently skip every other workspace.
- *
- * After chunk 3 wires writeable UI in the LaTeX tab, this re-sync rule
- * needs to be reconsidered (UI writes would be clobbered if VS Code
- * config still holds an older value); a follow-up will gate re-sync
- * behind a "VS Code config is no longer authoritative" flag.
+ * Once migrated, the LaTeX tab UI writes to workspaceSM directly. A user who
+ * later edits the legacy `texra.*` keys in settings.json sees no effect —
+ * that path is no longer authoritative. The migration intentionally does not
+ * re-sync, so UI writes cannot be clobbered.
  */
 const LATEX_CONFIG_MIGRATION_KEYS: readonly WorkspaceStateKey[] = [
   WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
@@ -575,6 +579,11 @@ const LATEX_CONFIG_MIGRATION_KEYS: readonly WorkspaceStateKey[] = [
 export async function migrateLatexConfigToStorage(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration();
   for (const key of LATEX_CONFIG_MIGRATION_KEYS) {
+    // Skip if already migrated: workspaceSM is authoritative, and a user-set
+    // value here (via the LaTeX tab UI) must not be clobbered by a stale
+    // settings.json entry.
+    if (workspaceSM.get(key) !== undefined) continue;
+
     const inspection = cfg.inspect(key);
     let explicit: unknown;
     if (inspection) {
@@ -587,7 +596,7 @@ export async function migrateLatexConfigToStorage(): Promise<void> {
     // once these keys are removed from package.json contributes.configuration,
     // VS Code may treat them as unregistered and `inspect()` can return either
     // `undefined` or an object with `defaultValue === undefined`. In both
-    // cases, settings.json entries from older TeXRA versions still exist —
+    // cases, settings.json entries from older TeXRA versions still exist;
     // VS Code just doesn't surface them via `inspect()`. `get(key)` reads the
     // merged config, which for unregistered keys is just the user's
     // settings.json entry (no compiled-in default to mistake for a real value).
@@ -597,32 +606,18 @@ export async function migrateLatexConfigToStorage(): Promise<void> {
     ) {
       explicit = cfg.get(key);
     }
-    const stored = workspaceSM.get(key);
-    // All migrated keys are scalars (bool / number / string), so === is sound.
-    if (stored === explicit) continue;
+    if (explicit === undefined) continue;
 
     try {
-      if (explicit === undefined) {
-        // User unset the legacy VS Code config value. Clear the workspace-state
-        // copy so readers fall back to the default rather than resurrecting a
-        // stale snapshot. Skip if storage is already empty.
-        if (stored === undefined) continue;
-        await workspaceSM.update(key, undefined);
-        logger.info(
-          'extension',
-          `Cleared ${key} from workspace storage (legacy VS Code config unset)`,
-        );
-      } else {
-        await workspaceSM.update(key, explicit);
-        logger.info(
-          'extension',
-          `Synced ${key} from VS Code config to workspace storage`,
-        );
-      }
+      await workspaceSM.update(key, explicit);
+      logger.info(
+        'extension',
+        `Migrated ${key} from VS Code config to workspace storage`,
+      );
     } catch (err) {
       logger.warn(
         'extension',
-        `Failed to sync ${key} to workspace storage: ${toErrorMessage(err)}`,
+        `Failed to migrate ${key} to workspace storage: ${toErrorMessage(err)}`,
       );
     }
   }
