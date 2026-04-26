@@ -115,14 +115,19 @@ selects. The same agent can appear in any number of teams.
 
 Vocabulary the user sees, and the codebase it replaces:
 
-| User-visible | Replaces                                                        |
-| ------------ | --------------------------------------------------------------- |
-| Team         | "preset" / "agent mode preset"                                  |
-| Lead         | implicit `isOrchestrator` agent in a preset                     |
-| Specialist   | tool-use agent without delegation                               |
-| Workflow     | workflow agent                                                  |
-| Setup        | the `setup` agent + setup wizard concepts                       |
-| Roster       | the launcher's contextual list of agents the active team groups |
+| User-visible      | Replaces                                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Team              | "preset" / "agent mode preset"                                                                                                                           |
+| Lead              | implicit `isOrchestrator` agent in a preset                                                                                                              |
+| Specialist        | tool-use agent without delegation                                                                                                                        |
+| Workflow          | workflow agent                                                                                                                                           |
+| Setup             | the `setup` agent + setup wizard concepts                                                                                                                |
+| Roster            | the launcher's contextual list of agents the active team groups                                                                                          |
+| Effective roster  | the team's roster plus L1 additions minus L1 removals — what the lead actually sees on a given Run                                                       |
+| L1 / L2 / L3      | the three customization levels (this-run roster tweak / save-as-new-team modal / full team editor in the Multi-Agent tab)                                |
+| Run               | one click of the launcher's Run button (and any follow-up turns within the same session)                                                                 |
+| Session           | the launcher's currently-open conversation; cleared when the user closes the launcher tab                                                                |
+| Researcher Access | TeXRA's free sign-in path (Researcher Access Program) — an alternative to bringing your own API key. Surfaced via `texra.auth.signIn`. Existing concept. |
 
 The codebase keeps `AgentModePresetSchema` as the underlying type but renames
 its display surface.
@@ -245,7 +250,7 @@ clear the textarea, mutate the model selection, or alter the global
         │                                │
         │ Custom                         │
         │  (none yet)                    │
-        │  ➕ Build a new team           │
+        │  ➕ New team           │
         └────────────────────────────────┘
 ```
 
@@ -253,9 +258,9 @@ clear the textarea, mutate the model selection, or alter the global
 
 The agent dropdown groups the active team's agents at the top, then surfaces
 every other agent in the registry below. Picking an agent **does not**
-switch teams — it replaces the agent selection for this turn. If the picked
+switch teams — it replaces the agent selection for this run. If the picked
 agent is outside the active team's roster, the launcher shows a single
-inline note ("Outside your team. Running solo for this turn.") and resets
+inline note ("Just this run — your team returns next time.") and resets
 to the team's default lead on the next session.
 
 ```
@@ -290,7 +295,8 @@ to the team's default lead on the next session.
          │ Setup & utilities            │
          │  🛠 setup assistant          │
          │                              │
-         │  ☐ Show internal/dev agents  │
+         │  ☐ Show experimental agents  │
+         │    (off by default)          │
          └──────────────────────────────┘
 ```
 
@@ -302,34 +308,52 @@ icons and the "lead" tag without re-deriving it.
 
 ### Roster strip — L1 inline tweak
 
-The roster strip below the model row lists the active team's agents in the
-order _lead → specialists → workflows_. Hovering an entry exposes a small
-✕ that drops it for this turn; a final `+ Add` chip opens a quick picker
-over every other agent in the registry.
+The roster strip below the model row lists the active team's agents in
+the order _lead → specialists → workflows_. The strip is collapsed by
+default with a small `▸ Roster (13 agents)` chevron to keep the
+first-open launcher tidy; clicking expands it. Hovering an entry exposes
+a small ✕ that drops it for this run only; a final `+ Add` chip opens a
+quick picker over every other agent in the registry.
+
+By default — when nothing has been added or removed — the strip's title
+reads `▾ Your team` and no footer line is rendered. Once the user makes
+the first tweak, the title reads `▾ Your team — modified for this run`,
+the active team chip gains a `•` dot (`🎓 Mathematician •`), and a
+single footer line appears with two actions:
 
 ```
-  ▾ Roster — this turn
+  ▾ Your team — modified for this run
     🎯 orchestrator           ← lead
     💬 chat   🔬 research   ✓ review
     ⚙ lean   🧮 simplifier ✕
     📄 correct  ✨ polish   🔄 merge
     [+ Add agent]
 
-  Modified · [Save as new team] [Reset]
+  Tweaks apply to this run only. [Save as new team] [Reset]
 ```
+
+The unmodified state has no footer at all, so a brand-new user never
+sees the word "Modified" before doing anything.
+
+The **effective roster** is the launcher's term for what the lead
+actually has access to on a given Run: the team's stored roster, plus
+any L1 additions, minus any L1 removals. It exists only at run time and
+is recomputed on every render. The dispatch payload sent to the lead
+carries the effective roster explicitly so removed agents cannot be
+selected even if the lead's prompt mentions them.
 
 Rules:
 
-- Tweaks live in **session state only**. They do not persist across reload.
-  The team's stored roster is unchanged. `ENABLED_AGENTS` is unchanged.
-- The active team chip gets a `•` dot when modified: `🎓 Mathematician •`.
-- The `Modified` footer line appears only when there is a delta. `Save as
-new team` opens the L2 modal (below). `Reset` reverts to the team's
-  stored roster.
-- The orchestrator dispatches only over the **effective roster** for the
-  turn — i.e. the team's roster plus added entries minus removed entries.
-  The dispatch payload sent to the lead carries the effective roster
-  explicitly so removed agents cannot be selected.
+- Tweaks live in **session state only**. They do not persist across
+  reload. The team's stored roster is unchanged. `ENABLED_AGENTS` is
+  unchanged.
+- The active team chip gets the `•` dot only when there's an actual
+  delta vs. the team's stored roster.
+- "This run" means a single Run-button click. Tweaks survive across the
+  follow-up turns of the same session (so the user can continue
+  conversation without losing their override) but are cleared by
+  switching teams, picking an out-of-team agent solo, hitting Reset, or
+  closing the launcher (which clears all session state).
 - Switching teams or picking an out-of-team agent solo discards pending
   L1 tweaks (the modified state belongs to the team that was active when
   the tweak was made; carrying it forward would be confusing).
@@ -337,21 +361,25 @@ new team` opens the L2 modal (below). `Reset` reverts to the team's
 ### L2 — Save as new team
 
 Clicking `Save as new team` in the modified footer opens a modal that is
-pre-filled from the modified state. The user confirms; a custom team is
-created and selected.
+pre-filled from the current launcher state. The user confirms; a custom
+team is created and selected. Every field has a sensible default so the
+"happy path" is hit Enter once.
 
 ```
 ┌──────────────────────────────────────────────┐
 │  Save as new team                            │
+│  Based on your current roster.               │
 ├──────────────────────────────────────────────┤
 │  Name        [Mathematician (custom)      ]  │
 │  Description [Mathematician without          │
 │               simplifier, plus latexFixer.]  │
-│  Icon        ( 🎓 ) ( ⚛ ) ( ⚙ ) ( 💻 ) ( ✨)│
+│  Icon        (•🎓) ( ⚛ ) ( ⚙ ) ( 💻 ) ( 🌟 )│
 │              ( 🔬 ) ( ✏️ ) ( 📐 ) ( + custom)│
+│              (selected: 🎓)                  │
 │                                              │
 │  Lead        [🎯 orchestrator             ▾] │
-│              (1 lead in roster)              │
+│              The lead used by default when   │
+│              you select this team.           │
 │                                              │
 │  ☐ Set as default team for new sessions      │
 │                                              │
@@ -359,9 +387,31 @@ created and selected.
 └──────────────────────────────────────────────┘
 ```
 
-The same modal opens for `+ Build a new team` from the team picker, with
-empty fields and the active team's lead/roster pre-filled (so "build a new
-team" is "duplicate this one" with one extra step).
+Defaults that prevent dead ends:
+
+- **Name** prefills `{base team name} (custom)`. Required, non-empty.
+- **Description** prefills a one-sentence summary of the diff against
+  the base team (e.g., _"Mathematician without `simplifier`, plus
+  `latexFixer`."_). User-editable.
+- **Icon** is pre-selected to match the base team's icon, with a clear
+  visual highlight (filled border and a leading `•` in the mockup).
+  The sub-line `(selected: 🎓)` makes the choice text-readable. The
+  emoji `🌟` replaces the earlier `✨` in this picker because `✨`
+  collides with the `polish` agent's icon.
+- **Lead** is pre-selected to the team's current lead in the launcher.
+  When the modified roster contains more than one lead-role agent, the
+  dropdown is populated with all of them and the **first lead from the
+  source team's `leadAgentIds`** is pre-selected so Save is never
+  blocked on first open. Helper text reads _"The lead used by default
+  when you select this team."_ to make persistence explicit.
+- **Set as default team** is unchecked by default. Checking writes a
+  user-scoped preference so this team becomes the post-Onboarding
+  fallback for new sessions on this machine.
+
+The same modal opens for `+ New team` from the team picker. Both
+entries are the same flow with the same pre-fills; the difference is
+only the source state. The Multi-Agent tab's `+ New team` and `+ Save
+current setup as team` also reuse this modal.
 
 ### First-run state
 
@@ -378,7 +428,7 @@ clarification).
 │ │ 🚀 Welcome — let's set TeXRA up.   │ │
 │ │ ~3 min: env check, sign in or add  │ │
 │ │ a key, open a sample paper.        │ │
-│ │       [Skip · I'll do it manually] │ │
+│ │       [Set up later]               │ │
 │ └────────────────────────────────────┘ │
 │                                        │
 │  Team   [🛠 Onboarding             ▾]  │
@@ -407,15 +457,30 @@ clarification).
 └────────────────────────────────────────┘
 ```
 
+**`[Set up later]` behavior.** Dismisses the welcome banner only.
+Leaves the Onboarding team active and the launcher in its first-run
+state so the user can still hit Run to talk to the setup agent. The
+banner is replaced by a small one-line muted reminder above the team
+picker: _"You can re-open setup any time from the Team dropdown →
+Onboarding."_ The reminder hides as soon as the user switches to any
+non-Onboarding team. (`[Set up later]` does not dismiss the
+"🚀 TeXRA: Get Started" status-bar pill — only acquiring a credential
+does.)
+
 When the setup conversation reaches phase 8 (see "First-open flow"):
 
 - the agent recommends a research team to the user based on their stated
   intent and waits for confirmation,
 - on confirmation the agent writes `selectedTeamId` through
-  `update_config`; the launcher's team picker switches and the welcome
-  banner disappears,
+  `update_config`; the launcher's team picker switches, the welcome
+  banner disappears, and the agent says one closing sentence in chat
+  ("Done — set you up on Mathematician.") so the team change is visible
+  conversationally as well as in the UI,
 - if the user declines without picking another team, the launcher stays
-  on Onboarding with an inline note pointing at the team picker,
+  on Onboarding with a single inline note above the team picker:
+  _"You're still on Onboarding. Pick a team from the dropdown above
+  whenever you're ready — Mathematician, Physicist, Lean Project, or
+  Computer Scientist (ML)."_,
 - the previous Onboarding state is always preserved — re-selecting
   Onboarding from the team picker re-runs the setup conversation at any
   time, including after upgrades.
@@ -426,29 +491,31 @@ phase 8 uses are specified in the "First-open flow" section.
 
 The `texra.gettingStarted` walkthrough and the "🚀 TeXRA: Get Started"
 status-bar pill (`extension.ts:108–112`) gain team-aware copy and one
-new pill state ("🛠 Finish setup" when a credential exists but the
+new pill state ("🎓 Pick your team" when a credential exists but the
 user is still on Onboarding); both are detailed in "First-open flow".
 Clicking either entry point selects the Onboarding team and opens the
 launcher.
 
 ### Out-of-team specialist or workflow run
 
-Picking an agent outside the active team's roster runs the agent solo for
-the turn without changing teams. The launcher shows a single inline note
-and the team chip remains stable.
+Picking an agent that isn't in the active team's roster runs that agent
+on its own this run, without changing your team. The launcher shows a
+single inline note and the team chip stays stable.
 
 ```
   Team   [🎓 Mathematician          ▾]
   Agent  [🎨 presenter              ▾]
          Builds a LaTeX Beamer deck
          from your paper.
-         ⓘ Outside your team.
-           Running solo for this turn.
+         ⓘ Just this run — your team
+           returns next time.
 ```
 
-The next session restores the team's default lead. This preserves the
-"team is your home" mental model while keeping every specialist and
-workflow agent one click away from the launcher.
+The note explicitly names what reverts and when, so the user is never
+left wondering whether picking a different agent permanently changed
+their setup. The next time they open the launcher, the agent picker is
+back on the team's default lead. The team chip never leaves
+Mathematician.
 
 ---
 
@@ -499,10 +566,33 @@ in their intro turn:
 
 If the user accepts, the agent writes `texra.launcher.selectedTeamId`
 through `update_config` (the allowlist gains this key) and confirms in
-one sentence: _"Set you up on Mathematician — `orchestrator` is your
-lead, with research, review, lean, and others on the roster."_ If the
-user declines and asks to see options, the agent lists the four research
-teams in one paragraph and waits for a choice.
+one sentence: _"Done — set you up on Mathematician. `orchestrator` is
+your lead, with research, review, lean, and others on the roster."_ The
+"Done —" prefix is mandatory; it pairs the conversational confirmation
+with the visual UI change so the user always sees that something
+happened.
+
+If the user declines and asks to see options, the agent lists the four
+research teams in one paragraph and waits for a choice. Three branches
+from there, all explicit:
+
+1. **User picks a team by name.** Agent writes the team via
+   `update_config` and confirms with the same "Done —" sentence.
+2. **User says "I don't know" or types something the agent can't map to
+   a team.** Agent gives one-line summaries of each team
+   (Mathematician for proofs and papers, Physicist for derivations and
+   numerics, Lean Project for Lean 4, Computer Scientist (ML) for ML/CS
+   research) and asks once more. If the user is still unsure, the
+   agent says _"No worries — I'll leave you on Onboarding for now. You
+   can pick a team any time from the Team dropdown in the launcher."_
+   and stops without writing `selectedTeamId`. This branch never
+   silently picks Mathematician for the user.
+3. **User explicitly declines all four.** Same closing sentence as
+   branch 2; no team is written.
+
+The agent never re-asks more than twice in phase 8. After the second
+ask, it always concludes with the "Onboarding for now" sentence, so
+the conversation cannot loop on team selection.
 
 The agent **does not enumerate every specialist or workflow on the
 team**. The launcher's roster strip will show that the moment the user
@@ -600,17 +690,20 @@ The pill at `extension.ts:108–112` ("🚀 TeXRA: Get Started") shows when
 no credential is present. Today it stays hidden once a credential
 exists. After this PRD, it has one additional state:
 
-| Condition                                             | Pill                                                                  |
-| ----------------------------------------------------- | --------------------------------------------------------------------- |
-| No credential                                         | "🚀 TeXRA: Get Started" → `texra.runSetupAssistant` (unchanged)       |
-| Credential present, `selectedTeamId === 'onboarding'` | "🛠 Finish setup" → `texra.runSetupAssistant` (small, less prominent) |
-| Credential present, `selectedTeamId !== 'onboarding'` | hidden (unchanged)                                                    |
+| Condition                                             | Pill                                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| No credential                                         | "🚀 TeXRA: Get Started" → `texra.runSetupAssistant` (unchanged)                        |
+| Credential present, `selectedTeamId === 'onboarding'` | "🎓 Pick your team" → opens the launcher with the team picker focused (less prominent) |
+| Credential present, `selectedTeamId !== 'onboarding'` | hidden (unchanged)                                                                     |
 
 The middle state catches users who installed credentials manually
 (through API key or sign-in) outside the setup agent — they have no
-team yet and would otherwise sit on Onboarding indefinitely. The pill
-nudges them to either run the setup agent (which now ends in team
-selection) or pick a team in the Multi-Agent tab.
+research team yet and would otherwise sit on Onboarding indefinitely.
+The pill says "Pick your team" rather than "Finish setup" because
+setup _is_ already done at this point in the credential sense; what's
+missing is a research team. The pill click target is the launcher with
+the team picker dropdown opened, not `texra.runSetupAssistant`, so the
+user gets the team-selection task they actually have to complete.
 
 ### Re-running setup
 
@@ -623,8 +716,12 @@ re-installs:
 2. After a TeXRA upgrade introduces new dependencies (e.g., a new
    default tool), the setup agent's `verify_setup` reports them as
    missing on next run. The launcher surfaces a small one-time banner:
-   _"TeXRA updated. Re-run setup to check your environment? [Run
-   setup] [Dismiss]"_, gated on a workspace-state version key.
+   _"TeXRA was updated and may need a new tool. Want me to check?
+   [Check environment] [Not now]"_. The `[Check environment]` button
+   re-runs setup, which is conversational and asks before installing
+   anything — so users can interpret it as low-risk. The banner is
+   gated on a workspace-state version key so it appears at most once
+   per upgrade.
 
 ### Behaviour when credentials are removed
 
@@ -691,8 +788,9 @@ removed, not what stays.
 │ │ Lead: 🎯 orchestrator    │ │ Lead: 🎯 orchestrator    │            │
 │ │ Specialists: chat,       │ │ Specialists: research,   │            │
 │ │  research, review, lean, │ │  numerics, review,       │            │
-│ │  simplifier              │ │  search, presenter,      │            │
-│ │ Workflows: correct,      │ │  simplifier             │            │
+│ │  simplifier, latexFixer, │ │  search, presenter,      │            │
+│ │  progressCheck           │ │  simplifier, latexFixer, │            │
+│ │ Workflows: correct,      │ │  progressCheck           │            │
 │ │  polish, merge, devise,  │ │ Workflows: criticize,    │            │
 │ │  apply                   │ │  generic, devise, apply  │            │
 │ │                          │ │                          │            │
@@ -723,7 +821,7 @@ removed, not what stays.
 │ │  [Use]  [Duplicate]      │                                         │
 │ └──────────────────────────┘                                         │
 │                                                                      │
-│ Custom              [+ New team]   [+ Save current launcher state]   │
+│ Custom              [+ New team]   [+ Save current setup as team]   │
 │ ┌──────────────────────────┐                                         │
 │ │ 🎓 Number Theory         │                                         │
 │ │ My team for analytic NT. │                                         │
@@ -755,6 +853,16 @@ Card differences vs. the current `MultiAgentTab.ts:420–574`:
   rather than overlapping the title.
 - The icon is rendered larger and to the left of the team name so the
   icon and the team name read as one unit.
+
+Each action button has a stable tooltip so a first-time user reading
+just the cards can tell the actions apart without trial-and-error:
+
+| Button    | Tooltip                                                                            |
+| --------- | ---------------------------------------------------------------------------------- |
+| Use       | "Switch to this team in the launcher."                                             |
+| Edit      | "Edit this team's lead, specialists, and workflows. (Custom teams only.)"          |
+| Duplicate | "Make a custom copy of this team you can edit. The original built-in stays as-is." |
+| Delete    | "Delete this custom team. Built-in teams cannot be deleted."                       |
 
 ### Built-in immutability + Duplicate
 
@@ -824,7 +932,7 @@ Editor rules:
    render but does not silently remove it from team storage (see the
    schema's stable-key rule).
 
-### "+ Save current launcher state"
+### "+ Save current setup as team"
 
 A button at the top of the Custom group is the explicit handoff from the
 launcher. Clicking it opens the same team editor with the launcher's
@@ -833,10 +941,23 @@ just initiated from settings instead of from the launcher footer.
 
 ### Team Coordination section
 
-Unchanged from today (auto-approve subagent steps, detach subagents,
-worktree support, kill-switch, max delegation depth). The section moves
-below the team grid and stays a sibling — these are global delegation
-behaviours, not per-team. A future PRD can move them per-team if needed.
+Mechanically unchanged from today (auto-approve subagent steps, detach
+subagents, worktree support, kill-switch, max delegation depth). The
+section moves below the team grid and stays a sibling — these are
+global delegation behaviours, not per-team. A future PRD can move them
+per-team if needed.
+
+Each toggle gains a one-line description below its label so first-time
+users don't have to know what "subagent" or "worktree" means before
+deciding:
+
+| Toggle                         | Description (one line shown under the toggle)                                                       |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Auto-approve subagent steps    | "Run delegated tasks without asking. You can still pause from the Progress view."                   |
+| Detach subagents on completion | "Free a slot when an agent finishes so the lead can dispatch the next task immediately."            |
+| Worktree support               | "Run multiple agents in parallel on copies of your repo so they don't trip over each other."        |
+| Allow orchestrator kill-switch | "Show a Stop button while the lead is running. Useful when a multi-step plan is going off-track."   |
+| Max delegation depth           | "How many levels deep the lead can delegate (lead → specialist → sub-specialist). Higher = deeper." |
 
 ### What `Use` does
 
@@ -892,7 +1013,7 @@ responsibilities, which now live in the launcher and the Multi-Agent tab.
    here, click `Save Preset`, name in a `vscode.window.showInputBox`) lives
    in `AgentsTab.ts:225–227` and `agentHandlers.ts:609–652`. It is replaced
    by the launcher's `Save as new team` (L2) and the Multi-Agent tab's
-   `+ Save current launcher state` / `+ New team`. The Agents tab is no
+   `+ Save current setup as team` / `+ New team`. The Agents tab is no
    longer the entry point for creating a team.
 2. **Role badge** on every agent list item and the detail pane: `Lead`,
    `Specialist`, `Workflow`, `Setup`. Derived from `agentRole`.
@@ -903,10 +1024,11 @@ responsibilities, which now live in the launcher and the Multi-Agent tab.
    customizing its YAML.
 4. **Setup agents are visible-but-locked.** Today `setup` is `internal:
 true` and hidden entirely. The Agents tab now shows it with a 🔒 icon,
-   role badge `Setup`, and a disabled toggle. The detail pane explains
-   why: _"Setup agents are managed by the Onboarding team and cannot be
-   disabled. Open YAML to inspect."_ The "Open YAML" affordance still
-   works so power users can read the agent's prompt.
+   role badge `Setup`, and a disabled toggle. Hovering the 🔒 icon
+   shows the tooltip _"Setup agents are part of the Onboarding team and
+   stay enabled."_ The detail pane shows the same sentence as a static
+   note plus the "Open YAML" affordance so power users can read the
+   agent's prompt.
 5. **Disable confirmation when an agent is in a team.** Toggling off an
    agent that is in any team — built-in or custom — shows a non-blocking
    confirmation listing the affected teams: _"`research` is used by
@@ -1073,7 +1195,7 @@ is supported during one minor-version migration window.
 
 Concrete deep links the launcher needs:
 
-- `multi-agent` (when the user clicks `+ Build a new team` from the team
+- `multi-agent` (when the user clicks `+ New team` from the team
   picker)
 - `multi-agent:custom-teams` (when L2 `Save as new team` completes — the
   view scrolls to the new team's card)
@@ -1368,6 +1490,40 @@ team` after Save in the launcher both call the same internal selector;
     the only place where selecting an agent changes the launcher's
     surrounding chrome; the change is driven by `agentRole === 'workflow'`,
     not by a separate session-type toggle.
+15. **Setup writes during user input.** When the setup agent writes
+    `selectedTeamId` while the user has the launcher open, the launcher
+    re-renders the team picker, agent picker, and welcome banner but
+    **never clears the textarea** and never moves the cursor. If the
+    user happens to be typing into the launcher mid-setup (rare but
+    possible — e.g., they opened a second instance of the launcher),
+    their text is preserved. Auto-promoted team change does swap the
+    agent picker's default to the new team's lead, but if the user has
+    already selected an agent for this session (`selectedAgentId !==
+previous defaultLeadAgentId`) their choice is preserved.
+16. **Broken team recovery.** A team becomes _broken_ when none of its
+    `leadAgentIds` resolve at load time (per rule 12). In the
+    Multi-Agent tab, broken team cards show a red border, an inline
+    error _"Lead agent missing"_ in place of the lead row, and replace
+    the `Use` button with a single `Open editor to repair` link. The
+    team editor opens with the lead section highlighted and a banner
+    _"This team's lead agent (`{ref}`) is no longer available. Pick a
+    new lead and save."_ Save remains disabled until at least one valid
+    lead is checked. Until repaired, the launcher hides broken teams
+    from its team picker dropdown to prevent re-selection. If the
+    broken team was the active team, the launcher silently falls back
+    to `mathematician` and surfaces the same one-time toast as rule 12.
+17. **Disable confirmation copy.** When disabling an agent that is
+    referenced by one or more teams, the confirmation modal lists the
+    affected teams and reads: _"`{agent}` is used by {team list}. If
+    you disable it, those teams will run without it — the lead can
+    still coordinate the rest of the roster, but anything that needed
+    `{agent}` won't happen."_ This is more concrete than today's "will
+    run without it" so the user understands the practical consequence.
+18. **Migration toast detail.** The post-upgrade migration toast (per
+    Migration section) names every team it had to repair, one per
+    line: _"Updated 'My Research Team' (custom): setup agent removed
+    per schema migration."_ One toast per affected team, rather than a
+    consolidated "Updated N teams" without specifics.
 
 ---
 
@@ -1462,7 +1618,7 @@ your enabled agents."_
 | Setup agent system prompt — phases 8 and 9, intent table   | `resources/tool_use_agents/setup.yaml`                                                                                                        |
 | `update_config` allowlist gains `selectedTeamId`           | `src/tools/setup/UpdateConfigTool.ts` (or current update_config implementation)                                                               |
 | Walkthrough rewrite — collapse step 6 into 7, retitle      | `package.json` `contributes.walkthroughs.texra.gettingStarted`, `resources/walkthroughs/getting-started.md`                                   |
-| Status-bar pill third state ("Finish setup")               | `src/extension.ts:108–112`                                                                                                                    |
+| Status-bar pill third state ("Pick your team")             | `src/extension.ts:108–112`                                                                                                                    |
 | Re-run-setup banner after upgrade                          | `src/webview/frontend/MainApp.ts` (gated on workspace-state version key)                                                                      |
 | Credentials-removed inline banner                          | `src/webview/frontend/MainApp.ts`                                                                                                             |
 | Effective-roster dispatch payload to lead                  | `src/agent/runtime/` (lead receives `effectiveRoster: AgentRef[]` in its delegate context)                                                    |
@@ -1515,7 +1671,7 @@ your enabled agents."_
 17. **Walkthrough rewrite.** Collapse `agentModel` step into `pickTeam`;
     rename and rewrite descriptions to use "team" vocabulary. Update
     `resources/walkthroughs/getting-started.md`.
-18. **Status-bar pill third state** ("🛠 Finish setup" when credential
+18. **Status-bar pill third state** ("🎓 Pick your team" when credential
     present + `selectedTeamId === 'onboarding'`). Add the
     re-run-setup-after-upgrade banner gated on a workspace-state version
     key. Add the credentials-removed inline banner.
