@@ -49,7 +49,9 @@ jobs:
           shopt -u nocasematch
 
           # Area from changed file paths.
-          files=$(gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path')
+          # `gh pr view --json files` caps at 100 entries (cli/cli#5368), so paginate
+          # the REST API to get the full list for large PRs.
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].path')
           grep_files() { printf '%s\n' "$files" | grep -qE "$1"; }
 
           # area:model is broader than agent/modelHandlers + model/, so check it first.
