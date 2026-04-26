@@ -576,11 +576,27 @@ export async function migrateLatexConfigToStorage(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration();
   for (const key of LATEX_CONFIG_MIGRATION_KEYS) {
     const inspection = cfg.inspect(key);
-    if (!inspection) continue;
-    const explicit =
-      inspection.workspaceFolderValue ??
-      inspection.workspaceValue ??
-      inspection.globalValue;
+    let explicit: unknown;
+    if (inspection) {
+      explicit =
+        inspection.workspaceFolderValue ??
+        inspection.workspaceValue ??
+        inspection.globalValue;
+    }
+    // Fallback for users upgrading directly past the deregistration commit:
+    // once these keys are removed from package.json contributes.configuration,
+    // VS Code may treat them as unregistered and `inspect()` can return either
+    // `undefined` or an object with `defaultValue === undefined`. In both
+    // cases, settings.json entries from older TeXRA versions still exist —
+    // VS Code just doesn't surface them via `inspect()`. `get(key)` reads the
+    // merged config, which for unregistered keys is just the user's
+    // settings.json entry (no compiled-in default to mistake for a real value).
+    if (
+      explicit === undefined &&
+      (!inspection || inspection.defaultValue === undefined)
+    ) {
+      explicit = cfg.get(key);
+    }
     const stored = workspaceSM.get(key);
     // All migrated keys are scalars (bool / number / string), so === is sound.
     if (stored === explicit) continue;
@@ -588,8 +604,8 @@ export async function migrateLatexConfigToStorage(): Promise<void> {
     try {
       if (explicit === undefined) {
         // User unset the legacy VS Code config value. Clear the workspace-state
-        // copy so readers (post-cutover) fall back to the default rather than
-        // resurrecting a stale snapshot. Skip if storage is already empty.
+        // copy so readers fall back to the default rather than resurrecting a
+        // stale snapshot. Skip if storage is already empty.
         if (stored === undefined) continue;
         await workspaceSM.update(key, undefined);
         logger.info(
