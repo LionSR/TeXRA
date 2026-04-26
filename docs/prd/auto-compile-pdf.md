@@ -51,10 +51,10 @@ Today:
 
 ### 6.1 Auto-open PDF / log
 
-After each round, in `finalOutputOpener.ts`:
+After each round, in `finalOutputOpener.ts`. **All branches below are keyed on the *final* post-fixer compile status** (same `lastCompileResult` defined in §6.5) — never on the initial failed compile attempt. A round whose initial compile failed but whose latexFixer pass repaired it sees only the success branch; no failure log is opened.
 
-- If compile succeeded: `vscode.commands.executeCommand('vscode.open', pdfUri, { viewColumn: vscode.ViewColumn.Beside })`.
-- If compile failed: open the truncated `.log`.
+- If final status is `"ok"`: `vscode.commands.executeCommand('vscode.open', pdfUri, { viewColumn: vscode.ViewColumn.Beside })`.
+- If final status is `"failed"` (initial compile failed and either latexFixer also failed, or `WORKFLOW_AUTO_FIX_COMPILE` is off, or the failure is a fragment-wrap failure per §6.3 step 4): open the truncated `.log`.
 - Same path used for the diff PDF when available.
 - Gated by `WORKFLOW_AUTO_OPEN_PDF` (default on).
 
