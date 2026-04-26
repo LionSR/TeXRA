@@ -57,7 +57,12 @@ jobs:
           # `gh pr view --json files` caps at 100 entries (cli/cli#5368), so paginate
           # the REST API to get the full list for large PRs.
           files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
-          grep_files() { printf '%s\n' "$files" | grep -qE "$1"; }
+          # Use here-strings (`<<<`) instead of `printf | grep` to avoid SIGPIPE
+          # bubbling under `set -o pipefail`: when `grep -q` matches early it
+          # closes the pipe, the upstream `printf` exits 141, and pipefail
+          # returns 141 — which the caller would misread as "no match". Here-
+          # strings avoid the pipeline entirely.
+          grep_files() { grep -qE "$1" <<<"$files"; }
 
           # area:model-handlers covers handlers + registry + the src/model/ tree.
           # Check it before area:agent-runtime so PRs that touch only modelHandlers
@@ -66,13 +71,20 @@ jobs:
           grep_files '^src/model/' && labels+=('area:model-handlers') || true
           # area:agent-runtime: src/agent/ (excluding modelHandlers/modelRegistry)
           # plus src/tools/ (per the label description: "...delegation, tools...").
-          if printf '%s\n' "$files" | grep -E '^src/agent/' | grep -qvE '^src/agent/(modelHandlers|modelRegistry)/'; then
+          # Filter into an intermediate variable so the two-stage check has no
+          # internal pipe (same SIGPIPE concern as above).
+          non_model_agent=$(grep -vE '^src/agent/(modelHandlers|modelRegistry)/' <<<"$files" || true)
+          if grep -qE '^src/agent/' <<<"$non_model_agent"; then
             labels+=('area:agent-runtime')
           fi
           grep_files '^src/tools/' && labels+=('area:agent-runtime') || true
           grep_files '^src/latex/' && labels+=('area:latex-workflow') || true
           grep_files '^src/progressView/' && labels+=('area:progress-view') || true
-          grep_files '^src/(webview|settingsView)/' && labels+=('area:webview') || true
+          # area:webview covers all webview-side and webview-adjacent UI code:
+          # webview frontends, the settings view, extension-host UI orchestration
+          # (src/frontend/), and the shared webview base classes.
+          grep_files '^src/(webview|settingsView|frontend)/' && labels+=('area:webview') || true
+          grep_files '^src/common/webview/' && labels+=('area:webview') || true
           grep_files '^(docs/|README\.md|CHANGELOG\.md|resources/walkthroughs/)' && labels+=('area:docs') || true
           grep_files '^\.github/workflows/' && labels+=('area:ci') || true
           # Build/lint/tsconfig at the repo root also belong to area:ci.
