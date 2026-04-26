@@ -1,6 +1,7 @@
 import * as path from 'path';
 
-import { getConfig } from '@agent/core/config';
+import { getWorkspaceState } from '@agent/core/stateStore';
+import { WorkspaceStateKey } from '@common/state';
 import { toErrorMessage } from '@common/errors';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -53,7 +54,12 @@ export async function runCompileCheck(
   ctx: CompileCheckContext,
   currentRound: number,
 ): Promise<CompileFailure[]> {
-  if (!getConfig<boolean>('texra.workflow.autoCompileAfterOutput', true)) {
+  if (
+    !getWorkspaceState().get<boolean>(
+      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+      true,
+    )
+  ) {
     return [];
   }
 
@@ -83,7 +89,10 @@ export async function runCompileCheck(
 
   const timeoutMs = Math.max(
     MIN_TIMEOUT_MS,
-    getConfig<number>('texra.workflow.autoCompileTimeoutMs', 120000),
+    getWorkspaceState().get<number>(
+      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+      120000,
+    ),
   );
   // compileRoot is created lazily on first failure so successful rounds leave
   // no trace — the orchestrator can use "no compile/*.log entries" as proof

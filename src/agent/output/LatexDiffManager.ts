@@ -2,7 +2,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { getConfig } from '@agent/core/config';
+import { getWorkspaceState } from '@agent/core/stateStore';
+import { WorkspaceStateKey } from '@common/state';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
@@ -169,8 +170,8 @@ export class LatexDiffManager {
       }
     }
 
-    const generateBetweenRoundDiffs = getConfig<boolean>(
-      'texra.latexdiff.generateBetweenRoundDiffs',
+    const generateBetweenRoundDiffs = getWorkspaceState().get<boolean>(
+      WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
       false,
     );
 
@@ -321,7 +322,10 @@ export class LatexDiffManager {
     // gets killed by execa instead of orphaning latexmk/pdflatex.
     const timeoutMs = Math.max(
       10000,
-      getConfig<number>('texra.workflow.autoCompileTimeoutMs', 120000),
+      getWorkspaceState().get<number>(
+        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+        120000,
+      ),
     );
     await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,

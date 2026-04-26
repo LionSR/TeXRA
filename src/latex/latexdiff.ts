@@ -4,7 +4,8 @@ import { z } from 'zod';
 
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import * as logger from '@agent/core/logger';
-import { getConfig } from '@agent/core/config';
+import { getWorkspaceState } from '@agent/core/stateStore';
+import { WorkspaceStateKey } from '@common/state';
 import { formatError, toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
@@ -56,8 +57,8 @@ export class LaTeXdiffService {
   }
 
   private getLatexdiffTimeout(): number {
-    return getConfig<number>(
-      'texra.latexdiff.timeoutMs',
+    return getWorkspaceState().get<number>(
+      WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
       DEFAULT_LATEXDIFF_TIMEOUT_MS,
     );
   }

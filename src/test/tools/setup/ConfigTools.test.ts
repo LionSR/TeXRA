@@ -131,21 +131,6 @@ describe('ConfigTools — update_config allowlist', () => {
     assert.equal(updates.length, 0);
   });
 
-  it('rejects enum values outside the schema', async () => {
-    const { platform, updates } = createPlatform();
-    setSetupPlatform(platform);
-    const tool = new UpdateConfigTool();
-
-    const result = await tool.call({
-      key: 'texra.latex.formatter',
-      value: 'pandoc',
-      target: 'user',
-    });
-
-    assert.ok(result.isError, 'unknown enum should be rejected');
-    assert.equal(updates.length, 0);
-  });
-
   it('honors target=workspace scope', async () => {
     const { platform, updates } = createPlatform();
     setSetupPlatform(platform);

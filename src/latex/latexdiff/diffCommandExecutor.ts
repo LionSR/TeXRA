@@ -4,6 +4,8 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 // Internal imports
 import * as logger from '@agent/core/logger';
 import { getConfig } from '@agent/core/config';
+import { getWorkspaceState } from '@agent/core/stateStore';
+import { WorkspaceStateKey } from '@common/state';
 import { executeCommand } from '@utils/system';
 
 // Local file imports
@@ -210,8 +212,8 @@ export class DiffCommandExecutor {
     return {
       mathMarkup:
         options?.mathMarkup ??
-        getConfig<MathMarkupOption>(
-          'texra.latexdiff.mathMarkup',
+        getWorkspaceState().get<MathMarkupOption>(
+          WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
           DEFAULT_MATH_MARKUP,
         ),
       pictureEnvs: getConfig<string>(

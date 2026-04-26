@@ -581,15 +581,28 @@ export async function migrateLatexConfigToStorage(): Promise<void> {
       inspection.workspaceFolderValue ??
       inspection.workspaceValue ??
       inspection.globalValue;
-    if (explicit === undefined) continue;
+    const stored = workspaceSM.get(key);
     // All migrated keys are scalars (bool / number / string), so === is sound.
-    if (workspaceSM.get(key) === explicit) continue;
+    if (stored === explicit) continue;
+
     try {
-      await workspaceSM.update(key, explicit);
-      logger.info(
-        'extension',
-        `Synced ${key} from VS Code config to workspace storage`,
-      );
+      if (explicit === undefined) {
+        // User unset the legacy VS Code config value. Clear the workspace-state
+        // copy so readers (post-cutover) fall back to the default rather than
+        // resurrecting a stale snapshot. Skip if storage is already empty.
+        if (stored === undefined) continue;
+        await workspaceSM.update(key, undefined);
+        logger.info(
+          'extension',
+          `Cleared ${key} from workspace storage (legacy VS Code config unset)`,
+        );
+      } else {
+        await workspaceSM.update(key, explicit);
+        logger.info(
+          'extension',
+          `Synced ${key} from VS Code config to workspace storage`,
+        );
+      }
     } catch (err) {
       logger.warn(
         'extension',

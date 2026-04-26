@@ -38,6 +38,7 @@ import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
@@ -89,8 +90,8 @@ async function withLatexdiffTool<T>(
 async function promptForLatexdiffMathMarkup(): Promise<
   MathMarkupOption | undefined
 > {
-  const configuredMode = getConfig<string>(
-    'texra.latexdiff.mathMarkup',
+  const configuredMode = workspaceSM.get<string>(
+    WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     DEFAULT_MATH_MARKUP,
   );
   const items: (vscode.QuickPickItem & { value: MathMarkupOption })[] =
@@ -614,8 +615,8 @@ async function handleRunLatexdiff(
       `Running latexdiff with math markup mode: ${mathMarkup}`,
     );
 
-    const generateBetweenRoundDiffs = getConfig<boolean>(
-      'texra.latexdiff.generateBetweenRoundDiffs',
+    const generateBetweenRoundDiffs = workspaceSM.get<boolean>(
+      WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
       false,
     );
     logger.debug(
