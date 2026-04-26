@@ -584,9 +584,21 @@ export const profileViewStyles: CSSResult = css`
     opacity: var(--opacity-disabled);
   }
 
-  .model-key-icon {
+  /**
+   * Inline icon following a model row's name. Variants set --_icon-color;
+   * the base resolves to secondary text when no variant is applied.
+   * Mirrors the tinted-badge --_tint pattern in shared badgeStyles.
+   */
+  .model-row-icon {
     font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
     margin-left: var(--spacing-tiny);
+    color: var(--_icon-color, var(--color-text-secondary));
+  }
+
+  .model-row-icon--warning {
+    --_icon-color: var(
+      --vscode-list-warningForeground,
+      var(--vscode-editorWarning-foreground)
+    );
   }
 `;
