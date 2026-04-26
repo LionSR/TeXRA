@@ -78,7 +78,7 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
    2. Agent input file's preamble, if it has `\documentclass`.
    3. Newest workspace `.tex` with `\documentclass` (mtime tiebreak).
    4. Skip with a clear log line — do not compile, do not invoke latexFixer.
-2. **Wrap**: `<preamble>\n<fragment>\n\end{document}`. Save to `<runDir>/compile/r<round>/<name>__wrap.tex`.
+2. **Wrap**: `<preamble>\n\begin{document}\n<fragment>\n\end{document}`. `extractPreamble()` returns content up to but excluding `\begin{document}` (conventional definition), so the wrap explicitly inserts the document boundary. Save to `<runDir>/compile/r<round>/<name>__wrap.tex`.
 3. **Compile** via existing `compileLatex2Pdf` with `latexmk -pdf`.
 4. Resolution source is logged: `Compile (fragment): preamble from <source description>`.
 5. Gated by `WORKFLOW_FRAGMENT_COMPILE` (default on).
