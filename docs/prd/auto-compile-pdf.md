@@ -89,10 +89,10 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
 - Built on existing `src/agent/implementations/flows/tool-use/` substrate.
 - Default model: cheap (Haiku-class).
 - **Tools available:**
-  - `compile_tex(path)` → `{ success, logExcerpt, pdfPath? }`. New tool in `src/tools/`.
+  - `compile_tex(path)` → `{ success, logExcerpt, pdfPath? }`. New tool in `src/tools/`. Body stays `vscode`-free — delegates to `src/latex/texTools.ts` (`compileLatex2Pdf`).
   - `read_file(path)` — existing.
   - `edit_file(path, ...)` — existing.
-  - `open_pdf(path)` — new, calls `vscode.open`.
+  - `open_pdf(path)` — new tool in `src/tools/`. Body stays `vscode`-free; it invokes an injectable opener callback (mirrors the `setExtensionChecker()` pattern in `src/tools/external/externalToolDefs.ts`). The callback is registered at extension activation from the command/frontend layer and performs `vscode.commands.executeCommand('vscode.open', ...)`. If no callback is registered the tool returns a structured "not available" result instead of importing `vscode`.
 - **Constraints:**
   - 3 internal turns max.
   - Wall-clock cap: `WORKFLOW_AUTO_COMPILE_TIMEOUT_MS × 3`.
@@ -177,7 +177,8 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 | `src/agent/output/fragmentWrap.ts` (new) | Resolve preamble → wrap fragment → return location to compile. ~100 lines. |
 | `src/latex/extractFileDependencies.ts` (or sibling) | Add `extractPreamble()`; add `buildParentMap()`. |
 | `src/agent/node/roundPersistedFlow.ts` | One clause in `shouldContinueNextRound`; one line of context injection. |
-| `src/tools/` | New `compile_tex` and `open_pdf` tools. |
+| `src/tools/` | New `compile_tex` tool (delegates to `src/latex/texTools.ts`); new `open_pdf` tool (body `vscode`-free, calls an injectable opener callback). |
+| `src/extension.ts` (or equivalent activation site) | Register the `open_pdf` opener callback that invokes `vscode.commands.executeCommand('vscode.open', ...)`. Mirrors the `setExtensionChecker()` pattern. |
 | `resources/agents/latexFixer.yml` | New agent definition. |
 | `src/agent/implementations/flows/reflection/nodes/OutputNode.ts` | Hand off to latexFixer on failure when setting is on. |
 | `src/frontend/agents/finalOutputOpener.ts` | Open PDF or log via `vscode.open`. |
