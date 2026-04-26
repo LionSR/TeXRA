@@ -1,7 +1,7 @@
 import * as path from 'path';
 
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { WorkspaceStateKey } from '@common/state';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { toErrorMessage } from '@common/errors';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { AgentLogger } from '@logger/AgentLogger';

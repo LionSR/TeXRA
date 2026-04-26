@@ -1,6 +1,6 @@
 // Local imports - formatter implementations
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { WorkspaceStateKey } from '@common/state';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 
 // Local file imports
 import { runLatexIndent } from './formatter/latexindentpt';

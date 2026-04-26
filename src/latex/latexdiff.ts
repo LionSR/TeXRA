@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import * as logger from '@agent/core/logger';
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { WorkspaceStateKey } from '@common/state';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { formatError, toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';

@@ -5,7 +5,7 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 import * as logger from '@agent/core/logger';
 import { getConfig } from '@agent/core/config';
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { WorkspaceStateKey } from '@common/state';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { executeCommand } from '@utils/system';
 
 // Local file imports
