@@ -93,6 +93,7 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
   - 3 internal turns max (orchestrator-enforced ceiling on top of whatever the YAML allows).
   - Wall-clock cap: `WORKFLOW_AUTO_COMPILE_TIMEOUT_MS × 3`.
   - Single attempt — no retry of the agent itself.
+  - **latexFixer must not touch the diff.** It is forbidden to read, edit, copy, move, or regenerate diff `.tex` / diff `.pdf` files (they live in `<runDir>/diff/...`, shadow storage). It is forbidden to bring the diff into the user's workspace under any name. The diff is purely a review artifact for the user; only the orchestrator and the auto-open path interact with it. The agent's mandate is the compile of the main `.tex` files post-accept; touching the diff would corrupt the audit trail and pollute the workspace.
 - Triggered when a **full-file** post-accept compile fails and `WORKFLOW_AUTO_FIX_COMPILE` is on (default on).
 - **Scope: full-file failures only.** Fragment-wrap failures (per §6.3 step 4) are surfaced to the user via the log-open path and do not invoke latexFixer; the wrapped `.tex` lives only in `<runDir>/...` and the workspace contains the raw fragment, neither of which the current workspace-scoped file tools can act on usefully. Extending latexFixer to the fragment case is part of the same deferred run-storage-aware-tools effort.
 
