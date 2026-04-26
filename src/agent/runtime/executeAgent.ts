@@ -145,6 +145,8 @@ interface ResolveAgentOptions {
   streamTabIdOverride?: StreamTabId;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
   onBeforeActivation?: (streamId: StreamTabId) => void;
+  /** Fires after setActiveStream is emitted. */
+  onAfterActivation?: (streamId: StreamTabId) => void;
   /** When true, reject if configPayload.agentCategory doesn't match the YAML-defined category. */
   enforceCategory?: boolean;
 }
@@ -224,6 +226,7 @@ async function resolveAgentBase(
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: useMultipleOutputs,
   });
+  options?.onAfterActivation?.(streamId);
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
@@ -483,6 +486,18 @@ function buildFallbackNotification(config: AgentConfig) {
 // Shared Orchestration
 // ============================================================================
 
+function markActivatedStreamLaunchFailed(
+  streamId: StreamTabId,
+  configPayload: AgentConfigPayload,
+  err: unknown,
+): void {
+  const errorMsg = `Failed to start agent ${configPayload.agent}: ${getSdkErrorMessage(err)}`;
+  new AgentLogger(streamId, true).logError(errorMsg, err, {
+    operation: `start ${configPayload.agent}`,
+  });
+  StreamStatusService.set(streamId, STREAM_STATUS.ERROR);
+}
+
 /**
  * Resolves agent context and acquires stream lock, handling the preliminary→final
  * stream ID correction that occurs when useMultipleOutputs changes during resolution.
@@ -497,15 +512,30 @@ async function resolveAndAcquireStream(
     taskType?: string;
     onBeforeActivation?: (streamId: StreamTabId) => void;
     enforceCategory?: boolean;
+    suppressErrorNotification?: boolean;
   },
 ): Promise<ResolvedAgentBase> {
   if (options?.streamTabIdOverride) {
     // Direct resolution with known stream ID (e.g., resume from snapshot)
-    return resolveAgentBase(configPayload, executionId, {
-      streamTabIdOverride: options.streamTabIdOverride,
-      onBeforeActivation: options.onBeforeActivation,
-      enforceCategory: options.enforceCategory,
-    });
+    let activatedStreamId: StreamTabId | undefined;
+    try {
+      return await resolveAgentBase(configPayload, executionId, {
+        streamTabIdOverride: options.streamTabIdOverride,
+        onBeforeActivation: options.onBeforeActivation,
+        onAfterActivation: (streamId) => {
+          activatedStreamId = streamId;
+        },
+        enforceCategory: options.enforceCategory,
+      });
+    } catch (err) {
+      if (activatedStreamId) {
+        markActivatedStreamLaunchFailed(activatedStreamId, configPayload, err);
+      }
+      if (!options.suppressErrorNotification && !(err instanceof ZodError)) {
+        bus.emit('requestShowError', { message: toErrorMessage(err) });
+      }
+      throw err;
+    }
   }
 
   if (!configPayload.agent || !configPayload.model) {
@@ -520,14 +550,25 @@ async function resolveAndAcquireStream(
   acquireStreamOrThrow(preliminaryStreamId, options?.taskType);
 
   let ctx: ResolvedAgentBase;
+  let activatedStreamId: StreamTabId | undefined;
   try {
     ctx = await resolveAgentBase(configPayload, resolvedExecutionId, {
       onBeforeActivation: options?.onBeforeActivation,
+      onAfterActivation: (streamId) => {
+        activatedStreamId = streamId;
+      },
       enforceCategory: options?.enforceCategory,
     });
   } catch (err) {
-    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
-    if (!(err instanceof ZodError)) {
+    if (activatedStreamId) {
+      if (activatedStreamId !== preliminaryStreamId) {
+        StreamStatusService.releaseIfInitializing(preliminaryStreamId);
+      }
+      markActivatedStreamLaunchFailed(activatedStreamId, configPayload, err);
+    } else {
+      StreamStatusService.releaseIfInitializing(preliminaryStreamId);
+    }
+    if (!options?.suppressErrorNotification && !(err instanceof ZodError)) {
       bus.emit('requestShowError', { message: toErrorMessage(err) });
     }
     throw err;
@@ -580,6 +621,7 @@ export async function executeAgent(
   const ctx = await resolveAndAcquireStream(configPayload, executionId, {
     onBeforeActivation: options?.onStreamResolved,
     enforceCategory: options?.enforceCategory,
+    suppressErrorNotification: options?.isSubagent,
   });
   ctx.delegationDepth = options?.delegationDepth ?? 0;
   const { setting, streamId, config } = ctx;
