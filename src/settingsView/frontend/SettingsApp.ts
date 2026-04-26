@@ -48,7 +48,9 @@ import {
   UpdateGitHubTokenStatusMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
+  UpdateLatexConfigValuesMessageSchema,
   type AgentSelectionItem,
+  type LatexConfigValues,
   type NumberVscodeSetting,
   type PRSubscriptionEntry,
   type ToolDashboardItem,
@@ -215,6 +217,8 @@ export class SettingsApp extends SettingsAppBase {
     ...DEFAULT_LATEX_SETTINGS_STATUS,
   });
   private readonly latexSettingsLoaded = signal(false);
+  private readonly latexConfigValues = signal<LatexConfigValues>({});
+  private readonly latexConfigValuesLoaded = signal(false);
 
   private parseMessage<T>(
     raw: unknown,
@@ -395,6 +399,17 @@ export class SettingsApp extends SettingsAppBase {
         if (!data) return;
         this.latexSettingsStatus.set(data.settings);
         this.latexSettingsLoaded.set(true);
+        return;
+      }
+
+      case SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES: {
+        const data = this.parseMessage(
+          raw,
+          UpdateLatexConfigValuesMessageSchema,
+        );
+        if (!data) return;
+        this.latexConfigValues.set(data.values);
+        this.latexConfigValuesLoaded.set(true);
         return;
       }
 
@@ -677,6 +692,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
   );
 
+  private handleSetLatexConfigValue = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
+  );
+
   private handleRunInstallCommand = forwardDetail(
     SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
   );
@@ -918,9 +937,12 @@ export class SettingsApp extends SettingsAppBase {
             <latex-tab
               .settings=${this.latexSettingsStatus.get()}
               .loaded=${this.latexSettingsLoaded.get()}
+              .configValues=${this.latexConfigValues.get()}
+              .configLoaded=${this.latexConfigValuesLoaded.get()}
               @latex-apply-settings=${this.handleApplyLatexSettings}
               @latex-install-workshop=${this.handleInstallLatexWorkshop}
               @latex-run-install-command=${this.handleRunInstallCommand}
+              @latex-set-config-value=${this.handleSetLatexConfigValue}
             ></latex-tab>
           </vscode-tab-panel>
         </vscode-tabs>

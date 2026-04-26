@@ -9,9 +9,11 @@ import * as vscode from 'vscode';
 
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
+  type LatexConfigValues,
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
@@ -60,6 +62,20 @@ const LATEX_RECOMMENDED_SETTINGS: {
     legacyKeys: ['build/'],
   },
 ];
+
+/** Maps the discriminated `field` in SET_LATEX_CONFIG_VALUE to the storage key. */
+const LATEX_CONFIG_FIELD_TO_KEY: Record<
+  SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_LATEX_CONFIG_VALUE>['field'],
+  WorkspaceStateKey
+> = {
+  workflowAutoCompile: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+  workflowAutoCompileTimeoutMs:
+    WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+  latexdiffBetweenRounds: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+  latexdiffTimeoutMs: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+  latexdiffMathMarkup: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+  latexFormatter: WorkspaceStateKey.LATEX_FORMATTER,
+};
 
 /** Allowlist of commands that may be executed via the Run in Terminal button. */
 const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
@@ -164,6 +180,58 @@ export class LatexSettingsHandlers {
     await this.installExtension(LATEX_WORKSHOP_EXT_ID, (w) =>
       this.sendLatexSettingsStatus(w),
     );
+  }
+
+  /**
+   * Push current LaTeX/compile/diff config values to the webview. Each field
+   * is left undefined when no value is set in workspace storage so the UI
+   * can render the documented default rather than overwriting it on save.
+   */
+  async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
+    const values: LatexConfigValues = {
+      workflowAutoCompile: workspaceSM.get<boolean>(
+        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+      ),
+      workflowAutoCompileTimeoutMs: workspaceSM.get<number>(
+        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+      ),
+      latexdiffBetweenRounds: workspaceSM.get<boolean>(
+        WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+      ),
+      latexdiffTimeoutMs: workspaceSM.get<number>(
+        WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+      ),
+      latexdiffMathMarkup: workspaceSM.get<
+        LatexConfigValues['latexdiffMathMarkup']
+      >(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP),
+      latexFormatter: workspaceSM.get<LatexConfigValues['latexFormatter']>(
+        WorkspaceStateKey.LATEX_FORMATTER,
+      ),
+    };
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+      values,
+    });
+  }
+
+  /**
+   * Persist a single LaTeX/compile/diff config value to workspace storage.
+   * `value === undefined` clears the key (returns to documented default).
+   */
+  async handleSetLatexConfigValue(
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_LATEX_CONFIG_VALUE>,
+  ): Promise<void> {
+    const key = LATEX_CONFIG_FIELD_TO_KEY[data.field];
+    try {
+      await workspaceSM.update(key, data.value);
+      await this.ctx.withActiveWebview((w) => this.sendLatexConfigValues(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        `Failed to update ${data.field}`,
+        error,
+      );
+    }
   }
 
   async handleRunInstallCommand(

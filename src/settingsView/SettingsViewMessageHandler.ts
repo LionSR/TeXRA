@@ -568,6 +568,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.latexHandlers.handleInstallLatexWorkshop(),
       [SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND]: (data) =>
         this.latexHandlers.handleRunInstallCommand(data),
+      [SETTINGS_VIEW_COMMANDS.GET_LATEX_CONFIG_VALUES]: () =>
+        this.withActiveWebview((w) =>
+          this.latexHandlers.sendLatexConfigValues(w),
+        ),
+      [SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE]: (data) =>
+        this.latexHandlers.handleSetLatexConfigValue(data),
 
       // Approval settings handlers
       [SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS]: () =>
@@ -691,6 +697,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
+      this.latexHandlers.sendLatexConfigValues(webview),
     ]);
   }
 

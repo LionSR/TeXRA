@@ -438,6 +438,44 @@ export type UpdateLatexSettingsStatusMessage = z.infer<
   typeof UpdateLatexSettingsStatusMessageSchema
 >;
 
+/**
+ * LaTeX/compile/diff configuration values, persisted in workspace storage.
+ * Migrated from VS Code `texra.*` configuration. The frontend tab edits these
+ * directly; the backend persists them via `workspaceSM`.
+ *
+ * Each property is optional so the UI can render either the user-set value
+ * (when defined) or the documented default (when undefined).
+ */
+export const LatexFormatterSchema = z.enum(['latexindent', 'tex-fmt', 'none']);
+export type LatexFormatter = z.infer<typeof LatexFormatterSchema>;
+
+export const LatexdiffMathMarkupSchema = z.enum([
+  'off',
+  'whole',
+  'coarse',
+  'fine',
+]);
+export type LatexdiffMathMarkup = z.infer<typeof LatexdiffMathMarkupSchema>;
+
+export const LatexConfigValuesSchema = z.object({
+  workflowAutoCompile: z.boolean().optional(),
+  workflowAutoCompileTimeoutMs: z.number().int().min(10000).optional(),
+  latexdiffBetweenRounds: z.boolean().optional(),
+  latexdiffTimeoutMs: z.number().int().min(1000).max(80000).optional(),
+  latexdiffMathMarkup: LatexdiffMathMarkupSchema.optional(),
+  latexFormatter: LatexFormatterSchema.optional(),
+});
+export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
+
+/** Outbound: backend → frontend current LaTeX/compile/diff config values. */
+export const UpdateLatexConfigValuesMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES),
+  values: LatexConfigValuesSchema,
+});
+export type UpdateLatexConfigValuesMessage = z.infer<
+  typeof UpdateLatexConfigValuesMessageSchema
+>;
+
 // ============================================================
 // Inbound message schemas (frontend → backend)
 // ============================================================
@@ -727,6 +765,49 @@ const RunInstallCommandMessageSchema = z.object({
   installCommand: z.string().min(1),
 });
 
+// LaTeX/compile/diff config (storage-backed)
+const GetLatexConfigValuesMessageSchema = commandOnly(
+  CMD.GET_LATEX_CONFIG_VALUES,
+);
+/**
+ * Single-property write — frontend sends one value at a time. The discriminated
+ * shape lets the backend route to the right WorkspaceStateKey while keeping
+ * type-safety on the value. `value: undefined` clears the key (returns to
+ * default).
+ */
+const SetLatexConfigValueMessageSchema = z.discriminatedUnion('field', [
+  z.object({
+    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
+    field: z.literal('workflowAutoCompile'),
+    value: z.boolean().optional(),
+  }),
+  z.object({
+    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
+    field: z.literal('workflowAutoCompileTimeoutMs'),
+    value: z.number().int().min(10000).optional(),
+  }),
+  z.object({
+    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
+    field: z.literal('latexdiffBetweenRounds'),
+    value: z.boolean().optional(),
+  }),
+  z.object({
+    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
+    field: z.literal('latexdiffTimeoutMs'),
+    value: z.number().int().min(1000).max(80000).optional(),
+  }),
+  z.object({
+    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
+    field: z.literal('latexdiffMathMarkup'),
+    value: LatexdiffMathMarkupSchema.optional(),
+  }),
+  z.object({
+    command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
+    field: z.literal('latexFormatter'),
+    value: LatexFormatterSchema.optional(),
+  }),
+]);
+
 // Approval settings inbound messages
 const GetApprovalSettingsMessageSchema = commandOnly(CMD.GET_APPROVAL_SETTINGS);
 const SetBashApprovalEnabledMessageSchema = z.object({
@@ -768,6 +849,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,
     RunInstallCommandMessageSchema,
+    GetLatexConfigValuesMessageSchema,
+    ...SetLatexConfigValueMessageSchema.options,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,

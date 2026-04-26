@@ -13,6 +13,7 @@ import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared schemas
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
+  type LatexConfigValues,
   type LatexSettingsStatus,
 } from '@shared/schemas/settingsViewMessages';
 
@@ -431,6 +432,11 @@ export class LaTeXTab extends LitElement {
 
   @property({ type: Boolean }) loaded = false;
 
+  @property({ attribute: false })
+  configValues: LatexConfigValues = {};
+
+  @property({ type: Boolean, attribute: 'config-loaded' }) configLoaded = false;
+
   @state() private expandedGuides = new Set<string>();
 
   private toggleGuide(key: string): void {
@@ -750,10 +756,250 @@ export class LaTeXTab extends LitElement {
         </div>
 
         ${RECOMMENDED_SETTINGS.map((info) => this.renderSettingCard(info))}
+        ${this.renderCompileDiffSettings()}
+      </div>
+    `;
+  }
+
+  // ── Compile & Diff settings (TeXRA storage-backed) ──
+
+  private dispatchSetConfigValue<F extends LatexConfigField>(
+    field: F,
+    value: LatexConfigValueFor<F> | undefined,
+  ): void {
+    this.dispatchEvent(
+      createEvent('latex-set-config-value', {
+        field,
+        value,
+      }),
+    );
+  }
+
+  private renderCompileDiffSettings(): TemplateResult {
+    const cv = this.configValues;
+    return html`
+      <div class="section-header" style="margin-top:var(--spacing-large)">
+        <span class="codicon codicon-zap"></span>
+        Compile &amp; Diff
+      </div>
+      <div class="latex-description">
+        TeXRA-specific compile and diff behavior, persisted per workspace.
+        These were previously edited in <code>settings.json</code>; they now
+        live here.
+      </div>
+
+      ${this.renderBooleanSetting({
+        field: 'workflowAutoCompile',
+        label: 'Auto-compile after each round',
+        description:
+          'After a workflow writes .tex outputs, attempt to compile each root document (latexmk, falling back to pdflatex) in run storage.',
+        defaultValue: true,
+        currentValue: cv.workflowAutoCompile,
+      })}
+      ${this.renderNumberSetting({
+        field: 'workflowAutoCompileTimeoutMs',
+        label: 'Auto-compile timeout (ms)',
+        description:
+          'Per-file timeout for the post-workflow compile check. Minimum 10000.',
+        defaultValue: 120000,
+        currentValue: cv.workflowAutoCompileTimeoutMs,
+        min: 10000,
+      })}
+      ${this.renderBooleanSetting({
+        field: 'latexdiffBetweenRounds',
+        label: 'Generate diffs between consecutive rounds',
+        description:
+          'In addition to comparing each round to the original input, also generate diffs between consecutive agent rounds.',
+        defaultValue: false,
+        currentValue: cv.latexdiffBetweenRounds,
+      })}
+      ${this.renderNumberSetting({
+        field: 'latexdiffTimeoutMs',
+        label: 'latexdiff timeout (ms)',
+        description: 'Timeout for latexdiff invocations. Range 1000–80000.',
+        defaultValue: 10000,
+        currentValue: cv.latexdiffTimeoutMs,
+        min: 1000,
+        max: 80000,
+      })}
+      ${this.renderEnumSetting({
+        field: 'latexdiffMathMarkup',
+        label: 'latexdiff math markup',
+        description: 'Granularity of markup in displayed math environments.',
+        defaultValue: 'coarse',
+        currentValue: cv.latexdiffMathMarkup,
+        options: [
+          { value: 'off', label: 'off — suppress markup' },
+          { value: 'whole', label: 'whole — equation-level' },
+          { value: 'coarse', label: 'coarse — within equations (default)' },
+          { value: 'fine', label: 'fine — small changes inside equations' },
+        ],
+      })}
+      ${this.renderEnumSetting({
+        field: 'latexFormatter',
+        label: 'LaTeX formatter',
+        description:
+          '"none" disables formatting; "latexindent" requires Perl; "tex-fmt" is a Rust-based alternative.',
+        defaultValue: 'latexindent',
+        currentValue: cv.latexFormatter,
+        options: [
+          { value: 'latexindent', label: 'latexindent (default)' },
+          { value: 'tex-fmt', label: 'tex-fmt' },
+          { value: 'none', label: 'none' },
+        ],
+      })}
+    `;
+  }
+
+  private renderBooleanSetting(opts: {
+    field: 'workflowAutoCompile' | 'latexdiffBetweenRounds';
+    label: string;
+    description: string;
+    defaultValue: boolean;
+    currentValue: boolean | undefined;
+  }): TemplateResult {
+    const effective = opts.currentValue ?? opts.defaultValue;
+    const isCustom = opts.currentValue !== undefined;
+    return html`
+      <div class="setting-card">
+        <span
+          class="codicon setting-status-icon ${effective
+            ? 'is-set codicon-check'
+            : 'not-set codicon-circle-slash'}"
+        ></span>
+        <div class="setting-info">
+          <div class="setting-name">${opts.label}</div>
+          <div class="setting-description">${opts.description}</div>
+        </div>
+        <button
+          class="tab-action-btn"
+          @click=${() =>
+            this.dispatchSetConfigValue(opts.field, !effective)}
+          title="Toggle"
+        >
+          ${effective ? 'On' : 'Off'}
+        </button>
+        ${isCustom
+          ? html`<button
+              class="tab-action-btn"
+              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
+              title="Reset to default (${opts.defaultValue ? 'On' : 'Off'})"
+            >
+              <span class="codicon codicon-discard"></span>
+            </button>`
+          : nothing}
+      </div>
+    `;
+  }
+
+  private renderNumberSetting(opts: {
+    field: 'workflowAutoCompileTimeoutMs' | 'latexdiffTimeoutMs';
+    label: string;
+    description: string;
+    defaultValue: number;
+    currentValue: number | undefined;
+    min: number;
+    max?: number;
+  }): TemplateResult {
+    const effective = opts.currentValue ?? opts.defaultValue;
+    const isCustom = opts.currentValue !== undefined;
+    return html`
+      <div class="setting-card">
+        <span
+          class="codicon setting-status-icon ${isCustom
+            ? 'is-set codicon-edit'
+            : 'not-set codicon-circle-outline'}"
+        ></span>
+        <div class="setting-info">
+          <div class="setting-name">${opts.label}</div>
+          <div class="setting-description">${opts.description}</div>
+          <input
+            type="number"
+            min=${opts.min}
+            max=${opts.max ?? ''}
+            .value=${String(effective)}
+            @change=${(e: Event) => {
+              const raw = (e.target as HTMLInputElement).valueAsNumber;
+              if (Number.isNaN(raw)) return;
+              const clamped = Math.max(
+                opts.min,
+                opts.max !== undefined ? Math.min(opts.max, raw) : raw,
+              );
+              this.dispatchSetConfigValue(opts.field, clamped);
+            }}
+            style="margin-top:var(--spacing-small);width:140px;"
+          />
+        </div>
+        ${isCustom
+          ? html`<button
+              class="tab-action-btn"
+              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
+              title="Reset to default (${opts.defaultValue})"
+            >
+              <span class="codicon codicon-discard"></span>
+            </button>`
+          : nothing}
+      </div>
+    `;
+  }
+
+  private renderEnumSetting<F extends 'latexdiffMathMarkup' | 'latexFormatter'>(
+    opts: {
+      field: F;
+      label: string;
+      description: string;
+      defaultValue: LatexConfigValueFor<F>;
+      currentValue: LatexConfigValueFor<F> | undefined;
+      options: Array<{ value: LatexConfigValueFor<F>; label: string }>;
+    },
+  ): TemplateResult {
+    const effective = opts.currentValue ?? opts.defaultValue;
+    const isCustom = opts.currentValue !== undefined;
+    return html`
+      <div class="setting-card">
+        <span
+          class="codicon setting-status-icon ${isCustom
+            ? 'is-set codicon-edit'
+            : 'not-set codicon-circle-outline'}"
+        ></span>
+        <div class="setting-info">
+          <div class="setting-name">${opts.label}</div>
+          <div class="setting-description">${opts.description}</div>
+          <select
+            @change=${(e: Event) => {
+              const v = (e.target as HTMLSelectElement)
+                .value as LatexConfigValueFor<F>;
+              this.dispatchSetConfigValue(opts.field, v);
+            }}
+            style="margin-top:var(--spacing-small);"
+          >
+            ${opts.options.map(
+              (o) => html`
+                <option value=${o.value} ?selected=${o.value === effective}>
+                  ${o.label}
+                </option>
+              `,
+            )}
+          </select>
+        </div>
+        ${isCustom
+          ? html`<button
+              class="tab-action-btn"
+              @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
+              title="Reset to default (${opts.defaultValue})"
+            >
+              <span class="codicon codicon-discard"></span>
+            </button>`
+          : nothing}
       </div>
     `;
   }
 }
+
+type LatexConfigField = keyof LatexConfigValues;
+type LatexConfigValueFor<F extends LatexConfigField> = NonNullable<
+  LatexConfigValues[F]
+>;
 
 declare global {
   interface HTMLElementTagNameMap {
