@@ -101,8 +101,9 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
 In `RoundPersistedFlow.shouldContinueNextRound()`:
 
 - Add one clause: if `lastCompileResult.status === "failed"` and `WORKFLOW_REJECT_ON_COMPILE_FAILURE` is on, the round is marked rejected.
+- **`lastCompileResult` is the *final* compile status for the round, after any latexFixer pass.** If latexFixer was invoked and produced a clean compile, the result is `"ok"` and the round is *not* rejected — the user does not lose a slot for a successfully-repaired round. Only when latexFixer also fails (or wasn't invoked because `WORKFLOW_AUTO_FIX_COMPILE` is off, or the failure is a fragment-wrap failure per §6.3 step 4) does the status remain `"failed"` and trigger rejection.
 - The truncated compile log is injected into the next round's context. **Round-loop semantics on rejection: replace, not extend** — a rejected round consumes a slot from the user's requested round count, so total rounds (and total cost) are unchanged regardless of how many compile failures occur. The next round is therefore always the user's already-planned next round (carrying compile-log context); there is no separate "fix-only" round inserted on top.
-- Compile result stored in `shared.lastCompileResult` for the orchestrator to consume.
+- Final compile result stored in `shared.lastCompileResult` for the orchestrator to consume. Intermediate (pre-fixer) failures are not exposed to the round-decision clause to avoid double-counting.
 - No new node, no new metadata fields on `WorkflowFlowResult` for round-level decisions until UI consumes them.
 
 ### 6.6 Latexdiff bib quality
@@ -207,7 +208,7 @@ Each phase is independently shippable.
 2. **Diff location confirmation:** `<runDir>/diff/...` (real on-disk path under extension storage) — confirm this satisfies "real filesystem" and the diff is reachable from the eventual fixer pass. If the intent was actually "in the user's workspace," reopen. (Note: latexFixer in default mode operates on workspace files post-accept, so diff in shadow doesn't block it; this question matters for any future pre-accept shadow-mode fixer.)
 3. **Workspace PDF copy:** off entirely, or off-by-default with a setting (`WORKFLOW_COPY_PDF_TO_WORKSPACE`, gitignore-friendly subdir)?
 4. **Latexdiff `--only-changes` exact flag and version floor:** verify at implementation time.
-5. **latexFixer invocation timing:** post-accept (default; works with existing tools) vs. pre-accept shadow-mode (requires new run-storage-aware file tools or extending `read_file`/`edit_file` semantics). *Recommendation: post-accept now; defer shadow-mode until there's a measured reason.*
+5. **latexFixer invocation timing — DECIDED: post-accept.** Phase 6 wires latexFixer into the post-accept full-file failure path only. Pre-accept shadow-mode is explicitly deferred (§11) and requires new run-storage-aware file tools (or extending `read_file`/`edit_file` semantics) before it can be reopened. Phase 6 is therefore independently shippable as written.
 6. **`open_pdf` exposure:** keep PDF opening orchestrator-driven (auto-open on success / failure log on failure), or expose `open_pdf` as a tool latexFixer can call? *Recommendation: orchestrator-driven only in this phase; expose to latexFixer later if there's a clear use case.*
 
 ## 11. Out of scope / future work
