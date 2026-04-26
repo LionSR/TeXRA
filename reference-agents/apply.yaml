@@ -6,9 +6,6 @@ settings:
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex
-  prefills:
-    - <scratchpad>
-    - <scratchpad>
 
 prompts:
   systemPrompt: |
@@ -85,31 +82,7 @@ prompts:
 
   userRequest:
     - |
-      Apply all changes suggested in the inline annotations.
-
-      <scratchpad>
-      <annotation_analysis>
-      For each annotation, understand the issue and plan the fix:
-      \begin{enumerate}
-          \item Annotation: [text]
-              \begin{itemize}
-                  \item Location: [reference]
-                  \item Issue: [what is wrong or needed]
-                  \item Analysis: [work through if needed---derivations, reasoning, etc.]
-                  \item Fix: [what change to make]
-              \end{itemize}
-      \end{enumerate}
-      </annotation_analysis>
-
-      <implementation_plan>
-      All changes in document order:
-      \begin{enumerate}
-          \item [Location]: [Change]
-      \end{enumerate}
-      </implementation_plan>
-      </scratchpad>
-
-      Apply all changes and remove the original annotations:
+      Apply all changes suggested in the inline annotations and remove the original annotations.
 
       <latex_document>
       % DOCUMENT WITH CHANGES APPLIED
@@ -118,7 +91,7 @@ prompts:
     - |
       SECOND PHASE: Revise, condense, and finalize.
 
-      If extensive derivations were added in the first phase, revise them to match document level or +1 (unless instruction requests more detail).
+      If extensive derivations were added in the first phase, revise them to match the document's maturity level or +1 (unless the instruction requests more detail).
 
       Document Maturity Levels:
       \begin{itemize}
@@ -129,47 +102,7 @@ prompts:
           \item Level 5 - Publication Ready: Polished, journal-ready
       \end{itemize}
 
-      <scratchpad>
-      <document_assessment>
-      - Current document level: [1-5]
-      - Target level for revisions: [current or +1]
-      - Instruction requests more detail: [Yes / No]
-      </document_assessment>
-
-      <revision_plan>
-      \begin{enumerate}
-          \item Condensation targets (if derivations added):
-              \begin{itemize}
-                  \item [Location]: [Full derivation] $\rightarrow$ [Level-appropriate form]
-              \end{itemize}
-          \item Quality checks:
-              \begin{itemize}
-                  \item Notations defined before use
-                  \item Logical flow
-                  \item Smooth transitions
-              \end{itemize}
-      \end{enumerate}
-      </revision_plan>
-
-      <verification>
-      \begin{itemize}
-          \item All fixes correct: [Yes / Issues]
-          \item Logical flow preserved: [Yes / Issues]
-          \item Document complete: [Yes / Issues]
-      \end{itemize}
-      </verification>
-
-      <change_summary>
-      Summary of changes made:
-      \begin{enumerate}
-          \item [Location]: [What was changed and why]
-      \end{enumerate}
-
-      Comment style for documentation: [\criticize / \todo / \comment / %]
-      </change_summary>
-      </scratchpad>
-
-      Output the final revised document at appropriate level:
+      Verify before output: all fixes are correct, logical flow is preserved (no notation used before defined), and the document is complete. Match the document's existing comment style (\criticize / \todo / \comment / %) when annotating changes.
 
       <latex_document>
       % FINAL_REVISED_DOCUMENT
