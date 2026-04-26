@@ -152,11 +152,15 @@ jobs:
               - PR: #<PR-number>
               - <Related issues or review comments>
               ```
-            - **Labels**: always `follow-up`, plus exactly one `type:*` label
-              (`type:bug`, `type:feature`, `type:refactor`, `type:docs`, `type:chore`),
-              plus any `area:*` labels that match the parent PR's changed paths
-              (`area:agent`, `area:model`, `area:latex`, `area:progress`,
-              `area:webview`, `area:ci`, `area:deps`).
+            - **Labels**: always `follow-up`. Plus, when applicable:
+              - One type-equivalent: `bug`, `enhancement`, `tech-debt`, or `documentation`.
+              - Any matching `area:*` from the parent PR's changed paths:
+                `area:agent-runtime`, `area:model-handlers`, `area:progress-view`,
+                `area:latex-workflow`, `area:docs`, `area:webview`, `area:ci`, `area:deps`.
+              - One `risk:*` (`risk:low`, `risk:medium`, `risk:high`) reflecting blast radius.
+              - One `status:*` (`status:needs-triage`, `status:needs-validation`,
+                `status:ready-review`, `status:blocked-external`) reflecting current state.
+              - `priority:p0` only for blocker / data-loss / security follow-ups.
 
             **Umbrella vs flat decision.**
 
@@ -172,7 +176,8 @@ jobs:
                  - **Capture both `number` AND `id` from the response** — `id` is the
                    global node ID needed by sub_issue_write below.
               2. For each child, call `mcp__github__issue_write` (method=create) with
-                 the body, `follow-up` + one `type:*` + matching `area:*` labels.
+                 the body and labels (`follow-up` + applicable type/area/risk/status
+                 from the list above).
                  **Capture both `number` AND `id` from each child response.**
               3. For each child, attach to the umbrella:
                  `mcp__github__sub_issue_write` with method=`add`,

@@ -27,27 +27,29 @@ jobs:
           labels=()
 
           # Strip leading bracketed bot tag like "[codex] " before prefix matching
-          # so that "[codex] fix: ..." derives type:bug from the rest of the title.
+          # so that "[codex] fix: ..." derives bug from the rest of the title.
           stripped="${TITLE#\[*\] }"
           # Normalize Conventional Commits breaking-change marker so `feat!:` and
-          # `feat(scope)!:` are matched the same as `feat:` / `feat(scope):`.
+          # `feat(scope)!:` match the same as `feat:` / `feat(scope):`.
           stripped="${stripped/!:/:}"
 
-          # Type from conventional-commit prefix in title.
+          # Type from conventional-commit prefix in title. The repo uses flat
+          # type labels (bug / enhancement / tech-debt / documentation) rather
+          # than a `type:*` prefix, matching GitHub's default labels.
+          # chore/ci/test/style/build prefixes get no type label — those PRs
+          # rely on area labels alone.
           shopt -s nocasematch
           case "$stripped" in
             'fix:'*|'fix('*|'bug:'*)
-              labels+=('type:bug') ;;
+              labels+=('bug') ;;
             'feat:'*|'feat('*)
-              labels+=('type:feature') ;;
+              labels+=('enhancement') ;;
             'refactor:'*|'refactor('*|'perf:'*|'perf('*)
-              labels+=('type:refactor') ;;
+              labels+=('tech-debt') ;;
             'docs:'*|'docs('*)
-              labels+=('type:docs') ;;
+              labels+=('documentation') ;;
             'chore(deps'*|'build(deps'*)
-              labels+=('type:chore' 'area:deps') ;;
-            'chore:'*|'chore('*|'ci:'*|'ci('*|'test:'*|'test('*|'style:'*|'style('*|'build:'*|'build('*)
-              labels+=('type:chore') ;;
+              labels+=('area:deps') ;;
           esac
           shopt -u nocasematch
 
@@ -57,19 +59,23 @@ jobs:
           files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
           grep_files() { printf '%s\n' "$files" | grep -qE "$1"; }
 
-          # area:model is broader than agent/modelHandlers + model/, so check it first.
-          grep_files '^src/agent/(modelHandlers|modelRegistry)/' && labels+=('area:model') || true
-          grep_files '^src/model/' && labels+=('area:model') || true
-          # area:agent excludes the model-handler subdirs so PRs that only touch
-          # modelHandlers don't double-tag as both area:agent and area:model.
+          # area:model-handlers covers handlers + registry + the src/model/ tree.
+          # Check it before area:agent-runtime so PRs that touch only modelHandlers
+          # don't double-tag.
+          grep_files '^src/agent/(modelHandlers|modelRegistry)/' && labels+=('area:model-handlers') || true
+          grep_files '^src/model/' && labels+=('area:model-handlers') || true
+          # area:agent-runtime: src/agent/ (excluding modelHandlers/modelRegistry)
+          # plus src/tools/ (per the label description: "...delegation, tools...").
           if printf '%s\n' "$files" | grep -E '^src/agent/' | grep -qvE '^src/agent/(modelHandlers|modelRegistry)/'; then
-            labels+=('area:agent')
+            labels+=('area:agent-runtime')
           fi
-          grep_files '^src/latex/' && labels+=('area:latex') || true
-          grep_files '^src/progressView/' && labels+=('area:progress') || true
+          grep_files '^src/tools/' && labels+=('area:agent-runtime') || true
+          grep_files '^src/latex/' && labels+=('area:latex-workflow') || true
+          grep_files '^src/progressView/' && labels+=('area:progress-view') || true
           grep_files '^src/(webview|settingsView)/' && labels+=('area:webview') || true
+          grep_files '^(docs/|README\.md|CHANGELOG\.md|resources/walkthroughs/)' && labels+=('area:docs') || true
           grep_files '^\.github/workflows/' && labels+=('area:ci') || true
-          # Build/lint/tsconfig at the repo root also belong to area:ci per labels.yml.
+          # Build/lint/tsconfig at the repo root also belong to area:ci.
           grep_files '^(esbuild|vite|webpack|eslint|prettier|babel|jest|rollup)\.config\.(mjs|cjs|js|ts)$' && labels+=('area:ci') || true
           grep_files '^tsconfig(\..+)?\.json$' && labels+=('area:ci') || true
           grep_files '^(package(-lock)?\.json|\.github/dependabot\.yml)$' && labels+=('area:deps') || true
@@ -82,18 +88,19 @@ jobs:
           # Dedupe.
           mapfile -t unique < <(printf '%s\n' "${labels[@]}" | sort -u)
 
-          # type:* is mutually exclusive. If we computed a desired type, strip any
-          # currently-applied type:* that doesn't match it — this handles retitles
-          # like `chore:` -> `fix:` without leaving stale labels behind. If we
-          # computed no type (bare title), leave existing type:* alone so a manual
-          # override is preserved. area:* is multi-select; never strip those.
+          # Type labels (bug/enhancement/tech-debt/documentation) are mutually
+          # exclusive in practice. If we computed a desired type, strip any of
+          # the other three currently applied so retitles like `chore:` -> `fix:`
+          # don't leave stale labels. If we computed no type (bare title or chore),
+          # leave existing type labels alone so a manual override is preserved.
+          # area:* and risk:*/status:*/etc. are multi-select; never strip those.
           desired_type=""
           for l in "${unique[@]}"; do
-            case "$l" in type:*) desired_type="$l"; break ;; esac
+            case "$l" in bug|enhancement|tech-debt|documentation) desired_type="$l"; break ;; esac
           done
           if [ -n "$desired_type" ]; then
             current_types=$(gh pr view "$PR" --repo "$REPO" --json labels \
-              --jq '.labels[].name | select(startswith("type:"))')
+              --jq '.labels[] | select(.name == "bug" or .name == "enhancement" or .name == "tech-debt" or .name == "documentation") | .name')
             while IFS= read -r t; do
               [ -z "$t" ] && continue
               if [ "$t" != "$desired_type" ]; then
