@@ -30,11 +30,13 @@ const LATEX_CONFIG_VERSION = 2;
 
 /**
  * Legacy agent files that should be deleted from GlobalStorage.
- * These agents have moved to remote-only and should not exist locally.
+ * These agents have been removed or renamed and should not exist locally.
  */
 const LEGACY_AGENT_FILES = [
   'agents/generic.yaml',
   'agents/generic_multiple.yaml',
+  'agents/write/paper2cover.yaml',
+  'agents/write/write_slide.yaml',
 ];
 
 /**
@@ -78,10 +80,12 @@ export async function copyDefaultAgents(
     GlobalStateKey.LAST_KNOWN_VERSION,
   );
 
-  if (
-    currentVersion === lastKnownVersion &&
-    !(await hasMissingBundledAgentFiles(context))
-  ) {
+  const needsCopy =
+    currentVersion !== lastKnownVersion ||
+    (await hasMissingBundledAgentFiles(context));
+
+  if (!needsCopy) {
+    await deleteLegacyAgentFiles();
     return;
   }
 
