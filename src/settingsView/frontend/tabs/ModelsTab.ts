@@ -36,9 +36,10 @@ export class ModelsTab extends LitElement {
       /* max-width and centering provided by .tab-content-container */
 
       .models-tab-hint {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--spacing-medium);
+        display: grid;
+        grid-template-columns: auto 1fr;
+        column-gap: var(--spacing-medium);
+        row-gap: var(--spacing-small);
         padding: var(--spacing-medium);
         margin-bottom: var(--spacing-large);
         border: var(--border-thin) solid
@@ -48,18 +49,10 @@ export class ModelsTab extends LitElement {
       }
 
       .models-tab-hint .codicon-info {
-        flex-shrink: 0;
+        grid-row: 1 / span 3;
         font-size: var(--font-size-lg);
         color: var(--vscode-editorInfo-foreground, #3794ff);
         margin-top: 2px;
-      }
-
-      .models-tab-hint-body {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-small);
       }
 
       .models-tab-hint-title {
@@ -79,30 +72,6 @@ export class ModelsTab extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
       }
-
-      .models-tab-hint-link {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        padding: var(--spacing-tiny) var(--spacing-small);
-        background: none;
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius-small);
-        color: var(--vscode-textLink-foreground);
-        font: inherit;
-        font-size: var(--font-size-sm);
-        cursor: pointer;
-      }
-
-      .models-tab-hint-link:hover {
-        background: var(--vscode-list-hoverBackground);
-        border-color: var(--vscode-focusBorder);
-      }
-
-      .models-tab-hint-link:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
-        outline-offset: 1px;
-      }
     `,
   ];
 
@@ -117,12 +86,20 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) helperModel = '';
   @property({ type: Boolean }) preferShortModelNames = false;
 
-  private scrollToSection(tagName: string): void {
+  private scrollToSection(
+    tagName: 'api-access-section' | 'provider-key-list',
+  ): void {
     const el = this.shadowRoot?.querySelector(tagName);
     if (el instanceof HTMLElement) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
+
+  private readonly handleScrollToApiAccess = (): void =>
+    this.scrollToSection('api-access-section');
+
+  private readonly handleScrollToApiConfig = (): void =>
+    this.scrollToSection('provider-key-list');
 
   private renderTabHint(): TemplateResult | typeof nothing {
     if (this.providerKeyStatuses.length === 0) {
@@ -136,31 +113,27 @@ export class ModelsTab extends LitElement {
 
     const accessJump = this.authenticated
       ? html`<button
-          class="models-tab-hint-link"
-          @click=${() => this.scrollToSection('api-access-section')}
+          class="tab-action-btn"
+          @click=${this.handleScrollToApiAccess}
         >
           Model Access
         </button>`
       : nothing;
 
     return html`
-      <div class="models-tab-hint" role="note">
+      <div class="models-tab-hint">
         <span class="codicon codicon-info"></span>
-        <div class="models-tab-hint-body">
-          <div class="models-tab-hint-title">
-            Looking for API key settings?
-          </div>
-          <div class="models-tab-hint-description">${description}</div>
-          <div class="models-tab-hint-actions">
-            ${accessJump}
-            <button
-              class="models-tab-hint-link"
-              @click=${() => this.scrollToSection('provider-key-list')}
-            >
-              <span class="codicon codicon-key"></span>
-              Jump to API Configuration
-            </button>
-          </div>
+        <div class="models-tab-hint-title">Looking for API key settings?</div>
+        <div class="models-tab-hint-description">${description}</div>
+        <div class="models-tab-hint-actions">
+          ${accessJump}
+          <button
+            class="tab-action-btn"
+            @click=${this.handleScrollToApiConfig}
+          >
+            <span class="codicon codicon-key"></span>
+            Jump to API Configuration
+          </button>
         </div>
       </div>
     `;
