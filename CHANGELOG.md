@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **GPT-5.5 Pro** — OpenAI's GPT-5.5 Pro (`gpt55pro`) is now available in the default lineup. It extends GPT-5.5 with a 1.05M-token context window and `xhigh` default reasoning effort for the hardest planning, long-horizon, and large-codebase tasks. Premium pricing ($30/M input, $180/M output) — reach for it when GPT-5.5 isn't enough; stick with `gpt55` or `gpt54` for everyday work.
+- **GPT-5.5 Pro** — OpenAI's GPT-5.5 Pro (`gpt55pro`) is now available in the model catalog as an opt-in choice for the hardest planning, long-horizon, and large-codebase tasks. It extends GPT-5.5 with a 1.05M-token context window and `xhigh` default reasoning effort. Premium pricing ($30/M input, $180/M output) and Ultra-tier only on the relay — enable it from Settings → Models when GPT-5.5 isn't enough.
 
 ## [0.37.5] - 2026-04-24
 
