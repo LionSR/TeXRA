@@ -1356,6 +1356,51 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  it('skips assistant prefill message when prefill is empty', async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'anthropic-prefill-empty-'),
+    );
+    const outputPath = path.join(tempDir, 'r0', 'output.xml');
+
+    try {
+      const handler = createAnthropicHandler({
+        supportsAssistantPrefill: true,
+      });
+      stubHandlerForTest(handler);
+
+      const agentSetting = AgentSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'latex_document',
+        endTag: '</latex_document>',
+        outputExt: 'tex',
+      });
+      const userMessage: MessageParam = {
+        role: 'user',
+        content: [{ type: 'text', text: 'revise the document' }],
+      };
+      const messages: MessageParam[] = [userMessage];
+      const workspaceState = AgentWorkspaceState.create();
+
+      const [isComplete, updatedMessages] =
+        await handler.initializeOutputAndPrefill(
+          {} as AgentConfig,
+          agentSetting,
+          messages,
+          workspaceState,
+          pathToLocation(outputPath),
+          '',
+        );
+
+      assert.equal(isComplete, false);
+      assert.equal(fs.existsSync(outputPath), false);
+      assert.equal(workspaceState.assembly.accumulatedOutput, '');
+      assert.equal(updatedMessages.length, 1);
+      assert.equal(updatedMessages.at(-1)?.role, 'user');
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('ModelHandlerAnthropic pre-message_start error handling', () => {

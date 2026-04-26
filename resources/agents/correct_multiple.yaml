@@ -6,6 +6,10 @@ settings:
   documentTag: latex_documents
   endTag: </latex_documents>
   outputExt: tex
+  # Override parent's singular-tag prefill so the model is primed with the
+  # plural <latex_documents> opening that this multi-document agent expects.
+  prefills:
+    - "Here are the revised \\LaTeX documents. <latex_documents>"
 
 prompts:
   systemPrompt: |
@@ -46,10 +50,10 @@ prompts:
     Output updated versions of all \LaTeX documents with targeted corrections that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
 
     <latex_documents>
-    <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+    <document name="{OUTPUT_FILES_ORDER[0]}">
     % 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
     </document>
-    <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+    <document name="{OUTPUT_FILES_ORDER[1]}">
     % 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
     </document>
     ... (repeat for all output files)

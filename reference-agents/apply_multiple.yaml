@@ -93,10 +93,10 @@ prompts:
       Apply all changes suggested in the inline annotations across all documents and remove the original annotations. Watch for cross-document dependencies (shared results/definitions, consistent notation).
 
       <latex_documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{OUTPUT_FILES_ORDER[0]}">
       % DOCUMENT_1 WITH CHANGES APPLIED
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      <document name="{OUTPUT_FILES_ORDER[1]}">
       % DOCUMENT_2 WITH CHANGES APPLIED
       </document>
       ... (repeat for all output files)
@@ -121,10 +121,10 @@ prompts:
       Output the final revised documents at appropriate levels:
 
       <latex_documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{OUTPUT_FILES_ORDER[0]}">
       % FINAL_DOCUMENT_1
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      <document name="{OUTPUT_FILES_ORDER[1]}">
       % FINAL_DOCUMENT_2
       </document>
       ... (repeat for all output files)

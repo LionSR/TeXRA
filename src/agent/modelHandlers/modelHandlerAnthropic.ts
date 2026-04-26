@@ -1634,6 +1634,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ): Promise<[boolean, MessageParam[]]> {
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       if (this.capabilities.supportsAssistantPrefill) {
+        if (prefill.length === 0) {
+          // Anthropic rejects assistant messages with empty text content blocks.
+          // When an agent declares no prefill, skip pushing the assistant turn
+          // entirely so the model produces its response from a clean slate.
+          this.logger.debug('No prefill provided; skipping assistant prefill message');
+          return [false, messages];
+        }
         this.logger.debug(`Adding prefill message:\n${prefill}`);
         workspaceState.assembly.accumulatedOutput = `${prefill}\n`;
         await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
