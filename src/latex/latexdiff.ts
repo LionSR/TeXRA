@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import * as logger from '@agent/core/logger';
-import { getWorkspaceState } from '@agent/core/stateStore';
+import { tryGetWorkspaceState } from '@agent/core/stateStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { formatError, toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -56,10 +56,20 @@ export class LaTeXdiffService {
     );
   }
 
+  /**
+   * Resolve the latexdiff timeout from workspace state. Tolerant of
+   * pre-initialization: `LaTeXdiffService` is instantiated at module scope in
+   * `commands/latex/latexdiffCommands.ts` and `tools/approval/latexPreview.ts`,
+   * which evaluate before `initPlatform()` runs in `activate()`. A throwing
+   * `getWorkspaceState()` would prevent the extension from activating; falling
+   * back to the documented default keeps construction safe.
+   */
   private getLatexdiffTimeout(): number {
-    return getWorkspaceState().get<number>(
-      WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-      DEFAULT_LATEXDIFF_TIMEOUT_MS,
+    return (
+      tryGetWorkspaceState()?.get<number>(
+        WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+        DEFAULT_LATEXDIFF_TIMEOUT_MS,
+      ) ?? DEFAULT_LATEXDIFF_TIMEOUT_MS
     );
   }
 
