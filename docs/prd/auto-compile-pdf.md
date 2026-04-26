@@ -63,7 +63,7 @@ After each round, in `finalOutputOpener.ts`:
 - Write all diff `.tex` and diff build artifacts to `<runDir>/diff/r<round>/...`.
 - Remove `buildSiblingDiffLocation`'s "next to the base" placement.
 - Verify `MediaExtractionNode` mirrors `.bib`, `.cls`, `.sty`, and `\input` targets into `<runDir>/diff/r<round>/` so latexmk resolves them.
-- The latexFixer agent's `compile_tex` tool operates on real disk paths — no virtual filesystems.
+- All compile invocations (deterministic compileCheck and any latexFixer-triggered `bash latexmk` run) operate on real disk paths — `<runDir>/...` for shadow artifacts, workspace paths post-accept. No virtual filesystems.
 
 ### 6.3 Fragment compile (deterministic wrap)
 
