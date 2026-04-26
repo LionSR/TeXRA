@@ -288,6 +288,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
 
     const item: ModelSelectionItem = {
       name,
+      label: config.label,
       provider: config.provider,
       enabled: enabledSet.has(name),
       deprecated: config.deprecated ?? false,
@@ -359,6 +360,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
     return {
+      // Lifecycle: webview signals it's mounted; populate every tab's
+      // initial data via the single `sendAllData` source of truth.
+      [SETTINGS_VIEW_COMMANDS.WEBVIEW_READY]: () =>
+        this.withActiveWebview((w) => this.sendAllData(w)),
+
       // Navigation handlers
       [SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS]: () =>
         this.handleOpenVscodeSettings(),

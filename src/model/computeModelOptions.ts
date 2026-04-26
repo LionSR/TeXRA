@@ -19,6 +19,10 @@ import {
   FAST_FIRST_RESPONSE_HINT,
   isFastFirstResponseModel,
 } from '@shared/constants/fastModels';
+import {
+  EXPENSIVE_MODEL_HINT,
+  isExpensiveModel,
+} from '@shared/constants/expensiveModels';
 
 // Local imports - sibling
 import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
@@ -94,16 +98,21 @@ export function formatCost(
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
+const prefixHint = (prefix: string, base: string): string =>
+  base ? `${prefix} | ${base}` : prefix;
+
 /**
- * Build the model tooltip string, prepending the "fast first response" nudge
- * for cheap non-reasoning variants so free-tier users can spot snappy options.
+ * Build the model tooltip string, prepending an attention-grabbing nudge
+ * for unusually cheap fast options or unusually expensive Pro variants.
+ * Expensive takes precedence — no current model is both.
  */
 function buildModelHint(config: ModelConfig): string {
   const base = hint(config);
-  if (!isFastFirstResponseModel(config.inputPrice)) return base;
-  return base
-    ? `${FAST_FIRST_RESPONSE_HINT} | ${base}`
-    : FAST_FIRST_RESPONSE_HINT;
+  if (isExpensiveModel(config.provider, config.name))
+    return prefixHint(EXPENSIVE_MODEL_HINT, base);
+  if (isFastFirstResponseModel(config.inputPrice))
+    return prefixHint(FAST_FIRST_RESPONSE_HINT, base);
+  return base;
 }
 
 /** Check if a model is available via personal API keys. */
@@ -216,7 +225,7 @@ async function buildModelOptionData(
   const available = await isModelAvailable(model, config, ctx);
   return {
     value: model,
-    label: model,
+    label: config.label,
     provider: config.provider,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
@@ -237,7 +246,7 @@ export function buildBasicModelOptionsData(): ModelOptionData[] {
     if (!config) return { value: model, label: model };
     return {
       value: model,
-      label: model,
+      label: config.label,
       provider: config.provider,
       context: formatContext(config.contextWindow),
       cost: formatCost(config.inputPrice, config.outputPrice),

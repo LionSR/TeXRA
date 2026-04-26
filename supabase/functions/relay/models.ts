@@ -8,7 +8,7 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
-import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.5.0';
+import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.6.0';
 
 // =============================================================================
 // Types

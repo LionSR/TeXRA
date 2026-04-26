@@ -43,6 +43,7 @@ import {
   RerunAgentMessageSchema,
   RestoreAgentMessageSchema,
 } from './historyViewMessages';
+import { WebviewReadyMessageSchema } from './commonViewMessages';
 import { commandOnly } from './messageFactories';
 import {
   GetProfileDataMessageSchema,
@@ -164,6 +165,7 @@ export type ReasoningLevel = z.infer<typeof ReasoningLevelSchema>;
 
 export const ModelSelectionItemSchema = z.object({
   name: z.string(),
+  label: z.string(),
   provider: z.string(),
   enabled: z.boolean(),
   deprecated: z.boolean(),
@@ -750,6 +752,8 @@ const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
   'command',
   [
+    // Lifecycle
+    WebviewReadyMessageSchema,
     // Navigation messages
     OpenVscodeSettingsMessageSchema,
     // Tool dashboard messages
