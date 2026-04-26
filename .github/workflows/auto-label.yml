@@ -2,7 +2,7 @@ name: Auto-label PR
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -73,6 +73,26 @@ jobs:
 
           # Dedupe.
           mapfile -t unique < <(printf '%s\n' "${labels[@]}" | sort -u)
+
+          # type:* is mutually exclusive. If we computed a desired type, strip any
+          # currently-applied type:* that doesn't match it — this handles retitles
+          # like `chore:` -> `fix:` without leaving stale labels behind. If we
+          # computed no type (bare title), leave existing type:* alone so a manual
+          # override is preserved. area:* is multi-select; never strip those.
+          desired_type=""
+          for l in "${unique[@]}"; do
+            case "$l" in type:*) desired_type="$l"; break ;; esac
+          done
+          if [ -n "$desired_type" ]; then
+            current_types=$(gh pr view "$PR" --repo "$REPO" --json labels \
+              --jq '.labels[].name | select(startswith("type:"))')
+            while IFS= read -r t; do
+              [ -z "$t" ] && continue
+              if [ "$t" != "$desired_type" ]; then
+                gh pr edit "$PR" --repo "$REPO" --remove-label "$t" 2>&1 | sed "s/^/[remove $t] /" || true
+              fi
+            done <<< "$current_types"
+          fi
 
           # Apply each label individually so a single missing label doesn't abort the rest.
           for l in "${unique[@]}"; do
