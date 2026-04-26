@@ -710,6 +710,235 @@ means.
 
 ---
 
+## Settings — Cross-tab consistency
+
+The team-first launcher only works if the Settings view itself reads as one
+coherent surface. Today the eight tabs (Memory, History, Models, Agents,
+Multi-Agent, LaTeX, Tools, Git) diverge in vocabulary, save model, action
+placement, section headers, empty states, confirmation behavior, and reset
+affordance. This PRD defines the rules every tab must follow.
+
+### Vocabulary
+
+| Canonical term                         | Replaces                                                                                                                                                                                                                                                         |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Team                                   | "agent mode preset", "preset" (display surface only — schema name `AgentModePresetSchema` is renamed to `TeamSchema`; storage key `WorkspaceStateKey.CUSTOM_AGENT_PRESETS` keeps its name to avoid migration churn but is referred to as "custom teams" in copy) |
+| Lead                                   | the orchestrator entry of a team                                                                                                                                                                                                                                 |
+| Specialist                             | a tool-use agent without delegation                                                                                                                                                                                                                              |
+| Workflow                               | a workflow agent                                                                                                                                                                                                                                                 |
+| Setup                                  | the privileged onboarding agent role                                                                                                                                                                                                                             |
+| Auto-approve subagent steps            | "Super YOLO", "auto-approve delegated tasks" (rename internal signal `superYoloEnabled` → `autoApproveSubagentSteps` in `SettingsApp.ts`)                                                                                                                        |
+| Agents tab "Tool Use" sub-tab          | renamed to **"Tool-Use Agents"** to disambiguate from the Tools tab (`AgentsTab.ts:259`)                                                                                                                                                                         |
+| Tools tab "Memory & Workflow" category | renamed to **"Workflow tools"** to disambiguate from the Memory tab (`ToolsTab.ts:66`)                                                                                                                                                                           |
+
+`AgentsTab.ts:269` ("Save current agent configuration as a preset") and
+similar tooltips are updated to use "team" everywhere the user sees them.
+The schema rename happens in one commit; tooltips and labels in another.
+
+### Save model
+
+One rule: **every toggle saves immediately on change; every named entity
+(team, custom agent, GitHub token) is saved through an explicit modal**.
+
+Today's outlier is the Agents tab `Save Preset` button
+(`AgentsTab.ts:225–227, 268–272`), which conflates "edit a list" with
+"persist a named entity". This PRD already removes that button from the
+Agents tab. The replacement flows are explicit (launcher footer's `Save as
+new team`, Multi-Agent tab's `+ New team` and `+ Save current launcher
+state`), each opening a modal that takes a name, description, and icon.
+
+No tab has a footer Save button. No tab buffers changes. Every other tab
+(Memory toggle, Models keys, Tools approvals, Git author, LaTeX apply
+buttons, Multi-Agent coordination toggles) is already immediate-on-change
+and stays that way.
+
+### Action placement
+
+Every tab follows the same rule: **primary action in the tab header, on
+the right; row-level actions on each row, on the right**.
+
+| Today                                                                         | After                                                                                     |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| AgentsTab header right: `Save Preset` (removed), `From Template`, `New Agent` | header right: `+ New agent`, `+ From template`                                            |
+| MultiAgentTab: card-level delete on hover only (`MultiAgentTab.ts:288`)       | card-level `Use` / `Edit` / `Duplicate` / `Delete` always visible (delete still confirms) |
+| LaTeXTab: per-card `Apply` (right) and `Reset` (right)                        | unchanged — already follows the rule                                                      |
+| ToolsTab: `Re-check` button at top right                                      | unchanged                                                                                 |
+| ModelsTab: per-row toggles                                                    | unchanged                                                                                 |
+| Memory / History tabs: scattered                                              | header right gets a single primary action (`+ New memory`, `Clear all`)                   |
+
+Buttons in row-actions read primary → destructive left-to-right with
+spacing token `var(--spacing-medium)` between them. Destructive actions
+use the same VS Code `error` foreground regardless of tab.
+
+### Section headers
+
+One pattern, used everywhere a tab has more than one logical group of
+controls: small uppercase, 0.5px letter-spacing, `border-bottom` on the
+secondary border color, font-size token. This is the existing
+`LaTeXTab.ts:339` / `ToolsTab.ts:183` pattern; it becomes the project
+default and replaces the `<h3>` style in `MultiAgentTab.ts:458, 470` and
+the bespoke `.section-title` in `GitTab.ts:76`.
+
+The shared style ships as `.section-header` in
+`src/settingsView/frontend/styles.ts` (the file already exists, currently
+66 lines for `.settings-header` only). Tab-local definitions of
+`.section-header`, `.category-header`, and `.section-title` are deleted.
+
+### Empty states
+
+Every tab that can be empty (Memory, History, Multi-Agent custom group,
+Agents custom group) renders the same shape: centered icon, one short
+sentence, one inline action.
+
+```
+        ┌─────────────────────────────────┐
+        │                                 │
+        │              📭                 │
+        │                                 │
+        │   No custom teams yet.          │
+        │   [+ Build your first team]     │
+        │                                 │
+        └─────────────────────────────────┘
+```
+
+The shared component is `<settings-empty-state icon=… text=… action=…>`
+in `src/settingsView/frontend/components/`. LaTeX and Tools loading
+spinners are kept distinct (loading is not empty); they get a shared
+`<settings-loading-state label=…>` partner. Tabs that cannot be empty
+(Models, Agents built-in group, Multi-Agent built-in group) do not adopt
+either.
+
+### Confirmation dialogs for destructive actions
+
+Today, deletes happen instantly. This is the highest footgun-per-pixel in
+the whole settings view. The rule: **every destructive action behind an
+explicit "Delete" / "Remove" / "Reset" / "Clear" verb confirms**.
+
+| Action                 | Today                                | After                                                                                             |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| Delete custom team     | instant (`MultiAgentTab.ts:332–337`) | `vscode.window.showWarningMessage('Delete team {name}?', { modal: true }, 'Delete')`              |
+| Delete custom agent    | instant                              | same modal pattern                                                                                |
+| Delete memory item     | instant                              | same modal pattern                                                                                |
+| Reset LaTeX setting    | instant (`LaTeXTab.ts:689`)          | inline confirm: button label flips to "Confirm reset" for 3s on first click; second click commits |
+| Remove GitHub token    | instant                              | modal `'Remove GitHub token? You will need to add it again to use Git features.'`                 |
+| Clear all history      | already confirmed                    | unchanged                                                                                         |
+| Reset agents directory | already confirmed                    | unchanged                                                                                         |
+
+The inline-confirm pattern (button flips for 3s) is used for low-stakes
+resets (LaTeX setting, code style); the modal is used for state the user
+cannot easily reconstruct (custom team membership, custom agent YAML,
+saved memory, GitHub token).
+
+### Reset to default affordance
+
+Every setting that has a default gets a small revert icon
+(`codicon-discard`) shown next to the current value when it differs from
+the default. Hovering reveals a tooltip with the default. Clicking
+applies the inline-confirm pattern (flips to `Confirm reset` for 3s).
+
+Tabs that gain this affordance: Multi-Agent (per coordination toggle),
+Models (per model on/off), Tools (per approval toggle), Git (mark commits
+toggle). Tabs that already have it (LaTeX, Agents directory) keep their
+flow but use the same icon and confirm pattern.
+
+### Direct deep-linking to tabs
+
+Today, the `SET_TAB` message (`SettingsApp.ts:246`) supports an explicit
+`tabIndex` and an Agents-only `agentSubTab`. After this PRD, every tab
+declares a stable string id (`memory`, `history`, `models`, `agents`,
+`multi-agent`, `latex`, `tools`, `git`) and `SET_TAB` accepts the id
+plus an optional sub-section anchor (`agents:tool-use`,
+`multi-agent:custom-teams`, `models:helper`). Existing numeric `tabIndex`
+is supported during one minor-version migration window.
+
+Concrete deep links the launcher needs:
+
+- `multi-agent` (when the user clicks `+ Build a new team` from the team
+  picker)
+- `multi-agent:custom-teams` (when L2 `Save as new team` completes — the
+  view scrolls to the new team's card)
+- `agents:tool-use` (when the user clicks `Manage agents →` in the team
+  editor)
+- `models` (when the setup agent finishes credential setup and offers to
+  pick a default model)
+
+---
+
+## Settings — Other tabs
+
+The team-first launcher should not creep into tabs whose responsibilities
+are orthogonal. Explicit scope rules close the audit's "PRD impact" open
+questions:
+
+### Models tab — global, not per-team
+
+Models are a **global** setting, not a per-team one. The Models tab keeps
+its current scope: API keys, per-model on/off toggles, helper-model
+choice. Teams do not pin a model. The launcher's model dropdown reads
+from the same global enabled-models list regardless of team.
+
+Rationale: models cross-cut domains (a Mathematician team may want Claude
+or Gemini depending on the task), and per-team model lists explode the
+configuration surface. Power users who want a model preference per team
+can store it as a domain tag in the team and a future PRD can revisit.
+
+### Memory tab — session, not per-team
+
+Memory is **session-scoped** today (Markdown notes the user can attach to
+any run). Teams do not partition memory; switching teams mid-session
+preserves memory. The Memory tab is unchanged.
+
+Rationale: memory is the user's project context, not the team's. A
+Mathematician working on the same paper as a Physicist team-mate should
+share notes.
+
+### Tools tab — global tool registry, not per-team
+
+The Tools tab continues to reflect global tool availability and global
+approval toggles. Teams do not whitelist tools; the per-agent tool list
+inside each YAML is the authoritative scope.
+
+Rationale: tools are a security surface (`bash`, `send_to_terminal`,
+GitHub token use). A per-team whitelist would split that surface across
+many teams and weaken auditability. The Tools tab stays the single place
+where the user reasons about what TeXRA can run on their machine.
+
+### History tab — gains a team filter
+
+History adds one filter chip alongside the existing search box: `Team`,
+which lists every team the user has run in. Default is "All teams".
+Selecting a team filters the list. This is the only History change.
+
+Rationale: once teams are first-class, a user who has run Mathematician
+sessions and Physicist sessions in the same workspace will want to see
+each separately without text-searching.
+
+### Git tab — unchanged
+
+Git settings (commit author, GitHub token, PR subscriptions) are
+team-independent. The Git tab is unchanged.
+
+### LaTeX tab — unchanged
+
+LaTeX dependencies and recommended VS Code settings apply uniformly. The
+LaTeX tab is unchanged. The setup agent's environment-probing is the
+only thing that writes here, and it does so through the same
+`update_config` allowlist.
+
+### Codex settings live with Codex (Models, not Tools)
+
+Today Codex has model-like settings (sandbox mode, reasoning effort) in
+the Tools tab (`ToolsTab.ts:332–349`). They move to the Models tab under
+a Codex sub-section when Codex is the helper model. The Tools tab keeps
+only the bash approval toggle and the tool-availability list.
+
+Rationale: users expect "what model" and "how does that model behave" to
+sit together. Codex's executable surface (the `codex` binary) remains in
+Tools as a tool entry; its model behaviour (sandbox/effort) lives where
+the user picks models.
+
+---
+
 ## Data model
 
 ### Agent metadata
@@ -982,49 +1211,217 @@ your enabled agents."_
 
 ## Implementation surface
 
-| Concern                                                    | File                                                                                        |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `agentRole` field on agent YAMLs                           | `resources/agents/*.yaml`, `resources/tool_use_agents/*.yaml`, `reference-agents/**/*.yaml` |
-| `agentRole` derivation + `AgentEntry.ref()`                | `src/agent/index/agentRegistry.ts`                                                          |
-| Team schema, built-in records, migration                   | `src/shared/schemas/agentPresets.ts`                                                        |
-| Custom team CRUD handlers                                  | `src/settingsView/handlers/agentHandlers.ts`                                                |
-| Multi-Agent tab grid + team editor                         | `src/settingsView/frontend/tabs/MultiAgentTab.ts`                                           |
-| Agents tab role badges, "Used by teams", setup-locked rows | `src/settingsView/frontend/tabs/AgentsTab.ts`, `AgentSelectionPanel.ts`                     |
-| Launcher team picker + agent grouped picker                | `src/webview/frontend/components/InstructionPanel.ts`                                       |
-| Grouped option rendering (team-aware)                      | `src/shared/utils/selectTemplates.ts`                                                       |
-| Launcher persisted state + session override                | `src/shared/schemas/mainView.ts`, `src/webview/frontend/MainApp.ts`                         |
-| First-run team selection + welcome banner                  | `src/webview/frontend/MainApp.ts`, `src/commands/setup/setupAssistantCommand.ts`            |
-| Setup auto-promotion follow-up                             | `src/commands/setup/setupAssistantCommand.ts`                                               |
-| Effective-roster dispatch payload to lead                  | `src/agent/runtime/` (lead receives `effectiveRoster: AgentRef[]` in its delegate context)  |
-| Status-bar pill (unchanged)                                | `src/extension.ts:108–112`                                                                  |
-| Walkthrough (unchanged)                                    | `package.json` `contributes.walkthroughs.texra.gettingStarted`                              |
+| Concern                                                    | File                                                                                                                                          |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agentRole` field on agent YAMLs                           | `resources/agents/*.yaml`, `resources/tool_use_agents/*.yaml`, `reference-agents/**/*.yaml`                                                   |
+| `agentRole` derivation + `AgentEntry.ref()`                | `src/agent/index/agentRegistry.ts`                                                                                                            |
+| Team schema, built-in records, migration                   | `src/shared/schemas/agentPresets.ts`                                                                                                          |
+| Custom team CRUD handlers                                  | `src/settingsView/handlers/agentHandlers.ts`                                                                                                  |
+| Multi-Agent tab grid + team editor                         | `src/settingsView/frontend/tabs/MultiAgentTab.ts`                                                                                             |
+| Agents tab role badges, "Used by teams", setup-locked rows | `src/settingsView/frontend/tabs/AgentsTab.ts`, `AgentSelectionPanel.ts`                                                                       |
+| Cross-tab vocabulary, save model, action placement         | every `src/settingsView/frontend/tabs/*.ts` (one-line text changes per tab)                                                                   |
+| `<settings-empty-state>`, `<settings-loading-state>`       | `src/settingsView/frontend/components/` (new)                                                                                                 |
+| Confirmation modals for destructive actions                | `MultiAgentTab.ts`, `AgentsTab.ts`, `MemoryTab.ts`, `GitTab.ts`, `LaTeXTab.ts`                                                                |
+| Reset-to-default revert icon                               | `src/settingsView/frontend/components/RevertButton.ts` (new), adopted across tabs                                                             |
+| `SET_TAB` deep-link by id + sub-section                    | `src/settingsView/frontend/SettingsApp.ts`, `src/shared/schemas/settingsViewMessages.ts`                                                      |
+| Codex settings move from Tools to Models                   | `src/settingsView/frontend/tabs/ToolsTab.ts`, `ModelsTab.ts`                                                                                  |
+| History team filter                                        | `src/settingsView/frontend/tabs/HistoryTab.ts`, `HistoryList.ts`                                                                              |
+| Shared section header, card, badge, mono-path styles       | `src/settingsView/frontend/styles.ts`, `cardStyles.ts` (new), `monoStyles.ts` (new), `iconButtonStyles.ts` (new), `badgeStyles.ts` (extended) |
+| Imperative→declarative refactors                           | `LaTeXTab.ts:472–481`, `HistoryList.ts:135, 191`, `AgentSelectionPanel.ts:468–472`, `SearchBar.ts:24–42`, `TaskGroupList.ts:623`              |
+| Batched workspace updates                                  | `src/common/state/WorkspaceStateManager.ts` (`updateMany([[k, v], ...])`)                                                                     |
+| Launcher team picker + agent grouped picker                | `src/webview/frontend/components/InstructionPanel.ts`                                                                                         |
+| Grouped option rendering (team-aware)                      | `src/shared/utils/selectTemplates.ts`                                                                                                         |
+| Launcher persisted state + session override                | `src/shared/schemas/mainView.ts`, `src/webview/frontend/MainApp.ts`                                                                           |
+| First-run team selection + welcome banner                  | `src/webview/frontend/MainApp.ts`, `src/commands/setup/setupAssistantCommand.ts`                                                              |
+| Setup auto-promotion follow-up                             | `src/commands/setup/setupAssistantCommand.ts`                                                                                                 |
+| Effective-roster dispatch payload to lead                  | `src/agent/runtime/` (lead receives `effectiveRoster: AgentRef[]` in its delegate context)                                                    |
+| Status-bar pill (unchanged)                                | `src/extension.ts:108–112`                                                                                                                    |
+| Walkthrough (unchanged)                                    | `package.json` `contributes.walkthroughs.texra.gettingStarted`                                                                                |
 
 ### Implementation order
 
 1. **Add `agentRole` derivation** on `AgentEntry` without changing UI. Audit
    the registry against the four expected role buckets. Add the field to
    built-in YAMLs as a follow-up cleanup.
-2. **Add `Team` schema + migration** for built-in and custom presets, with
+2. **CSS consolidation pass.** Extract `cardStyles.ts`, `monoStyles.ts`,
+   `iconButtonStyles.ts`, `emptyStateStyles.ts`; promote `.section-header`
+   to `styles.ts`; extend `badgeStyles.ts`. Update LaTeX, Multi-Agent,
+   Tools, Agents, Git tabs to import from shared modules. No visual
+   change shipped — purely a refactor with snapshot tests.
+3. **Imperative→declarative refactors.** Migrate the six violations
+   listed in the principles section, one PR each. Each is independent
+   and ships incrementally.
+4. **Add `<settings-empty-state>` and `<settings-loading-state>`.** Adopt
+   in Memory, History, Multi-Agent custom group, Agents custom group.
+5. **Add confirmation modals** for delete-team, delete-agent,
+   delete-memory, remove-token, reset-LaTeX. Inline-confirm pattern for
+   reset; modal pattern for state the user can't reconstruct.
+6. **Add `Team` schema + migration** for built-in and custom presets, with
    the new launcher fields stubbed but not yet rendered.
-3. **Refactor `handleApplyAgentModePreset`** to _select_ a team rather
+7. **Vocabulary rename.** `superYoloEnabled` → `autoApproveSubagentSteps`,
+   "preset" copy → "team" across all tabs, "Tool Use" sub-tab →
+   "Tool-Use Agents", "Memory & Workflow" tools category → "Workflow
+   tools". Single commit, mechanical search-and-replace.
+8. **Refactor `handleApplyAgentModePreset`** to _select_ a team rather
    than overwrite `ENABLED_AGENTS`. Behind a feature flag for one minor
    version — when disabled, fall back to today's wholesale overwrite.
-4. **Render the new launcher controls** (team picker, grouped agent picker,
-   roster strip, modified footer) behind the same feature flag.
-5. **Render the new Multi-Agent tab** (Use/Edit/Duplicate/Delete actions,
-   team editor side panel) behind the same flag.
-6. **Refresh the Agents tab** (role badges, "Used by teams", visible-but-
-   locked setup agents, removed `Save Preset` button).
-7. **First-run rule** (Onboarding team auto-selected, welcome banner,
-   setup auto-promotion) once the launcher renders teams.
-8. **Flip the flag** in a single release once the migration paths are
-   verified against held-out fixtures of all four persisted shapes.
+9. **Render the new launcher controls** (team picker, grouped agent
+   picker, roster strip, modified footer) behind the same feature flag.
+10. **Render the new Multi-Agent tab** (Use/Edit/Duplicate/Delete
+    actions, team editor side panel) behind the same flag.
+11. **Refresh the Agents tab** (role badges, "Used by teams",
+    visible-but-locked setup agents, removed `Save Preset` button).
+12. **`SET_TAB` deep-link upgrade** — accept tab id + sub-section anchor
+    alongside numeric `tabIndex` for one minor-version migration window.
+13. **Codex settings move** from Tools tab to Models tab (under helper
+    model section).
+14. **History team filter** added as a single chip alongside the existing
+    search box.
+15. **First-run rule** (Onboarding team auto-selected, welcome banner,
+    setup auto-promotion) once the launcher renders teams.
+16. **Flip the flag** in a single release once the migration paths are
+    verified against held-out fixtures of all four persisted shapes.
+
+Steps 2–5 are pure consolidation and ship before any team-first UI. Steps
+6–9 land the data model and feature-flagged UI. Steps 10–14 fill in the
+new surfaces. Step 15 turns the system on for first-run users. Step 16
+removes the flag.
 
 A small migration-fixture suite (`src/shared/schemas/__fixtures__/`) holds
 serialized snapshots of each persisted shape: built-in-only, custom with
 orchestrator, custom without orchestrator, persisted launcher with each
 sessionType variant, no-credential first launch. Migration tests assert
 each fixture produces a valid `Team[]` and `MainViewPersistedState`.
+
+---
+
+## Implementation principles — Lit and CSS
+
+The settings view is a Lit application, but several tabs have grown
+imperative and CSS-duplicated. This PRD treats consolidation as a
+prerequisite for the cross-tab consistency rules above; they cannot be
+enforced if every tab keeps its own copy of the same selectors.
+
+### Declarative reactivity over imperative DOM
+
+Rule: **`render()` is a pure function of `@property` and `@state`.**
+Anything `render()` reads must be a reactive field; anything `render()`
+needs to react to must trigger a state setter, not a manual
+`requestUpdate()`.
+
+The audit identified concrete violations to fix:
+
+| File                     | Line    | Violation                                                                                                                | Fix                                                                                                                                                                                                                                |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LaTeXTab.ts`            | 472–481 | `button.classList.add('copy-success'); setTimeout(() => button.classList.remove(...), 2000)` for transient copy feedback | `@state() private copiedCommandId: string \| null = null;` + conditional class binding `class=${classMap({ 'copy-success': this.copiedCommandId === id })}`. Setter clears via a timer field cleaned up in `disconnectedCallback`. |
+| `LaTeXTab.ts`            | 476–480 | `button.setAttribute('title', 'Copied!')`                                                                                | bound title in template: `title=${this.copiedCommandId === id ? 'Copied!' : 'Copy command'}`                                                                                                                                       |
+| `HistoryList.ts`         | 135     | `this.state.setSearchIndex(...); this.requestUpdate();`                                                                  | move `searchIndex` to `@state()` on the component (or migrate the underlying state container to `@lit-labs/signals`); the manual `requestUpdate()` is the smell.                                                                   |
+| `HistoryList.ts`         | 191     | second `this.requestUpdate()` after a non-reactive mutation                                                              | same fix                                                                                                                                                                                                                           |
+| `AgentSelectionPanel.ts` | 468–472 | `requestAnimationFrame(() => shadowRoot.querySelector('.agent-list-item.selected')?.focus())`                            | use a Lit `ref()` on the selected item, focus inside `updated(changedProperties)` when `selectedAgentId` changed                                                                                                                   |
+| `SearchBar.ts`           | 24–42   | manual `setTimeout` debounce with id stored on the instance and cleared in `disconnectedCallback`                        | use a small typed `debounce()` utility with a single `controller.abort()` cleanup; or move to a `Task`-driven debounced search if the rest of the view migrates                                                                    |
+| `TaskGroupList.ts`       | 623     | `this.requestUpdate()` in progress view                                                                                  | same — move underlying mutation to a reactive store                                                                                                                                                                                |
+
+The pattern fix is consistent across all six: replace a non-reactive
+field + `requestUpdate()` pair with a `@state()` field. Where the source
+of truth lives outside the component (the `ViewState` container in the
+history list, the underlying signal store), the migration is to make
+that container's reads observable — either via the existing
+`SignalWatcher` already in use at `MainApp.ts:381` and
+`ProgressApp.ts:450`, or by extracting a small `@lit-labs/signals`
+adapter.
+
+`MainApp.ts` and `ProgressApp.ts` already use `SignalWatcher` correctly;
+new components in this PRD's surface (the team picker, the agent picker,
+the roster strip, the team editor) follow that pattern from day one.
+
+### CSS consolidation
+
+Rule: **shared visual primitives live in shared modules. Tab files
+contain only tab-specific layout.**
+
+Today, eight tabs duplicate the same six primitives. The audit
+identified the exact selectors and line numbers; this PRD codifies which
+modules absorb them.
+
+Shared modules in `src/settingsView/frontend/`:
+
+| Module                              | Exposes                                                                                         | Absorbs                                                                                                                                                                                     |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `styles.ts` (existing, expand)      | `.section-header`, `.tab-content`, `.action-button-row`                                         | `LaTeXTab.ts:339` `.section-header`, `ToolsTab.ts:183` `.category-header`, `GitTab.ts:76` `.section-title`, `MultiAgentTab.ts:458, 470` `<h3>` rules                                        |
+| `cardStyles.ts` (new)               | `.settings-card`, `.settings-card-status-icon`, `.settings-card-body`, `.settings-card-actions` | `LaTeXTab.ts:186` `.dependency-card`, `LaTeXTab.ts:353` `.setting-card`, `MultiAgentTab.ts:64` `.preset-card`, `MultiAgentTab.ts:46` `.setting-block`, similar definitions in `ToolsTab.ts` |
+| `badgeStyles.ts` (existing, extend) | `.badge`, `.badge-active`, `.badge-warning`, `.badge-error`, `.badge-source`                    | `LaTeXTab.ts:412` `.setting-badge`, `MultiAgentTab.ts:112` `.preset-active-badge`, `profile/styles.ts:235` `.key-status-badge`                                                              |
+| `monoStyles.ts` (new)               | `.mono-path`                                                                                    | `AgentsTab.ts:131` `.agents-dir-path`, `LaTeXTab.ts:262` `.dependency-path`, similar elsewhere                                                                                              |
+| `iconButtonStyles.ts` (new)         | `.icon-button`, `.icon-button-danger`                                                           | `AgentsTab.ts:156` `.agents-dir-icon-btn`, `MultiAgentTab.ts:288` `.preset-delete-btn`, hand-rolled link buttons in LaTeXTab                                                                |
+| `emptyStateStyles.ts` (new)         | `.empty-state` + the `<settings-empty-state>` component declared in the consistency section     | new                                                                                                                                                                                         |
+
+Tab files import what they need: `import { sectionHeaderStyles,
+cardStyles } from '../styles';` and compose via Lit's `css\`\``
+spreading.
+
+The `profile/styles.ts` file (593 lines today) is shrunk by extracting
+the same primitives. The `commonViewStyles.ts` file is the canonical
+import for cross-webview shared CSS (used by progressView, mainView,
+settingsView); settings-specific primitives live in
+`src/settingsView/frontend/`.
+
+### Handler idempotency
+
+Rule: **handlers that touch related workspace state do so atomically or
+explicitly accept partial-update semantics.**
+
+The most visible offender is
+`handleApplyAgentModePreset` at
+`agentHandlers.ts:589–592`, which does two sequential
+`workspaceSM.update` calls for `ENABLED_AGENTS` and
+`ENABLED_TOOL_USE_AGENTS`. After this PRD, that handler no longer writes
+to either key (Use selects a team without overwriting), so the pair
+disappears. New handlers that need to update related keys use a small
+batched API on `workspaceSM` (`updateMany([[k1, v1], [k2, v2]])`),
+implemented as a sequential write with try/catch and rollback to the
+prior values on failure. This is added in
+`src/common/state/WorkspaceStateManager.ts` and used by team CRUD
+handlers (`handleCreateCustomTeam`, `handleUpdateCustomTeam`,
+`handleDeleteCustomTeam`).
+
+### Component contracts for the new surfaces
+
+Every new component in this PRD declares only `@property` (inputs from
+parent) and `@state` (local UI state). No subclassing of
+component-internal mixins; no `firstUpdated` for state initialization;
+no `setTimeout`-driven property updates.
+
+| Component                | Inputs (`@property`)                                                                    | Local state (`@state`)                                              | Events fired                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `<team-picker>`          | `teams: Team[]`, `selectedTeamId: string`, `modified: boolean`                          | `open: boolean` (dropdown open)                                     | `team-change`, `new-team-clicked`                                |
+| `<agent-picker>`         | `agents: AgentEntry[]`, `team: Team`, `selectedAgentId: AgentRef`, `outOfTeam: boolean` | `open: boolean`                                                     | `agent-change`, `manage-agents-clicked`                          |
+| `<roster-strip>`         | `team: Team`, `override: SessionTeamOverride \| null`                                   | (none)                                                              | `roster-add`, `roster-remove`, `save-as-team`, `reset-overrides` |
+| `<team-editor>`          | `team: Team \| null` (null = new), `agents: AgentEntry[]`                               | `draft: Team`, `saving: boolean`, `validationError: string \| null` | `team-saved`, `cancelled`                                        |
+| `<settings-empty-state>` | `icon: string`, `text: string`, `actionLabel?: string`, `actionEvent?: string`          | (none)                                                              | event named by `actionEvent`                                     |
+
+All components live in `src/settingsView/frontend/components/` (team
+editor + roster strip + empty state) or
+`src/webview/frontend/components/` (team picker + agent picker, since
+they render in the launcher). They are pure Lit elements and importable
+by either webview without coupling to webview-specific stores.
+
+### What this section does not require
+
+This PRD does not require a full webview rewrite, a state-management
+library swap, or a CSS framework adoption. The consolidations above are
+small, mechanical, and can ship incrementally:
+
+1. Extract `cardStyles.ts` and update LaTeX, Multi-Agent, Tools to import
+   it. (~30 minutes)
+2. Extract `.section-header` to `styles.ts`. Delete the three
+   duplicates. (~10 minutes)
+3. Migrate the six imperative violations one at a time. Each is a
+   self-contained PR. (~10 minutes each)
+4. Add `<settings-empty-state>` and adopt it in the four tabs that need
+   it. (~30 minutes)
+5. Add modal confirms to the four destructive paths. (~20 minutes total)
+
+The new components for the launcher / Multi-Agent tab redesign follow
+the contracts above from the start and do not contribute to the debt.
 
 ---
 
