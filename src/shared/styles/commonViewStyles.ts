@@ -271,6 +271,13 @@ export const commonViewStyles: CSSResult = css`
     line-height: var(--line-height-normal);
   }
 
+  .settings-reminder-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-small);
+    min-width: 0;
+  }
+
   .settings-reminder-actions {
     display: flex;
     flex-wrap: wrap;
