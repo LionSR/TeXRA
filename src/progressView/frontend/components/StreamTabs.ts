@@ -284,6 +284,12 @@ export class StreamTab extends LitElement {
         padding: var(--spacing-small) var(--spacing-tiny);
       }
 
+      .tab-container.is-compact .tab-delete {
+        width: 20px;
+        min-width: 20px;
+        height: 20px;
+      }
+
       .tab-container.is-compact .tab-header {
         gap: var(--spacing-tiny);
       }
@@ -472,18 +478,14 @@ export class StreamTab extends LitElement {
                 </div>
               `}
         </button>
-        ${this.compact
-          ? nothing
-          : html`
-              <vscode-toolbar-button
-                class="tab-delete"
-                icon="close"
-                title="Delete stream"
-                aria-label="Delete stream"
-                data-stream=${stream.name}
-                data-action="delete"
-              ></vscode-toolbar-button>
-            `}
+        <vscode-toolbar-button
+          class="tab-delete"
+          icon="close"
+          title="Delete stream"
+          aria-label="Delete stream"
+          data-stream=${stream.name}
+          data-action="delete"
+        ></vscode-toolbar-button>
       </div>
     `;
   }
