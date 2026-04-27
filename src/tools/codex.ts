@@ -4,8 +4,8 @@
  * Mirrors the `delegate_agent` model: every call is async. Without a
  * thread_id, a new Codex session is launched and the result is delivered
  * as a follow-up to the parent stream. With a thread_id, the prompt is
- * enqueued as a follow-up instruction to an existing session (errors if
- * the session is still processing — never interrupts a running turn).
+ * enqueued as a follow-up instruction to an existing session. If a turn is
+ * still processing, the prompt waits in that session's queue.
  * Each turn's result is delivered back to the parent via the follow-up
  * queue, so the orchestrator sees responses uniformly whether it or the
  * user drove the turn.
@@ -119,7 +119,7 @@ const CodexInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Resume an existing Codex thread with a follow-up instruction. The prompt is enqueued as the next turn; if the thread is currently processing, the call errors — wait for its delivery before resuming.',
+      'Resume an existing Codex thread with a follow-up instruction. The prompt is enqueued as the next turn; if the thread is currently processing, the prompt waits in its queue.',
     ),
 });
 
@@ -161,8 +161,8 @@ export function interruptAllCodexSessions(): void {
 
 /**
  * `hasDelivered` is true between turns (the loop is WAITING) and false while
- * a turn is in flight. Resume via thread_id refuses when !hasDelivered so the
- * orchestrator can't pile up concurrent prompts on the same thread.
+ * a turn is in flight. Follow-ups can be queued in either state; the flag is
+ * retained as lightweight delivery-state bookkeeping for the active loop.
  */
 interface CodexDeliveryState {
   hasDelivered: boolean;
@@ -652,21 +652,8 @@ async function resumeCodexThread(
       `Codex execution '${stored.executionId}' is no longer tracked for delivery.`,
     );
   }
-  if (!deliveryState.hasDelivered) {
-    throw new ToolError(
-      `Codex thread '${threadId}' is still processing. Wait for its result before sending a follow-up.`,
-    );
-  }
-  deliveryState.hasDelivered = false;
-  try {
-    const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
-    queue.enqueue(prompt);
-  } catch (err) {
-    // Restore the flag so the thread doesn't get permanently locked if the
-    // enqueue path ever starts throwing (mirrors DelegationTools).
-    deliveryState.hasDelivered = true;
-    throw err;
-  }
+  const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
+  queue.enqueue(prompt);
 
   const preview = truncateWithEllipsis(prompt, 60);
   return {
