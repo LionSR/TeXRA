@@ -98,9 +98,9 @@ const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
  * Per-execution delivery gate for subagent result routing.
  *
  * `hasDelivered` prevents duplicate delivery of the same result via both
- * `onBeforeWaiting` and `onCompleted`. When `delegate_agent (resume)` confirms a
- * follow-up was accepted, it resets `hasDelivered` so the next cycle's
- * `onBeforeWaiting` delivers the new result back to the orchestrator.
+ * `onBeforeWaiting` and `onCompleted`. Accepted follow-ups mark delivery
+ * pending immediately so interrupts before consumption still report back;
+ * consuming a follow-up keeps the next cycle pending for `onBeforeWaiting`.
  */
 interface SubagentDeliveryState {
   hasDelivered: boolean;
@@ -263,10 +263,11 @@ async function executeSubagent(
     parentDelegationDepth + 1,
   );
 
-  // Track delivery state in the module-level map so delegate_agent (resume) can reset it.
+  // Track delivery state in the module-level map so delegate_agent (resume)
+  // can find live subagents and enqueue follow-up instructions.
   // The flag prevents duplicate delivery of the same result via both
-  // onBeforeWaiting and onCompleted. When delegate_agent (resume) resets the flag,
-  // the next onBeforeWaiting will deliver the resumed cycle's result.
+  // onBeforeWaiting and onCompleted. When a follow-up is consumed, the next
+  // onBeforeWaiting will deliver the resumed cycle's result.
   const deliveryState: SubagentDeliveryState = { hasDelivered: false };
   activeSubagentDelivery.set(executionId, deliveryState);
   let childStreamId: StreamTabId | undefined;
@@ -293,6 +294,9 @@ async function executeSubagent(
       }
     },
     onProgress,
+    onFollowUpConsumed: () => {
+      deliveryState.hasDelivered = false;
+    },
     onBeforeWaiting: async (lastResponse, touchedFiles) => {
       if (deliveryState.hasDelivered || !childStreamId) return;
       const wallTimeMs = Date.now() - startedAt;
@@ -821,7 +825,7 @@ const DelegateAgentInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'If set, resumes a WAITING tool-use subagent instead of starting a new one. Use the execution ID from the original delegation result or /executions.',
+      'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the execution ID from the original delegation result or /executions.',
     ),
 });
 
@@ -831,11 +835,11 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 export class DelegateAgentTool extends defineTool({
   name: 'delegate_agent',
   description:
-    () => `Delegate a task to a tool-use agent, or resume a WAITING subagent with follow-up instructions.
+    () => `Delegate a task to a tool-use agent, or queue follow-up instructions for a tool-use subagent.
 
 **New delegation** (no execution_id): Launches a new tool-use agent with its own tools (file reading, editing, search, bash). Tool-use agents are versatile—they can create entire documents, make targeted edits, perform research, or run multi-step investigations.
 
-**Resume** (with execution_id): Sends follow-up instructions to a WAITING subagent. The subagent keeps its full history. Result arrives asynchronously like the original delegation.
+**Resume** (with execution_id): Sends follow-up instructions to a WAITING or still-running subagent. If the subagent is busy, the instruction is queued for its next turn. The subagent keeps its full history. Result arrives asynchronously like the original delegation.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
@@ -889,7 +893,7 @@ Git worktree support: ${
     return proposeAndExecute(proposal, input.agent, ctx.streamId);
   }
 
-  /** Resume a WAITING tool-use subagent with follow-up instructions. */
+  /** Queue follow-up instructions for a tool-use subagent. */
   private async resumeAgent(
     executionId: string,
     instruction: string,
@@ -919,25 +923,18 @@ Git worktree support: ${
       );
     }
 
-    if (!deliveryState.hasDelivered) {
+    if (ToolUseFollowUpQueue.hasQueuedFollowUp(handle.childStreamId)) {
       throw new Error(
-        `'${handle.agentName}' is still processing. Wait for its result before sending a follow-up.`,
+        `'${handle.agentName}' already has a pending follow-up queued. Wait for its next result before sending another follow-up.`,
       );
     }
-    deliveryState.hasDelivered = false;
 
     const framedInstruction = formatFollowUpInstruction(instruction);
-    let result: Awaited<ReturnType<typeof sendFollowUp>>;
-    try {
-      result = await sendFollowUp(handle.childStreamId, framedInstruction);
-    } catch (err) {
-      deliveryState.hasDelivered = true;
-      throw err;
-    }
+    const result = await sendFollowUp(handle.childStreamId, framedInstruction);
 
     switch (result.status) {
       case 'sent':
-      case 'queued':
+        deliveryState.hasDelivered = false;
         return {
           summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
@@ -945,8 +942,16 @@ Git worktree support: ${
             `Execution ID: ${executionId}`,
           ].join('\n'),
         };
+      case 'queued':
+        deliveryState.hasDelivered = false;
+        return {
+          summary: `Follow-up queued for '${handle.agentName}'`,
+          output: [
+            `Follow-up instruction queued for '${handle.agentName}' (${result.reason}). The subagent will process it and deliver a new result automatically.`,
+            `Execution ID: ${executionId}`,
+          ].join('\n'),
+        };
       case 'no_session':
-        deliveryState.hasDelivered = true;
         throw new Error(
           `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,
         );
