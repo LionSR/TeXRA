@@ -421,7 +421,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       config: {
         abortSignal: options?.signal,
         ...(options?.googleTools?.length && {
-          tools: options.googleTools as GeminiTool[],
+          tools: options.googleTools,
         }),
       },
     });
@@ -481,8 +481,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       };
     }
 
-    if (tools?.length) {
-      generationConfig.tools = toGoogleTools(tools);
+    const googleTools = tools?.length ? toGoogleTools(tools) : undefined;
+    if (googleTools?.length) {
+      generationConfig.tools = googleTools;
     }
 
     const chatParams: CreateChatParameters = {
@@ -501,10 +502,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           client,
           systemPrompt,
           lastMessageParts,
-          // toGoogleTools returns Tool[], but generationConfig.tools is typed
-          // as ToolListUnion (which includes CallableTool). Cast is safe since
-          // our tools are always plain Tool[] (FunctionDeclaration-based).
-          googleTools: generationConfig.tools as GeminiTool[] | undefined,
+          googleTools,
           signal,
         });
 
