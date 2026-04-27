@@ -75,11 +75,14 @@ export class SendToTerminalTool extends defineTool({
     const name = TERMINAL_NAME_PREFIX + input.label.trim();
     const timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS;
 
-    const { exitCode, output, timedOut } = await getSetupPlatform()
-      .terminal.runCommand({ name, command, timeoutMs });
+    const { exitCode, output, timedOut } =
+      await getSetupPlatform().terminal.runCommand({
+        name,
+        command,
+        timeoutMs,
+      });
 
-    const exitLabel =
-      exitCode === undefined ? 'unknown' : String(exitCode);
+    const exitLabel = exitCode === undefined ? 'unknown' : String(exitCode);
     const summary = timedOut
       ? `"${name}" timed out after ${Math.round(timeoutMs / 1000)}s`
       : `"${name}" exited ${exitLabel}`;

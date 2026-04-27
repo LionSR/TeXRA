@@ -1638,7 +1638,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
           // Anthropic rejects assistant messages with empty text content blocks.
           // When an agent declares no prefill, skip pushing the assistant turn
           // entirely so the model produces its response from a clean slate.
-          this.logger.debug('No prefill provided; skipping assistant prefill message');
+          this.logger.debug(
+            'No prefill provided; skipping assistant prefill message',
+          );
           return [false, messages];
         }
         this.logger.debug(`Adding prefill message:\n${prefill}`);

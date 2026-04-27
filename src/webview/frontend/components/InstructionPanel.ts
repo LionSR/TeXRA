@@ -216,8 +216,12 @@ export class InstructionPanel extends LitElement {
         min-width: 0;
       }
 
-      .model-selection-footer .model-select-group {
-        flex: 1 1 auto;
+      .model-selection-footer .agent-model-select-group {
+        flex: 1 1
+          calc(
+            var(--agent-model-select-min-width) + var(--height-control) +
+              var(--spacing-small)
+          );
         max-width: calc(
           var(--agent-model-select-max-width) + var(--height-control) +
             var(--spacing-small)
@@ -548,7 +552,9 @@ export class InstructionPanel extends LitElement {
         ></vscode-textarea>
         <div class="instruction-controls">
           <div class="model-selection-footer">
-            <div class="select-group agent-select-group agent-model-select-group">
+            <div
+              class="select-group agent-select-group agent-model-select-group"
+            >
               <vscode-toolbar-button
                 id="agentSettingsButton"
                 class="settings-button"
@@ -624,7 +630,9 @@ export class InstructionPanel extends LitElement {
                 </div>
               </div>
             </div>
-            <div class="select-group model-select-group agent-model-select-group">
+            <div
+              class="select-group model-select-group agent-model-select-group"
+            >
               <vscode-toolbar-button
                 id="modelSettingsButton"
                 class="settings-button"

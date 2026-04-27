@@ -1481,7 +1481,10 @@ describe('ModelHandlerAnthropic updateMessageContentWithPrefill', () => {
 
     const messages: MessageParam[] = [
       { role: 'user', content: [{ type: 'text', text: 'revise' }] },
-      { role: 'assistant', content: [{ type: 'text', text: '<latex_document>' }] },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: '<latex_document>' }],
+      },
     ];
     const workspaceState = AgentWorkspaceState.create();
 
