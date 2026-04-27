@@ -5,7 +5,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
@@ -18,6 +18,46 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - formatter helpers
 import { formatTimestamp } from '../formatters/timestampUtils';
+
+const STRUCTURED_DELIVERY_TAGS = [
+  'background-result',
+  'background-error',
+  'codex-result',
+  'codex-error',
+  'execution-activity',
+  'github-webhook-activity',
+  'subagent-result',
+  'subagent-error',
+] as const;
+
+const XML_ESCAPED_DELIVERY_TAGS = new Set<string>([
+  'background-result',
+  'background-error',
+  'codex-result',
+  'codex-error',
+  'subagent-result',
+  'subagent-error',
+]);
+
+const STRUCTURED_DELIVERY_PATTERN = new RegExp(
+  `^\\s*<(${STRUCTURED_DELIVERY_TAGS.join('|')})(\\s|>)`,
+);
+
+function getStructuredDeliveryTag(text: string): string | null {
+  const match = STRUCTURED_DELIVERY_PATTERN.exec(text);
+  return match?.[1] ?? null;
+}
+
+function decodeXmlEntitiesForDisplay(text: string): string {
+  if (!text.includes('&')) return text;
+
+  return text
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&');
+}
 
 @customElement('user-message')
 export class UserMessage extends LitElement {
@@ -41,6 +81,10 @@ export class UserMessage extends LitElement {
         background-color: var(--vscode-editor-selectionBackground);
         border: var(--border-thin) solid var(--vscode-panel-border);
         border-radius: var(--border-radius);
+      }
+
+      .user-message--structured-delivery {
+        max-width: 100%;
       }
 
       .user-message-header {
@@ -84,6 +128,28 @@ export class UserMessage extends LitElement {
         font-size: var(--font-size-sm);
       }
 
+      .user-message--structured-delivery .user-message-content {
+        max-height: min(45vh, 520px);
+        overflow: auto;
+        padding: var(--spacing-small);
+        background: var(
+          --vscode-textCodeBlock-background,
+          var(--vscode-editor-background)
+        );
+        border-radius: var(--border-radius-small);
+        font-family: var(
+          --vscode-editor-font-family,
+          ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace
+        );
+        font-size: var(--vscode-editor-font-size, var(--font-size-sm));
+        line-height: 1.35;
+        white-space: pre;
+        word-wrap: normal;
+      }
+
       .user-message-timestamp {
         font-size: var(--font-size-xs);
       }
@@ -103,15 +169,60 @@ export class UserMessage extends LitElement {
     defaultTitle: 'Copy message',
   });
 
+  private payloadCopyController = new CopyButtonController(this, {
+    defaultTitle: 'Copy original payload',
+  });
+
+  private displayCache = {
+    text: '',
+    isStructuredDelivery: false,
+    hasOriginalPayload: false,
+    displayText: '',
+  };
+
+  private getDisplayState(): {
+    isStructuredDelivery: boolean;
+    hasOriginalPayload: boolean;
+    displayText: string;
+  } {
+    if (this.displayCache.text === this.text) {
+      return this.displayCache;
+    }
+
+    const structuredTag = getStructuredDeliveryTag(this.text);
+    const isStructuredDelivery = structuredTag != null;
+    const hasOriginalPayload =
+      structuredTag != null && XML_ESCAPED_DELIVERY_TAGS.has(structuredTag);
+    const displayText = hasOriginalPayload
+      ? decodeXmlEntitiesForDisplay(this.text)
+      : this.text;
+
+    this.displayCache = {
+      text: this.text,
+      isStructuredDelivery,
+      hasOriginalPayload,
+      displayText,
+    };
+    return this.displayCache;
+  }
+
   override render(): TemplateResult {
     const { timeDisplay, tooltipTimestamp } = formatTimestamp(
       new Date(this.timestamp),
     );
     const copyState = this.copyController.state;
+    const payloadCopyState = this.payloadCopyController.state;
+    const { isStructuredDelivery, hasOriginalPayload, displayText } =
+      this.getDisplayState();
 
     return html`
       <div class="user-message-container">
-        <div class="user-message">
+        <div
+          class=${classMap({
+            'user-message': true,
+            'user-message--structured-delivery': isStructuredDelivery,
+          })}
+        >
           <div class="user-message-header">
             <span class="user-message-header-left">
               <i class="codicon codicon-comment user-message-icon"></i>
@@ -127,13 +238,25 @@ export class UserMessage extends LitElement {
               icon="copy"
               title=${copyState.title}
               aria-label=${copyState.ariaLabel}
-              @click=${() => this.copyController.copy(this.text)}
+              @click=${() => this.copyController.copy(displayText)}
             ></vscode-toolbar-button>
+            ${hasOriginalPayload
+              ? html`<vscode-toolbar-button
+                  class=${classMap({
+                    'user-message-copy': true,
+                    [payloadCopyState.successClass]: payloadCopyState.copied,
+                  })}
+                  icon="code"
+                  title=${payloadCopyState.title}
+                  aria-label=${payloadCopyState.ariaLabel}
+                  @click=${() => this.payloadCopyController.copy(this.text)}
+                ></vscode-toolbar-button>`
+              : nothing}
           </div>
           <div
             class="user-message-content"
             data-log-id=${this.logId}
-            .textContent=${this.text}
+            .textContent=${displayText}
           ></div>
         </div>
       </div>
