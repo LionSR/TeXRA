@@ -98,9 +98,9 @@ const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
  * Per-execution delivery gate for subagent result routing.
  *
  * `hasDelivered` prevents duplicate delivery of the same result via both
- * `onBeforeWaiting` and `onCompleted`. When the subagent consumes a queued
- * follow-up, it resets `hasDelivered` so the next cycle's `onBeforeWaiting`
- * delivers the new result back to the orchestrator.
+ * `onBeforeWaiting` and `onCompleted`. Accepted follow-ups mark delivery
+ * pending immediately so interrupts before consumption still report back;
+ * consuming a follow-up keeps the next cycle pending for `onBeforeWaiting`.
  */
 interface SubagentDeliveryState {
   hasDelivered: boolean;
@@ -934,6 +934,7 @@ Git worktree support: ${
 
     switch (result.status) {
       case 'sent':
+        deliveryState.hasDelivered = false;
         return {
           summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
@@ -942,6 +943,7 @@ Git worktree support: ${
           ].join('\n'),
         };
       case 'queued':
+        deliveryState.hasDelivered = false;
         return {
           summary: `Follow-up queued for '${handle.agentName}'`,
           output: [
