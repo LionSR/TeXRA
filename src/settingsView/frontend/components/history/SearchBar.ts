@@ -20,6 +20,7 @@ export class SearchBar extends LitElement {
 
   @property({ attribute: false }) searchTerm = '';
   @property({ attribute: false }) matchCount = '';
+  @property({ type: Boolean, attribute: false }) canClearHistory = false;
 
   private searchTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -48,6 +49,10 @@ export class SearchBar extends LitElement {
 
   private handlePrev(): void {
     this.dispatchEvent(HistoryViewEvents.searchPrev());
+  }
+
+  private handleClearHistory(): void {
+    this.dispatchEvent(HistoryViewEvents.clearHistory());
   }
 
   private handleKeydown(event: KeyboardEvent): void {
@@ -87,6 +92,15 @@ export class SearchBar extends LitElement {
             @click=${this.handleNext}
           ></vscode-toolbar-button>
           <span class="match-count">${this.matchCount}</span>
+          ${this.canClearHistory
+            ? html`<vscode-toolbar-button
+                class="history-clear-btn"
+                icon="trash"
+                label="Clear history"
+                title="Clear all history"
+                @click=${this.handleClearHistory}
+              ></vscode-toolbar-button>`
+            : ''}
         </vscode-toolbar-container>
       </div>
     `;

@@ -223,6 +223,11 @@ export class ToolsTab extends LitElement {
       .codex-inline-settings {
         padding: var(--spacing-small) var(--spacing-medium);
         margin-bottom: var(--spacing-small);
+        border-radius: var(--border-radius);
+        background: var(
+          --vscode-textCodeBlock-background,
+          rgba(128, 128, 128, 0.08)
+        );
       }
 
       .setting-row {
@@ -440,10 +445,13 @@ export class ToolsTab extends LitElement {
           items,
           (item) => item.id,
           (item) => html`
-            <tool-card .item=${item}></tool-card>
-            ${category === 'computation' && item.id === 'codex'
-              ? this.renderCodexInlineSettings()
-              : nothing}
+            <tool-card .item=${item}>
+              ${category === 'computation' && item.id === 'codex'
+                ? html`<div slot="details">
+                    ${this.renderCodexInlineSettings()}
+                  </div>`
+                : nothing}
+            </tool-card>
           `,
         )}
       </div>
