@@ -26,6 +26,7 @@ export const searchStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: var(--spacing-small);
+    margin-left: auto;
   }
 
   .search-nav-btn {
@@ -41,6 +42,19 @@ export const searchStyles: CSSResult = css`
     min-width: calc(var(--height-button) * 2);
     text-align: center;
   }
+
+  .history-clear-btn {
+    color: var(--color-text-secondary);
+    margin-left: var(--spacing-small);
+  }
+
+  .history-clear-btn::part(control) {
+    border-radius: var(--border-radius-medium);
+  }
+
+  .history-clear-btn:hover {
+    color: var(--color-removed);
+  }
 `;
 
 /**
@@ -51,14 +65,6 @@ export const historyListStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: var(--spacing-medium);
-  }
-
-  .clear-container {
-    margin-bottom: var(--spacing-xlarge);
-  }
-
-  .button-clear {
-    padding: var(--spacing-medium) var(--spacing-large);
   }
 
   .history-details {

@@ -82,6 +82,7 @@ export class HistoryTab extends LitElement {
         <history-search-bar
           .matchCount=${this.matchCount}
           .searchTerm=${this.searchTerm}
+          .canClearHistory=${this.items.length > 0}
           @history-search-change=${this.handleSearchChange}
           @history-search-next=${() => this.handleSearchNavigate('next')}
           @history-search-prev=${() => this.handleSearchNavigate('prev')}
