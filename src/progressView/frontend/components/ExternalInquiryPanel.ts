@@ -279,6 +279,14 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           <div class="external-inquiry-request__session-links-label">
             External chat/thread links (optional):
           </div>
+          <div class="external-inquiry-request__chat-links">
+            Open:
+            <a href="https://chatgpt.com/" target="_blank">ChatGPT Pro</a>
+            &nbsp;·&nbsp;
+            <a href="https://gemini.google.com/" target="_blank"
+              >Gemini Deep Think</a
+            >
+          </div>
           <textarea
             class="external-inquiry-request__session-links-input"
             placeholder="Paste one ChatGPT/Claude/Gemini thread link per line..."
