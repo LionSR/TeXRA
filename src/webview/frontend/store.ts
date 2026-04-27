@@ -182,6 +182,7 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     emptyListLabel: 'Clear all input files',
     selectListLabel: 'Add input files',
     tooltip: 'Primary files the agent processes, such as .tex, .txt, or .md',
+    description: 'Read and edited by the agent',
     toolConfig: 'tool',
     focusInstruction: {
       key: 'inputFileSelect',
@@ -201,6 +202,7 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     selectListLabel: 'Add reference files',
     tooltip:
       "Context files such as .bib/.bbl or other papers that guide output but won't be modified",
+    description: 'Read-only context — not modified',
   },
   {
     type: 'auxiliary',
@@ -215,6 +217,7 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     selectListLabel: 'Add auxiliary files',
     tooltip:
       'Files such as .cls/.sty that define document structure and styles',
+    description: 'Style/structure files (.cls/.sty)',
   },
   {
     type: 'media',
@@ -228,6 +231,7 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     emptyListLabel: 'Clear all media files',
     selectListLabel: 'Add media files',
     tooltip: 'Images, figures, and media assets used by the document',
+    description: 'Images and figures the agent can view',
     toolConfig: 'autoExtract',
   },
 ];
