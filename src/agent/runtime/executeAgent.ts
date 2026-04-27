@@ -615,6 +615,8 @@ export interface ExecuteAgentOptions {
     lastResponse: string | undefined,
     touchedFiles: string[],
   ) => void | Promise<void>;
+  /** Fires when a tool-use session consumes queued follow-up instructions. */
+  onFollowUpConsumed?: () => void;
   /** Fires on meaningful progress: todo changes, round completions, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
@@ -705,8 +707,10 @@ export async function executeAgent(
               }
               options?.onProgress?.(update);
             },
-            onFollowUpConsumed: () =>
-              bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+            onFollowUpConsumed: () => {
+              bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId });
+              options?.onFollowUpConsumed?.();
+            },
           });
           return {
             category: 'toolUse' as const,
