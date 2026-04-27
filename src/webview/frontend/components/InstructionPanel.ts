@@ -87,6 +87,13 @@ export class InstructionPanel extends LitElement {
     css`
       :host {
         display: block;
+        --agent-model-select-min-width: 11rem;
+        --agent-model-select-max-width: min(22rem, calc(100vw - 9rem));
+        --agent-model-listbox-min-width: 17rem;
+        --agent-model-listbox-max-width: min(
+          26rem,
+          calc(100vw - var(--spacing-xlarge))
+        );
       }
 
       .instruction-box {
@@ -195,7 +202,9 @@ export class InstructionPanel extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--spacing-small);
-        flex: 0 1 auto;
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+        min-width: 0;
       }
 
       .model-selection-footer .select-group,
@@ -204,6 +213,18 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         flex: 0 1 auto;
+        min-width: 0;
+      }
+
+      .model-selection-footer .agent-model-select-group {
+        flex: 1 1 calc(
+          var(--agent-model-select-min-width) + var(--height-control) +
+            var(--spacing-small)
+        );
+        max-width: calc(
+          var(--agent-model-select-max-width) + var(--height-control) +
+            var(--spacing-small)
+        );
       }
 
       .model-selection-footer .codicon,
@@ -218,14 +239,15 @@ export class InstructionPanel extends LitElement {
         height: var(--height-control);
       }
 
-      .agent-select-controls,
-      .agent-select-dropdowns {
+      .model-selection-footer .agent-select-controls,
+      .model-selection-footer .agent-select-dropdowns {
         display: flex;
         align-items: center;
         gap: var(--spacing-small);
-        flex: 0 1 auto;
-        min-width: 9rem;
-        max-width: 14rem;
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
         position: relative;
       }
 
@@ -235,25 +257,18 @@ export class InstructionPanel extends LitElement {
         width: 100%;
       }
 
-      .model-selection-footer .select-group select,
-      .model-selection-footer .select-group vscode-single-select {
-        min-width: 4rem;
-        max-width: 7rem;
-      }
-
+      .model-selection-footer .agent-model-select-group select,
+      .model-selection-footer .agent-model-select-group vscode-single-select,
       .model-selection-footer .model-select-group vscode-single-select {
-        min-width: 10rem;
-        max-width: 14rem;
+        flex: 1 1 auto;
+        min-width: var(--agent-model-select-min-width);
+        max-width: var(--agent-model-select-max-width);
       }
 
-      .model-selection-footer .model-select::part(listbox) {
-        min-width: 16rem;
-        max-width: min(22rem, calc(100vw - var(--spacing-xlarge)));
-      }
-
+      .model-selection-footer .model-select::part(listbox),
       .model-selection-footer .agent-select::part(listbox) {
-        min-width: 15rem;
-        max-width: min(22rem, calc(100vw - var(--spacing-xlarge)));
+        min-width: var(--agent-model-listbox-min-width);
+        max-width: var(--agent-model-listbox-max-width);
       }
 
       .agent-select--hidden {
@@ -535,7 +550,7 @@ export class InstructionPanel extends LitElement {
         ></vscode-textarea>
         <div class="instruction-controls">
           <div class="model-selection-footer">
-            <div class="select-group agent-select-group">
+            <div class="select-group agent-select-group agent-model-select-group">
               <vscode-toolbar-button
                 id="agentSettingsButton"
                 class="settings-button"
@@ -611,7 +626,7 @@ export class InstructionPanel extends LitElement {
                 </div>
               </div>
             </div>
-            <div class="select-group model-select-group">
+            <div class="select-group model-select-group agent-model-select-group">
               <vscode-toolbar-button
                 id="modelSettingsButton"
                 class="settings-button"
