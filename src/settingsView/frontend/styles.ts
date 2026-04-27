@@ -52,6 +52,21 @@ const settingsHeaderStyles: CSSResult = css`
     align-items: center;
     gap: var(--spacing-small);
   }
+
+  .settings-header-auth-button {
+    min-height: var(--height-control);
+    color: var(--vscode-foreground);
+    background: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
+    border-color: var(--color-border);
+  }
+
+  .settings-header-auth-button:hover {
+    border-color: var(--vscode-focusBorder);
+    background: var(
+      --vscode-toolbar-activeBackground,
+      rgba(99, 102, 103, 0.31)
+    );
+  }
 `;
 
 /**
