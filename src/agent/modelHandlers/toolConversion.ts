@@ -38,6 +38,14 @@ function convertToolSchema(
   return (def.parameters ?? null) as Record<string, unknown> | null;
 }
 
+/**
+ * OpenAI tool payloads should always carry an explicit schema object when a
+ * tool has no declared parameters to avoid null/omitted ambiguity.
+ */
+function toOpenAISchemaObject(def: ToolDefinition): Record<string, unknown> {
+  return convertToolSchema(def) ?? {};
+}
+
 // Map local tool names to Anthropic remote tool types.
 // The custom `memory` tool (with pin/unpin) is sent as a regular function tool.
 // `memory_anthropic` maps to Anthropic's native memory server tool for cases
@@ -65,7 +73,7 @@ const DYNAMIC_FILTERING_TOOLS = new Set(['web_search', 'web_fetch']);
  */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
   return defs.map((d): ChatCompletionTool => {
-    const parameters = convertToolSchema(d) ?? undefined;
+    const parameters = toOpenAISchemaObject(d);
     return {
       type: 'function',
       function: {
@@ -120,7 +128,7 @@ export function toOpenAIResponseTools(
       type: 'function',
       name: d.name,
       description: d.description,
-      parameters: convertToolSchema(d),
+      parameters: toOpenAISchemaObject(d),
       strict: false,
     };
     tools.push(functionTool);
