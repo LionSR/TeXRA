@@ -240,6 +240,74 @@ export const commonViewStyles: CSSResult = css`
     outline-offset: 1px;
   }
 
+  /* Shared settings reminder for compact informational panels at the top of tabs */
+  .settings-reminder {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--spacing-medium);
+    row-gap: var(--spacing-small);
+    padding: var(--spacing-medium);
+    margin-bottom: var(--spacing-large);
+    border: var(--border-thin) solid var(--vscode-focusBorder);
+    border-radius: var(--border-radius);
+    background: var(--vscode-editor-background);
+  }
+
+  .settings-reminder-icon {
+    grid-row: 1 / span 3;
+    margin-top: 2px;
+    font-size: var(--font-size-lg);
+    color: var(--vscode-focusBorder);
+  }
+
+  .settings-reminder-title {
+    font-weight: var(--font-weight-medium);
+    color: var(--vscode-foreground);
+  }
+
+  .settings-reminder-description {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+  }
+
+  .settings-reminder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-small);
+  }
+
+  .settings-reminder-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-small);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .settings-reminder-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-small);
+  }
+
+  .settings-reminder-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    border-radius: 50%;
+    color: var(--vscode-editor-background);
+    background: var(--vscode-focusBorder);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+  }
+
   /* Utility: single-line text truncation with ellipsis */
   .truncate {
     overflow: hidden;

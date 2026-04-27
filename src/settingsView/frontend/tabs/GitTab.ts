@@ -86,6 +86,23 @@ export class GitTab extends LitElement {
         flex-wrap: wrap;
       }
 
+      .token-row-label {
+        font-size: var(--font-size-sm);
+        color: var(--vscode-foreground);
+      }
+
+      .token-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        flex-wrap: wrap;
+      }
+
+      .token-remove-btn:hover {
+        color: var(--vscode-errorForeground);
+        border-color: var(--vscode-errorForeground);
+      }
+
       .tinted-badge--ok {
         --_tint: var(
           --vscode-testing-iconPassed,
@@ -244,25 +261,33 @@ export class GitTab extends LitElement {
             failed CI) when you subscribe to a PR.
           </p>
           <div class="token-row">
-            Status: ${this.renderTokenStatusBadge()}
-            <vscode-button
-              appearance="primary"
-              @click=${this.handleSetGitHubToken}
-            >
-              ${tokenIsSet ? 'Replace token' : 'Set token'}
-            </vscode-button>
-            ${this.githubTokenStatus === 'secret'
-              ? html`<vscode-button
-                  appearance="secondary"
-                  @click=${this.handleRemoveGitHubToken}
-                  >Remove</vscode-button
-                >`
-              : nothing}
-            <vscode-button
-              appearance="secondary"
-              @click=${this.handleOpenGitHubTokenUrl}
-              >Create on GitHub…</vscode-button
-            >
+            <span class="token-row-label">Status:</span>
+            ${this.renderTokenStatusBadge()}
+            <span class="token-actions">
+              <button
+                class="tab-action-btn"
+                @click=${this.handleSetGitHubToken}
+              >
+                <span class="codicon codicon-key"></span>
+                ${tokenIsSet ? 'Replace token' : 'Set token'}
+              </button>
+              ${this.githubTokenStatus === 'secret'
+                ? html`<button
+                    class="tab-action-btn token-remove-btn"
+                    @click=${this.handleRemoveGitHubToken}
+                  >
+                    <span class="codicon codicon-trash"></span>
+                    Remove
+                  </button>`
+                : nothing}
+              <button
+                class="tab-action-btn"
+                @click=${this.handleOpenGitHubTokenUrl}
+              >
+                <span class="codicon codicon-github"></span>
+                Create on GitHub…
+              </button>
+            </span>
           </div>
           <div class="instructions">
             <strong>How to get a token:</strong>

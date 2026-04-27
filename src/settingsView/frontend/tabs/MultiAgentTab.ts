@@ -201,47 +201,6 @@ export class MultiAgentTab extends LitElement {
         display: inline-flex;
       }
 
-      /* Intro / how-it-works */
-      .how-it-works {
-        padding: var(--spacing-medium);
-        background-color: var(--vscode-inputValidation-infoBackground);
-        color: var(--vscode-inputValidation-infoForeground);
-        border: var(--border-thin) solid
-          var(--vscode-inputValidation-infoBorder);
-        border-radius: var(--border-radius);
-        line-height: var(--line-height-relaxed);
-        font-size: var(--font-size-sm);
-      }
-
-      .how-it-works-steps {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-small);
-        margin: var(--spacing-small) 0 0 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .how-it-works-step {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--spacing-small);
-      }
-
-      .step-number {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        flex-shrink: 0;
-        border-radius: 50%;
-        background: var(--vscode-focusBorder);
-        color: var(--vscode-editor-background);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-bold);
-      }
-
       /* Reliability settings */
       .reliability-row {
         display: flex;
@@ -420,32 +379,34 @@ export class MultiAgentTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
-        <div class="how-it-works">
-          <strong
-            >You run a team of specialized AI agents, led by an
-            orchestrator.</strong
-          >
-          The orchestrator reads your paper and hands tasks to the right
-          teammate — writing, derivations, numerical experiments, citations,
-          figures, and more.
-          <ol class="how-it-works-steps">
-            <li class="how-it-works-step">
-              <span class="step-number">1</span>
+        <div class="settings-reminder">
+          <span
+            class="codicon codicon-organization settings-reminder-icon"
+          ></span>
+          <div class="settings-reminder-title">Multi-agent workflow</div>
+          <div class="settings-reminder-description">
+            The orchestrator reads your paper and hands work to specialized
+            agents for writing, derivations, numerical experiments, citations,
+            figures, and more.
+          </div>
+          <ol class="settings-reminder-list settings-reminder-description">
+            <li>
+              <span class="settings-reminder-step">1</span>
               <span
                 ><strong>Pick a team</strong> below that matches your field.
                 This enables and configures the right specialized agents for
                 you.</span
               >
             </li>
-            <li class="how-it-works-step">
-              <span class="step-number">2</span>
+            <li>
+              <span class="settings-reminder-step">2</span>
               <span
                 ><strong>Select orchestrator</strong> from the agent dropdown
-                (look for the 🎯 icon), then click Execute.</span
+                (look for the target icon), then click Execute.</span
               >
             </li>
-            <li class="how-it-works-step">
-              <span class="step-number">3</span>
+            <li>
+              <span class="settings-reminder-step">3</span>
               <span
                 ><strong>Approve tasks</strong> in Progress as they come in —
                 press <strong>y</strong> to approve or <strong>n</strong> to

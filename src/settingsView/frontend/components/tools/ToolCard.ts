@@ -102,11 +102,6 @@ export class ToolCard extends LitElement {
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
       }
 
-      .tool-badge--disabled {
-        color: var(--vscode-badge-foreground);
-        background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
-      }
-
       .tool-description {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
@@ -324,20 +319,12 @@ export class ToolCard extends LitElement {
     ToolDashboardItem['status'],
     { icon: string; label: string }
   > = {
-    available: { icon: 'codicon-check', label: 'Available' },
-    'not-found': { icon: 'codicon-warning', label: 'Not Found' },
-    unknown: { icon: 'codicon-question', label: 'Unknown' },
+    available: { icon: 'codicon-check', label: 'Ready' },
+    'not-found': { icon: 'codicon-warning', label: 'Needs setup' },
+    unknown: { icon: 'codicon-question', label: 'Not checked' },
   };
 
   private renderBadge(): TemplateResult {
-    if (this.item.toggleable && this.item.enabled === false) {
-      return html`
-        <span class="tool-badge tool-badge--disabled">
-          <span class="codicon codicon-circle-slash"></span>
-          Disabled
-        </span>
-      `;
-    }
     const { status } = this.item;
     const config =
       ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
@@ -448,13 +435,13 @@ export class ToolCard extends LitElement {
       <vscode-checkbox
         class="tool-toggle"
         title="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this.item
-          .name}"
+          .name} for agent runs"
         ?checked=${this.item.enabled !== false}
         aria-label="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this
-          .item.name}"
+          .item.name} for agent runs"
         @change=${this.handleToggle}
       >
-        Enabled
+        Use in runs
       </vscode-checkbox>
     `;
   }
@@ -493,6 +480,7 @@ export class ToolCard extends LitElement {
               >`,
           )}
         </div>
+        <slot name="details"></slot>
         ${this.renderGuide()}
       </div>
     `;
