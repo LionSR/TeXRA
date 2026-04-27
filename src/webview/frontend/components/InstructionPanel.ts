@@ -216,8 +216,6 @@ export class InstructionPanel extends LitElement {
         min-width: 0;
       }
 
-      /* Agent group: shrink to content width */
-      /* Model group: grow to fill remaining space */
       .model-selection-footer .model-select-group {
         flex: 1 1 auto;
         max-width: calc(

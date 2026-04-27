@@ -54,13 +54,6 @@ export class MultiAgentTab extends LitElement {
         font-size: var(--font-size-sm);
       }
 
-      .multi-agent-reminder-body {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-small);
-        min-width: 0;
-      }
-
       .multi-agent-reminder-steps {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
@@ -446,7 +439,7 @@ export class MultiAgentTab extends LitElement {
           <span
             class="codicon codicon-organization settings-reminder-icon"
           ></span>
-          <div class="multi-agent-reminder-body">
+          <div class="settings-reminder-body">
             <div class="settings-reminder-title">Multi-agent workflow</div>
             <div class="settings-reminder-description">
               The orchestrator reads your paper and hands work to specialized
