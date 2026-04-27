@@ -280,12 +280,12 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
       }
       if (!tokenPresent && !inGitRepo) {
-        return 'Workspace is not a git repo and no GitHub token is configured. Open a git-tracked folder and set a token in the Git tab.';
+        return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in the Git tab.';
       }
       if (!tokenPresent) {
-        return 'Workspace is a git repo, but no GitHub token is configured. Set one in the Git tab.';
+        return 'This workspace is a git repo. Set a GitHub personal access token in the Git tab to enable PR activity subscriptions.';
       }
-      return 'GitHub token is set, but the workspace is not a git repo. Open a git-tracked folder to use PR subscriptions.';
+      return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
     },
   },
 
