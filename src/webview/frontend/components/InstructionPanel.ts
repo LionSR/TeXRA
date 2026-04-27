@@ -239,13 +239,14 @@ export class InstructionPanel extends LitElement {
         height: var(--height-control);
       }
 
-      .agent-select-controls,
-      .agent-select-dropdowns {
+      .model-selection-footer .agent-select-controls,
+      .model-selection-footer .agent-select-dropdowns {
         display: flex;
         align-items: center;
         gap: var(--spacing-small);
         flex: 1 1 auto;
         min-width: 0;
+        max-width: none;
         position: relative;
       }
 
