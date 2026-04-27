@@ -156,6 +156,7 @@ export const FileSelectConfigSchema = z.object({
   emptyListLabel: z.string(),
   selectListLabel: z.string(),
   tooltip: z.string(),
+  description: z.string().nullish(),
   toolConfig: z.enum(['tool', 'autoExtract']).nullish(),
   focusInstruction: z
     .object({
