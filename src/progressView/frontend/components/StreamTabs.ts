@@ -632,10 +632,13 @@ export class StreamTabs extends LitElement {
    * `manuallyCollapsed` + `finishedCollapseHandled` sets.
    */
   private userOverride: Map<string, 'expanded' | 'collapsed'> = new Map();
+  private branchActivityCache: Map<StreamTabId, ChildActivity> = new Map();
 
   protected override willUpdate(changed: import('lit').PropertyValues): void {
     if (!changed.has('childStreamsByParent') && !changed.has('streamStates'))
       return;
+
+    this.branchActivityCache.clear();
 
     for (const parentId of this.userOverride.keys()) {
       if (!this.childStreamsByParent.has(parentId)) {
@@ -670,10 +673,7 @@ export class StreamTabs extends LitElement {
     let anyActive = false;
     let anyUnknown = false;
     for (const child of children) {
-      const activity = this.classifyChildBranch(
-        child.name,
-        new Set([parentId]),
-      );
+      const activity = this.getBranchActivity(child.name, new Set([parentId]));
       if (activity === 'active') anyActive = true;
       else if (activity === 'unknown') anyUnknown = true;
     }
@@ -691,30 +691,43 @@ export class StreamTabs extends LitElement {
   }
 
   /**
-   * Classify an entire child branch, not just the direct row. This keeps a
-   * parent expanded while a deeper descendant (for example subagent → bash) is
-   * still running, and avoids dimming a completed intermediate child that has
-   * active descendants.
+   * Classify an entire child branch, not just the direct row. Results are
+   * memoized for each reactive update so deep child trees are traversed once
+   * even though expansion and dimming both ask for branch activity.
    */
-  private classifyChildBranch(
+  private getBranchActivity(
     streamId: StreamTabId,
     visited: Set<string>,
   ): ChildActivity {
-    const ownActivity = classifyChild(this.streamStates, streamId);
-    if (ownActivity === 'active') return 'active';
-    if (visited.has(streamId)) return ownActivity;
+    if (visited.has(streamId))
+      return classifyChild(this.streamStates, streamId);
 
-    visited.add(streamId);
+    const cached = this.branchActivityCache.get(streamId);
+    if (cached) return cached;
+
+    const ownActivity = classifyChild(this.streamStates, streamId);
+    if (ownActivity === 'active') {
+      this.branchActivityCache.set(streamId, 'active');
+      return 'active';
+    }
+
+    const nextVisited = new Set(visited);
+    nextVisited.add(streamId);
 
     let anyUnknown = ownActivity === 'unknown';
     const children = this.childStreamsByParent.get(streamId) ?? [];
     for (const child of children) {
-      const childActivity = this.classifyChildBranch(child.name, visited);
-      if (childActivity === 'active') return 'active';
+      const childActivity = this.getBranchActivity(child.name, nextVisited);
+      if (childActivity === 'active') {
+        this.branchActivityCache.set(streamId, 'active');
+        return 'active';
+      }
       if (childActivity === 'unknown') anyUnknown = true;
     }
 
-    return anyUnknown ? 'unknown' : 'finished';
+    const activity = anyUnknown ? 'unknown' : 'finished';
+    this.branchActivityCache.set(streamId, activity);
+    return activity;
   }
 
   private renderStreamNode(
@@ -734,8 +747,7 @@ export class StreamTabs extends LitElement {
       this.expandedParents.has(stream.name);
     const isFinished =
       stream.parentStreamId != null &&
-      this.classifyChildBranch(stream.name, new Set(options.visited)) ===
-        'finished';
+      this.getBranchActivity(stream.name, options.visited) === 'finished';
 
     return html`
       <stream-tab

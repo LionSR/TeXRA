@@ -52,6 +52,8 @@ function decodeXmlEntitiesForDisplay(text: string): string {
   if (!text.includes('&')) return text;
 
   return text
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
     .replaceAll('&amp;', '&');
