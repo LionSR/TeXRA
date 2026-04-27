@@ -54,6 +54,20 @@ export class MultiAgentTab extends LitElement {
         font-size: var(--font-size-sm);
       }
 
+      .multi-agent-reminder-body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-small);
+        min-width: 0;
+      }
+
+      .multi-agent-reminder-steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+        gap: var(--spacing-small) var(--spacing-large);
+        margin-top: var(--spacing-tiny);
+      }
+
       /* Preset cards */
       .preset-grid {
         display: grid;
@@ -162,6 +176,13 @@ export class MultiAgentTab extends LitElement {
         margin-top: var(--spacing-tiny);
       }
 
+      .preset-card-orchestrators {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-tiny);
+      }
+
       .preset-agent-badge {
         display: inline-flex;
         align-items: center;
@@ -174,15 +195,11 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-agent-badge--orchestrator {
-        color: var(--vscode-focusBorder);
-        background: color-mix(
-          in srgb,
-          var(--vscode-focusBorder) 14%,
-          var(--vscode-editor-background)
-        );
+        color: var(--vscode-button-foreground);
+        background: var(--vscode-button-background);
         border: var(--border-thin) solid
-          color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent);
-        font-weight: var(--font-weight-medium);
+          var(--vscode-button-background, var(--vscode-focusBorder));
+        font-weight: var(--font-weight-semibold);
       }
 
       .preset-orchestrator-icon {
@@ -364,20 +381,24 @@ export class MultiAgentTab extends LitElement {
             : nothing}
         </div>
         <p class="preset-card-description">${preset.description}</p>
+        ${orchestratorAgents.length > 0
+          ? html`<div class="preset-card-orchestrators">
+              ${orchestratorAgents.map(
+                (name) => html`
+                  <span
+                    class="preset-agent-badge preset-agent-badge--orchestrator"
+                    title="${name} is the orchestrator for this team"
+                  >
+                    <span class="preset-orchestrator-icon" aria-hidden="true"
+                      >🎯</span
+                    >
+                    ${name}
+                  </span>
+                `,
+              )}
+            </div>`
+          : nothing}
         <div class="preset-card-agents">
-          ${orchestratorAgents.map(
-            (name) => html`
-              <span
-                class="preset-agent-badge preset-agent-badge--orchestrator"
-                title="${name} is the orchestrator for this team"
-              >
-                <span class="preset-orchestrator-icon" aria-hidden="true"
-                  >🎯</span
-                >
-                ${name}
-              </span>
-            `,
-          )}
           ${teammateAgents.map(
             (name) => html`<span class="preset-agent-badge">${name}</span>`,
           )}
@@ -425,37 +446,41 @@ export class MultiAgentTab extends LitElement {
           <span
             class="codicon codicon-organization settings-reminder-icon"
           ></span>
-          <div class="settings-reminder-title">Multi-agent workflow</div>
-          <div class="settings-reminder-description">
-            The orchestrator reads your paper and hands work to specialized
-            agents for writing, derivations, numerical experiments, citations,
-            figures, and more.
+          <div class="multi-agent-reminder-body">
+            <div class="settings-reminder-title">Multi-agent workflow</div>
+            <div class="settings-reminder-description">
+              The orchestrator reads your paper and hands work to specialized
+              agents for writing, derivations, numerical experiments, citations,
+              figures, and more.
+            </div>
+            <ol
+              class="settings-reminder-list settings-reminder-description multi-agent-reminder-steps"
+            >
+              <li>
+                <span class="settings-reminder-step">1</span>
+                <span
+                  ><strong>Pick a team</strong> below that matches your field.
+                  This enables and configures the right specialized agents for
+                  you.</span
+                >
+              </li>
+              <li>
+                <span class="settings-reminder-step">2</span>
+                <span
+                  ><strong>Select orchestrator</strong> from the agent dropdown
+                  (look for the target icon), then click Execute.</span
+                >
+              </li>
+              <li>
+                <span class="settings-reminder-step">3</span>
+                <span
+                  ><strong>Approve tasks</strong> in Progress as they come in —
+                  press <strong>y</strong> to approve or <strong>n</strong> to
+                  reject. Or turn on auto-approve below.</span
+                >
+              </li>
+            </ol>
           </div>
-          <ol class="settings-reminder-list settings-reminder-description">
-            <li>
-              <span class="settings-reminder-step">1</span>
-              <span
-                ><strong>Pick a team</strong> below that matches your field.
-                This enables and configures the right specialized agents for
-                you.</span
-              >
-            </li>
-            <li>
-              <span class="settings-reminder-step">2</span>
-              <span
-                ><strong>Select orchestrator</strong> from the agent dropdown
-                (look for the target icon), then click Execute.</span
-              >
-            </li>
-            <li>
-              <span class="settings-reminder-step">3</span>
-              <span
-                ><strong>Approve tasks</strong> in Progress as they come in —
-                press <strong>y</strong> to approve or <strong>n</strong> to
-                reject. Or turn on auto-approve below.</span
-              >
-            </li>
-          </ol>
         </div>
 
         <h3>Multi-Agent Teams</h3>
