@@ -64,14 +64,17 @@ const DYNAMIC_FILTERING_TOOLS = new Set(['web_search', 'web_fetch']);
  * the unrepresentable option, causing failures with tool schemas that use .transform().
  */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
-  return defs.map((d) => ({
-    type: 'function',
-    function: {
-      name: d.name,
-      description: d.description,
-      parameters: convertToolSchema(d),
-    },
-  })) as ChatCompletionTool[];
+  return defs.map((d): ChatCompletionTool => {
+    const parameters = convertToolSchema(d) ?? undefined;
+    return {
+      type: 'function',
+      function: {
+        name: d.name,
+        description: d.description,
+        parameters,
+      },
+    };
+  });
 }
 
 /**
@@ -102,7 +105,8 @@ export function toOpenAIResponseTools(
   for (const d of defs) {
     // Handle native web search tool (only if model supports it)
     if (d.name === 'web_search' && supportsNativeWebSearch) {
-      tools.push({ type: 'web_search' } as WebSearchTool);
+      const webSearchTool: WebSearchTool = { type: 'web_search' };
+      tools.push(webSearchTool);
       continue;
     }
 
@@ -112,13 +116,14 @@ export function toOpenAIResponseTools(
       continue;
     }
 
-    tools.push({
+    const functionTool: FunctionTool = {
       type: 'function',
       name: d.name,
       description: d.description,
       parameters: convertToolSchema(d),
       strict: false,
-    } as FunctionTool);
+    };
+    tools.push(functionTool);
   }
 
   return tools;
