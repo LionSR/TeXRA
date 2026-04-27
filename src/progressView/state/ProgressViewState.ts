@@ -339,6 +339,7 @@ export class ProgressViewState {
     );
 
     // Clear in-memory state
+    StreamStatusService.clearAll();
     this.outputFiles.evictAll();
     this.usageStats.evictAll();
     this.meta.evictAll();
