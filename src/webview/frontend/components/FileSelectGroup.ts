@@ -1,4 +1,4 @@
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -444,6 +444,13 @@ export class FileSelectGroup extends LitElement {
             ${when(config.toolConfig === 'autoExtract', () =>
               this.renderAutoExtractMenu(),
             )}
+            ${config.description
+              ? html`<span
+                    class="file-select-hint"
+                    title=${config.description}
+                    >${config.description}</span
+                  >`
+              : nothing}
           </div>
           <vscode-toolbar-container class="file-select-actions">
             <vscode-toolbar-button
