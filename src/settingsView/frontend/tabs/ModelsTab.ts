@@ -85,14 +85,19 @@ export class ModelsTab extends LitElement {
     return html`
       <div class="settings-reminder">
         <span class="codicon codicon-info settings-reminder-icon"></span>
-        <div class="settings-reminder-title">Looking for API key settings?</div>
-        <div class="settings-reminder-description">${description}</div>
-        <div class="settings-reminder-actions">
-          ${accessJump}
-          <button class="tab-action-btn" @click=${this.handleScrollToApiConfig}>
-            <span class="codicon codicon-key"></span>
-            Jump to API Configuration
-          </button>
+        <div class="settings-reminder-body">
+          <div class="settings-reminder-title">API key settings</div>
+          <div class="settings-reminder-description">${description}</div>
+          <div class="settings-reminder-actions">
+            ${accessJump}
+            <button
+              class="tab-action-btn"
+              @click=${this.handleScrollToApiConfig}
+            >
+              <span class="codicon codicon-key"></span>
+              Jump to API Configuration
+            </button>
+          </div>
         </div>
       </div>
     `;
