@@ -770,6 +770,20 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-descriptionForeground);
   }
 
+  .external-inquiry-request__chat-links {
+    font-size: var(--font-size-sm);
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .external-inquiry-request__chat-links a {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: none;
+  }
+
+  .external-inquiry-request__chat-links a:hover {
+    text-decoration: underline;
+  }
+
   .external-inquiry-request__answer-label {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
