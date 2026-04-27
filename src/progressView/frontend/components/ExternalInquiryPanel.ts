@@ -283,7 +283,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
             Open:
             <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">ChatGPT Pro</a>
             &nbsp;·&nbsp;
-            <a href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer"
+            <a href="https://deepmind.google/models/gemini/deep-think/" target="_blank" rel="noopener noreferrer"
               >Gemini Deep Think</a
             >
           </div>
