@@ -245,6 +245,7 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         flex: 1 1 auto;
+        width: 100%;
         min-width: 0;
         max-width: none;
         position: relative;

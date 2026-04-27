@@ -202,12 +202,6 @@ export class MultiAgentTab extends LitElement {
         font-weight: var(--font-weight-semibold);
       }
 
-      .preset-card.active .preset-agent-badge--orchestrator {
-        color: var(--vscode-button-foreground);
-        background: var(--vscode-button-background);
-        border-color: var(--vscode-button-background, var(--vscode-focusBorder));
-      }
-
       .preset-orchestrator-icon {
         font-size: var(--font-size-xs);
         line-height: 1;
