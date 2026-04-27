@@ -1,5 +1,7 @@
 import * as path from 'path';
 
+import { MODEL_CONFIGS } from 'llm-zoo';
+
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
@@ -79,6 +81,10 @@ export function buildStreamInfo(
     name: id,
     label,
     model: processAgent ? undefined : config?.model,
+    modelLabel:
+      !processAgent && config?.model
+        ? (MODEL_CONFIGS[config.model]?.label ?? config.model)
+        : undefined,
     agent: config?.agent,
     agentCategory: category,
     hasMultipleOutputs:

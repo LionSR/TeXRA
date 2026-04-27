@@ -62,7 +62,7 @@ function buildTooltip(
   const mainLine = [
     info.label,
     `Status: ${status}`,
-    info.model && `Model: ${info.model}`,
+    info.model && `Model: ${info.modelLabel ?? info.model}`,
     info.inputFile && `Input: ${info.inputFile}`,
   ]
     .filter(Boolean)
@@ -445,7 +445,9 @@ export class StreamTab extends LitElement {
                       ? formatRelativeTime(this.lastTimestamp)
                       : ''}</span
                   >
-                  <span class="model">${stream.model ?? ''}</span>
+                  <span class="model"
+                    >${stream.modelLabel ?? stream.model ?? ''}</span
+                  >
                   <i
                     class=${`codicon codicon-${agentDecorator.icon} agent-category`}
                     title=${`Category: ${agentDecorator.label}`}
