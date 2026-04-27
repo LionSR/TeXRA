@@ -1,8 +1,5 @@
 // Local imports
-import type {
-  SetupPlatform,
-  TerminalRunResult,
-} from '@tools/setup/platform';
+import type { SetupPlatform, TerminalRunResult } from '@tools/setup/platform';
 
 /**
  * Build a fully stubbed `SetupPlatform` for tool unit tests, with each
