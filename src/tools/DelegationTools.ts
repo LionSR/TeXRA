@@ -50,7 +50,10 @@ import {
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { delegationAllowed } from '@shared/constants/delegationPolicy';
+import {
+  evaluateDelegationGate,
+  type NestedDelegationConfig,
+} from '@shared/constants/delegationPolicy';
 import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
@@ -209,21 +212,56 @@ interface ApprovalMeta {
 }
 
 /**
- * Defense-in-depth depth gate shared by fresh delegations and resumes.
- * The tool-use flow already filters delegation tools from the toolset when
- * the cap is reached, but if a rogue agent calls through anyway (fresh or
- * via the execution_id resume path) we refuse here with a clear error so
- * the LLM can pivot.
- *
- * Delegates to the same `delegationAllowed` predicate the tool filter
- * uses so NaN / sentinel depths behave identically at both gates.
+ * Runtime depth gate shared by fresh delegations and resumes.
+ * Tool-use flows pass the same max-depth snapshot used for tool resolution so
+ * prompt pruning and runtime enforcement derive from one policy snapshot.
+ * Direct tool calls fall back to the current workspace policy.
  */
-function depthGateError(parentDelegationDepth: number): ToolResult | null {
-  const config = readNestedDelegationConfig();
-  if (delegationAllowed(parentDelegationDepth, config)) return null;
+function depthGateError(
+  parentDelegationDepth: number,
+  configSnapshot?: NestedDelegationConfig,
+): ToolResult | null {
+  const gate = evaluateDelegationGate(
+    parentDelegationDepth,
+    configSnapshot ?? readNestedDelegationConfig(),
+  );
+  if (gate.allowed) return null;
+
+  const unknownDepth = gate.blockReason === 'unknown_depth';
+  const reason = unknownDepth
+    ? [
+        'The current session was resumed from saved state,',
+        'but its delegation lineage could not be verified.',
+      ].join(' ')
+    : [
+        `This agent is already at delegation depth ${gate.depth},`,
+        'and agents may delegate only when their current depth is less than',
+        'the configured max depth.',
+      ].join(' ');
+  const remediation = unknownDepth
+    ? [
+        'Resume or restart from a valid parent session,',
+        'or complete this task directly without delegating.',
+      ].join(' ')
+    : [
+        'Raise Settings → Multi-Agent → Max delegation depth,',
+        'or complete this task directly without delegating.',
+      ].join(' ');
   return {
-    error: `Delegation depth cap reached (max depth ${config.maxDepth}). Raise Settings → Multi-Agent → Max delegation depth, or complete this task directly without delegating.`,
+    error: [
+      `Delegation depth cap reached (current depth ${gate.depth},`,
+      `max depth ${gate.maxDepth}).`,
+      reason,
+      remediation,
+    ].join(' '),
     isError: true,
+    diagnostics: {
+      type: 'delegation_depth_cap',
+      currentDepth: gate.depth,
+      currentDepthKnown: !unknownDepth,
+      maxDepth: gate.maxDepth,
+      blockReason: gate.blockReason,
+    },
   };
 }
 
@@ -247,7 +285,10 @@ async function executeSubagent(
   const parentExecutionId = parentContext?.executionId;
   const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
 
-  const gated = depthGateError(parentDelegationDepth);
+  const gated = depthGateError(
+    parentDelegationDepth,
+    parentContext?.delegationConfig,
+  );
   if (gated) return gated;
 
   const executionId = generateExecutionId();
@@ -894,9 +935,12 @@ Git worktree support: ${
     executionId: string,
     instruction: string,
   ): Promise<ToolResult> {
-    const parentDelegationDepth =
-      getCurrentToolFileInteractionContext()?.delegationDepth ?? 0;
-    const gated = depthGateError(parentDelegationDepth);
+    const parentContext = getCurrentToolFileInteractionContext();
+    const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
+    const gated = depthGateError(
+      parentDelegationDepth,
+      parentContext?.delegationConfig,
+    );
     if (gated) return gated;
 
     const handle = getHandle(executionId);
