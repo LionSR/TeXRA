@@ -163,12 +163,31 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-agent-badge {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
         padding: var(--border-thin) var(--border-radius-large);
         font-size: var(--font-size-xs);
         color: var(--vscode-badge-foreground);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);
+      }
+
+      .preset-agent-badge--orchestrator {
+        color: var(--vscode-focusBorder);
+        background: color-mix(
+          in srgb,
+          var(--vscode-focusBorder) 14%,
+          var(--vscode-editor-background)
+        );
+        border: var(--border-thin) solid
+          color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent);
+        font-weight: var(--font-weight-medium);
+      }
+
+      .preset-orchestrator-icon {
+        font-size: var(--font-size-xs);
+        line-height: 1;
       }
 
       .preset-delete-btn {
@@ -313,11 +332,21 @@ export class MultiAgentTab extends LitElement {
     );
   }
 
+  private isOrchestratorAgent(name: string): boolean {
+    return name.toLowerCase().includes('orchestrator');
+  }
+
   private renderPresetCard(
     preset: AgentModePreset,
     deletable: boolean,
   ): TemplateResult {
     const allAgents = [...preset.toolUseAgents, ...preset.workflowAgents];
+    const orchestratorAgents = allAgents.filter((name) =>
+      this.isOrchestratorAgent(name),
+    );
+    const teammateAgents = allAgents.filter(
+      (name) => !this.isOrchestratorAgent(name),
+    );
     const isActive = this.activePresetId === preset.id;
     return html`
       <div
@@ -336,7 +365,20 @@ export class MultiAgentTab extends LitElement {
         </div>
         <p class="preset-card-description">${preset.description}</p>
         <div class="preset-card-agents">
-          ${allAgents.map(
+          ${orchestratorAgents.map(
+            (name) => html`
+              <span
+                class="preset-agent-badge preset-agent-badge--orchestrator"
+                title="${name} is the orchestrator for this team"
+              >
+                <span class="preset-orchestrator-icon" aria-hidden="true"
+                  >🎯</span
+                >
+                ${name}
+              </span>
+            `,
+          )}
+          ${teammateAgents.map(
             (name) => html`<span class="preset-agent-badge">${name}</span>`,
           )}
         </div>
