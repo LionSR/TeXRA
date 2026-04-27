@@ -280,6 +280,7 @@ export const ToolDashboardItemSchema = z.object({
   tools: z.array(ToolInfoSchema),
   status: ToolStatusSchema,
   requiresSetup: z.boolean(),
+  statusLabel: z.string().optional(),
   installGuide: z.string().optional(),
   installUrl: z.string().optional(),
   installExtensionId: z.string().optional(),
