@@ -445,9 +445,11 @@ export class FileSelectGroup extends LitElement {
               this.renderAutoExtractMenu(),
             )}
             ${config.description
-              ? html`<span class="file-select-hint"
-                  >${config.description}</span
-                >`
+              ? html`<span
+                    class="file-select-hint"
+                    title=${config.description}
+                    >${config.description}</span
+                  >`
               : nothing}
           </div>
           <vscode-toolbar-container class="file-select-actions">

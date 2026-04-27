@@ -267,7 +267,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
   };
 
   private handleQuestionInput = (event: Event): void => {
-    this.initialQuestion = (event.currentTarget as HTMLTextAreaElement).value;
+    this.initialQuestion = (event.currentTarget as HTMLInputElement).value;
   };
 
   private setupFollowup = (): void => {
