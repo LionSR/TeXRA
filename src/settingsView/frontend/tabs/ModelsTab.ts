@@ -34,44 +34,6 @@ export class ModelsTab extends LitElement {
       }
 
       /* max-width and centering provided by .tab-content-container */
-
-      .models-tab-hint {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        column-gap: var(--spacing-medium);
-        row-gap: var(--spacing-small);
-        padding: var(--spacing-medium);
-        margin-bottom: var(--spacing-large);
-        border: var(--border-thin) solid
-          var(--vscode-editorInfo-foreground, #3794ff);
-        border-radius: var(--border-radius);
-        background: var(--vscode-editor-background);
-      }
-
-      .models-tab-hint .codicon-info {
-        grid-row: 1 / span 3;
-        font-size: var(--font-size-lg);
-        color: var(--vscode-editorInfo-foreground, #3794ff);
-        margin-top: 2px;
-      }
-
-      .models-tab-hint-title {
-        font-weight: var(--font-weight-medium);
-        color: var(--vscode-foreground);
-      }
-
-      .models-tab-hint-description {
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        line-height: var(--line-height-normal);
-      }
-
-      .models-tab-hint-actions {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: var(--spacing-small);
-      }
     `,
   ];
 
@@ -121,16 +83,13 @@ export class ModelsTab extends LitElement {
       : nothing;
 
     return html`
-      <div class="models-tab-hint">
-        <span class="codicon codicon-info"></span>
-        <div class="models-tab-hint-title">Looking for API key settings?</div>
-        <div class="models-tab-hint-description">${description}</div>
-        <div class="models-tab-hint-actions">
+      <div class="settings-reminder">
+        <span class="codicon codicon-info settings-reminder-icon"></span>
+        <div class="settings-reminder-title">Looking for API key settings?</div>
+        <div class="settings-reminder-description">${description}</div>
+        <div class="settings-reminder-actions">
           ${accessJump}
-          <button
-            class="tab-action-btn"
-            @click=${this.handleScrollToApiConfig}
-          >
+          <button class="tab-action-btn" @click=${this.handleScrollToApiConfig}>
             <span class="codicon codicon-key"></span>
             Jump to API Configuration
           </button>

@@ -62,7 +62,7 @@ function buildTooltip(
   const mainLine = [
     info.label,
     `Status: ${status}`,
-    info.model && `Model: ${info.model}`,
+    info.model && `Model: ${info.modelLabel ?? info.model}`,
     info.inputFile && `Input: ${info.inputFile}`,
   ]
     .filter(Boolean)
@@ -451,7 +451,9 @@ export class StreamTab extends LitElement {
                       ? formatRelativeTime(this.lastTimestamp)
                       : ''}</span
                   >
-                  <span class="model">${stream.model ?? ''}</span>
+                  <span class="model"
+                    >${stream.modelLabel ?? stream.model ?? ''}</span
+                  >
                   <i
                     class=${`codicon codicon-${agentDecorator.icon} agent-category`}
                     title=${`Category: ${agentDecorator.label}`}
@@ -539,10 +541,17 @@ export class StreamTabs extends LitElement {
         scrollbar-width: thin;
       }
 
-      .clear-all-container {
+      .stream-list-footer {
         flex-shrink: 0;
         border-top: var(--border-thin) solid var(--color-border);
-        padding: var(--spacing-small);
+        padding: var(--spacing-small) var(--spacing-medium);
+      }
+
+      .stream-list-controls {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-small);
+        min-width: 0;
       }
 
       .agent-filter-group {
@@ -550,12 +559,32 @@ export class StreamTabs extends LitElement {
         justify-content: flex-start;
         flex-wrap: wrap;
         gap: var(--spacing-small);
-        margin-bottom: var(--spacing-small);
+        flex: 1 1 auto;
+        min-width: 0;
       }
 
       .agent-filter-group vscode-radio {
         min-width: auto;
         flex: 0 0 auto;
+      }
+
+      .stream-list-actions {
+        display: flex;
+        flex: 0 0 auto;
+        justify-content: flex-end;
+        margin-left: auto;
+      }
+
+      .delete-all-streams {
+        color: var(--color-text-secondary);
+      }
+
+      .delete-all-streams::part(control) {
+        border-radius: var(--border-radius-medium);
+      }
+
+      .delete-all-streams:hover {
+        color: var(--color-removed);
       }
 
       /* Child stream nesting */
@@ -704,35 +733,40 @@ export class StreamTabs extends LitElement {
         </div>
         ${this.compact
           ? nothing
-          : html`<div class="clear-all-container">
-              <vscode-radio-group
-                id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
-                class="agent-filter-group"
-                .value=${this.filter}
-                @change=${this.handleFilterChange}
-              >
-                ${repeat(
-                  FILTER_BUTTONS,
-                  (btn) => btn.id,
-                  (btn) => html`
-                    <vscode-radio
-                      id=${btn.id}
-                      value=${btn.filter}
-                      ?checked=${this.filter === btn.filter}
-                    >
-                      ${btn.label}
-                    </vscode-radio>
-                  `,
-                )}
-              </vscode-radio-group>
+          : html`<div class="stream-list-footer">
+              <div class="stream-list-controls">
+                <vscode-radio-group
+                  id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
+                  class="agent-filter-group"
+                  .value=${this.filter}
+                  @change=${this.handleFilterChange}
+                >
+                  ${repeat(
+                    FILTER_BUTTONS,
+                    (btn) => btn.id,
+                    (btn) => html`
+                      <vscode-radio
+                        id=${btn.id}
+                        value=${btn.filter}
+                        ?checked=${this.filter === btn.filter}
+                      >
+                        ${btn.label}
+                      </vscode-radio>
+                    `,
+                  )}
+                </vscode-radio-group>
 
-              <vscode-toolbar-button
-                id=${ELEMENT_IDS.DELETE_ALL_BTN}
-                icon="close-all"
-                label="Clear all"
-                title="Clear all streams"
-                @click=${this.handleDeleteAll}
-              ></vscode-toolbar-button>
+                <div class="stream-list-actions">
+                  <vscode-toolbar-button
+                    id=${ELEMENT_IDS.DELETE_ALL_BTN}
+                    class="delete-all-streams"
+                    icon="trash"
+                    label="Clear all streams"
+                    title="Clear all streams"
+                    @click=${this.handleDeleteAll}
+                  ></vscode-toolbar-button>
+                </div>
+              </div>
             </div>`}
       </div>
     `;

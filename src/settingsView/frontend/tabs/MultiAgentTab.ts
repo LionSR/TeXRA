@@ -163,12 +163,31 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-agent-badge {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
         padding: var(--border-thin) var(--border-radius-large);
         font-size: var(--font-size-xs);
         color: var(--vscode-badge-foreground);
         background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);
+      }
+
+      .preset-agent-badge--orchestrator {
+        color: var(--vscode-focusBorder);
+        background: color-mix(
+          in srgb,
+          var(--vscode-focusBorder) 14%,
+          var(--vscode-editor-background)
+        );
+        border: var(--border-thin) solid
+          color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent);
+        font-weight: var(--font-weight-medium);
+      }
+
+      .preset-orchestrator-icon {
+        font-size: var(--font-size-xs);
+        line-height: 1;
       }
 
       .preset-delete-btn {
@@ -199,47 +218,6 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card:hover .preset-delete-btn {
         display: inline-flex;
-      }
-
-      /* Intro / how-it-works */
-      .how-it-works {
-        padding: var(--spacing-medium);
-        background-color: var(--vscode-inputValidation-infoBackground);
-        color: var(--vscode-inputValidation-infoForeground);
-        border: var(--border-thin) solid
-          var(--vscode-inputValidation-infoBorder);
-        border-radius: var(--border-radius);
-        line-height: var(--line-height-relaxed);
-        font-size: var(--font-size-sm);
-      }
-
-      .how-it-works-steps {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-small);
-        margin: var(--spacing-small) 0 0 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .how-it-works-step {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--spacing-small);
-      }
-
-      .step-number {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        flex-shrink: 0;
-        border-radius: 50%;
-        background: var(--vscode-focusBorder);
-        color: var(--vscode-editor-background);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-bold);
       }
 
       /* Reliability settings */
@@ -354,11 +332,21 @@ export class MultiAgentTab extends LitElement {
     );
   }
 
+  private isOrchestratorAgent(name: string): boolean {
+    return name.toLowerCase().includes('orchestrator');
+  }
+
   private renderPresetCard(
     preset: AgentModePreset,
     deletable: boolean,
   ): TemplateResult {
     const allAgents = [...preset.toolUseAgents, ...preset.workflowAgents];
+    const orchestratorAgents = allAgents.filter((name) =>
+      this.isOrchestratorAgent(name),
+    );
+    const teammateAgents = allAgents.filter(
+      (name) => !this.isOrchestratorAgent(name),
+    );
     const isActive = this.activePresetId === preset.id;
     return html`
       <div
@@ -377,7 +365,20 @@ export class MultiAgentTab extends LitElement {
         </div>
         <p class="preset-card-description">${preset.description}</p>
         <div class="preset-card-agents">
-          ${allAgents.map(
+          ${orchestratorAgents.map(
+            (name) => html`
+              <span
+                class="preset-agent-badge preset-agent-badge--orchestrator"
+                title="${name} is the orchestrator for this team"
+              >
+                <span class="preset-orchestrator-icon" aria-hidden="true"
+                  >🎯</span
+                >
+                ${name}
+              </span>
+            `,
+          )}
+          ${teammateAgents.map(
             (name) => html`<span class="preset-agent-badge">${name}</span>`,
           )}
         </div>
@@ -420,32 +421,34 @@ export class MultiAgentTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
-        <div class="how-it-works">
-          <strong
-            >You run a team of specialized AI agents, led by an
-            orchestrator.</strong
-          >
-          The orchestrator reads your paper and hands tasks to the right
-          teammate — writing, derivations, numerical experiments, citations,
-          figures, and more.
-          <ol class="how-it-works-steps">
-            <li class="how-it-works-step">
-              <span class="step-number">1</span>
+        <div class="settings-reminder">
+          <span
+            class="codicon codicon-organization settings-reminder-icon"
+          ></span>
+          <div class="settings-reminder-title">Multi-agent workflow</div>
+          <div class="settings-reminder-description">
+            The orchestrator reads your paper and hands work to specialized
+            agents for writing, derivations, numerical experiments, citations,
+            figures, and more.
+          </div>
+          <ol class="settings-reminder-list settings-reminder-description">
+            <li>
+              <span class="settings-reminder-step">1</span>
               <span
                 ><strong>Pick a team</strong> below that matches your field.
                 This enables and configures the right specialized agents for
                 you.</span
               >
             </li>
-            <li class="how-it-works-step">
-              <span class="step-number">2</span>
+            <li>
+              <span class="settings-reminder-step">2</span>
               <span
                 ><strong>Select orchestrator</strong> from the agent dropdown
-                (look for the 🎯 icon), then click Execute.</span
+                (look for the target icon), then click Execute.</span
               >
             </li>
-            <li class="how-it-works-step">
-              <span class="step-number">3</span>
+            <li>
+              <span class="settings-reminder-step">3</span>
               <span
                 ><strong>Approve tasks</strong> in Progress as they come in —
                 press <strong>y</strong> to approve or <strong>n</strong> to
