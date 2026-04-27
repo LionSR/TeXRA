@@ -332,7 +332,7 @@ export class ToolCard extends LitElement {
     return html`
       <span class="tool-badge tool-badge--${status}">
         <span class="codicon ${config.icon}"></span>
-        ${config.label}
+        ${this.item.statusLabel ?? config.label}
       </span>
     `;
   }
