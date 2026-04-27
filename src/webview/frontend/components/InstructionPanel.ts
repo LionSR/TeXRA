@@ -224,8 +224,8 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         flex: 0 1 auto;
-        min-width: 7rem;
-        max-width: 10rem;
+        min-width: 9rem;
+        max-width: 14rem;
         position: relative;
       }
 
@@ -239,6 +239,21 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer .select-group vscode-single-select {
         min-width: 4rem;
         max-width: 7rem;
+      }
+
+      .model-selection-footer .model-select-group vscode-single-select {
+        min-width: 10rem;
+        max-width: 14rem;
+      }
+
+      .model-selection-footer .model-select::part(listbox) {
+        min-width: 16rem;
+        max-width: min(22rem, calc(100vw - var(--spacing-xlarge)));
+      }
+
+      .model-selection-footer .agent-select::part(listbox) {
+        min-width: 15rem;
+        max-width: min(22rem, calc(100vw - var(--spacing-xlarge)));
       }
 
       .agent-select--hidden {
@@ -596,7 +611,7 @@ export class InstructionPanel extends LitElement {
                 </div>
               </div>
             </div>
-            <div class="select-group">
+            <div class="select-group model-select-group">
               <vscode-toolbar-button
                 id="modelSettingsButton"
                 class="settings-button"
@@ -607,6 +622,7 @@ export class InstructionPanel extends LitElement {
               ></vscode-toolbar-button>
               <vscode-single-select
                 id="model"
+                class="model-select"
                 position="above"
                 aria-label="Model"
                 title=${this.getModelTooltip(

@@ -50,6 +50,7 @@ export const StreamTabInfoSchema = z.object({
   name: z.string(),
   label: z.string(),
   model: z.string().optional(),
+  modelLabel: z.string().optional(),
   agent: z.string().optional(),
   agentCategory: AgentCategorySchema,
   hasMultipleOutputs: z.boolean().optional(),
