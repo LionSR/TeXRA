@@ -69,23 +69,28 @@ export async function initializeToolDefaults(): Promise<void> {
 }
 
 /**
- * Copies default agent files from the extension resources to the global storage directory
+ * Reconciles bundled agents in global storage:
+ *  - Always prunes renamed/removed legacy files (idempotent; cheap).
+ *  - Re-copies bundled agents only on version bump or when files are missing.
+ *
+ * Splitting these concerns means a stale legacy file gets cleaned up on
+ * every activation, even when the bundled set is otherwise unchanged.
  */
 export async function copyDefaultAgents(
   context: vscode.ExtensionContext,
 ): Promise<void> {
+  await deleteLegacyAgentFiles();
+
   const currentVersion = vscode.extensions.getExtension(context.extension.id)
     ?.packageJSON.version;
   const lastKnownVersion = globalSM.get<string>(
     GlobalStateKey.LAST_KNOWN_VERSION,
   );
 
-  const needsCopy =
-    currentVersion !== lastKnownVersion ||
-    (await hasMissingBundledAgentFiles(context));
-
-  if (!needsCopy) {
-    await deleteLegacyAgentFiles();
+  if (
+    currentVersion === lastKnownVersion &&
+    !(await hasMissingBundledAgentFiles(context))
+  ) {
     return;
   }
 
@@ -105,7 +110,6 @@ export async function copyDefaultAgents(
       { overwrite: true },
     );
 
-    await deleteLegacyAgentFiles();
     await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
   } catch (err) {
     logger.error(
