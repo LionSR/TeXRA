@@ -928,11 +928,18 @@ Git worktree support: ${
 
     switch (result.status) {
       case 'sent':
+        return {
+          summary: `Follow-up sent to '${handle.agentName}'`,
+          output: [
+            `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
+            `Execution ID: ${executionId}`,
+          ].join('\n'),
+        };
       case 'queued':
         return {
           summary: `Follow-up queued for '${handle.agentName}'`,
           output: [
-            `Follow-up instruction queued for '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
+            `Follow-up instruction queued for '${handle.agentName}' (${result.reason}). The subagent will process it and deliver a new result automatically.`,
             `Execution ID: ${executionId}`,
           ].join('\n'),
         };

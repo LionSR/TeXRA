@@ -156,21 +156,6 @@ export function interruptAllCodexSessions(): void {
 }
 
 // ============================================================================
-// Codex delivery state — mirrors DelegationTools.activeSubagentDelivery
-// ============================================================================
-
-/**
- * `hasDelivered` is true between turns (the loop is WAITING) and false while
- * a turn is in flight. Follow-ups can be queued in either state; the flag is
- * retained as lightweight delivery-state bookkeeping for the active loop.
- */
-interface CodexDeliveryState {
-  hasDelivered: boolean;
-}
-
-const activeCodexDelivery = new Map<ExecutionId, CodexDeliveryState>();
-
-// ============================================================================
 // Codex follow-up session — IInterruptible only (no ToolUseFlowContext)
 // ============================================================================
 
@@ -385,9 +370,6 @@ function startCodexLoop(params: {
   session.setQueue(queue);
   registerInterruptible(childStreamId, session);
 
-  const deliveryState: CodexDeliveryState = { hasDelivered: true };
-  activeCodexDelivery.set(executionId, deliveryState);
-
   // Start a log group so endRunningGroups() marks it as errored on reload,
   // giving the user a visual cue that the session was interrupted.
   const groupId = logger.startGroup('Codex session');
@@ -418,7 +400,6 @@ function startCodexLoop(params: {
         if (!messages || session.isInterrupted()) break;
 
         const prompt = messages.join('\n\n');
-        deliveryState.hasDelivered = false;
         StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
         const startedAt = Date.now();
 
@@ -467,7 +448,6 @@ function startCodexLoop(params: {
         } catch {
           // Best-effort; delivery must not block on storage.
         }
-        deliveryState.hasDelivered = true;
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
 
         if (!session.isInterrupted()) {
@@ -478,7 +458,6 @@ function startCodexLoop(params: {
       logger.endGroup(groupId, 'stopped');
       unregisterInterruptible(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
-      activeCodexDelivery.delete(executionId);
       const threadId = thread.id;
       if (threadId) threadRegistry.delete(threadId);
       // Persist terminal status before untracking — untrackExecution fires
@@ -646,18 +625,12 @@ async function resumeCodexThread(
     );
   }
 
-  const deliveryState = activeCodexDelivery.get(stored.executionId);
-  if (!deliveryState) {
-    throw new ToolError(
-      `Codex execution '${stored.executionId}' is no longer tracked for delivery.`,
-    );
-  }
   const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
   queue.enqueue(prompt);
 
   const preview = truncateWithEllipsis(prompt, 60);
   return {
-    summary: `Follow-up sent to Codex: ${preview}`,
+    summary: `Follow-up queued for Codex: ${preview}`,
     output: [
       `Follow-up instruction queued for Codex thread '${threadId}'. The agent will process it and deliver a new result automatically.`,
       `Execution ID: ${stored.executionId}`,
