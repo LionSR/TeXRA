@@ -30,18 +30,28 @@ const STRUCTURED_DELIVERY_TAGS = [
   'subagent-error',
 ] as const;
 
+const XML_ESCAPED_DELIVERY_TAGS = new Set<string>([
+  'background-result',
+  'background-error',
+  'codex-result',
+  'codex-error',
+  'subagent-result',
+  'subagent-error',
+]);
+
 const STRUCTURED_DELIVERY_PATTERN = new RegExp(
   `^\\s*<(${STRUCTURED_DELIVERY_TAGS.join('|')})(\\s|>)`,
 );
 
-function isStructuredDeliveryMessage(text: string): boolean {
-  return STRUCTURED_DELIVERY_PATTERN.test(text);
+function getStructuredDeliveryTag(text: string): string | null {
+  const match = STRUCTURED_DELIVERY_PATTERN.exec(text);
+  return match?.[1] ?? null;
 }
 
-function decodeXmlEntities(text: string): string {
+function decodeXmlEntitiesForDisplay(text: string): string {
+  if (!text.includes('&')) return text;
+
   return text
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
     .replaceAll('&amp;', '&');
@@ -157,15 +167,41 @@ export class UserMessage extends LitElement {
     defaultTitle: 'Copy message',
   });
 
+  private displayCache = {
+    text: '',
+    isStructuredDelivery: false,
+    displayText: '',
+  };
+
+  private getDisplayState(): {
+    isStructuredDelivery: boolean;
+    displayText: string;
+  } {
+    if (this.displayCache.text === this.text) {
+      return this.displayCache;
+    }
+
+    const structuredTag = getStructuredDeliveryTag(this.text);
+    const isStructuredDelivery = structuredTag != null;
+    const displayText =
+      structuredTag != null && XML_ESCAPED_DELIVERY_TAGS.has(structuredTag)
+        ? decodeXmlEntitiesForDisplay(this.text)
+        : this.text;
+
+    this.displayCache = {
+      text: this.text,
+      isStructuredDelivery,
+      displayText,
+    };
+    return this.displayCache;
+  }
+
   override render(): TemplateResult {
     const { timeDisplay, tooltipTimestamp } = formatTimestamp(
       new Date(this.timestamp),
     );
     const copyState = this.copyController.state;
-    const isStructuredDelivery = isStructuredDeliveryMessage(this.text);
-    const displayText = isStructuredDelivery
-      ? decodeXmlEntities(this.text)
-      : this.text;
+    const { isStructuredDelivery, displayText } = this.getDisplayState();
 
     return html`
       <div class="user-message-container">
@@ -190,7 +226,7 @@ export class UserMessage extends LitElement {
               icon="copy"
               title=${copyState.title}
               aria-label=${copyState.ariaLabel}
-              @click=${() => this.copyController.copy(displayText)}
+              @click=${() => this.copyController.copy(this.text)}
             ></vscode-toolbar-button>
           </div>
           <div
