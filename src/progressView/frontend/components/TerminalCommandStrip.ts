@@ -32,7 +32,8 @@ export class TerminalCommandStrip extends LitElement {
         monospace
       );
       font-size: var(--vscode-editor-font-size, 12px);
-      overflow-x: auto;
+      max-height: min(32vh, 320px);
+      overflow: auto;
       white-space: pre;
     }
 

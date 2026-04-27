@@ -19,6 +19,34 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 // Local imports - formatter helpers
 import { formatTimestamp } from '../formatters/timestampUtils';
 
+const STRUCTURED_DELIVERY_TAGS = [
+  'background-result',
+  'background-error',
+  'codex-result',
+  'codex-error',
+  'execution-activity',
+  'github-webhook-activity',
+  'subagent-result',
+  'subagent-error',
+] as const;
+
+const STRUCTURED_DELIVERY_PATTERN = new RegExp(
+  `^\\s*<(${STRUCTURED_DELIVERY_TAGS.join('|')})(\\s|>)`,
+);
+
+function isStructuredDeliveryMessage(text: string): boolean {
+  return STRUCTURED_DELIVERY_PATTERN.test(text);
+}
+
+function decodeXmlEntities(text: string): string {
+  return text
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&');
+}
+
 @customElement('user-message')
 export class UserMessage extends LitElement {
   static override styles = [
@@ -41,6 +69,10 @@ export class UserMessage extends LitElement {
         background-color: var(--vscode-editor-selectionBackground);
         border: var(--border-thin) solid var(--vscode-panel-border);
         border-radius: var(--border-radius);
+      }
+
+      .user-message--structured-delivery {
+        max-width: 100%;
       }
 
       .user-message-header {
@@ -84,6 +116,28 @@ export class UserMessage extends LitElement {
         font-size: var(--font-size-sm);
       }
 
+      .user-message--structured-delivery .user-message-content {
+        max-height: min(45vh, 520px);
+        overflow: auto;
+        padding: var(--spacing-small);
+        background: var(
+          --vscode-textCodeBlock-background,
+          var(--vscode-editor-background)
+        );
+        border-radius: var(--border-radius-small);
+        font-family: var(
+          --vscode-editor-font-family,
+          ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace
+        );
+        font-size: var(--vscode-editor-font-size, var(--font-size-sm));
+        line-height: 1.35;
+        white-space: pre;
+        word-wrap: normal;
+      }
+
       .user-message-timestamp {
         font-size: var(--font-size-xs);
       }
@@ -108,10 +162,19 @@ export class UserMessage extends LitElement {
       new Date(this.timestamp),
     );
     const copyState = this.copyController.state;
+    const isStructuredDelivery = isStructuredDeliveryMessage(this.text);
+    const displayText = isStructuredDelivery
+      ? decodeXmlEntities(this.text)
+      : this.text;
 
     return html`
       <div class="user-message-container">
-        <div class="user-message">
+        <div
+          class=${classMap({
+            'user-message': true,
+            'user-message--structured-delivery': isStructuredDelivery,
+          })}
+        >
           <div class="user-message-header">
             <span class="user-message-header-left">
               <i class="codicon codicon-comment user-message-icon"></i>
@@ -127,13 +190,13 @@ export class UserMessage extends LitElement {
               icon="copy"
               title=${copyState.title}
               aria-label=${copyState.ariaLabel}
-              @click=${() => this.copyController.copy(this.text)}
+              @click=${() => this.copyController.copy(displayText)}
             ></vscode-toolbar-button>
           </div>
           <div
             class="user-message-content"
             data-log-id=${this.logId}
-            .textContent=${this.text}
+            .textContent=${displayText}
           ></div>
         </div>
       </div>
