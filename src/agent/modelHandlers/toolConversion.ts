@@ -42,8 +42,14 @@ function convertToolSchema(
  * OpenAI tool payloads should always carry an explicit schema object when a
  * tool has no declared parameters to avoid null/omitted ambiguity.
  */
+const EMPTY_TOOL_PARAMETERS_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {},
+  additionalProperties: false,
+};
+
 function toOpenAISchemaObject(def: ToolDefinition): Record<string, unknown> {
-  return convertToolSchema(def) ?? {};
+  return convertToolSchema(def) ?? EMPTY_TOOL_PARAMETERS_SCHEMA;
 }
 
 // Map local tool names to Anthropic remote tool types.
