@@ -706,12 +706,14 @@ export class SettingsApp extends SettingsAppBase {
           </div>
           <div class="settings-header-actions">
             ${settingsButton}
-            <vscode-toolbar-button
-              icon="sign-out"
-              label="Sign Out"
+            <button
+              class="tab-action-btn settings-header-auth-button"
               title="Sign out"
               @click=${this.handleSignOut}
-            ></vscode-toolbar-button>
+            >
+              <span class="codicon codicon-sign-out"></span>
+              Sign out
+            </button>
           </div>
         </div>
       `;
@@ -724,12 +726,14 @@ export class SettingsApp extends SettingsAppBase {
         </span>
         <div class="settings-header-actions">
           ${settingsButton}
-          <vscode-toolbar-button
-            icon="sign-in"
-            label="Sign In"
+          <button
+            class="tab-action-btn settings-header-auth-button"
             title="Sign in"
             @click=${this.handleSignIn}
-          ></vscode-toolbar-button>
+          >
+            <span class="codicon codicon-sign-in"></span>
+            Sign in
+          </button>
         </div>
       </div>
     `;
