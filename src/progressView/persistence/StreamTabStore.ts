@@ -20,6 +20,7 @@
 import * as path from 'path';
 
 import { KVStore } from '@common/storage';
+import * as logger from '@logger/logUtils';
 
 import type {
   CompileFailure,
@@ -62,6 +63,7 @@ const KEYS = {
 } as const;
 
 export const STREAM_DATA_DIR = 'streamData';
+const CHANNEL = 'StreamTabStore';
 
 // ============================================================================
 // Implementation
@@ -88,10 +90,31 @@ class StreamTabKVStore extends KVStore {
     return this.streamTabId;
   }
 
+  /**
+   * Per-stream-tab files are a regenerable cache: an empty/truncated JSON
+   * payload (interrupted write, crash mid-flush) is functionally equivalent
+   * to a missing file — the next write will replace it. Treat parse errors
+   * as missing so a single corrupt file cannot block extension activation.
+   * Other I/O errors still propagate so genuine failures stay loud.
+   */
+  private async tryRead(key: string): Promise<unknown | undefined> {
+    try {
+      return await this.read(key);
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      logger.warn(
+        CHANNEL,
+        `Discarding unreadable ${key}.json for stream ${this.streamTabId}; treating as missing.`,
+        { data: error },
+      );
+      return undefined;
+    }
+  }
+
   // -- Meta -----------------------------------------------------------------
 
   async readMeta(): Promise<StreamTabMeta | null> {
-    const raw = await this.read(KEYS.META);
+    const raw = await this.tryRead(KEYS.META);
     if (!raw) return null;
     const result = StreamTabMetaSchema.safeParse(raw);
     return result.success ? result.data : null;
@@ -104,7 +127,7 @@ class StreamTabKVStore extends KVStore {
   // -- Output files ---------------------------------------------------------
 
   async readOutputFiles(): Promise<Map<number, OutputFileInfo[]> | null> {
-    const raw = await this.read(KEYS.OUTPUT_FILES);
+    const raw = await this.tryRead(KEYS.OUTPUT_FILES);
     if (!raw) return null;
     const migrated = await this.preferActiveRunFlattening(raw);
     const result = OutputFilesDataSchema.safeParse(migrated);
@@ -132,7 +155,7 @@ class StreamTabKVStore extends KVStore {
   // -- Missing outputs ------------------------------------------------------
 
   async readMissingOutputs(): Promise<Map<number, string[]> | null> {
-    const raw = await this.read(KEYS.MISSING_OUTPUTS);
+    const raw = await this.tryRead(KEYS.MISSING_OUTPUTS);
     if (!raw) return null;
     const migrated = await this.preferActiveRunFlattening(raw);
     const result = MissingOutputsDataSchema.safeParse(migrated);
@@ -146,7 +169,7 @@ class StreamTabKVStore extends KVStore {
   // -- Compile failures -----------------------------------------------------
 
   async readCompileFailures(): Promise<Map<number, CompileFailure[]> | null> {
-    const raw = await this.read(KEYS.COMPILE_FAILURES);
+    const raw = await this.tryRead(KEYS.COMPILE_FAILURES);
     if (!raw) return null;
     const migrated = await this.preferActiveRunFlattening(raw);
     const result = CompileFailuresDataSchema.safeParse(migrated);
@@ -160,7 +183,7 @@ class StreamTabKVStore extends KVStore {
   // -- Usage stats ----------------------------------------------------------
 
   async readUsageStats(): Promise<Map<string, TokenUsageStats> | null> {
-    const raw = await this.read(KEYS.USAGE_STATS);
+    const raw = await this.tryRead(KEYS.USAGE_STATS);
     if (!raw) return null;
     const result = UsageDataSchema.safeParse(raw);
     return result.success && result.data.size > 0 ? result.data : null;
@@ -187,7 +210,7 @@ class StreamTabKVStore extends KVStore {
    * exists, otherwise falls back to the newest archived entry.
    */
   async readPreferredLegacyInstruction(): Promise<LegacyInstructionEntry | null> {
-    const raw = await this.read(KEYS.LEGACY_INSTRUCTIONS);
+    const raw = await this.tryRead(KEYS.LEGACY_INSTRUCTIONS);
     if (!raw) return null;
 
     const result = LegacyInstructionsDataSchema.safeParse(raw);
@@ -206,9 +229,9 @@ class StreamTabKVStore extends KVStore {
    * so the data is preserved under the canonical archival key.
    */
   async migrateOnDiskRunInstructions(): Promise<void> {
-    const existingLegacy = await this.read(KEYS.LEGACY_INSTRUCTIONS);
+    const existingLegacy = await this.tryRead(KEYS.LEGACY_INSTRUCTIONS);
     if (existingLegacy) return;
-    const oldData = await this.read(KEYS.LEGACY_RUN_INSTRUCTIONS);
+    const oldData = await this.tryRead(KEYS.LEGACY_RUN_INSTRUCTIONS);
     if (!oldData) return;
     await this.write(KEYS.LEGACY_INSTRUCTIONS, oldData);
     await this.delete(KEYS.LEGACY_RUN_INSTRUCTIONS);
