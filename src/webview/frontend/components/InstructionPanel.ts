@@ -87,8 +87,8 @@ export class InstructionPanel extends LitElement {
     css`
       :host {
         display: block;
-        --agent-model-select-min-width: 11rem;
-        --agent-model-select-max-width: min(22rem, calc(100vw - 9rem));
+        --agent-model-select-min-width: 6rem;
+        --agent-model-select-max-width: min(20rem, calc(100vw - 9rem));
         --agent-model-listbox-min-width: 17rem;
         --agent-model-listbox-max-width: min(
           26rem,
@@ -216,11 +216,8 @@ export class InstructionPanel extends LitElement {
         min-width: 0;
       }
 
-      .model-selection-footer .agent-model-select-group {
-        flex: 1 1 calc(
-          var(--agent-model-select-min-width) + var(--height-control) +
-            var(--spacing-small)
-        );
+      .model-selection-footer .model-select-group {
+        flex: 1 1 auto;
         max-width: calc(
           var(--agent-model-select-max-width) + var(--height-control) +
             var(--spacing-small)
@@ -261,6 +258,7 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer .agent-model-select-group vscode-single-select,
       .model-selection-footer .model-select-group vscode-single-select {
         flex: 1 1 auto;
+        font-size: var(--font-size-sm);
         min-width: var(--agent-model-select-min-width);
         max-width: var(--agent-model-select-max-width);
       }

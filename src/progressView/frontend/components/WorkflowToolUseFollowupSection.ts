@@ -85,11 +85,8 @@ export class WorkflowToolUseFollowupSection extends LitElement {
         color: var(--color-text-secondary);
       }
 
-      textarea {
+      vscode-textarea {
         width: 100%;
-        min-height: 72px;
-        box-sizing: border-box;
-        resize: vertical;
       }
 
       .followup__actions {
@@ -190,12 +187,14 @@ export class WorkflowToolUseFollowupSection extends LitElement {
                     </vscode-single-select>
                   </label>
                 </div>
-                <textarea
+                <vscode-textarea
                   aria-label="Follow-up note"
                   placeholder="Ask what the tool-use agent should do with these results."
+                  rows="3"
+                  resize="vertical"
                   .value=${this.initialQuestion}
                   @input=${this.handleQuestionInput}
-                ></textarea>
+                ></vscode-textarea>
                 <div class="followup__actions">
                   <vscode-button
                     appearance="secondary"
@@ -268,7 +267,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
   };
 
   private handleQuestionInput = (event: Event): void => {
-    this.initialQuestion = (event.currentTarget as HTMLTextAreaElement).value;
+    this.initialQuestion = (event.currentTarget as HTMLInputElement).value;
   };
 
   private setupFollowup = (): void => {
