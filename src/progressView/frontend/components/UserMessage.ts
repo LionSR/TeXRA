@@ -5,7 +5,7 @@
  */
 
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
@@ -167,14 +167,20 @@ export class UserMessage extends LitElement {
     defaultTitle: 'Copy message',
   });
 
+  private payloadCopyController = new CopyButtonController(this, {
+    defaultTitle: 'Copy original payload',
+  });
+
   private displayCache = {
     text: '',
     isStructuredDelivery: false,
+    hasOriginalPayload: false,
     displayText: '',
   };
 
   private getDisplayState(): {
     isStructuredDelivery: boolean;
+    hasOriginalPayload: boolean;
     displayText: string;
   } {
     if (this.displayCache.text === this.text) {
@@ -183,14 +189,16 @@ export class UserMessage extends LitElement {
 
     const structuredTag = getStructuredDeliveryTag(this.text);
     const isStructuredDelivery = structuredTag != null;
-    const displayText =
-      structuredTag != null && XML_ESCAPED_DELIVERY_TAGS.has(structuredTag)
-        ? decodeXmlEntitiesForDisplay(this.text)
-        : this.text;
+    const hasOriginalPayload =
+      structuredTag != null && XML_ESCAPED_DELIVERY_TAGS.has(structuredTag);
+    const displayText = hasOriginalPayload
+      ? decodeXmlEntitiesForDisplay(this.text)
+      : this.text;
 
     this.displayCache = {
       text: this.text,
       isStructuredDelivery,
+      hasOriginalPayload,
       displayText,
     };
     return this.displayCache;
@@ -201,7 +209,9 @@ export class UserMessage extends LitElement {
       new Date(this.timestamp),
     );
     const copyState = this.copyController.state;
-    const { isStructuredDelivery, displayText } = this.getDisplayState();
+    const payloadCopyState = this.payloadCopyController.state;
+    const { isStructuredDelivery, hasOriginalPayload, displayText } =
+      this.getDisplayState();
 
     return html`
       <div class="user-message-container">
@@ -226,8 +236,20 @@ export class UserMessage extends LitElement {
               icon="copy"
               title=${copyState.title}
               aria-label=${copyState.ariaLabel}
-              @click=${() => this.copyController.copy(this.text)}
+              @click=${() => this.copyController.copy(displayText)}
             ></vscode-toolbar-button>
+            ${hasOriginalPayload
+              ? html`<vscode-toolbar-button
+                  class=${classMap({
+                    'user-message-copy': true,
+                    [payloadCopyState.successClass]: payloadCopyState.copied,
+                  })}
+                  icon="code"
+                  title=${payloadCopyState.title}
+                  aria-label=${payloadCopyState.ariaLabel}
+                  @click=${() => this.payloadCopyController.copy(this.text)}
+                ></vscode-toolbar-button>`
+              : nothing}
           </div>
           <div
             class="user-message-content"
