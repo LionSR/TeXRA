@@ -162,6 +162,9 @@ export class OutputFilesSection extends LitElement {
               title="List the files that should receive the agent's output"
               >Multiple Outputs</span
             >
+            <span class="file-select-hint"
+              >Agent writes to all listed files</span
+            >
           </div>
           <vscode-toolbar-container class="file-select-actions">
             <vscode-toolbar-button

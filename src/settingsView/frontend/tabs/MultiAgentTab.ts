@@ -461,7 +461,8 @@ export class MultiAgentTab extends LitElement {
                 <span
                   ><strong>Pick a team</strong> below that matches your field.
                   This enables and configures the right specialized agents for
-                  you.</span
+                  you. You can also add or remove individual agents in the
+                  <strong>Agents</strong> tab.</span
                 >
               </li>
               <li>
