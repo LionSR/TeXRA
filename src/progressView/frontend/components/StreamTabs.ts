@@ -587,14 +587,11 @@ export class StreamTabs extends LitElement {
         color: var(--color-removed);
       }
 
-      /* Child stream nesting */
+      /* Recursive child stream nesting */
       .child-streams {
         padding-left: var(--spacing-medium, 12px);
         border-left: var(--border-thin) solid var(--color-border);
         margin-left: var(--spacing-small);
-        max-height: 12rem;
-        overflow-y: auto;
-        scrollbar-gutter: stable;
       }
 
       .child-streams stream-tab {
@@ -658,8 +655,8 @@ export class StreamTabs extends LitElement {
    * Single source of truth for "is this parent's child list expanded?".
    * Rules (top to bottom):
    *   1. Honor user intent if set.
-   *   2. Expand if any child is actively running.
-   *   3. Collapse once all children have reached a terminal status.
+   *   2. Expand if any child or descendant is actively running.
+   *   3. Collapse once every child branch has reached a terminal status.
    *   4. Otherwise (mixed / still-unknown), keep expanded — default on
    *      first appearance before status events arrive.
    */
@@ -673,7 +670,10 @@ export class StreamTabs extends LitElement {
     let anyActive = false;
     let anyUnknown = false;
     for (const child of children) {
-      const activity = classifyChild(this.streamStates, child.name);
+      const activity = this.classifyChildBranch(
+        child.name,
+        new Set([parentId]),
+      );
       if (activity === 'active') anyActive = true;
       else if (activity === 'unknown') anyUnknown = true;
     }
@@ -690,6 +690,81 @@ export class StreamTabs extends LitElement {
     return this.streamStates.get(name)?.lastTimestamp;
   }
 
+  /**
+   * Classify an entire child branch, not just the direct row. This keeps a
+   * parent expanded while a deeper descendant (for example subagent → bash) is
+   * still running, and avoids dimming a completed intermediate child that has
+   * active descendants.
+   */
+  private classifyChildBranch(
+    streamId: StreamTabId,
+    visited: Set<string>,
+  ): ChildActivity {
+    const ownActivity = classifyChild(this.streamStates, streamId);
+    if (ownActivity === 'active') return 'active';
+    if (visited.has(streamId)) return ownActivity;
+
+    visited.add(streamId);
+
+    let anyUnknown = ownActivity === 'unknown';
+    const children = this.childStreamsByParent.get(streamId) ?? [];
+    for (const child of children) {
+      const childActivity = this.classifyChildBranch(child.name, visited);
+      if (childActivity === 'active') return 'active';
+      if (childActivity === 'unknown') anyUnknown = true;
+    }
+
+    return anyUnknown ? 'unknown' : 'finished';
+  }
+
+  private renderStreamNode(
+    stream: StreamTabInfo,
+    options: { compact: boolean; visited: Set<string> },
+  ): TemplateResult {
+    const nextVisited = new Set(options.visited);
+    nextVisited.add(stream.name);
+
+    const children = (this.childStreamsByParent.get(stream.name) ?? []).filter(
+      (child) => !nextVisited.has(child.name),
+    );
+    const childCount = children.length;
+    const expanded =
+      !options.compact &&
+      childCount > 0 &&
+      this.expandedParents.has(stream.name);
+    const isFinished =
+      stream.parentStreamId != null &&
+      this.classifyChildBranch(stream.name, new Set(options.visited)) ===
+        'finished';
+
+    return html`
+      <stream-tab
+        class=${isFinished ? 'is-finished' : ''}
+        .info=${stream}
+        .compact=${options.compact}
+        .status=${this.getStatus(stream.name)}
+        .lastTimestamp=${this.getTimestamp(stream.name)}
+        ?active=${stream.name === this.activeStreamId}
+        .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}
+        .childCount=${childCount}
+        ?expanded=${expanded}
+      ></stream-tab>
+      ${!options.compact && childCount > 0
+        ? html`<div class="child-streams" ?hidden=${!expanded}>
+            ${repeat(
+              children,
+              (child) => child.name,
+              (child) =>
+                this.renderStreamNode(child, {
+                  compact: false,
+                  visited: nextVisited,
+                }),
+            )}
+          </div>`
+        : nothing}
+    `;
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="tabs">
@@ -698,29 +773,11 @@ export class StreamTabs extends LitElement {
             ${repeat(
               this.streams,
               (stream) => stream.name,
-              (stream) => {
-                const children = this.childStreamsByParent.get(stream.name);
-                const rawChildCount = children?.length ?? 0;
-                // In compact mode, force childCount to 0 so the entire
-                // <div class="child-streams"> subtree is unmounted (saves
-                // memory on sessions with many child streams). In non-compact
-                // mode, the div always mounts with ?hidden tied to `expanded`
-                // so DOM is preserved across user-driven toggles (the common
-                // case PR #2984 optimized for). Compact toggles come from
-                // sidebar resize, which is infrequent enough that
-                // unmount/remount is acceptable and frees memory.
-                const childCount = !this.compact ? rawChildCount : 0;
-                const expanded =
-                  childCount > 0 && this.expandedParents.has(stream.name);
-
-                // prettier-ignore
-                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${rawChildCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded}>${repeat(children, (child) => child.name, (child) => {
-                  const childStatus = this.getStatus(child.name);
-                  const isFinished = classifyChild(this.streamStates, child.name) === 'finished';
-                  // prettier-ignore
-                  return html`<stream-tab class=${isFinished ? 'is-finished' : ''} .info=${child} .compact=${false} .status=${childStatus} .lastTimestamp=${this.getTimestamp(child.name)} ?active=${child.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(child.name)}></stream-tab>`;
-                })}</div>` : nothing}`;
-              },
+              (stream) =>
+                this.renderStreamNode(stream, {
+                  compact: this.compact,
+                  visited: new Set(),
+                }),
             )}
           </div>
           ${when(
