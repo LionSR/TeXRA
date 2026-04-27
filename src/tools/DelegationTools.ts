@@ -924,8 +924,7 @@ Git worktree support: ${
     }
 
     const framedInstruction = formatFollowUpInstruction(instruction);
-    let result: Awaited<ReturnType<typeof sendFollowUp>>;
-    result = await sendFollowUp(handle.childStreamId, framedInstruction);
+    const result = await sendFollowUp(handle.childStreamId, framedInstruction);
 
     switch (result.status) {
       case 'sent':
