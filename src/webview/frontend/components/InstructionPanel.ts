@@ -224,8 +224,8 @@ export class InstructionPanel extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         flex: 0 1 auto;
-        min-width: 7rem;
-        max-width: 10rem;
+        min-width: 9rem;
+        max-width: 14rem;
         position: relative;
       }
 
@@ -248,6 +248,11 @@ export class InstructionPanel extends LitElement {
 
       .model-selection-footer .model-select::part(listbox) {
         min-width: 16rem;
+        max-width: min(22rem, calc(100vw - var(--spacing-xlarge)));
+      }
+
+      .model-selection-footer .agent-select::part(listbox) {
+        min-width: 15rem;
         max-width: min(22rem, calc(100vw - var(--spacing-xlarge)));
       }
 
