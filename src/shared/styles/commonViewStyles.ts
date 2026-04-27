@@ -254,7 +254,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .settings-reminder-icon {
-    grid-row: 1 / span 3;
+    grid-row: 1 / -1;
     margin-top: 2px;
     font-size: var(--font-size-lg);
     color: var(--vscode-focusBorder);
