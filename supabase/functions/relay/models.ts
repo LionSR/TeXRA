@@ -162,6 +162,20 @@ export function getSpendingLimit(tier: string): number {
 /** Word-boundary separators that may follow a model-name prefix in API names. */
 const BOUNDARY_RE = /^[-/:@.]/;
 
+/** Tier rank for restrictiveness comparison (higher = more restricted). */
+const TIER_RANK: Record<MinTier, number> = { free: 0, Max: 1, Ultra: 2 };
+
+/**
+ * Compare two relay models and return true if `a` is more restrictive than `b`.
+ * Higher tier wins; within same tier, thinking variants (supportsReasoning) win.
+ * Used to break ties when multiple entries share the same API model name.
+ */
+function isMoreRestrictive(a: RelayModel, b: RelayModel): boolean {
+  const tierDiff = TIER_RANK[a.minTier] - TIER_RANK[b.minTier];
+  if (tierDiff !== 0) return tierDiff > 0;
+  return a.supportsReasoning && !b.supportsReasoning;
+}
+
 /**
  * Resolve an API model name to the best-matching RelayModel using
  * boundary-aware longest-prefix matching. Returns undefined when the name
@@ -172,31 +186,41 @@ const BOUNDARY_RE = /^[-/:@.]/;
  *
  * Longest match wins (most specific pattern), preventing a short free-tier
  * pattern like "glm-5" from matching a paid "glm-5-turbo" entry.
+ *
+ * When multiple entries share the same API name (e.g. a thinking and a
+ * non-thinking variant of the same model), the most restrictive entry wins
+ * so tier gating is never bypassed by iteration order.
  */
 function resolveModelByApiName(modelName: string): RelayModel | undefined {
   const name = modelName.toLowerCase().trim();
   const modelPart = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
 
-  let best: RelayModel | undefined;
-  let bestLen = -1;
+  let bestExact: RelayModel | undefined;
+  let bestBoundary: RelayModel | undefined;
+  let bestBoundaryLen = -1;
 
   for (const model of RELAY_MODELS) {
     for (const pattern of model.apiPatterns) {
-      // Exact match (either with or without provider prefix) — always wins
-      if (modelPart === pattern || name === pattern) return model;
+      if (modelPart === pattern || name === pattern) {
+        // Exact match: keep the most restrictive among all exact matches
+        if (!bestExact || isMoreRestrictive(model, bestExact)) bestExact = model;
+        break; // Only check each model once
+      }
 
       // Boundary-aware prefix: next character must be a separator
       const isBoundary =
         (modelPart.startsWith(pattern) && BOUNDARY_RE.test(modelPart.slice(pattern.length))) ||
         (name.startsWith(pattern) && BOUNDARY_RE.test(name.slice(pattern.length)));
 
-      if (isBoundary && pattern.length > bestLen) {
-        best = model;
-        bestLen = pattern.length;
+      if (isBoundary && pattern.length > bestBoundaryLen) {
+        bestBoundary = model;
+        bestBoundaryLen = pattern.length;
       }
     }
   }
-  return best;
+
+  // Exact matches always take precedence over boundary (prefix) matches
+  return bestExact ?? bestBoundary;
 }
 
 /**
