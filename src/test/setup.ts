@@ -13,11 +13,17 @@ import { register } from 'tsconfig-paths';
 const outDir = path.resolve(__dirname, '..');
 const srcDir = path.resolve(__dirname, '..', '..', 'src');
 
+// Only stub 'vscode' when running outside the VS Code extension host.
+// Inside the host, VSCODE_PID is set and the real vscode API is available.
+const standaloneMode = !process.env['VSCODE_PID'];
+const extraPaths: Record<string, string[]> = standaloneMode
+  ? { vscode: [path.join(outDir, 'test/support/vscode-mock')] }
+  : {};
+
 register({
   baseUrl: outDir,
   paths: {
-    // Map 'vscode' to a stub so unit tests run outside the VS Code test host.
-    'vscode': [path.join(outDir, 'test/support/vscode-mock')],
+    ...extraPaths,
     '@/*': ['*', path.join(srcDir, '*')],
     '~/*': ['*', path.join(srcDir, '*')],
     '@common/*': ['common/*', path.join(srcDir, 'common/*')],
