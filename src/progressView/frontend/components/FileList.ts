@@ -221,11 +221,17 @@ export class FileList extends LitElement {
   private storageHintDismissed =
     webviewStorage.get(STORAGE_HINT_DISMISS_KEY) === true;
 
-  // Keyed by output file absolutePath for O(1) lookup in renderFileItem.
+  // Flattened from failuresByRound to avoid O(rounds) scan per file item in render.
   private failureByPath = new Map<string, CompileFailure>();
-  private hasFailures = false;
+  private sortedRounds: [number, OutputFileInfo[]][] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
+    if (changedProperties.has('filesByRound')) {
+      this.sortedRounds = Object.entries(this.filesByRound)
+        .map(([round, files]) => [Number(round), files] as [number, OutputFileInfo[]])
+        .filter(([round, files]) => !Number.isNaN(round) && Array.isArray(files) && files.length > 0)
+        .sort((a, b) => a[0] - b[0]);
+    }
     if (changedProperties.has('failuresByRound')) {
       this.failureByPath = new Map();
       for (const failures of Object.values(this.failuresByRound)) {
@@ -233,15 +239,11 @@ export class FileList extends LitElement {
           this.failureByPath.set(f.output.absolutePath, f);
         }
       }
-      this.hasFailures = Object.values(this.failuresByRound).some(
-        (failures) => failures.length > 0,
-      );
     }
   }
 
   override render(): TemplateResult | typeof nothing {
-    const rounds = this.getSortedRounds();
-    if (rounds.length === 0) {
+    if (this.sortedRounds.length === 0) {
       return nothing;
     }
 
@@ -259,12 +261,12 @@ export class FileList extends LitElement {
           @click=${this.handleFileClick}
         >
           ${repeat(
-            rounds,
+            this.sortedRounds,
             ([round]) => round,
             ([round, files]) => this.renderRound(round, files),
           )}
         </div>
-        ${this.hasFailures
+        ${this.failureByPath.size > 0
           ? html`
               <div class="compile-actions">
                 <vscode-button
@@ -421,19 +423,6 @@ export class FileList extends LitElement {
 
   private runLatexFixer(): void {
     this.dispatchEvent(ProgressEvents.compileFixerRun());
-  }
-
-  private getSortedRounds(): [number, OutputFileInfo[]][] {
-    return Object.entries(this.filesByRound)
-      .map(
-        ([round, files]) =>
-          [Number(round), files] as [number, OutputFileInfo[]],
-      )
-      .filter(
-        ([round, files]) =>
-          !Number.isNaN(round) && Array.isArray(files) && files.length > 0,
-      )
-      .sort((a, b) => a[0] - b[0]);
   }
 
   private getDisplayPath(
