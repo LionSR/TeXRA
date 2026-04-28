@@ -89,8 +89,8 @@ export class InstructionPanel extends LitElement {
         display: block;
         --agent-select-min-width: 8rem;
         --agent-select-max-width: min(13rem, calc(100vw - 9rem));
-        --model-select-min-width: 11rem;
-        --model-select-max-width: min(18rem, calc(100vw - 9rem));
+        --model-select-min-width: 8rem;
+        --model-select-max-width: min(15rem, calc(100vw - 9rem));
         --agent-model-listbox-min-width: 17rem;
         --agent-model-listbox-max-width: min(
           26rem,
