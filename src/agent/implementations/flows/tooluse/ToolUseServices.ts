@@ -29,8 +29,8 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly isSubagent?: boolean;
   /**
    * True when the agent's YAML requested delegation tools but they were filtered
-   * out by the nested-delegation gate (disabled or depth cap reached). The
-   * prepare node uses this to tell the LLM it cannot delegate further.
+   * out by the current delegation-depth gate. The prepare node uses this to
+   * tell the LLM it cannot delegate further.
    */
   readonly delegationTrimmed?: boolean;
 }
