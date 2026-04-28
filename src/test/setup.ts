@@ -16,6 +16,8 @@ const srcDir = path.resolve(__dirname, '..', '..', 'src');
 register({
   baseUrl: outDir,
   paths: {
+    // Map 'vscode' to a stub so unit tests run outside the VS Code test host.
+    'vscode': [path.join(outDir, 'test/support/vscode-mock')],
     '@/*': ['*', path.join(srcDir, '*')],
     '~/*': ['*', path.join(srcDir, '*')],
     '@common/*': ['common/*', path.join(srcDir, 'common/*')],
@@ -37,6 +39,10 @@ register({
     '@tools/*': ['tools/*', path.join(srcDir, 'tools/*')],
     '@types/*': ['types/*', path.join(srcDir, 'types/*')],
     '@eventBus/*': ['eventBus/*', path.join(srcDir, 'eventBus/*')],
+    '@shared/*': ['shared/*', path.join(srcDir, 'shared/*')],
+    '@auth/*': ['auth/*', path.join(srcDir, 'auth/*')],
+    '@platform': ['platform', path.join(srcDir, 'platform')],
+    '@platform/*': ['platform/*', path.join(srcDir, 'platform/*')],
   },
 });
 
