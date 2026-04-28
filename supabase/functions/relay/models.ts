@@ -222,13 +222,15 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
  * Max tier: all models up to $3/M input (includes thinking variants).
  * Ultra tier: all models.
  *
- * When multiple llm-zoo entries share the same API model name the rules are
- * intentionally asymmetric:
- * - Max: allowed if at least one interpretation is within Max's range. A shared
- *   name that includes a Max-accessible entry should not block Max users.
- * - Free: allowed only if every interpretation is a budget non-thinking model.
- *   The relay cannot tell from the model name alone whether the client intends
- *   the thinking variant, so it errs on the side of denial.
+ * When multiple llm-zoo entries share the same API model name (e.g. a
+ * thinking and a non-thinking variant of moonshot-v1-128k), both tiers use
+ * a `some()` check:
+ * - Max: allowed if at least one interpretation is within Max's range.
+ * - Free: allowed if at least one interpretation is a budget non-thinking
+ *   model. The relay cannot prevent the client from adding thinking parameters
+ *   to the request, but any cost overrun is bounded by the spending limit.
+ *   Denying with `every()` would 403 legitimate free requests for the
+ *   non-thinking variant of a shared-name model.
  *
  * Unknown model names are denied for non-Ultra tiers.
  */
@@ -245,8 +247,8 @@ export function isModelAllowedForTier(
   if (tier === MAX_TIER) {
     return models.some((m) => m.minTier === FREE_TIER || m.minTier === MAX_TIER);
   }
-  // Free tier: deny if any interpretation could be thinking or priced above free
-  return models.every((m) => m.minTier === FREE_TIER && !m.supportsReasoning);
+  // Free tier: allow if a non-thinking budget interpretation exists
+  return models.some((m) => m.minTier === FREE_TIER && !m.supportsReasoning);
 }
 
 // =============================================================================
