@@ -21,7 +21,6 @@ import {
   COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
@@ -1202,13 +1201,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleRunCompileFixer(streamId: StreamTabId): Promise<void> {
-    if (isInFlightStatus(StreamStatusService.get(streamId))) {
-      await vscode.window.showInformationMessage(
-        'Wait for the workflow run to finish before launching latexFixer.',
-      );
-      return;
-    }
-
     const taskState = this.provider.state.meta.getTaskState(streamId);
     if (!taskState || !isWorkflowTaskState(taskState)) {
       await vscode.window.showWarningMessage(
