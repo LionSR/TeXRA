@@ -438,32 +438,34 @@ async function runFlowWithLifecycle(
     // Subagents propagate errors to the orchestrator via FollowUpQueue —
     // don't show VS Code popups that would confuse the user.
     if (!options?.isSubagent) {
-      const msg = toErrorMessage(err);
       if (isDiskFullError(err)) {
         bus.emit('requestShowError', {
           message:
             'No space left on device. Free up disk space and try again.',
         });
-      } else if (
-        msg.includes('Missing API key') ||
-        msg.includes('API key not found')
-      ) {
-        bus.emit('requestShowInstruction', {
-          key: 'missingApiKey',
-          message:
-            'API key not found. Set your API key in the extension settings and run again.',
-          actions: [
-            { title: 'Set API Key', command: 'texra.setApiKey' },
-            {
-              title: 'Open Settings Guide',
-              command: 'texra.openDoc',
-              args: ['configuration'],
-            },
-          ],
-          showSuppress: false,
-        });
       } else {
-        bus.emit('requestShowError', { message: errorMsg });
+        const msg = toErrorMessage(err);
+        if (
+          msg.includes('Missing API key') ||
+          msg.includes('API key not found')
+        ) {
+          bus.emit('requestShowInstruction', {
+            key: 'missingApiKey',
+            message:
+              'API key not found. Set your API key in the extension settings and run again.',
+            actions: [
+              { title: 'Set API Key', command: 'texra.setApiKey' },
+              {
+                title: 'Open Settings Guide',
+                command: 'texra.openDoc',
+                args: ['configuration'],
+              },
+            ],
+            showSuppress: false,
+          });
+        } else {
+          bus.emit('requestShowError', { message: errorMsg });
+        }
       }
     }
 

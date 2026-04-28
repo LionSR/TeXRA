@@ -37,7 +37,7 @@ import {
 } from '@shared/schemas';
 import { extractErrorMessage, isObject, isString } from '@utils/core';
 
-import { toErrorMessage } from './errorHandlingUtils';
+import { isDiskFullError, toErrorMessage } from './errorHandlingUtils';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
@@ -531,7 +531,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   }
 
   // Disk full — local I/O error, never retryable
-  if ((err as { code?: string })?.code === 'ENOSPC') {
+  if (isDiskFullError(err)) {
     return {
       message:
         'No space left on device. Free up disk space and try again.',
