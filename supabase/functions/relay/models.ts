@@ -162,65 +162,58 @@ export function getSpendingLimit(tier: string): number {
 /** Word-boundary separators that may follow a model-name prefix in API names. */
 const BOUNDARY_RE = /^[-/:@.]/;
 
-/** Tier rank for restrictiveness comparison (higher = more restricted). */
-const TIER_RANK: Record<MinTier, number> = { free: 0, Max: 1, Ultra: 2 };
-
 /**
- * Compare two relay models and return true if `a` is more restrictive than `b`.
- * Higher tier wins; within same tier, thinking variants (supportsReasoning) win.
- * Used to break ties when multiple entries share the same API model name.
+ * Collect all RelayModel entries whose apiPatterns match the given API model
+ * name. Exact matches take precedence over boundary-prefix matches.
+ *
+ * Strips an optional "provider/" prefix so "openai/gpt-4o-mini" and
+ * "gpt-4o-mini" resolve identically.
+ *
+ * For boundary matches, only the longest-matching pattern length is kept
+ * (prevents a short free-tier "glm-5" from co-matching with "glm-5-turbo").
+ *
+ * Returns all matching entries rather than a single winner because the same
+ * API model name can map to multiple llm-zoo entries (e.g. a thinking and a
+ * non-thinking variant, or multiple pricing tiers). The caller decides how to
+ * interpret the set.
  */
-function isMoreRestrictive(a: RelayModel, b: RelayModel): boolean {
-  const tierDiff = TIER_RANK[a.minTier] - TIER_RANK[b.minTier];
-  if (tierDiff !== 0) return tierDiff > 0;
-  return a.supportsReasoning && !b.supportsReasoning;
-}
-
-/**
- * Resolve an API model name to the best-matching RelayModel using
- * boundary-aware longest-prefix matching. Returns undefined when the name
- * does not correspond to any known model.
- *
- * Strips an optional "provider/" prefix before matching so that both
- * "openai/gpt-4o-mini" and "gpt-4o-mini" resolve to the same entry.
- *
- * Longest match wins (most specific pattern), preventing a short free-tier
- * pattern like "glm-5" from matching a paid "glm-5-turbo" entry.
- *
- * When multiple entries share the same API name (e.g. a thinking and a
- * non-thinking variant of the same model), the most restrictive entry wins
- * so tier gating is never bypassed by iteration order.
- */
-function resolveModelByApiName(modelName: string): RelayModel | undefined {
+function resolveAllModelsByApiName(modelName: string): RelayModel[] {
   const name = modelName.toLowerCase().trim();
   const modelPart = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
 
-  let bestExact: RelayModel | undefined;
-  let bestBoundary: RelayModel | undefined;
+  const exactMatches: RelayModel[] = [];
   let bestBoundaryLen = -1;
+  const boundaryMatches: RelayModel[] = [];
 
   for (const model of RELAY_MODELS) {
+    let isExact = false;
     for (const pattern of model.apiPatterns) {
       if (modelPart === pattern || name === pattern) {
-        // Exact match: keep the most restrictive among all exact matches
-        if (!bestExact || isMoreRestrictive(model, bestExact)) bestExact = model;
-        break; // Only check each model once
+        isExact = true;
+        break;
       }
+    }
+    if (isExact) {
+      exactMatches.push(model);
+      continue;
+    }
 
-      // Boundary-aware prefix: next character must be a separator
+    for (const pattern of model.apiPatterns) {
       const isBoundary =
         (modelPart.startsWith(pattern) && BOUNDARY_RE.test(modelPart.slice(pattern.length))) ||
         (name.startsWith(pattern) && BOUNDARY_RE.test(name.slice(pattern.length)));
-
-      if (isBoundary && pattern.length > bestBoundaryLen) {
-        bestBoundary = model;
-        bestBoundaryLen = pattern.length;
+      if (isBoundary) {
+        if (pattern.length > bestBoundaryLen) {
+          boundaryMatches.length = 0;
+          bestBoundaryLen = pattern.length;
+        }
+        if (pattern.length === bestBoundaryLen) boundaryMatches.push(model);
+        break; // count each model once per loop
       }
     }
   }
 
-  // Exact matches always take precedence over boundary (prefix) matches
-  return bestExact ?? bestBoundary;
+  return exactMatches.length > 0 ? exactMatches : boundaryMatches;
 }
 
 /**
@@ -228,6 +221,14 @@ function resolveModelByApiName(modelName: string): RelayModel | undefined {
  * Free tier: budget non-thinking models only (under $1/M input, no reasoning).
  * Max tier: all models up to $3/M input (includes thinking variants).
  * Ultra tier: all models.
+ *
+ * When multiple llm-zoo entries share the same API model name the rules are
+ * intentionally asymmetric:
+ * - Max: allowed if at least one interpretation is within Max's range. A shared
+ *   name that includes a Max-accessible entry should not block Max users.
+ * - Free: allowed only if every interpretation is a budget non-thinking model.
+ *   The relay cannot tell from the model name alone whether the client intends
+ *   the thinking variant, so it errs on the side of denial.
  *
  * Unknown model names are denied for non-Ultra tiers.
  */
@@ -238,12 +239,14 @@ export function isModelAllowedForTier(
   if (tier === ULTRA_TIER) return true;
   if (!modelName) return false;
 
-  const model = resolveModelByApiName(modelName);
-  if (!model) return false;
+  const models = resolveAllModelsByApiName(modelName);
+  if (models.length === 0) return false;
 
-  if (tier === MAX_TIER) return model.minTier === 'free' || model.minTier === 'Max';
-  // free tier: only non-thinking budget models
-  return model.minTier === 'free' && !model.supportsReasoning;
+  if (tier === MAX_TIER) {
+    return models.some((m) => m.minTier === FREE_TIER || m.minTier === MAX_TIER);
+  }
+  // Free tier: deny if any interpretation could be thinking or priced above free
+  return models.every((m) => m.minTier === FREE_TIER && !m.supportsReasoning);
 }
 
 // =============================================================================
