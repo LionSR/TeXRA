@@ -26,7 +26,6 @@ All notable changes to this project will be documented in this file.
 
 - **Progress board fails to open after a crash** — TeXRA now recovers cleanly if its saved state was corrupted by an unexpected shutdown, so the progress board always opens on startup.
 - **Agent panels stuck open after delegation** — panels from completed delegated work now close properly and can no longer get stuck mid-initialisation.
-- **Thinking steps lost for reasoning models** — extended thinking output from OpenAI reasoning models is now preserved correctly through the conversation.
 - **GitHub status stale in Settings** — the GitHub connection status now refreshes each time you open Settings instead of showing outdated information.
 
 ## [0.37.5] - 2026-04-24
