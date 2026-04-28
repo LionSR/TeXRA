@@ -64,13 +64,10 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
         "gemini25f",
         "gemini25f-",
         "deepseek",
-        "deepseekT",
         "grok3-",
         "kimi128k",
         "kimi128kv",
-        "kimit",
-        "kimi2",
-        "kimi2T"
+        "kimi2"
       ],
       "providers": [
         "openai",
@@ -163,37 +160,38 @@ Model names must match the short names defined in `src/model/ModelRegistry.ts`.
 
 Available to all authenticated users. Thinking/reasoning variants of these models require Max tier.
 
-| Model Name  | Full Name                         | Provider | Pricing (in/out per 1M) |
-| ----------- | --------------------------------- | -------- | ----------------------- |
-| `gpt5-`     | gpt-5-mini                        | OpenAI   | $0.25/$2.00             |
-| `gpt5--`    | gpt-5-nano                        | OpenAI   | $0.05/$0.40             |
-| `gpt41-`    | gpt-4.1-mini                      | OpenAI   | $0.40/$1.60             |
-| `gpt41--`   | gpt-4.1-nano                      | OpenAI   | $0.10/$0.40             |
-| `gpt4o-`    | gpt-4o-mini                       | OpenAI   | $0.15/$0.60             |
-| `gemini3f`  | gemini-3-flash-preview            | Google   | $0.30/$2.50             |
-| `deepseek`  | deepseek-chat (V3.2)              | Deepseek | $0.28/$0.42             |
-| `deepseekT` | deepseek-reasoner (V3.2 Thinking) | Deepseek | $0.28/$0.42             |
-| `grok3-`    | grok-3-mini-beta                  | xAI      | $0.30/$0.50             |
-| `kimi128k`  | moonshot-v1-128k                  | Moonshot | $0.28/$1.12             |
-| `kimi128kv` | moonshot-v1-128k-vision           | Moonshot | $0.35/$1.40             |
-| `kimi2`     | kimi-k2-0905-preview              | Moonshot | $0.60/$2.50             |
-| `kimi2T`    | kimi-k2-thinking                  | Moonshot | $0.56/$2.22             |
+| Model Name  | Full Name               | Provider | Pricing (in/out per 1M) |
+| ----------- | ----------------------- | -------- | ----------------------- |
+| `gpt5-`     | gpt-5-mini              | OpenAI   | $0.25/$2.00             |
+| `gpt5--`    | gpt-5-nano              | OpenAI   | $0.05/$0.40             |
+| `gpt41-`    | gpt-4.1-mini            | OpenAI   | $0.40/$1.60             |
+| `gpt41--`   | gpt-4.1-nano            | OpenAI   | $0.10/$0.40             |
+| `gpt4o-`    | gpt-4o-mini             | OpenAI   | $0.15/$0.60             |
+| `gemini3f`  | gemini-3-flash-preview  | Google   | $0.30/$2.50             |
+| `deepseek`  | deepseek-chat (V3.2)    | Deepseek | $0.28/$0.42             |
+| `grok3-`    | grok-3-mini-beta        | xAI      | $0.30/$0.50             |
+| `kimi128k`  | moonshot-v1-128k        | Moonshot | $0.28/$1.12             |
+| `kimi128kv` | moonshot-v1-128k-vision | Moonshot | $0.35/$1.40             |
+| `kimi2`     | kimi-k2-0905-preview    | Moonshot | $0.60/$2.50             |
 
-### Max Tier Additional Models ($1-3/M Input)
+### Max Tier Additional Models ($1-3/M Input + Thinking Variants)
 
 Available to Max tier subscribers (includes all free tier models).
 
-| Model Name  | Full Name                    | Provider  | Pricing (in/out per 1M) |
-| ----------- | ---------------------------- | --------- | ----------------------- |
-| `haiku45`   | claude-haiku-4-5             | Anthropic | $1.00/$5.00             |
-| `haiku45T`  | claude-haiku-4-5 (Thinking)  | Anthropic | $1.00/$5.00             |
-| `sonnet45T` | claude-sonnet-4-5 (Thinking) | Anthropic | $3.00/$15.00            |
-| `gemini3p`  | gemini-3-pro-preview         | Google    | $2.00/$12.00            |
-| `gemini25p` | gemini-2.5-pro               | Google    | $1.25/$10.00            |
-| `grok2`     | grok-2-1212                  | xAI       | $2.00/$10.00            |
-| `grok2v`    | grok-2-1212-vision           | xAI       | $2.00/$10.00            |
-| `kimi2+`    | kimi-k2-turbo-preview        | Moonshot  | $2.24/$8.88             |
-| `kimi2T+`   | kimi-k2-thinking-turbo       | Moonshot  | $2.24/$8.88             |
+| Model Name  | Full Name                         | Provider  | Pricing (in/out per 1M) |
+| ----------- | --------------------------------- | --------- | ----------------------- |
+| `deepseekT` | deepseek-reasoner (V3.2 Thinking) | Deepseek  | $0.28/$0.42             |
+| `kimit`     | moonshot-v1-128k (Thinking)       | Moonshot  | $0.35/$1.40             |
+| `kimi2T`    | kimi-k2-thinking                  | Moonshot  | $0.56/$2.22             |
+| `haiku45`   | claude-haiku-4-5                  | Anthropic | $1.00/$5.00             |
+| `haiku45T`  | claude-haiku-4-5 (Thinking)       | Anthropic | $1.00/$5.00             |
+| `sonnet45T` | claude-sonnet-4-5 (Thinking)      | Anthropic | $3.00/$15.00            |
+| `gemini3p`  | gemini-3-pro-preview              | Google    | $2.00/$12.00            |
+| `gemini25p` | gemini-2.5-pro                    | Google    | $1.25/$10.00            |
+| `grok2`     | grok-2-1212                       | xAI       | $2.00/$10.00            |
+| `grok2v`    | grok-2-1212-vision                | xAI       | $2.00/$10.00            |
+| `kimi2+`    | kimi-k2-turbo-preview             | Moonshot  | $2.24/$8.88             |
+| `kimi2T+`   | kimi-k2-thinking-turbo            | Moonshot  | $2.24/$8.88             |
 
 ### Ultra Tier Models ($3+/M Input)
 

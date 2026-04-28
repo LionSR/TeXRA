@@ -97,9 +97,6 @@ const MAX_TIER_MODELS = RELAY_MODELS.filter(
 const FREE_TIER_SHORT_NAMES = FREE_TIER_MODELS.map((m) => m.shortName);
 const MAX_TIER_SHORT_NAMES = MAX_TIER_MODELS.map((m) => m.shortName);
 
-const FREE_TIER_API_PATTERNS = FREE_TIER_MODELS.flatMap((m) => m.apiPatterns);
-const MAX_TIER_API_PATTERNS = MAX_TIER_MODELS.flatMap((m) => m.apiPatterns);
-
 // All supported providers
 const ALL_PROVIDERS = [
   'openai',
@@ -162,13 +159,53 @@ export function getSpendingLimit(tier: string): number {
 // Validation Functions
 // =============================================================================
 
+/** Word-boundary separators that may follow a model-name prefix in API names. */
+const BOUNDARY_RE = /^[-/:@.]/;
+
+/**
+ * Resolve an API model name to the best-matching RelayModel using
+ * boundary-aware longest-prefix matching. Returns undefined when the name
+ * does not correspond to any known model.
+ *
+ * Strips an optional "provider/" prefix before matching so that both
+ * "openai/gpt-4o-mini" and "gpt-4o-mini" resolve to the same entry.
+ *
+ * Longest match wins (most specific pattern), preventing a short free-tier
+ * pattern like "glm-5" from matching a paid "glm-5-turbo" entry.
+ */
+function resolveModelByApiName(modelName: string): RelayModel | undefined {
+  const name = modelName.toLowerCase().trim();
+  const modelPart = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+
+  let best: RelayModel | undefined;
+  let bestLen = -1;
+
+  for (const model of RELAY_MODELS) {
+    for (const pattern of model.apiPatterns) {
+      // Exact match (either with or without provider prefix) — always wins
+      if (modelPart === pattern || name === pattern) return model;
+
+      // Boundary-aware prefix: next character must be a separator
+      const isBoundary =
+        (modelPart.startsWith(pattern) && BOUNDARY_RE.test(modelPart.slice(pattern.length))) ||
+        (name.startsWith(pattern) && BOUNDARY_RE.test(name.slice(pattern.length)));
+
+      if (isBoundary && pattern.length > bestLen) {
+        best = model;
+        bestLen = pattern.length;
+      }
+    }
+  }
+  return best;
+}
+
 /**
  * Check if a model is allowed for a given tier.
  * Free tier: budget non-thinking models only (under $1/M input, no reasoning).
  * Max tier: all models up to $3/M input (includes thinking variants).
  * Ultra tier: all models.
  *
- * Strips optional provider prefix (e.g. "openai/gpt-4o-mini") before matching.
+ * Unknown model names are denied for non-Ultra tiers.
  */
 export function isModelAllowedForTier(
   tier: string,
@@ -177,12 +214,12 @@ export function isModelAllowedForTier(
   if (tier === ULTRA_TIER) return true;
   if (!modelName) return false;
 
-  const name = modelName.toLowerCase().trim();
-  // Strip optional "provider/" prefix used in some generic endpoints
-  const modelPart = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+  const model = resolveModelByApiName(modelName);
+  if (!model) return false;
 
-  const patterns = tier === MAX_TIER ? MAX_TIER_API_PATTERNS : FREE_TIER_API_PATTERNS;
-  return patterns.some((p) => modelPart.startsWith(p) || name.startsWith(p));
+  if (tier === MAX_TIER) return model.minTier === 'free' || model.minTier === 'Max';
+  // free tier: only non-thinking budget models
+  return model.minTier === 'free' && !model.supportsReasoning;
 }
 
 // =============================================================================
