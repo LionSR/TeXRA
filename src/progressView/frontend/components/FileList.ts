@@ -1,11 +1,18 @@
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import type { OutputFileInfo } from '@shared/schemas';
+import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { ELEMENT_IDS } from '../constants';
@@ -168,6 +175,19 @@ export class FileList extends LitElement {
         padding: 0;
       }
 
+      .compile-warning {
+        flex-shrink: 0;
+        color: var(--vscode-editorWarning-foreground, orange);
+      }
+
+      .compile-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding: var(--spacing-small) 0;
+        border-top: var(--border-thin) solid var(--color-border);
+        margin-top: var(--spacing-tiny);
+      }
+
       @media (max-width: 500px) {
         .file-item {
           flex-wrap: wrap;
@@ -191,11 +211,33 @@ export class FileList extends LitElement {
     string,
     OutputFileInfo[]
   > = {};
+  @property({ attribute: false }) failuresByRound: Record<
+    string,
+    CompileFailure[]
+  > = {};
   @property({ attribute: false }) showRoundHeaders = true;
 
   @state()
   private storageHintDismissed =
     webviewStorage.get(STORAGE_HINT_DISMISS_KEY) === true;
+
+  // Keyed by output file absolutePath for O(1) lookup in renderFileItem.
+  private failureByPath = new Map<string, CompileFailure>();
+  private hasFailures = false;
+
+  protected override willUpdate(changedProperties: PropertyValues): void {
+    if (changedProperties.has('failuresByRound')) {
+      this.failureByPath = new Map();
+      for (const failures of Object.values(this.failuresByRound)) {
+        for (const f of failures) {
+          this.failureByPath.set(f.output.absolutePath, f);
+        }
+      }
+      this.hasFailures = Object.values(this.failuresByRound).some(
+        (failures) => failures.length > 0,
+      );
+    }
+  }
 
   override render(): TemplateResult | typeof nothing {
     const rounds = this.getSortedRounds();
@@ -222,6 +264,19 @@ export class FileList extends LitElement {
             ([round, files]) => this.renderRound(round, files),
           )}
         </div>
+        ${this.hasFailures
+          ? html`
+              <div class="compile-actions">
+                <vscode-button
+                  appearance="primary"
+                  @click=${this.runLatexFixer}
+                >
+                  <span slot="start" class="codicon codicon-tools"></span>
+                  Run latexFixer
+                </vscode-button>
+              </div>
+            `
+          : nothing}
       </vscode-collapsible>
     `;
   }
@@ -299,6 +354,7 @@ export class FileList extends LitElement {
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
     const filePath = location.absolutePath;
+    const failure = this.failureByPath.get(filePath);
     const diffStats = this.renderDiffStats(file);
     const baseActions = this.renderBaseActions(filePath, effectiveBase);
     const previousAction = this.renderPreviousAction(
@@ -309,6 +365,13 @@ export class FileList extends LitElement {
 
     return html`
       <div class="file-item">
+        ${failure
+          ? html`<i
+              class="codicon codicon-warning compile-warning"
+              title="Compile check failed"
+              aria-label="Compile check failed"
+            ></i>`
+          : nothing}
         <span class="file-name">
           <span
             class="file-path clickable-link"
@@ -322,6 +385,15 @@ export class FileList extends LitElement {
         </span>
         ${diffStats}
         <vscode-toolbar-container class="file-actions">
+          ${failure
+            ? html`<vscode-toolbar-button
+                icon="output"
+                label="Open compile log"
+                title="Open compile log (${failure.logRelativePath})"
+                data-command=${PROGRESS_VIEW_COMMANDS.OPEN_FILE}
+                data-file=${failure.log.absolutePath}
+              ></vscode-toolbar-button>`
+            : nothing}
           ${baseActions} ${previousAction}
         </vscode-toolbar-container>
       </div>
@@ -345,6 +417,10 @@ export class FileList extends LitElement {
     this.dispatchEvent(
       ProgressEvents.fileAction({ command, file, base, prev }),
     );
+  }
+
+  private runLatexFixer(): void {
+    this.dispatchEvent(ProgressEvents.compileFixerRun());
   }
 
   private getSortedRounds(): [number, OutputFileInfo[]][] {
