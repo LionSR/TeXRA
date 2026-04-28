@@ -111,19 +111,28 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
         id,
         tools,
         name,
+        probe,
         check,
         statusLabel: getStatusLabel,
         detailCheck,
       }): Promise<ExternalToolCheckResult> => {
-        // Run check then detailCheck sequentially — some groups (Codex,
-        // Zotero, GitHub PR) share probe work between the two, so running
-        // them in parallel would duplicate that work.
+        // Run check/status/detail from one shared probe result. Some groups
+        // (Codex, Zotero, GitHub PR) touch async local state, so running the
+        // callbacks independently can duplicate the same probe work.
+        let probeResult: unknown;
         let available: boolean;
         try {
-          available = await check();
+          probeResult = await probe?.();
+          available = await check(probeResult);
         } catch {
-          const statusDetail = await detailCheck?.().catch(() => undefined);
-          const statusLabel = await getStatusLabel?.().catch(() => undefined);
+          const statusDetail = await resolveOptionalStatus(
+            detailCheck,
+            probeResult,
+          );
+          const statusLabel = await resolveOptionalStatus(
+            getStatusLabel,
+            probeResult,
+          );
           return {
             id,
             tools,
@@ -133,8 +142,14 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
             statusDetail,
           };
         }
-        const statusDetail = await detailCheck?.().catch(() => undefined);
-        const statusLabel = await getStatusLabel?.().catch(() => undefined);
+        const statusDetail = await resolveOptionalStatus(
+          detailCheck,
+          probeResult,
+        );
+        const statusLabel = await resolveOptionalStatus(
+          getStatusLabel,
+          probeResult,
+        );
         return {
           id,
           tools,
@@ -146,6 +161,16 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
       },
     ),
   );
+}
+
+async function resolveOptionalStatus(
+  getStatus:
+    | ((probeResult?: unknown) => Promise<string | undefined>)
+    | undefined,
+  probeResult: unknown,
+): Promise<string | undefined> {
+  if (!getStatus) return undefined;
+  return getStatus(probeResult).catch(() => undefined);
 }
 
 /** Build the set of unavailable tool names from external check results only. */

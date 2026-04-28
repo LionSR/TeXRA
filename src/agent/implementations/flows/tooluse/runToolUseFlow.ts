@@ -25,11 +25,8 @@ import {
   type EndGroupStatus,
 } from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
-import {
-  delegationAllowed,
-  type NestedDelegationConfig,
-} from '@shared/constants/delegationPolicy';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { evaluateDelegationGate } from '@shared/constants/delegationPolicy';
 
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
@@ -86,13 +83,11 @@ function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
-  delegationDepth: number,
-  nestedConfig: NestedDelegationConfig,
+  delegationBlocked: boolean,
 ): { tools: ToolDefinition[]; delegationTrimmed: boolean } {
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
   const missingDependency: string[] = [];
-  const canDelegate = delegationAllowed(delegationDepth, nestedConfig);
 
   // Don't warn on routine filtering outcomes (user-disabled, unavailable,
   // not in registry): they fire on every tool-use cycle and drown out real
@@ -104,7 +99,7 @@ function resolveTools(
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
-      if (DELEGATION_TOOLS.has(def.name) && !canDelegate) {
+      if (DELEGATION_TOOLS.has(def.name) && delegationBlocked) {
         delegationTrimmed = true;
         return false;
       }
@@ -148,13 +143,16 @@ export async function runToolUseFlow<C = unknown>(
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const delegationDepth = input.delegationDepth ?? 0;
-  const nestedConfig = readNestedDelegationConfig();
+  const delegationConfig = readNestedDelegationConfig();
+  const delegationGate = evaluateDelegationGate(
+    delegationDepth,
+    delegationConfig,
+  );
   const { tools: resolvedTools, delegationTrimmed } = resolveTools(
     setting.tools,
     registry,
     logger,
-    delegationDepth,
-    nestedConfig,
+    !delegationGate.allowed,
   );
 
   const kv = getExecutionStore(executionId);
@@ -168,6 +166,7 @@ export async function runToolUseFlow<C = unknown>(
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
     delegationDepth,
+    delegationConfig,
     delegationTrimmed,
   };
 
