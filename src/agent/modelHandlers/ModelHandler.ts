@@ -257,8 +257,10 @@ export abstract class ModelHandler<
    * Centralizes the decision to avoid duplication between getApiKey() and getBaseUrl().
    * Both methods call this to ensure consistent routing decisions.
    *
-   * Returns true only if:
-   * 1. Model is not openRouterOnly (those always use OpenRouter)
+   * Returns true only if ALL of the following hold:
+   * 1. Model is NOT routing through OpenRouter (neither openRouterOnly nor global toggle).
+   *    OpenRouter always requires an OpenRouter API key; the server-side relay is a
+   *    direct-provider path that must not interfere.
    * 2. shouldUseServerSideKeysSync confirms access:
    *    - Setting enabled
    *    - Provider supported
@@ -301,8 +303,11 @@ export abstract class ModelHandler<
    * When server-side keys are enabled (experimental), returns the user's JWT token instead,
    * which the relay Edge Function will use for authentication.
    *
-   * When "Use Included Access" is enabled, only server-side keys are used - no fallback
+   * When "Use Included Access" is enabled, only server-side keys are used — no fallback
    * to personal API keys. This ensures runtime behavior matches dropdown availability.
+   * Exception: models routed through OpenRouter (openRouterOnly or global toggle) always
+   * use the OpenRouter API key regardless of included-access settings, because the
+   * server-side relay is a direct-provider path that does not apply to OpenRouter routing.
    *
    * @throws Error if required API key is missing from environment
    */
