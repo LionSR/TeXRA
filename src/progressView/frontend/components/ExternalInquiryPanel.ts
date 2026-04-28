@@ -281,9 +281,17 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           </div>
           <div class="external-inquiry-request__chat-links">
             Open:
-            <a href="https://chatgpt.com/plans/pro/" target="_blank" rel="noopener noreferrer">ChatGPT Pro</a>
+            <a
+              href="https://chatgpt.com/plans/pro/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >ChatGPT Pro</a
+            >
             &nbsp;·&nbsp;
-            <a href="https://deepmind.google/models/gemini/deep-think/" target="_blank" rel="noopener noreferrer"
+            <a
+              href="https://deepmind.google/models/gemini/deep-think/"
+              target="_blank"
+              rel="noopener noreferrer"
               >Gemini Deep Think</a
             >
           </div>
