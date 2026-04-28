@@ -115,7 +115,6 @@ export class WorkflowStreamContent extends LitElement {
 
       <compile-failure-panel
         .failuresByRound=${state.compileFailures}
-        .status=${state.status}
       ></compile-failure-panel>
 
       <workflow-tool-use-followup-section

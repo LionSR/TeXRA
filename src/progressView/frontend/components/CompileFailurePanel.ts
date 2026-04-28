@@ -5,11 +5,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import {
-  STREAM_STATUS,
-  type CompileFailure,
-  type StreamStatus,
-} from '@shared/schemas';
+import { type CompileFailure } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
@@ -89,12 +85,10 @@ export class CompileFailurePanel extends LitElement {
     string,
     CompileFailure[]
   > = {};
-  @property({ attribute: false }) status: StreamStatus | null = null;
 
   override render(): TemplateResult | typeof nothing {
     const failures = this.getFailures();
     if (failures.length === 0) return nothing;
-    const canRunFixer = this.canRunFixer();
 
     return html`
       <div class="compile-panel" role="region" aria-label="Compile failures">
@@ -118,10 +112,6 @@ export class CompileFailurePanel extends LitElement {
           <div class="compile-panel__actions">
             <vscode-button
               appearance="primary"
-              ?disabled=${!canRunFixer}
-              title=${canRunFixer
-                ? 'Run latexFixer'
-                : 'Wait for the workflow run to finish before launching latexFixer'}
               @click=${this.runLatexFixer}
             >
               <span slot="start" class="codicon codicon-tools"></span>
@@ -160,15 +150,6 @@ export class CompileFailurePanel extends LitElement {
       .filter(Boolean);
   }
 
-  private canRunFixer(): boolean {
-    return (
-      this.status == null ||
-      this.status === STREAM_STATUS.READY ||
-      this.status === STREAM_STATUS.ERROR ||
-      this.status === STREAM_STATUS.STOPPED
-    );
-  }
-
   private openLog(event: Event): void {
     const target = event.currentTarget as HTMLElement | null;
     const file = target?.dataset.file;
@@ -182,7 +163,6 @@ export class CompileFailurePanel extends LitElement {
   }
 
   private runLatexFixer(): void {
-    if (!this.canRunFixer()) return;
     this.dispatchEvent(ProgressEvents.compileFixerRun());
   }
 }

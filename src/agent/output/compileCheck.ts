@@ -133,11 +133,15 @@ async function compileOne(
   // naming their .log; it may differ from displayName when file.source is set.
   const compiledBasename = path.basename(outputFile.location.absolutePath);
   // Full relative path keeps two outputs sharing a basename distinct
-  // (ch1/main.tex vs ch2/main.tex).
-  const safeName = getComparablePath(outputFile.location).replaceAll(
-    /[^a-zA-Z0-9._-]/g,
-    '_',
-  );
+  // (ch1/main.tex vs ch2/main.tex). Strip the leading r<N>/ segment because
+  // it is already added explicitly as `r${currentRound}_` below — without
+  // this, a location like `r0/main.tex` would produce `r0_r0_main.tex.log`.
+  const comparablePath = getComparablePath(outputFile.location);
+  const roundPrefix = `r${currentRound}/`;
+  const pathForSafeName = comparablePath.startsWith(roundPrefix)
+    ? comparablePath.slice(roundPrefix.length)
+    : comparablePath;
+  const safeName = pathForSafeName.replaceAll(/[^a-zA-Z0-9._-]/g, '_');
   const buildDir = path.join(
     opts.compileRoot,
     'build',
