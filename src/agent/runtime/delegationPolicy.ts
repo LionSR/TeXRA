@@ -14,6 +14,7 @@ import type { ExecutionId } from '@shared/schemas';
 import {
   clampNestedDelegationDepth,
   type NestedDelegationConfig,
+  UNKNOWN_DELEGATION_DEPTH,
 } from '@shared/constants/delegationPolicy';
 
 /** Read the current delegation policy from workspace state. */
@@ -31,7 +32,7 @@ export function readNestedDelegationConfig(): NestedDelegationConfig {
  * `delegationAllowed(MAX_SAFE_INTEGER, { maxDepth })` is false for any
  * configured cap, so delegation is conservatively blocked.
  */
-const UNKNOWN_DEPTH_SENTINEL = Number.MAX_SAFE_INTEGER;
+const UNKNOWN_DEPTH_SENTINEL = UNKNOWN_DELEGATION_DEPTH;
 
 /**
  * Read meta without letting filesystem/IO errors bubble up — safeParse
