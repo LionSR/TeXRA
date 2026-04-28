@@ -42,7 +42,10 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { normalizeRunId } from '@common/constants/runIds';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import {
+  isDiskFullError,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
@@ -436,7 +439,12 @@ async function runFlowWithLifecycle(
     // don't show VS Code popups that would confuse the user.
     if (!options?.isSubagent) {
       const msg = toErrorMessage(err);
-      if (
+      if (isDiskFullError(err)) {
+        bus.emit('requestShowError', {
+          message:
+            'No space left on device. Free up disk space and try again.',
+        });
+      } else if (
         msg.includes('Missing API key') ||
         msg.includes('API key not found')
       ) {

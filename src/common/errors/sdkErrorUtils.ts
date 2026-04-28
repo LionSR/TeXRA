@@ -530,6 +530,19 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
+  // Disk full — local I/O error, never retryable
+  if ((err as { code?: string })?.code === 'ENOSPC') {
+    return {
+      message:
+        'No space left on device. Free up disk space and try again.',
+      retryable: false,
+      isRelayError: false,
+      rawErrorBody,
+      streamDiagnostics,
+      partialText,
+    };
+  }
+
   // Try matching a known SDK error type (connection, abort, HTTP errors)
   const sdkMatch = matchSdkError(err, rawErrorBody);
   if (sdkMatch) {
