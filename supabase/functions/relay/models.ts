@@ -2,9 +2,9 @@
  * Relay Model Configuration
  *
  * SINGLE SOURCE OF TRUTH: llm-zoo npm package
- * Tier assignments are derived from model pricing:
- * - free: Budget models (under $1/M input)
- * - Max: Mid-tier models ($1-3/M input) + free tier
+ * Tier assignments are derived from model pricing and capabilities:
+ * - free: Budget non-thinking models (under $1/M input, supportsReasoning=false)
+ * - Max: All models up to $3/M input, including thinking variants
  * - Ultra: All models including premium ($3+/M input)
  */
 
@@ -44,6 +44,7 @@ interface RelayModel {
   apiPatterns: string[];
   minTier: MinTier;
   inputPrice: number;
+  supportsReasoning: boolean;
 }
 
 // =============================================================================
@@ -64,6 +65,7 @@ function toRelayModel(config: ModelConfig): RelayModel {
     apiPatterns: [config.fullName.toLowerCase()],
     minTier: getTierFromPrice(config.inputPrice),
     inputPrice: config.inputPrice,
+    supportsReasoning: config.capabilities?.supportsReasoning ?? false,
   };
 }
 
@@ -76,41 +78,21 @@ const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
   .filter((m) => !m.openRouterOnly)
   .map(toRelayModel);
 
-/**
- * Ultra-only models: reserved for Ultra-tier users even during the
- * sponsor-credit promotion. Matches gpt-5-pro, gpt-5.2-pro, gpt-5.5-pro, etc.
- * Accepts optional provider prefixes like "openai/gpt-5.5-pro".
- */
-const ULTRA_ONLY_PATTERN =
-  /^(?:[a-z0-9_-]+\/)?gpt-5(?:\.\d+)?-pro(?:$|[-:@/])/i;
-
-function isUltraOnlyModelName(modelName: string): boolean {
-  return ULTRA_ONLY_PATTERN.test(modelName.trim());
-}
-
-const isUltraOnlyModel = (model: RelayModel): boolean =>
-  model.apiPatterns.some(isUltraOnlyModelName);
-
-const NON_ULTRA_ONLY_SHORT_NAMES = RELAY_MODELS.filter(
-  (m) => !isUltraOnlyModel(m),
-).map((m) => m.shortName);
-
 // =============================================================================
 // Derived Arrays
 // =============================================================================
 
-/** Get models available for a specific tier (cumulative access) */
-function getModelsForTier(tier: MinTier): RelayModel[] {
-  if (tier === 'Ultra') return RELAY_MODELS;
-  if (tier === 'Max')
-    return RELAY_MODELS.filter(
-      (m) => m.minTier === 'free' || m.minTier === 'Max',
-    );
-  return RELAY_MODELS.filter((m) => m.minTier === 'free');
-}
-
-const FREE_TIER_MODELS = getModelsForTier('free');
-const MAX_TIER_MODELS = getModelsForTier('Max');
+/**
+ * Free tier: budget models (under $1/M input) excluding thinking/reasoning
+ * variants — those are more capable and consume significantly more tokens.
+ * Max tier: all models up to $3/M input (including thinking variants).
+ */
+const FREE_TIER_MODELS = RELAY_MODELS.filter(
+  (m) => m.minTier === 'free' && !m.supportsReasoning,
+);
+const MAX_TIER_MODELS = RELAY_MODELS.filter(
+  (m) => m.minTier === 'free' || m.minTier === 'Max',
+);
 
 const FREE_TIER_SHORT_NAMES = FREE_TIER_MODELS.map((m) => m.shortName);
 const MAX_TIER_SHORT_NAMES = MAX_TIER_MODELS.map((m) => m.shortName);
@@ -138,8 +120,8 @@ const ALL_PROVIDERS = [
 export const TIER_CONFIG: TierModelConfig = {
   providers: [...ALL_PROVIDERS],
   tiers: {
-    free: { models: NON_ULTRA_ONLY_SHORT_NAMES },
-    Max: { models: NON_ULTRA_ONLY_SHORT_NAMES },
+    free: { models: FREE_TIER_SHORT_NAMES },
+    Max: { models: MAX_TIER_SHORT_NAMES },
     Ultra: { models: '*' },
   },
 };
@@ -182,8 +164,11 @@ export function getSpendingLimit(tier: string): number {
 
 /**
  * Check if a model is allowed for a given tier.
- * During the sponsor-credit promotion, all models are open to every tier
- * EXCEPT the gpt-5 "pro" variants, which remain reserved for Ultra users.
+ * Free tier: budget non-thinking models only (under $1/M input, no reasoning).
+ * Max tier: all models up to $3/M input (includes thinking variants).
+ * Ultra tier: all models.
+ *
+ * Strips optional provider prefix (e.g. "openai/gpt-4o-mini") before matching.
  */
 export function isModelAllowedForTier(
   tier: string,
@@ -191,7 +176,13 @@ export function isModelAllowedForTier(
 ): boolean {
   if (tier === ULTRA_TIER) return true;
   if (!modelName) return false;
-  return !isUltraOnlyModelName(modelName);
+
+  const name = modelName.toLowerCase().trim();
+  // Strip optional "provider/" prefix used in some generic endpoints
+  const modelPart = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+
+  const patterns = tier === MAX_TIER ? MAX_TIER_API_PATTERNS : FREE_TIER_API_PATTERNS;
+  return patterns.some((p) => modelPart.startsWith(p) || name.startsWith(p));
 }
 
 // =============================================================================
@@ -203,22 +194,22 @@ export function getTierBreakdown(): Record<
   MinTier,
   { count: number; models: string[] }
 > {
+  const freeNames = new Set(FREE_TIER_SHORT_NAMES);
+  const maxNames = new Set(MAX_TIER_SHORT_NAMES);
+  const maxOnly = MAX_TIER_MODELS.filter((m) => !freeNames.has(m.shortName));
+  const ultraOnly = RELAY_MODELS.filter((m) => !maxNames.has(m.shortName));
   return {
     free: {
       count: FREE_TIER_MODELS.length,
       models: FREE_TIER_MODELS.map((m) => `${m.shortName} ($${m.inputPrice})`),
     },
     Max: {
-      count: MAX_TIER_MODELS.length - FREE_TIER_MODELS.length,
-      models: MAX_TIER_MODELS.filter((m) => m.minTier === 'Max').map(
-        (m) => `${m.shortName} ($${m.inputPrice})`,
-      ),
+      count: maxOnly.length,
+      models: maxOnly.map((m) => `${m.shortName} ($${m.inputPrice})`),
     },
     Ultra: {
-      count: RELAY_MODELS.length - MAX_TIER_MODELS.length,
-      models: RELAY_MODELS.filter((m) => m.minTier === 'Ultra').map(
-        (m) => `${m.shortName} ($${m.inputPrice})`,
-      ),
+      count: ultraOnly.length,
+      models: ultraOnly.map((m) => `${m.shortName} ($${m.inputPrice})`),
     },
   };
 }

@@ -28,13 +28,17 @@ Toggle this option in the Profile view settings.
 
 ## Tier Hierarchy (Cumulative Access)
 
-| Tier      | Model Access                    | Pricing Threshold | Additional Providers |
-| --------- | ------------------------------- | ----------------- | -------------------- |
-| **Ultra** | All models (premium included)   | $3+/M input       | + DashScope          |
-| **Max**   | Mid-tier + all free tier models | $1-3/M input      | —                    |
-| **free**  | Budget models only              | <$1/M input       | —                    |
+| Tier      | Model Access                                           | Pricing Threshold           | Additional Providers |
+| --------- | ------------------------------------------------------ | --------------------------- | -------------------- |
+| **Ultra** | All models (premium included)                          | $3+/M input                 | + DashScope          |
+| **Max**   | Mid-tier + all free tier models + thinking variants    | $1-3/M input (+ reasoning)  | —                    |
+| **free**  | Budget non-thinking models only                        | <$1/M input, no reasoning   | —                    |
 
 All tiers have access to: OpenAI, Anthropic, Google, DeepSeek, xAI, Moonshot
+
+> **Note:** Thinking/reasoning model variants (e.g. `deepseekT`, `kimi2T`, `kimit`) require **Max** tier
+> even when their input price falls under $1/M. They generate significantly more tokens and are
+> considerably more capable than their non-thinking counterparts.
 
 ## Endpoint
 
@@ -155,9 +159,9 @@ interface TierModelConfig {
 
 Model names must match the short names defined in `src/model/ModelRegistry.ts`.
 
-### Free Tier Models (Under $1/M Input)
+### Free Tier Models (Under $1/M Input, Non-Thinking)
 
-Available to all authenticated users.
+Available to all authenticated users. Thinking/reasoning variants of these models require Max tier.
 
 | Model Name  | Full Name                         | Provider | Pricing (in/out per 1M) |
 | ----------- | --------------------------------- | -------- | ----------------------- |
@@ -221,11 +225,16 @@ The relay function uses a `RELAY_MODELS` array as the single source of truth. Ea
 - `shortName`: UI identifier
 - `apiPatterns`: API name prefixes for server-side validation
 - `minTier`: Minimum tier required ('free', 'Max', or 'Ultra')
+- `supportsReasoning`: Whether the model is a thinking/reasoning variant
 
 Tier-specific arrays are derived automatically:
 
 ```typescript
-const FREE_TIER_MODELS = RELAY_MODELS.filter((m) => m.minTier === 'free');
+// Free: budget models only, thinking variants excluded (they need Max)
+const FREE_TIER_MODELS = RELAY_MODELS.filter(
+  (m) => m.minTier === 'free' && !m.supportsReasoning,
+);
+// Max: all models up to $3/M input (including thinking variants priced as 'free')
 const MAX_TIER_MODELS = RELAY_MODELS.filter(
   (m) => m.minTier === 'free' || m.minTier === 'Max',
 );
