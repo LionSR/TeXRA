@@ -234,9 +234,10 @@ export class FileList extends LitElement {
     }
     if (changedProperties.has('failuresByRound')) {
       this.failureByPath = new Map();
-      for (const failures of Object.values(this.failuresByRound)) {
+      for (const [roundStr, failures] of Object.entries(this.failuresByRound)) {
+        const round = Number(roundStr);
         for (const f of failures) {
-          this.failureByPath.set(f.output.absolutePath, f);
+          this.failureByPath.set(`${round}:${f.output.absolutePath}`, f);
         }
       }
     }
@@ -315,7 +316,7 @@ export class FileList extends LitElement {
       return html`${repeat(
         files,
         (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
-        (file) => this.renderFileItem(file),
+        (file) => this.renderFileItem(file, round),
       )}`;
     }
 
@@ -329,7 +330,7 @@ export class FileList extends LitElement {
           ${repeat(
             files,
             (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
-            (file) => this.renderFileItem(file),
+            (file) => this.renderFileItem(file, round),
           )}
         </div>
       </vscode-collapsible>
@@ -338,6 +339,7 @@ export class FileList extends LitElement {
 
   private renderFileItem(
     file: OutputFileInfo,
+    round: number,
   ): TemplateResult | typeof nothing {
     if (!file?.location) return nothing;
 
@@ -356,7 +358,7 @@ export class FileList extends LitElement {
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
     const filePath = location.absolutePath;
-    const failure = this.failureByPath.get(filePath);
+    const failure = this.failureByPath.get(`${round}:${filePath}`);
     const diffStats = this.renderDiffStats(file);
     const baseActions = this.renderBaseActions(filePath, effectiveBase);
     const previousAction = this.renderPreviousAction(
