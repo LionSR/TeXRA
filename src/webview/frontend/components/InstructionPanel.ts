@@ -87,8 +87,10 @@ export class InstructionPanel extends LitElement {
     css`
       :host {
         display: block;
-        --agent-model-select-min-width: 6rem;
-        --agent-model-select-max-width: min(20rem, calc(100vw - 9rem));
+        --agent-select-min-width: 8rem;
+        --agent-select-max-width: min(13rem, calc(100vw - 9rem));
+        --model-select-min-width: 11rem;
+        --model-select-max-width: min(18rem, calc(100vw - 9rem));
         --agent-model-listbox-min-width: 17rem;
         --agent-model-listbox-max-width: min(
           26rem,
@@ -217,13 +219,19 @@ export class InstructionPanel extends LitElement {
       }
 
       .model-selection-footer .agent-model-select-group {
-        flex: 1 1
-          calc(
-            var(--agent-model-select-min-width) + var(--height-control) +
-              var(--spacing-small)
-          );
+        flex: 0 1 auto;
+      }
+
+      .model-selection-footer .agent-select-group {
         max-width: calc(
-          var(--agent-model-select-max-width) + var(--height-control) +
+          var(--agent-select-max-width) + var(--height-control) +
+            var(--spacing-small)
+        );
+      }
+
+      .model-selection-footer .model-select-group {
+        max-width: calc(
+          var(--model-select-max-width) + var(--height-control) +
             var(--spacing-small)
         );
       }
@@ -245,10 +253,10 @@ export class InstructionPanel extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--spacing-small);
-        flex: 1 1 auto;
+        flex: 0 1 var(--agent-select-max-width);
         width: 100%;
         min-width: 0;
-        max-width: none;
+        max-width: var(--agent-select-max-width);
         position: relative;
       }
 
@@ -261,10 +269,19 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer .agent-model-select-group select,
       .model-selection-footer .agent-model-select-group vscode-single-select,
       .model-selection-footer .model-select-group vscode-single-select {
-        flex: 1 1 auto;
         font-size: var(--font-size-sm);
-        min-width: var(--agent-model-select-min-width);
-        max-width: var(--agent-model-select-max-width);
+      }
+
+      .model-selection-footer .agent-select-group vscode-single-select {
+        flex: 0 1 var(--agent-select-max-width);
+        min-width: var(--agent-select-min-width);
+        max-width: var(--agent-select-max-width);
+      }
+
+      .model-selection-footer .model-select-group vscode-single-select {
+        flex: 0 1 var(--model-select-max-width);
+        min-width: var(--model-select-min-width);
+        max-width: var(--model-select-max-width);
       }
 
       .model-selection-footer .model-select::part(listbox),
