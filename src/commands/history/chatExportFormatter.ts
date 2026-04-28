@@ -17,11 +17,12 @@ import {
   isAssistantMessage,
   isToolMessage,
 } from 'openai/lib/chatCompletionUtils';
+import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 import latexPreamble from '../../../resources/templates/chatExport.tex';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
-  ChatCompletionMessageToolCall,
+  ChatCompletionMessageFunctionToolCall,
 } from 'openai/resources/chat/completions';
 import type {
   ResponseFunctionToolCallItem,
@@ -456,12 +457,11 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
 
       // OpenAI Chat Completions: tool_calls array on assistant messages
       for (const tc of getAssistantToolCalls(item)) {
-        const fn = tc.type === 'function' ? tc.function : undefined;
-        if (fn?.name) {
+        if (tc.function.name) {
           nodes.push({
             kind: 'tool-call',
-            name: fn.name,
-            input: fn.arguments ?? '{}',
+            name: tc.function.name,
+            input: tc.function.arguments ?? '{}',
           });
           lastAssistantHadToolUse = true;
         }
@@ -512,12 +512,20 @@ function toChatCompletionMessageParam(
   return item as ChatCompletionMessageParam;
 }
 
-function getAssistantToolCalls(item: unknown): ChatCompletionMessageToolCall[] {
+function getAssistantToolCalls(
+  item: unknown,
+): ChatCompletionMessageFunctionToolCall[] {
   const message = toChatCompletionMessageParam(item);
   if (!isAssistantMessage(message) || !Array.isArray(message.tool_calls)) {
     return [];
   }
-  return message.tool_calls;
+
+  try {
+    assertToolCallsAreChatCompletionFunctionToolCalls(message.tool_calls);
+    return message.tool_calls;
+  } catch {
+    return [];
+  }
 }
 
 // ============================================================
