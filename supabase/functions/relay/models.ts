@@ -2,9 +2,9 @@
  * Relay Model Configuration
  *
  * SINGLE SOURCE OF TRUTH: llm-zoo npm package
- * Tier assignments are derived from model pricing and capabilities:
- * - free: Budget non-thinking models (under $1/M input, supportsReasoning=false)
- * - Max: All models up to $3/M input, including thinking variants
+ * Tier assignments are derived from model pricing:
+ * - free: Budget models (under $1/M input)
+ * - Max: Mid-tier models ($1-3/M input) + free tier
  * - Ultra: All models including premium ($3+/M input)
  */
 
@@ -44,7 +44,6 @@ interface RelayModel {
   apiPatterns: string[];
   minTier: MinTier;
   inputPrice: number;
-  supportsReasoning: boolean;
 }
 
 // =============================================================================
@@ -65,7 +64,6 @@ function toRelayModel(config: ModelConfig): RelayModel {
     apiPatterns: [config.fullName.toLowerCase()],
     minTier: getTierFromPrice(config.inputPrice),
     inputPrice: config.inputPrice,
-    supportsReasoning: config.capabilities?.supportsReasoning ?? false,
   };
 }
 
@@ -82,14 +80,7 @@ const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
 // Derived Arrays
 // =============================================================================
 
-/**
- * Free tier: budget models (under $1/M input) excluding thinking/reasoning
- * variants — those are more capable and consume significantly more tokens.
- * Max tier: all models up to $3/M input (including thinking variants).
- */
-const FREE_TIER_MODELS = RELAY_MODELS.filter(
-  (m) => m.minTier === 'free' && !m.supportsReasoning,
-);
+const FREE_TIER_MODELS = RELAY_MODELS.filter((m) => m.minTier === 'free');
 const MAX_TIER_MODELS = RELAY_MODELS.filter(
   (m) => m.minTier === 'free' || m.minTier === 'Max',
 );
@@ -173,9 +164,8 @@ const BOUNDARY_RE = /^[-/:@.]/;
  * (prevents a short free-tier "glm-5" from co-matching with "glm-5-turbo").
  *
  * Returns all matching entries rather than a single winner because the same
- * API model name can map to multiple llm-zoo entries (e.g. a thinking and a
- * non-thinking variant, or multiple pricing tiers). The caller decides how to
- * interpret the set.
+ * API model name can map to multiple llm-zoo entries (e.g. multiple pricing
+ * tiers for the same model). The caller decides how to interpret the set.
  */
 function resolveAllModelsByApiName(modelName: string): RelayModel[] {
   const name = modelName.toLowerCase().trim();
@@ -218,21 +208,13 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
 
 /**
  * Check if a model is allowed for a given tier.
- * Free tier: budget non-thinking models only (under $1/M input, no reasoning).
- * Max tier: all models up to $3/M input (includes thinking variants).
+ * Free tier: budget models only (under $1/M input).
+ * Max tier: all models up to $3/M input.
  * Ultra tier: all models.
  *
- * When multiple llm-zoo entries share the same API model name (e.g. a
- * thinking and a non-thinking variant of moonshot-v1-128k), both tiers use
- * a `some()` check:
- * - Max: allowed if at least one interpretation is within Max's range.
- * - Free: allowed if at least one interpretation is a budget non-thinking
- *   model. The relay cannot prevent the client from adding thinking parameters
- *   to the request, but any cost overrun is bounded by the spending limit.
- *   Denying with `every()` would 403 legitimate free requests for the
- *   non-thinking variant of a shared-name model.
- *
- * Unknown model names are denied for non-Ultra tiers.
+ * When multiple llm-zoo entries share the same API model name, a `some()`
+ * check is used: access is granted if at least one interpretation falls
+ * within the user's tier. Unknown model names are denied for non-Ultra tiers.
  */
 export function isModelAllowedForTier(
   tier: string,
@@ -247,8 +229,8 @@ export function isModelAllowedForTier(
   if (tier === MAX_TIER) {
     return models.some((m) => m.minTier === FREE_TIER || m.minTier === MAX_TIER);
   }
-  // Free tier: allow if a non-thinking budget interpretation exists
-  return models.some((m) => m.minTier === FREE_TIER && !m.supportsReasoning);
+  // Free tier: allow if at least one interpretation is a budget model
+  return models.some((m) => m.minTier === FREE_TIER);
 }
 
 // =============================================================================
