@@ -5,7 +5,12 @@ import { glob } from 'glob';
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';
-import { GlobalStateKey, globalSM } from '@common/state';
+import {
+  GlobalStateKey,
+  WorkspaceStateKey,
+  globalSM,
+  workspaceSM,
+} from '@common/state';
 import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -15,7 +20,12 @@ import {
   MODEL_LIST_VERSION,
   isDeprecatedModel,
 } from '@model/computeModelOptions';
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
+import { LatexConfigValuesSchema } from '@shared/schemas/settingsViewMessages';
+import {
+  LATEX_FIELD_TO_KEY,
+  LATEX_WORKSHOP_EXT_ID,
+  type LatexConfigField,
+} from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { GlobalStorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
@@ -536,4 +546,143 @@ async function promptLatexWorkshopInstall(): Promise<void> {
       },
     ],
   );
+}
+
+/**
+ * One-shot per-workspace migration for LaTeX/compile/diff settings that moved
+ * from `package.json` `contributes.configuration` to TeXRA workspace state.
+ *
+ * Gating: a single workspace-scoped marker (`LATEX_SETTINGS_MIGRATED`) is set
+ * after the first run. Subsequent activations skip the entire pass. This is
+ * essential for correctness — without a marker, a per-key "skip if storage has
+ * any value" gate would re-import the legacy settings.json value the moment a
+ * user resets a key to default via the LaTeX tab UI (`update(key, undefined)`
+ * removes the key from storage; the next activation would read it back from
+ * settings.json again). Marker prevents that footgun.
+ *
+ * Per-workspace, not per-user: workspace state is per-workspace and a global
+ * once-per-user marker would let the first opened workspace consume the
+ * migration and silently skip every other workspace.
+ *
+ * Source detection has two paths:
+ * 1. `inspect()` — for keys that were declared in `contributes.configuration`
+ *    at upgrade time. Considers only `workspaceFolderValue`, `workspaceValue`,
+ *    `globalValue`, never `defaultValue` (avoids persisting VS Code's
+ *    compiled-in defaults into workspace state, which would block future
+ *    default changes).
+ * 2. `get()` fallback — for users who upgrade directly past the package.json
+ *    deregistration. VS Code may treat the now-unregistered keys' settings.json
+ *    entries as opaque, so `inspect()` can return undefined or all-undefined.
+ *    `get()` reads the merged config; for unregistered keys this is just the
+ *    user's settings.json entry (no compiled-in default to confuse the result).
+ *
+ * Once migrated, the LaTeX tab UI writes to workspaceSM directly. A user who
+ * later edits the legacy `texra.*` keys in settings.json sees no effect —
+ * that path is no longer authoritative.
+ */
+/**
+ * Read an explicit legacy `texra.*` value from VS Code config, considering
+ * only workspaceFolder/workspace/global (never default). For keys deregistered
+ * from `package.json` `contributes.configuration`, VS Code may not surface
+ * settings.json entries via `inspect()`; fall back to `get(key)` for those.
+ */
+function readExplicitLegacyValue(
+  cfg: vscode.WorkspaceConfiguration,
+  key: WorkspaceStateKey,
+): unknown {
+  const inspection = cfg.inspect(key);
+  if (inspection) {
+    const explicit =
+      inspection.workspaceFolderValue ??
+      inspection.workspaceValue ??
+      inspection.globalValue;
+    if (explicit !== undefined) return explicit;
+  }
+  if (!inspection || inspection.defaultValue === undefined) {
+    return cfg.get(key);
+  }
+  return undefined;
+}
+
+/**
+ * Validate a legacy value against the new schema. Returns the parsed value
+ * on success, or undefined when the value is unrecoverable. Permits one
+ * backward-compat coercion: the old VS Code config `number` schema allowed
+ * decimal timeouts where the new schema requires integers, so retry once
+ * with `Math.round` before giving up.
+ */
+function validateLegacyLatexConfigValue(
+  field: LatexConfigField,
+  raw: unknown,
+): unknown | undefined {
+  const fieldSchema = LatexConfigValuesSchema.shape[field];
+  const direct = fieldSchema.safeParse(raw);
+  if (direct.success) return direct.data;
+  if (
+    typeof raw === 'number' &&
+    Number.isFinite(raw) &&
+    !Number.isInteger(raw)
+  ) {
+    const rounded = fieldSchema.safeParse(Math.round(raw));
+    if (rounded.success) return rounded.data;
+  }
+  return undefined;
+}
+
+export async function migrateLatexConfigToStorage(): Promise<void> {
+  // One-shot gate. Once this workspace has been migrated, never run again —
+  // post-migration the LaTeX tab UI is the only authoritative writer. Re-
+  // running would re-import stale settings.json entries and silently undo
+  // any "reset to default" the user performed in the UI.
+  if (workspaceSM.get<boolean>(WorkspaceStateKey.LATEX_SETTINGS_MIGRATED)) {
+    return;
+  }
+
+  const cfg = vscode.workspace.getConfiguration();
+  for (const [field, key] of Object.entries(LATEX_FIELD_TO_KEY) as [
+    LatexConfigField,
+    WorkspaceStateKey,
+  ][]) {
+    const raw = readExplicitLegacyValue(cfg, key);
+    if (raw === undefined) continue;
+
+    // Validate (with a one-shot decimal→integer coercion for legacy timeout
+    // values). On failure: skip, log, do not write — the user's value falls
+    // back to the documented default rather than crashing the webview parse
+    // or sticking an out-of-range value into runtime readers.
+    const validated = validateLegacyLatexConfigValue(field, raw);
+    if (validated === undefined) {
+      logger.warn(
+        'extension',
+        `Skipping migration of ${key}: value ${JSON.stringify(raw)} fails schema validation`,
+      );
+      continue;
+    }
+
+    try {
+      await workspaceSM.update(key, validated);
+      logger.info(
+        'extension',
+        `Migrated ${key} from VS Code config to workspace storage`,
+      );
+    } catch (err) {
+      logger.warn(
+        'extension',
+        `Failed to migrate ${key} to workspace storage: ${toErrorMessage(err)}`,
+      );
+    }
+  }
+
+  // Always mark migration done — even if a particular key failed to copy or
+  // had no value. Otherwise a transient failure would force a retry on every
+  // activation forever, and the user's UI resets would be silently undone in
+  // the meantime.
+  try {
+    await workspaceSM.update(WorkspaceStateKey.LATEX_SETTINGS_MIGRATED, true);
+  } catch (err) {
+    logger.warn(
+      'extension',
+      `Failed to set LATEX_SETTINGS_MIGRATED marker: ${toErrorMessage(err)}`,
+    );
+  }
 }

@@ -38,6 +38,7 @@ import {
   copyDefaultAgents,
   configureLatexSettings,
   initializeToolDefaults,
+  migrateLatexConfigToStorage,
   refreshModelListIfNeeded,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
@@ -161,6 +162,11 @@ export async function activate(context: vscode.ExtensionContext) {
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
   await initializeToolDefaults();
+
+  // Per-key idempotent copy of LaTeX/compile/diff settings from VS Code
+  // config to TeXRA workspace storage. Safe to run on every activation —
+  // a key already in workspaceSM is left untouched.
+  await migrateLatexConfigToStorage();
 
   // Copy default agents before loading the agent index so built-in agents
   // are available when the index scans directories

@@ -18,6 +18,7 @@ import {
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@common/errors';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   runPackLatexdiffvc,
@@ -38,6 +39,7 @@ import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
@@ -89,8 +91,8 @@ async function withLatexdiffTool<T>(
 async function promptForLatexdiffMathMarkup(): Promise<
   MathMarkupOption | undefined
 > {
-  const configuredMode = getConfig<string>(
-    'texra.latexdiff.mathMarkup',
+  const configuredMode = workspaceSM.get<string>(
+    WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     DEFAULT_MATH_MARKUP,
   );
   const items: (vscode.QuickPickItem & { value: MathMarkupOption })[] =
@@ -614,9 +616,9 @@ async function handleRunLatexdiff(
       `Running latexdiff with math markup mode: ${mathMarkup}`,
     );
 
-    const generateBetweenRoundDiffs = getConfig<boolean>(
-      'texra.latexdiff.generateBetweenRoundDiffs',
-      false,
+    const generateBetweenRoundDiffs = workspaceSM.get<boolean>(
+      WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+      LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
     );
     logger.debug(
       CHANNEL,

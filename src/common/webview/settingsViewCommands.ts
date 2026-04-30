@@ -107,6 +107,9 @@ export const SETTINGS_VIEW_CMD = {
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
   INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
   RUN_INSTALL_COMMAND: 'runInstallCommand',
+  // LaTeX/compile/diff config (storage-backed, migrated from VS Code config)
+  GET_LATEX_CONFIG_VALUES: 'getLatexConfigValues',
+  SET_LATEX_CONFIG_VALUE: 'setLatexConfigValue',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -129,4 +132,5 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
   UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
+  UPDATE_LATEX_CONFIG_VALUES: 'updateLatexConfigValues',
 } as const;
