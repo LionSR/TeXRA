@@ -1,10 +1,7 @@
 import * as vscode from 'vscode';
 
 import { bus } from '@eventBus/ProgressEventBus';
-import {
-  collectOutputFileLocations,
-  type OutputFileInfo,
-} from '@shared/schemas/output';
+import type { OutputFileInfo } from '@shared/schemas/output';
 
 // Session-scoped: the touched set is not persisted across window reloads so
 // the badges clear on restart and track only the current session's activity.
@@ -48,17 +45,15 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
   }
 }
 
-// Decorate workspace files reachable from this output info — including the
-// original workspace file referenced via `lineage.original` for edit
-// workflows whose agent output sits under runStorage.
+// Only mark the primary output location. Lineage entries (original, diffBase,
+// diffFile) are reference points — marking them would badge the source file as
+// "Modified by TeXRA" before the user has actually accepted the workflow output.
 function collectWorkspacePaths(
   target: Set<string>,
   info: OutputFileInfo,
 ): void {
-  for (const loc of collectOutputFileLocations(info)) {
-    if (loc.kind === 'workspace') {
-      target.add(loc.absolutePath);
-    }
+  if (info.location.kind === 'workspace') {
+    target.add(info.location.absolutePath);
   }
 }
 
