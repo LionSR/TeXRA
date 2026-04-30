@@ -46,6 +46,18 @@ const FEEDBACK_ACTIVE = selectorGroup(ITEM_NAMES, '--feedback-active');
 const BADGES = unsafeCSS(
   '.workflow-proposal__category-badge, .external-inquiry-request__mode-badge',
 );
+const SCROLLABLE_DETAILS = selectorGroup(
+  ITEM_NAMES.filter((n) => n !== 'workflow-proposal'),
+  '__details',
+);
+
+const sp = {
+  tiny: unsafeCSS('${sp.tiny}'),
+  small: unsafeCSS('${sp.small}'),
+  medium: unsafeCSS('${sp.medium}'),
+  large: unsafeCSS('${sp.large}'),
+  xlarge: unsafeCSS('${sp.xlarge}'),
+} as const;
 
 export const requestPanelStyles: CSSResult = css`
   /* ================================================================
@@ -53,21 +65,21 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   :is(${CONTAINERS}) {
-    margin: var(--spacing-large) 0;
-    padding: var(--spacing-large);
+    margin: ${sp.large} 0;
+    padding: ${sp.large};
     border: var(--border-thin) solid var(--vscode-input-border);
     border-radius: var(--border-radius-large);
     background: var(--vscode-editor-background);
     box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.12));
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-medium);
+    gap: ${sp.medium};
   }
 
   :is(${HEADERS}) {
     display: flex;
     align-items: center;
-    gap: var(--spacing-medium);
+    gap: ${sp.medium};
     font-weight: var(--font-weight-semibold);
     color: var(--vscode-editor-foreground);
   }
@@ -75,7 +87,7 @@ export const requestPanelStyles: CSSResult = css`
   :is(${LISTS}) {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-medium);
+    gap: ${sp.medium};
   }
 
   :is(${ITEMS}) {
@@ -84,25 +96,21 @@ export const requestPanelStyles: CSSResult = css`
     border-radius: var(--border-radius);
     border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
     background: var(--vscode-editorHoverWidget-background);
-    padding: var(--spacing-medium);
-    gap: var(--spacing-medium);
+    padding: ${sp.medium};
+    gap: ${sp.medium};
     position: relative;
   }
 
   :is(${DETAILS}) {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   /* Scroll constraint for panels with potentially long content.
      Excluded: workflow-proposal__details (has an absolutely-positioned
      dropdown that would be clipped by overflow-y: auto). */
-  .approval-request__details,
-  .bash-approval-request__details,
-  .retry-request__details,
-  .plan-approval-request__details,
-  .external-inquiry-request__details {
+  :is(${SCROLLABLE_DETAILS}) {
     max-height: min(34vh, 26rem);
     overflow-y: auto;
     scrollbar-gutter: stable;
@@ -114,20 +122,20 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--color-text-secondary);
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
     flex-wrap: wrap;
   }
 
   :is(${ACTIONS}) {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   :is(${ACTIONS})::part(container) {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   :is(${ACTIONS}) vscode-toolbar-button {
@@ -136,7 +144,7 @@ export const requestPanelStyles: CSSResult = css`
 
   :is(${ACTIONS}) vscode-toolbar-button::part(control) {
     justify-content: flex-start;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   /* Shared action button colors */
@@ -161,7 +169,7 @@ export const requestPanelStyles: CSSResult = css`
     font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    padding: var(--spacing-tiny) var(--border-radius-large);
+    padding: ${sp.tiny} var(--border-radius-large);
     border-radius: var(--border-radius);
     white-space: nowrap;
   }
@@ -210,7 +218,7 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request__diff {
     display: inline-flex;
     align-items: baseline;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   .approval-request__diff-added,
@@ -258,7 +266,7 @@ export const requestPanelStyles: CSSResult = css`
 
   .approval-request__actions .diff-dropdown .diff-dropdown-menu {
     position: absolute;
-    top: calc(100% + var(--spacing-tiny));
+    top: calc(100% + ${sp.tiny});
     left: 0;
     z-index: 100;
     min-width: 150px;
@@ -326,7 +334,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .retry-request__error-details {
-    margin-top: var(--spacing-tiny);
+    margin-top: ${sp.tiny};
     font-size: var(--font-size-xs);
   }
 
@@ -335,7 +343,7 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-descriptionForeground);
     display: flex;
     align-items: center;
-    gap: var(--spacing-tiny);
+    gap: ${sp.tiny};
     user-select: none;
   }
 
@@ -346,8 +354,8 @@ export const requestPanelStyles: CSSResult = css`
   /* Note: .toggle-icon rotation handled by commonViewStyles */
 
   .retry-request__error-body {
-    margin-top: var(--spacing-tiny);
-    padding: var(--spacing-small);
+    margin-top: ${sp.tiny};
+    padding: ${sp.small};
     background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
     font-family: var(--vscode-editor-font-family);
@@ -377,7 +385,7 @@ export const requestPanelStyles: CSSResult = css`
   .workflow-proposal__header-row {
     display: flex;
     align-items: baseline;
-    gap: var(--spacing-medium);
+    gap: ${sp.medium};
     flex-wrap: wrap;
   }
 
@@ -405,14 +413,14 @@ export const requestPanelStyles: CSSResult = css`
 
   .workflow-proposal__model::before {
     content: '\u2022';
-    margin-right: var(--spacing-small);
+    margin-right: ${sp.small};
   }
 
   .workflow-proposal__agent-select,
   .workflow-proposal__model-select {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   .workflow-proposal__agent-select .codicon,
@@ -444,21 +452,21 @@ export const requestPanelStyles: CSSResult = css`
     max-height: 12em;
     overflow-y: auto;
     line-height: var(--line-height-normal);
-    padding: var(--spacing-small) 0;
+    padding: ${sp.small} 0;
     border-bottom: var(--border-thin) solid var(--vscode-editorWidget-border);
   }
 
   .workflow-proposal__extract-flags {
     display: flex;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
     flex-wrap: wrap;
-    margin-top: var(--spacing-small);
+    margin-top: ${sp.small};
   }
 
   .workflow-proposal__extract-flag {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-tiny);
+    gap: ${sp.tiny};
     text-transform: none;
     letter-spacing: normal;
   }
@@ -466,8 +474,8 @@ export const requestPanelStyles: CSSResult = css`
   .workflow-proposal__files {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
-    margin-top: var(--spacing-small);
+    gap: ${sp.small};
+    margin-top: ${sp.small};
   }
 
   .workflow-proposal__files > div {
@@ -527,12 +535,12 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .plan-approval-request__steps {
-    margin: var(--spacing-small) 0;
-    padding-left: var(--spacing-xlarge);
+    margin: ${sp.small} 0;
+    padding-left: ${sp.xlarge};
   }
 
   .plan-approval-request__steps li {
-    margin-bottom: var(--spacing-small);
+    margin-bottom: ${sp.small};
   }
 
   .plan-approval-request__step-desc {
@@ -544,7 +552,7 @@ export const requestPanelStyles: CSSResult = css`
     font-family: var(--vscode-editor-font-family);
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
-    margin-top: var(--spacing-tiny);
+    margin-top: ${sp.tiny};
   }
 
   .plan-approval-request__file {
@@ -560,7 +568,7 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   :is(${FEEDBACKS}) {
-    margin-top: var(--spacing-small);
+    margin-top: ${sp.small};
   }
 
   :is(${FEEDBACK_INPUTS}) {
@@ -579,7 +587,7 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-requests__nav {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
     margin-left: auto;
   }
 
@@ -622,7 +630,7 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-request__context {
     font-size: var(--font-size-sm);
     color: var(--vscode-descriptionForeground);
-    padding: var(--spacing-small) var(--spacing-medium);
+    padding: ${sp.small} ${sp.medium};
     background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
     border-left: var(--border-thick) solid
@@ -634,7 +642,7 @@ export const requestPanelStyles: CSSResult = css`
     background: var(--vscode-textCodeBlock-background, rgba(0, 0, 0, 0.05));
     border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
     border-radius: var(--border-radius);
-    padding: var(--spacing-medium);
+    padding: ${sp.medium};
     position: relative;
   }
 
@@ -652,24 +660,24 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-request__question-actions {
     display: flex;
     justify-content: flex-end;
-    margin-top: var(--spacing-small);
-    padding-top: var(--spacing-small);
+    margin-top: ${sp.small};
+    padding-top: ${sp.small};
     border-top: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
   }
 
   .external-inquiry-request__search-hint {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
     font-size: var(--font-size-sm);
     color: var(--vscode-editorInfo-foreground, var(--vscode-focusBorder));
-    padding: var(--spacing-small) 0;
+    padding: ${sp.small} 0;
   }
 
   .external-inquiry-request__attach-files {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   .external-inquiry-request__attach-label {
@@ -678,14 +686,14 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--vscode-descriptionForeground);
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   .external-inquiry-request__file-list {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-tiny);
-    padding: var(--spacing-small);
+    gap: ${sp.tiny};
+    padding: ${sp.small};
     background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
   }
@@ -693,7 +701,7 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-request__file-item {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
     font-size: var(--font-size-sm);
     font-family: var(--vscode-editor-font-family);
     color: var(--vscode-textLink-foreground);
@@ -702,20 +710,20 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-request__answer-area {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   .external-inquiry-request__session-links {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   .external-inquiry-request__session-links-known,
   .external-inquiry-request__session-links-input-group {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   .external-inquiry-request__session-links-label {
@@ -727,8 +735,8 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-request__session-links-list {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-tiny);
-    padding: var(--spacing-small);
+    gap: ${sp.tiny};
+    padding: ${sp.small};
     background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
   }
@@ -748,7 +756,7 @@ export const requestPanelStyles: CSSResult = css`
     font-family: var(--vscode-editor-font-family);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
-    padding: var(--spacing-medium);
+    padding: ${sp.medium};
     background: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: var(--border-thin) solid var(--vscode-input-border);
@@ -798,7 +806,7 @@ export const requestPanelStyles: CSSResult = css`
     font-family: var(--vscode-editor-font-family);
     font-size: var(--font-size);
     line-height: var(--line-height-normal);
-    padding: var(--spacing-medium);
+    padding: ${sp.medium};
     background: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: var(--border-thin) solid var(--vscode-input-border);
@@ -821,11 +829,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   @media (max-height: 900px) {
-    .approval-request__details,
-    .bash-approval-request__details,
-    .retry-request__details,
-    .plan-approval-request__details,
-    .external-inquiry-request__details {
+    :is(${SCROLLABLE_DETAILS}) {
       max-height: min(28vh, 20rem);
     }
 

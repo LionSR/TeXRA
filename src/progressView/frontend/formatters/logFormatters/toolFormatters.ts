@@ -236,6 +236,424 @@ function isMcpTextBlock(
   );
 }
 
+type ToolSectionContext = {
+  toolName: string;
+  input: unknown;
+  filePath: string;
+  parsedOutput: unknown;
+  outputText: string;
+  isInProgress: boolean;
+};
+
+function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
+  const { input, filePath, parsedOutput } = ctx;
+  if (!isPlainObject(input)) return [];
+  const editInput = input as EditInput | TextEditorInput;
+  if (
+    typeof editInput.old_str !== 'string' ||
+    typeof editInput.new_str !== 'string'
+  ) {
+    return [];
+  }
+  const sections: TemplateResult[] = [];
+  const edits = getOutputEdits<{ startLine?: number }>(parsedOutput);
+  const startLine = edits?.[0]?.startLine;
+
+  if (filePath) {
+    sections.push(
+      buildToolUseSection(
+        'File:',
+        buildFileLinkWithLines(filePath, { startLine }),
+      ),
+    );
+  }
+  sections.push(
+    buildToolUseSection(
+      '',
+      buildEditDiffSection(editInput.old_str, editInput.new_str),
+    ),
+  );
+  return sections;
+}
+
+function buildFileLinkSections(ctx: ToolSectionContext): TemplateResult[] {
+  const { input, filePath } = ctx;
+  if (!filePath) return [];
+  const readInput = input as ReadInput;
+  return [
+    buildToolUseSection(
+      'File:',
+      buildFileLinkWithLines(filePath, {
+        startLine: readInput.range?.start,
+        endLine: readInput.range?.end ?? undefined,
+      }),
+    ),
+  ];
+}
+
+function buildFileContentSections(ctx: ToolSectionContext): TemplateResult[] {
+  const { toolName, input, filePath } = ctx;
+  if (!filePath) return [];
+  const writeInput = input as WriteInput;
+  const contentLanguage = getLanguageFromPath(filePath);
+  return [
+    buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
+    buildToolSection('', writeInput.content, {
+      toolName,
+      language: contentLanguage,
+    }),
+  ];
+}
+
+function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
+  const { input } = ctx;
+  if (!isPlainObject(input)) return [];
+  const memInput = input as MemoryToolInput;
+  const command = memInput.command;
+  const memPath = memInput.path ?? '';
+  const sections: TemplateResult[] = [];
+
+  if (memPath) {
+    sections.push(
+      buildToolUseSection('File:', buildMemoryPathDisplay(memPath)),
+    );
+  }
+
+  if (
+    command === 'str_replace' &&
+    memInput.old_str != null &&
+    memInput.new_str != null
+  ) {
+    sections.push(
+      buildToolUseSection(
+        '',
+        buildEditDiffSection(memInput.old_str, memInput.new_str),
+      ),
+    );
+  } else if (command === 'create' && memInput.file_text != null) {
+    const contentLanguage = memPath
+      ? getLanguageFromPath(memPath)
+      : 'plaintext';
+    sections.push(
+      buildToolSection('', memInput.file_text, {
+        language: contentLanguage,
+      }),
+    );
+  } else if (command === 'insert') {
+    const insertText = memInput.insert_text ?? memInput.new_str;
+    if (insertText != null) {
+      const lineLabel =
+        memInput.insert_line != null
+          ? `Insert at line ${memInput.insert_line}:`
+          : 'Insert:';
+      const contentLanguage = memPath
+        ? getLanguageFromPath(memPath)
+        : 'plaintext';
+      sections.push(
+        buildToolSection(lineLabel, insertText, {
+          language: contentLanguage,
+        }),
+      );
+    }
+  } else if (command === 'rename') {
+    const oldPath = memInput.old_path;
+    const newPath = memInput.new_path;
+    if (oldPath != null && newPath != null) {
+      sections.push(
+        buildToolUseSection('Rename:', wrapInPre(`${oldPath} → ${newPath}`)),
+      );
+    }
+  }
+  return sections;
+}
+
+function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
+  const { input, isInProgress } = ctx;
+  if (!isPlainObject(input)) return [];
+  const execInput = input as ExecutionsToolInput;
+  const execPath = execInput.path ?? '';
+  const action = execInput.action ?? EXECUTIONS_DEFAULT_ACTION;
+  const sections: TemplateResult[] = [];
+
+  if (execPath) {
+    sections.push(
+      buildToolUseSection('Path:', buildExecutionsPathDisplay(execPath)),
+    );
+  }
+
+  if (action === 'wait') {
+    const timeout = execInput.timeout ?? 300;
+    // prettier-ignore
+    const waitContent = isInProgress
+      ? html`<pre>wait (timeout: ${timeout}s)</pre><span class="followup-break-wait" title="Focus the follow-up input to send a message and break this wait"><i class="codicon codicon-comment"></i> Send Follow-up</span>`
+      : wrapInPre(`wait (timeout: ${timeout}s)`);
+    sections.push(buildToolUseSection('Action:', waitContent));
+  } else if (action === 'kill') {
+    sections.push(buildToolUseSection('Action:', wrapInPre('kill')));
+  }
+
+  if (execInput.view_range) {
+    const [start, end] = execInput.view_range;
+    sections.push(
+      buildToolUseSection('Range:', wrapInPre(`lines ${start}–${end}`)),
+    );
+  }
+  return sections;
+}
+
+function buildAcceptRunFilesSections(
+  ctx: ToolSectionContext,
+): TemplateResult[] {
+  const { input, parsedOutput } = ctx;
+  if (!isPlainObject(input)) return [];
+  const acceptInput = input as AcceptRunFilesInput;
+  const sections: TemplateResult[] = [];
+
+  if (acceptInput.execution_id) {
+    // prettier-ignore
+    sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${acceptInput.execution_id}</code>`));
+  }
+
+  const files = acceptInput.files;
+  if (Array.isArray(files) && files.length > 0) {
+    const edits = getOutputEdits<{
+      path?: string;
+      lineChanges?: { added: number; removed: number };
+    }>(parsedOutput);
+    const editsByPath = new Map(
+      (edits ?? []).filter((e) => e.path).map((e) => [e.path!, e] as const),
+    );
+
+    // prettier-ignore
+    const fileItems = html`${files.map((f) => {
+      const dest = f.original ?? f.path ?? '';
+      const source = f.path ?? '';
+      const isMapped = dest && source && dest !== source;
+      const edit = editsByPath.get(dest);
+      const diffStats = edit?.lineChanges
+        ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:var(--spacing-small)">-${edit.lineChanges.removed}</span></span>`
+        : nothing;
+      // prettier-ignore
+      return html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${dest}>${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
+    })}`;
+    // prettier-ignore
+    sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
+  }
+  return sections;
+}
+
+function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
+  const { input } = ctx;
+  if (!isPlainObject(input)) return [];
+  const delegateInput = input as DelegateAgentInput | WorkflowAgentInput;
+  const sections: TemplateResult[] = [];
+
+  const execId =
+    'execution_id' in delegateInput
+      ? (delegateInput as DelegateAgentInput).execution_id
+      : undefined;
+  if (execId) {
+    // prettier-ignore
+    sections.push(buildToolUseSection('Resume:', html`<code class="execution-id">${execId}</code>`));
+  }
+
+  const agent = delegateInput.agent;
+  const model = delegateInput.model;
+  if (agent || model) {
+    const agentPart = agent ?? 'unknown';
+    const modelPart = model
+      ? html` <span class="file-source">(${model})</span>`
+      : nothing;
+    // prettier-ignore
+    sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${agentPart}</code>${modelPart}`));
+  }
+
+  const instruction = delegateInput.instruction;
+  if (instruction) {
+    sections.push(buildToolUseSection('Instruction:', wrapInPre(instruction)));
+  }
+
+  const extractFlags: string[] = [];
+  if ('extractFigures' in delegateInput && delegateInput.extractFigures)
+    extractFlags.push('Extract Figures');
+  if ('extractTikz' in delegateInput && delegateInput.extractTikz)
+    extractFlags.push('Extract TikZ');
+  if (extractFlags.length > 0) {
+    // prettier-ignore
+    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<span class="extract-flag"><i class="codicon codicon-file-media"></i> ${f}</span>`)}`));
+  }
+
+  const fileGroups = getProposalFileGroups(delegateInput);
+  if (fileGroups.length > 0) {
+    // prettier-ignore
+    const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
+    // prettier-ignore
+    sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
+  }
+  return sections;
+}
+
+function buildSpecializedSections(ctx: ToolSectionContext): TemplateResult[] {
+  const { toolName, input } = ctx;
+  const content =
+    SPECIALIZED_TOOL_SECTION_RENDERERS[
+      toolName as keyof typeof SPECIALIZED_TOOL_SECTION_RENDERERS
+    ](input);
+  if (content != null && content !== nothing) {
+    return [content];
+  }
+  return [];
+}
+
+function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
+  const { toolName, input, parsedOutput, outputText } = ctx;
+  const sections: TemplateResult[] = [];
+  let renderedMcpOutput = false;
+
+  if (input != null) {
+    const { text: inputValue, language: inputLanguage } =
+      stringifyWithLanguage(input);
+    if (inputValue) {
+      sections.push(
+        buildToolSection('Arguments:', inputValue, {
+          toolName,
+          language: inputLanguage,
+        }),
+      );
+    }
+  }
+
+  const mcpParsed = CodexMcpToolOutputSchema.safeParse(parsedOutput);
+  const mcpOutput: CodexMcpToolOutput | null = mcpParsed.success
+    ? mcpParsed.data
+    : null;
+  const contentBlocks = Array.isArray(mcpOutput?.contentBlocks)
+    ? mcpOutput.contentBlocks
+    : [];
+  const textBlocks = contentBlocks
+    .filter(isMcpTextBlock)
+    .map((block) => block.text);
+  const otherBlocks = contentBlocks.filter((block) => !isMcpTextBlock(block));
+
+  if (typeof mcpOutput?.status === 'string') {
+    let statusIcon: string;
+    if (mcpOutput.status === 'failed') {
+      statusIcon = 'codicon-error';
+    } else if (mcpOutput.status === 'in_progress') {
+      statusIcon = 'codicon-sync spin';
+    } else {
+      statusIcon = 'codicon-check';
+    }
+    // prettier-ignore
+    sections.push(buildToolUseSection('Status:', html`<span class="extract-flag"><i class="codicon ${statusIcon}"></i> ${mcpOutput.status}</span>`));
+    renderedMcpOutput = true;
+  }
+
+  if (textBlocks.length > 0) {
+    sections.push(buildToolSection('Response:', textBlocks.join('\n\n')));
+    renderedMcpOutput = true;
+  }
+
+  if (mcpOutput && 'structuredContent' in mcpOutput) {
+    const { text: structuredText, language: structuredLanguage } =
+      stringifyWithLanguage(mcpOutput.structuredContent);
+    if (structuredText) {
+      sections.push(
+        buildToolSection('Structured:', structuredText, {
+          toolName,
+          language: structuredLanguage,
+        }),
+      );
+      renderedMcpOutput = true;
+    }
+  }
+
+  if (otherBlocks.length > 0) {
+    const { text: contentText, language: contentLanguage } =
+      stringifyWithLanguage(otherBlocks);
+    if (contentText) {
+      sections.push(
+        buildToolSection('Content:', contentText, {
+          toolName,
+          language: contentLanguage,
+        }),
+      );
+      renderedMcpOutput = true;
+    }
+  }
+
+  if (!renderedMcpOutput && outputText) {
+    sections.push(
+      buildToolSection('Result:', outputText, {
+        toolName,
+        extraClass: 'tool-output-full',
+      }),
+    );
+  }
+  return sections;
+}
+
+function buildDefaultSections(ctx: ToolSectionContext): TemplateResult[] {
+  const { toolName, input } = ctx;
+  if (input == null) return [];
+  const codeLanguage = TOOL_CODE_LANGUAGES.get(toolName);
+  const { isCodeOnly, code } = codeLanguage
+    ? extractCodeOnlyInput(input)
+    : { isCodeOnly: false, code: '' };
+
+  if (isCodeOnly) {
+    return [buildToolSection('', code, { toolName, language: codeLanguage })];
+  }
+  const { text: inputValue, language: inputLanguage } =
+    stringifyWithLanguage(input);
+  if (inputValue) {
+    return [
+      buildToolSection('', inputValue, {
+        toolName,
+        language: inputLanguage,
+      }),
+    ];
+  }
+  return [];
+}
+
+const TOOL_SECTION_BUILDERS: Array<{
+  match: (toolName: string) => boolean;
+  build: (ctx: ToolSectionContext) => TemplateResult[];
+}> = [
+  {
+    match: (n) => TOOLS_WITH_DIFF_INPUT.has(n),
+    build: buildEditDiffInputSections,
+  },
+  {
+    match: (n) => TOOLS_WITH_FILE_LINK.has(n),
+    build: buildFileLinkSections,
+  },
+  {
+    match: (n) => TOOLS_WITH_FILE_CONTENT.has(n),
+    build: buildFileContentSections,
+  },
+  { match: (n) => n === 'memory', build: buildMemorySections },
+  { match: (n) => n === 'executions', build: buildExecutionsSections },
+  {
+    match: (n) => n === 'accept_run_files',
+    build: buildAcceptRunFilesSections,
+  },
+  { match: (n) => DELEGATION_TOOLS.has(n), build: buildDelegationSections },
+  {
+    match: (n) => Object.hasOwn(SPECIALIZED_TOOL_SECTION_RENDERERS, n),
+    build: buildSpecializedSections,
+  },
+  { match: (n) => n.startsWith('mcp:'), build: buildMcpSections },
+];
+
+function dispatchToolSections(ctx: ToolSectionContext): TemplateResult[] {
+  for (const { match, build } of TOOL_SECTION_BUILDERS) {
+    if (match(ctx.toolName)) return build(ctx);
+  }
+  return buildDefaultSections(ctx);
+}
+
 /** Format tool use log entry as TemplateResult. */
 export function formatToolUseTemplate(
   message: LogMessageData,
@@ -296,372 +714,17 @@ export function formatToolUseTemplate(
     ? `${titleBase} — ${headerSummary}`
     : titleBase;
 
-  // Build content sections
-  const sections: TemplateResult[] = [];
-
   const filePath =
     isPlainObject(input) && typeof input.path === 'string' ? input.path : '';
 
-  // Handle edit tools with diff display
-  if (TOOLS_WITH_DIFF_INPUT.has(toolName) && isPlainObject(input)) {
-    const editInput = input as EditInput | TextEditorInput;
-    if (
-      typeof editInput.old_str === 'string' &&
-      typeof editInput.new_str === 'string'
-    ) {
-      const edits = getOutputEdits<{ startLine?: number }>(parsed.output);
-      const startLine = edits?.[0]?.startLine;
-
-      if (filePath) {
-        sections.push(
-          buildToolUseSection(
-            'File:',
-            buildFileLinkWithLines(filePath, { startLine }),
-          ),
-        );
-      }
-      sections.push(
-        buildToolUseSection(
-          '',
-          buildEditDiffSection(editInput.old_str, editInput.new_str),
-        ),
-      );
-    }
-  }
-  // Handle read tools with file link
-  else if (TOOLS_WITH_FILE_LINK.has(toolName) && filePath) {
-    const readInput = input as ReadInput;
-    sections.push(
-      buildToolUseSection(
-        'File:',
-        buildFileLinkWithLines(filePath, {
-          startLine: readInput.range?.start,
-          endLine: readInput.range?.end ?? undefined,
-        }),
-      ),
-    );
-  }
-  // Handle write tools with file link + content
-  else if (TOOLS_WITH_FILE_CONTENT.has(toolName) && filePath) {
-    const writeInput = input as WriteInput;
-    sections.push(
-      buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
-    );
-    const contentLanguage = getLanguageFromPath(filePath);
-    sections.push(
-      buildToolSection('', writeInput.content, {
-        toolName,
-        language: contentLanguage,
-      }),
-    );
-  }
-  // Handle memory tool with specialized formatting based on command
-  else if (toolName === 'memory' && isPlainObject(input)) {
-    const memInput = input as MemoryToolInput;
-    const command = memInput.command;
-    const memPath = memInput.path ?? '';
-
-    // Show memory file path for commands that operate on a single path
-    if (memPath) {
-      sections.push(
-        buildToolUseSection('File:', buildMemoryPathDisplay(memPath)),
-      );
-    }
-
-    if (
-      command === 'str_replace' &&
-      memInput.old_str != null &&
-      memInput.new_str != null
-    ) {
-      // str_replace: show diff (like edit_file)
-      sections.push(
-        buildToolUseSection(
-          '',
-          buildEditDiffSection(memInput.old_str, memInput.new_str),
-        ),
-      );
-    } else if (command === 'create' && memInput.file_text != null) {
-      // create: show file content (like write_file)
-      const contentLanguage = memPath
-        ? getLanguageFromPath(memPath)
-        : 'plaintext';
-      sections.push(
-        buildToolSection('', memInput.file_text, {
-          language: contentLanguage,
-        }),
-      );
-    } else if (command === 'insert') {
-      // insert: show inserted text at line number (tool accepts insert_text or new_str)
-      const insertText = memInput.insert_text ?? memInput.new_str;
-      if (insertText != null) {
-        const lineLabel =
-          memInput.insert_line != null
-            ? `Insert at line ${memInput.insert_line}:`
-            : 'Insert:';
-        const contentLanguage = memPath
-          ? getLanguageFromPath(memPath)
-          : 'plaintext';
-        sections.push(
-          buildToolSection(lineLabel, insertText, {
-            language: contentLanguage,
-          }),
-        );
-      }
-    } else if (command === 'rename') {
-      // rename: show old → new path (both required)
-      const oldPath = memInput.old_path;
-      const newPath = memInput.new_path;
-      if (oldPath != null && newPath != null) {
-        sections.push(
-          buildToolUseSection('Rename:', wrapInPre(`${oldPath} → ${newPath}`)),
-        );
-      }
-    }
-    // view and delete: file path section above is sufficient
-  }
-  // Handle executions tool with specialized formatting based on action
-  else if (toolName === 'executions' && isPlainObject(input)) {
-    const execInput = input as ExecutionsToolInput;
-    const execPath = execInput.path ?? '';
-    const action = execInput.action ?? EXECUTIONS_DEFAULT_ACTION;
-
-    // Show the virtual path being accessed
-    if (execPath) {
-      sections.push(
-        buildToolUseSection('Path:', buildExecutionsPathDisplay(execPath)),
-      );
-    }
-
-    if (action === 'wait') {
-      // wait: show timeout info and a button to break the wait via follow-up
-      const timeout = execInput.timeout ?? 300;
-      // prettier-ignore
-      const waitContent = isInProgress
-        ? html`<pre>wait (timeout: ${timeout}s)</pre><span class="followup-break-wait" title="Focus the follow-up input to send a message and break this wait"><i class="codicon codicon-comment"></i> Send Follow-up</span>`
-        : wrapInPre(`wait (timeout: ${timeout}s)`);
-      sections.push(buildToolUseSection('Action:', waitContent));
-    } else if (action === 'kill') {
-      // kill: show action
-      sections.push(buildToolUseSection('Action:', wrapInPre('kill')));
-    }
-    // view: path section above is sufficient
-
-    // Show view_range if specified
-    if (execInput.view_range) {
-      const [start, end] = execInput.view_range;
-      sections.push(
-        buildToolUseSection('Range:', wrapInPre(`lines ${start}–${end}`)),
-      );
-    }
-  }
-  // Handle accept_run_files with file list display
-  else if (toolName === 'accept_run_files' && isPlainObject(input)) {
-    const acceptInput = input as AcceptRunFilesInput;
-
-    // Show execution ID
-    if (acceptInput.execution_id) {
-      // prettier-ignore
-      sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${acceptInput.execution_id}</code>`));
-    }
-
-    // Show file mappings as a list with file links
-    const files = acceptInput.files;
-    if (Array.isArray(files) && files.length > 0) {
-      const edits = getOutputEdits<{
-        path?: string;
-        lineChanges?: { added: number; removed: number };
-      }>(parsed.output);
-      const editsByPath = new Map(
-        (edits ?? []).filter((e) => e.path).map((e) => [e.path!, e] as const),
-      );
-
-      // prettier-ignore
-      const fileItems = html`${files.map((f) => {
-        const dest = f.original ?? f.path ?? '';
-        const source = f.path ?? '';
-        const isMapped = dest && source && dest !== source;
-        const edit = editsByPath.get(dest);
-        const diffStats = edit?.lineChanges
-          ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:var(--spacing-small)">-${edit.lineChanges.removed}</span></span>`
-          : nothing;
-        // prettier-ignore
-        return html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${dest}>${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
-      })}`;
-      // prettier-ignore
-      sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
-    }
-  }
-  // Handle delegation tools with structured display
-  else if (DELEGATION_TOOLS.has(toolName) && isPlainObject(input)) {
-    const delegateInput = input as DelegateAgentInput | WorkflowAgentInput;
-
-    // Resume mode: show execution ID
-    const execId =
-      'execution_id' in delegateInput
-        ? (delegateInput as DelegateAgentInput).execution_id
-        : undefined;
-    if (execId) {
-      // prettier-ignore
-      sections.push(buildToolUseSection('Resume:', html`<code class="execution-id">${execId}</code>`));
-    }
-
-    // Agent and model on one line
-    const agent = delegateInput.agent;
-    const model = delegateInput.model;
-    if (agent || model) {
-      const agentPart = agent ?? 'unknown';
-      const modelPart = model
-        ? html` <span class="file-source">(${model})</span>`
-        : nothing;
-      // prettier-ignore
-      sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${agentPart}</code>${modelPart}`));
-    }
-
-    // Instruction as readable text
-    const instruction = delegateInput.instruction;
-    if (instruction) {
-      sections.push(
-        buildToolUseSection('Instruction:', wrapInPre(instruction)),
-      );
-    }
-
-    // Extract figure flags (workflow delegation only)
-    const extractFlags: string[] = [];
-    if ('extractFigures' in delegateInput && delegateInput.extractFigures)
-      extractFlags.push('Extract Figures');
-    if ('extractTikz' in delegateInput && delegateInput.extractTikz)
-      extractFlags.push('Extract TikZ');
-    if (extractFlags.length > 0) {
-      // prettier-ignore
-      sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<span class="extract-flag"><i class="codicon codicon-file-media"></i> ${f}</span>`)}`));
-    }
-
-    // File groups (workflow file fields + memories for both delegation types)
-    const fileGroups = getProposalFileGroups(delegateInput);
-    if (fileGroups.length > 0) {
-      // prettier-ignore
-      const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
-      // prettier-ignore
-      sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
-    }
-  }
-  // Handle specialized structured tool cards via renderer registry
-  else if (Object.hasOwn(SPECIALIZED_TOOL_SECTION_RENDERERS, toolName)) {
-    const content =
-      SPECIALIZED_TOOL_SECTION_RENDERERS[
-        toolName as keyof typeof SPECIALIZED_TOOL_SECTION_RENDERERS
-      ](input);
-    if (content != null && content !== nothing) {
-      sections.push(content);
-    }
-  }
-  // Handle MCP tool calls with richer result rendering
-  else if (toolName.startsWith('mcp:')) {
-    let renderedMcpOutput = false;
-
-    if (input != null) {
-      const { text: inputValue, language: inputLanguage } =
-        stringifyWithLanguage(input);
-      if (inputValue) {
-        sections.push(
-          buildToolSection('Arguments:', inputValue, {
-            toolName,
-            language: inputLanguage,
-          }),
-        );
-      }
-    }
-
-    const mcpParsed = CodexMcpToolOutputSchema.safeParse(parsed.output);
-    const mcpOutput: CodexMcpToolOutput | null = mcpParsed.success
-      ? mcpParsed.data
-      : null;
-    const contentBlocks = Array.isArray(mcpOutput?.contentBlocks)
-      ? mcpOutput.contentBlocks
-      : [];
-    const textBlocks = contentBlocks
-      .filter(isMcpTextBlock)
-      .map((block) => block.text);
-    const otherBlocks = contentBlocks.filter((block) => !isMcpTextBlock(block));
-
-    if (typeof mcpOutput?.status === 'string') {
-      const statusIcon =
-        mcpOutput.status === 'failed'
-          ? 'codicon-error'
-          : mcpOutput.status === 'in_progress'
-            ? 'codicon-sync spin'
-            : 'codicon-check';
-      // prettier-ignore
-      sections.push(buildToolUseSection('Status:', html`<span class="extract-flag"><i class="codicon ${statusIcon}"></i> ${mcpOutput.status}</span>`));
-      renderedMcpOutput = true;
-    }
-
-    if (textBlocks.length > 0) {
-      sections.push(buildToolSection('Response:', textBlocks.join('\n\n')));
-      renderedMcpOutput = true;
-    }
-
-    if (mcpOutput && 'structuredContent' in mcpOutput) {
-      const { text: structuredText, language: structuredLanguage } =
-        stringifyWithLanguage(mcpOutput.structuredContent);
-      if (structuredText) {
-        sections.push(
-          buildToolSection('Structured:', structuredText, {
-            toolName,
-            language: structuredLanguage,
-          }),
-        );
-        renderedMcpOutput = true;
-      }
-    }
-
-    if (otherBlocks.length > 0) {
-      const { text: contentText, language: contentLanguage } =
-        stringifyWithLanguage(otherBlocks);
-      if (contentText) {
-        sections.push(
-          buildToolSection('Content:', contentText, {
-            toolName,
-            language: contentLanguage,
-          }),
-        );
-        renderedMcpOutput = true;
-      }
-    }
-
-    if (!renderedMcpOutput && outputText) {
-      sections.push(
-        buildToolSection('Result:', outputText, {
-          toolName,
-          extraClass: 'tool-output-full',
-        }),
-      );
-    }
-  }
-  // Default handling for other tools
-  else if (input != null) {
-    const codeLanguage = TOOL_CODE_LANGUAGES.get(toolName);
-    const { isCodeOnly, code } = codeLanguage
-      ? extractCodeOnlyInput(input)
-      : { isCodeOnly: false, code: '' };
-
-    if (isCodeOnly) {
-      sections.push(
-        buildToolSection('', code, { toolName, language: codeLanguage }),
-      );
-    } else {
-      const { text: inputValue, language: inputLanguage } =
-        stringifyWithLanguage(input);
-      if (inputValue) {
-        sections.push(
-          buildToolSection('', inputValue, {
-            toolName,
-            language: inputLanguage,
-          }),
-        );
-      }
-    }
-  }
+  const sections: TemplateResult[] = dispatchToolSections({
+    toolName,
+    input,
+    filePath,
+    parsedOutput: parsed.output,
+    outputText,
+    isInProgress,
+  });
 
   // Show output if present
   const isWriteTool = TOOLS_WITH_FILE_CONTENT.has(toolName);

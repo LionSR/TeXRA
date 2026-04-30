@@ -1,21 +1,25 @@
+import { z } from 'zod';
+
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getConfig } from '@agent/core/config';
 import { bus } from '@eventBus/ProgressEventBus';
-import type { StreamTabId } from '@shared/schemas';
+import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@tools/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
-import { isApprovalBypassedForStream } from './toolEditApproval';
+import { createStreamApprovalController } from './streamApprovalQueue';
 
-export interface BashApprovalRequest {
-  command: string;
-  streamId?: StreamTabId;
-}
+export const BashApprovalRequestSchema = z.object({
+  command: z.string(),
+  streamId: StreamTabIdSchema.optional(),
+});
+export type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
 
-export interface BashApprovalResult {
-  accepted: boolean;
-  userMessage?: string;
-}
+export const BashApprovalResultSchema = z.object({
+  accepted: z.boolean(),
+  userMessage: z.string().optional(),
+});
+export type BashApprovalResult = z.infer<typeof BashApprovalResultSchema>;
 
 export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';
 
@@ -23,34 +27,12 @@ export const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
 
 export type BashApprovalAction = (typeof BASH_APPROVAL_ACTIONS)[number];
 
-export interface RejectablePendingEntry {
-  streamId?: StreamTabId;
-  isSettled: () => boolean;
-  settle: (result: { accepted: false }) => void;
-}
+export const bashApprovalController =
+  createStreamApprovalController<BashApprovalResult>({
+    rejectionResult: () => ({ accepted: false }),
+  });
 
-export function rejectPendingEntries<T extends RejectablePendingEntry>(
-  entries: Iterable<T>,
-  streamId?: StreamTabId,
-): void {
-  for (const entry of entries) {
-    const matches = streamId === undefined || entry.streamId === streamId;
-    if (matches && !entry.isSettled()) {
-      entry.settle({ accepted: false });
-    }
-  }
-}
-
-let queue: Promise<void> = Promise.resolve();
 let approvalCounter = 0;
-const pendingApprovals = new Map<
-  string,
-  {
-    streamId?: StreamTabId;
-    settle: (result: BashApprovalResult) => void;
-    isSettled: () => boolean;
-  }
->();
 
 export async function requestBashApproval(
   request: BashApprovalRequest,
@@ -62,24 +44,21 @@ export async function requestBashApproval(
 
   if (
     !approvalsEnabled ||
-    (streamId && isApprovalBypassedForStream(streamId))
+    (streamId && bashApprovalController.isBypassed(streamId))
   ) {
     return { accepted: true };
   }
 
-  const operation = queue.then(() => showApprovalPrompt(request, streamId));
-  queue = operation.then(
-    () => {},
-    () => {},
+  return bashApprovalController.enqueue(() =>
+    showApprovalPrompt(request, streamId),
   );
-  return operation;
 }
 
 async function showApprovalPrompt(
   request: BashApprovalRequest,
   streamId?: StreamTabId,
 ): Promise<BashApprovalResult> {
-  if (streamId && isApprovalBypassedForStream(streamId)) {
+  if (streamId && bashApprovalController.isBypassed(streamId)) {
     return { accepted: true };
   }
 
@@ -94,7 +73,7 @@ async function showApprovalPrompt(
         resolve(result);
       };
 
-      pendingApprovals.set(requestId, {
+      bashApprovalController.registerPending(requestId, {
         streamId,
         settle,
         isSettled: () => settled,
@@ -115,7 +94,7 @@ async function showApprovalPrompt(
       });
     });
   } finally {
-    pendingApprovals.delete(requestId);
+    bashApprovalController.unregisterPending(requestId);
     bus.emit('resolveBashPermission', { requestId });
   }
 }
@@ -125,7 +104,7 @@ export async function handleProgressViewBashApprovalAction(payload: {
   action: BashApprovalAction;
   feedback?: string;
 }): Promise<void> {
-  const entry = pendingApprovals.get(payload.requestId);
+  const entry = bashApprovalController.getPending(payload.requestId);
   if (!entry || entry.isSettled()) return;
 
   entry.settle({
@@ -133,18 +112,6 @@ export async function handleProgressViewBashApprovalAction(payload: {
     userMessage:
       payload.action === 'reject' ? payload.feedback?.trim() : undefined,
   });
-}
-
-/** @internal Called by unified cleanup in toolEditApproval.ts */
-export function _rejectPendingBashApprovalsForStream(
-  streamId: StreamTabId,
-): void {
-  rejectPendingEntries(pendingApprovals.values(), streamId);
-}
-
-/** @internal Called by unified cleanup in toolEditApproval.ts */
-export function _rejectAllPendingBashApprovals(): void {
-  rejectPendingEntries(pendingApprovals.values());
 }
 
 export function buildBashApprovalRejectedResult(

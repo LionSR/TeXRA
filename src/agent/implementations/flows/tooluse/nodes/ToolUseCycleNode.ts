@@ -3,7 +3,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
-  createToolUseCycleShared,
+  type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { formatProviderHttpError } from '@common/errors';
@@ -57,10 +57,13 @@ export class ToolUseCycleNode<C> extends Node<
       return { outcome: 'skipped' };
     }
 
-    const cycleShared = createToolUseCycleShared(
-      prepRes.messages,
-      prepRes.runState.totalRounds,
-    );
+    const cycleShared: ToolUseCycleShared = {
+      messages: prepRes.messages,
+      shouldStop: false,
+      endTurn: false,
+      cycleIndex: prepRes.runState.totalRounds,
+      cycleResponseTimeMs: 0,
+    };
 
     const flow = createToolUseCycleFlow<C>();
     let client = await modelHandler.getClient();

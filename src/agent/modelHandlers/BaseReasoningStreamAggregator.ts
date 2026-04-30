@@ -6,8 +6,12 @@ import type {
   ChatCompletionMessageFunctionToolCall,
 } from 'openai/resources/chat/completions';
 
-// Local imports
-import type { StreamingAggregator } from './modelHandlerOpenAI';
+export interface StreamingAggregator {
+  appendContent(delta: string): void;
+  appendReasoning(delta: string): void;
+  consumeChunk(chunk: ChatCompletionChunk): void;
+  finalize(fallback?: ChatCompletion): ChatCompletion;
+}
 
 type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
   reasoning_content?: string;
