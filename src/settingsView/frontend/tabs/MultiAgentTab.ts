@@ -1,6 +1,6 @@
 /**
  * MultiAgentTab component - multi-agent settings for the settings view.
- * Contains agent mode presets (built-in + custom) for quick configuration,
+ * Contains agent teams (built-in + custom) for quick configuration,
  * the auto-approve toggle for agent delegation proposals,
  * and reliability settings.
  */
@@ -68,7 +68,7 @@ export class MultiAgentTab extends LitElement {
         margin-top: var(--spacing-tiny);
       }
 
-      /* Preset cards */
+      /* Team cards */
       .preset-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

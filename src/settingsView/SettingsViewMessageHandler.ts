@@ -5,7 +5,7 @@
  * into a single unified message handler.
  *
  * Domain-specific handlers are delegated to focused handler classes:
- * - AgentHandlers: agent selection, directories, and mode presets
+ * - AgentHandlers: agent selection, directories, and teams
  * - LatexSettingsHandlers: LaTeX tool detection and recommended settings
  */
 import * as vscode from 'vscode';
@@ -493,7 +493,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () =>
         this.agentHandlers.handleResetCustomAgentDir(),
 
-      // Agent mode presets
+      // Agent teams
       [SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS]: () =>
         this.withActiveWebview((w) =>
           this.agentHandlers.sendAgentModePresets(w),
