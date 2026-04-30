@@ -256,16 +256,15 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     check: async () => extensionChecker(LEAN4_EXT_ID),
   },
   {
+    // ID kept as `github-pr-subscription` for back-compat with persisted
+    // disabled-tool preferences. The user-facing name has expanded to
+    // cover repos and issues but the persistence key is stable.
     id: 'github-pr-subscription',
-    tools: [
-      'subscribe_pr_activity',
-      'unsubscribe_pr_activity',
-      'find_current_pr',
-    ],
-    name: 'GitHub PR Activity Subscription',
+    tools: ['github_subscription'],
+    name: 'GitHub Activity Subscription',
     category: 'workflow',
     description:
-      'Poll GitHub pull requests and deliver new comments, reviews, line comments, and failed CI checks into the current stream as follow-up messages.',
+      'Poll GitHub for pull request, issue, and repository activity. Path mirrors GitHub URL shape: "owner/repo" for coarse repo-wide events, "owner/repo/pulls/N" for per-PR comments/reviews/CI, "owner/repo/issues/N" for issue comments and lifecycle.',
     installGuide:
       'Requires a git-tracked workspace and a GitHub personal access token:\n\n' +
       '  1. Open the folder as a git repo (or `git init` + set a github.com remote).\n' +
@@ -275,7 +274,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  4. Copy the token back into TeXRA via "Set token".\n\n' +
       'Alternatively, export GITHUB_TOKEN in the environment VS Code is launched from.',
     installUrl: 'https://github.com/settings/tokens',
-    configNotes: `Token stored in VS Code SecretStorage (managed from Git tab). Requires a git repository in the workspace. Polls every ${PR_POLL_INTERVAL_MS / 1000}s; subscription cap: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs.`,
+    configNotes: `Token stored in VS Code SecretStorage (managed from Git tab). Requires a git repository in the workspace. Polls every ${PR_POLL_INTERVAL_MS / 1000}s; cap: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs and 3 concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
     authNote: 'Uses personal access token',
     toggleable: true,
     installActionCommand: 'texra.showGitSettings',
