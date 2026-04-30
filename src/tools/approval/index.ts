@@ -66,11 +66,9 @@ export {
 } from './bashApproval';
 
 export {
-  // Proposal approval (Super YOLO)
+  // Proposal approval
   toggleProposalBypass,
   isProposalBypassedForStream,
-  isSuperYoloFeatureEnabled,
-  _disableAllProposalBypasses,
 } from './proposalApproval';
 
 export {
