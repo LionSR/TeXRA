@@ -163,6 +163,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
           ${isWorkflow ? this.renderExtractFlags(data) : nothing}
+          ${this.renderWorkingDirectory(data)}
           ${this.renderProposalFiles(data)}
         </div>
         <vscode-toolbar-container class="workflow-proposal__actions">
@@ -195,6 +196,22 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // ===========================================================================
   // Proposal-specific rendering
   // ===========================================================================
+
+  private renderWorkingDirectory(
+    data: AgentProposalPermission,
+  ): TemplateResult | typeof nothing {
+    const workingDirectory = data.workingDirectory;
+    if (!workingDirectory) return nothing;
+    return html`<div
+      class="workflow-proposal__working-directory"
+      title=${workingDirectory}
+    >
+      <span class="workflow-proposal__file-label">Working directory:</span>
+      <span class="workflow-proposal__file-name workflow-proposal__file-name--readonly"
+        >${workingDirectory}</span
+      >
+    </div>`;
+  }
 
   private renderProposalFiles(
     data: AgentProposalPermission,

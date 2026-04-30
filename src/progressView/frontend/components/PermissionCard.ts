@@ -300,6 +300,11 @@ export class PermissionCard extends LitElement {
       <p><strong>Agent:</strong> ${data.agent}</p>
       <p><strong>Model:</strong> ${data.model}</p>
       <p><strong>Instruction:</strong> ${data.instruction}</p>
+      ${data.workingDirectory
+        ? html`<p>
+            <strong>Working directory:</strong> ${data.workingDirectory}
+          </p>`
+        : nothing}
       ${data.agentCategory === AGENT_CATEGORY.WORKFLOW
         ? this.renderExtractFlags(data)
         : nothing}
