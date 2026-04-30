@@ -202,6 +202,7 @@ export abstract class RetryableInvocationNode<
   shouldAutoRetry(error: Error): boolean {
     const formatted = formatProviderHttpError(error);
     if (formatted.isCredentialExhausted) return false;
+    if (!formatted.retryable) return false;
     const code = formatted.statusCode;
     return code !== 401 && code !== 403;
   }

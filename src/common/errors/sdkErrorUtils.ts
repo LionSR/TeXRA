@@ -37,7 +37,7 @@ import {
 } from '@shared/schemas';
 import { extractErrorMessage, isObject, isString } from '@utils/core';
 
-import { toErrorMessage } from './errorHandlingUtils';
+import { isDiskFullError, toErrorMessage } from './errorHandlingUtils';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
@@ -522,6 +522,19 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   if (err instanceof DOMException && err.name === 'AbortError') {
     return {
       message: 'Request aborted',
+      retryable: false,
+      isRelayError: false,
+      rawErrorBody,
+      streamDiagnostics,
+      partialText,
+    };
+  }
+
+  // Disk full — local I/O error, never retryable
+  if (isDiskFullError(err)) {
+    return {
+      message:
+        'No space left on device. Free up disk space and try again.',
       retryable: false,
       isRelayError: false,
       rawErrorBody,
