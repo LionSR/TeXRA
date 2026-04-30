@@ -246,7 +246,7 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       key: GlobalStateKey.USE_OPENROUTER,
       label: 'Use OpenRouter for All Models',
       description:
-        'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key.',
+        'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. Note: OpenRouter bypasses Included Access — your OpenRouter key is always used directly.',
       globalStateKey: GlobalStateKey.USE_OPENROUTER,
     },
   ],
