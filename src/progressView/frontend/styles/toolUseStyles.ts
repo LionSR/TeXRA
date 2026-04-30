@@ -148,7 +148,7 @@ export const toolUseStyles = css`
   }
 
   /* Shared base for inline action links */
-  :is(.proposal-restore-link, .followup-break-wait) {
+  .proposal-restore-link {
     color: var(--color-text-link);
     cursor: pointer;
     font-size: var(--font-size-sm);
@@ -161,7 +161,7 @@ export const toolUseStyles = css`
       background-color var(--transition-fast);
   }
 
-  :is(.proposal-restore-link, .followup-break-wait):focus-visible {
+  .proposal-restore-link:focus-visible {
     outline: var(--border-thin) solid var(--vscode-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
@@ -174,22 +174,6 @@ export const toolUseStyles = css`
 
   .proposal-banner-setup {
     margin-left: auto;
-  }
-
-  /* Follow-up break-wait button (shown inside executions wait entries) */
-  .followup-break-wait {
-    margin-top: var(--spacing-small);
-    padding: var(--spacing-tiny) var(--spacing-small);
-    border: var(--border-thin) solid var(--color-text-link);
-    border-radius: var(--border-radius-small);
-  }
-
-  .followup-break-wait:hover {
-    background-color: color-mix(
-      in srgb,
-      var(--color-text-link) 15%,
-      transparent
-    );
   }
 
   /* Diff styles */
