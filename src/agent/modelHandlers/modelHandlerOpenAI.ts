@@ -760,14 +760,6 @@ export class ModelHandlerOpenAI<
       );
     }
 
-    normalizedMessages.forEach((msg, index) => {
-      const contentPreview =
-        typeof msg.content === 'string'
-          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
-          : 'non-string content';
-      this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
-    });
-
     return normalizedMessages;
   }
 
@@ -896,12 +888,11 @@ export class ModelHandlerOpenAI<
       text,
     ) as ChatCompletionAssistantMessageParam & { reasoning_content?: string };
 
+    // Always include reasoning_content (even empty string) when the provider
+    // requires it, so all assistant messages stay consistent in thinking mode.
     if (this.shouldIncludeReasoningInAssistantMessages()) {
-      const reasoningContent =
-        this.extractReasoningFromResponse(responseObject);
-      if (reasoningContent) {
-        message.reasoning_content = reasoningContent;
-      }
+      message.reasoning_content =
+        this.extractReasoningFromResponse(responseObject) ?? '';
     }
 
     return message;
@@ -1575,15 +1566,15 @@ export class ModelHandlerOpenAI<
       tool_calls: toolCalls,
     };
 
-    // Include reasoning_content if this provider requires it for tool-use cycles
+    // Include reasoning_content if this provider requires it for tool-use cycles.
+    // Always include (even as empty string) to ensure consistency: once
+    // reasoning_content appears in the conversation history, DeepSeek's API
+    // requires it on every subsequent assistant message in thinking mode.
     if (this.shouldIncludeReasoningInToolCalls() && workspaceState) {
-      const reasoningContent =
-        workspaceState.reasoning.thinkingBlocks[0]?.thinking;
-      if (reasoningContent) {
-        callMsg.reasoning_content = reasoningContent;
-        // Clear after use to prevent stale reasoning in subsequent calls
-        workspaceState.resetReasoning();
-      }
+      callMsg.reasoning_content =
+        workspaceState.reasoning.thinkingBlocks[0]?.thinking ?? '';
+      // Clear after use to prevent stale reasoning in subsequent calls
+      workspaceState.resetReasoning();
     }
 
     if (text !== undefined || this.shouldIncludeEmptyAssistantToolContent()) {
