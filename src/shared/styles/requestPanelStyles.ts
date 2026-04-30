@@ -52,11 +52,11 @@ const SCROLLABLE_DETAILS = selectorGroup(
 );
 
 const sp = {
-  tiny: unsafeCSS('${sp.tiny}'),
-  small: unsafeCSS('${sp.small}'),
-  medium: unsafeCSS('${sp.medium}'),
-  large: unsafeCSS('${sp.large}'),
-  xlarge: unsafeCSS('${sp.xlarge}'),
+  tiny: unsafeCSS('var(--spacing-tiny)'),
+  small: unsafeCSS('var(--spacing-small)'),
+  medium: unsafeCSS('var(--spacing-medium)'),
+  large: unsafeCSS('var(--spacing-large)'),
+  xlarge: unsafeCSS('var(--spacing-xlarge)'),
 } as const;
 
 export const requestPanelStyles: CSSResult = css`

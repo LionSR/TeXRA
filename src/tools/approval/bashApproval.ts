@@ -8,6 +8,7 @@ import type { ToolResult } from '@tools/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createStreamApprovalController } from './streamApprovalQueue';
+import { isApprovalBypassedForStream } from './toolEditApproval';
 
 export const BashApprovalRequestSchema = z.object({
   command: z.string(),
@@ -44,7 +45,7 @@ export async function requestBashApproval(
 
   if (
     !approvalsEnabled ||
-    (streamId && bashApprovalController.isBypassed(streamId))
+    (streamId && isApprovalBypassedForStream(streamId))
   ) {
     return { accepted: true };
   }
@@ -58,7 +59,7 @@ async function showApprovalPrompt(
   request: BashApprovalRequest,
   streamId?: StreamTabId,
 ): Promise<BashApprovalResult> {
-  if (streamId && bashApprovalController.isBypassed(streamId)) {
+  if (streamId && isApprovalBypassedForStream(streamId)) {
     return { accepted: true };
   }
 

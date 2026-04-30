@@ -618,38 +618,47 @@ function buildDefaultSections(ctx: ToolSectionContext): TemplateResult[] {
 }
 
 const TOOL_SECTION_BUILDERS: Array<{
-  match: (toolName: string) => boolean;
+  match: (ctx: ToolSectionContext) => boolean;
   build: (ctx: ToolSectionContext) => TemplateResult[];
 }> = [
   {
-    match: (n) => TOOLS_WITH_DIFF_INPUT.has(n),
+    match: (ctx) => TOOLS_WITH_DIFF_INPUT.has(ctx.toolName),
     build: buildEditDiffInputSections,
   },
   {
-    match: (n) => TOOLS_WITH_FILE_LINK.has(n),
+    match: (ctx) =>
+      TOOLS_WITH_FILE_LINK.has(ctx.toolName) && Boolean(ctx.filePath),
     build: buildFileLinkSections,
   },
   {
-    match: (n) => TOOLS_WITH_FILE_CONTENT.has(n),
+    match: (ctx) =>
+      TOOLS_WITH_FILE_CONTENT.has(ctx.toolName) && Boolean(ctx.filePath),
     build: buildFileContentSections,
   },
-  { match: (n) => n === 'memory', build: buildMemorySections },
-  { match: (n) => n === 'executions', build: buildExecutionsSections },
+  { match: (ctx) => ctx.toolName === 'memory', build: buildMemorySections },
   {
-    match: (n) => n === 'accept_run_files',
+    match: (ctx) => ctx.toolName === 'executions',
+    build: buildExecutionsSections,
+  },
+  {
+    match: (ctx) => ctx.toolName === 'accept_run_files',
     build: buildAcceptRunFilesSections,
   },
-  { match: (n) => DELEGATION_TOOLS.has(n), build: buildDelegationSections },
   {
-    match: (n) => Object.hasOwn(SPECIALIZED_TOOL_SECTION_RENDERERS, n),
+    match: (ctx) => DELEGATION_TOOLS.has(ctx.toolName),
+    build: buildDelegationSections,
+  },
+  {
+    match: (ctx) =>
+      Object.hasOwn(SPECIALIZED_TOOL_SECTION_RENDERERS, ctx.toolName),
     build: buildSpecializedSections,
   },
-  { match: (n) => n.startsWith('mcp:'), build: buildMcpSections },
+  { match: (ctx) => ctx.toolName.startsWith('mcp:'), build: buildMcpSections },
 ];
 
 function dispatchToolSections(ctx: ToolSectionContext): TemplateResult[] {
   for (const { match, build } of TOOL_SECTION_BUILDERS) {
-    if (match(ctx.toolName)) return build(ctx);
+    if (match(ctx)) return build(ctx);
   }
   return buildDefaultSections(ctx);
 }
