@@ -51,8 +51,12 @@ export class LaTeXdiffService {
 
   constructor(private readonly channel: string = CHANNEL) {
     this.fileProcessor = new DiffFileProcessor(channel);
-    this.commandExecutor = new DiffCommandExecutor(
-      channel,
+    // Pass a thunk so DiffCommandExecutor reads the current workspace value
+    // each time it runs a diff. Module-scope instances (in latexdiffCommands.ts
+    // and latexPreview.ts) construct before `initPlatform()` runs, so a value
+    // captured here would be permanently frozen at the default — defeating
+    // user changes to LATEXDIFF_TIMEOUT_MS.
+    this.commandExecutor = new DiffCommandExecutor(channel, () =>
       this.getLatexdiffTimeout(),
     );
   }
@@ -63,7 +67,8 @@ export class LaTeXdiffService {
    * `commands/latex/latexdiffCommands.ts` and `tools/approval/latexPreview.ts`,
    * which evaluate before `initPlatform()` runs in `activate()`. A throwing
    * `getWorkspaceState()` would prevent the extension from activating; falling
-   * back to the documented default keeps construction safe.
+   * back to the documented default keeps construction safe. Called per-diff
+   * so user updates take effect on the next invocation without any rebuild.
    */
   private getLatexdiffTimeout(): number {
     return (
