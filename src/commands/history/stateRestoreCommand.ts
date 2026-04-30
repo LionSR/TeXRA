@@ -13,6 +13,9 @@ import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);
 
+const RESTORE_MALFORMED_MESSAGE =
+  'Cannot restore state: persisted task data is malformed or from an incompatible version';
+
 export function registerStateRestoreCommand(
   context: vscode.ExtensionContext,
 ): void {
@@ -31,11 +34,10 @@ async function restoreState(
 
   const parsed = TaskStateSchema.safeParse(state);
   if (!parsed.success) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      'Cannot restore state: persisted task data is malformed or from an incompatible version',
-      parsed.error,
-    );
+    logger.info(CHANNEL, RESTORE_MALFORMED_MESSAGE, {
+      data: { validationError: parsed.error.message },
+    });
+    await vscode.window.showErrorMessage(RESTORE_MALFORMED_MESSAGE);
     return;
   }
 
