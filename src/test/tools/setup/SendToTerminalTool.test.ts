@@ -32,7 +32,7 @@ import { createFakeSetupPlatform } from './fixtures';
 function installApprovalSkippingPlatform(): void {
   const stub: Partial<Platform> = {
     config: {
-      get: <T,>(key: string, defaultValue?: T): T =>
+      get: <T>(key: string, defaultValue?: T): T =>
         key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
     },
   };

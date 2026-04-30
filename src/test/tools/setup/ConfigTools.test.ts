@@ -1,10 +1,7 @@
 import { strict as assert } from 'assert';
 
 import { ReadConfigTool, UpdateConfigTool } from '@tools/setup/ConfigTools';
-import {
-  setSetupPlatform,
-  type SetupPlatform,
-} from '@tools/setup/platform';
+import { setSetupPlatform, type SetupPlatform } from '@tools/setup/platform';
 
 import { createFakeSetupPlatform } from './fixtures';
 

@@ -789,9 +789,9 @@ export class LaTeXTab extends LitElement {
         Compile &amp; Diff
       </div>
       <div class="latex-description">
-        TeXRA-specific compile and diff behavior, persisted per workspace.
-        These were previously edited in <code>settings.json</code>; they now
-        live here.
+        TeXRA-specific compile and diff behavior, persisted per workspace. These
+        were previously edited in <code>settings.json</code>; they now live
+        here.
       </div>
 
       ${this.renderBooleanSetting({
@@ -878,8 +878,7 @@ export class LaTeXTab extends LitElement {
         </div>
         <button
           class="tab-action-btn"
-          @click=${() =>
-            this.dispatchSetConfigValue(opts.field, !effective)}
+          @click=${() => this.dispatchSetConfigValue(opts.field, !effective)}
           title="Toggle"
         >
           ${effective ? 'On' : 'Off'}
@@ -951,16 +950,16 @@ export class LaTeXTab extends LitElement {
     `;
   }
 
-  private renderEnumSetting<F extends 'latexdiffMathMarkup' | 'latexFormatter'>(
-    opts: {
-      field: F;
-      label: string;
-      description: string;
-      defaultValue: LatexConfigValueFor<F>;
-      currentValue: LatexConfigValueFor<F> | undefined;
-      options: Array<{ value: LatexConfigValueFor<F>; label: string }>;
-    },
-  ): TemplateResult {
+  private renderEnumSetting<
+    F extends 'latexdiffMathMarkup' | 'latexFormatter',
+  >(opts: {
+    field: F;
+    label: string;
+    description: string;
+    defaultValue: LatexConfigValueFor<F>;
+    currentValue: LatexConfigValueFor<F> | undefined;
+    options: Array<{ value: LatexConfigValueFor<F>; label: string }>;
+  }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
     return html`

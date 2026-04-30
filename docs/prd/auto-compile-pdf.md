@@ -10,7 +10,7 @@ After every workflow round, TeXRA must automatically produce a viewable PDF (or 
 
 Today:
 
-- Compile-after-output exists (`compileCheck.ts`) and failures *are* surfaced — `OutputNode` emits `updateCompileFailures` events that render in the progress view via `compile-failure-panel` (with an "Open log" action). But failures are not promoted as primary output: the resulting PDF is not auto-opened on success, the log is not auto-opened on failure, and the user has to switch to the progress view to act on either.
+- Compile-after-output exists (`compileCheck.ts`) and failures _are_ surfaced — `OutputNode` emits `updateCompileFailures` events that render in the progress view via `compile-failure-panel` (with an "Open log" action). But failures are not promoted as primary output: the resulting PDF is not auto-opened on success, the log is not auto-opened on failure, and the user has to switch to the progress view to act on either.
 - Fragments (no `\documentclass`) are silently skipped — never compiled.
 - Latexdiff `.tex` files are written **inside the user's workspace**, polluting git and the file tree (`LatexDiffManager.buildSiblingDiffLocation`, comment at line 306–310).
 - Compile errors are not fed back to the orchestrator; subsequent rounds don't know the previous round failed to compile.
@@ -51,7 +51,7 @@ Today:
 
 ### 6.1 Auto-open PDF / log
 
-After each round, in `finalOutputOpener.ts`. **All branches below are keyed on the *final* post-fixer compile status** (same `lastCompileResult` defined in §6.5) — never on the initial failed compile attempt. A round whose initial compile failed but whose latexFixer pass repaired it sees only the success branch; no failure log is opened.
+After each round, in `finalOutputOpener.ts`. **All branches below are keyed on the _final_ post-fixer compile status** (same `lastCompileResult` defined in §6.5) — never on the initial failed compile attempt. A round whose initial compile failed but whose latexFixer pass repaired it sees only the success branch; no failure log is opened.
 
 - If final status is `"ok"`: `vscode.commands.executeCommand('vscode.open', pdfUri, { viewColumn: vscode.ViewColumn.Beside })`.
 - If final status is `"failed"` (initial compile failed and either latexFixer also failed, or `WORKFLOW_AUTO_FIX_COMPILE` is off, or the failure is a fragment-wrap failure per §6.3 step 4): open the truncated `.log`.
@@ -76,7 +76,7 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
    4. **No preamble found:** set `lastCompileResult = { status: "failed", reason: "fragment-no-preamble", logExcerpt: "<one-line: no preamble source available for fragment <X>" }` so §6.1 (auto-open log) and §6.5 (round rejection) have a concrete terminal status to branch on. Do not compile, do not invoke latexFixer. Same handling as a wrap-compile failure (step 4 below) — log auto-opens, round is rejected per `WORKFLOW_REJECT_ON_COMPILE_FAILURE`.
 2. **Wrap**: `<preamble>\n\begin{document}\n<fragment>\n\end{document}`. `extractPreamble()` returns content up to but excluding `\begin{document}` (conventional definition), so the wrap explicitly inserts the document boundary. Save to `<runDir>/compile/r<round>/<name>__wrap.tex`.
 3. **Compile** via existing `compileLatex2Pdf` with `latexmk -pdf`.
-4. **On wrap-compile failure**, surface the truncated log via the auto-open path (§6.1). **latexFixer is *not* invoked for fragment-wrap failures.** The wrap lives in `<runDir>/compile/r<round>/<name>__wrap.tex`, and post-accept the workspace contains only the raw unwrapped fragment (no `\documentclass`); latexFixer's `read_file`/`edit_file` are workspace-scoped and would have nothing meaningful to compile or fix without re-wrapping (which is unspecified). Pre-accept fixing of the wrap requires the run-storage-aware file tools deferred in §6.4. So fragment-wrap failures fall through to the user until that follow-up lands.
+4. **On wrap-compile failure**, surface the truncated log via the auto-open path (§6.1). **latexFixer is _not_ invoked for fragment-wrap failures.** The wrap lives in `<runDir>/compile/r<round>/<name>__wrap.tex`, and post-accept the workspace contains only the raw unwrapped fragment (no `\documentclass`); latexFixer's `read_file`/`edit_file` are workspace-scoped and would have nothing meaningful to compile or fix without re-wrapping (which is unspecified). Pre-accept fixing of the wrap requires the run-storage-aware file tools deferred in §6.4. So fragment-wrap failures fall through to the user until that follow-up lands.
 5. Resolution source is logged: `Compile (fragment): preamble from <source description>`.
 6. Gated by `WORKFLOW_FRAGMENT_COMPILE` (default on).
 
@@ -102,7 +102,7 @@ When `XmlOutputManager` extracts a `<document name="X">` lacking `\documentclass
 In `RoundPersistedFlow.shouldContinueNextRound()`:
 
 - Add one clause: if `lastCompileResult.status === "failed"` and `WORKFLOW_REJECT_ON_COMPILE_FAILURE` is on, the round is marked rejected.
-- **`lastCompileResult` is the *final* compile status for the round, after any latexFixer pass.** If latexFixer was invoked and produced a clean compile, the result is `"ok"` and the round is *not* rejected — the user does not lose a slot for a successfully-repaired round. Only when latexFixer also fails (or wasn't invoked because `WORKFLOW_AUTO_FIX_COMPILE` is off, or the failure is a fragment-wrap failure per §6.3 step 4) does the status remain `"failed"` and trigger rejection.
+- **`lastCompileResult` is the _final_ compile status for the round, after any latexFixer pass.** If latexFixer was invoked and produced a clean compile, the result is `"ok"` and the round is _not_ rejected — the user does not lose a slot for a successfully-repaired round. Only when latexFixer also fails (or wasn't invoked because `WORKFLOW_AUTO_FIX_COMPILE` is off, or the failure is a fragment-wrap failure per §6.3 step 4) does the status remain `"failed"` and trigger rejection.
 - The truncated compile log is injected into the next round's context. **Round-loop semantics on rejection: replace, not extend** — a rejected round consumes a slot from the user's requested round count, so total rounds (and total cost) are unchanged regardless of how many compile failures occur. The next round is therefore always the user's already-planned next round (carrying compile-log context); there is no separate "fix-only" round inserted on top.
 - Final compile result stored in `shared.lastCompileResult` for the orchestrator to consume. Intermediate (pre-fixer) failures are not exposed to the round-decision clause to avoid double-counting.
 - No new node, no new metadata fields on `WorkflowFlowResult` for round-level decisions until UI consumes them.
@@ -116,7 +116,7 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 ### 6.7 Latexdiff changes-only
 
 - Default on (`LATEXDIFF_CHANGES_ONLY`). Apply via the appropriate latexdiff flag — exact spelling pinned at implementation time after verifying the shipped binary.
-- **No PDF post-processing fallback.** A previously sketched "scan rendered PDF text for `\DIFadd`/`\DIFdel` and keep those pages with `pdftk`" approach does not work — those are LaTeX source macros that latexdiff transforms into typeset markup at compile time and are *not* preserved as literal strings in the PDF text layer. If the shipped `latexdiff` lacks the changes-only flag, `LATEXDIFF_CHANGES_ONLY` becomes a no-op with a one-time warning logged and a documented minimum-version requirement. Any source-side fallback (e.g., wrapping changed blocks with `\includeonly` regions or using `latexdiff --append-mboxcmd` patterns to introduce markers we can read from compile metadata) is deferred and not in scope for this phase.
+- **No PDF post-processing fallback.** A previously sketched "scan rendered PDF text for `\DIFadd`/`\DIFdel` and keep those pages with `pdftk`" approach does not work — those are LaTeX source macros that latexdiff transforms into typeset markup at compile time and are _not_ preserved as literal strings in the PDF text layer. If the shipped `latexdiff` lacks the changes-only flag, `LATEXDIFF_CHANGES_ONLY` becomes a no-op with a one-time warning logged and a documented minimum-version requirement. Any source-side fallback (e.g., wrapping changed blocks with `\includeonly` regions or using `latexdiff --append-mboxcmd` patterns to introduce markers we can read from compile metadata) is deferred and not in scope for this phase.
 
 ### 6.8 PDF persistence
 
@@ -133,24 +133,24 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 
 **Migrated to `WorkspaceStateKey` in `src/common/state/stateManager.ts`:**
 
-| Old `vscode` config | New storage key |
-|---|---|
-| `texra.workflow.autoCompileAfterOutput` | `WORKFLOW_AUTO_COMPILE` |
-| `texra.workflow.autoCompileTimeoutMs` | `WORKFLOW_AUTO_COMPILE_TIMEOUT_MS` |
-| `texra.latexdiff.generateBetweenRoundDiffs` | `LATEXDIFF_BETWEEN_ROUNDS` |
-| `texra.latexdiff.timeoutMs` | `LATEXDIFF_TIMEOUT_MS` |
-| `texra.latexdiff.mathMarkup` | `LATEXDIFF_MATH_MARKUP` |
-| `texra.latex.formatter` | `LATEX_FORMATTER` |
+| Old `vscode` config                         | New storage key                    |
+| ------------------------------------------- | ---------------------------------- |
+| `texra.workflow.autoCompileAfterOutput`     | `WORKFLOW_AUTO_COMPILE`            |
+| `texra.workflow.autoCompileTimeoutMs`       | `WORKFLOW_AUTO_COMPILE_TIMEOUT_MS` |
+| `texra.latexdiff.generateBetweenRoundDiffs` | `LATEXDIFF_BETWEEN_ROUNDS`         |
+| `texra.latexdiff.timeoutMs`                 | `LATEXDIFF_TIMEOUT_MS`             |
+| `texra.latexdiff.mathMarkup`                | `LATEXDIFF_MATH_MARKUP`            |
+| `texra.latex.formatter`                     | `LATEX_FORMATTER`                  |
 
 **New keys:**
 
-| Key | Type | Default | Purpose |
-|---|---|---|---|
-| `WORKFLOW_AUTO_OPEN_PDF` | bool | true | Open PDF (or log) after each round |
-| `WORKFLOW_FRAGMENT_COMPILE` | bool | true | Enable deterministic fragment wrap+compile |
-| `WORKFLOW_AUTO_FIX_COMPILE` | bool | true | Run latexFixer on compile failure |
-| `WORKFLOW_REJECT_ON_COMPILE_FAILURE` | bool | true | Compile failure rejects round, feeds log to next |
-| `LATEXDIFF_CHANGES_ONLY` | bool | true | Render only changed pages in diff PDF |
+| Key                                  | Type | Default | Purpose                                          |
+| ------------------------------------ | ---- | ------- | ------------------------------------------------ |
+| `WORKFLOW_AUTO_OPEN_PDF`             | bool | true    | Open PDF (or log) after each round               |
+| `WORKFLOW_FRAGMENT_COMPILE`          | bool | true    | Enable deterministic fragment wrap+compile       |
+| `WORKFLOW_AUTO_FIX_COMPILE`          | bool | true    | Run latexFixer on compile failure                |
+| `WORKFLOW_REJECT_ON_COMPILE_FAILURE` | bool | true    | Compile failure rejects round, feeds log to next |
+| `LATEXDIFF_CHANGES_ONLY`             | bool | true    | Render only changed pages in diff PDF            |
 
 **Migration:** on activation, for each migrated key, copy a value into storage **only when the user (or workspace) has explicitly set it**. Use `vscode.workspace.getConfiguration().inspect(key)` and consider only `workspaceFolderValue`, `workspaceValue`, `globalValue` (in that precedence order) — never `defaultValue`. This avoids persisting VS Code's compiled-in defaults into workspace state, which would otherwise prevent future default changes from taking effect and create silent config drift across upgrades. **Gate per workspace, not per user.** The migration writes to `WorkspaceStateKey` (per-workspace storage), so a global once-per-user marker (e.g. `GlobalStateKey.LATEX_CONFIG_VERSION`) would let the first opened workspace consume the migration and silently drop config in every other workspace. Use either a workspace-scoped marker (e.g. a new `WorkspaceStateKey.LATEX_SETTINGS_MIGRATED`) **or**, simpler and equivalent, a per-key idempotent rule: only copy a key when its workspace storage is currently empty. The per-key rule is preferred — no marker needed, naturally idempotent, and rerunning on a future TeXRA upgrade just no-ops.
 
@@ -174,23 +174,23 @@ Sub-commit 3 must not land before sub-commit 2. There must be no window in which
 
 ## 8. Architecture impact
 
-| Area | Change |
-|---|---|
-| `src/common/state/stateManager.ts` | New keys; migration helper. |
-| `src/settingsView/handlers/latexSettingsHandlers.ts` + frontend | Read/write new keys. |
-| `package.json` | Remove migrated `contributes.configuration` entries. |
-| `src/agent/output/LatexDiffManager.ts` | Diff write path → `<runDir>/diff/...`; pass `--exclude-textcmd` and changes-only flags; `BIBINPUTS` env. |
-| `src/latex/latexdiff.ts` | Accept explicit output dir; honour new flags. |
-| `src/agent/output/compileCheck.ts` | Call new fragment-wrap helper before bailing on missing `\documentclass`; emit `lastCompileResult` to shared state. |
-| `src/agent/output/fragmentWrap.ts` (new) | Resolve preamble → wrap fragment → return location to compile. ~100 lines. |
-| `src/latex/extractFileDependencies.ts` (or sibling) | Add `extractPreamble()`; add `buildParentMap()`. |
-| `src/agent/node/roundPersistedFlow.ts` | One clause in `shouldContinueNextRound`; one line of context injection. |
-| `src/tools/` | New `open_pdf` tool (body `vscode`-free, calls an injectable opener callback). No `compile_tex` — latexFixer already calls `latexmk` via the existing `bash` tool. |
-| `src/extension.ts` (or equivalent activation site) | Register the `open_pdf` opener callback that invokes `vscode.commands.executeCommand('vscode.open', ...)`. Mirrors the `setExtensionChecker()` pattern. |
-| `resources/tool_use_agents/latexFixer.yaml` | Existing agent — wired into the post-compile failure path. No definition changes required for the default flow; if pre-accept shadow-mode is later pursued, the YAML's tool list and prompt are revisited. |
-| `src/agent/implementations/flows/reflection/nodes/OutputNode.ts` | Hand off to latexFixer on failure when setting is on. |
-| `src/frontend/agents/finalOutputOpener.ts` | Open PDF or log via `vscode.open`. |
-| `src/housekeeping/` | Exclude `*.pdf` from cleanup under runDir. |
+| Area                                                             | Change                                                                                                                                                                                                     |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/common/state/stateManager.ts`                               | New keys; migration helper.                                                                                                                                                                                |
+| `src/settingsView/handlers/latexSettingsHandlers.ts` + frontend  | Read/write new keys.                                                                                                                                                                                       |
+| `package.json`                                                   | Remove migrated `contributes.configuration` entries.                                                                                                                                                       |
+| `src/agent/output/LatexDiffManager.ts`                           | Diff write path → `<runDir>/diff/...`; pass `--exclude-textcmd` and changes-only flags; `BIBINPUTS` env.                                                                                                   |
+| `src/latex/latexdiff.ts`                                         | Accept explicit output dir; honour new flags.                                                                                                                                                              |
+| `src/agent/output/compileCheck.ts`                               | Call new fragment-wrap helper before bailing on missing `\documentclass`; emit `lastCompileResult` to shared state.                                                                                        |
+| `src/agent/output/fragmentWrap.ts` (new)                         | Resolve preamble → wrap fragment → return location to compile. ~100 lines.                                                                                                                                 |
+| `src/latex/extractFileDependencies.ts` (or sibling)              | Add `extractPreamble()`; add `buildParentMap()`.                                                                                                                                                           |
+| `src/agent/node/roundPersistedFlow.ts`                           | One clause in `shouldContinueNextRound`; one line of context injection.                                                                                                                                    |
+| `src/tools/`                                                     | New `open_pdf` tool (body `vscode`-free, calls an injectable opener callback). No `compile_tex` — latexFixer already calls `latexmk` via the existing `bash` tool.                                         |
+| `src/extension.ts` (or equivalent activation site)               | Register the `open_pdf` opener callback that invokes `vscode.commands.executeCommand('vscode.open', ...)`. Mirrors the `setExtensionChecker()` pattern.                                                    |
+| `resources/tool_use_agents/latexFixer.yaml`                      | Existing agent — wired into the post-compile failure path. No definition changes required for the default flow; if pre-accept shadow-mode is later pursued, the YAML's tool list and prompt are revisited. |
+| `src/agent/implementations/flows/reflection/nodes/OutputNode.ts` | Hand off to latexFixer on failure when setting is on.                                                                                                                                                      |
+| `src/frontend/agents/finalOutputOpener.ts`                       | Open PDF or log via `vscode.open`.                                                                                                                                                                         |
+| `src/housekeeping/`                                              | Exclude `*.pdf` from cleanup under runDir.                                                                                                                                                                 |
 
 ## 9. Phases
 
@@ -213,7 +213,7 @@ Each phase is independently shippable.
 3. **Workspace PDF copy:** off entirely, or off-by-default with a setting (`WORKFLOW_COPY_PDF_TO_WORKSPACE`, gitignore-friendly subdir)?
 4. **Latexdiff `--only-changes` exact flag and version floor:** verify at implementation time.
 5. **latexFixer invocation timing — DECIDED: post-accept.** Phase 6 wires latexFixer into the post-accept full-file failure path only. Pre-accept shadow-mode is explicitly deferred (§11) and requires new run-storage-aware file tools (or extending `read_file`/`edit_file` semantics) before it can be reopened. Phase 6 is therefore independently shippable as written.
-6. **`open_pdf` exposure:** keep PDF opening orchestrator-driven (auto-open on success / failure log on failure), or expose `open_pdf` as a tool latexFixer can call? *Recommendation: orchestrator-driven only in this phase; expose to latexFixer later if there's a clear use case.*
+6. **`open_pdf` exposure:** keep PDF opening orchestrator-driven (auto-open on success / failure log on failure), or expose `open_pdf` as a tool latexFixer can call? _Recommendation: orchestrator-driven only in this phase; expose to latexFixer later if there's a clear use case._
 
 ## 11. Out of scope / future work
 
@@ -243,4 +243,3 @@ Each phase is independently shippable.
 - Settings UI:
   - All compile/diff/fix knobs in the LaTeX tab.
   - Pre-existing user settings carry over from `settings.json` after migration without user intervention.
-

@@ -610,7 +610,11 @@ function validateLegacyLatexConfigValue(
   const fieldSchema = LatexConfigValuesSchema.shape[field];
   const direct = fieldSchema.safeParse(raw);
   if (direct.success) return direct.data;
-  if (typeof raw === 'number' && Number.isFinite(raw) && !Number.isInteger(raw)) {
+  if (
+    typeof raw === 'number' &&
+    Number.isFinite(raw) &&
+    !Number.isInteger(raw)
+  ) {
     const rounded = fieldSchema.safeParse(Math.round(raw));
     if (rounded.success) return rounded.data;
   }

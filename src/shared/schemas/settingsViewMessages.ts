@@ -805,9 +805,7 @@ const SetLatexConfigValueMessageSchema = z.object({
   // Loose at the schema level — the handler validates per-field via
   // LatexConfigValuesSchema.shape[field] before writing to workspace state.
   // `undefined` clears the key (returns to documented default).
-  value: z
-    .union([z.boolean(), z.number(), z.string(), z.null()])
-    .optional(),
+  value: z.union([z.boolean(), z.number(), z.string(), z.null()]).optional(),
 });
 
 // Approval settings inbound messages

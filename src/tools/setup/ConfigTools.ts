@@ -74,10 +74,7 @@ const UPDATABLE_KEYS = {
     summary:
       'Image dimension cap before downscaling. Lower values save tokens; higher values preserve fidelity.',
   },
-} satisfies Record<
-  string,
-  { schema: z.ZodType<unknown>; summary: string }
->;
+} satisfies Record<string, { schema: z.ZodType<unknown>; summary: string }>;
 
 type UpdatableKey = keyof typeof UPDATABLE_KEYS;
 
@@ -97,7 +94,9 @@ const ReadConfigInputSchema = z.strictObject({
       /^texra\./,
       'Only TeXRA configuration keys are readable through this tool. Pass a key starting with "texra.".',
     )
-    .describe('Configuration key starting with "texra." (e.g. texra.bib.defaultPath).'),
+    .describe(
+      'Configuration key starting with "texra." (e.g. texra.bib.defaultPath).',
+    ),
 });
 
 type ReadConfigInput = z.infer<typeof ReadConfigInputSchema>;
@@ -128,7 +127,7 @@ const UpdateConfigInputSchema = z.strictObject({
   value: z
     .unknown()
     .describe(
-      'New value. Type depends on the key — see the allowlist for each key\'s expected schema.',
+      "New value. Type depends on the key — see the allowlist for each key's expected schema.",
     ),
   target: z
     .enum(['user', 'workspace'])
@@ -164,7 +163,11 @@ Anything outside this list must be changed through the settings UI — invoke \`
     }
 
     const previous = getSetupPlatform().config.get(input.key);
-    await getSetupPlatform().config.update(input.key, parsed.data, input.target);
+    await getSetupPlatform().config.update(
+      input.key,
+      parsed.data,
+      input.target,
+    );
 
     const before = JSON.stringify(previous);
     const after = JSON.stringify(parsed.data);
