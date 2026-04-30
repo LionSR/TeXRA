@@ -44,9 +44,7 @@ export interface NestedDelegationConfig {
   maxDepth: number;
 }
 
-export type DelegationGateBlockReason =
-  | 'max_depth_reached'
-  | 'unknown_depth';
+export type DelegationGateBlockReason = 'max_depth_reached' | 'unknown_depth';
 
 export interface DelegationGateResult {
   depth: number | 'unknown';
