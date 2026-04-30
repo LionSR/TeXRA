@@ -99,10 +99,6 @@ import type {
   NumberVscodeSetting,
 } from '@shared/schemas/profileViewMessages';
 import {
-  _disableAllProposalBypasses,
-  setToolEditApprovalSessionBypass,
-} from '@tools/approval';
-import {
   getLastCheckResults,
   refreshToolAvailability,
   refreshDisabledToolCache,
@@ -450,11 +446,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES]: (data) =>
         this.handleSetPreferShortModelNames(data),
 
-      // Super YOLO handlers
+      // Multi-agent coordination handlers
       [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
         this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
-      [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: (data) =>
-        this.handleSetSuperYoloEnabled(data),
+      [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: () =>
+        this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
       [SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL]: (data) =>
         this.updateBooleanAndSendSuperYolo(
           WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
@@ -860,14 +856,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   // ============================================================
-  // Super YOLO handler implementations
+  // Multi-agent coordination handler implementations
   // ============================================================
 
   public async sendSuperYoloEnabled(webview: vscode.Webview): Promise<void> {
-    const enabled = workspaceSM.get<boolean>(
-      WorkspaceStateKey.SUPER_YOLO_ENABLED,
-      false,
-    );
     const allowOrchestratorKill = workspaceSM.get<boolean>(
       WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
       true,
@@ -884,34 +876,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
-      enabled,
+      enabled: true,
       reliabilitySettings: getReliabilitySettings(),
       allowOrchestratorKill,
       detachSubagentsOnStop,
       nestedDelegationMaxDepth,
     });
-  }
-
-  private async handleSetSuperYoloEnabled(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_SUPER_YOLO_ENABLED>,
-  ): Promise<void> {
-    await workspaceSM.update(
-      WorkspaceStateKey.SUPER_YOLO_ENABLED,
-      data.enabled,
-    );
-
-    // Disabling the feature: clear all per-stream Super YOLO and YOLO bypasses
-    if (!data.enabled) {
-      const affected = _disableAllProposalBypasses();
-      for (const streamId of affected) {
-        setToolEditApprovalSessionBypass(streamId, false);
-      }
-    }
-
-    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
-    void vscode.window.showInformationMessage(
-      `Super YOLO mode ${data.enabled ? 'enabled' : 'disabled'}`,
-    );
   }
 
   private async updateBooleanAndSendSuperYolo(
