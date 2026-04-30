@@ -47,26 +47,12 @@ const UPDATABLE_KEYS = {
     summary:
       'Path override for the SoX audio tool (used by the audio transcription agent).',
   },
-  'texra.latex.formatter': {
-    schema: z
-      .enum(['none', 'latexindent', 'tex-fmt'])
-      .describe('Which formatter TeXRA invokes when normalizing LaTeX'),
-    summary:
-      'LaTeX formatter choice. "none" disables auto-formatting; "latexindent" requires Perl; "tex-fmt" is a Rust-based alternative.',
-  },
   'texra.latex.tikzInputDirectory': {
     schema: z
       .string()
       .describe('Workspace-relative directory containing TikZ source files'),
     summary:
       'Where the TikZ extraction/compilation flows look for figure source files.',
-  },
-  'texra.workflow.autoCompileAfterOutput': {
-    schema: z
-      .boolean()
-      .describe('Whether to compile LaTeX after each agent output'),
-    summary:
-      'Auto-compiles the LaTeX project after a workflow agent writes output. Useful for catching breakage early.',
   },
   'texra.git.numberOfCommitsToShow': {
     schema: z

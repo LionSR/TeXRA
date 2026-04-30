@@ -1,9 +1,11 @@
 import * as path from 'path';
 
 import { showLoggedErrorMessage, showLoggedMessage } from '@common/errors';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { isDirectory, isFile, isSymlink } from '@common/files/fsEntryType';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { hasExtension } from '@utils/core/pathCore';
@@ -27,7 +29,10 @@ export async function indentLatexFilesInDirectory(
     `Starting LaTeX indentation process for directory: ${directory}`,
   );
 
-  const formatter = getConfig<string>('texra.latex.formatter', 'latexindent');
+  const formatter = workspaceSM.get<string>(
+    WorkspaceStateKey.LATEX_FORMATTER,
+    LATEX_CONFIG_DEFAULTS.latexFormatter,
+  );
   if (formatter === 'none') {
     logger.debug(CHANNEL, 'LaTeX formatter disabled; skipping indentation');
     return 0;
