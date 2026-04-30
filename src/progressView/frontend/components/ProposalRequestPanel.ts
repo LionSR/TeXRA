@@ -196,12 +196,31 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // Proposal-specific rendering
   // ===========================================================================
 
+  private renderWorkingDirectory(
+    data: AgentProposalPermission,
+  ): TemplateResult | typeof nothing {
+    const workingDirectory = data.workingDirectory;
+    if (!workingDirectory) return nothing;
+    return html`<div
+      class="workflow-proposal__working-directory"
+      title=${workingDirectory}
+    >
+      <span class="workflow-proposal__file-label">Working directory:</span>
+      <span
+        class="workflow-proposal__file-name workflow-proposal__file-name--readonly workflow-proposal__file-name--wrap"
+        >${workingDirectory}</span
+      >
+    </div>`;
+  }
+
   private renderProposalFiles(
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
     const groups = getProposalFileGroups(data);
-    if (groups.length === 0) return nothing;
+    const workingDirectoryRow = this.renderWorkingDirectory(data);
+    if (groups.length === 0 && workingDirectoryRow === nothing) return nothing;
     return html`<div class="workflow-proposal__files">
+      ${workingDirectoryRow}
       ${repeat(
         groups,
         ({ label }) => label,
