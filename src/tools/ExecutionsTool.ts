@@ -63,7 +63,7 @@ import {
   formatFileView,
   paginateToolListing,
   formatPaginationHint,
-} from './utils';
+} from './formatting';
 
 // ============================================================================
 // Category-aware field filtering

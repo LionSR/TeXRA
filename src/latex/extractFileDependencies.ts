@@ -17,7 +17,10 @@ import type { FileLocation } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 // Local file imports
-import { stripLatexComments, BIB_DIRECTIVE_PATTERN } from './latexParsingUtils';
+import {
+  collectBibliographyPaths,
+  stripLatexComments,
+} from './latexParsingUtils';
 
 const INPUT_PATTERN = /\\input\s*\{([^}]+)\}/g;
 const INCLUDE_PATTERN = /\\include\s*\{([^}]+)\}/g;
@@ -50,20 +53,12 @@ async function resolveTexInputPath(
 }
 
 /**
- * Resolve a bibliography path to an existing absolute path.
+ * Return the candidate path if it exists on disk, otherwise null.
  */
-async function resolveBibPath(
-  rawPath: string,
-  baseDir: string,
-): Promise<string | null> {
-  const trimmed = rawPath.trim();
-  if (!trimmed) return null;
-
-  const absolute = joinLatexPath(baseDir, ensureExtension(trimmed, '.bib'));
+async function existingPath(absolute: string): Promise<string | null> {
   if (await flexibleFS.exists({ kind: 'external', absolutePath: absolute })) {
     return absolute;
   }
-
   return null;
 }
 
@@ -93,16 +88,11 @@ export async function extractLatexFileDependencies(
     texInputPaths.push(match[1]);
   }
 
-  const bibPaths: string[] = [];
-  for (const match of uncommented.matchAll(BIB_DIRECTIVE_PATTERN)) {
-    for (const entry of match[1].split(',')) {
-      bibPaths.push(entry);
-    }
-  }
+  const bibCandidates = collectBibliographyPaths(latexDir, uncommented);
 
   const [texResolved, bibResolved] = await Promise.all([
     Promise.all(texInputPaths.map((raw) => resolveTexInputPath(raw, latexDir))),
-    Promise.all(bibPaths.map((raw) => resolveBibPath(raw, latexDir))),
+    Promise.all(bibCandidates.map((absolute) => existingPath(absolute))),
   ]);
 
   const results = new Set<string>();
