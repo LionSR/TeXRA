@@ -228,8 +228,14 @@ export class FileList extends LitElement {
   protected override willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('filesByRound')) {
       this.sortedRounds = Object.entries(this.filesByRound)
-        .map(([round, files]) => [Number(round), files] as [number, OutputFileInfo[]])
-        .filter(([round, files]) => !Number.isNaN(round) && Array.isArray(files) && files.length > 0)
+        .map(
+          ([round, files]) =>
+            [Number(round), files] as [number, OutputFileInfo[]],
+        )
+        .filter(
+          ([round, files]) =>
+            !Number.isNaN(round) && Array.isArray(files) && files.length > 0,
+        )
         .sort((a, b) => a[0] - b[0]);
     }
     if (changedProperties.has('failuresByRound')) {
