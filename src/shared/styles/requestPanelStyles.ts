@@ -513,6 +513,10 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--color-text-secondary);
   }
 
+  .workflow-proposal__file-name--wrap {
+    word-break: break-word;
+  }
+
   .workflow-proposal__input-files .workflow-proposal__file-label {
     color: var(--vscode-editor-foreground);
   }
