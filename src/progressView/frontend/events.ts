@@ -114,7 +114,4 @@ export const ProgressEvents = {
 
   followupFocusComplete: () =>
     createEvent('followup-focus-complete', undefined),
-
-  /** Request focus on the follow-up input (e.g. from the "Send Follow-up" button in log entries). */
-  followupFocusRequest: () => createEvent('followup-focus-request', undefined),
 } as const;
