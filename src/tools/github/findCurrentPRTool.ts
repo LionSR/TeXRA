@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { toErrorMessage } from '@common/errors';
 import { ToolError, type ToolResult } from '@tools/result';
-import { parseWorkingDirectory } from '@tools/utils';
+import { parseWorkingDirectory } from '@tools/pathResolution';
 
 import { defineTool } from '../core/define';
 import { ghGet } from './githubClient';

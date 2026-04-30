@@ -8,14 +8,13 @@ import { z } from 'zod';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@tools/result';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
+import { buildFileAttachment } from '@tools/attachments';
+import { formatFileView, READ_FILE_MAX_LINES } from '@tools/formatting';
 import {
-  buildFileAttachment,
-  formatFileView,
-  READ_FILE_MAX_LINES,
   resolveAndFormat,
   parseWorkingDirectory,
   type WorkspacePathResolution,
-} from '@tools/utils';
+} from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml } from '@tools/emlParser';
 import {
