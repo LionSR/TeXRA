@@ -350,15 +350,18 @@ export class GitTab extends LitElement {
                                         <span class="subscription-owner-label"
                                           >${owner.label}</span
                                         >
-                                        <vscode-button
-                                          appearance="secondary"
+                                        <button
+                                          class="tab-action-btn"
                                           @click=${() =>
                                             this.handleOpenPRSubscriptionStream(
                                               owner.streamId,
                                             )}
                                         >
+                                          <span
+                                            class="codicon codicon-comment-discussion"
+                                          ></span>
                                           Jump to agent
-                                        </vscode-button>
+                                        </button>
                                       </div>
                                     `,
                                   )}
@@ -370,13 +373,14 @@ export class GitTab extends LitElement {
                                 </p>
                               `}
                         </div>
-                        <vscode-button
-                          appearance="secondary"
+                        <button
+                          class="tab-action-btn"
                           @click=${() =>
                             this.handleUnsubscribePR(subscription.key)}
                         >
+                          <span class="codicon codicon-debug-stop"></span>
                           Stop
-                        </vscode-button>
+                        </button>
                       </li>
                     `,
                   )}
