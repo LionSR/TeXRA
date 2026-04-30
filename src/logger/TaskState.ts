@@ -1,10 +1,7 @@
 import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/AgentConfig';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { FILE_TYPES, type FileType } from '@utils/config';
 
 const ToolSessionStateSchema = z.object({
