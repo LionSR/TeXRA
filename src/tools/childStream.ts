@@ -42,6 +42,8 @@ interface FinalizeChildStreamOptions {
   } | null;
   error?: unknown;
   errorMessage?: string;
+  /** Remove the child stream tab from the progress view once finalized. */
+  autoClose?: boolean;
 }
 
 /** Create a child stream tab and execution handle for a background child task. */
@@ -113,4 +115,8 @@ export function finalizeChildStream(
     );
   }
   untrackExecution(executionId);
+
+  if (options?.autoClose) {
+    bus.emit('removeStream', { streamId: childStreamId });
+  }
 }
