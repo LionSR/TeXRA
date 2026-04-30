@@ -311,6 +311,47 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     assert.equal((messages[2] as any).tool_call_id, 'call_2');
   });
 
+  it('includes empty reasoning_content in tool-call messages when model generated none', async () => {
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsVision: false,
+        },
+      }),
+    );
+    const workspace = {
+      reasoning: {
+        thinkingBlocks: [] as Array<{ type: string; thinking: string }>,
+      },
+      resetReasoning() {
+        this.reasoning.thinkingBlocks = [];
+      },
+    };
+
+    const messages = await handler.createBatchedToolUseFollowUpMessages(
+      [
+        {
+          raw: {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'some_tool', arguments: '{}' },
+          },
+        },
+      ] as any,
+      [{ output: 'result' }],
+      [[]],
+      workspace as any,
+      '',
+    );
+
+    assert.equal(messages.length, 2);
+    assert.equal(messages[0].role, 'assistant');
+    // reasoning_content must always be present in thinking mode, even as empty string
+    assert.equal((messages[0] as any).reasoning_content, '');
+  });
+
   it('passes back response reasoning_content on final assistant messages', () => {
     const handler = new ModelHandlerDeepSeek(
       buildConfig({
@@ -344,6 +385,38 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
       (message as any).reasoning_content,
       'Tool result is sufficient.',
     );
+  });
+
+  it('includes empty reasoning_content on final assistant messages when model generated none', () => {
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsVision: false,
+        },
+      }),
+    );
+    const response = {
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: 'final answer',
+            // no reasoning_content
+          },
+        },
+      ],
+    };
+
+    const message = handler.createAssistantMessageFromResponse(
+      response as any,
+      'final answer',
+    );
+
+    assert.equal(message.role, 'assistant');
+    // reasoning_content must always be present in thinking mode, even as empty string
+    assert.equal((message as any).reasoning_content, '');
   });
 
   it('sends nullable Chat Completions tools without SDK strict auto-parse validation', async () => {
