@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
