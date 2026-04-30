@@ -104,7 +104,6 @@ export interface ProgressEventPayloads {
   updateSuperYoloBypassState: {
     streamId: StreamTabId;
     bypassActive: boolean;
-    featureEnabled: boolean;
   };
   showBashPermission: BashPermission;
   resolveBashPermission: { requestId: string };
