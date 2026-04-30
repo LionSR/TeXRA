@@ -168,7 +168,9 @@ const BOUNDARY_RE = /^[-/:@.]/;
  */
 function resolveAllModelsByApiName(modelName: string): RelayModel[] {
   const name = modelName.toLowerCase().trim();
-  const modelPart = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+  const modelPart = name.includes('/')
+    ? name.slice(name.indexOf('/') + 1)
+    : name;
 
   const exactMatches: RelayModel[] = [];
   let bestBoundaryLen = -1;
@@ -189,8 +191,10 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
 
     for (const pattern of model.apiPatterns) {
       const isBoundary =
-        (modelPart.startsWith(pattern) && BOUNDARY_RE.test(modelPart.slice(pattern.length))) ||
-        (name.startsWith(pattern) && BOUNDARY_RE.test(name.slice(pattern.length)));
+        (modelPart.startsWith(pattern) &&
+          BOUNDARY_RE.test(modelPart.slice(pattern.length))) ||
+        (name.startsWith(pattern) &&
+          BOUNDARY_RE.test(name.slice(pattern.length)));
       if (isBoundary) {
         if (pattern.length > bestBoundaryLen) {
           boundaryMatches.length = 0;
@@ -225,7 +229,9 @@ export function isModelAllowedForTier(
   if (models.length === 0) return false;
 
   if (tier === MAX_TIER) {
-    return models.some((m) => m.minTier === FREE_TIER || m.minTier === MAX_TIER);
+    return models.some(
+      (m) => m.minTier === FREE_TIER || m.minTier === MAX_TIER,
+    );
   }
   return models.some((m) => m.minTier === FREE_TIER);
 }
