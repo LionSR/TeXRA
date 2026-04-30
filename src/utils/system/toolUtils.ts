@@ -62,6 +62,20 @@ export function setToolMissingHandler(handler: ToolMissingHandler): void {
   toolMissingHandler = handler;
 }
 
+async function reportMissingTool(
+  message: string,
+  openDocsCommand?: string,
+): Promise<void> {
+  try {
+    await toolMissingHandler(message, openDocsCommand);
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Failed to report missing tool: ${toErrorMessage(err)}`,
+    );
+  }
+}
+
 // Platform-specific install instructions resolved at module load.
 // All guides are defined in @shared/constants/latex (single source of truth).
 const p = process.platform;
@@ -192,7 +206,7 @@ export async function checkToolInstalled(
 
   if (!config) {
     if (showError) {
-      void toolMissingHandler(`Unknown tool: ${toolOrConfig}`);
+      await reportMissingTool(`Unknown tool: ${toolOrConfig}`);
     }
     return false;
   }
@@ -336,7 +350,7 @@ export async function checkToolInstalled(
     }
 
     if (!isInstalled && showError) {
-      void toolMissingHandler(config.errorMessage, config.openDocsCommand);
+      await reportMissingTool(config.errorMessage, config.openDocsCommand);
     }
 
     return isInstalled;
@@ -344,7 +358,7 @@ export async function checkToolInstalled(
     if (showError) {
       const errorMessage =
         config.errorMessage || `Failed to check tool installation: ${err}`;
-      void toolMissingHandler(errorMessage);
+      await reportMissingTool(errorMessage);
     }
     return false;
   }
