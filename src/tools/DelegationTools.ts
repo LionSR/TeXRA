@@ -963,12 +963,6 @@ Git worktree support: ${
       );
     }
 
-    if (ToolUseFollowUpQueue.hasQueuedFollowUp(handle.childStreamId)) {
-      throw new Error(
-        `'${handle.agentName}' already has a pending follow-up queued. Wait for its next result before sending another follow-up.`,
-      );
-    }
-
     const framedInstruction = formatFollowUpInstruction(instruction);
     const result = await sendFollowUp(handle.childStreamId, framedInstruction);
 

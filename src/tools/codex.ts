@@ -626,11 +626,6 @@ async function resumeCodexThread(
   }
 
   const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
-  if (!queue.isEmpty()) {
-    throw new ToolError(
-      `Codex thread '${threadId}' already has a pending follow-up queued. Wait for its next result before sending another follow-up.`,
-    );
-  }
   queue.enqueue(prompt);
 
   const preview = truncateWithEllipsis(prompt, 60);
