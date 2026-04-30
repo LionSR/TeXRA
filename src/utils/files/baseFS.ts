@@ -6,6 +6,7 @@ import * as path from 'path';
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 import { getFileSystem } from '@agent/core/filesystem';
 import { isFile, isDirectory } from '@common/files/fsEntryType';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /** Convert content to Buffer for writing. */
 function toBuffer(content: string | Uint8Array): Uint8Array {
@@ -60,7 +61,7 @@ export abstract class BaseFS {
     target: string,
   ): Promise<string> {
     const content = await getFileSystem().readFile(this.preparePath(target));
-    return Buffer.from(content).toString('utf-8').replaceAll('\r\n', '\n');
+    return normalizeLineEndings(Buffer.from(content).toString('utf-8'));
   }
 
   public static async readBytes(
@@ -205,9 +206,9 @@ export abstract class BaseFS {
   }
 
   public static readSync(this: typeof BaseFS, target: string): string {
-    return fs
-      .readFileSync(this.preparePath(target), 'utf-8')
-      .replaceAll('\r\n', '\n');
+    return normalizeLineEndings(
+      fs.readFileSync(this.preparePath(target), 'utf-8'),
+    );
   }
 
   public static readBytesSync(this: typeof BaseFS, target: string): Buffer {

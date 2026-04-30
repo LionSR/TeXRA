@@ -24,7 +24,7 @@ import { ExecutionIdSchema } from '@shared/schemas';
 // Local imports - tools
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
-import { formatResultCount, pluralize } from '@tools/utils';
+import { formatResultCount, pluralize } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import {
   buildApprovalRejectedResult,
