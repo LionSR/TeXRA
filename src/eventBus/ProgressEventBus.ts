@@ -163,6 +163,14 @@ export interface ProgressEventPayloads {
   prSubscriptionsChanged: { keys: readonly string[] };
   /** Active PR-activity owners changed; frontends refresh owner metadata. */
   prSubscriptionBindingsChanged: undefined;
+  /** Active repo-activity subscription keys changed. */
+  repoSubscriptionsChanged: { keys: readonly string[] };
+  /** Active repo-activity owners changed. */
+  repoSubscriptionBindingsChanged: undefined;
+  /** Active issue-activity subscription keys changed. */
+  issueSubscriptionsChanged: { keys: readonly string[] };
+  /** Active issue-activity owners changed. */
+  issueSubscriptionBindingsChanged: undefined;
 
   /**
    * External tool availability was re-probed. Frontends (Tools tab) refresh
