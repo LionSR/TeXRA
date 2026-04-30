@@ -19,13 +19,12 @@ import {
   requireFileReadForEdit,
 } from '../fileInteractions';
 import {
-  countOccurrences,
   formatFileView,
   formatLinesWithNumbers,
   formatPaginationHint,
   paginateToolListing,
-  requireField,
-} from '../utils';
+} from '../formatting';
+import { countOccurrences, requireField } from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
