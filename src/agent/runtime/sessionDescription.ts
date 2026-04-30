@@ -92,6 +92,7 @@ export async function generateSessionDescription(
         .replace(/^["'`]+|["'`]+$/g, '')
         .replace(/[.!?…]+$/, '')
         .trim();
+      if (!cleaned) return;
       const MAX_DESCRIPTION_LENGTH = 80;
       const description =
         cleaned.length > MAX_DESCRIPTION_LENGTH
