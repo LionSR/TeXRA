@@ -9,9 +9,16 @@ import * as vscode from 'vscode';
 
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
+import { workspaceSM } from '@common/state';
 import {
+  LATEX_FIELD_TO_KEY,
+  type LatexConfigField,
+} from '@shared/constants/latex';
+import {
+  LatexConfigValuesSchema,
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
+  type LatexConfigValues,
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
@@ -164,6 +171,68 @@ export class LatexSettingsHandlers {
     await this.installExtension(LATEX_WORKSHOP_EXT_ID, (w) =>
       this.sendLatexSettingsStatus(w),
     );
+  }
+
+  /**
+   * Push current LaTeX/compile/diff config values to the webview. Each field
+   * is left undefined when no value is set in workspace storage so the UI
+   * can render the documented default rather than overwriting it on save.
+   *
+   * Iterates LATEX_FIELD_TO_KEY (the shared single-source-of-truth field/key
+   * map) so the read path stays automatically aligned with the write path
+   * and the migration helper.
+   */
+  async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
+    const values: Partial<Record<LatexConfigField, unknown>> = {};
+    for (const [field, key] of Object.entries(LATEX_FIELD_TO_KEY) as [
+      LatexConfigField,
+      Parameters<typeof workspaceSM.get>[0],
+    ][]) {
+      const stored = workspaceSM.get(key);
+      if (stored !== undefined) values[field] = stored;
+    }
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+      values: values as LatexConfigValues,
+    });
+  }
+
+  /**
+   * Persist a single LaTeX/compile/diff config value to workspace storage.
+   * `value === undefined` (or `null`) clears the key (returns to documented
+   * default). Per-field validation is intentionally done here rather than in
+   * the inbound message schema — the outer SettingsViewInboundMessageSchema
+   * is a discriminatedUnion('command', …) and a nested per-field
+   * discriminator on the same command literal would crash Zod with a
+   * duplicate-discriminator error at parse time.
+   */
+  async handleSetLatexConfigValue(
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_LATEX_CONFIG_VALUE>,
+  ): Promise<void> {
+    const key = LATEX_FIELD_TO_KEY[data.field];
+    // Validate value against the per-field schema in LatexConfigValuesSchema.
+    // Both schemas mark the property optional, so undefined/null both parse to
+    // undefined and clear the key.
+    const fieldSchema = LatexConfigValuesSchema.shape[data.field];
+    const parsed = fieldSchema.safeParse(data.value ?? undefined);
+    if (!parsed.success) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        `Invalid value for ${data.field}`,
+        parsed.error,
+      );
+      return;
+    }
+    try {
+      await workspaceSM.update(key, parsed.data);
+      await this.ctx.withActiveWebview((w) => this.sendLatexConfigValues(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        `Failed to update ${data.field}`,
+        error,
+      );
+    }
   }
 
   async handleRunInstallCommand(
