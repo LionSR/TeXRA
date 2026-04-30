@@ -398,17 +398,6 @@
       {
         "title": "LaTeX Formatter",
         "properties": {
-          "texra.latex.formatter": {
-            "type": "string",
-            "enum": [
-              "latexindent",
-              "tex-fmt",
-              "none"
-            ],
-            "default": "latexindent",
-            "description": "LaTeX formatter to use when formatting files ('none' to disable)",
-            "order": 1
-          },
           "texra.latex.showLatexindentWarning": {
             "type": "boolean",
             "default": false,
@@ -548,43 +537,11 @@
       {
         "title": "LaTeXdiff",
         "properties": {
-          "texra.latexdiff.timeoutMs": {
-            "type": "number",
-            "default": 10000,
-            "minimum": 1000,
-            "maximum": 80000,
-            "description": "Timeout in milliseconds for latexdiff operations",
-            "order": 1
-          },
-          "texra.latexdiff.mathMarkup": {
-            "type": "string",
-            "default": "coarse",
-            "enum": [
-              "off",
-              "whole",
-              "coarse",
-              "fine"
-            ],
-            "enumDescriptions": [
-              "Suppress markup for math environments. Deleted equations will not appear in diff file.",
-              "Differencing on the level of whole equations. Even trivial changes cause the whole equation to be marked changed.",
-              "Detect changes within equations with coarse granularity; changes in equation type appear as a change to the complete equation.",
-              "Detect small changes in equations and mark up at fine granularity."
-            ],
-            "description": "Determine granularity of markup in displayed math environments for latexdiff",
-            "order": 2
-          },
           "texra.latexdiff.pictureEnvironments": {
             "type": "string",
             "default": "(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*",
             "description": "Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.",
             "order": 3
-          },
-          "texra.latexdiff.generateBetweenRoundDiffs": {
-            "type": "boolean",
-            "default": false,
-            "description": "Generate diffs between consecutive agent rounds in addition to comparing each round to the original input.",
-            "order": 4
           },
           "texra.latexdiff.tempFileLocation": {
             "type": "string",
@@ -599,24 +556,6 @@
             "default": "sameDirectory",
             "description": "Where to create temporary files for LaTeX preview and diff operations during tool edit approval.",
             "order": 5
-          }
-        }
-      },
-      {
-        "title": "Workflow Output",
-        "properties": {
-          "texra.workflow.autoCompileAfterOutput": {
-            "type": "boolean",
-            "default": true,
-            "description": "After a workflow writes .tex outputs, attempt to compile each root document (latexmk, falling back to pdflatex) in run storage to verify the build. On failure the last 200 lines of the LaTeX log are written to /executions/<id>/compile/<name>.log so the orchestrator can react to genuine errors. When no LaTeX toolchain is installed, the check is skipped gracefully.",
-            "order": 1
-          },
-          "texra.workflow.autoCompileTimeoutMs": {
-            "type": "number",
-            "default": 120000,
-            "minimum": 10000,
-            "description": "Timeout in milliseconds for each per-file compile attempt during the post-workflow compile check.",
-            "order": 2
           }
         }
       },

@@ -1,10 +1,15 @@
 import * as path from 'path';
 
-import { getConfig } from '@agent/core/config';
+import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
+import {
+  LATEX_CONFIG_DEFAULTS,
+  LATEX_CONFIG_RANGES,
+} from '@shared/constants/latex';
 import {
   createRunStorageLocation,
   flexibleFS,
@@ -24,7 +29,7 @@ export interface CompileCheckContext {
 }
 
 const LOG_TAIL_LINES = 200;
-const MIN_TIMEOUT_MS = 10000;
+const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
 /**
  * Return a human-readable display name for an output file in compile messages.
@@ -53,7 +58,12 @@ export async function runCompileCheck(
   ctx: CompileCheckContext,
   currentRound: number,
 ): Promise<CompileFailure[]> {
-  if (!getConfig<boolean>('texra.workflow.autoCompileAfterOutput', true)) {
+  if (
+    !getWorkspaceState().get<boolean>(
+      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+      LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
+    )
+  ) {
     return [];
   }
 
@@ -83,7 +93,10 @@ export async function runCompileCheck(
 
   const timeoutMs = Math.max(
     MIN_TIMEOUT_MS,
-    getConfig<number>('texra.workflow.autoCompileTimeoutMs', 120000),
+    getWorkspaceState().get<number>(
+      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+      LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
+    ),
   );
   // compileRoot is created lazily on first failure so successful rounds leave
   // no trace — the orchestrator can use "no compile/*.log entries" as proof

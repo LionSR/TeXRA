@@ -2,7 +2,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { getConfig } from '@agent/core/config';
+import { getWorkspaceState } from '@agent/core/stateStore';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
@@ -12,6 +13,10 @@ import {
   MESSAGE_TYPES,
   type OutputFileInfo,
 } from '@shared/schemas';
+import {
+  LATEX_CONFIG_DEFAULTS,
+  LATEX_CONFIG_RANGES,
+} from '@shared/constants/latex';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -169,9 +174,9 @@ export class LatexDiffManager {
       }
     }
 
-    const generateBetweenRoundDiffs = getConfig<boolean>(
-      'texra.latexdiff.generateBetweenRoundDiffs',
-      false,
+    const generateBetweenRoundDiffs = getWorkspaceState().get<boolean>(
+      WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+      LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
     );
 
     if (generateBetweenRoundDiffs && currRound > 0) {
@@ -320,8 +325,11 @@ export class LatexDiffManager {
     // Reuse the workflow compile-check timeout so a hanging diff build
     // gets killed by execa instead of orphaning latexmk/pdflatex.
     const timeoutMs = Math.max(
-      10000,
-      getConfig<number>('texra.workflow.autoCompileTimeoutMs', 120000),
+      LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
+      getWorkspaceState().get<number>(
+        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+        LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
+      ),
     );
     await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
