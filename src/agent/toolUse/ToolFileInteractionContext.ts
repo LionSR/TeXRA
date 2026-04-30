@@ -4,8 +4,8 @@ import type {
   PlanState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
-import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
 export interface ToolFileInteractionContext {
   streamId?: StreamTabId;

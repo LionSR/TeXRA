@@ -4,8 +4,8 @@ import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
 export interface AgentCore<C = unknown> {
   modelHandler: IModelHandler<any, any, any, any, C>;
