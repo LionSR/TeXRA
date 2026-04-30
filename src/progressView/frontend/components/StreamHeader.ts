@@ -28,7 +28,6 @@ import { getComposedPathElement } from '../utils';
 interface ToolbarButton {
   id: string;
   icon: string;
-  iconActive?: string;
   command: string;
   title: string;
   titleActive?: string;
@@ -389,14 +388,12 @@ export class StreamHeader extends LitElement {
                       ? this.superYoloActive
                       : this.yoloActive),
                   );
-                  const icon =
-                    isActive && btn.iconActive ? btn.iconActive : btn.icon;
                   const title =
                     isActive && btn.titleActive ? btn.titleActive : btn.title;
                   return html`
                     <vscode-toolbar-button
                       id=${btn.id}
-                      icon=${icon}
+                      icon=${btn.icon}
                       label=${title}
                       title=${title}
                       data-command=${btn.command}
