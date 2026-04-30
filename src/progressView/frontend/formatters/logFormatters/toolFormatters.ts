@@ -622,7 +622,8 @@ const TOOL_SECTION_BUILDERS: Array<{
   build: (ctx: ToolSectionContext) => TemplateResult[];
 }> = [
   {
-    match: (ctx) => TOOLS_WITH_DIFF_INPUT.has(ctx.toolName),
+    match: (ctx) =>
+      TOOLS_WITH_DIFF_INPUT.has(ctx.toolName) && isPlainObject(ctx.input),
     build: buildEditDiffInputSections,
   },
   {
@@ -635,17 +636,22 @@ const TOOL_SECTION_BUILDERS: Array<{
       TOOLS_WITH_FILE_CONTENT.has(ctx.toolName) && Boolean(ctx.filePath),
     build: buildFileContentSections,
   },
-  { match: (ctx) => ctx.toolName === 'memory', build: buildMemorySections },
   {
-    match: (ctx) => ctx.toolName === 'executions',
+    match: (ctx) => ctx.toolName === 'memory' && isPlainObject(ctx.input),
+    build: buildMemorySections,
+  },
+  {
+    match: (ctx) => ctx.toolName === 'executions' && isPlainObject(ctx.input),
     build: buildExecutionsSections,
   },
   {
-    match: (ctx) => ctx.toolName === 'accept_run_files',
+    match: (ctx) =>
+      ctx.toolName === 'accept_run_files' && isPlainObject(ctx.input),
     build: buildAcceptRunFilesSections,
   },
   {
-    match: (ctx) => DELEGATION_TOOLS.has(ctx.toolName),
+    match: (ctx) =>
+      DELEGATION_TOOLS.has(ctx.toolName) && isPlainObject(ctx.input),
     build: buildDelegationSections,
   },
   {
