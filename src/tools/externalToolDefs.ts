@@ -54,13 +54,9 @@ export interface ExternalToolDef {
   /** Returns true if the external dependency is available. */
   readonly check: (probeResult?: unknown) => Promise<boolean>;
   /** Optional detailed status string resolved at check time (shown below description). */
-  readonly detailCheck?: (
-    probeResult?: unknown,
-  ) => Promise<string | undefined>;
+  readonly detailCheck?: (probeResult?: unknown) => Promise<string | undefined>;
   /** Optional short status label for the dashboard badge. */
-  readonly statusLabel?: (
-    probeResult?: unknown,
-  ) => Promise<string | undefined>;
+  readonly statusLabel?: (probeResult?: unknown) => Promise<string | undefined>;
   // Dashboard UI metadata
   readonly name: string;
   readonly category: ToolCategory;
