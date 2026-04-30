@@ -4,7 +4,6 @@ import * as path from 'path';
 // Third-party imports
 import { execa, execaSync } from 'execa';
 import { parse as shellParse } from 'shell-quote';
-import * as vscode from 'vscode';
 
 // Local imports
 import type { ExecResult } from '@agent/types/ResultTypes';
@@ -42,6 +41,39 @@ interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
   errorMessage: string;
   openDocsCommand?: string; // Optional command to open documentation
+}
+
+/**
+ * Pluggable handler for surfacing tool-missing errors to the user.
+ * Set by the extension host at activation; defaults to a no-op so this
+ * module remains free of platform-specific (vscode) dependencies.
+ */
+export type ToolMissingHandler = (
+  message: string,
+  openDocsCommand?: string,
+) => void | Promise<void>;
+
+let toolMissingHandler: ToolMissingHandler = () => {
+  // No-op by default; the extension host registers a real handler.
+};
+
+/** Register a platform-specific handler for displaying tool-missing errors. */
+export function setToolMissingHandler(handler: ToolMissingHandler): void {
+  toolMissingHandler = handler;
+}
+
+async function reportMissingTool(
+  message: string,
+  openDocsCommand?: string,
+): Promise<void> {
+  try {
+    await toolMissingHandler(message, openDocsCommand);
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Failed to report missing tool: ${toErrorMessage(err)}`,
+    );
+  }
 }
 
 // Platform-specific install instructions resolved at module load.
@@ -174,7 +206,7 @@ export async function checkToolInstalled(
 
   if (!config) {
     if (showError) {
-      vscode.window.showErrorMessage(`Unknown tool: ${toolOrConfig}`);
+      await reportMissingTool(`Unknown tool: ${toolOrConfig}`);
     }
     return false;
   }
@@ -318,17 +350,7 @@ export async function checkToolInstalled(
     }
 
     if (!isInstalled && showError) {
-      const actions = config.openDocsCommand ? ['View Installation Guide'] : [];
-      const choice = await vscode.window.showErrorMessage(
-        config.errorMessage,
-        ...actions,
-      );
-
-      if (choice === 'View Installation Guide' && config.openDocsCommand) {
-        // Handle commands with additional arguments separated by comma
-        const [command, ...args] = config.openDocsCommand.split(',');
-        void vscode.commands.executeCommand(command, ...args);
-      }
+      await reportMissingTool(config.errorMessage, config.openDocsCommand);
     }
 
     return isInstalled;
@@ -336,7 +358,7 @@ export async function checkToolInstalled(
     if (showError) {
       const errorMessage =
         config.errorMessage || `Failed to check tool installation: ${err}`;
-      vscode.window.showErrorMessage(errorMessage);
+      await reportMissingTool(errorMessage);
     }
     return false;
   }

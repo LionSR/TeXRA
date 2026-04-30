@@ -27,14 +27,13 @@ import { splitContentLines } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 import { ToolResult, ToolError } from './result';
+import { formatFileView, formatLinesWithNumbers } from './formatting';
 import {
   assertWritable,
-  formatFileView,
-  formatLinesWithNumbers,
-  requireField,
   resolveAndFormat,
   parseWorkingDirectory,
-} from './utils';
+} from './pathResolution';
+import { requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';

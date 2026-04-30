@@ -15,16 +15,6 @@ import {
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
 
-/**
- * Get the appropriate path from a FileLocation based on its kind.
- * Uses relativePath for workspace files, absolutePath for external files.
- */
-function getLocationPath(location: FileLocation): string {
-  return location.kind !== 'external'
-    ? location.relativePath
-    : location.absolutePath;
-}
-
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
@@ -128,7 +118,10 @@ export class TikzPictureManager {
     });
 
     const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
-    const buildDir = getLocationPath(buildDirLocation);
+    const buildDir =
+      buildDirLocation.kind !== 'external'
+        ? buildDirLocation.relativePath
+        : buildDirLocation.absolutePath;
     const fileRelativePath = path.join(buildDir, filename);
 
     const texLocation = this.createLocation(
@@ -156,7 +149,11 @@ export class TikzPictureManager {
     channel: string = this.channel,
   ): Promise<FileLocation[]> {
     const inputName = path.parse(path.basename(latexFile.absolutePath)).name;
-    const inputDir = path.dirname(getLocationPath(latexFile));
+    const inputDir = path.dirname(
+      latexFile.kind !== 'external'
+        ? latexFile.relativePath
+        : latexFile.absolutePath,
+    );
     const buildRelativePath = path.join(inputDir, 'build', inputName);
 
     const buildDirLocation = this.createLocation(
@@ -201,7 +198,11 @@ export class TikzPictureManager {
         const pdfFilename = path
           .basename(texLocation.absolutePath)
           .replace(/\.tex$/, '.pdf');
-        const texDir = path.dirname(getLocationPath(texLocation));
+        const texDir = path.dirname(
+          texLocation.kind !== 'external'
+            ? texLocation.relativePath
+            : texLocation.absolutePath,
+        );
         const pdfRelativePath = path.join(texDir, pdfFilename);
 
         const pdfLocation = this.createLocation(

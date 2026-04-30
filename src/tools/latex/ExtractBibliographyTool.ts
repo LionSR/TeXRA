@@ -9,7 +9,8 @@ import {
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
 import { ToolError } from '@tools/result';
-import { formatToolOutput, resolveAndFormat } from '@tools/utils';
+import { formatToolOutput } from '@tools/formatting';
+import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
 
