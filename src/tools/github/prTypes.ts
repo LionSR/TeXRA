@@ -5,6 +5,8 @@
 
 export interface GhUser {
   login: string;
+  /** 'User' | 'Bot' | 'Organization' — used by the bot filter to drop CI noise. */
+  type?: string;
 }
 
 export interface GhIssueComment {
@@ -14,6 +16,14 @@ export interface GhIssueComment {
   created_at: string;
   updated_at?: string;
   html_url: string;
+  /**
+   * Canonical link to the parent issue (PRs are issues internally), e.g.
+   * `https://api.github.com/repos/o/r/issues/{number}`. Always present on
+   * `/issues/comments` responses; preferred over `html_url` for parsing the
+   * target number because `html_url` shape varies between issue and PR
+   * comments depending on GitHub's redirect behavior.
+   */
+  issue_url?: string;
 }
 
 export interface GhReviewComment {
@@ -52,4 +62,38 @@ export interface GhPullRequest {
   merged: boolean;
   mergeable_state?: string;
   head: { sha: string };
+}
+
+/**
+ * Subset of `GET /repos/{o}/{r}/issues/{n}` we consume. The `pull_request`
+ * field is GitHub's discriminator: present (with a `url`) iff this issue
+ * record is actually a PR. The disambiguator on subscribe uses it.
+ */
+export interface GhIssue {
+  number: number;
+  state: 'open' | 'closed';
+  /** GitHub: `completed | not_planned | reopened | null`. */
+  state_reason?: string | null;
+  title: string;
+  html_url: string;
+  user: GhUser | null;
+  pull_request?: { url: string };
+}
+
+/**
+ * Subset of `GET /repos/{o}/{r}/pulls` list-entry fields used by the repo
+ * poller for open/close/merge transition detection. Note: the list endpoint
+ * does NOT return `merged` (that's only on the single-PR endpoint), so we
+ * rely on `merged_at` to distinguish merged-closed from plain closed.
+ */
+export interface GhPullsListEntry {
+  number: number;
+  state: 'open' | 'closed';
+  title: string;
+  html_url: string;
+  user: GhUser | null;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  merged_at: string | null;
 }
