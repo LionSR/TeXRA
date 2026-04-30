@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.37.7] - 2026-05-01
+
+### Features
+
+- **GitHub subscription for repos and issues** — ask an agent to watch a repository or issue and it will receive activity (comments, state changes, CI results) as follow-ups while it works. Use `owner/repo` to monitor a whole repo, or `owner/repo/issues/N` for a specific issue — the same way PR subscriptions already work. Open Settings → Git to see what's being watched and stop any subscription.
+- **Compile & Diff settings in the UI** — LaTeX compile and diff options (auto-compile after each round, timeouts, latexdiff math-markup mode, formatter choice) can now be configured in Settings → LaTeX under **Compile & Diff** without touching `settings.json`. Settings are per-workspace and take effect immediately.
+- **Working directory shown on delegation proposals** — when a delegated agent will run in a specific directory, that path now appears on the proposal and permission cards before you approve, so you can confirm it's correct.
+- **Send follow-ups freely during delegation** — you can now queue multiple messages while a delegated agent is working; they are delivered in order once it's ready, instead of later messages being silently dropped.
+
+### Bug Fixes
+
+- **Workflow outputs stay out of your workspace until accepted** — generated files remain in run storage and your source files are not marked as modified until you explicitly accept the output.
+- **Disk-full errors show an actionable message** — a full disk now produces a clear "free up disk space" notification instead of a raw error, and no retry is attempted.
+- **Delegation no longer stalls on a spurious approval prompt** — an extra confirmation step between the orchestrator and a delegated subtask has been removed.
+- **Follow-up input handles long lines correctly** — URLs, paths, and pasted log output in the follow-up box now wrap instead of overflowing the panel.
+- **Progress board opens cleanly after a crash** — corrupted or outdated saved state shows a friendly error rather than crashing on startup.
+- **Various smaller fixes** — stable toggle icons; reliable DeepSeek reasoning output; LaTeX fixer button always enabled when appropriate; AI responses no longer silently drop tool calls.
+
 ## [0.37.6] - 2026-04-27
 
 ### Features
