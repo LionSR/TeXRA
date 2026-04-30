@@ -74,5 +74,6 @@ export const AgentSelectionEvents = {
   }) => createEvent('agent-reveal-file', detail),
   viewRemotePrompt: (detail: { agentName: string }) =>
     createEvent('agent-view-remote-prompt', detail),
+  // Keep the event name stable because SettingsApp already listens for it.
   saveTeam: () => createEvent('save-agent-mode-preset', undefined),
 } as const;

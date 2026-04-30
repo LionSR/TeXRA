@@ -68,7 +68,7 @@ Concretely:
 
 5. **The schema is fragile.** Custom teams reference agents by bare name,
    so renaming a custom agent silently breaks every team that referenced
-   it. Built-in presets ship without an explicit lead. Workflow defaults are
+   it. Built-in teams ship without an explicit lead. Workflow defaults are
    lumped into `workflowAgents` with no role distinction.
 
 6. **The launcher does not express intent.** Selecting `orchestrator` vs.
