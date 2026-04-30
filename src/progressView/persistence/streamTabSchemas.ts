@@ -165,12 +165,25 @@ function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
 // Output files: { round: OutputFileInfo[] }
 // ============================================================================
 
+function warnDroppedItem(
+  kind: string,
+  error: { issues: readonly { path: PropertyKey[]; message: string }[] },
+): void {
+  console.warn(
+    `[streamTabSchemas] Dropping malformed ${kind} entry: ${error.issues
+      .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+      .join('; ')}`,
+  );
+}
+
 const OutputFileListSchema = z
   .array(z.unknown())
   .transform((items) =>
     items.flatMap((item) => {
       const parsed = OutputFileInfoSchema.safeParse(item);
-      return parsed.success ? [parsed.data] : [];
+      if (parsed.success) return [parsed.data];
+      warnDroppedItem('OutputFileInfo', parsed.error);
+      return [];
     }),
   )
   .catch([]);
