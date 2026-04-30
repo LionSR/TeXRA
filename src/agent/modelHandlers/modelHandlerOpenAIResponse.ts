@@ -1,6 +1,5 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
-import type { EventEmitter } from 'node:events';
 import * as path from 'path';
 
 // Third-party imports
@@ -75,6 +74,7 @@ import {
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
+import type { EventEmitter } from 'node:events';
 import type { ModelConfig } from 'llm-zoo';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -696,7 +696,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.wsKeepaliveInterval = setInterval(() => {
       try {
         if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
-          ws.socket.ping();
+          ws.socket.platformSocket.ping();
         }
       } catch {
         // Ignore ping errors
