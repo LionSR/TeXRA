@@ -41,7 +41,6 @@ export const AgentSelectionEvents = {
   openYaml: (detail: {
     agentName: string;
     agentSource: AgentSourceType;
-    variant: 'base' | 'multiple';
   }) => createEvent('agent-open-yaml', detail),
   setEnabled: (detail: {
     agentName: string;

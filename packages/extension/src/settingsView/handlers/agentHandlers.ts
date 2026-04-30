@@ -375,21 +375,6 @@ export class AgentHandlers {
 
       await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
 
-      if (multipleCopy) {
-        await AbsoluteFS.ensureDir(path.dirname(multipleCopy.targetPath));
-        try {
-          await AbsoluteFS.copy(
-            multipleCopy.sourcePath,
-            multipleCopy.targetPath,
-            {
-              overwrite: true,
-            },
-          );
-        } catch {
-          // _multiple variant may not exist on disk even if registered
-        }
-      }
-
       const doc = await vscode.workspace.openTextDocument(
         vscode.Uri.file(targetPath),
       );
@@ -435,19 +420,6 @@ export class AgentHandlers {
       }
 
       await AbsoluteFS.delete(result.plan.path, { recursive: false });
-
-      if (result.plan.multiplePath) {
-        try {
-          await AbsoluteFS.delete(result.plan.multiplePath, {
-            recursive: false,
-          });
-        } catch (err) {
-          // Only ignore FileNotFound; surface other errors
-          if (!isFileNotFoundError(err)) {
-            throw err;
-          }
-        }
-      }
 
       void vscode.window.showInformationMessage(
         `Deleted custom agent: ${data.agentName}`,

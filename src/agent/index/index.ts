@@ -58,9 +58,6 @@ export {
   createKey,
   getCleanAgentName,
   resolveAgentKey,
-  // _multiple helpers
-  getBaseName,
-  getMultipleName,
   // Source helpers
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)

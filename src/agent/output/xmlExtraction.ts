@@ -1,8 +1,11 @@
 /**
  * XML file extraction for output processing.
  *
- * Extracts output files from XML responses, handling both single
- * and multiple output scenarios.
+ * Extracts output files from XML responses.
+ * Agents using the unified protocol (documentTag === 'documents') always produce
+ * <documents><document name="..."> containers and are extracted via the
+ * multi-document path regardless of output file count.
+ * Legacy agents with a custom documentTag use single-document extraction.
  */
 
 import { toErrorMessage } from '@common/errors';
@@ -89,10 +92,14 @@ export async function extractFilesFromXml(
 
       const fileProcessor = new OutputFileProcessor(processingContext);
 
-      const hasMultipleOutputs =
-        deps.config.useMultipleOutputs && deps.config.outputFiles?.length > 0;
+      // Unified protocol: documentTag === 'documents' means the model always
+      // emits <documents><document name="..."> containers (N≥1).
+      // Legacy agents with a custom documentTag (e.g. 'latex_document') use
+      // single-document extraction for backward compatibility.
+      const useMultiDocumentPath =
+        deps.setting.documentTag === 'documents';
 
-      if (hasMultipleOutputs) {
+      if (useMultiDocumentPath) {
         await fileProcessor.processMultipleOutputs(
           outputLocation,
           currRound,

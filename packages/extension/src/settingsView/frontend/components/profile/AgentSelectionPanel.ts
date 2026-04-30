@@ -442,15 +442,11 @@ export class AgentSelectionPanel extends LitElement {
     }
   }
 
-  private handleOpenYaml(
-    agent: AgentSelectionItem,
-    variant: 'base' | 'multiple',
-  ): void {
+  private handleOpenYaml(agent: AgentSelectionItem): void {
     this.dispatchEvent(
       AgentSelectionEvents.openYaml({
         agentName: agent.name,
         agentSource: agent.source,
-        variant,
       }),
     );
   }
@@ -551,9 +547,6 @@ export class AgentSelectionPanel extends LitElement {
         />
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
-          ${agent.hasMultiple
-            ? html`<span title="Can produce multiple output files">⧉</span>`
-            : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE
             ? html`<span title="Remote agent">☁</span>`
             : nothing}
@@ -666,13 +659,6 @@ export class AgentSelectionPanel extends LitElement {
             ${agent.enabled ? 'Yes' : 'No'}
           </span>
 
-          <span class="agent-detail-meta-label">Multiple outputs</span>
-          <span class="agent-detail-meta-value">
-            ${agent.hasMultiple
-              ? 'Yes — can produce multiple output files per run'
-              : 'No — produces a single output file'}
-          </span>
-
           ${agent.tools && agent.tools.length > 0
             ? html`
                 <span class="agent-detail-meta-label">Tools</span>
@@ -712,19 +698,6 @@ export class AgentSelectionPanel extends LitElement {
                     "View the remote agent's prompt definition (read-only)",
                   className: 'agent-action-btn',
                   onClick: () => this.handleViewRemotePrompt(agent),
-                })}
-              `
-            : nothing}
-          ${agent.hasMultiplePath
-            ? html`
-                ${renderLabeledActionButton({
-                  icon: 'file-lines',
-                  text: 'Multi-Output Prompts',
-                  label: 'Open the multi-output prompts',
-                  title:
-                    'Open the multi-output prompts — alternate instructions used when generating multiple alternatives',
-                  className: 'agent-action-btn',
-                  onClick: () => this.handleOpenYaml(agent, 'multiple'),
                 })}
               `
             : nothing}

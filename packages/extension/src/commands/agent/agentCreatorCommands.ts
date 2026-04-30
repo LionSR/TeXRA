@@ -5,7 +5,6 @@ import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
-import { getBaseName, getMultipleName } from '@agent/index';
 import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
@@ -67,7 +66,6 @@ interface AgentBlueprint {
   aiVars: Record<string, string>;
   fallbackTemplate: string;
   fallbackVars: Record<string, string>;
-  registrationMeta: AgentVariantMetadata;
 }
 
 /** Mutable shared state flowing through the agent creation flow. */
@@ -419,41 +417,6 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
   }): Promise<AgentBlueprint | undefined> {
     const { agentName, description, config } = prepRes;
 
-    const outputChoice = await vscode.window.showQuickPick(
-      [
-        {
-          label: 'Single output file',
-          description: 'Agent produces one document',
-        },
-        {
-          label: 'Multiple output files',
-          description: 'Agent produces several documents at once',
-        },
-      ],
-      {
-        title: `Workflow Agent: ${agentName}`,
-        placeHolder: 'Choose the agent output style',
-      },
-    );
-    if (!outputChoice) return undefined;
-
-    const isMultiple = outputChoice.label === 'Multiple output files';
-
-    let outputFiles: string[] = [];
-    if (isMultiple) {
-      const filesInput = await vscode.window.showInputBox({
-        title: `Workflow Agent: ${agentName}`,
-        prompt: 'Enter default output filenames (comma separated)',
-      });
-      if (!filesInput) return undefined;
-      outputFiles = filesInput
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-    }
-
-    const outputFilesYaml = outputFiles.map((f) => `- ${f}`).join('\n    ');
-    const outputFilesNote = outputFiles.map((f) => `    - ${f}`).join('\n');
     const targetDir = await agentDirectories.custom();
 
     return {
@@ -463,30 +426,14 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
       aiVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        MULTIPLE_OUTPUT_NOTE: isMultiple
-          ? MULTIPLE_OUTPUT_INSTRUCTIONS +
-            '\nDefault output files:\n' +
-            outputFilesNote
-          : '',
+        MULTIPLE_OUTPUT_NOTE: '',
       },
-      fallbackTemplate: isMultiple
-        ? config.templates.workflowMultiple
-        : config.templates.workflowSingle,
+      fallbackTemplate: config.templates.workflowSingle,
       fallbackVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        OUTPUT_FILES: outputFilesYaml,
+        OUTPUT_FILES: '',
       },
-      registrationMeta: isMultiple
-        ? {
-            isMultipleOutput: true,
-            baseAgentName: getBaseName(agentName),
-            multipleAgentName: agentName,
-          }
-        : {
-            isMultipleOutput: false,
-            multipleAgentName: getMultipleName(agentName),
-          },
     };
   }
 
@@ -542,7 +489,6 @@ class ToolUseBlueprintNode extends Node<AgentCreatorShared> {
         DESCRIPTION: description,
         TOOLS_YAML: picked.tools.map((t) => `    - ${t}`).join('\n'),
       },
-      registrationMeta: {},
     };
   }
 
@@ -685,12 +631,7 @@ class RegisterNode extends Node<AgentCreatorShared> {
     vscode.window.showInformationMessage(
       `Created agent at ${blueprint.filePath.fsPath}`,
     );
-    await promptToAddAgentToConfig(
-      blueprint.agentName,
-      false,
-      blueprint.registrationMeta,
-      blueprint.category,
-    );
+    await promptToAddAgentToConfig(blueprint.agentName, false, blueprint.category);
     const doc = await vscode.workspace.openTextDocument(blueprint.filePath);
     await vscode.window.showTextDocument(doc);
   }

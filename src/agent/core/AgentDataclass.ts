@@ -16,8 +16,8 @@ export const AgentSettingBaseSchema = z.strictObject({
   documentTag: z
     .string()
     .min(1, 'documentTag cannot be empty')
-    .prefault('document'),
-  endTag: z.string().prefault('</latex_document>'),
+    .prefault('documents'),
+  endTag: z.string().prefault('</documents>'),
   temperature: z.number().min(0).max(1).prefault(1.0),
   requiredFiles: z.record(z.string(), z.string()).prefault({}),
   requiredFilesInternal: z.record(z.string(), z.string()).prefault({}),
@@ -44,7 +44,6 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   rounds: z.number().prefault(2),
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
-  isMultipleOutput: z.boolean().prefault(false),
 });
 
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({

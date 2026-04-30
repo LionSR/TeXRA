@@ -33,14 +33,10 @@ const BasePackSchema = z.object({
 const PackConfigSchema = BasePackSchema.extend({
   model: z.string().prefault(''),
   outputFiles: z.array(z.string()).prefault([]),
-  useMultipleOutputs: z.boolean().optional(),
   streamId: z.string().optional(),
   executionId: ExecutionIdSchema.optional(),
   skipProgressViewClear: z.boolean().optional(),
-}).transform((c) => ({
-  ...c,
-  useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 0,
-}));
+});
 
 const PackMultipleSchema = BasePackSchema.extend({
   inputFile: z.string().prefault(''),
@@ -111,20 +107,13 @@ async function handlePack(config: unknown): Promise<void> {
     config,
     'config',
     async (data) => {
-      const runWorkspacePack = (): Promise<FileOpResult> => {
-        if (data.outputFiles.length > 1 && !data.useMultipleOutputs) {
-          logger.warn(
-            CHANNEL,
-            'Multiple output files but multi-output mode disabled',
-          );
-        }
-        return runPack(
+      const runWorkspacePack = (): Promise<FileOpResult> =>
+        runPack(
           data.model,
           data.inputFile,
           data.agent,
-          data.useMultipleOutputs ? data.outputFiles : [],
+          data.outputFiles,
         );
-      };
 
       // Toolbar-driven invocations pass an executionId: snapshot the runDir
       // AND the workspace. The workspace pass is a no-op for new runs (their
@@ -161,7 +150,6 @@ async function handlePack(config: unknown): Promise<void> {
           agent: data.agent,
           model: data.model,
           inputFile: data.inputFile,
-          useMultipleOutputs: data.useMultipleOutputs,
         },
       };
     },
@@ -183,7 +171,6 @@ async function handlePackSingle(
         agent: data.agent,
         model: data.model,
         inputFile: data.inputFile,
-        useMultipleOutputs: false,
       },
     }),
   );
@@ -206,7 +193,6 @@ async function handlePackMultiple(
         agent: data.agent,
         model: data.model,
         inputFile: data.inputFile,
-        useMultipleOutputs: true,
       },
     }),
   );

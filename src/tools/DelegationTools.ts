@@ -675,12 +675,6 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Output file paths. Must be a subset of input files—never create new files or change format. Leave empty for default suffix-based outputs.',
     ),
-  useMultipleOutputs: z
-    .boolean()
-    .prefault(false)
-    .describe(
-      'Set true when outputFiles has multiple entries. Enables multi-file extraction from agent response.',
-    ),
   memories: memoriesField,
 });
 
@@ -821,7 +815,6 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       mediaFile: input.mediaFile,
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
-      useMultipleOutputs: input.useMultipleOutputs,
       toolConfig: {
         ...DEFAULT_TOOL_CONFIG,
         autoExtractFigure: input.extractFigures ?? false,
