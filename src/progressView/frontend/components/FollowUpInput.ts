@@ -36,6 +36,7 @@ export class FollowUpInput extends LitElement {
       :host([visible]) {
         display: block;
         margin-top: var(--spacing-medium);
+        max-width: 100%;
       }
 
       :host([hidden]) {
@@ -44,16 +45,16 @@ export class FollowUpInput extends LitElement {
 
       .follow-up-container {
         display: grid;
-        grid-template-columns: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         padding: var(--spacing-small) 0;
         gap: var(--spacing-small);
+        min-width: 0;
       }
 
       .follow-up-container > queued-follow-ups {
         display: block;
         grid-column: 1 / -1;
         min-width: 0;
-        box-sizing: border-box;
       }
 
       .follow-up-input-row {
@@ -61,12 +62,15 @@ export class FollowUpInput extends LitElement {
         align-items: flex-end;
         gap: var(--spacing-small);
         grid-column: 1 / -1;
+        min-width: 0;
       }
 
       #followUpInput {
         display: block;
         flex: 1;
         min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
         line-height: var(--line-height-normal);
         min-height: 106px;
         max-height: var(--height-xlarge);
@@ -76,7 +80,12 @@ export class FollowUpInput extends LitElement {
       #followUpInput::part(control) {
         min-height: 106px;
         max-height: var(--height-xlarge);
+        width: 100%;
+        box-sizing: border-box;
+        overflow-x: hidden;
         overflow-y: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
       }
 
       .follow-up-actions,
