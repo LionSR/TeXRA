@@ -163,7 +163,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
           ${isWorkflow ? this.renderExtractFlags(data) : nothing}
-          ${this.renderWorkingDirectory(data)} ${this.renderProposalFiles(data)}
+          ${this.renderProposalFiles(data)}
         </div>
         <vscode-toolbar-container class="workflow-proposal__actions">
           <vscode-toolbar-button
@@ -207,7 +207,11 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
     >
       <span class="workflow-proposal__file-label">Working directory:</span>
       <span
+<<<<<<< HEAD
         class="workflow-proposal__file-name workflow-proposal__file-name--readonly"
+=======
+        class="workflow-proposal__file-name workflow-proposal__file-name--readonly workflow-proposal__file-name--wrap"
+>>>>>>> 797f511 (fix: place working directory inside files block and wrap long paths)
         >${workingDirectory}</span
       >
     </div>`;
@@ -217,8 +221,10 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
     const groups = getProposalFileGroups(data);
-    if (groups.length === 0) return nothing;
+    const workingDirectoryRow = this.renderWorkingDirectory(data);
+    if (groups.length === 0 && workingDirectoryRow === nothing) return nothing;
     return html`<div class="workflow-proposal__files">
+      ${workingDirectoryRow}
       ${repeat(
         groups,
         ({ label }) => label,

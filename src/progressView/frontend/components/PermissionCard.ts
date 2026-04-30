@@ -302,7 +302,8 @@ export class PermissionCard extends LitElement {
       <p><strong>Instruction:</strong> ${data.instruction}</p>
       ${data.workingDirectory
         ? html`<p>
-            <strong>Working directory:</strong> ${data.workingDirectory}
+            <strong>Working directory:</strong>
+            <span class="file-path">${data.workingDirectory}</span>
           </p>`
         : nothing}
       ${data.agentCategory === AGENT_CATEGORY.WORKFLOW
