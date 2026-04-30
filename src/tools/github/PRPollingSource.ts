@@ -2,8 +2,8 @@
  * Poll-based event source for GitHub PR activity.
  *
  * Each subscribed PR maintains per-resource cursors (last-seen ID) and ETags.
- * A single shared timer ticks every `POLL_INTERVAL_MS` and iterates all active
- * subscriptions. Events are converted to natural-language text via
+ * A single shared timer ticks every `PR_POLL_INTERVAL_MS` and iterates all
+ * active subscriptions. Events are converted to natural-language text via
  * `formatPREvent` and dispatched to per-caller listeners.
  *
  * Transport is polling for v1; swapping to a push transport (e.g. a Supabase
@@ -33,6 +33,10 @@ import {
   type ConditionalResponse,
   ghGet,
 } from './githubClient';
+import {
+  MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+  PR_POLL_INTERVAL_MS,
+} from './prSubscriptionConstants';
 import type {
   GhCheckRun,
   GhIssueComment,
@@ -45,8 +49,6 @@ export interface Disposable {
   dispose(): void;
 }
 
-const POLL_INTERVAL_MS = 30_000;
-const MAX_CONCURRENT_SUBSCRIPTIONS = 10;
 // Coalesce this many same-kind events in a single tick into a summary.
 const COALESCE_THRESHOLD = 3;
 // Exponential backoff on transient poll failures. After each failure the
@@ -200,9 +202,9 @@ export class PRPollingSource {
 
     let state = this.subscriptions.get(key);
     if (!state) {
-      if (this.subscriptions.size >= MAX_CONCURRENT_SUBSCRIPTIONS) {
+      if (this.subscriptions.size >= MAX_CONCURRENT_PR_SUBSCRIPTIONS) {
         throw new Error(
-          `Too many active PR subscriptions (max ${MAX_CONCURRENT_SUBSCRIPTIONS}). Unsubscribe from one before adding another.`,
+          `Too many active PR subscriptions (max ${MAX_CONCURRENT_PR_SUBSCRIPTIONS}). Unsubscribe from one before adding another.`,
         );
       }
       state = {
@@ -257,7 +259,7 @@ export class PRPollingSource {
     if (this.timer) return;
     this.timer = setInterval(() => {
       void this.tick();
-    }, POLL_INTERVAL_MS);
+    }, PR_POLL_INTERVAL_MS);
     // Fire an immediate tick so first-subscribe initializes cursors without
     // waiting a full interval.
     void this.tick();
@@ -272,7 +274,7 @@ export class PRPollingSource {
   private tickInFlight = false;
 
   private async tick(): Promise<void> {
-    // setInterval fires every POLL_INTERVAL_MS regardless of prior
+    // setInterval fires every PR_POLL_INTERVAL_MS regardless of prior
     // completion; with N subscriptions and 15s per-request timeouts a tick
     // can outlast the interval. Without this guard overlapping ticks would
     // double-emit events for the same new items.
