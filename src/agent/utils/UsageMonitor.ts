@@ -46,7 +46,12 @@ export interface UsageMonitorModelInfo {
   >;
   config: Pick<
     ModelConfig,
-    'provider' | 'name' | 'fullName' | 'inputPrice' | 'openRouterOnly' | 'requiresResponsesAPI'
+    | 'provider'
+    | 'name'
+    | 'fullName'
+    | 'inputPrice'
+    | 'openRouterOnly'
+    | 'requiresResponsesAPI'
   >;
 }
 
