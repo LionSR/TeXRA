@@ -588,10 +588,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
     if (!isModelAllowedForTier(userTier, modelName)) {
       const tierName = userTier === FREE_TIER ? 'free' : userTier;
-      const upgradeHint =
-        userTier === FREE_TIER
-          ? 'Upgrade to Max for more models.'
-          : 'Upgrade to Ultra for access.';
+      const upgradeHint = 'Upgrade to Ultra for access.';
 
       return jsonError(
         modelName
