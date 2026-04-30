@@ -1,6 +1,5 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
-import type { EventEmitter } from 'node:events';
 import * as path from 'path';
 
 // Third-party imports
@@ -369,8 +368,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const cleanup = (): void => {
-        (ws.socket as unknown as EventEmitter).removeListener('open', onOpen);
-        (ws.socket as unknown as EventEmitter).removeListener('error', onError);
+        ws.socket.off('open', onOpen);
+        ws.socket.off('error', onError);
         signal?.removeEventListener('abort', onAbort);
       };
       const onOpen = (): void => {
@@ -696,7 +695,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.wsKeepaliveInterval = setInterval(() => {
       try {
         if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
-          ws.socket.ping();
+          ws.socket.platformSocket.ping();
         }
       } catch {
         // Ignore ping errors
