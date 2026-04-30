@@ -207,8 +207,7 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
 
 /**
  * Check if a model is allowed for a given tier.
- * Free tier: budget models only (under $1/M input).
- * Max tier: all models up to $3/M input.
+ * Free/Max tier: all models up to $3/M input (currently identical access).
  * Ultra tier: all models.
  *
  * When multiple llm-zoo entries share the same API model name, a `some()`
