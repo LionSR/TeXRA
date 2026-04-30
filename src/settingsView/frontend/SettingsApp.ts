@@ -177,7 +177,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly customAgentDirIsDefault = signal(true);
   private readonly agentSubTab = signal<AgentCategory | undefined>(undefined);
 
-  // Agent mode presets state
+  // Agent teams state
   private readonly customPresets = signal<AgentModePreset[]>([]);
 
   // Super YOLO / reliability state
