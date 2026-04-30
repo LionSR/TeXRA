@@ -7,6 +7,8 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import {
   validateExecutionRequest,
