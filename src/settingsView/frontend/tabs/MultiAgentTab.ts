@@ -1,7 +1,6 @@
 /**
  * MultiAgentTab component - multi-agent settings for the settings view.
  * Contains agent mode presets (built-in + custom) for quick configuration,
- * the auto-approve toggle for agent delegation proposals,
  * and reliability settings.
  */
 
@@ -262,8 +261,6 @@ export class MultiAgentTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) superYoloEnabled = false;
-  @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) allowOrchestratorKill = true;
   @property({ attribute: false }) detachSubagentsOnStop = false;
   @property({ attribute: false }) worktreeSupport = false;
@@ -279,10 +276,6 @@ export class MultiAgentTab extends LitElement {
     this.dispatchEvent(
       createEvent(eventName, { enabled: Boolean(target?.checked) }),
     );
-  }
-
-  private handleToggle(event: Event): void {
-    this.emitToggle('super-yolo-toggle', event);
   }
 
   private handleKillToggle(event: Event): void {
@@ -470,7 +463,8 @@ export class MultiAgentTab extends LitElement {
                 <span
                   ><strong>Approve tasks</strong> in Progress as they come in —
                   press <strong>y</strong> to approve or <strong>n</strong> to
-                  reject. Or turn on auto-approve below.</span
+                  reject. Use the rocket button in Progress to let one stream
+                  run without task-by-task approval.</span
                 >
               </li>
             </ol>
@@ -496,22 +490,6 @@ export class MultiAgentTab extends LitElement {
           only use agents and models you've turned on in the Models and Agents
           tabs.
         </p>
-
-        <div class="setting-block">
-          <vscode-checkbox
-            ?checked=${this.superYoloEnabled}
-            ?disabled=${this.toggleDisabled}
-            @change=${this.handleToggle}
-          >
-            Auto-approve delegated tasks
-          </vscode-checkbox>
-          <p class="text-secondary setting-description">
-            Let the orchestrator run without waiting for your approval on each
-            task. Use the rocket button
-            <span class="codicon codicon-rocket"></span> in Progress to turn
-            this on for a single stream.
-          </p>
-        </div>
 
         <div class="setting-block">
           <vscode-checkbox

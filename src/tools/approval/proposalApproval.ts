@@ -1,17 +1,6 @@
-/**
- * Per-stream bypass state for agent delegation proposals (Super YOLO mode).
- *
- * When both the workspace setting (SUPER_YOLO_ENABLED) and the per-stream
- * toggle are active, agent proposals are auto-approved without user interaction.
- */
-import { WorkspaceStateKey, workspaceSM } from '@common/state';
+/** Per-stream bypass state for agent delegation proposals. */
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas';
-
-/** Check if the workspace-level Super YOLO feature is enabled. */
-export function isSuperYoloFeatureEnabled(): boolean {
-  return workspaceSM.get<boolean>(WorkspaceStateKey.SUPER_YOLO_ENABLED, false);
-}
 
 const bypassedByStream = new Map<StreamTabId, boolean>();
 
@@ -19,7 +8,7 @@ function notifyBypassState(streamId: StreamTabId): void {
   bus.emit('updateSuperYoloBypassState', {
     streamId,
     bypassActive: bypassedByStream.get(streamId) ?? false,
-    featureEnabled: isSuperYoloFeatureEnabled(),
+    featureEnabled: true,
   });
 }
 

@@ -59,7 +59,6 @@ import { formatBytes } from '@shared/utils/string';
 // Local imports - tools
 import type { ToolResult } from '@tools/result';
 import {
-  isSuperYoloFeatureEnabled,
   isProposalBypassedForStream,
   isApprovalBypassedForStream,
   setToolEditApprovalSessionBypass,
@@ -530,7 +529,7 @@ function proposalResultToToolResult(
 /**
  * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
  *
- * If Super YOLO is active for this stream, skips the proposal and launches immediately.
+ * If proposal bypass is active for this stream, skips the proposal and launches immediately.
  * Otherwise, waits for user approval via the proposal coordinator.
  */
 async function proposeAndExecute(
@@ -538,7 +537,7 @@ async function proposeAndExecute(
   agentName: string,
   streamId: StreamTabId,
 ): Promise<ToolResult> {
-  if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
+  if (isProposalBypassedForStream(streamId)) {
     return executeSubagent(toConfigPayload(proposal), agentName, streamId, {
       enableYoloOnChild: true,
       approvalMeta: { autoApproved: true },

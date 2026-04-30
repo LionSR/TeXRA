@@ -73,7 +73,6 @@ export {
   // Proposal approval (Super YOLO)
   toggleProposalBypass,
   isProposalBypassedForStream,
-  isSuperYoloFeatureEnabled,
   _disableAllProposalBypasses,
 } from './proposalApproval';
 
