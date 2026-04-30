@@ -18,9 +18,18 @@ describe('cleanSessionDescription', () => {
   });
 
   it('strips surrounding quotes and backticks', () => {
-    assert.equal(cleanSessionDescription('"Fixing TikZ arrows"'), 'Fixing TikZ arrows');
-    assert.equal(cleanSessionDescription('`Fixing TikZ arrows`'), 'Fixing TikZ arrows');
-    assert.equal(cleanSessionDescription("'Fixing TikZ arrows'"), 'Fixing TikZ arrows');
+    assert.equal(
+      cleanSessionDescription('"Fixing TikZ arrows"'),
+      'Fixing TikZ arrows',
+    );
+    assert.equal(
+      cleanSessionDescription('`Fixing TikZ arrows`'),
+      'Fixing TikZ arrows',
+    );
+    assert.equal(
+      cleanSessionDescription("'Fixing TikZ arrows'"),
+      'Fixing TikZ arrows',
+    );
   });
 
   it('strips trailing sentence punctuation', () => {
