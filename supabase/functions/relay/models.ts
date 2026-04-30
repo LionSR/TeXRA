@@ -198,7 +198,7 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
           bestBoundaryLen = pattern.length;
         }
         if (pattern.length === bestBoundaryLen) boundaryMatches.push(model);
-        break; // count each model once per loop
+        break;
       }
     }
   }
@@ -229,7 +229,6 @@ export function isModelAllowedForTier(
   if (tier === MAX_TIER) {
     return models.some((m) => m.minTier === FREE_TIER || m.minTier === MAX_TIER);
   }
-  // Free tier: allow if at least one interpretation is a budget model
   return models.some((m) => m.minTier === FREE_TIER);
 }
 
