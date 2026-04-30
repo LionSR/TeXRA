@@ -40,7 +40,7 @@ export const ToolFileAttachmentSchema = FileReferenceSchema.extend({
   /** Base64 encoded payload when inline transport is supported */
   base64Data: z.string().optional(),
   /** Raw bytes for providers that require binary uploads */
-  bytes: z.custom<Uint8Array>((val) => val instanceof Uint8Array).optional(),
+  bytes: z.instanceof(Uint8Array).optional(),
 });
 export type ToolFileAttachment = z.infer<typeof ToolFileAttachmentSchema>;
 
