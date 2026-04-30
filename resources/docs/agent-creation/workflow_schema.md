@@ -68,8 +68,10 @@ Workflow agent prompts receive:
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
 - `{{ REFERENCE_CONTENT }}` — content of reference files
 - `{{ AUXILIARY_CONTENT }}` — content of auxiliary files
-- `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames (multiple-
-  output agents only)
+- `{{ OUTPUT_FILES_ORDER }}` — array of output filenames (multiple-output
+  agents only); use `{{ OUTPUT_FILES_ORDER | join(", ") }}` to render as a
+  comma-separated string, or `{{ OUTPUT_FILES_ORDER[0] }}` to reference a
+  specific file by index
 
 Both categories support `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
 for model-specific instructions.

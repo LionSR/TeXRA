@@ -83,7 +83,7 @@ multiple-output affordances.
 
 ## Example: `polish_multiple` Agent Prompts
 
-The built-in `polish_multiple.yaml` agent (which inherits from `polish`) demonstrates how prompts need to be structured to request and format multiple outputs within the `<latex_documents>` tag. Its `userRequest` prompt explicitly asks the model to structure its response like this, referencing the `{{ OUTPUT_FILES_ORDER }}` variable which contains the comma-separated list of filenames from the UI:
+The built-in `polish_multiple.yaml` agent (which inherits from `polish`) demonstrates how prompts need to be structured to request and format multiple outputs within the `<latex_documents>` tag. Its `userRequest` prompt explicitly asks the model to structure its response like this, referencing the `{{ OUTPUT_FILES_ORDER }}` variable which is an array of filenames from the UI:
 
 ```yaml
 # (Inside polish_multiple.yaml userRequest prompt)

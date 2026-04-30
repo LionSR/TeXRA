@@ -139,7 +139,7 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 
 **Multiple Output Variable:**
 
-- &#123;&#123; OUTPUT_FILES_ORDER &#125;&#125;: Comma-separated string listing the output filenames specified in the UI. Crucial for agents generating multiple files. See [Handling Multiple Files](./multiple-output.md).
+- &#123;&#123; OUTPUT_FILES_ORDER &#125;&#125;: Array of output filenames specified in the UI. Use `{{ OUTPUT_FILES_ORDER | join(", ") }}` to render as a comma-separated string, or `{{ OUTPUT_FILES_ORDER[0] }}` to reference a specific file by index. Crucial for agents generating multiple files. See [Handling Multiple Files](./multiple-output.md).
 
 **Custom Variables (from `settings`):**
 
@@ -232,7 +232,7 @@ settings:
 prompts:
   userRequest: |
     {% if OUTPUT_FILES_ORDER %}
-    The output files should be in this order: {{ OUTPUT_FILES_ORDER }}.
+    The output files should be in this order: {{ OUTPUT_FILES_ORDER | join(", ") }}.
     {% endif %}
 
     <scratchpad>
