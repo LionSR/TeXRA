@@ -2,6 +2,7 @@
 // This file is loaded before all tests to configure the test environment
 
 // Standard library imports
+import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -59,6 +60,10 @@ register({
     '@platform/*': ['platform/*', path.join(srcDir, 'platform/*')],
   },
 });
+
+require.extensions['.tex'] = (module, filename) => {
+  module.exports = fs.readFileSync(filename, 'utf8');
+};
 
 // Set longer timeout for VS Code extension tests
 if (typeof mocha !== 'undefined') {
