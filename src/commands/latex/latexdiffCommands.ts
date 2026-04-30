@@ -39,6 +39,7 @@ import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
@@ -617,7 +618,7 @@ async function handleRunLatexdiff(
 
     const generateBetweenRoundDiffs = workspaceSM.get<boolean>(
       WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-      false,
+      LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
     );
     logger.debug(
       CHANNEL,

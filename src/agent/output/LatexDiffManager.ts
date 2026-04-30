@@ -5,6 +5,10 @@ import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import {
+  LATEX_CONFIG_DEFAULTS,
+  LATEX_CONFIG_RANGES,
+} from '@shared/constants/latex';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
@@ -172,7 +176,7 @@ export class LatexDiffManager {
 
     const generateBetweenRoundDiffs = getWorkspaceState().get<boolean>(
       WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-      false,
+      LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
     );
 
     if (generateBetweenRoundDiffs && currRound > 0) {
@@ -321,10 +325,10 @@ export class LatexDiffManager {
     // Reuse the workflow compile-check timeout so a hanging diff build
     // gets killed by execa instead of orphaning latexmk/pdflatex.
     const timeoutMs = Math.max(
-      10000,
+      LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
       getWorkspaceState().get<number>(
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-        120000,
+        LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
       ),
     );
     await compileLatex2Pdf(diffLocation, {

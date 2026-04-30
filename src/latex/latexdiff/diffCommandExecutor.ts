@@ -6,6 +6,7 @@ import * as logger from '@agent/core/logger';
 import { getConfig } from '@agent/core/config';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { executeCommand } from '@utils/system';
 
 // Local file imports
@@ -214,7 +215,7 @@ export class DiffCommandExecutor {
         options?.mathMarkup ??
         getWorkspaceState().get<MathMarkupOption>(
           WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-          DEFAULT_MATH_MARKUP,
+          LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup as MathMarkupOption,
         ),
       pictureEnvs: getConfig<string>(
         'texra.latexdiff.pictureEnvironments',

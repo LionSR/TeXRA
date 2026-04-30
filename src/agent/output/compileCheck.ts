@@ -3,6 +3,10 @@ import * as path from 'path';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { toErrorMessage } from '@common/errors';
+import {
+  LATEX_CONFIG_DEFAULTS,
+  LATEX_CONFIG_RANGES,
+} from '@shared/constants/latex';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
@@ -25,7 +29,7 @@ export interface CompileCheckContext {
 }
 
 const LOG_TAIL_LINES = 200;
-const MIN_TIMEOUT_MS = 10000;
+const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
 /**
  * Return a human-readable display name for an output file in compile messages.
@@ -57,7 +61,7 @@ export async function runCompileCheck(
   if (
     !getWorkspaceState().get<boolean>(
       WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-      true,
+      LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
     )
   ) {
     return [];
@@ -91,7 +95,7 @@ export async function runCompileCheck(
     MIN_TIMEOUT_MS,
     getWorkspaceState().get<number>(
       WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-      120000,
+      LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
     ),
   );
   // compileRoot is created lazily on first failure so successful rounds leave

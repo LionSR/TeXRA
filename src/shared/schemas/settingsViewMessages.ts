@@ -11,6 +11,11 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import {
+  LATEX_CONFIG_RANGES,
+  LATEX_FORMATTER_VALUES,
+  LATEXDIFF_MATH_MARKUP_VALUES,
+} from '@shared/constants/latex';
+import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
@@ -444,24 +449,30 @@ export type UpdateLatexSettingsStatusMessage = z.infer<
  * directly; the backend persists them via `workspaceSM`.
  *
  * Each property is optional so the UI can render either the user-set value
- * (when defined) or the documented default (when undefined).
+ * (when defined) or the documented default (when undefined). Numeric ranges
+ * and enum values come from `@shared/constants/latex` so this schema, the UI,
+ * and the runtime readers all stay in lockstep.
  */
-export const LatexFormatterSchema = z.enum(['latexindent', 'tex-fmt', 'none']);
+export const LatexFormatterSchema = z.enum(LATEX_FORMATTER_VALUES);
 export type LatexFormatter = z.infer<typeof LatexFormatterSchema>;
 
-export const LatexdiffMathMarkupSchema = z.enum([
-  'off',
-  'whole',
-  'coarse',
-  'fine',
-]);
+export const LatexdiffMathMarkupSchema = z.enum(LATEXDIFF_MATH_MARKUP_VALUES);
 export type LatexdiffMathMarkup = z.infer<typeof LatexdiffMathMarkupSchema>;
 
 export const LatexConfigValuesSchema = z.object({
   workflowAutoCompile: z.boolean().optional(),
-  workflowAutoCompileTimeoutMs: z.number().int().min(10000).optional(),
+  workflowAutoCompileTimeoutMs: z
+    .number()
+    .int()
+    .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
+    .optional(),
   latexdiffBetweenRounds: z.boolean().optional(),
-  latexdiffTimeoutMs: z.number().int().min(1000).max(80000).optional(),
+  latexdiffTimeoutMs: z
+    .number()
+    .int()
+    .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
+    .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max!)
+    .optional(),
   latexdiffMathMarkup: LatexdiffMathMarkupSchema.optional(),
   latexFormatter: LatexFormatterSchema.optional(),
 });

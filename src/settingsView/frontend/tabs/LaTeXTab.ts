@@ -17,6 +17,12 @@ import {
   type LatexSettingsStatus,
 } from '@shared/schemas/settingsViewMessages';
 
+// Local imports - LaTeX config constants (shared with backend + readers)
+import {
+  LATEX_CONFIG_DEFAULTS,
+  LATEX_CONFIG_RANGES,
+} from '@shared/constants/latex';
+
 // Local imports - shared constants
 import {
   PDFLATEX_INSTALL_GUIDE,
@@ -793,40 +799,39 @@ export class LaTeXTab extends LitElement {
         label: 'Auto-compile after each round',
         description:
           'After a workflow writes .tex outputs, attempt to compile each root document (latexmk, falling back to pdflatex) in run storage.',
-        defaultValue: true,
+        defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
         currentValue: cv.workflowAutoCompile,
       })}
       ${this.renderNumberSetting({
         field: 'workflowAutoCompileTimeoutMs',
         label: 'Auto-compile timeout (ms)',
-        description:
-          'Per-file timeout for the post-workflow compile check. Minimum 10000.',
-        defaultValue: 120000,
+        description: `Per-file timeout for the post-workflow compile check. Minimum ${LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min}.`,
+        defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
         currentValue: cv.workflowAutoCompileTimeoutMs,
-        min: 10000,
+        min: LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
       })}
       ${this.renderBooleanSetting({
         field: 'latexdiffBetweenRounds',
         label: 'Generate diffs between consecutive rounds',
         description:
           'In addition to comparing each round to the original input, also generate diffs between consecutive agent rounds.',
-        defaultValue: false,
+        defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
         currentValue: cv.latexdiffBetweenRounds,
       })}
       ${this.renderNumberSetting({
         field: 'latexdiffTimeoutMs',
         label: 'latexdiff timeout (ms)',
-        description: 'Timeout for latexdiff invocations. Range 1000–80000.',
-        defaultValue: 10000,
+        description: `Timeout for latexdiff invocations. Range ${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min}–${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max}.`,
+        defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs,
         currentValue: cv.latexdiffTimeoutMs,
-        min: 1000,
-        max: 80000,
+        min: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min,
+        max: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max,
       })}
       ${this.renderEnumSetting({
         field: 'latexdiffMathMarkup',
         label: 'latexdiff math markup',
         description: 'Granularity of markup in displayed math environments.',
-        defaultValue: 'coarse',
+        defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
         currentValue: cv.latexdiffMathMarkup,
         options: [
           { value: 'off', label: 'off — suppress markup' },
@@ -840,7 +845,7 @@ export class LaTeXTab extends LitElement {
         label: 'LaTeX formatter',
         description:
           '"none" disables formatting; "latexindent" requires Perl; "tex-fmt" is a Rust-based alternative.',
-        defaultValue: 'latexindent',
+        defaultValue: LATEX_CONFIG_DEFAULTS.latexFormatter,
         currentValue: cv.latexFormatter,
         options: [
           { value: 'latexindent', label: 'latexindent (default)' },

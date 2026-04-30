@@ -11,6 +11,11 @@ import {
   globalSM,
   workspaceSM,
 } from '@common/state';
+import {
+  LATEX_FIELD_TO_KEY,
+  type LatexConfigField,
+} from '@shared/constants/latex';
+import { LatexConfigValuesSchema } from '@shared/schemas/settingsViewMessages';
 import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -567,41 +572,49 @@ async function promptLatexWorkshopInstall(): Promise<void> {
  * later edits the legacy `texra.*` keys in settings.json sees no effect —
  * that path is no longer authoritative.
  */
-const LATEX_CONFIG_MIGRATION_KEYS: readonly WorkspaceStateKey[] = [
-  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-  WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-  WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-  WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-  WorkspaceStateKey.LATEX_FORMATTER,
-] as const;
-
-/** Keys that the new schema requires to be integers. */
-const LATEX_INTEGER_KEYS: ReadonlySet<WorkspaceStateKey> = new Set([
-  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-  WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-]);
+/**
+ * Read an explicit legacy `texra.*` value from VS Code config, considering
+ * only workspaceFolder/workspace/global (never default). For keys deregistered
+ * from `package.json` `contributes.configuration`, VS Code may not surface
+ * settings.json entries via `inspect()`; fall back to `get(key)` for those.
+ */
+function readExplicitLegacyValue(
+  cfg: vscode.WorkspaceConfiguration,
+  key: WorkspaceStateKey,
+): unknown {
+  const inspection = cfg.inspect(key);
+  if (inspection) {
+    const explicit =
+      inspection.workspaceFolderValue ??
+      inspection.workspaceValue ??
+      inspection.globalValue;
+    if (explicit !== undefined) return explicit;
+  }
+  if (!inspection || inspection.defaultValue === undefined) {
+    return cfg.get(key);
+  }
+  return undefined;
+}
 
 /**
- * Coerce a legacy VS Code config value to a shape the new storage / webview
- * schemas accept. The old `number` config schema permitted decimals; the new
- * `LatexConfigValuesSchema` uses `.int()` so an unmodified decimal would fail
- * the webview parse and revert the UI to defaults. Round timeout numbers.
- * Non-numeric or already-integer values pass through unchanged.
+ * Validate a legacy value against the new schema. Returns the parsed value
+ * on success, or undefined when the value is unrecoverable. Permits one
+ * backward-compat coercion: the old VS Code config `number` schema allowed
+ * decimal timeouts where the new schema requires integers, so retry once
+ * with `Math.round` before giving up.
  */
-function normalizeLegacyLatexConfigValue(
-  key: WorkspaceStateKey,
-  value: unknown,
-): unknown {
-  if (
-    LATEX_INTEGER_KEYS.has(key) &&
-    typeof value === 'number' &&
-    Number.isFinite(value) &&
-    !Number.isInteger(value)
-  ) {
-    return Math.round(value);
+function validateLegacyLatexConfigValue(
+  field: LatexConfigField,
+  raw: unknown,
+): unknown | undefined {
+  const fieldSchema = LatexConfigValuesSchema.shape[field];
+  const direct = fieldSchema.safeParse(raw);
+  if (direct.success) return direct.data;
+  if (typeof raw === 'number' && Number.isFinite(raw) && !Number.isInteger(raw)) {
+    const rounded = fieldSchema.safeParse(Math.round(raw));
+    if (rounded.success) return rounded.data;
   }
-  return value;
+  return undefined;
 }
 
 export async function migrateLatexConfigToStorage(): Promise<void> {
@@ -614,39 +627,28 @@ export async function migrateLatexConfigToStorage(): Promise<void> {
   }
 
   const cfg = vscode.workspace.getConfiguration();
-  for (const key of LATEX_CONFIG_MIGRATION_KEYS) {
-    const inspection = cfg.inspect(key);
-    let explicit: unknown;
-    if (inspection) {
-      explicit =
-        inspection.workspaceFolderValue ??
-        inspection.workspaceValue ??
-        inspection.globalValue;
-    }
-    // Fallback for users upgrading directly past the deregistration commit:
-    // once these keys are removed from package.json contributes.configuration,
-    // VS Code may treat them as unregistered and `inspect()` can return either
-    // `undefined` or an object with `defaultValue === undefined`. In both
-    // cases, settings.json entries from older TeXRA versions still exist;
-    // VS Code just doesn't surface them via `inspect()`. `get(key)` reads the
-    // merged config, which for unregistered keys is just the user's
-    // settings.json entry (no compiled-in default to mistake for a real value).
-    if (
-      explicit === undefined &&
-      (!inspection || inspection.defaultValue === undefined)
-    ) {
-      explicit = cfg.get(key);
-    }
-    if (explicit === undefined) continue;
+  for (const [field, key] of Object.entries(LATEX_FIELD_TO_KEY) as [
+    LatexConfigField,
+    WorkspaceStateKey,
+  ][]) {
+    const raw = readExplicitLegacyValue(cfg, key);
+    if (raw === undefined) continue;
 
-    // Normalize legacy values that the old `number` VS Code config schema
-    // accepted but the new storage / settings-view schema treats as integers.
-    // A decimal timeout in settings.json would otherwise crash the webview's
-    // discriminated-union parse and silently fall back to defaults.
-    const normalized = normalizeLegacyLatexConfigValue(key, explicit);
+    // Validate (with a one-shot decimal→integer coercion for legacy timeout
+    // values). On failure: skip, log, do not write — the user's value falls
+    // back to the documented default rather than crashing the webview parse
+    // or sticking an out-of-range value into runtime readers.
+    const validated = validateLegacyLatexConfigValue(field, raw);
+    if (validated === undefined) {
+      logger.warn(
+        'extension',
+        `Skipping migration of ${key}: value ${JSON.stringify(raw)} fails schema validation`,
+      );
+      continue;
+    }
 
     try {
-      await workspaceSM.update(key, normalized);
+      await workspaceSM.update(key, validated);
       logger.info(
         'extension',
         `Migrated ${key} from VS Code config to workspace storage`,

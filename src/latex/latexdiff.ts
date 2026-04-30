@@ -7,6 +7,7 @@ import * as logger from '@agent/core/logger';
 import { tryGetWorkspaceState } from '@agent/core/stateStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { formatError, toErrorMessage } from '@common/errors';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { executeCommand } from '@utils/system';
@@ -42,7 +43,7 @@ export type LaTeXdiffMultipleResult = z.infer<
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-const DEFAULT_LATEXDIFF_TIMEOUT_MS = 10000;
+const DEFAULT_LATEXDIFF_TIMEOUT_MS = LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs;
 
 export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;

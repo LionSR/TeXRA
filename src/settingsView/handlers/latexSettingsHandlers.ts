@@ -9,7 +9,11 @@ import * as vscode from 'vscode';
 
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
-import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { workspaceSM } from '@common/state';
+import {
+  LATEX_FIELD_TO_KEY,
+  type LatexConfigField,
+} from '@shared/constants/latex';
 import {
   LatexConfigValuesSchema,
   SETTINGS_VIEW_CMD,
@@ -63,20 +67,6 @@ const LATEX_RECOMMENDED_SETTINGS: {
     legacyKeys: ['build/'],
   },
 ];
-
-/** Maps the discriminated `field` in SET_LATEX_CONFIG_VALUE to the storage key. */
-const LATEX_CONFIG_FIELD_TO_KEY: Record<
-  SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_LATEX_CONFIG_VALUE>['field'],
-  WorkspaceStateKey
-> = {
-  workflowAutoCompile: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-  workflowAutoCompileTimeoutMs:
-    WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-  latexdiffBetweenRounds: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-  latexdiffTimeoutMs: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-  latexdiffMathMarkup: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-  latexFormatter: WorkspaceStateKey.LATEX_FORMATTER,
-};
 
 /** Allowlist of commands that may be executed via the Run in Terminal button. */
 const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
@@ -187,31 +177,23 @@ export class LatexSettingsHandlers {
    * Push current LaTeX/compile/diff config values to the webview. Each field
    * is left undefined when no value is set in workspace storage so the UI
    * can render the documented default rather than overwriting it on save.
+   *
+   * Iterates LATEX_FIELD_TO_KEY (the shared single-source-of-truth field/key
+   * map) so the read path stays automatically aligned with the write path
+   * and the migration helper.
    */
   async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
-    const values: LatexConfigValues = {
-      workflowAutoCompile: workspaceSM.get<boolean>(
-        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-      ),
-      workflowAutoCompileTimeoutMs: workspaceSM.get<number>(
-        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-      ),
-      latexdiffBetweenRounds: workspaceSM.get<boolean>(
-        WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-      ),
-      latexdiffTimeoutMs: workspaceSM.get<number>(
-        WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-      ),
-      latexdiffMathMarkup: workspaceSM.get<
-        LatexConfigValues['latexdiffMathMarkup']
-      >(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP),
-      latexFormatter: workspaceSM.get<LatexConfigValues['latexFormatter']>(
-        WorkspaceStateKey.LATEX_FORMATTER,
-      ),
-    };
+    const values: Partial<Record<LatexConfigField, unknown>> = {};
+    for (const [field, key] of Object.entries(LATEX_FIELD_TO_KEY) as [
+      LatexConfigField,
+      Parameters<typeof workspaceSM.get>[0],
+    ][]) {
+      const stored = workspaceSM.get(key);
+      if (stored !== undefined) values[field] = stored;
+    }
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values,
+      values: values as LatexConfigValues,
     });
   }
 
@@ -227,7 +209,7 @@ export class LatexSettingsHandlers {
   async handleSetLatexConfigValue(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_LATEX_CONFIG_VALUE>,
   ): Promise<void> {
-    const key = LATEX_CONFIG_FIELD_TO_KEY[data.field];
+    const key = LATEX_FIELD_TO_KEY[data.field];
     // Validate value against the per-field schema in LatexConfigValuesSchema.
     // Both schemas mark the property optional, so undefined/null both parse to
     // undefined and clear the key.
