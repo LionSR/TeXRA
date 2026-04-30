@@ -12,7 +12,6 @@ import {
   getDebugContext,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import {
@@ -199,33 +198,6 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
   toolCalls?: SdkToolCall[];
   /** Normalized usage with proper typing */
   cycleNormalizedUsage?: NormalizedUsage;
-}
-
-/**
- * Create a fresh ToolUseCycleShared with all fields initialized.
- *
- * Same pattern as ResponseCycleFlow's initializeCycleFields():
- * typed literal ensures compile-time checking — missing fields, typos,
- * and wrong types are all caught.
- */
-export function createToolUseCycleShared(
-  messages: ProviderMessage[],
-  cycleIndex: number,
-): ToolUseCycleShared {
-  return {
-    messages,
-    shouldStop: false,
-    endTurn: false,
-    responseTimeMs: undefined,
-    stopReason: undefined,
-    lastError: undefined,
-    response: undefined,
-    toolCalls: undefined,
-    text: undefined,
-    cycleIndex,
-    cycleResponseTimeMs: 0,
-    cycleNormalizedUsage: undefined,
-  };
 }
 
 /**

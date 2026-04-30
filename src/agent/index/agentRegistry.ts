@@ -605,7 +605,6 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
 // KEY HELPERS
 // =============================================================================
 
-// Re-export for backward compatibility (local binding imported at top of file)
 export { createKey };
 
 /**
