@@ -30,11 +30,11 @@ Toggle this option in the Profile view settings.
 
 ## Tier Hierarchy (Cumulative Access)
 
-| Tier      | Model Access                         | Pricing Threshold | Additional Providers |
-| --------- | ------------------------------------ | ----------------- | -------------------- |
-| **Ultra** | All models (premium included)        | >$3/M input       | + DashScope          |
-| **Max**   | Same as free (≤$3/M)                 | ≤$3/M input       | —                    |
-| **free**  | All non-premium models (no Opus/GPT-5) | ≤$3/M input    | —                    |
+| Tier      | Model Access                           | Pricing Threshold | Additional Providers |
+| --------- | -------------------------------------- | ----------------- | -------------------- |
+| **Ultra** | All models (premium included)          | >$3/M input       | + DashScope          |
+| **Max**   | Same as free (≤$3/M)                   | ≤$3/M input       | —                    |
+| **free**  | All non-premium models (no Opus/GPT-5) | ≤$3/M input       | —                    |
 
 All tiers have access to: OpenAI, Anthropic, Google, DeepSeek, xAI, Moonshot
 
@@ -189,12 +189,12 @@ Available to all authenticated users (free and Max tiers have the same access).
 
 Available to Ultra tier subscribers only (includes all lower tier models).
 
-| Model Name | Full Name                        | Provider  | Pricing (in/out per 1M) |
-| ---------- | -------------------------------- | --------- | ----------------------- |
-| `opus47`   | claude-opus-4-7                  | Anthropic | $5.00/$25.00            |
-| `opus47T`  | claude-opus-4-7 (Thinking)       | Anthropic | $5.00/$25.00            |
-| `gpt55`    | gpt-5.5-2026-04-23               | OpenAI    | $5.00/$30.00            |
-| `gpt55pro` | gpt-5.5-pro-2026-04-23           | OpenAI    | $30.00/$180.00          |
+| Model Name | Full Name                  | Provider  | Pricing (in/out per 1M) |
+| ---------- | -------------------------- | --------- | ----------------------- |
+| `opus47`   | claude-opus-4-7            | Anthropic | $5.00/$25.00            |
+| `opus47T`  | claude-opus-4-7 (Thinking) | Anthropic | $5.00/$25.00            |
+| `gpt55`    | gpt-5.5-2026-04-23         | OpenAI    | $5.00/$30.00            |
+| `gpt55pro` | gpt-5.5-pro-2026-04-23     | OpenAI    | $30.00/$180.00          |
 
 ## Implementation Details
 
