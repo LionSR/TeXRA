@@ -1666,7 +1666,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
     "@cantoo/pdf-lib": "^2.6.5",
-    "@google/genai": "^1.50.0",
+    "@google/genai": "^1.51.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/signals": "^0.2.0",
     "@lit-labs/virtualizer": "^2.1.1",
@@ -1720,6 +1720,6 @@
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
     "yaml": "^2.8.3",
-    "zod": "^4.3.6"
+    "zod": "^4.4.1"
   }
 }
