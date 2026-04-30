@@ -15,6 +15,10 @@ import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '../core/define';
 import { bindPRSubscription } from './PRSubscriptionBinder';
 import { getGitHubToken } from './githubAuth';
+import {
+  MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+  PR_POLL_INTERVAL_MS,
+} from './prSubscriptionConstants';
 
 const SubscribePRInputSchema = z.strictObject({
   owner: z.string().min(1).describe('Repository owner (user or org)'),
@@ -32,7 +36,7 @@ export class SubscribePRTool extends defineTool({
     'When such a follow-up arrives, treat it like user input: investigate what it refers to, fix it if the action is small and unambiguous, ask the user if the change is architecturally significant or the request is ambiguous, or skip the event if no action is needed.',
     'Do NOT re-post the event text as a comment on GitHub — that would create a self-loop; your job is to react to events, not echo them.',
     'The subscription is scoped to the current stream: sub-agents spawned via delegate_agent do not inherit it. Delegation results come through their own follow-up channel.',
-    'Subscriptions auto-terminate when the PR is closed or merged. Poll interval ≈ 30s. Up to 10 concurrent PRs. Requires a GitHub token — set it in TeXRA settings → Git tab, or via the GITHUB_TOKEN environment variable.',
+    `Subscriptions auto-terminate when the PR is closed or merged. Poll interval ≈ ${PR_POLL_INTERVAL_MS / 1000}s. Up to ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs. Requires a GitHub token — set it in TeXRA settings → Git tab, or via the GITHUB_TOKEN environment variable.`,
   ].join(' '),
   schema: SubscribePRInputSchema,
 }) {
@@ -55,7 +59,7 @@ export class SubscribePRTool extends defineTool({
         ? `Subscribed to ${slug}`
         : `Already subscribed to ${slug}`,
       output: created
-        ? `Subscribed to ${slug}. New comments, reviews, line comments, and failed CI checks will arrive as follow-up messages wrapped in <github-webhook-activity>. Poll interval ≈ 30s. Auto-unsubscribes on close/merge.`
+        ? `Subscribed to ${slug}. New comments, reviews, line comments, and failed CI checks will arrive as follow-up messages wrapped in <github-webhook-activity>. Poll interval ≈ ${PR_POLL_INTERVAL_MS / 1000}s. Auto-unsubscribes on close/merge.`
         : `Already subscribed to ${slug}. You will continue to receive PR activity as follow-up messages until the PR closes or you call unsubscribe_pr_activity.`,
     };
   }

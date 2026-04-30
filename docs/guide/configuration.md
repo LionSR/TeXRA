@@ -259,7 +259,7 @@ Setup:
 
 The token is stored in VS Code's encrypted **Secret Storage** — never written to `settings.json`. Alternatively, export `GITHUB_TOKEN` in the shell VS Code is launched from and the tool will pick it up automatically (the Git tab will show **Env** as the status).
 
-Once a token is configured, an agent can run `subscribe_pr_activity owner=… repo=… pullNumber=…` and every new PR event arrives wrapped in a `<github-webhook-activity>` tag in the follow-up queue. Subscriptions auto-terminate when the PR closes or merges, and up to 10 PRs can be watched concurrently.
+Once a token is configured, an agent can run `subscribe_pr_activity owner=… repo=… pullNumber=…` and every new PR event arrives wrapped in a `<github-webhook-activity>` tag in the follow-up queue. Subscriptions auto-terminate when the PR closes or merges, and up to 25 PRs can be watched concurrently.
 
 ### TeXRA commit author
 
