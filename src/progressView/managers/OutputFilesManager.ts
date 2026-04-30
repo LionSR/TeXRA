@@ -4,7 +4,6 @@ import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import {
   CompileFailureSchema,
-  collectOutputFileLocations,
   OutputFileInfoListSchema,
   type CompileFailure,
   type OutputFileInfo,
@@ -154,10 +153,9 @@ export class OutputFilesManager {
     info: OutputFileInfo,
     workspaceOnly: boolean,
   ): void {
-    for (const loc of collectOutputFileLocations(info)) {
-      if (!workspaceOnly || loc.kind === 'workspace') {
-        target.add(loc.absolutePath);
-      }
+    const loc = info.location;
+    if (!workspaceOnly || loc.kind === 'workspace') {
+      target.add(loc.absolutePath);
     }
   }
 
