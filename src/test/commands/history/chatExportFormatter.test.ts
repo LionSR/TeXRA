@@ -30,6 +30,10 @@ describe('formatChatAsMarkdown', () => {
               },
             },
             {
+              id: 'call_malformed',
+              type: 'function',
+            },
+            {
               id: 'call_second',
               type: 'function',
               function: {
@@ -45,5 +49,6 @@ describe('formatChatAsMarkdown', () => {
     assert.match(markdown, /#### Tool: `first_tool`/);
     assert.match(markdown, /#### Tool: `second_tool`/);
     assert.doesNotMatch(markdown, /custom_tool/);
+    assert.doesNotMatch(markdown, /call_malformed/);
   });
 });

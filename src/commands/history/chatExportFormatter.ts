@@ -458,11 +458,12 @@ function normalizeMessages(messages: unknown[]): ExportNode[] {
 
       // OpenAI Chat Completions: tool_calls array on assistant messages
       for (const tc of getAssistantToolCalls(item)) {
-        if (tc.function.name) {
+        const fn = tc.function;
+        if (fn?.name) {
           nodes.push({
             kind: 'tool-call',
-            name: tc.function.name,
-            input: tc.function.arguments ?? '{}',
+            name: fn.name,
+            input: fn.arguments ?? '{}',
           });
           lastAssistantHadToolUse = true;
         }
