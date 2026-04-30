@@ -93,32 +93,3 @@ export const RoundOutputSchema = z.strictObject({
 });
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 
-/**
- * Return every `FileLocation` reachable from an `OutputFileInfo`: the primary
- * `location` plus any lineage entries (`original`, `diffBase`, `diffFile`).
- * Missing lineage entries (`null`/`undefined`) are skipped; defensively, any
- * entry with a falsy `absolutePath` is also dropped, though valid
- * `FileLocation`s always have one.
- *
- * Callers that only care about workspace files should filter the result by
- * `loc.kind === 'workspace'` themselves — the workspace-scope check is
- * platform-coupled and intentionally lives outside this VS Code-free module.
- */
-export function collectOutputFileLocations(
-  info: OutputFileInfo,
-): FileLocation[] {
-  const { lineage } = info;
-  const candidates: (FileLocation | null | undefined)[] = [
-    info.location,
-    lineage?.original,
-    lineage?.diffBase,
-    lineage?.diffFile,
-  ];
-  const result: FileLocation[] = [];
-  for (const loc of candidates) {
-    if (loc != null && loc.absolutePath) {
-      result.push(loc);
-    }
-  }
-  return result;
-}
