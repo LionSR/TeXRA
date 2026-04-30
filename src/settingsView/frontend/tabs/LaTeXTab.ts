@@ -926,9 +926,12 @@ export class LaTeXTab extends LitElement {
             @change=${(e: Event) => {
               const raw = (e.target as HTMLInputElement).valueAsNumber;
               if (Number.isNaN(raw)) return;
+              // Coerce to integer first — paste / spinner can produce decimals
+              // that the backend `.int()` schema would silently reject.
+              const integer = Math.round(raw);
               const clamped = Math.max(
                 opts.min,
-                opts.max !== undefined ? Math.min(opts.max, raw) : raw,
+                opts.max !== undefined ? Math.min(opts.max, integer) : integer,
               );
               this.dispatchSetConfigValue(opts.field, clamped);
             }}
