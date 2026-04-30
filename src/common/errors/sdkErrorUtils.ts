@@ -533,8 +533,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Disk full — local I/O error, never retryable
   if (isDiskFullError(err)) {
     return {
-      message:
-        'No space left on device. Free up disk space and try again.',
+      message: 'No space left on device. Free up disk space and try again.',
       retryable: false,
       isRelayError: false,
       rawErrorBody,

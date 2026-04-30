@@ -12,8 +12,8 @@ import {
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
 
 // Modules to monkey-patch
-import * as providerConfigModule from '@utils/config/providerConfig';
 import * as serverKeysModule from '@auth/serverKeys';
+import * as providerConfigModule from '@utils/config/providerConfig';
 
 function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
   return {

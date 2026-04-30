@@ -2,8 +2,8 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   UsageLogService,
   type AgentLogger,
