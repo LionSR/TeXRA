@@ -1,11 +1,18 @@
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import type { OutputFileInfo } from '@shared/schemas';
+import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { ELEMENT_IDS } from '../constants';
@@ -168,6 +175,19 @@ export class FileList extends LitElement {
         padding: 0;
       }
 
+      .compile-warning {
+        flex-shrink: 0;
+        color: var(--vscode-editorWarning-foreground, orange);
+      }
+
+      .compile-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding: var(--spacing-small) 0;
+        border-top: var(--border-thin) solid var(--color-border);
+        margin-top: var(--spacing-tiny);
+      }
+
       @media (max-width: 500px) {
         .file-item {
           flex-wrap: wrap;
@@ -191,15 +211,40 @@ export class FileList extends LitElement {
     string,
     OutputFileInfo[]
   > = {};
+  @property({ attribute: false }) failuresByRound: Record<
+    string,
+    CompileFailure[]
+  > = {};
   @property({ attribute: false }) showRoundHeaders = true;
 
   @state()
   private storageHintDismissed =
     webviewStorage.get(STORAGE_HINT_DISMISS_KEY) === true;
 
+  // Flattened from failuresByRound to avoid O(rounds) scan per file item in render.
+  private failureByPath = new Map<string, CompileFailure>();
+  private sortedRounds: [number, OutputFileInfo[]][] = [];
+
+  protected override willUpdate(changedProperties: PropertyValues): void {
+    if (changedProperties.has('filesByRound')) {
+      this.sortedRounds = Object.entries(this.filesByRound)
+        .map(([round, files]) => [Number(round), files] as [number, OutputFileInfo[]])
+        .filter(([round, files]) => !Number.isNaN(round) && Array.isArray(files) && files.length > 0)
+        .sort((a, b) => a[0] - b[0]);
+    }
+    if (changedProperties.has('failuresByRound')) {
+      this.failureByPath = new Map();
+      for (const [roundStr, failures] of Object.entries(this.failuresByRound)) {
+        const round = Number(roundStr);
+        for (const f of failures) {
+          this.failureByPath.set(`${round}:${f.output.absolutePath}`, f);
+        }
+      }
+    }
+  }
+
   override render(): TemplateResult | typeof nothing {
-    const rounds = this.getSortedRounds();
-    if (rounds.length === 0) {
+    if (this.sortedRounds.length === 0) {
       return nothing;
     }
 
@@ -217,11 +262,24 @@ export class FileList extends LitElement {
           @click=${this.handleFileClick}
         >
           ${repeat(
-            rounds,
+            this.sortedRounds,
             ([round]) => round,
             ([round, files]) => this.renderRound(round, files),
           )}
         </div>
+        ${this.failureByPath.size > 0
+          ? html`
+              <div class="compile-actions">
+                <vscode-button
+                  appearance="primary"
+                  @click=${this.runLatexFixer}
+                >
+                  <span slot="start" class="codicon codicon-tools"></span>
+                  Run latexFixer
+                </vscode-button>
+              </div>
+            `
+          : nothing}
       </vscode-collapsible>
     `;
   }
@@ -258,7 +316,7 @@ export class FileList extends LitElement {
       return html`${repeat(
         files,
         (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
-        (file) => this.renderFileItem(file),
+        (file) => this.renderFileItem(file, round),
       )}`;
     }
 
@@ -272,7 +330,7 @@ export class FileList extends LitElement {
           ${repeat(
             files,
             (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
-            (file) => this.renderFileItem(file),
+            (file) => this.renderFileItem(file, round),
           )}
         </div>
       </vscode-collapsible>
@@ -281,6 +339,7 @@ export class FileList extends LitElement {
 
   private renderFileItem(
     file: OutputFileInfo,
+    round: number,
   ): TemplateResult | typeof nothing {
     if (!file?.location) return nothing;
 
@@ -299,6 +358,7 @@ export class FileList extends LitElement {
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
     const filePath = location.absolutePath;
+    const failure = this.failureByPath.get(`${round}:${filePath}`);
     const diffStats = this.renderDiffStats(file);
     const baseActions = this.renderBaseActions(filePath, effectiveBase);
     const previousAction = this.renderPreviousAction(
@@ -309,6 +369,13 @@ export class FileList extends LitElement {
 
     return html`
       <div class="file-item">
+        ${failure
+          ? html`<i
+              class="codicon codicon-warning compile-warning"
+              title="Compile check failed"
+              aria-label="Compile check failed"
+            ></i>`
+          : nothing}
         <span class="file-name">
           <span
             class="file-path clickable-link"
@@ -322,6 +389,15 @@ export class FileList extends LitElement {
         </span>
         ${diffStats}
         <vscode-toolbar-container class="file-actions">
+          ${failure
+            ? html`<vscode-toolbar-button
+                icon="output"
+                label="Open compile log"
+                title="Open compile log (${failure.logRelativePath})"
+                data-command=${PROGRESS_VIEW_COMMANDS.OPEN_FILE}
+                data-file=${failure.log.absolutePath}
+              ></vscode-toolbar-button>`
+            : nothing}
           ${baseActions} ${previousAction}
         </vscode-toolbar-container>
       </div>
@@ -347,17 +423,8 @@ export class FileList extends LitElement {
     );
   }
 
-  private getSortedRounds(): [number, OutputFileInfo[]][] {
-    return Object.entries(this.filesByRound)
-      .map(
-        ([round, files]) =>
-          [Number(round), files] as [number, OutputFileInfo[]],
-      )
-      .filter(
-        ([round, files]) =>
-          !Number.isNaN(round) && Array.isArray(files) && files.length > 0,
-      )
-      .sort((a, b) => a[0] - b[0]);
+  private runLatexFixer(): void {
+    this.dispatchEvent(ProgressEvents.compileFixerRun());
   }
 
   private getDisplayPath(
