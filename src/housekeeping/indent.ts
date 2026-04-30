@@ -1,10 +1,10 @@
 import * as path from 'path';
 
 import { showLoggedErrorMessage, showLoggedMessage } from '@common/errors';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { isDirectory, isFile, isSymlink } from '@common/files/fsEntryType';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
-import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';

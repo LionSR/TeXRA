@@ -11,11 +11,6 @@ import {
   globalSM,
   workspaceSM,
 } from '@common/state';
-import {
-  LATEX_FIELD_TO_KEY,
-  type LatexConfigField,
-} from '@shared/constants/latex';
-import { LatexConfigValuesSchema } from '@shared/schemas/settingsViewMessages';
 import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -25,7 +20,12 @@ import {
   MODEL_LIST_VERSION,
   isDeprecatedModel,
 } from '@model/computeModelOptions';
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
+import { LatexConfigValuesSchema } from '@shared/schemas/settingsViewMessages';
+import {
+  LATEX_FIELD_TO_KEY,
+  LATEX_WORKSHOP_EXT_ID,
+  type LatexConfigField,
+} from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { GlobalStorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';

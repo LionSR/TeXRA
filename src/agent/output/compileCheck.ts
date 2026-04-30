@@ -1,15 +1,15 @@
 import * as path from 'path';
 
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { toErrorMessage } from '@common/errors';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { compileLatex2Pdf } from '@latex/texTools';
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
 } from '@shared/constants/latex';
-import { compileLatex2Pdf } from '@latex/texTools';
-import type { AgentLogger } from '@logger/AgentLogger';
-import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import {
   createRunStorageLocation,
   flexibleFS,
