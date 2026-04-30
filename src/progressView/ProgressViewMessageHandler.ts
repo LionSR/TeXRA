@@ -16,6 +16,7 @@ import {
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
+import { bus } from '@eventBus/ProgressEventBus';
 import {
   BaseViewMessageHandler,
   COMMON_COMMANDS,
@@ -122,6 +123,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
 
     this.handlerRegistry = this.createHandlerRegistry();
+
+    bus.on('removeStream', ({ streamId }) => {
+      void this.handleDeleteStream({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        stream: streamId,
+      });
+    });
   }
 
   /**

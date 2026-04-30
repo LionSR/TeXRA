@@ -196,6 +196,7 @@ export class BashTool extends defineTool({
     const syntheticConfig = AgentConfigSchema.parse({
       agent: 'bash',
       instruction: command,
+      agentCategory: AgentCategory.ToolUse,
     });
 
     try {
@@ -288,6 +289,7 @@ export class BashTool extends defineTool({
             : new ToolError(
                 `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
               ),
+          autoClose: true,
         });
         unregisterInterruptible(childStreamId);
 
@@ -306,6 +308,7 @@ export class BashTool extends defineTool({
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         finalizeChildStream(childStreamId, executionId, logger, {
           error: err,
+          autoClose: true,
         });
         unregisterInterruptible(childStreamId);
 
