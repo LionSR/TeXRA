@@ -3,6 +3,7 @@ import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 import {
   UsageLogService,
   type AgentLogger,
@@ -238,10 +239,12 @@ export class UsageMonitor {
         }),
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
-        usedRelay: getServerSideKeyService().shouldUseServerSideKeysSync(
-          config.provider,
-          config.name,
-        ),
+        usedRelay:
+          !getUseOpenRouter() &&
+          getServerSideKeyService().shouldUseServerSideKeysSync(
+            config.provider,
+            config.name,
+          ),
         streamId: this.context.streamId,
       });
     } catch (error) {
