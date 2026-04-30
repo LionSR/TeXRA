@@ -369,8 +369,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const cleanup = (): void => {
-        (ws.socket as unknown as EventEmitter).removeListener('open', onOpen);
-        (ws.socket as unknown as EventEmitter).removeListener('error', onError);
+        ws.socket.off('open', onOpen);
+        ws.socket.off('error', onError);
         signal?.removeEventListener('abort', onAbort);
       };
       const onOpen = (): void => {
