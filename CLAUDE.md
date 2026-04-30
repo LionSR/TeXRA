@@ -55,18 +55,12 @@ Alternatively, use `npm run compile:safe` which runs type checking before buildi
 
 ### Legacy Webpack Builds
 
-The original webpack-based commands are still available but require increased memory:
+The original webpack-based commands are still available:
 
 ```bash
-# Set for webpack builds
-export NODE_OPTIONS=--max-old-space-size=8192
-
-# Or prefix individual commands
-NODE_OPTIONS=--max-old-space-size=8192 npm run compile
-NODE_OPTIONS=--max-old-space-size=8192 npm run package
+npm run compile
+npm run package
 ```
-
-Without this, webpack may fail with "JavaScript heap out of memory" errors during production builds.
 
 ## Architecture Overview
 
