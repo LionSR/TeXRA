@@ -59,6 +59,20 @@ export function isFileNotFoundError(err: unknown): boolean {
   return code === 'ENOENT' || code === 'FileNotFound';
 }
 
+/** Check if an error represents a "no space left on device" condition (ENOSPC). */
+export function isDiskFullError(err: unknown): boolean {
+  // Walk the cause chain — filesystem errors are sometimes wrapped by
+  // higher-level abstractions that lose the original .code property.
+  for (
+    let current: unknown = err;
+    current != null && typeof current === 'object';
+    current = (current as { cause?: unknown }).cause
+  ) {
+    if ((current as { code?: string }).code === 'ENOSPC') return true;
+  }
+  return false;
+}
+
 /** Log a formatted error message and return it. */
 export function logErrorMessage(
   channel: string,
