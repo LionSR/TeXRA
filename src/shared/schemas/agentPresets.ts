@@ -1,15 +1,15 @@
 /**
- * Agent mode presets - predefined collections of enabled agents
+ * Agent teams - predefined collections of enabled agents
  * for different academic disciplines.
  *
- * Each preset specifies which workflow and tool-use agents to enable.
+ * Each team specifies which workflow and tool-use agents to enable.
  * Agent names are plain strings (not source-prefixed keys) so they
  * match across built-in and custom sources.
  */
 
 import { z } from 'zod';
 
-/** Schema for a single agent mode preset. */
+/** Schema for a single agent team. */
 export const AgentModePresetSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -22,7 +22,7 @@ export const AgentModePresetSchema = z.object({
 export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
 
 /**
- * Built-in agent mode presets.
+ * Built-in agent teams.
  *
  * Agent names listed here are matched by name (not source:name key)
  * so custom agents that override a built-in are included automatically.
