@@ -23,6 +23,7 @@ import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
   ChatCompletionMessageFunctionToolCall,
+  ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
 import type {
   ResponseFunctionToolCallItem,
@@ -520,12 +521,17 @@ function getAssistantToolCalls(
     return [];
   }
 
-  try {
-    assertToolCallsAreChatCompletionFunctionToolCalls(message.tool_calls);
-    return message.tool_calls;
-  } catch {
-    return [];
+  const functionToolCalls: ChatCompletionMessageFunctionToolCall[] = [];
+  for (const toolCall of message.tool_calls) {
+    const candidate: ChatCompletionMessageToolCall[] = [toolCall];
+    try {
+      assertToolCallsAreChatCompletionFunctionToolCalls(candidate);
+      functionToolCalls.push(candidate[0]);
+    } catch {
+      // Skip non-function or malformed entries while preserving valid calls.
+    }
   }
+  return functionToolCalls;
 }
 
 // ============================================================
