@@ -113,9 +113,15 @@ import {
 } from '@tools/codexConfig';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
+  issuePollingSource,
+  listIssueSubscriptionBindings,
   listPRSubscriptionBindings,
+  listRepoSubscriptionBindings,
   prPollingSource,
+  repoPollingSource,
+  unbindAllForIssue,
   unbindAllForPR,
+  unbindAllForRepo,
 } from '@tools/github';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import {
@@ -345,12 +351,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.handlerRegistry = this.createHandlerRegistry();
 
     // Lifetime == extension; bus is process-global so no dispose needed.
-    bus.on('prSubscriptionsChanged', ({ keys }) => {
-      void this.withActiveWebview((w) => this.sendPRSubscriptions(w, keys));
-    });
-    bus.on('prSubscriptionBindingsChanged', () => {
+    const refreshSubscriptions = () =>
       void this.withActiveWebview((w) => this.sendPRSubscriptions(w));
-    });
+    bus.on('prSubscriptionsChanged', refreshSubscriptions);
+    bus.on('prSubscriptionBindingsChanged', refreshSubscriptions);
+    bus.on('repoSubscriptionsChanged', refreshSubscriptions);
+    bus.on('repoSubscriptionBindingsChanged', refreshSubscriptions);
+    bus.on('issueSubscriptionsChanged', refreshSubscriptions);
+    bus.on('issueSubscriptionBindingsChanged', refreshSubscriptions);
     bus.on('toolAvailabilityChanged', () => {
       void this.withActiveWebview((w) =>
         this.sendToolDashboardData(w, { skipChecks: true }),
@@ -546,10 +554,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS]: () =>
         this.withActiveWebview((w) => this.sendPRSubscriptions(w)),
       [SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR]: (data) => {
-        const removed = unbindAllForPR(data.key);
+        // Path form mirrors GitHub's REST URL shape:
+        //   owner/repo               → repo
+        //   owner/repo/pulls/N       → PR
+        //   owner/repo/issues/N      → issue
+        const k = data.key;
+        const removed = k.includes('/pulls/')
+          ? unbindAllForPR(k)
+          : k.includes('/issues/')
+            ? unbindAllForIssue(k)
+            : unbindAllForRepo(k);
         if (removed === 0) {
           void vscode.window.showInformationMessage(
-            `No active subscription for ${data.key}.`,
+            `No active subscription for ${k}.`,
           );
         }
       },
@@ -988,14 +1005,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  private async sendPRSubscriptions(
-    webview: vscode.Webview,
-    keys?: readonly string[],
-  ): Promise<void> {
+  private async sendPRSubscriptions(webview: vscode.Webview): Promise<void> {
     const state = ProgressViewProvider.getInstance()?.state;
-    const subscriptions = listPRSubscriptionBindings(
-      keys ?? prPollingSource.activeKeys(),
-    ).map(({ key, streamIds }) => ({
+    const toEntry = (
+      key: string,
+      streamIds: readonly string[],
+    ): { key: string; owners: { streamId: string; label: string }[] } => ({
       key,
       owners: streamIds.map((streamId) => ({
         streamId,
@@ -1003,11 +1018,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           ? (buildStreamInfo(state, streamId, 'all')?.label ?? streamId)
           : streamId,
       })),
-    }));
+    });
+    const prEntries = listPRSubscriptionBindings(
+      prPollingSource.activeKeys(),
+    ).map(({ key, streamIds }) => toEntry(key, streamIds));
+    const repoEntries = listRepoSubscriptionBindings(
+      repoPollingSource.activeKeys(),
+    ).map(({ key, streamIds }) => toEntry(key, streamIds));
+    const issueEntries = listIssueSubscriptionBindings(
+      issuePollingSource.activeKeys(),
+    ).map(({ key, streamIds }) => toEntry(key, streamIds));
 
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions,
+      subscriptions: [...prEntries, ...repoEntries, ...issueEntries],
     });
   }
 
