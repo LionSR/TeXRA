@@ -230,32 +230,3 @@ export function isModelAllowedForTier(
   }
   return models.some((m) => m.minTier === FREE_TIER);
 }
-
-// =============================================================================
-// Debug/Info Exports
-// =============================================================================
-
-/** Get pricing breakdown by tier (useful for debugging) */
-export function getTierBreakdown(): Record<
-  MinTier,
-  { count: number; models: string[] }
-> {
-  const freeNames = new Set(FREE_TIER_SHORT_NAMES);
-  const maxNames = new Set(MAX_TIER_SHORT_NAMES);
-  const maxOnly = MAX_TIER_MODELS.filter((m) => !freeNames.has(m.shortName));
-  const ultraOnly = RELAY_MODELS.filter((m) => !maxNames.has(m.shortName));
-  return {
-    free: {
-      count: FREE_TIER_MODELS.length,
-      models: FREE_TIER_MODELS.map((m) => `${m.shortName} ($${m.inputPrice})`),
-    },
-    Max: {
-      count: maxOnly.length,
-      models: maxOnly.map((m) => `${m.shortName} ($${m.inputPrice})`),
-    },
-    Ultra: {
-      count: ultraOnly.length,
-      models: ultraOnly.map((m) => `${m.shortName} ($${m.inputPrice})`),
-    },
-  };
-}
