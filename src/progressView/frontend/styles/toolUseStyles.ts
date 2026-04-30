@@ -147,7 +147,7 @@ export const toolUseStyles = css`
     border: var(--border-thin) solid var(--color-border);
   }
 
-  /* Shared base for inline action links */
+  /* Proposal restore link */
   .proposal-restore-link {
     color: var(--color-text-link);
     cursor: pointer;

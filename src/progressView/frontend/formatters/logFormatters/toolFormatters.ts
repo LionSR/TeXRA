@@ -368,7 +368,7 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
 }
 
 function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
-  const { input, isInProgress } = ctx;
+  const { input } = ctx;
   if (!isPlainObject(input)) return [];
   const execInput = input as ExecutionsToolInput;
   const execPath = execInput.path ?? '';
