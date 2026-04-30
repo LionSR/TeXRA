@@ -13,9 +13,25 @@ import { register } from 'tsconfig-paths';
 const outDir = path.resolve(__dirname, '..');
 const srcDir = path.resolve(__dirname, '..', '..', 'src');
 
+// Only stub 'vscode' when the real module is not available.
+// Probing with require.resolve() works correctly in all environments:
+// the real vscode module is available inside the VS Code extension host
+// (vscode-test runner), but not in plain Node.js / standalone Mocha runs
+// — regardless of whether VSCODE_PID happens to be set in the shell.
+let vscodeMissing = false;
+try {
+  require.resolve('vscode');
+} catch {
+  vscodeMissing = true;
+}
+const extraPaths: Record<string, string[]> = vscodeMissing
+  ? { vscode: [path.join(outDir, 'test/support/vscode-mock')] }
+  : {};
+
 register({
   baseUrl: outDir,
   paths: {
+    ...extraPaths,
     '@/*': ['*', path.join(srcDir, '*')],
     '~/*': ['*', path.join(srcDir, '*')],
     '@common/*': ['common/*', path.join(srcDir, 'common/*')],
@@ -37,6 +53,10 @@ register({
     '@tools/*': ['tools/*', path.join(srcDir, 'tools/*')],
     '@types/*': ['types/*', path.join(srcDir, 'types/*')],
     '@eventBus/*': ['eventBus/*', path.join(srcDir, 'eventBus/*')],
+    '@shared/*': ['shared/*', path.join(srcDir, 'shared/*')],
+    '@auth/*': ['auth/*', path.join(srcDir, 'auth/*')],
+    '@platform': ['platform', path.join(srcDir, 'platform')],
+    '@platform/*': ['platform/*', path.join(srcDir, 'platform/*')],
   },
 });
 
