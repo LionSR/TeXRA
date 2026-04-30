@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
@@ -21,7 +20,6 @@ import {
   COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
@@ -1215,13 +1213,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleRunCompileFixer(streamId: StreamTabId): Promise<void> {
-    if (isInFlightStatus(StreamStatusService.get(streamId))) {
-      await vscode.window.showInformationMessage(
-        'Wait for the workflow run to finish before launching latexFixer.',
-      );
-      return;
-    }
-
     const taskState = this.provider.state.meta.getTaskState(streamId);
     if (!taskState || !isWorkflowTaskState(taskState)) {
       await vscode.window.showWarningMessage(

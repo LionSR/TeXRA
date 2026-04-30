@@ -31,7 +31,6 @@ import './TaskGroupList';
 import './LogList';
 import './UsagePanel';
 import './FileList';
-import './CompileFailurePanel';
 import './WorkflowToolUseFollowupSection';
 import './BackgroundTasksPanel';
 import './RequestPanels';
@@ -110,13 +109,9 @@ export class WorkflowStreamContent extends LitElement {
 
       <file-list
         .filesByRound=${state.files}
+        .failuresByRound=${state.compileFailures}
         .showRoundHeaders=${true}
       ></file-list>
-
-      <compile-failure-panel
-        .failuresByRound=${state.compileFailures}
-        .status=${state.status}
-      ></compile-failure-panel>
 
       <workflow-tool-use-followup-section
         .status=${state.status}
