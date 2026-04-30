@@ -163,8 +163,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           </div>
           <div class="workflow-proposal__instruction">${data.instruction}</div>
           ${isWorkflow ? this.renderExtractFlags(data) : nothing}
-          ${this.renderWorkingDirectory(data)}
-          ${this.renderProposalFiles(data)}
+          ${this.renderWorkingDirectory(data)} ${this.renderProposalFiles(data)}
         </div>
         <vscode-toolbar-container class="workflow-proposal__actions">
           <vscode-toolbar-button
@@ -207,7 +206,8 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
       title=${workingDirectory}
     >
       <span class="workflow-proposal__file-label">Working directory:</span>
-      <span class="workflow-proposal__file-name workflow-proposal__file-name--readonly"
+      <span
+        class="workflow-proposal__file-name workflow-proposal__file-name--readonly"
         >${workingDirectory}</span
       >
     </div>`;
