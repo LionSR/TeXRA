@@ -4,6 +4,7 @@ import type {
   PlanState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
+import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 export interface ToolFileInteractionContext {
@@ -21,6 +22,12 @@ export interface ToolFileInteractionContext {
    * N for an agent N levels deep. Read by delegation tools to compute the child's depth.
    */
   delegationDepth?: number;
+  /**
+   * Delegation policy snapshot for the executing agent. Keeps delegation tool
+   * enforcement aligned with the tool list shown to the model without carrying
+   * a second depth value.
+   */
+  delegationConfig?: NestedDelegationConfig;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;

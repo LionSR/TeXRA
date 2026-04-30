@@ -21,6 +21,12 @@ export const NESTED_DELEGATION_DEPTH_RANGE = {
   default: 1,
 } as const;
 
+/**
+ * Sentinel for resumed executions whose persisted parent lineage cannot be
+ * trusted. It must never pass the max-depth gate for any supported setting.
+ */
+export const UNKNOWN_DELEGATION_DEPTH = Number.MAX_SAFE_INTEGER;
+
 /** Clamp an arbitrary value to the supported max-depth range. */
 export function clampNestedDelegationDepth(value: unknown): number {
   const n =
@@ -38,6 +44,38 @@ export interface NestedDelegationConfig {
   maxDepth: number;
 }
 
+export type DelegationGateBlockReason = 'max_depth_reached' | 'unknown_depth';
+
+export interface DelegationGateResult {
+  depth: number | 'unknown';
+  maxDepth: number;
+  allowed: boolean;
+  blockReason?: DelegationGateBlockReason;
+}
+
+/** Explain the delegation gate result without leaking sentinel logic. */
+export function evaluateDelegationGate(
+  depth: number,
+  config: NestedDelegationConfig,
+): DelegationGateResult {
+  if (depth === UNKNOWN_DELEGATION_DEPTH) {
+    return {
+      depth: 'unknown',
+      maxDepth: config.maxDepth,
+      allowed: false,
+      blockReason: 'unknown_depth',
+    };
+  }
+
+  const allowed = depth < config.maxDepth;
+  return {
+    depth,
+    maxDepth: config.maxDepth,
+    allowed,
+    ...(allowed ? {} : { blockReason: 'max_depth_reached' as const }),
+  };
+}
+
 /**
  * Delegation gate. An agent at depth `d` may delegate iff `d < maxDepth`.
  * Root (depth 0) with the default (maxDepth 1) can always delegate;
@@ -47,5 +85,5 @@ export function delegationAllowed(
   depth: number,
   config: NestedDelegationConfig,
 ): boolean {
-  return depth < config.maxDepth;
+  return evaluateDelegationGate(depth, config).allowed;
 }

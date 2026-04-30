@@ -1,5 +1,6 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
+import type { EventEmitter } from 'node:events';
 import * as path from 'path';
 
 // Third-party imports
@@ -368,8 +369,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const cleanup = (): void => {
-        ws.socket.removeListener('open', onOpen);
-        ws.socket.removeListener('error', onError);
+        (ws.socket as unknown as EventEmitter).removeListener('open', onOpen);
+        (ws.socket as unknown as EventEmitter).removeListener('error', onError);
         signal?.removeEventListener('abort', onAbort);
       };
       const onOpen = (): void => {
