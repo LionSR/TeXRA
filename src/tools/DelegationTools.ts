@@ -72,7 +72,7 @@ import {
   formatFollowUpInstruction,
 } from '@tools/subagentResults';
 import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
-import { parseWorkingDirectory } from '@tools/utils';
+import { parseWorkingDirectory } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - memory

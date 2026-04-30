@@ -53,6 +53,19 @@ export class LatexMediaManager {
     private readonly fileService?: TaskRunFileService,
   ) {}
 
+  /**
+   * Resolve a figure path (relative to the LaTeX directory) to an absolute,
+   * normalized path. Mirrors the resolution used inside
+   * `extractFigurePathsFromLatex` so figure paths returned from a symlinked
+   * run-storage `.tex` map back to their real workspace location.
+   */
+  private resolveFigureAbsolutePath(
+    baseDir: string,
+    relativePath: string,
+  ): string {
+    return path.normalize(path.join(baseDir, relativePath));
+  }
+
   private async mirrorFigureDependencies(
     latexFile: FileLocation,
     figures: string[],
@@ -71,7 +84,7 @@ export class LatexMediaManager {
       if (!trimmed) {
         continue;
       }
-      absolutePaths.add(path.normalize(path.join(baseDir, trimmed)));
+      absolutePaths.add(this.resolveFigureAbsolutePath(baseDir, trimmed));
     }
 
     if (absolutePaths.size === 0) {
@@ -393,10 +406,9 @@ export class LatexMediaManager {
       // figure paths (relative to the real latexDir) map back to workspace
       // files when the .tex is symlinked into run storage.
       const baseDir = await resolveLatexDir(file.absolutePath);
-      const fileLocations = figures.map((relativePath) => {
-        const absolutePath = path.normalize(path.join(baseDir, relativePath));
-        return pathToLocation(absolutePath);
-      });
+      const fileLocations = figures.map((relativePath) =>
+        pathToLocation(this.resolveFigureAbsolutePath(baseDir, relativePath)),
+      );
 
       const existenceChecks = await Promise.all(
         fileLocations.map(async (loc) => ({
