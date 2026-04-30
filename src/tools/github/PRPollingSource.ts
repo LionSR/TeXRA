@@ -150,8 +150,8 @@ export class PRPollingSource extends PollingSourceBase<
   constructor() {
     super({
       name: 'PRPollingSource',
-      pollIntervalMs: 30_000,
-      maxConcurrent: 10,
+      pollIntervalMs: PR_POLL_INTERVAL_MS,
+      maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
       backoffBaseMs: 60_000,
       backoffMaxMs: 3_600_000,
       maxFailureDurationMs: 24 * 3_600_000,
