@@ -7,8 +7,10 @@
  * detail via its tools if needed.
  */
 
-import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
-
+import {
+  truncate as truncateBody,
+  wrapWebhookEvent as wrap,
+} from './formatUtils';
 import type {
   GhCheckRun,
   GhIssueComment,
@@ -16,23 +18,10 @@ import type {
   GhReviewComment,
 } from './prTypes';
 
-const TAG = 'github-webhook-activity';
 const MAX_BODY = 500;
 
 function truncate(s: string | null | undefined): string {
-  const body = (s ?? '').trim();
-  if (body.length <= MAX_BODY) return body;
-  return body.slice(0, MAX_BODY) + '…';
-}
-
-/**
- * Sanitizing per-field is easy to forget when a new formatter is added;
- * doing it at the wrap boundary closes the attack surface by construction.
- * Every comment/review body, username, CI check name, file path, or URL
- * interpolated into the wrapper flows through here.
- */
-function wrap(inner: string): string {
-  return wrapAndSanitizeTag(TAG, inner);
+  return truncateBody(s, MAX_BODY);
 }
 
 export function formatIssueComment(
@@ -42,7 +31,7 @@ export function formatIssueComment(
 ): string {
   const author = c.user?.login ?? 'someone';
   return wrap(
-    `New comment on ${slug}#${prNumber} by @${author}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
+    `New comment on ${slug}/pulls/${prNumber} by @${author}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
   );
 }
 
@@ -59,7 +48,7 @@ export function formatReviewComment(
       ? 'Reply to inline review thread'
       : 'New line review comment';
   return wrap(
-    `${prefix} on ${slug}#${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
+    `${prefix} on ${slug}/pulls/${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
   );
 }
 
@@ -81,7 +70,7 @@ export function formatReview(
             : 'reviewed';
   const body = r.body ? `\n\n${truncate(r.body)}` : '';
   return wrap(
-    `@${author} ${verb} ${slug}#${prNumber}.${body}\n\n${r.html_url}`,
+    `@${author} ${verb} ${slug}/pulls/${prNumber}.${body}\n\n${r.html_url}`,
   );
 }
 
@@ -92,7 +81,7 @@ export function formatCheckFailure(
 ): string {
   return wrap(
     `The following CI check failed on the PR. Investigate the failure and determine what action (if any) is needed.\n\n` +
-      `PR: ${slug}#${prNumber}\n` +
+      `PR: ${slug}/pulls/${prNumber}\n` +
       `Check: ${run.name}\n` +
       `Conclusion: ${run.conclusion}\n` +
       `Details: ${run.html_url}`,
@@ -112,7 +101,7 @@ export function formatCheckFailureSummary(
     .join('\n\n');
   return wrap(
     `${runs.length} CI checks failed on the PR. Investigate the failures and determine what action (if any) is needed.\n\n` +
-      `PR: ${slug}#${prNumber}\n\n` +
+      `PR: ${slug}/pulls/${prNumber}\n\n` +
       entries,
   );
 }
@@ -133,7 +122,7 @@ export function formatCIPassed(
   runs: GhCheckRun[],
 ): string {
   return wrap(
-    `All ${runs.length} CI checks passed on ${slug}#${prNumber} (head ${sha.slice(0, 7)}).`,
+    `All ${runs.length} CI checks passed on ${slug}/pulls/${prNumber} (head ${sha.slice(0, 7)}).`,
   );
 }
 
@@ -146,7 +135,7 @@ export function formatCIComplete(
   const passed = runs.filter((r) => isPassingConclusion(r.conclusion)).length;
   const failed = runs.length - passed;
   return wrap(
-    `CI completed on ${slug}#${prNumber} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
+    `CI completed on ${slug}/pulls/${prNumber} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
   );
 }
 
@@ -156,7 +145,7 @@ export function formatPRClosed(
   merged: boolean,
 ): string {
   const verb = merged ? 'merged' : 'closed';
-  return wrap(`${slug}#${prNumber} was ${verb}. Subscription ended.`);
+  return wrap(`${slug}/pulls/${prNumber} was ${verb}. Subscription ended.`);
 }
 
 /**
@@ -171,5 +160,5 @@ export function formatSubscriptionError(
   prNumber: number,
   detail: string,
 ): string {
-  return wrap(`PR subscription to ${slug}#${prNumber} halted: ${detail}`);
+  return wrap(`PR subscription to ${slug}/pulls/${prNumber} halted: ${detail}`);
 }
