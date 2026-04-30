@@ -51,11 +51,7 @@ import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ExternalInquiryTool } from './inquiry';
-import {
-  FindCurrentPRTool,
-  SubscribePRTool,
-  UnsubscribePRTool,
-} from './github';
+import { GitHubSubscriptionTool } from './github';
 import {
   ProbeEnvironmentTool,
   VerifySetupTool,
@@ -124,9 +120,7 @@ function createDefaultTools() {
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
     external_inquiry: new ExternalInquiryTool(),
-    subscribe_pr_activity: new SubscribePRTool(),
-    unsubscribe_pr_activity: new UnsubscribePRTool(),
-    find_current_pr: new FindCurrentPRTool(),
+    github_subscription: new GitHubSubscriptionTool(),
     probe_environment: new ProbeEnvironmentTool(),
     verify_setup: new VerifySetupTool(),
     set_api_key: new SetApiKeyTool(),
