@@ -3,7 +3,6 @@ import { ReasoningEffort } from 'llm-zoo';
 
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 // Type imports
@@ -31,6 +30,8 @@ import type { DeepSeekToolCall } from './types/IModelHandler';
  */
 export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   // toolCallProvider and usageProvider inherit from base class via config.provider
+
+  protected override useReasoningStreamAggregator = true;
 
   /**
    * DeepSeek models don't support vision/attachments in tool results.
@@ -85,12 +86,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    */
   protected override validateReasoningEffort(effort: string): string {
     return effort === ReasoningEffort.XHIGH ? 'max' : 'high';
-  }
-
-  protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
-    return this.capabilities.supportsReasoning
-      ? new BaseReasoningStreamAggregator()
-      : null;
   }
 
   /**

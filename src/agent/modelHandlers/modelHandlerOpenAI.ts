@@ -66,6 +66,10 @@ import {
 import { parseToolArguments } from './utils/parseArguments';
 import { ModelHandler } from './ModelHandler';
 import {
+  BaseReasoningStreamAggregator,
+  type StreamingAggregator,
+} from './BaseReasoningStreamAggregator';
+import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
@@ -104,13 +108,6 @@ function extractReasoningText(content: ReasoningContent | undefined): string {
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
 
 // COMPACTION_SYSTEM_PROMPT imported from contextManagementConstants
-
-export interface StreamingAggregator {
-  appendContent(delta: string): void;
-  appendReasoning(delta: string): void;
-  consumeChunk(chunk: ChatCompletionChunk): void;
-  finalize(fallback?: ChatCompletion): ChatCompletion;
-}
 
 /** Extracts `reasoning_content` from a streaming chunk delta. */
 function extractReasoningDelta(chunk: ChatCompletionChunk): string {
@@ -155,6 +152,8 @@ export class ModelHandlerOpenAI<
 
   /** Flag to force compaction on the next API call, set by requestCompaction(). */
   private compactionRequested = false;
+
+  protected useReasoningStreamAggregator: boolean = false;
 
   // ── Compaction interface overrides ────────────────────────────────────
 
@@ -346,6 +345,12 @@ export class ModelHandlerOpenAI<
    * Allows subclasses to provide a streaming aggregator implementation.
    */
   protected createStreamingAggregator(): StreamingAggregator | null {
+    if (
+      this.useReasoningStreamAggregator &&
+      this.capabilities.supportsReasoning
+    ) {
+      return new BaseReasoningStreamAggregator();
+    }
     return null;
   }
 
