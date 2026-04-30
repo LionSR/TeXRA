@@ -368,8 +368,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const cleanup = (): void => {
-        ws.socket.removeListener('open', onOpen);
-        ws.socket.removeListener('error', onError);
+        ws.socket.off('open', onOpen);
+        ws.socket.off('error', onError);
         signal?.removeEventListener('abort', onAbort);
       };
       const onOpen = (): void => {
