@@ -128,7 +128,6 @@ const WORKFLOW_TOOLBAR = [
 const YOLO_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.YOLO_TOGGLE_BTN,
   icon: 'shield',
-  iconActive: 'flame',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
   title: 'Skip edit approvals (auto-accept file changes)',
   titleActive: 'Edit auto-accept active — click to resume approval prompts',
@@ -139,7 +138,6 @@ const YOLO_TOGGLE_BUTTON = Object.freeze({
 const SUPER_YOLO_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
   icon: 'rocket',
-  iconActive: 'zap',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
   title: 'Auto-approve delegated tasks (skip task-by-task approval)',
   titleActive: 'Auto-approve active — click to resume manual approval',
