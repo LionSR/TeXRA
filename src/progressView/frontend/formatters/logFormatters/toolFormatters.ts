@@ -368,7 +368,7 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
 }
 
 function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
-  const { input, isInProgress } = ctx;
+  const { input } = ctx;
   if (!isPlainObject(input)) return [];
   const execInput = input as ExecutionsToolInput;
   const execPath = execInput.path ?? '';
@@ -383,11 +383,9 @@ function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
 
   if (action === 'wait') {
     const timeout = execInput.timeout ?? 300;
-    // prettier-ignore
-    const waitContent = isInProgress
-      ? html`<pre>wait (timeout: ${timeout}s)</pre><span class="followup-break-wait" title="Focus the follow-up input to send a message and break this wait"><i class="codicon codicon-comment"></i> Send Follow-up</span>`
-      : wrapInPre(`wait (timeout: ${timeout}s)`);
-    sections.push(buildToolUseSection('Action:', waitContent));
+    sections.push(
+      buildToolUseSection('Action:', wrapInPre(`wait (timeout: ${timeout}s)`)),
+    );
   } else if (action === 'kill') {
     sections.push(buildToolUseSection('Action:', wrapInPre('kill')));
   }
