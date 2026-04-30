@@ -257,8 +257,10 @@ export abstract class ModelHandler<
    * Centralizes the decision to avoid duplication between getApiKey() and getBaseUrl().
    * Both methods call this to ensure consistent routing decisions.
    *
-   * Returns true only if:
-   * 1. Model is not openRouterOnly (those always use OpenRouter)
+   * Returns true only if ALL of the following hold:
+   * 1. Model is NOT routing through OpenRouter (neither openRouterOnly nor global toggle).
+   *    OpenRouter always requires an OpenRouter API key; the server-side relay is a
+   *    direct-provider path that must not interfere.
    * 2. shouldUseServerSideKeysSync confirms access:
    *    - Setting enabled
    *    - Provider supported
@@ -270,9 +272,10 @@ export abstract class ModelHandler<
    * - Both are defined in RELAY_MODELS, ensuring UI filtering matches API validation
    */
   protected shouldUseServerSideKeys(): boolean {
-    // Skip openRouterOnly models - these should always route through OpenRouter
-    // since their model IDs don't exist on provider APIs.
-    if (this.config.openRouterOnly) {
+    // Models routing through OpenRouter (openRouterOnly or global toggle) always use the
+    // OpenRouter API — the server-side relay is a direct-provider path, not an OpenRouter
+    // path, so it must never take precedence here.
+    if (shouldUseOpenRouter(this.config)) {
       return false;
     }
     // Pass short name (this.config.name) for client-side tier validation.
@@ -300,8 +303,11 @@ export abstract class ModelHandler<
    * When server-side keys are enabled (experimental), returns the user's JWT token instead,
    * which the relay Edge Function will use for authentication.
    *
-   * When "Use Included Access" is enabled, only server-side keys are used - no fallback
+   * When "Use Included Access" is enabled, only server-side keys are used — no fallback
    * to personal API keys. This ensures runtime behavior matches dropdown availability.
+   * Exception: models routed through OpenRouter (openRouterOnly or global toggle) always
+   * use the OpenRouter API key regardless of included-access settings, because the
+   * server-side relay is a direct-provider path that does not apply to OpenRouter routing.
    *
    * @throws Error if required API key is missing from environment
    */
@@ -332,12 +338,12 @@ export abstract class ModelHandler<
       );
     }
 
-    // openRouterOnly models can NEVER use server-side relay - they always need OpenRouter key.
-    // Allow these even in "Use Included Access" mode since included access is never possible.
-    if (this.config.openRouterOnly) {
+    // Models routing through OpenRouter always need the OpenRouter key — included access
+    // is a direct-provider relay path and does not apply here.
+    if (shouldUseOpenRouter(this.config)) {
       return this.fetchApiKeyOrThrow(
         'openRouter',
-        `Model "${this.config.name}" requires an OpenRouter API key. Please set it using the "Set API Key" command.`,
+        'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
       );
     }
 
@@ -352,13 +358,6 @@ export abstract class ModelHandler<
       throw new Error(
         `Model "${this.config.name}" is not available with your current subscription tier. ` +
           `Switch to "Use My Own Keys" via the TeXRA Profile panel, or select a model included in your tier.`,
-      );
-    }
-
-    if (shouldUseOpenRouter(this.config)) {
-      return this.fetchApiKeyOrThrow(
-        'openRouter',
-        'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
       );
     }
 
