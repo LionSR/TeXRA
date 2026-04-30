@@ -180,9 +180,7 @@ export class SettingsApp extends SettingsAppBase {
   // Agent teams state
   private readonly customPresets = signal<AgentModePreset[]>([]);
 
-  // Super YOLO / reliability state
-  private readonly superYoloEnabled = signal(false);
-  private readonly superYoloToggleDisabled = signal(true);
+  // Multi-agent coordination / reliability state
   private readonly reliabilitySettings = signal<NumberVscodeSetting[]>([]);
   private readonly allowOrchestratorKill = signal(true);
   private readonly detachSubagentsOnStop = signal(false);
@@ -317,8 +315,6 @@ export class SettingsApp extends SettingsAppBase {
           UpdateSuperYoloEnabledMessageSchema,
         );
         if (!data) return;
-        this.superYoloEnabled.set(data.enabled);
-        this.superYoloToggleDisabled.set(false);
         this.reliabilitySettings.set(data.reliabilitySettings);
         this.allowOrchestratorKill.set(data.allowOrchestratorKill);
         this.detachSubagentsOnStop.set(data.detachSubagentsOnStop);
@@ -568,10 +564,6 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleViewRemoteAgentPrompt = forwardDetail(
     SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT,
-  );
-
-  private handleSuperYoloToggle = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED,
   );
 
   private handleAllowOrchestratorKillToggle = forwardDetail(
@@ -857,15 +849,12 @@ export class SettingsApp extends SettingsAppBase {
 
           <vscode-tab-panel>
             <multi-agent-tab
-              .superYoloEnabled=${this.superYoloEnabled.get()}
-              .toggleDisabled=${this.superYoloToggleDisabled.get()}
               .reliabilitySettings=${this.reliabilitySettings.get()}
               .customPresets=${this.customPresets.get()}
               .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
               .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
               .worktreeSupport=${this.gitWorktreeSupport.get()}
               .nestedDelegationMaxDepth=${this.nestedDelegationMaxDepth.get()}
-              @super-yolo-toggle=${this.handleSuperYoloToggle}
               @allow-orchestrator-kill-toggle=${this
                 .handleAllowOrchestratorKillToggle}
               @detach-subagents-on-stop-toggle=${this
