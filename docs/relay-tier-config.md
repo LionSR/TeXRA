@@ -30,11 +30,11 @@ Toggle this option in the Profile view settings.
 
 ## Tier Hierarchy (Cumulative Access)
 
-| Tier      | Model Access                    | Pricing Threshold | Additional Providers |
-| --------- | ------------------------------- | ----------------- | -------------------- |
-| **Ultra** | All models (premium included)   | $3+/M input       | + DashScope          |
-| **Max**   | Mid-tier + all free tier models | $1-3/M input      | —                    |
-| **free**  | Budget models only (no Opus/GPT-5) | <$1/M input    | —                    |
+| Tier      | Model Access                         | Pricing Threshold | Additional Providers |
+| --------- | ------------------------------------ | ----------------- | -------------------- |
+| **Ultra** | All models (premium included)        | >$3/M input       | + DashScope          |
+| **Max**   | Same as free (≤$3/M)                 | ≤$3/M input       | —                    |
+| **free**  | All non-premium models (no Opus/GPT-5) | ≤$3/M input    | —                    |
 
 All tiers have access to: OpenAI, Anthropic, Google, DeepSeek, xAI, Moonshot
 
@@ -61,7 +61,18 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
         "kimi26",
         "kimi26T",
         "qwenplus",
-        "qwenturbo"
+        "qwenturbo",
+        "haiku45",
+        "haiku45T",
+        "sonnet46",
+        "sonnet46T",
+        "gemini31p",
+        "grok4",
+        "deepseekpro",
+        "deepseekproT",
+        "glm51",
+        "glm5vturbo",
+        "glm5turbo"
       ],
       "providers": [
         "openai",
@@ -145,45 +156,38 @@ interface TierModelConfig {
 
 Model names must match the short names defined in `src/model/ModelRegistry.ts`.
 
-### Free Tier Models (Under $1/M Input)
+### Free / Max Tier Models (≤$3/M Input)
 
-Available to all authenticated users.
+Available to all authenticated users (free and Max tiers have the same access).
 
-| Model Name    | Full Name                          | Provider  | Pricing (in/out per 1M) |
-| ------------- | ---------------------------------- | --------- | ----------------------- |
-| `gpt54-`      | gpt-5.4-mini-2026-03-17            | OpenAI    | $0.75/$4.50             |
-| `gpt54--`     | gpt-5.4-nano-2026-03-17            | OpenAI    | $0.20/$1.25             |
-| `deepseek`    | deepseek-v4-flash                  | DeepSeek  | $0.14/$0.28             |
-| `deepseekT`   | deepseek-v4-flash (Thinking)       | DeepSeek  | $0.14/$0.28             |
-| `glm5`        | glm-5                              | GLM       | $0.80/$2.56             |
-| `minimaxM27`  | MiniMax-M2.7                       | MiniMax   | $0.30/$1.20             |
-| `minimaxM25`  | MiniMax-M2.5                       | MiniMax   | $0.20/$1.20             |
-| `kimi26`      | kimi-k2.6                          | Moonshot  | $0.60/$2.80             |
-| `kimi26T`     | kimi-k2.6 (Thinking)               | Moonshot  | $0.60/$2.80             |
-| `qwenplus`    | qwen-plus                          | DashScope | $0.40/$1.20             |
-| `qwenturbo`   | qwen-turbo-latest                  | DashScope | $0.05/$0.50             |
+| Model Name     | Full Name                            | Provider  | Pricing (in/out per 1M) |
+| -------------- | ------------------------------------ | --------- | ----------------------- |
+| `gpt54-`       | gpt-5.4-mini-2026-03-17              | OpenAI    | $0.75/$4.50             |
+| `gpt54--`      | gpt-5.4-nano-2026-03-17              | OpenAI    | $0.20/$1.25             |
+| `deepseek`     | deepseek-v4-flash                    | DeepSeek  | $0.14/$0.28             |
+| `deepseekT`    | deepseek-v4-flash (Thinking)         | DeepSeek  | $0.14/$0.28             |
+| `glm5`         | glm-5                                | GLM       | $0.80/$2.56             |
+| `minimaxM27`   | MiniMax-M2.7                         | MiniMax   | $0.30/$1.20             |
+| `minimaxM25`   | MiniMax-M2.5                         | MiniMax   | $0.20/$1.20             |
+| `kimi26`       | kimi-k2.6                            | Moonshot  | $0.60/$2.80             |
+| `kimi26T`      | kimi-k2.6 (Thinking)                 | Moonshot  | $0.60/$2.80             |
+| `qwenplus`     | qwen-plus                            | DashScope | $0.40/$1.20             |
+| `qwenturbo`    | qwen-turbo-latest                    | DashScope | $0.05/$0.50             |
+| `haiku45`      | claude-haiku-4-5-20251001            | Anthropic | $1.00/$5.00             |
+| `haiku45T`     | claude-haiku-4-5-20251001 (Thinking) | Anthropic | $1.00/$5.00             |
+| `sonnet46`     | claude-sonnet-4-6                    | Anthropic | $3.00/$15.00            |
+| `sonnet46T`    | claude-sonnet-4-6 (Thinking)         | Anthropic | $3.00/$15.00            |
+| `gemini31p`    | gemini-3.1-pro-preview               | Google    | $2.00/$12.00            |
+| `grok4`        | grok-4-0709                          | xAI       | $3.00/$15.00            |
+| `deepseekpro`  | deepseek-v4-pro                      | DeepSeek  | $1.74/$3.48             |
+| `deepseekproT` | deepseek-v4-pro (Thinking)           | DeepSeek  | $1.74/$3.48             |
+| `glm51`        | glm-5.1                              | GLM       | $1.05/$3.50             |
+| `glm5vturbo`   | glm-5v-turbo                         | GLM       | $1.20/$4.00             |
+| `glm5turbo`    | glm-5-turbo                          | GLM       | $1.20/$4.00             |
 
-### Max Tier Additional Models ($1-3/M Input)
+### Ultra Tier Models (>$3/M Input)
 
-Available to Max tier subscribers (includes all free tier models).
-
-| Model Name     | Full Name                     | Provider  | Pricing (in/out per 1M) |
-| -------------- | ----------------------------- | --------- | ----------------------- |
-| `haiku45`      | claude-haiku-4-5-20251001     | Anthropic | $1.00/$5.00             |
-| `haiku45T`     | claude-haiku-4-5-20251001 (Thinking) | Anthropic | $1.00/$5.00      |
-| `sonnet46`     | claude-sonnet-4-6             | Anthropic | $3.00/$15.00            |
-| `sonnet46T`    | claude-sonnet-4-6 (Thinking)  | Anthropic | $3.00/$15.00            |
-| `gemini31p`    | gemini-3.1-pro-preview        | Google    | $2.00/$12.00            |
-| `grok4`        | grok-4-0709                   | xAI       | $3.00/$15.00            |
-| `deepseekpro`  | deepseek-v4-pro               | DeepSeek  | $1.74/$3.48             |
-| `deepseekproT` | deepseek-v4-pro (Thinking)    | DeepSeek  | $1.74/$3.48             |
-| `glm51`        | glm-5.1                       | GLM       | $1.05/$3.50             |
-| `glm5vturbo`   | glm-5v-turbo                  | GLM       | $1.20/$4.00             |
-| `glm5turbo`    | glm-5-turbo                   | GLM       | $1.20/$4.00             |
-
-### Ultra Tier Models ($3+/M Input)
-
-Available to Ultra tier subscribers (includes all lower tier models).
+Available to Ultra tier subscribers only (includes all lower tier models).
 
 | Model Name | Full Name                        | Provider  | Pricing (in/out per 1M) |
 | ---------- | -------------------------------- | --------- | ----------------------- |
@@ -200,7 +204,7 @@ The relay function uses a `RELAY_MODELS` array as the single source of truth. Ea
 
 - `shortName`: UI identifier
 - `apiPatterns`: API name prefixes for server-side validation
-- `minTier`: Minimum tier required ('free', 'Max', or 'Ultra')
+- `minTier`: Minimum tier required ('free' or 'Ultra' — free and Max share the same ≤$3 cutoff)
 
 Tier-specific arrays are derived automatically:
 
@@ -209,6 +213,7 @@ const FREE_TIER_MODELS = RELAY_MODELS.filter((m) => m.minTier === 'free');
 const MAX_TIER_MODELS = RELAY_MODELS.filter(
   (m) => m.minTier === 'free' || m.minTier === 'Max',
 );
+// Currently identical since all non-Ultra models are assigned 'free'
 ```
 
 ### Client-Side Caching
@@ -244,7 +249,7 @@ User selects model
    Ultra   Max   free
       │     │     │
       ▼     ▼     ▼
-    All   Max    Free
+    All   Free   Free
   models models models
 ```
 

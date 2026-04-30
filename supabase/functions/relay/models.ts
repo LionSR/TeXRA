@@ -52,8 +52,7 @@ interface RelayModel {
 
 /** Derive tier from model pricing */
 function getTierFromPrice(inputPrice: number): MinTier {
-  if (inputPrice < 1) return 'free';
-  if (inputPrice <= 3) return 'Max';
+  if (inputPrice <= 3) return 'free';
   return 'Ultra';
 }
 
