@@ -44,7 +44,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
-import { parseWorkingDirectory } from '@tools/utils';
+import { parseWorkingDirectory } from '@tools/pathResolution';
 import { escapeAttr, escapeText } from '@tools/subagentResults';
 import {
   requestBashApproval,

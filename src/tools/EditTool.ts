@@ -8,13 +8,13 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
+import { pluralize } from '@tools/formatting';
 import {
   assertWritable,
-  countOccurrences,
-  pluralize,
   resolveAndFormat,
   parseWorkingDirectory,
-} from '@tools/utils';
+} from '@tools/pathResolution';
+import { countOccurrences } from '@tools/utils';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,

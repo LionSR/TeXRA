@@ -14,7 +14,7 @@ import {
   assertWritable,
   resolveAndFormat,
   parseWorkingDirectory,
-} from '@tools/utils';
+} from '@tools/pathResolution';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,

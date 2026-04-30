@@ -6,10 +6,12 @@ import { BibEntry, parseBibFile } from 'bibtex';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
-import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 // Local file imports
-import { stripLatexComments, BIB_DIRECTIVE_PATTERN } from './latexParsingUtils';
+import {
+  collectBibliographyPaths,
+  stripLatexComments,
+} from './latexParsingUtils';
 
 const CITE_COMMANDS = [
   'cite',
@@ -48,30 +50,6 @@ export interface BibliographyEntriesResult {
   entries: Map<string, string>;
   /** Citation keys without matching entries across the loaded files. */
   missingKeys: string[];
-}
-
-function normalizeBibPath(baseDir: string, target: string): string {
-  const trimmed = target.trim();
-  if (!trimmed) {
-    return '';
-  }
-  return joinLatexPath(baseDir, ensureExtension(trimmed, '.bib'));
-}
-
-function collectBibliographyPaths(baseDir: string, content: string): string[] {
-  const paths = new Set<string>();
-
-  for (const match of content.matchAll(BIB_DIRECTIVE_PATTERN)) {
-    const block = match[1];
-    for (const raw of block.split(',')) {
-      const normalized = normalizeBibPath(baseDir, raw);
-      if (normalized) {
-        paths.add(normalized);
-      }
-    }
-  }
-
-  return [...paths];
 }
 
 function collectCitationKeys(content: string): string[] {

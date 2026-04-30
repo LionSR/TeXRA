@@ -9,14 +9,13 @@ import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInt
 import { toErrorMessage } from '@common/errors';
 import { isFile, isDirectory } from '@common/files/fsEntryType';
 import { ToolError, ToolResult } from '@tools/result';
+import { formatToolOutput, pluralize } from '@tools/formatting';
 import {
-  createGlobMatcher,
   joinWorkspaceRelativePath,
   resolveAndFormat,
-  formatToolOutput,
-  pluralize,
   parseWorkingDirectory,
-} from '@tools/utils';
+} from '@tools/pathResolution';
+import { createGlobMatcher } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';

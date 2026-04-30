@@ -6,13 +6,12 @@ import { z } from 'zod';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@tools/result';
+import { formatToolOutput, pluralize } from '@tools/formatting';
 import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
-  formatToolOutput,
-  pluralize,
   parseWorkingDirectory,
-} from '@tools/utils';
+} from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';

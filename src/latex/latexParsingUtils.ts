@@ -9,6 +9,8 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
+import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
+
 /** Strips everything after an unescaped % on each line. */
 const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
 
@@ -33,4 +35,25 @@ export const BIB_DIRECTIVE_PATTERN = new RegExp(
 export async function resolveLatexDir(absolutePath: string): Promise<string> {
   const resolved = await fs.realpath(absolutePath).catch(() => absolutePath);
   return path.dirname(resolved);
+}
+
+/**
+ * Collect candidate `.bib` paths referenced by `\bibliography` and
+ * `\addbibresource` directives in `content`, joined against `baseDir`.
+ * Empty/whitespace entries are skipped and duplicates are de-duplicated.
+ * Existence checking is the caller's responsibility.
+ */
+export function collectBibliographyPaths(
+  baseDir: string,
+  content: string,
+): string[] {
+  const paths = new Set<string>();
+  for (const match of content.matchAll(BIB_DIRECTIVE_PATTERN)) {
+    for (const raw of match[1].split(',')) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      paths.add(joinLatexPath(baseDir, ensureExtension(trimmed, '.bib')));
+    }
+  }
+  return [...paths];
 }
