@@ -231,10 +231,10 @@ export type UpdateSuperYoloEnabledMessage = z.infer<
 >;
 
 // ============================================================
-// Agent mode presets data schema
+// Agent team data schema
 // ============================================================
 
-/** Outbound: backend → frontend agent mode presets (built-in + custom) */
+/** Outbound: backend → frontend agent teams (built-in + custom) */
 export const UpdateAgentModePresetsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
   customPresets: z.array(AgentModePresetSchema),
@@ -612,7 +612,7 @@ const SetNestedDelegationMaxDepthMessageSchema = z.object({
     .max(NESTED_DELEGATION_DEPTH_RANGE.max),
 });
 
-// Agent mode preset inbound messages
+// Agent team inbound messages
 const GetAgentModePresetsMessageSchema = commandOnly(
   CMD.GET_AGENT_MODE_PRESETS,
 );
@@ -846,7 +846,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetBashApprovalEnabledMessageSchema,
     SetCodexSandboxModeMessageSchema,
     SetCodexReasoningEffortMessageSchema,
-    // Agent mode preset messages
+    // Agent team messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,
     SaveAgentModePresetMessageSchema,

@@ -222,8 +222,8 @@ export class AgentsTab extends LitElement {
     this.dispatchEvent(AgentSelectionEvents.resetCustomDir());
   }
 
-  private handleSavePreset(): void {
-    this.dispatchEvent(AgentSelectionEvents.savePreset());
+  private handleSaveTeam(): void {
+    this.dispatchEvent(AgentSelectionEvents.saveTeam());
   }
 
   override render(): TemplateResult {
@@ -265,11 +265,11 @@ export class AgentsTab extends LitElement {
           <div class="agents-header-actions">
             <button
               class="tab-action-btn"
-              @click=${this.handleSavePreset}
-              title="Save current agent configuration as a preset"
+              @click=${this.handleSaveTeam}
+              title="Save current agent configuration as a team"
             >
               <span class="codicon codicon-save"></span>
-              Save Preset
+              Save Team
             </button>
             <button
               class="tab-action-btn"
