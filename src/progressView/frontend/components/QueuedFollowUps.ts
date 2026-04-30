@@ -22,6 +22,8 @@ export class QueuedFollowUps extends LitElement {
     css`
       :host {
         display: block;
+        max-width: 100%;
+        min-width: 0;
       }
 
       :host([hidden]) {
@@ -62,6 +64,7 @@ export class QueuedFollowUps extends LitElement {
         background-color: var(--vscode-editor-background);
         border-radius: var(--border-radius-small);
         border: var(--border-thin) solid var(--color-border);
+        min-width: 0;
       }
 
       .queued-follow-up-icon {
@@ -74,7 +77,8 @@ export class QueuedFollowUps extends LitElement {
 
       .queued-follow-up-text {
         flex: 1;
-        word-break: break-word;
+        min-width: 0;
+        overflow-wrap: anywhere;
         white-space: pre-wrap;
         color: var(--vscode-foreground);
       }
