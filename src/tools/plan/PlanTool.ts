@@ -129,7 +129,7 @@ Best practices:
           'New plan created without streamId — skipping approval gate',
         );
       } else if (isProposalBypassedForStream(context.streamId)) {
-        logger.info('Plan auto-approved (proposal bypass active)');
+        logger.info('Plan auto-approved via delegated-task auto-approval');
         return this.buildApprovedResult({ autoApproved: true });
       } else {
         return this.requestApproval(
@@ -200,7 +200,7 @@ Best practices:
     autoApproved: boolean;
   }): ToolResult {
     const prefix = autoApproved
-      ? 'Plan auto-approved (proposal bypass active — user did not review).'
+      ? 'Plan auto-approved via delegated-task auto-approval (user did not review).'
       : 'Plan approved by the user.';
     return {
       summary: autoApproved

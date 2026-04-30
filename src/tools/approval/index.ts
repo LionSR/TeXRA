@@ -21,7 +21,6 @@ import {
 import {
   _clearAllProposalBypass,
   _clearProposalBypassForStream,
-  _disableAllProposalBypasses,
 } from './proposalApproval';
 import {
   _clearAllApprovalBypass,
@@ -70,10 +69,9 @@ export {
 } from './bashApproval';
 
 export {
-  // Proposal approval (Super YOLO)
+  // Proposal approval
   toggleProposalBypass,
   isProposalBypassedForStream,
-  _disableAllProposalBypasses,
 } from './proposalApproval';
 
 export {

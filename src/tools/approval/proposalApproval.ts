@@ -8,7 +8,6 @@ function notifyBypassState(streamId: StreamTabId): void {
   bus.emit('updateSuperYoloBypassState', {
     streamId,
     bypassActive: bypassedByStream.get(streamId) ?? false,
-    featureEnabled: true,
   });
 }
 
@@ -33,21 +32,4 @@ export function _clearProposalBypassForStream(streamId: StreamTabId): void {
 /** @internal Called by unified cleanup in index.ts */
 export function _clearAllProposalBypass(): void {
   bypassedByStream.clear();
-}
-
-/**
- * Clear all per-stream proposal bypasses and notify each stream.
- * Returns the list of streams that were previously bypassed.
- * @internal Called when the workspace feature is disabled.
- */
-export function _disableAllProposalBypasses(): StreamTabId[] {
-  const affected: StreamTabId[] = [];
-  for (const [id, active] of bypassedByStream) {
-    if (active) affected.push(id);
-  }
-  bypassedByStream.clear();
-  for (const streamId of affected) {
-    notifyBypassState(streamId);
-  }
-  return affected;
 }

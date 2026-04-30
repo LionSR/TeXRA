@@ -441,6 +441,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       // Multi-agent coordination handlers
       [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
         this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
+      [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: () =>
+        this.withActiveWebview((w) => this.sendSuperYoloEnabled(w)),
       [SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL]: (data) =>
         this.updateBooleanAndSendSuperYolo(
           WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
