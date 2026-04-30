@@ -1440,14 +1440,28 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       data.mode === 'included',
     );
 
+    // Included Access routes through the TeXRA relay — OpenRouter bypasses it.
+    // Disable OpenRouter when switching to Included Access so routing is consistent.
+    let openRouterDisabled = false;
+    if (
+      data.mode === 'included' &&
+      globalSM?.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
+    ) {
+      await globalSM.update(GlobalStateKey.USE_OPENROUTER, false);
+      openRouterDisabled = true;
+    }
+
     // Access mode affects model availability — invalidate cached options.
     invalidateModelOptionsCache();
     await this.withActiveWebview((w) => this.sendProfileData(w));
 
     const modeLabel =
       data.mode === 'included' ? 'Included Access' : 'My Own Keys';
+    const suffix = openRouterDisabled
+      ? ' OpenRouter has been turned off (not compatible with Included Access).'
+      : '';
     void vscode.window.showInformationMessage(
-      `Model access changed to: ${modeLabel}`,
+      `Model access changed to: ${modeLabel}.${suffix}`,
     );
   }
 
