@@ -374,8 +374,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Stop the agent if it is still running so the process does not leak
-    await vscode.commands.executeCommand('texra.stopAgent', streamId);
+    // Stop the agent if it is still running so the process does not leak.
+    // Skip for already-finished streams to avoid spurious STOPPED status
+    // transitions and child interrupts on naturally completed work.
+    if (isInFlightStatus(StreamStatusService.get(streamId))) {
+      await vscode.commands.executeCommand('texra.stopAgent', streamId);
+    }
 
     // Clear pending approvals, retry requests, queued follow-ups, and YOLO state
     cleanupApprovalsForStream(streamId);
