@@ -15,8 +15,27 @@ import * as logger from '@agent/core/logger';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'SessionDescription';
+const MAX_DESCRIPTION_LENGTH = 80;
+
+/**
+ * Normalize a model-generated session description: collapse newlines,
+ * strip surrounding quotes/backticks, drop trailing sentence punctuation,
+ * and truncate to a UI-friendly length. Returns an empty string when the
+ * cleaned result has no meaningful content.
+ */
+export function cleanSessionDescription(text: string): string {
+  const cleaned = text
+    .trim()
+    .replaceAll(/\s*\n\s*/g, ' ')
+    .replace(/^["'`]+|["'`]+$/g, '')
+    .replace(/[.!?…]+$/, '')
+    .trim();
+  if (!cleaned) return '';
+  return truncateWithEllipsis(cleaned, MAX_DESCRIPTION_LENGTH);
+}
 
 const SYSTEM_PROMPT = `You generate very short session labels for a LaTeX research assistant tool. Given an agent name, its description, and the user's instruction, write a single short phrase (max ~10 words, no trailing period) that captures what the session aims to accomplish. Be specific but terse — no full sentences, no meta-commentary, no quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
 
@@ -83,21 +102,8 @@ export async function generateSessionDescription(
     const { text } = handler.extractResponse(result.response, '');
 
     if (isNonEmptyString(text)) {
-      // Collapse newlines to prevent corrupting line-based tool output,
-      // strip surrounding quotes/trailing punctuation, and cap length so
-      // tab/history rows stay readable even if the model overshoots.
-      const cleaned = text
-        .trim()
-        .replaceAll(/\s*\n\s*/g, ' ')
-        .replace(/^["'`]+|["'`]+$/g, '')
-        .replace(/[.!?…]+$/, '')
-        .trim();
-      if (!cleaned) return;
-      const MAX_DESCRIPTION_LENGTH = 80;
-      const description =
-        cleaned.length > MAX_DESCRIPTION_LENGTH
-          ? cleaned.slice(0, MAX_DESCRIPTION_LENGTH - 1).trimEnd() + '…'
-          : cleaned;
+      const description = cleanSessionDescription(text);
+      if (!description) return;
       await writeSessionDescription(executionId, description);
       bus.emit('updateStreamDescription', { streamId, description });
       logger.info(CHANNEL, `Generated session description for ${executionId}`);
