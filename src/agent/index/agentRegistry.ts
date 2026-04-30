@@ -287,9 +287,7 @@ export function updateAgentDefaultOutputFiles(
 /**
  * Resolve an agent to its definition path.
  */
-export function resolveAgent(
-  identifier: string,
-): ResolvedAgent | undefined {
+export function resolveAgent(identifier: string): ResolvedAgent | undefined {
   const entry = getAgent(identifier);
   if (!entry) return undefined;
 

@@ -11,7 +11,9 @@ describe('getAgentRegistrationSkipReason', () => {
   });
 
   it('returns undefined when the agent should be prompted', () => {
-    const reason = getAgentRegistrationSkipReason('polish_multiple', ['correct']);
+    const reason = getAgentRegistrationSkipReason('polish_multiple', [
+      'correct',
+    ]);
     assert.equal(reason, undefined);
   });
 });

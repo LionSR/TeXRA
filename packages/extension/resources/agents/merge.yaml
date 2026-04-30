@@ -6,7 +6,7 @@ settings:
   rounds: 1
   outputExt: tex
   prefills:
-    - "<documents>"
+    - '<documents>'
 
 prompts:
   systemPrompt: |

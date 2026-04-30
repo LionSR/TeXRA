@@ -96,8 +96,7 @@ export async function extractFilesFromXml(
       // emits <documents><document name="..."> containers (N≥1).
       // Legacy agents with a custom documentTag (e.g. 'latex_document') use
       // single-document extraction for backward compatibility.
-      const useMultiDocumentPath =
-        deps.setting.documentTag === 'documents';
+      const useMultiDocumentPath = deps.setting.documentTag === 'documents';
 
       if (useMultiDocumentPath) {
         await fileProcessor.processMultipleOutputs(

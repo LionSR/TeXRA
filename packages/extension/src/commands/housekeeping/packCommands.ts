@@ -108,12 +108,7 @@ async function handlePack(config: unknown): Promise<void> {
     'config',
     async (data) => {
       const runWorkspacePack = (): Promise<FileOpResult> =>
-        runPack(
-          data.model,
-          data.inputFile,
-          data.agent,
-          data.outputFiles,
-        );
+        runPack(data.model, data.inputFile, data.agent, data.outputFiles);
 
       // Toolbar-driven invocations pass an executionId: snapshot the runDir
       // AND the workspace. The workspace pass is a no-op for new runs (their

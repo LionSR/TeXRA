@@ -631,7 +631,11 @@ class RegisterNode extends Node<AgentCreatorShared> {
     vscode.window.showInformationMessage(
       `Created agent at ${blueprint.filePath.fsPath}`,
     );
-    await promptToAddAgentToConfig(blueprint.agentName, false, blueprint.category);
+    await promptToAddAgentToConfig(
+      blueprint.agentName,
+      false,
+      blueprint.category,
+    );
     const doc = await vscode.workspace.openTextDocument(blueprint.filePath);
     await vscode.window.showTextDocument(doc);
   }

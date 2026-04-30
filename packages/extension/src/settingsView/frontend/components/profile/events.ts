@@ -38,10 +38,8 @@ export const ProviderKeyEvents = {
 } as const;
 
 export const AgentSelectionEvents = {
-  openYaml: (detail: {
-    agentName: string;
-    agentSource: AgentSourceType;
-  }) => createEvent('agent-open-yaml', detail),
+  openYaml: (detail: { agentName: string; agentSource: AgentSourceType }) =>
+    createEvent('agent-open-yaml', detail),
   setEnabled: (detail: {
     agentName: string;
     agentSource: AgentSourceType;

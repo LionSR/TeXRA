@@ -102,9 +102,7 @@ function parseListItemRow(row: {
 /** Loader for remote agents stored in Supabase. */
 export class RemoteAgentLoader {
   /** Load a remote agent configuration by name. */
-  static async loadRemoteAgent(
-    agentName: string,
-  ): Promise<RemoteAgentConfig> {
+  static async loadRemoteAgent(agentName: string): Promise<RemoteAgentConfig> {
     if (!(await SupabaseClient.isAuthenticated())) {
       throw new Error(
         'Remote agents require authentication. Sign in using the "TeXRA: Sign In" command.',
