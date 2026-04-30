@@ -439,10 +439,7 @@ async function runFlowWithLifecycle(
     // don't show VS Code popups that would confuse the user.
     if (!options?.isSubagent) {
       if (isDiskFullError(err)) {
-        bus.emit('requestShowError', {
-          message:
-            'No space left on device. Free up disk space and try again.',
-        });
+        bus.emit('requestShowError', { message: getSdkErrorMessage(err) });
       } else {
         const msg = toErrorMessage(err);
         if (
