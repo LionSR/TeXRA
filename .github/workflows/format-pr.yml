@@ -1,0 +1,48 @@
+name: Format PR
+
+on:
+  pull_request:
+
+concurrency:
+  group: format-pr-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format
+        run: npm run format
+
+      - name: Commit formatting changes
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: format code"
+          git push
