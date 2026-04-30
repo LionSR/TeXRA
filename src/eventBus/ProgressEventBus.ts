@@ -147,6 +147,10 @@ export interface ProgressEventPayloads {
    *  Listened by blocking tools (e.g. ExecutionsTool wait) to abort early. */
   followUpSent: { streamId: StreamTabId };
 
+  /** Request the progress view to remove a stream tab (used by short-lived
+   *  child streams that should auto-close once their work is done). */
+  removeStream: { streamId: StreamTabId };
+
   extensionDeactivating: undefined;
 
   /**
