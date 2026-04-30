@@ -209,10 +209,6 @@ export class HistoryList extends LitElement {
     this.state.toggleStates.set(event.detail.historyId, event.detail.open);
   }
 
-  private handleClear(): void {
-    this.dispatchEvent(HistoryViewEvents.clearHistory());
-  }
-
   private handlePageChange(event: CustomEvent<PageChangeDetail>): void {
     this.page = event.detail.page;
   }
@@ -238,15 +234,6 @@ export class HistoryList extends LitElement {
       : this.items;
 
     return html`
-      <div class="clear-container">
-        <vscode-toolbar-button
-          class="button-clear"
-          icon="clear-all"
-          label="Clear All History"
-          title="Clear all history"
-          @click=${this.handleClear}
-        ></vscode-toolbar-button>
-      </div>
       ${this.paginated
         ? html`<list-pagination
             .page=${this.page}

@@ -3,6 +3,8 @@ import { strict as assert } from 'assert';
 import { ReadConfigTool, UpdateConfigTool } from '@tools/setup/ConfigTools';
 import { setSetupPlatform, type SetupPlatform } from '@tools/setup/platform';
 
+import { createFakeSetupPlatform } from './fixtures';
+
 interface UpdateRecord {
   key: string;
   value: unknown;
@@ -16,41 +18,7 @@ function createPlatform(initial: Record<string, unknown> = {}): {
 } {
   const store: Record<string, unknown> = { ...initial };
   const updates: UpdateRecord[] = [];
-  const platform: SetupPlatform = {
-    secrets: {
-      async setApiKey() {},
-      async deleteApiKey() {},
-      async apiKeyExists() {
-        return false;
-      },
-      async hasUsableApiKey() {
-        return false;
-      },
-      async storedApiKeyExists() {
-        return false;
-      },
-      async anyApiKeyExists() {
-        return false;
-      },
-      async gitHubTokenExists() {
-        return 'none';
-      },
-      providers: [],
-    },
-    commands: {
-      async invoke() {},
-    },
-    extensions: {
-      isInstalled() {
-        return false;
-      },
-      async install() {},
-    },
-    auth: {
-      async getStatus() {
-        return { authenticated: false };
-      },
-    },
+  const platform = createFakeSetupPlatform({
     config: {
       get(key) {
         return store[key];
@@ -60,7 +28,7 @@ function createPlatform(initial: Record<string, unknown> = {}): {
         store[key] = value;
       },
     },
-  };
+  });
   return { platform, store, updates };
 }
 

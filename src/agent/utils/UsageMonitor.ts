@@ -2,6 +2,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
+import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   UsageLogService,
@@ -43,7 +44,15 @@ export interface UsageMonitorModelInfo {
     | 'supportsReasoning'
     | 'cacheDiscountFactor'
   >;
-  config: Pick<ModelConfig, 'provider' | 'name' | 'fullName' | 'inputPrice'>;
+  config: Pick<
+    ModelConfig,
+    | 'provider'
+    | 'name'
+    | 'fullName'
+    | 'inputPrice'
+    | 'openRouterOnly'
+    | 'requiresResponsesAPI'
+  >;
 }
 
 /**
@@ -238,10 +247,12 @@ export class UsageMonitor {
         }),
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
-        usedRelay: getServerSideKeyService().shouldUseServerSideKeysSync(
-          config.provider,
-          config.name,
-        ),
+        usedRelay:
+          !shouldUseOpenRouter(config) &&
+          getServerSideKeyService().shouldUseServerSideKeysSync(
+            config.provider,
+            config.name,
+          ),
         streamId: this.context.streamId,
       });
     } catch (error) {

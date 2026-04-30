@@ -62,7 +62,7 @@ function buildTooltip(
   const mainLine = [
     info.label,
     `Status: ${status}`,
-    info.model && `Model: ${info.model}`,
+    info.model && `Model: ${info.modelLabel ?? info.model}`,
     info.inputFile && `Input: ${info.inputFile}`,
   ]
     .filter(Boolean)
@@ -284,6 +284,12 @@ export class StreamTab extends LitElement {
         padding: var(--spacing-small) var(--spacing-tiny);
       }
 
+      .tab-container.is-compact .tab-delete {
+        width: 20px;
+        min-width: 20px;
+        height: 20px;
+      }
+
       .tab-container.is-compact .tab-header {
         gap: var(--spacing-tiny);
       }
@@ -445,7 +451,9 @@ export class StreamTab extends LitElement {
                       ? formatRelativeTime(this.lastTimestamp)
                       : ''}</span
                   >
-                  <span class="model">${stream.model ?? ''}</span>
+                  <span class="model"
+                    >${stream.modelLabel ?? stream.model ?? ''}</span
+                  >
                   <i
                     class=${`codicon codicon-${agentDecorator.icon} agent-category`}
                     title=${`Category: ${agentDecorator.label}`}
@@ -472,18 +480,14 @@ export class StreamTab extends LitElement {
                 </div>
               `}
         </button>
-        ${this.compact
-          ? nothing
-          : html`
-              <vscode-toolbar-button
-                class="tab-delete"
-                icon="close"
-                title="Delete stream"
-                aria-label="Delete stream"
-                data-stream=${stream.name}
-                data-action="delete"
-              ></vscode-toolbar-button>
-            `}
+        <vscode-toolbar-button
+          class="tab-delete"
+          icon="close"
+          title="Delete stream"
+          aria-label="Delete stream"
+          data-stream=${stream.name}
+          data-action="delete"
+        ></vscode-toolbar-button>
       </div>
     `;
   }
@@ -537,10 +541,17 @@ export class StreamTabs extends LitElement {
         scrollbar-width: thin;
       }
 
-      .clear-all-container {
+      .stream-list-footer {
         flex-shrink: 0;
         border-top: var(--border-thin) solid var(--color-border);
-        padding: var(--spacing-small);
+        padding: var(--spacing-small) var(--spacing-medium);
+      }
+
+      .stream-list-controls {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-small);
+        min-width: 0;
       }
 
       .agent-filter-group {
@@ -548,7 +559,8 @@ export class StreamTabs extends LitElement {
         justify-content: flex-start;
         flex-wrap: wrap;
         gap: var(--spacing-small);
-        margin-bottom: var(--spacing-small);
+        flex: 1 1 auto;
+        min-width: 0;
       }
 
       .agent-filter-group vscode-radio {
@@ -556,14 +568,30 @@ export class StreamTabs extends LitElement {
         flex: 0 0 auto;
       }
 
-      /* Child stream nesting */
+      .stream-list-actions {
+        display: flex;
+        flex: 0 0 auto;
+        justify-content: flex-end;
+        margin-left: auto;
+      }
+
+      .delete-all-streams {
+        color: var(--color-text-secondary);
+      }
+
+      .delete-all-streams::part(control) {
+        border-radius: var(--border-radius-medium);
+      }
+
+      .delete-all-streams:hover {
+        color: var(--color-removed);
+      }
+
+      /* Recursive child stream nesting */
       .child-streams {
         padding-left: var(--spacing-medium, 12px);
         border-left: var(--border-thin) solid var(--color-border);
         margin-left: var(--spacing-small);
-        max-height: 12rem;
-        overflow-y: auto;
-        scrollbar-gutter: stable;
       }
 
       .child-streams stream-tab {
@@ -604,10 +632,13 @@ export class StreamTabs extends LitElement {
    * `manuallyCollapsed` + `finishedCollapseHandled` sets.
    */
   private userOverride: Map<string, 'expanded' | 'collapsed'> = new Map();
+  private branchActivityCache: Map<StreamTabId, ChildActivity> = new Map();
 
   protected override willUpdate(changed: import('lit').PropertyValues): void {
     if (!changed.has('childStreamsByParent') && !changed.has('streamStates'))
       return;
+
+    this.branchActivityCache.clear();
 
     for (const parentId of this.userOverride.keys()) {
       if (!this.childStreamsByParent.has(parentId)) {
@@ -627,8 +658,8 @@ export class StreamTabs extends LitElement {
    * Single source of truth for "is this parent's child list expanded?".
    * Rules (top to bottom):
    *   1. Honor user intent if set.
-   *   2. Expand if any child is actively running.
-   *   3. Collapse once all children have reached a terminal status.
+   *   2. Expand if any child or descendant is actively running.
+   *   3. Collapse once every child branch has reached a terminal status.
    *   4. Otherwise (mixed / still-unknown), keep expanded — default on
    *      first appearance before status events arrive.
    */
@@ -642,7 +673,7 @@ export class StreamTabs extends LitElement {
     let anyActive = false;
     let anyUnknown = false;
     for (const child of children) {
-      const activity = classifyChild(this.streamStates, child.name);
+      const activity = this.getBranchActivity(child.name, new Set([parentId]));
       if (activity === 'active') anyActive = true;
       else if (activity === 'unknown') anyUnknown = true;
     }
@@ -659,6 +690,93 @@ export class StreamTabs extends LitElement {
     return this.streamStates.get(name)?.lastTimestamp;
   }
 
+  /**
+   * Classify an entire child branch, not just the direct row. Results are
+   * memoized for each reactive update so deep child trees are traversed once
+   * even though expansion and dimming both ask for branch activity.
+   */
+  private getBranchActivity(
+    streamId: StreamTabId,
+    visited: Set<string>,
+  ): ChildActivity {
+    if (visited.has(streamId))
+      return classifyChild(this.streamStates, streamId);
+
+    const cached = this.branchActivityCache.get(streamId);
+    if (cached) return cached;
+
+    const ownActivity = classifyChild(this.streamStates, streamId);
+    if (ownActivity === 'active') {
+      this.branchActivityCache.set(streamId, 'active');
+      return 'active';
+    }
+
+    const nextVisited = new Set(visited);
+    nextVisited.add(streamId);
+
+    let anyUnknown = ownActivity === 'unknown';
+    const children = this.childStreamsByParent.get(streamId) ?? [];
+    for (const child of children) {
+      const childActivity = this.getBranchActivity(child.name, nextVisited);
+      if (childActivity === 'active') {
+        this.branchActivityCache.set(streamId, 'active');
+        return 'active';
+      }
+      if (childActivity === 'unknown') anyUnknown = true;
+    }
+
+    const activity = anyUnknown ? 'unknown' : 'finished';
+    this.branchActivityCache.set(streamId, activity);
+    return activity;
+  }
+
+  private renderStreamNode(
+    stream: StreamTabInfo,
+    options: { compact: boolean; visited: Set<string> },
+  ): TemplateResult {
+    const nextVisited = new Set(options.visited);
+    nextVisited.add(stream.name);
+
+    const children = (this.childStreamsByParent.get(stream.name) ?? []).filter(
+      (child) => !nextVisited.has(child.name),
+    );
+    const childCount = children.length;
+    const expanded =
+      !options.compact &&
+      childCount > 0 &&
+      this.expandedParents.has(stream.name);
+    const isFinished =
+      stream.parentStreamId != null &&
+      this.getBranchActivity(stream.name, options.visited) === 'finished';
+
+    return html`
+      <stream-tab
+        class=${isFinished ? 'is-finished' : ''}
+        .info=${stream}
+        .compact=${options.compact}
+        .status=${this.getStatus(stream.name)}
+        .lastTimestamp=${this.getTimestamp(stream.name)}
+        ?active=${stream.name === this.activeStreamId}
+        .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}
+        .childCount=${childCount}
+        ?expanded=${expanded}
+      ></stream-tab>
+      ${!options.compact && childCount > 0
+        ? html`<div class="child-streams" ?hidden=${!expanded}>
+            ${repeat(
+              children,
+              (child) => child.name,
+              (child) =>
+                this.renderStreamNode(child, {
+                  compact: false,
+                  visited: nextVisited,
+                }),
+            )}
+          </div>`
+        : nothing}
+    `;
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="tabs">
@@ -667,29 +785,11 @@ export class StreamTabs extends LitElement {
             ${repeat(
               this.streams,
               (stream) => stream.name,
-              (stream) => {
-                const children = this.childStreamsByParent.get(stream.name);
-                const rawChildCount = children?.length ?? 0;
-                // In compact mode, force childCount to 0 so the entire
-                // <div class="child-streams"> subtree is unmounted (saves
-                // memory on sessions with many child streams). In non-compact
-                // mode, the div always mounts with ?hidden tied to `expanded`
-                // so DOM is preserved across user-driven toggles (the common
-                // case PR #2984 optimized for). Compact toggles come from
-                // sidebar resize, which is infrequent enough that
-                // unmount/remount is acceptable and frees memory.
-                const childCount = !this.compact ? rawChildCount : 0;
-                const expanded =
-                  childCount > 0 && this.expandedParents.has(stream.name);
-
-                // prettier-ignore
-                return html`<stream-tab .info=${stream} .compact=${this.compact} .status=${this.getStatus(stream.name)} .lastTimestamp=${this.getTimestamp(stream.name)} ?active=${stream.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)} .childCount=${rawChildCount} ?expanded=${expanded}></stream-tab>${children && childCount > 0 ? html`<div class="child-streams" ?hidden=${!expanded}>${repeat(children, (child) => child.name, (child) => {
-                  const childStatus = this.getStatus(child.name);
-                  const isFinished = classifyChild(this.streamStates, child.name) === 'finished';
-                  // prettier-ignore
-                  return html`<stream-tab class=${isFinished ? 'is-finished' : ''} .info=${child} .compact=${false} .status=${childStatus} .lastTimestamp=${this.getTimestamp(child.name)} ?active=${child.name === this.activeStreamId} .hasPendingApproval=${this.pendingApprovalStreamIds.has(child.name)}></stream-tab>`;
-                })}</div>` : nothing}`;
-              },
+              (stream) =>
+                this.renderStreamNode(stream, {
+                  compact: this.compact,
+                  visited: new Set(),
+                }),
             )}
           </div>
           ${when(
@@ -702,35 +802,40 @@ export class StreamTabs extends LitElement {
         </div>
         ${this.compact
           ? nothing
-          : html`<div class="clear-all-container">
-              <vscode-radio-group
-                id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
-                class="agent-filter-group"
-                .value=${this.filter}
-                @change=${this.handleFilterChange}
-              >
-                ${repeat(
-                  FILTER_BUTTONS,
-                  (btn) => btn.id,
-                  (btn) => html`
-                    <vscode-radio
-                      id=${btn.id}
-                      value=${btn.filter}
-                      ?checked=${this.filter === btn.filter}
-                    >
-                      ${btn.label}
-                    </vscode-radio>
-                  `,
-                )}
-              </vscode-radio-group>
+          : html`<div class="stream-list-footer">
+              <div class="stream-list-controls">
+                <vscode-radio-group
+                  id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
+                  class="agent-filter-group"
+                  .value=${this.filter}
+                  @change=${this.handleFilterChange}
+                >
+                  ${repeat(
+                    FILTER_BUTTONS,
+                    (btn) => btn.id,
+                    (btn) => html`
+                      <vscode-radio
+                        id=${btn.id}
+                        value=${btn.filter}
+                        ?checked=${this.filter === btn.filter}
+                      >
+                        ${btn.label}
+                      </vscode-radio>
+                    `,
+                  )}
+                </vscode-radio-group>
 
-              <vscode-toolbar-button
-                id=${ELEMENT_IDS.DELETE_ALL_BTN}
-                icon="close-all"
-                label="Clear all"
-                title="Clear all streams"
-                @click=${this.handleDeleteAll}
-              ></vscode-toolbar-button>
+                <div class="stream-list-actions">
+                  <vscode-toolbar-button
+                    id=${ELEMENT_IDS.DELETE_ALL_BTN}
+                    class="delete-all-streams"
+                    icon="trash"
+                    label="Clear all streams"
+                    title="Clear all streams"
+                    @click=${this.handleDeleteAll}
+                  ></vscode-toolbar-button>
+                </div>
+              </div>
             </div>`}
       </div>
     `;

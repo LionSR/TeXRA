@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
@@ -21,8 +20,8 @@ import {
   COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { RecordingManager } from '@common/managers/RecordingManager';
+import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
@@ -122,6 +121,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
 
     this.handlerRegistry = this.createHandlerRegistry();
+
+    const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
+      void this.handleDeleteStream({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        stream: streamId,
+      });
+    });
+    context.subscriptions.push({ dispose: unsubscribeRemoveStream });
   }
 
   /**
@@ -365,8 +372,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Stop the agent if it is still running so the process does not leak
-    await vscode.commands.executeCommand('texra.stopAgent', streamId);
+    // Stop the agent if it is still running so the process does not leak.
+    // Skip for already-finished streams to avoid spurious STOPPED status
+    // transitions and child interrupts on naturally completed work.
+    if (isInFlightStatus(StreamStatusService.get(streamId))) {
+      await vscode.commands.executeCommand('texra.stopAgent', streamId);
+    }
 
     // Clear pending approvals, retry requests, queued follow-ups, and YOLO state
     cleanupApprovalsForStream(streamId);
@@ -1202,13 +1213,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleRunCompileFixer(streamId: StreamTabId): Promise<void> {
-    if (isInFlightStatus(StreamStatusService.get(streamId))) {
-      await vscode.window.showInformationMessage(
-        'Wait for the workflow run to finish before launching latexFixer.',
-      );
-      return;
-    }
-
     const taskState = this.provider.state.meta.getTaskState(streamId);
     if (!taskState || !isWorkflowTaskState(taskState)) {
       await vscode.window.showWarningMessage(

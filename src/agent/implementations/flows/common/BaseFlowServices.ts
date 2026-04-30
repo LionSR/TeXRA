@@ -5,6 +5,7 @@ import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
 export interface AgentCore<C = unknown> {
   modelHandler: IModelHandler<any, any, any, any, C>;
@@ -24,6 +25,12 @@ export interface AgentCore<C = unknown> {
    * to compute the child's depth.
    */
   delegationDepth?: number;
+  /**
+   * Delegation policy snapshot for this agent run. Tool-use flows set this once
+   * so the visible tool list and runtime delegation gate derive from the same
+   * max-depth setting without carrying a second depth value.
+   */
+  delegationConfig?: NestedDelegationConfig;
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {

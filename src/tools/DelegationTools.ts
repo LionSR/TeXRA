@@ -50,7 +50,10 @@ import {
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { delegationAllowed } from '@shared/constants/delegationPolicy';
+import {
+  evaluateDelegationGate,
+  type NestedDelegationConfig,
+} from '@shared/constants/delegationPolicy';
 import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
@@ -98,9 +101,9 @@ const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
  * Per-execution delivery gate for subagent result routing.
  *
  * `hasDelivered` prevents duplicate delivery of the same result via both
- * `onBeforeWaiting` and `onCompleted`. When `delegate_agent (resume)` confirms a
- * follow-up was accepted, it resets `hasDelivered` so the next cycle's
- * `onBeforeWaiting` delivers the new result back to the orchestrator.
+ * `onBeforeWaiting` and `onCompleted`. Accepted follow-ups mark delivery
+ * pending immediately so interrupts before consumption still report back;
+ * consuming a follow-up keeps the next cycle pending for `onBeforeWaiting`.
  */
 interface SubagentDeliveryState {
   hasDelivered: boolean;
@@ -209,21 +212,56 @@ interface ApprovalMeta {
 }
 
 /**
- * Defense-in-depth depth gate shared by fresh delegations and resumes.
- * The tool-use flow already filters delegation tools from the toolset when
- * the cap is reached, but if a rogue agent calls through anyway (fresh or
- * via the execution_id resume path) we refuse here with a clear error so
- * the LLM can pivot.
- *
- * Delegates to the same `delegationAllowed` predicate the tool filter
- * uses so NaN / sentinel depths behave identically at both gates.
+ * Runtime depth gate shared by fresh delegations and resumes.
+ * Tool-use flows pass the same max-depth snapshot used for tool resolution so
+ * prompt pruning and runtime enforcement derive from one policy snapshot.
+ * Direct tool calls fall back to the current workspace policy.
  */
-function depthGateError(parentDelegationDepth: number): ToolResult | null {
-  const config = readNestedDelegationConfig();
-  if (delegationAllowed(parentDelegationDepth, config)) return null;
+function depthGateError(
+  parentDelegationDepth: number,
+  configSnapshot?: NestedDelegationConfig,
+): ToolResult | null {
+  const gate = evaluateDelegationGate(
+    parentDelegationDepth,
+    configSnapshot ?? readNestedDelegationConfig(),
+  );
+  if (gate.allowed) return null;
+
+  const unknownDepth = gate.blockReason === 'unknown_depth';
+  const reason = unknownDepth
+    ? [
+        'The current session was resumed from saved state,',
+        'but its delegation lineage could not be verified.',
+      ].join(' ')
+    : [
+        `This agent is already at delegation depth ${gate.depth},`,
+        'and agents may delegate only when their current depth is less than',
+        'the configured max depth.',
+      ].join(' ');
+  const remediation = unknownDepth
+    ? [
+        'Resume or restart from a valid parent session,',
+        'or complete this task directly without delegating.',
+      ].join(' ')
+    : [
+        'Raise Settings → Multi-Agent → Max delegation depth,',
+        'or complete this task directly without delegating.',
+      ].join(' ');
   return {
-    error: `Delegation depth cap reached (max depth ${config.maxDepth}). Raise Settings → Multi-Agent → Max delegation depth, or complete this task directly without delegating.`,
+    error: [
+      `Delegation depth cap reached (current depth ${gate.depth},`,
+      `max depth ${gate.maxDepth}).`,
+      reason,
+      remediation,
+    ].join(' '),
     isError: true,
+    diagnostics: {
+      type: 'delegation_depth_cap',
+      currentDepth: gate.depth,
+      currentDepthKnown: !unknownDepth,
+      maxDepth: gate.maxDepth,
+      blockReason: gate.blockReason,
+    },
   };
 }
 
@@ -247,7 +285,10 @@ async function executeSubagent(
   const parentExecutionId = parentContext?.executionId;
   const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
 
-  const gated = depthGateError(parentDelegationDepth);
+  const gated = depthGateError(
+    parentDelegationDepth,
+    parentContext?.delegationConfig,
+  );
   if (gated) return gated;
 
   const executionId = generateExecutionId();
@@ -263,10 +304,11 @@ async function executeSubagent(
     parentDelegationDepth + 1,
   );
 
-  // Track delivery state in the module-level map so delegate_agent (resume) can reset it.
+  // Track delivery state in the module-level map so delegate_agent (resume)
+  // can find live subagents and enqueue follow-up instructions.
   // The flag prevents duplicate delivery of the same result via both
-  // onBeforeWaiting and onCompleted. When delegate_agent (resume) resets the flag,
-  // the next onBeforeWaiting will deliver the resumed cycle's result.
+  // onBeforeWaiting and onCompleted. When a follow-up is consumed, the next
+  // onBeforeWaiting will deliver the resumed cycle's result.
   const deliveryState: SubagentDeliveryState = { hasDelivered: false };
   activeSubagentDelivery.set(executionId, deliveryState);
   let childStreamId: StreamTabId | undefined;
@@ -293,6 +335,9 @@ async function executeSubagent(
       }
     },
     onProgress,
+    onFollowUpConsumed: () => {
+      deliveryState.hasDelivered = false;
+    },
     onBeforeWaiting: async (lastResponse, touchedFiles) => {
       if (deliveryState.hasDelivered || !childStreamId) return;
       const wallTimeMs = Date.now() - startedAt;
@@ -821,7 +866,7 @@ const DelegateAgentInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'If set, resumes a WAITING tool-use subagent instead of starting a new one. Use the execution ID from the original delegation result or /executions.',
+      'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the execution ID from the original delegation result or /executions.',
     ),
 });
 
@@ -831,11 +876,11 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 export class DelegateAgentTool extends defineTool({
   name: 'delegate_agent',
   description:
-    () => `Delegate a task to a tool-use agent, or resume a WAITING subagent with follow-up instructions.
+    () => `Delegate a task to a tool-use agent, or queue follow-up instructions for a tool-use subagent.
 
 **New delegation** (no execution_id): Launches a new tool-use agent with its own tools (file reading, editing, search, bash). Tool-use agents are versatile—they can create entire documents, make targeted edits, perform research, or run multi-step investigations.
 
-**Resume** (with execution_id): Sends follow-up instructions to a WAITING subagent. The subagent keeps its full history. Result arrives asynchronously like the original delegation.
+**Resume** (with execution_id): Sends follow-up instructions to a WAITING or still-running subagent. If the subagent is busy, the instruction is queued for its next turn. The subagent keeps its full history. Result arrives asynchronously like the original delegation.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
@@ -889,14 +934,17 @@ Git worktree support: ${
     return proposeAndExecute(proposal, input.agent, ctx.streamId);
   }
 
-  /** Resume a WAITING tool-use subagent with follow-up instructions. */
+  /** Queue follow-up instructions for a tool-use subagent. */
   private async resumeAgent(
     executionId: string,
     instruction: string,
   ): Promise<ToolResult> {
-    const parentDelegationDepth =
-      getCurrentToolFileInteractionContext()?.delegationDepth ?? 0;
-    const gated = depthGateError(parentDelegationDepth);
+    const parentContext = getCurrentToolFileInteractionContext();
+    const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
+    const gated = depthGateError(
+      parentDelegationDepth,
+      parentContext?.delegationConfig,
+    );
     if (gated) return gated;
 
     const handle = getHandle(executionId);
@@ -919,25 +967,18 @@ Git worktree support: ${
       );
     }
 
-    if (!deliveryState.hasDelivered) {
+    if (ToolUseFollowUpQueue.hasQueuedFollowUp(handle.childStreamId)) {
       throw new Error(
-        `'${handle.agentName}' is still processing. Wait for its result before sending a follow-up.`,
+        `'${handle.agentName}' already has a pending follow-up queued. Wait for its next result before sending another follow-up.`,
       );
     }
-    deliveryState.hasDelivered = false;
 
     const framedInstruction = formatFollowUpInstruction(instruction);
-    let result: Awaited<ReturnType<typeof sendFollowUp>>;
-    try {
-      result = await sendFollowUp(handle.childStreamId, framedInstruction);
-    } catch (err) {
-      deliveryState.hasDelivered = true;
-      throw err;
-    }
+    const result = await sendFollowUp(handle.childStreamId, framedInstruction);
 
     switch (result.status) {
       case 'sent':
-      case 'queued':
+        deliveryState.hasDelivered = false;
         return {
           summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
@@ -945,8 +986,16 @@ Git worktree support: ${
             `Execution ID: ${executionId}`,
           ].join('\n'),
         };
+      case 'queued':
+        deliveryState.hasDelivered = false;
+        return {
+          summary: `Follow-up queued for '${handle.agentName}'`,
+          output: [
+            `Follow-up instruction queued for '${handle.agentName}' (${result.reason}). The subagent will process it and deliver a new result automatically.`,
+            `Execution ID: ${executionId}`,
+          ].join('\n'),
+        };
       case 'no_session':
-        deliveryState.hasDelivered = true;
         throw new Error(
           `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,
         );

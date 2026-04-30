@@ -10,6 +10,7 @@ export {
   formatZodError,
   parseWithErrorDisplay,
   isFileNotFoundError,
+  isDiskFullError,
   logErrorMessage,
   toErrorMessage,
   showLoggedErrorMessage,

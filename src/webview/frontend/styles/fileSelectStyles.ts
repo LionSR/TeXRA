@@ -70,6 +70,16 @@ export const fileSelectLayoutStyles = css`
     margin-right: var(--spacing-small);
   }
 
+  .file-select-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
   .file-select-actions,
   vscode-toolbar-container.file-select-actions {
     flex-direction: column !important;

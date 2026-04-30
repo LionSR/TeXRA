@@ -74,6 +74,7 @@ import {
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
+import type { EventEmitter } from 'node:events';
 import type { ModelConfig } from 'llm-zoo';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -368,8 +369,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const cleanup = (): void => {
-        ws.socket.removeListener('open', onOpen);
-        ws.socket.removeListener('error', onError);
+        ws.socket.off('open', onOpen);
+        ws.socket.off('error', onError);
         signal?.removeEventListener('abort', onAbort);
       };
       const onOpen = (): void => {
@@ -695,7 +696,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.wsKeepaliveInterval = setInterval(() => {
       try {
         if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
-          ws.socket.ping();
+          ws.socket.platformSocket.ping();
         }
       } catch {
         // Ignore ping errors

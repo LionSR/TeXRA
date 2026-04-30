@@ -1,9 +1,12 @@
 import * as path from 'path';
 
+import { MODEL_CONFIGS } from 'llm-zoo';
+
 import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 import { isProcessAgent } from '@shared/streams/agentKind';
+import { compareByNewestCreationTime } from './streamOrdering';
 import type { ProgressViewState } from './state/ProgressViewState';
 
 /**
@@ -24,12 +27,6 @@ function matchesFilter(
     filter === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
 
   return resolved === expected ? resolved : null;
-}
-
-function compareByCreationTime(a: StreamTabInfo, b: StreamTabInfo): number {
-  return (
-    a.creationTimestamp - b.creationTimestamp || a.name.localeCompare(b.name)
-  );
 }
 
 /**
@@ -84,6 +81,10 @@ export function buildStreamInfo(
     name: id,
     label,
     model: processAgent ? undefined : config?.model,
+    modelLabel:
+      !processAgent && config?.model
+        ? (MODEL_CONFIGS[config.model]?.label ?? config.model)
+        : undefined,
     agent: config?.agent,
     agentCategory: category,
     hasMultipleOutputs:
@@ -112,5 +113,5 @@ export function buildStreamInfos(
     .map((id) => buildStreamInfo(state, id, filter))
     .filter((info): info is StreamTabInfo => info !== null);
 
-  return infos.sort(compareByCreationTime);
+  return infos.sort(compareByNewestCreationTime);
 }

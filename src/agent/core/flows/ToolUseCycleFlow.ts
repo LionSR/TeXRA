@@ -795,6 +795,7 @@ class ToolUseDispatchNode<C> extends Node<
           agentName: options.agentName,
           workingDirectory: options.workingDirectory,
           delegationDepth: options.delegationDepth,
+          delegationConfig: options.delegationConfig,
           onExecutionReady,
           onToolOutput,
         },

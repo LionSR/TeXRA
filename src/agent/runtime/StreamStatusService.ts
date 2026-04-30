@@ -62,6 +62,13 @@ export const StreamStatusService = {
     this.set(stream, STREAM_STATUS.READY);
   },
 
+  /** Reset every stream to READY. Used by ProgressViewState.clearAll(). */
+  clearAll(): void {
+    for (const stream of [...statusMemory.keys()]) {
+      this.clear(stream);
+    }
+  },
+
   entries(): IterableIterator<[StreamTabId, StreamStatus]> {
     return statusMemory.entries();
   },

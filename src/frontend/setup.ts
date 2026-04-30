@@ -30,11 +30,13 @@ const LATEX_CONFIG_VERSION = 2;
 
 /**
  * Legacy agent files that should be deleted from GlobalStorage.
- * These agents have moved to remote-only and should not exist locally.
+ * These agents have been removed or renamed and should not exist locally.
  */
 const LEGACY_AGENT_FILES = [
   'agents/generic.yaml',
   'agents/generic_multiple.yaml',
+  'agents/write/paper2cover.yaml',
+  'agents/write/write_slide.yaml',
 ];
 
 /**
@@ -67,11 +69,18 @@ export async function initializeToolDefaults(): Promise<void> {
 }
 
 /**
- * Copies default agent files from the extension resources to the global storage directory
+ * Reconciles bundled agents in global storage:
+ *  - Always prunes renamed/removed legacy files (idempotent; cheap).
+ *  - Re-copies bundled agents only on version bump or when files are missing.
+ *
+ * Splitting these concerns means a stale legacy file gets cleaned up on
+ * every activation, even when the bundled set is otherwise unchanged.
  */
 export async function copyDefaultAgents(
   context: vscode.ExtensionContext,
 ): Promise<void> {
+  await deleteLegacyAgentFiles();
+
   const currentVersion = vscode.extensions.getExtension(context.extension.id)
     ?.packageJSON.version;
   const lastKnownVersion = globalSM.get<string>(
@@ -101,7 +110,6 @@ export async function copyDefaultAgents(
       { overwrite: true },
     );
 
-    await deleteLegacyAgentFiles();
     await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
   } catch (err) {
     logger.error(

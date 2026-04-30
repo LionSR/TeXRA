@@ -142,7 +142,7 @@ import {
   getProviderDisplayName,
   getProviderKeyUrl,
 } from '@utils/config/providerConfig';
-import { getConfig } from '@utils/config/configUtils';
+import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
@@ -288,6 +288,7 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
 
     const item: ModelSelectionItem = {
       name,
+      label: config.label,
       provider: config.provider,
       enabled: enabledSet.has(name),
       deprecated: config.deprecated ?? false,
@@ -359,6 +360,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
     return {
+      // Lifecycle: webview signals it's mounted; populate every tab's
+      // initial data via the single `sendAllData` source of truth.
+      [SETTINGS_VIEW_COMMANDS.WEBVIEW_READY]: () =>
+        this.withActiveWebview((w) => this.sendAllData(w)),
+
       // Navigation handlers
       [SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS]: () =>
         this.handleOpenVscodeSettings(),
@@ -1065,8 +1071,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     configKey: string,
     enabled: boolean,
   ): Promise<void> {
-    const config = vscode.workspace.getConfiguration();
-    await config.update(configKey, enabled, vscode.ConfigurationTarget.Global);
+    await updateConfig(configKey, enabled, {
+      target: vscode.ConfigurationTarget.Global,
+      prefix: false,
+    });
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
@@ -1432,14 +1440,28 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       data.mode === 'included',
     );
 
+    // Included Access routes through the TeXRA relay — OpenRouter bypasses it.
+    // Disable OpenRouter when switching to Included Access so routing is consistent.
+    let openRouterDisabled = false;
+    if (
+      data.mode === 'included' &&
+      globalSM?.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
+    ) {
+      await globalSM.update(GlobalStateKey.USE_OPENROUTER, false);
+      openRouterDisabled = true;
+    }
+
     // Access mode affects model availability — invalidate cached options.
     invalidateModelOptionsCache();
     await this.withActiveWebview((w) => this.sendProfileData(w));
 
     const modeLabel =
       data.mode === 'included' ? 'Included Access' : 'My Own Keys';
+    const suffix = openRouterDisabled
+      ? ' OpenRouter has been turned off (not compatible with Included Access).'
+      : '';
     void vscode.window.showInformationMessage(
-      `Model access changed to: ${modeLabel}`,
+      `Model access changed to: ${modeLabel}.${suffix}`,
     );
   }
 
@@ -1578,12 +1600,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     if (def?.globalStateKey) {
       await globalSM?.update(def.globalStateKey, data.value);
     } else {
-      const config = vscode.workspace.getConfiguration();
-      await config.update(
-        data.key,
-        data.value,
-        vscode.ConfigurationTarget.Global,
-      );
+      await updateConfig(data.key, data.value, {
+        target: vscode.ConfigurationTarget.Global,
+        prefix: false,
+      });
     }
 
     await this.withActiveWebview(async (w) => {

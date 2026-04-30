@@ -45,7 +45,8 @@ export class ApiAccessSection extends LitElement {
             <span class="option-content">
               <span class="option-title">Use Included Access</span>
               <span class="option-description"
-                >Works automatically. No setup needed.</span
+                >Works automatically. No setup needed. Does not apply to
+                OpenRouter — those models always use your OpenRouter key.</span
               >
             </span>
           </label>

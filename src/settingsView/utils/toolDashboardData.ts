@@ -161,7 +161,7 @@ export async function buildToolDashboardItems(
 
   const disabledIds = getDisabledToolIds();
   const externalItems: ToolDashboardItem[] = [];
-  for (const { id, tools, status, statusDetail } of results) {
+  for (const { id, tools, status, statusLabel, statusDetail } of results) {
     const def = findExternalToolDef(id);
     if (!def || def.hideFromDashboard) continue;
     externalItems.push({
@@ -171,6 +171,7 @@ export async function buildToolDashboardItems(
       description: def.description,
       tools: enrichTools(tools),
       status,
+      statusLabel,
       requiresSetup: true,
       installGuide: def.installGuide,
       installUrl: def.installUrl,
