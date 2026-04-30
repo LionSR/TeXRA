@@ -2,7 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.37.6] - 2026-04-27
+
+### Features
+
+- **GPT-5.5 Pro** — OpenAI's GPT-5.5 Pro (`gpt55pro`) is now available in the model catalog as an opt-in choice for the hardest planning, long-horizon, and large-codebase tasks. It extends GPT-5.5 with a 1.05M-token context window and `xhigh` default reasoning effort. Premium pricing ($30/M input, $180/M output) and Ultra-tier only on the relay — enable it from Settings → Models when GPT-5.5 isn't enough.
+- **Computer Scientist (ML) multi-agent preset** — a new built-in team preset tuned for empirical ML and CS work pairs a numerics agent for code-driven experiments with a search agent for literature and a review/criticize agent for methodology and baseline scrutiny.
+- **Setup assistant can run terminal commands** — the setup wizard can now hand off sudo prompts and interactive installers to your VS Code terminal instead of stalling on them.
+
+### Improvements
+
+- **Premium-pricing advisory for GPT Pro models** — `gpt5pro`, `gpt52pro`, and `gpt55pro` now show a warning in the model dropdown tooltip and the Settings → Models tab pointing users to the External Inquiry tool, which lets agents ask you to paste an answer from your own ChatGPT subscription instead of paying per-token API rates for these flagship Pro models.
+- **Friendlier first-run experience** — the status bar now shows a "Get Started" button that opens the setup assistant for both sign-in and API-key flows; if agents fail to load you get a dismissible notification with Retry and View Logs actions; and the welcome view lists numbered next steps instead of a generic message.
+- **Model labels in selection lists** — model labels (e.g. "Fastest", "Balanced") now appear alongside model names in the Settings → Models selection list so you can tell at a glance what each choice is optimised for.
+- **Recent runs shown first** — the progress board now lists your most recent runs at the top.
+- **Scrollable command output** — long command output in the progress board scrolls independently, and you can copy it in formatted or plain-text form.
+- **More reliable follow-ups during delegation** — messages sent while a delegated agent is still working are queued and delivered once it's ready, instead of being dropped.
+- **Settings UI polish** — model and agent dropdowns are wider; model labels appear in run tab headers; the GitHub tools section shows prerequisite hints; and the Multi-Agent tab layout is more compact and consistent.
+- **API setup guidance in Models tab** — a hint banner appears in Settings → Models when no API key is detected, giving users a direct path to configuration.
+- **External Inquiry quick-links** — the External Inquiry panel now includes direct links to documentation so users know when and how to use it.
+
+### Bug Fixes
+
+- **Progress board fails to open after a crash** — TeXRA now recovers cleanly if its saved state was corrupted by an unexpected shutdown, so the progress board always opens on startup.
+- **Agent panels stuck open after delegation** — panels from completed delegated work now close properly and can no longer get stuck mid-initialisation.
+- **GitHub status stale in Settings** — the GitHub connection status now refreshes each time you open Settings instead of showing outdated information.
 
 ## [0.37.5] - 2026-04-24
 

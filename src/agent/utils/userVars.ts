@@ -496,7 +496,7 @@ export function getToolFlags(
       ? 'Choose codex for coding tasks that benefit from a separate OpenAI agent — it runs in its own sandbox with independent tool use. ' +
         'Codex is async and multi-turn, mirroring delegate_agent: each call returns an execution ID, and results arrive as follow-up messages that include a thread_id. ' +
         'Pass that thread_id back on a later codex call to send a follow-up instruction to the same session — the agent retains full history and file context. ' +
-        'The follow-up errors out if the thread is still processing; wait for its delivery before resuming. ' +
+        "If the thread is still processing, the follow-up waits in that session's queue. " +
         'When multiple codex agents need to edit the same files, or when you want to isolate experimental changes, ' +
         'use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.'
       : '',

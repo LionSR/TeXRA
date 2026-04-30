@@ -4,10 +4,7 @@ import { strict as assert } from 'assert';
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';
 import { InvokeCommandTool } from '@tools/setup/InvokeCommandTool';
-import {
-  setSetupPlatform,
-  type SetupPlatform,
-} from '@tools/setup/platform';
+import { setSetupPlatform, type SetupPlatform } from '@tools/setup/platform';
 
 import { createFakeSetupPlatform } from './fixtures';
 

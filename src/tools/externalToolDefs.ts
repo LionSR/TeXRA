@@ -49,10 +49,14 @@ export interface ExternalToolDef {
   readonly id: string;
   /** Tool names belonging to this group — must match registry keys. */
   readonly tools: readonly RegisteredToolName[];
+  /** Optional shared probe result passed to check/status/detail callbacks. */
+  readonly probe?: () => Promise<unknown>;
   /** Returns true if the external dependency is available. */
-  readonly check: () => Promise<boolean>;
+  readonly check: (probeResult?: unknown) => Promise<boolean>;
   /** Optional detailed status string resolved at check time (shown below description). */
-  readonly detailCheck?: () => Promise<string | undefined>;
+  readonly detailCheck?: (probeResult?: unknown) => Promise<string | undefined>;
+  /** Optional short status label for the dashboard badge. */
+  readonly statusLabel?: (probeResult?: unknown) => Promise<string | undefined>;
   // Dashboard UI metadata
   readonly name: string;
   readonly category: ToolCategory;
@@ -114,6 +118,27 @@ async function probeZoteroBbt(port: number): Promise<boolean> {
     }
     return false;
   }
+}
+
+async function getGitHubPRPrerequisites(): Promise<{
+  tokenPresent: boolean;
+  inGitRepo: boolean;
+}> {
+  const tokenPresent = getGitHubToken() !== undefined;
+  const inGitRepo = await isGitRepository();
+  return { tokenPresent, inGitRepo };
+}
+
+type GitHubPRPrerequisites = Awaited<
+  ReturnType<typeof getGitHubPRPrerequisites>
+>;
+
+async function resolveGitHubPRPrerequisites(
+  probeResult: unknown,
+): Promise<GitHubPRPrerequisites> {
+  return probeResult === undefined
+    ? getGitHubPRPrerequisites()
+    : (probeResult as GitHubPRPrerequisites);
 }
 
 // ============================================================
@@ -252,23 +277,33 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     toggleable: true,
     installActionCommand: 'texra.showGitSettings',
     installActionLabel: 'Open Git settings',
-    check: async () => {
-      if (!getGitHubToken()) return false;
-      return await isGitRepository();
+    probe: getGitHubPRPrerequisites,
+    check: async (probeResult) => {
+      const { tokenPresent, inGitRepo } =
+        await resolveGitHubPRPrerequisites(probeResult);
+      return tokenPresent && inGitRepo;
     },
-    detailCheck: async () => {
-      const tokenPresent = getGitHubToken() !== undefined;
-      const inGitRepo = await isGitRepository();
+    statusLabel: async (probeResult) => {
+      const { tokenPresent, inGitRepo } =
+        await resolveGitHubPRPrerequisites(probeResult);
+      if (tokenPresent && inGitRepo) return undefined;
+      if (tokenPresent && !inGitRepo) return 'Needs git repo';
+      if (!tokenPresent && inGitRepo) return 'Needs token';
+      return 'Needs setup';
+    },
+    detailCheck: async (probeResult) => {
+      const { tokenPresent, inGitRepo } =
+        await resolveGitHubPRPrerequisites(probeResult);
       if (tokenPresent && inGitRepo) {
         return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
       }
       if (!tokenPresent && !inGitRepo) {
-        return 'Workspace is not a git repo and no GitHub token is configured. Open a git-tracked folder and set a token in the Git tab.';
+        return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in the Git tab.';
       }
       if (!tokenPresent) {
-        return 'Workspace is a git repo, but no GitHub token is configured. Set one in the Git tab.';
+        return 'This workspace is a git repo. Set a GitHub personal access token in the Git tab to enable PR activity subscriptions.';
       }
-      return 'GitHub token is set, but the workspace is not a git repo. Open a git-tracked folder to use PR subscriptions.';
+      return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
     },
   },
 

@@ -145,6 +145,12 @@ interface ResolveAgentOptions {
   streamTabIdOverride?: StreamTabId;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
   onBeforeActivation?: (streamId: StreamTabId) => void;
+  /**
+   * Fires immediately after setActiveStream is emitted. Marks the activation
+   * boundary: any subsequent failure should surface on this stream (the UI
+   * tab is now visible) rather than be dropped silently.
+   */
+  onActivated?: (streamId: StreamTabId) => void;
   /** When true, reject if configPayload.agentCategory doesn't match the YAML-defined category. */
   enforceCategory?: boolean;
 }
@@ -224,6 +230,7 @@ async function resolveAgentBase(
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: useMultipleOutputs,
   });
+  options?.onActivated?.(streamId);
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
@@ -484,10 +491,47 @@ function buildFallbackNotification(config: AgentConfig) {
 // ============================================================================
 
 /**
+ * Saga-style compensation for a failed stream activation.
+ *
+ *  - Pre-activation failure (no `activatedStreamId`): the UI tab was never
+ *    registered. Release the preliminary lock if we held it; the caller
+ *    won't ever see a stream.
+ *
+ *  - Post-activation failure (`activatedStreamId` set): the UI tab is
+ *    visible. Surface the failure on it and transition to ERROR so the
+ *    tab doesn't hang in INITIALIZING. Release the preliminary lock only
+ *    when the activation switched to a different id (rare: when
+ *    `useMultipleOutputs` flips during resolution).
+ */
+function compensateFailedActivation(args: {
+  preliminaryStreamId?: StreamTabId;
+  activatedStreamId?: StreamTabId;
+  configPayload: AgentConfigPayload;
+  err: unknown;
+}): void {
+  const { preliminaryStreamId, activatedStreamId, configPayload, err } = args;
+
+  if (activatedStreamId) {
+    new AgentLogger(activatedStreamId, true).logError(
+      `Failed to start agent ${configPayload.agent}: ${getSdkErrorMessage(err)}`,
+      err,
+      { operation: `start ${configPayload.agent}` },
+    );
+    StreamStatusService.set(activatedStreamId, STREAM_STATUS.ERROR);
+  }
+
+  if (preliminaryStreamId && preliminaryStreamId !== activatedStreamId) {
+    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
+  }
+}
+
+/**
  * Resolves agent context and acquires stream lock, handling the preliminary→final
  * stream ID correction that occurs when useMultipleOutputs changes during resolution.
  *
- * Consolidates the acquire → resolve → correct pattern duplicated across entry points.
+ * Treats the `setActiveStream` emission as a transactional commit point:
+ * resolution failures before that point release the lock silently; failures
+ * after surface on the visible tab via {@link compensateFailedActivation}.
  */
 async function resolveAndAcquireStream(
   configPayload: AgentConfigPayload,
@@ -497,43 +541,48 @@ async function resolveAndAcquireStream(
     taskType?: string;
     onBeforeActivation?: (streamId: StreamTabId) => void;
     enforceCategory?: boolean;
+    /** Skip the `requestShowError` toast — for callers that show their own UI. */
+    suppressErrorNotification?: boolean;
   },
 ): Promise<ResolvedAgentBase> {
-  if (options?.streamTabIdOverride) {
-    // Direct resolution with known stream ID (e.g., resume from snapshot)
-    return resolveAgentBase(configPayload, executionId, {
-      streamTabIdOverride: options.streamTabIdOverride,
-      onBeforeActivation: options.onBeforeActivation,
-      enforceCategory: options.enforceCategory,
-    });
+  let preliminaryStreamId: StreamTabId | undefined;
+  let resolvedExecutionId = executionId;
+
+  if (!options?.streamTabIdOverride) {
+    if (!configPayload.agent || !configPayload.model) {
+      throw new Error('Missing required fields: model and/or agent');
+    }
+    resolvedExecutionId = executionId ?? generateExecutionId();
+    preliminaryStreamId = getStreamTabId(
+      configPayload.agent,
+      configPayload.model,
+      { executionId: resolvedExecutionId },
+    );
+    acquireStreamOrThrow(preliminaryStreamId, options?.taskType);
   }
 
-  if (!configPayload.agent || !configPayload.model) {
-    throw new Error('Missing required fields: model and/or agent');
-  }
-  const resolvedExecutionId = executionId ?? generateExecutionId();
-  const preliminaryStreamId = getStreamTabId(
-    configPayload.agent,
-    configPayload.model,
-    { executionId: resolvedExecutionId },
-  );
-  acquireStreamOrThrow(preliminaryStreamId, options?.taskType);
-
-  let ctx: ResolvedAgentBase;
+  let activatedStreamId: StreamTabId | undefined;
   try {
-    ctx = await resolveAgentBase(configPayload, resolvedExecutionId, {
+    return await resolveAgentBase(configPayload, resolvedExecutionId, {
+      streamTabIdOverride: options?.streamTabIdOverride,
       onBeforeActivation: options?.onBeforeActivation,
+      onActivated: (streamId) => {
+        activatedStreamId = streamId;
+      },
       enforceCategory: options?.enforceCategory,
     });
   } catch (err) {
-    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
-    if (!(err instanceof ZodError)) {
+    compensateFailedActivation({
+      preliminaryStreamId,
+      activatedStreamId,
+      configPayload,
+      err,
+    });
+    if (!options?.suppressErrorNotification && !(err instanceof ZodError)) {
       bus.emit('requestShowError', { message: toErrorMessage(err) });
     }
     throw err;
   }
-
-  return ctx;
 }
 
 // ============================================================================
@@ -566,6 +615,8 @@ export interface ExecuteAgentOptions {
     lastResponse: string | undefined,
     touchedFiles: string[],
   ) => void | Promise<void>;
+  /** Fires when a tool-use session consumes queued follow-up instructions. */
+  onFollowUpConsumed?: () => void;
   /** Fires on meaningful progress: todo changes, round completions, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
@@ -580,6 +631,7 @@ export async function executeAgent(
   const ctx = await resolveAndAcquireStream(configPayload, executionId, {
     onBeforeActivation: options?.onStreamResolved,
     enforceCategory: options?.enforceCategory,
+    suppressErrorNotification: options?.isSubagent,
   });
   ctx.delegationDepth = options?.delegationDepth ?? 0;
   const { setting, streamId, config } = ctx;
@@ -655,8 +707,10 @@ export async function executeAgent(
               }
               options?.onProgress?.(update);
             },
-            onFollowUpConsumed: () =>
-              bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId }),
+            onFollowUpConsumed: () => {
+              bus.emit('updateQueuedFollowUps', { streamId: ctx.streamId });
+              options?.onFollowUpConsumed?.();
+            },
           });
           return {
             category: 'toolUse' as const,
@@ -764,7 +818,12 @@ export async function resumeToolUseFromSnapshot(
   const ctx = await resolveAndAcquireStream(
     snapshot.agentConfig,
     snapshot.executionId,
-    { streamTabIdOverride: snapshot.streamId },
+    {
+      streamTabIdOverride: snapshot.streamId,
+      // resumeCommand surfaces its own warning toast on failure; skip the
+      // bus-level error to avoid double-notifying.
+      suppressErrorNotification: true,
+    },
   );
   // Recover delegation depth from the persisted parent-execution chain
   // so resumed subagents remain gated by the nested-delegation policy

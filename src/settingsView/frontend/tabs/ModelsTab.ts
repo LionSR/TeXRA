@@ -9,7 +9,7 @@ import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
 import type {
@@ -27,6 +27,7 @@ export class ModelsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    codiconStyles,
     css`
       :host {
         display: block;
@@ -47,6 +48,61 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) helperModel = '';
   @property({ type: Boolean }) preferShortModelNames = false;
 
+  private scrollToSection(
+    tagName: 'api-access-section' | 'provider-key-list',
+  ): void {
+    const el = this.shadowRoot?.querySelector(tagName);
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  private readonly handleScrollToApiAccess = (): void =>
+    this.scrollToSection('api-access-section');
+
+  private readonly handleScrollToApiConfig = (): void =>
+    this.scrollToSection('provider-key-list');
+
+  private renderTabHint(): TemplateResult | typeof nothing {
+    if (this.providerKeyStatuses.length === 0) {
+      return nothing;
+    }
+
+    const description =
+      this.apiAccessMode === 'included'
+        ? 'Personal provider API keys are optional overrides—configure them in the API Configuration section below.'
+        : 'To use your own keys for OpenAI, Anthropic, Google, and other providers, scroll to the API Configuration section below.';
+
+    const accessJump = this.authenticated
+      ? html`<button
+          class="tab-action-btn"
+          @click=${this.handleScrollToApiAccess}
+        >
+          Model Access
+        </button>`
+      : nothing;
+
+    return html`
+      <div class="settings-reminder">
+        <span class="codicon codicon-info settings-reminder-icon"></span>
+        <div class="settings-reminder-body">
+          <div class="settings-reminder-title">API key settings</div>
+          <div class="settings-reminder-description">${description}</div>
+          <div class="settings-reminder-actions">
+            ${accessJump}
+            <button
+              class="tab-action-btn"
+              @click=${this.handleScrollToApiConfig}
+            >
+              <span class="codicon codicon-key"></span>
+              Jump to API Configuration
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   override render(): TemplateResult {
     const apiAccessSection = this.authenticated
       ? html`<api-access-section
@@ -56,7 +112,7 @@ export class ModelsTab extends LitElement {
 
     return html`
       <div class="models-container tab-content-container">
-        ${apiAccessSection}
+        ${this.renderTabHint()} ${apiAccessSection}
         <model-selection-list
           .models=${this.modelSelectionItems}
           .helperModel=${this.helperModel}
