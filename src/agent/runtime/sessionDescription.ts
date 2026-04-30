@@ -18,7 +18,7 @@ import { isNonEmptyString } from '@utils/core';
 
 const CHANNEL = 'SessionDescription';
 
-const SYSTEM_PROMPT = `You generate concise session descriptions for a LaTeX research assistant tool. Given an agent name, its description, and the user's instruction, write 1-2 sentences summarizing what this session aims to accomplish. Be specific and informative. Do not include meta-commentary — just the summary. Write in present tense (e.g. "Reviews the introduction for...").`;
+const SYSTEM_PROMPT = `You generate very short session labels for a LaTeX research assistant tool. Given an agent name, its description, and the user's instruction, write a single short phrase (max ~10 words, no trailing period) that captures what the session aims to accomplish. Be specific but terse — no full sentences, no meta-commentary, no quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
 
 /**
  * Build a user prompt for session description generation.
@@ -83,8 +83,20 @@ export async function generateSessionDescription(
     const { text } = handler.extractResponse(result.response, '');
 
     if (isNonEmptyString(text)) {
-      // Collapse newlines to prevent corrupting line-based tool output.
-      const description = text.trim().replaceAll(/\s*\n\s*/g, ' ');
+      // Collapse newlines to prevent corrupting line-based tool output,
+      // strip surrounding quotes/trailing punctuation, and cap length so
+      // tab/history rows stay readable even if the model overshoots.
+      const cleaned = text
+        .trim()
+        .replaceAll(/\s*\n\s*/g, ' ')
+        .replace(/^["'`]+|["'`]+$/g, '')
+        .replace(/[.!?…]+$/, '')
+        .trim();
+      const MAX_DESCRIPTION_LENGTH = 80;
+      const description =
+        cleaned.length > MAX_DESCRIPTION_LENGTH
+          ? cleaned.slice(0, MAX_DESCRIPTION_LENGTH - 1).trimEnd() + '…'
+          : cleaned;
       await writeSessionDescription(executionId, description);
       bus.emit('updateStreamDescription', { streamId, description });
       logger.info(CHANNEL, `Generated session description for ${executionId}`);
