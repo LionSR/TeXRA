@@ -22,21 +22,25 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
 
-const PROVIDER_HANDLERS = new Map<
+// Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
+// A new enum value in llm-zoo without an entry here will fail typecheck.
+// `null` marks providers that have no direct handler (routed elsewhere or unsupported).
+const PROVIDER_HANDLERS: Record<
   ModelProvider,
-  new (config: ModelConfig) => ModelHandler<ProviderMessage>
->([
-  [ModelProvider.ANTHROPIC, ModelHandlerAnthropic],
-  [ModelProvider.OPENAI, ModelHandlerOpenAI],
-  [ModelProvider.GOOGLE, ModelHandlerGoogleGenAI],
-  [ModelProvider.DEEPSEEK, ModelHandlerDeepSeek],
-  [ModelProvider.XAI, ModelHandlerXAI],
-  [ModelProvider.MOONSHOT, ModelHandlerKimi],
-  [ModelProvider.DASHSCOPE, ModelHandlerDashScope],
-  [ModelProvider.MINIMAX, ModelHandlerMiniMax],
-  [ModelProvider.GLM, ModelHandlerGLM],
-  [ModelProvider.OTHERS, ModelHandlerOpenRouterNative],
-]);
+  (new (config: ModelConfig) => ModelHandler<ProviderMessage>) | null
+> = {
+  [ModelProvider.ANTHROPIC]: ModelHandlerAnthropic,
+  [ModelProvider.OPENAI]: ModelHandlerOpenAI,
+  [ModelProvider.GOOGLE]: ModelHandlerGoogleGenAI,
+  [ModelProvider.DEEPSEEK]: ModelHandlerDeepSeek,
+  [ModelProvider.XAI]: ModelHandlerXAI,
+  [ModelProvider.MOONSHOT]: ModelHandlerKimi,
+  [ModelProvider.DASHSCOPE]: ModelHandlerDashScope,
+  [ModelProvider.MINIMAX]: ModelHandlerMiniMax,
+  [ModelProvider.GLM]: ModelHandlerGLM,
+  [ModelProvider.OTHERS]: ModelHandlerOpenRouterNative,
+  [ModelProvider.COPILOT]: null,
+};
 
 /**
  * Single source of truth: user-facing reasoning level strings → ReasoningEffort enum.
@@ -140,7 +144,7 @@ export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
   }
 
   // Direct provider handler
-  const HandlerClass = PROVIDER_HANDLERS.get(config.provider);
+  const HandlerClass = PROVIDER_HANDLERS[config.provider];
   if (!HandlerClass) {
     throw new Error(`Unsupported model provider: ${config.provider}`);
   }

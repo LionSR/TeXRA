@@ -1,10 +1,7 @@
 import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import {
-  liftLegacyAgentCategory,
-  type AgentConfig,
-} from '@agent/core/AgentConfig';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { FILE_TYPES, type FileType } from '@utils/config';
 
 const ToolSessionStateSchema = z.object({
@@ -15,11 +12,6 @@ const ActiveFilesSchema = z.partialRecord(
   z.enum(FILE_TYPES),
   z.boolean(),
 ) as z.ZodType<Record<FileType, boolean>>;
-
-const AgentConfigSchema = z.preprocess(
-  liftLegacyAgentCategory,
-  z.looseObject({ agentCategory: z.enum(AgentCategory) }),
-);
 
 const WorkflowTaskStateSchema = z.object({
   agentConfig: AgentConfigSchema.refine(
