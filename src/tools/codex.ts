@@ -44,7 +44,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
-import { parseWorkingDirectory } from '@tools/utils';
+import { parseWorkingDirectory } from '@tools/pathResolution';
 import { escapeAttr, escapeText } from '@tools/subagentResults';
 import {
   requestBashApproval,
@@ -626,11 +626,6 @@ async function resumeCodexThread(
   }
 
   const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
-  if (!queue.isEmpty()) {
-    throw new ToolError(
-      `Codex thread '${threadId}' already has a pending follow-up queued. Wait for its next result before sending another follow-up.`,
-    );
-  }
   queue.enqueue(prompt);
 
   const preview = truncateWithEllipsis(prompt, 60);

@@ -61,17 +61,17 @@ import type { ToolResult } from '@tools/result';
 import {
   isProposalBypassedForStream,
   isApprovalBypassedForStream,
-  setToolEditApprovalSessionBypass,
+  enableYoloOnChildStream,
 } from '@tools/approval';
+import { computeAndWriteWorkflowDiffs } from '@tools/subagentDiffs';
 import {
-  computeAndWriteWorkflowDiffs,
   formatSubagentDelivery,
   formatSubagentError,
   formatSubagentProgress,
   formatFollowUpInstruction,
 } from '@tools/subagentResults';
 import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
-import { parseWorkingDirectory } from '@tools/utils';
+import { parseWorkingDirectory } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - memory
@@ -326,11 +326,7 @@ async function executeSubagent(
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {
-        // Silent: fires before stream activation so the UI notification would
-        // be dropped. The subsequent SYNC_STREAM_CONTENT reads from the map.
-        setToolEditApprovalSessionBypass(resolvedStreamId, true, {
-          silent: true,
-        });
+        enableYoloOnChildStream(resolvedStreamId);
       }
     },
     onProgress,
@@ -963,12 +959,6 @@ Git worktree support: ${
     if (!deliveryState) {
       throw new Error(
         `Execution '${executionId}' is no longer tracked for delivery. It may have already completed.`,
-      );
-    }
-
-    if (ToolUseFollowUpQueue.hasQueuedFollowUp(handle.childStreamId)) {
-      throw new Error(
-        `'${handle.agentName}' already has a pending follow-up queued. Wait for its next result before sending another follow-up.`,
       );
     }
 

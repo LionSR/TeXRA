@@ -171,6 +171,19 @@ export class RequestPanels extends LitElement {
   // Section rendering
   // ===========================================================================
 
+  private renderSectionHeader(
+    config: SectionConfig,
+    extra: TemplateResult | typeof nothing = nothing,
+  ): TemplateResult {
+    return html`
+      <div class="${config.cssClass}__header">
+        <i class="codicon codicon-${config.icon}"></i>
+        <span>${config.title}</span>
+        ${extra}
+      </div>
+    `;
+  }
+
   private renderSection(
     config: SectionConfig,
     permissions: PermissionState[],
@@ -179,10 +192,7 @@ export class RequestPanels extends LitElement {
 
     return html`
       <section class=${config.cssClass}>
-        <div class="${config.cssClass}__header">
-          <i class="codicon codicon-${config.icon}"></i>
-          <span>${config.title}</span>
-        </div>
+        ${this.renderSectionHeader(config)}
         <div class="${config.cssClass}__list">
           ${repeat(
             permissions,
@@ -214,34 +224,33 @@ export class RequestPanels extends LitElement {
 
     const config = SECTION_CONFIGS.externalInquiry;
     const current = perms[this._eiIndex];
+    const nav = html`
+      <div class="external-inquiry-requests__nav">
+        <button
+          class="external-inquiry-requests__nav-btn"
+          title="Previous inquiry"
+          ?disabled=${this._eiIndex === 0}
+          @click=${this._eiPrev}
+        >
+          <i class="codicon codicon-chevron-left"></i>
+        </button>
+        <span class="external-inquiry-requests__counter">
+          ${this._eiIndex + 1} / ${perms.length}
+        </span>
+        <button
+          class="external-inquiry-requests__nav-btn"
+          title="Next inquiry"
+          ?disabled=${this._eiIndex === perms.length - 1}
+          @click=${this._eiNext}
+        >
+          <i class="codicon codicon-chevron-right"></i>
+        </button>
+      </div>
+    `;
 
     return html`
       <section class=${config.cssClass}>
-        <div class="${config.cssClass}__header">
-          <i class="codicon codicon-${config.icon}"></i>
-          <span>${config.title}</span>
-          <div class="external-inquiry-requests__nav">
-            <button
-              class="external-inquiry-requests__nav-btn"
-              title="Previous inquiry"
-              ?disabled=${this._eiIndex === 0}
-              @click=${this._eiPrev}
-            >
-              <i class="codicon codicon-chevron-left"></i>
-            </button>
-            <span class="external-inquiry-requests__counter">
-              ${this._eiIndex + 1} / ${perms.length}
-            </span>
-            <button
-              class="external-inquiry-requests__nav-btn"
-              title="Next inquiry"
-              ?disabled=${this._eiIndex === perms.length - 1}
-              @click=${this._eiNext}
-            >
-              <i class="codicon codicon-chevron-right"></i>
-            </button>
-          </div>
-        </div>
+        ${this.renderSectionHeader(config, nav)}
         <div class="${config.cssClass}__list">
           ${keyed(getPermissionKey(current), config.renderPanel(current))}
         </div>

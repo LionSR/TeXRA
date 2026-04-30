@@ -2,8 +2,8 @@
  * Poll-based event source for GitHub PR activity.
  *
  * Each subscribed PR maintains per-resource cursors (last-seen ID) and ETags.
- * A single shared timer ticks every `POLL_INTERVAL_MS` and iterates all active
- * subscriptions. Events are converted to natural-language text via
+ * A single shared timer ticks every `PR_POLL_INTERVAL_MS` and iterates all
+ * active subscriptions. Events are converted to natural-language text via
  * `formatPREvent` and dispatched to per-caller listeners.
  *
  * Transport is polling for v1; swapping to a push transport (e.g. a Supabase
@@ -12,8 +12,8 @@
  */
 
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
 
+import { shouldDropBotEvent } from './botFilter';
 import {
   formatCheckFailure,
   formatCheckFailureSummary,
@@ -26,13 +26,17 @@ import {
   formatSubscriptionError,
   isPassingConclusion,
 } from './formatPREvent';
+import { getNewestTimestamp, trimSet } from './formatUtils';
+import { type ConditionalResponse, ghGet } from './githubClient';
 import {
-  GitHubAuthError,
-  GitHubPermanentError,
-  GitHubRateLimitError,
-  type ConditionalResponse,
-  ghGet,
-} from './githubClient';
+  PollingSourceBase,
+  type BasePollSubscriptionState,
+  type Disposable,
+} from './PollingSourceBase';
+import {
+  MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+  PR_POLL_INTERVAL_MS,
+} from './prSubscriptionConstants';
 import type {
   GhCheckRun,
   GhIssueComment,
@@ -41,21 +45,31 @@ import type {
   GhReviewComment,
 } from './prTypes';
 
-export interface Disposable {
-  dispose(): void;
+function createInitialState(pr: PRKey): SubscriptionState {
+  return {
+    pr,
+    slug: `${pr.owner}/${pr.repo}`,
+    listeners: new Set(),
+    initialized: false,
+    seenIssueCommentIds: new Set(),
+    seenReviewCommentIds: new Set(),
+    seenReviewIds: new Set(),
+    lastFailedCheckKeys: new Set(),
+    ciCompleteSha: undefined,
+    ciPassedSha: undefined,
+    headSha: undefined,
+    state: undefined,
+    merged: false,
+    etags: {},
+    sinceCursors: {},
+    lastSuccessAt: Date.now(),
+    consecutiveFailures: 0,
+    skipPollUntilMs: 0,
+  };
 }
 
-const POLL_INTERVAL_MS = 30_000;
-const MAX_CONCURRENT_SUBSCRIPTIONS = 10;
 // Coalesce this many same-kind events in a single tick into a summary.
 const COALESCE_THRESHOLD = 3;
-// Exponential backoff on transient poll failures. After each failure the
-// subscription sleeps for min(BASE * 2^(n-1), MAX) before retrying, so the
-// schedule is 1 min → 2 → 4 → 8 → 16 → 32 → 60 min (cap). After 24 h of
-// continuous failure the subscription is detached.
-const BACKOFF_BASE_MS = 60_000;
-const BACKOFF_MAX_MS = 3_600_000;
-const MAX_FAILURE_DURATION_MS = 24 * 3_600_000;
 // Per-resource id history is trimmed to this many entries so long-running
 // subscriptions don't grow the state map unboundedly.
 const MAX_SEEN_IDS = 1000;
@@ -74,7 +88,7 @@ export interface PRKey {
 }
 
 export function prKeyToString(k: PRKey): string {
-  return `${k.owner}/${k.repo}#${k.pullNumber}`;
+  return `${k.owner}/${k.repo}/pulls/${k.pullNumber}`;
 }
 
 function withSince(url: string, since: string | undefined): string {
@@ -83,27 +97,10 @@ function withSince(url: string, since: string | undefined): string {
   return `${url}${sep}since=${encodeURIComponent(since)}`;
 }
 
-/** Return the newest `updated_at` (falling back to `created_at`) in the batch. */
-function newestTimestamp(
-  items: ReadonlyArray<{
-    created_at?: string | null;
-    updated_at?: string | null;
-  }>,
-): string | undefined {
-  let best: string | undefined;
-  for (const it of items) {
-    const t = it.updated_at ?? it.created_at ?? undefined;
-    if (t && (!best || t > best)) best = t;
-  }
-  return best;
-}
-
-interface SubscriptionState {
+interface SubscriptionState extends BasePollSubscriptionState {
   pr: PRKey;
   slug: string;
-  listeners: Set<(text: string) => void>;
-  // Per-resource pagination / cursor state. Initialized on first tick so we
-  // do not replay historical events.
+  /** Initialized on first tick so we don't replay historical events. */
   initialized: boolean;
   seenIssueCommentIds: Set<number>;
   seenReviewCommentIds: Set<number>;
@@ -116,7 +113,6 @@ interface SubscriptionState {
   headSha: string | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
-  // ETags for conditional requests.
   etags: {
     pr?: string;
     issueComments?: string;
@@ -124,18 +120,13 @@ interface SubscriptionState {
     reviews?: string;
   };
   /**
-   * Per-page cache for the paginated check-runs endpoint.
+   * Per-page cache for the paginated check-runs endpoint. Single-page PRs
+   * touch only page 1 so still get the cheap 304 fast path; multi-page PRs
+   * issue conditional GETs per page so steady-state ticks make N HEAD-cheap
+   * 304s instead of N full-page GETs.
    *
-   * Single-page PRs (<=100 runs) only ever touch page 1, so this still gives
-   * us the cheap 304 path. Multi-page PRs (>100 runs) issue conditional GETs
-   * per page; pages that haven't changed return 304 and we reuse the cached
-   * `check_runs` for that page. This is what keeps the polling cost bounded
-   * on large matrix builds — a steady-state tick should be N HEAD-cheap 304s,
-   * not N unconditional full-page GETs.
-   *
-   * `lastTotalCount` is the most recent `total_count` we saw from a 200
-   * response; it lets us decide how many pages to walk on a tick where
-   * page 1 came back 304.
+   * `lastTotalCount` is the most recent `total_count` from a 200 response;
+   * it tells us how many pages to walk when page 1 returns 304.
    */
   checkRunsCache?: {
     etagsByPage: Map<number, string>;
@@ -150,280 +141,44 @@ interface SubscriptionState {
     issueComments?: string;
     reviewComments?: string;
   };
-  consecutiveFailures: number;
-  /**
-   * Epoch-ms at which the subscription will be detached if still failing.
-   * Set to `now + MAX_FAILURE_DURATION_MS` on the first transient failure and
-   * extended by the rate-limit duration on each rate-limit hit, so rate-limit
-   * wait time doesn't count toward the 24 h window. Cleared on success.
-   */
-  detachDeadlineMs: number | undefined;
-  /** Epoch-ms until which this subscription skips polling (rate-limit or backoff). */
-  skipPollUntilMs: number;
 }
 
-export class PRPollingSource {
-  private readonly logger = new AgentLogger('PRPollingSource');
-  private readonly subscriptions = new Map<string, SubscriptionState>();
-  private readonly changeListeners = new Set<
-    (keys: readonly string[]) => void
-  >();
-  private timer: ReturnType<typeof setInterval> | undefined;
-
-  /**
-   * Register a callback fired whenever the set of active PR keys changes
-   * (subscription added, removed, auto-unsubscribed on close, etc.). Used by
-   * the settings UI to keep its active-subscriptions list in sync.
-   */
-  onKeysChanged(listener: (keys: readonly string[]) => void): () => void {
-    this.changeListeners.add(listener);
-    return () => {
-      this.changeListeners.delete(listener);
-    };
-  }
-
-  private notifyKeysChanged(): void {
-    const snapshot = [...this.subscriptions.keys()];
-    bus.emit('prSubscriptionsChanged', { keys: snapshot });
-    for (const cb of this.changeListeners) {
-      try {
-        cb(snapshot);
-      } catch (err) {
-        this.logger.warn(`Change listener threw: ${String(err)}`);
-      }
-    }
+export class PRPollingSource extends PollingSourceBase<
+  string,
+  SubscriptionState
+> {
+  constructor() {
+    super({
+      name: 'PRPollingSource',
+      pollIntervalMs: PR_POLL_INTERVAL_MS,
+      maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+      backoffBaseMs: 60_000,
+      backoffMaxMs: 3_600_000,
+      maxFailureDurationMs: 24 * 3_600_000,
+    });
   }
 
   subscribe(pr: PRKey, onEvent: (text: string) => void): Disposable {
     const key = prKeyToString(pr);
-    const slug = `${pr.owner}/${pr.repo}`;
-
-    let state = this.subscriptions.get(key);
-    if (!state) {
-      if (this.subscriptions.size >= MAX_CONCURRENT_SUBSCRIPTIONS) {
-        throw new Error(
-          `Too many active PR subscriptions (max ${MAX_CONCURRENT_SUBSCRIPTIONS}). Unsubscribe from one before adding another.`,
-        );
-      }
-      state = {
-        pr,
-        slug,
-        listeners: new Set(),
-        initialized: false,
-        seenIssueCommentIds: new Set(),
-        seenReviewCommentIds: new Set(),
-        seenReviewIds: new Set(),
-        lastFailedCheckKeys: new Set(),
-        ciCompleteSha: undefined,
-        ciPassedSha: undefined,
-        headSha: undefined,
-        state: undefined,
-        merged: false,
-        etags: {},
-        sinceCursors: {},
-        consecutiveFailures: 0,
-        detachDeadlineMs: undefined,
-        skipPollUntilMs: 0,
-      };
-      this.subscriptions.set(key, state);
-      this.logger.info(`Subscribed to ${key}`);
-      this.notifyKeysChanged();
-    }
-    state.listeners.add(onEvent);
-    this.ensureTimer();
-
-    return {
-      dispose: () => this.removeListener(key, onEvent),
-    };
+    return this.register(key, () => createInitialState(pr), onEvent);
   }
 
-  activeKeys(): readonly string[] {
-    return [...this.subscriptions.keys()];
+  protected emitKeysChangedBusEvent(keys: readonly string[]): void {
+    bus.emit('prSubscriptionsChanged', { keys });
   }
 
-  private removeListener(key: string, onEvent: (text: string) => void): void {
-    const state = this.subscriptions.get(key);
-    if (!state) return;
-    state.listeners.delete(onEvent);
-    if (state.listeners.size === 0) {
-      this.subscriptions.delete(key);
-      this.logger.info(`Unsubscribed from ${key}`);
-      this.notifyKeysChanged();
-    }
-    if (this.subscriptions.size === 0) this.stopTimer();
+  protected formatErrorEvent(
+    _key: string,
+    state: SubscriptionState,
+    detail: string,
+  ): string {
+    return formatSubscriptionError(state.slug, state.pr.pullNumber, detail);
   }
 
-  private ensureTimer(): void {
-    if (this.timer) return;
-    this.timer = setInterval(() => {
-      void this.tick();
-    }, POLL_INTERVAL_MS);
-    // Fire an immediate tick so first-subscribe initializes cursors without
-    // waiting a full interval.
-    void this.tick();
-  }
-
-  private stopTimer(): void {
-    if (!this.timer) return;
-    clearInterval(this.timer);
-    this.timer = undefined;
-  }
-
-  private tickInFlight = false;
-
-  private async tick(): Promise<void> {
-    // setInterval fires every POLL_INTERVAL_MS regardless of prior
-    // completion; with N subscriptions and 15s per-request timeouts a tick
-    // can outlast the interval. Without this guard overlapping ticks would
-    // double-emit events for the same new items.
-    if (this.tickInFlight) return;
-    this.tickInFlight = true;
-    try {
-      const now = Date.now();
-      const entries = [...this.subscriptions.entries()];
-      await Promise.allSettled(
-        entries.map(async ([key, state]) => {
-          if (state.skipPollUntilMs > now) return;
-          try {
-            await this.pollOne(state);
-            state.consecutiveFailures = 0;
-            state.detachDeadlineMs = undefined;
-          } catch (err) {
-            // Capture time of failure (not tick start) so that backoff and
-            // deadline calculations are not shortened by the duration of
-            // pollOne(), which can take many seconds across multiple HTTP calls.
-            const failNow = Date.now();
-            if (err instanceof GitHubAuthError) {
-              this.logger.warn(
-                `Auth error for ${key}; stopping subscription. ${err.message}`,
-              );
-              this.emit(
-                state,
-                formatSubscriptionError(
-                  state.slug,
-                  state.pr.pullNumber,
-                  err.message,
-                ),
-              );
-              this.subscriptions.delete(key);
-              this.notifyKeysChanged();
-              bus.emit('githubTokenInvalid', { message: err.message });
-            } else if (err instanceof GitHubPermanentError) {
-              this.logger.warn(
-                `Permanent error for ${key} (HTTP ${err.status}); stopping subscription. ${err.message}`,
-              );
-              this.emit(
-                state,
-                formatSubscriptionError(
-                  state.slug,
-                  state.pr.pullNumber,
-                  err.message,
-                ),
-              );
-              this.subscriptions.delete(key);
-              this.notifyKeysChanged();
-            } else if (err instanceof GitHubRateLimitError) {
-              const rateLimitEndsAt = err.resetAt * 1000;
-              // If the detach deadline has already passed, treat this like any
-              // other terminal failure rather than letting the rate-limit
-              // extension keep the slot alive beyond the 24 h window.
-              if (
-                state.detachDeadlineMs !== undefined &&
-                failNow >= state.detachDeadlineMs
-              ) {
-                this.logger.warn(
-                  `Rate limited while polling ${key} and detach deadline already passed; stopping subscription.`,
-                );
-                this.emit(
-                  state,
-                  formatSubscriptionError(
-                    state.slug,
-                    state.pr.pullNumber,
-                    `unreachable for over 24 h; detaching`,
-                  ),
-                );
-                this.subscriptions.delete(key);
-                this.notifyKeysChanged();
-              } else {
-                // Rate limiting is a transient condition; skip until the reset
-                // time without touching consecutiveFailures so a rate-limit
-                // burst doesn't inflate the backoff exponent. Extend (not reset)
-                // the detach deadline by the rate-limit duration so time spent
-                // waiting on rate limits doesn't erode the 24 h failure window.
-                if (state.detachDeadlineMs !== undefined) {
-                  state.detachDeadlineMs += Math.max(
-                    0,
-                    rateLimitEndsAt - failNow,
-                  );
-                }
-                state.skipPollUntilMs = rateLimitEndsAt;
-                this.logger.warn(
-                  `Rate limited while polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
-                );
-              }
-            } else {
-              state.detachDeadlineMs ??= failNow + MAX_FAILURE_DURATION_MS;
-              state.consecutiveFailures += 1;
-              const backoffMs = Math.min(
-                BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
-                BACKOFF_MAX_MS,
-              );
-              // Jitter ±20% to spread retries when many subscriptions fail
-              // simultaneously (e.g. network outage), preventing thundering herd.
-              const jitter = 0.8 + Math.random() * 0.4;
-              const actualDelayMs = Math.round(backoffMs * jitter);
-              state.skipPollUntilMs = failNow + actualDelayMs;
-              if (failNow >= state.detachDeadlineMs) {
-                this.logger.warn(
-                  `Poll failed for ${key} (failure #${state.consecutiveFailures}); ` +
-                    `detach deadline reached, stopping subscription: ${String(err)}`,
-                );
-                this.emit(
-                  state,
-                  formatSubscriptionError(
-                    state.slug,
-                    state.pr.pullNumber,
-                    `unreachable for over 24 h; detaching`,
-                  ),
-                );
-                this.subscriptions.delete(key);
-                this.notifyKeysChanged();
-              } else {
-                this.logger.warn(
-                  `Poll failed for ${key} (failure #${state.consecutiveFailures}, ` +
-                    `retrying in ${Math.round(actualDelayMs / 1000)}s): ${String(err)}`,
-                );
-              }
-            }
-          }
-        }),
-      );
-      if (this.subscriptions.size === 0) this.stopTimer();
-    } finally {
-      this.tickInFlight = false;
-    }
-  }
-
-  private trimSet<T>(set: Set<T>): void {
-    const excess = set.size - MAX_SEEN_IDS;
-    if (excess <= 0) return;
-    const iter = set.values();
-    for (let i = 0; i < excess; i += 1) set.delete(iter.next().value as T);
-  }
-
-  private emit(state: SubscriptionState, text: string): void {
-    for (const cb of state.listeners) {
-      try {
-        cb(text);
-      } catch (err) {
-        this.logger.warn(
-          `Listener threw for ${prKeyToString(state.pr)}: ${String(err)}`,
-        );
-      }
-    }
-  }
-
-  private async pollOne(state: SubscriptionState): Promise<void> {
+  protected async pollOne(
+    _key: string,
+    state: SubscriptionState,
+  ): Promise<void> {
     const { pr } = state;
     const prPath = `/repos/${pr.owner}/${pr.repo}/pulls/${pr.pullNumber}`;
     const issuePath = `/repos/${pr.owner}/${pr.repo}/issues/${pr.pullNumber}`;
@@ -442,9 +197,7 @@ export class PRPollingSource {
         newState === 'closed'
       ) {
         this.emit(state, formatPRClosed(state.slug, pr.pullNumber, newMerged));
-        // Auto-unsubscribe.
-        this.subscriptions.delete(prKeyToString(pr));
-        this.notifyKeysChanged();
+        this.detach(prKeyToString(pr));
         return;
       }
       state.state = newState;
@@ -476,13 +229,12 @@ export class PRPollingSource {
       // (future refactors, unexpected state) where we could otherwise
       // return early every tick without ever cleaning up.
       const prKey = prKeyToString(pr);
-      if (this.subscriptions.has(prKey)) {
+      if (this.has(prKey)) {
         this.emit(
           state,
           formatPRClosed(state.slug, pr.pullNumber, state.merged),
         );
-        this.subscriptions.delete(prKey);
-        this.notifyKeysChanged();
+        this.detach(prKey);
       }
       state.initialized = true;
       return;
@@ -524,13 +276,13 @@ export class PRPollingSource {
       if (commentsRes.status === 200) {
         state.etags.issueComments = commentsRes.etag;
         for (const c of commentsRes.data) state.seenIssueCommentIds.add(c.id);
-        state.sinceCursors.issueComments = newestTimestamp(commentsRes.data);
+        state.sinceCursors.issueComments = getNewestTimestamp(commentsRes.data);
       }
       if (reviewCommentsRes.status === 200) {
         state.etags.reviewComments = reviewCommentsRes.etag;
         for (const c of reviewCommentsRes.data)
           state.seenReviewCommentIds.add(c.id);
-        state.sinceCursors.reviewComments = newestTimestamp(
+        state.sinceCursors.reviewComments = getNewestTimestamp(
           reviewCommentsRes.data,
         );
       }
@@ -591,12 +343,14 @@ export class PRPollingSource {
       for (const c of commentsRes.data) {
         if (!state.seenIssueCommentIds.has(c.id)) {
           state.seenIssueCommentIds.add(c.id);
+          if (shouldDropBotEvent(c.user)) continue;
           this.emit(state, formatIssueComment(state.slug, pr.pullNumber, c));
         }
       }
       state.sinceCursors.issueComments =
-        newestTimestamp(commentsRes.data) ?? state.sinceCursors.issueComments;
-      this.trimSet(state.seenIssueCommentIds);
+        getNewestTimestamp(commentsRes.data) ??
+        state.sinceCursors.issueComments;
+      trimSet(state.seenIssueCommentIds, MAX_SEEN_IDS);
     }
 
     if (reviewCommentsRes.status === 200) {
@@ -604,13 +358,14 @@ export class PRPollingSource {
       for (const c of reviewCommentsRes.data) {
         if (!state.seenReviewCommentIds.has(c.id)) {
           state.seenReviewCommentIds.add(c.id);
+          if (shouldDropBotEvent(c.user)) continue;
           this.emit(state, formatReviewComment(state.slug, pr.pullNumber, c));
         }
       }
       state.sinceCursors.reviewComments =
-        newestTimestamp(reviewCommentsRes.data) ??
+        getNewestTimestamp(reviewCommentsRes.data) ??
         state.sinceCursors.reviewComments;
-      this.trimSet(state.seenReviewCommentIds);
+      trimSet(state.seenReviewCommentIds, MAX_SEEN_IDS);
     }
 
     if (reviewsRes.status === 200) {
@@ -623,10 +378,11 @@ export class PRPollingSource {
         if (r.state === 'PENDING') continue;
         if (!state.seenReviewIds.has(r.id)) {
           state.seenReviewIds.add(r.id);
+          if (shouldDropBotEvent(r.user)) continue;
           this.emit(state, formatReview(state.slug, pr.pullNumber, r));
         }
       }
-      this.trimSet(state.seenReviewIds);
+      trimSet(state.seenReviewIds, MAX_SEEN_IDS);
     }
 
     if (checksRes.status === 200) {
@@ -965,13 +721,6 @@ export class PRPollingSource {
 
   private checkKey(r: GhCheckRun): string {
     return `${r.id}:${r.completed_at ?? ''}`;
-  }
-
-  /** Stop polling and forget every subscription. For extension teardown. */
-  disposeAll(): void {
-    this.subscriptions.clear();
-    this.stopTimer();
-    this.notifyKeysChanged();
   }
 }
 

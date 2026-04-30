@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { resolveAndFormat, parseWorkingDirectory } from '@tools/utils';
+import { resolveAndFormat, parseWorkingDirectory } from '@tools/pathResolution';
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports

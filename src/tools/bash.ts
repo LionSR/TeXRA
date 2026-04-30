@@ -36,7 +36,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 import { createChildStream, finalizeChildStream } from './childStream';
-import { parseWorkingDirectory } from './utils';
+import { parseWorkingDirectory } from './pathResolution';
 
 const BASH_TIMEOUT_MS = 120_000; // 120 s
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;

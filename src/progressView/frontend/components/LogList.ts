@@ -262,18 +262,6 @@ export class LogList extends LitElement {
       return;
     }
 
-    // Handle "Send Follow-up" button in executions wait entries
-    const breakWaitBtn = this.findTargetInPath<HTMLElement>(
-      event,
-      '.followup-break-wait',
-    );
-    if (breakWaitBtn) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.dispatchEvent(ProgressEvents.followupFocusRequest());
-      return;
-    }
-
     // Handle copy buttons - content is stored in the copy registry
     const copyButton = this.findTargetInPath<HTMLElement>(
       event,

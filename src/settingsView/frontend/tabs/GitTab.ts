@@ -323,15 +323,19 @@ export class GitTab extends LitElement {
         ${this.prSubscriptions.length > 0
           ? html`
               <div class="setting-block">
-                <p class="section-title">Active PR subscriptions</p>
+                <p class="section-title">Active GitHub subscriptions</p>
                 <p class="setting-description">
-                  An agent is monitoring these pull requests in the background,
-                  polling GitHub every ~30 seconds. New comments, review
-                  comments, and CI failures arrive as follow-up messages in the
-                  agent's conversation so it can investigate and act on them.
-                  Subscriptions end automatically when a PR is closed or merged,
-                  or after 24 hours of continuous network failure. Click
-                  <em>Stop</em> to cancel one manually.
+                  An agent is monitoring these repositories
+                  (<code>owner/repo</code>), pull requests
+                  (<code>owner/repo/pulls/N</code>), or issues
+                  (<code>owner/repo/issues/N</code>) in the background, polling
+                  GitHub every ~30 seconds. New comments, reviews, and CI
+                  failures arrive as follow-up messages in the agent's
+                  conversation so it can investigate and act on them. PR
+                  subscriptions end automatically on close/merge; issue
+                  subscriptions stay active across close so reopens are caught.
+                  All kinds detach after 24 hours of continuous network failure.
+                  Click <em>Stop</em> to cancel one manually.
                 </p>
                 <ul class="subscriptions-list">
                   ${this.prSubscriptions.map(
@@ -350,15 +354,18 @@ export class GitTab extends LitElement {
                                         <span class="subscription-owner-label"
                                           >${owner.label}</span
                                         >
-                                        <vscode-button
-                                          appearance="secondary"
+                                        <button
+                                          class="tab-action-btn"
                                           @click=${() =>
                                             this.handleOpenPRSubscriptionStream(
                                               owner.streamId,
                                             )}
                                         >
+                                          <span
+                                            class="codicon codicon-comment-discussion"
+                                          ></span>
                                           Jump to agent
-                                        </vscode-button>
+                                        </button>
                                       </div>
                                     `,
                                   )}
@@ -370,13 +377,14 @@ export class GitTab extends LitElement {
                                 </p>
                               `}
                         </div>
-                        <vscode-button
-                          appearance="secondary"
+                        <button
+                          class="tab-action-btn"
                           @click=${() =>
                             this.handleUnsubscribePR(subscription.key)}
                         >
+                          <span class="codicon codicon-debug-stop"></span>
                           Stop
-                        </vscode-button>
+                        </button>
                       </li>
                     `,
                   )}

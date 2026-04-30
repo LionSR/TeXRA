@@ -1,32 +1,27 @@
 /**
  * Unified approval system exports.
  *
- * This module serves as the coordination point for approval cleanup,
- * breaking the circular dependency between bashApproval and toolEditApproval.
+ * This module is the coordination point for approval cleanup so that
+ * bash and tool-edit modules don't form a circular dependency.
  *
- * Import cleanup functions from here, not from individual modules.
+ * Import cleanup helpers from here, not from individual modules.
  */
 
-// Local file imports - individual approval modules
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingInquiries,
   _rejectPendingInquiriesForStream,
 } from '@tools/inquiry';
-import {
-  _rejectAllPendingBashApprovals,
-  _rejectPendingBashApprovalsForStream,
-} from './bashApproval';
+
+import { bashApprovalController } from './bashApproval';
 import {
   _clearAllProposalBypass,
   _clearProposalBypassForStream,
 } from './proposalApproval';
 import {
-  _clearAllApprovalBypass,
-  _clearApprovalBypassForStream,
-  _rejectAllPendingToolEditApprovals,
-  _rejectPendingToolEditApprovalsForStream,
+  toolEditApprovalController,
+  enableYoloOnChildStream,
 } from './toolEditApproval';
 
 /**
@@ -34,10 +29,10 @@ import {
  * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
  */
 export function cleanupApprovalsForStream(streamId: StreamTabId): void {
-  _rejectPendingToolEditApprovalsForStream(streamId);
-  _rejectPendingBashApprovalsForStream(streamId);
+  toolEditApprovalController.rejectPendingForStream(streamId);
+  bashApprovalController.rejectPendingForStream(streamId);
   _rejectPendingInquiriesForStream(streamId);
-  _clearApprovalBypassForStream(streamId);
+  toolEditApprovalController.clearBypassForStream(streamId);
   _clearProposalBypassForStream(streamId);
   planApprovalCoordinator.clearForStream(streamId);
 }
@@ -47,13 +42,15 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
  * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
  */
 export function cleanupAllApprovals(): void {
-  _rejectAllPendingToolEditApprovals();
-  _rejectAllPendingBashApprovals();
+  toolEditApprovalController.rejectAllPending();
+  bashApprovalController.rejectAllPending();
   _rejectAllPendingInquiries();
-  _clearAllApprovalBypass();
+  toolEditApprovalController.clearAllBypass();
   _clearAllProposalBypass();
   planApprovalCoordinator.clearAll();
 }
+
+export { enableYoloOnChildStream };
 
 // Re-export commonly used functions from individual modules
 export {

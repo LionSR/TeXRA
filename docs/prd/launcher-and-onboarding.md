@@ -54,21 +54,21 @@ Concretely:
    agent is `internal: true`.
 
 3. **Teams exist but read as flat badge clouds.** The Multi-Agent settings
-   tab (`MultiAgentTab.ts:420–574`) ships four built-in presets
+   tab (`MultiAgentTab.ts:420–574`) ships four built-in teams
    (Mathematician, Physicist, Lean Project, Computer Scientist (ML)). Each is
    rendered as a card with a single row of agent badges — the lead
    orchestrator is not visually distinguished from specialists or workflow
    agents.
 
 4. **Tweaking a team is a maze.** To customise a built-in team a user must
-   apply the preset (which silently overwrites their global enabled-agents
+   apply the team (which silently overwrites their global enabled-agents
    list — `agentHandlers.ts:589–592`), switch tabs to the Agents tab, toggle
-   agents, click "Save Preset", then name the result. The card that triggered
+   agents, click "Save Team", then name the result. The card that triggered
    the flow has no Edit, Duplicate, or inline tweak affordance.
 
-5. **The schema is fragile.** Custom presets reference agents by bare name,
-   so renaming a custom agent silently breaks every preset that referenced
-   it. Built-in presets ship without an explicit lead. Workflow defaults are
+5. **The schema is fragile.** Custom teams reference agents by bare name,
+   so renaming a custom agent silently breaks every team that referenced
+   it. Built-in teams ship without an explicit lead. Workflow defaults are
    lumped into `workflowAgents` with no role distinction.
 
 6. **The launcher does not express intent.** Selecting `orchestrator` vs.
@@ -1011,8 +1011,8 @@ responsibilities, which now live in the launcher and the Multi-Agent tab.
 
 ### Concrete deltas vs. today
 
-1. **`Save Preset` toolbar button removed.** Today's flow (toggle agents
-   here, click `Save Preset`, name in a `vscode.window.showInputBox`) lives
+1. **`Save Team` toolbar button removed.** Today's flow (toggle agents
+   here, click `Save Team`, name in a `vscode.window.showInputBox`) lives
    in `AgentsTab.ts:225–227` and `agentHandlers.ts:609–652`. It is replaced
    by the launcher's `Save as new team` (L2) and the Multi-Agent tab's
    `+ Save current setup as team` / `+ New team`. The Agents tab is no
@@ -1075,7 +1075,7 @@ affordance. This PRD defines the rules every tab must follow.
 | Agents tab "Tool Use" sub-tab          | renamed to **"Tool-Use Agents"** to disambiguate from the Tools tab (`AgentsTab.ts:259`)                                                                                                                                                                         |
 | Tools tab "Memory & Workflow" category | renamed to **"Workflow tools"** to disambiguate from the Memory tab (`ToolsTab.ts:66`)                                                                                                                                                                           |
 
-`AgentsTab.ts:269` ("Save current agent configuration as a preset") and
+`AgentsTab.ts:269` ("Save current agent configuration as a team") and
 similar tooltips are updated to use "team" everywhere the user sees them.
 The schema rename happens in one commit; tooltips and labels in another.
 
@@ -1084,7 +1084,7 @@ The schema rename happens in one commit; tooltips and labels in another.
 One rule: **every toggle saves immediately on change; every named entity
 (team, custom agent, GitHub token) is saved through an explicit modal**.
 
-Today's outlier is the Agents tab `Save Preset` button
+Today's outlier is the Agents tab `Save Team` button
 (`AgentsTab.ts:225–227, 268–272`), which conflates "edit a list" with
 "persist a named entity". This PRD already removes that button from the
 Agents tab. The replacement flows are explicit (launcher footer's `Save as
@@ -1101,14 +1101,14 @@ and stays that way.
 Every tab follows the same rule: **primary action in the tab header, on
 the right; row-level actions on each row, on the right**.
 
-| Today                                                                         | After                                                                                     |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| AgentsTab header right: `Save Preset` (removed), `From Template`, `New Agent` | header right: `+ New agent`, `+ From template`                                            |
-| MultiAgentTab: card-level delete on hover only (`MultiAgentTab.ts:288`)       | card-level `Use` / `Edit` / `Duplicate` / `Delete` always visible (delete still confirms) |
-| LaTeXTab: per-card `Apply` (right) and `Reset` (right)                        | unchanged — already follows the rule                                                      |
-| ToolsTab: `Re-check` button at top right                                      | unchanged                                                                                 |
-| ModelsTab: per-row toggles                                                    | unchanged                                                                                 |
-| Memory / History tabs: scattered                                              | header right gets a single primary action (`+ New memory`, `Clear all`)                   |
+| Today                                                                       | After                                                                                     |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| AgentsTab header right: `Save Team` (removed), `From Template`, `New Agent` | header right: `+ New agent`, `+ From template`                                            |
+| MultiAgentTab: card-level delete on hover only (`MultiAgentTab.ts:288`)     | card-level `Use` / `Edit` / `Duplicate` / `Delete` always visible (delete still confirms) |
+| LaTeXTab: per-card `Apply` (right) and `Reset` (right)                      | unchanged — already follows the rule                                                      |
+| ToolsTab: `Re-check` button at top right                                    | unchanged                                                                                 |
+| ModelsTab: per-row toggles                                                  | unchanged                                                                                 |
+| Memory / History tabs: scattered                                            | header right gets a single primary action (`+ New memory`, `Clear all`)                   |
 
 Buttons in row-actions read primary → destructive left-to-right with
 spacing token `var(--spacing-medium)` between them. Destructive actions
@@ -1546,7 +1546,7 @@ rewritten to the new `Team[]` schema with explicit lead/default/spec/wf
 splits — see the table above. No persistent state involved; this is
 shipped code.
 
-### Custom presets in workspace state
+### Custom teams in workspace state
 
 Today's `WorkspaceStateKey.CUSTOM_AGENT_PRESETS` is
 `Array<AgentModePreset>` with `workflowAgents: string[]`,
@@ -1675,7 +1675,7 @@ current workspace; it does not override an active workspace selection.
 10. **Render the new Multi-Agent tab** (Use/Edit/Duplicate/Delete
     actions, team editor side panel) behind the same flag.
 11. **Refresh the Agents tab** (role badges, "Used by teams",
-    visible-but-locked setup agents, removed `Save Preset` button).
+    visible-but-locked setup agents, removed `Save Team` button).
 12. **`SET_TAB` deep-link upgrade** — accept tab id + sub-section anchor
     alongside numeric `tabIndex` for one minor-version migration window.
 13. **Codex settings move** from Tools tab to Models tab (under helper

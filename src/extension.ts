@@ -65,13 +65,19 @@ import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
-import { setGitHubTokenProvider, prPollingSource } from '@tools/github';
+import {
+  setGitHubTokenProvider,
+  prPollingSource,
+  repoPollingSource,
+  issuePollingSource,
+} from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setLinterProvider } from '@tools/DiagnosticsTool';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { setToolMissingHandler } from '@utils/system';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 // Local imports - components
@@ -240,6 +246,14 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  setToolMissingHandler(async (message, openDocsCommand) => {
+    const actions = openDocsCommand ? ['View Installation Guide'] : [];
+    const choice = await vscode.window.showErrorMessage(message, ...actions);
+    if (choice === 'View Installation Guide' && openDocsCommand) {
+      const [command, ...args] = openDocsCommand.split(',');
+      void vscode.commands.executeCommand(command, ...args);
+    }
+  });
   setSetupPlatform({
     secrets: {
       providers: SecretManager.API_PROVIDERS,
@@ -531,6 +545,8 @@ export async function deactivate() {
 
   clearStoreCache();
   prPollingSource.disposeAll();
+  repoPollingSource.disposeAll();
+  issuePollingSource.disposeAll();
   bus.emit('extensionDeactivating', undefined);
 
   statusBarItem?.dispose();

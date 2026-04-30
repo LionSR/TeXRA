@@ -15,16 +15,12 @@ import { z } from 'zod';
 // Local imports - agent
 import {
   getExecutionStore,
-  type ExecutionListingEntry,
   type ChildRecord,
-  type TodoEntry,
   listExecutions,
 } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
-  type ExecutionHandle,
-  type ExecutionStatusInfo,
   ACTIVE_STATUSES,
   AgentExecutionHandle,
   ProcessExecutionHandle,
@@ -45,7 +41,6 @@ import { isDirectory } from '@common/files/fsEntryType';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
-  EXECUTION_STATUS,
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
@@ -53,13 +48,22 @@ import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
+import {
+  formatListingLine,
+  formatProgressLine,
+  formatStatusInfo,
+  formatTodoHeader,
+  formatTodoSection,
+  getAvailablePaths,
+  getExecutionStatusInfo,
+} from './executionFormatters';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
 import {
   formatFileView,
   paginateToolListing,
   formatPaginationHint,
-} from './utils';
+} from './formatting';
 
 // ============================================================================
 // Category-aware field filtering
@@ -83,22 +87,6 @@ const WORKFLOW_ONLY_FIELDS = new Set([
 
 /** Config fields only relevant to toolUse agents — hidden for workflow. */
 const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
-
-/** Return paths available for a given agent category. */
-function getAvailablePaths(category?: string, hasChildren?: boolean): string[] {
-  const common = ['config', 'report'];
-  if (hasChildren) common.push('children');
-  switch (category) {
-    case 'toolUse':
-      return [...common, 'conversation', 'todos'];
-    case 'workflow':
-      return [...common, 'files'];
-    case 'process':
-      return [...common, 'output'];
-    default:
-      return [...common, 'conversation', 'todos', 'files', 'output'];
-  }
-}
 
 /**
  * Listen for follow-up messages on the current stream and abort the given
@@ -207,26 +195,6 @@ export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 // Helpers
 // ============================================================================
 
-/** Format status info as a display string. */
-function formatStatusInfo(info: ExecutionStatusInfo): string {
-  return info.elapsed
-    ? `${info.status} (${info.elapsed} elapsed)`
-    : info.status;
-}
-
-/** Resolve the runtime status for an execution ID, using persisted terminal status as fallback. */
-function getExecutionStatusInfo(
-  executionId: string,
-  terminalStatus?: string,
-): ExecutionStatusInfo {
-  const handle = getHandle(executionId);
-  if (handle) return handle.getStatus();
-  return {
-    status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,
-    elapsed: null,
-  };
-}
-
 /**
  * Single-pass check: should the wait endpoint skip blocking on this execution?
  *
@@ -261,51 +229,6 @@ function shouldSkipWait(executionId: string): boolean {
   }
 
   return false;
-}
-
-/** Format round progress as a display line, or empty string if unavailable. */
-function formatProgressLine(handle: ExecutionHandle | undefined): string {
-  const progress = handle?.getProgress();
-  if (
-    progress?.currentRound === undefined ||
-    progress.totalRounds === undefined
-  ) {
-    return '';
-  }
-  return `Progress: round ${progress.currentRound + 1}/${progress.totalRounds}`;
-}
-
-/** Format a listing entry as a single summary line. */
-function formatListingLine(entry: ExecutionListingEntry): string {
-  const ts = entry.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-  const info = getExecutionStatusInfo(entry.id, entry.terminalStatus);
-  const categoryTag = entry.category ? `  ${entry.category}` : '';
-  const parentSuffix = entry.parentExecutionId
-    ? `  parent=${entry.parentExecutionId}`
-    : '';
-  const descSuffix = entry.description ? `  — ${entry.description}` : '';
-  return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
-}
-
-const TODO_ICON: Record<string, string> = {
-  completed: '[x]',
-  in_progress: '[>]',
-  pending: '[ ]',
-};
-
-/** Format todo items as a checklist. */
-function formatTodoSection(todos: TodoEntry[]): string[] {
-  return todos.map((t) => {
-    const icon = TODO_ICON[t.status ?? ''] ?? '[ ]';
-    return `${icon} ${t.content ?? '(no description)'}`;
-  });
-}
-
-/** Format a todo header with counts. */
-function formatTodoHeader(executionId: string, todos: TodoEntry[]): string {
-  const completed = todos.filter((t) => t.status === 'completed').length;
-  const inProgress = todos.filter((t) => t.status === 'in_progress').length;
-  return `Tasks for ${executionId} (${completed} done, ${inProgress} active, ${todos.length - completed - inProgress} pending):`;
 }
 
 export class ExecutionsTool extends defineTool({

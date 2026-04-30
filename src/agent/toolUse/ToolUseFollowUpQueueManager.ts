@@ -109,10 +109,6 @@ export class ToolUseFollowUpQueue {
     return this.queues.get(streamId)?.drain() ?? [];
   }
 
-  static hasQueuedFollowUp(streamId: StreamTabId): boolean {
-    return !(this.queues.get(streamId)?.isEmpty() ?? true);
-  }
-
   /** Get all queued follow-up messages for a stream without consuming them. */
   static getAll(streamId: StreamTabId): string[] {
     return this.queues.get(streamId)?.getAll() ?? [];

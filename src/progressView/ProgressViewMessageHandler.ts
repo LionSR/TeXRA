@@ -7,6 +7,7 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import {
   validateExecutionRequest,
@@ -20,6 +21,7 @@ import {
   COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
