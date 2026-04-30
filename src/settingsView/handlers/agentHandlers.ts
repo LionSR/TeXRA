@@ -1,9 +1,9 @@
 /**
- * Agent selection, directory, and mode preset handlers.
+ * Agent selection, directory, and team handlers.
  *
  * Extracted from SettingsViewMessageHandler to improve cohesion.
  * Handles agent enable/disable, create/customize/delete, YAML editing,
- * custom agent directories, and agent mode presets.
+ * custom agent directories, and agent teams.
  */
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -91,7 +91,7 @@ export function buildAgentSelectionItems(): {
 }
 
 /**
- * Agent selection, directory, and mode preset handler delegate.
+ * Agent selection, directory, and team handler delegate.
  */
 export class AgentHandlers {
   constructor(
@@ -552,7 +552,7 @@ export class AgentHandlers {
     }
   }
 
-  // ── Agent mode preset handlers ──
+  // ── Agent team handlers ──
 
   async sendAgentModePresets(webview: vscode.Webview): Promise<void> {
     await webview.postMessage({
@@ -569,9 +569,7 @@ export class AgentHandlers {
         AGENT_MODE_PRESETS.find((p) => p.id === data.presetId) ??
         this.getCustomPresets().find((p) => p.id === data.presetId);
       if (!preset) {
-        await vscode.window.showErrorMessage(
-          `Unknown preset: ${data.presetId}`,
-        );
+        await vscode.window.showErrorMessage(`Unknown team: ${data.presetId}`);
         return;
       }
 
@@ -595,12 +593,12 @@ export class AgentHandlers {
       await this.refreshAfterAgentMutation();
 
       void vscode.window.showInformationMessage(
-        `Applied "${preset.name}" preset`,
+        `Applied "${preset.name}" team`,
       );
     } catch (error) {
       await showLoggedErrorMessage(
         this.ctx.channel,
-        'Failed to apply agent mode preset',
+        'Failed to apply agent team',
         error,
       );
     }
@@ -611,8 +609,8 @@ export class AgentHandlers {
   ): Promise<void> {
     try {
       const name = await vscode.window.showInputBox({
-        prompt: 'Name for the new preset',
-        placeHolder: 'e.g. My Research Setup',
+        prompt: 'Name for the new team',
+        placeHolder: 'e.g. My Research Team',
         validateInput: (v) => (v.trim() ? null : 'Name cannot be empty'),
       });
       if (!name) return; // cancelled
@@ -625,7 +623,7 @@ export class AgentHandlers {
       const preset: AgentModePreset = {
         id: `custom-${Date.now()}`,
         name: name.trim(),
-        description: `Custom preset: ${[...toolUseAgents, ...workflowAgents].join(', ')}`,
+        description: `Custom team: ${[...toolUseAgents, ...workflowAgents].join(', ')}`,
         icon: 'codicon-bookmark',
         workflowAgents,
         toolUseAgents,
@@ -639,13 +637,11 @@ export class AgentHandlers {
 
       await this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w));
 
-      void vscode.window.showInformationMessage(
-        `Saved preset "${name.trim()}"`,
-      );
+      void vscode.window.showInformationMessage(`Saved team "${name.trim()}"`);
     } catch (error) {
       await showLoggedErrorMessage(
         this.ctx.channel,
-        'Failed to save agent mode preset',
+        'Failed to save agent team',
         error,
       );
     }
@@ -660,7 +656,7 @@ export class AgentHandlers {
       if (!target) return;
 
       const confirm = await vscode.window.showWarningMessage(
-        `Delete preset "${target.name}"?`,
+        `Delete team "${target.name}"?`,
         { modal: true },
         'Delete',
       );
@@ -673,7 +669,7 @@ export class AgentHandlers {
     } catch (error) {
       await showLoggedErrorMessage(
         this.ctx.channel,
-        'Failed to delete agent mode preset',
+        'Failed to delete agent team',
         error,
       );
     }
@@ -759,7 +755,7 @@ export class AgentHandlers {
     ]);
   }
 
-  /** Read and validate custom presets from workspace state. */
+  /** Read and validate custom teams from workspace state. */
   private getCustomPresets(): AgentModePreset[] {
     const raw = workspaceSM.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []);
     const parsed = z.array(AgentModePresetSchema).safeParse(raw);

@@ -169,20 +169,20 @@ export class UserMessage extends LitElement {
     defaultTitle: 'Copy message',
   });
 
-  private payloadCopyController = new CopyButtonController(this, {
-    defaultTitle: 'Copy original payload',
+  private rawMessageCopyController = new CopyButtonController(this, {
+    defaultTitle: 'Copy raw message',
   });
 
   private displayCache = {
     text: '',
     isStructuredDelivery: false,
-    hasOriginalPayload: false,
+    hasRawMessage: false,
     displayText: '',
   };
 
   private getDisplayState(): {
     isStructuredDelivery: boolean;
-    hasOriginalPayload: boolean;
+    hasRawMessage: boolean;
     displayText: string;
   } {
     if (this.displayCache.text === this.text) {
@@ -191,16 +191,16 @@ export class UserMessage extends LitElement {
 
     const structuredTag = getStructuredDeliveryTag(this.text);
     const isStructuredDelivery = structuredTag != null;
-    const hasOriginalPayload =
+    const hasRawMessage =
       structuredTag != null && XML_ESCAPED_DELIVERY_TAGS.has(structuredTag);
-    const displayText = hasOriginalPayload
+    const displayText = hasRawMessage
       ? decodeXmlEntitiesForDisplay(this.text)
       : this.text;
 
     this.displayCache = {
       text: this.text,
       isStructuredDelivery,
-      hasOriginalPayload,
+      hasRawMessage,
       displayText,
     };
     return this.displayCache;
@@ -211,8 +211,8 @@ export class UserMessage extends LitElement {
       new Date(this.timestamp),
     );
     const copyState = this.copyController.state;
-    const payloadCopyState = this.payloadCopyController.state;
-    const { isStructuredDelivery, hasOriginalPayload, displayText } =
+    const rawMessageCopyState = this.rawMessageCopyController.state;
+    const { isStructuredDelivery, hasRawMessage, displayText } =
       this.getDisplayState();
 
     return html`
@@ -240,16 +240,17 @@ export class UserMessage extends LitElement {
               aria-label=${copyState.ariaLabel}
               @click=${() => this.copyController.copy(displayText)}
             ></vscode-toolbar-button>
-            ${hasOriginalPayload
+            ${hasRawMessage
               ? html`<vscode-toolbar-button
                   class=${classMap({
                     'user-message-copy': true,
-                    [payloadCopyState.successClass]: payloadCopyState.copied,
+                    [rawMessageCopyState.successClass]:
+                      rawMessageCopyState.copied,
                   })}
                   icon="code"
-                  title=${payloadCopyState.title}
-                  aria-label=${payloadCopyState.ariaLabel}
-                  @click=${() => this.payloadCopyController.copy(this.text)}
+                  title=${rawMessageCopyState.title}
+                  aria-label=${rawMessageCopyState.ariaLabel}
+                  @click=${() => this.rawMessageCopyController.copy(this.text)}
                 ></vscode-toolbar-button>`
               : nothing}
           </div>
