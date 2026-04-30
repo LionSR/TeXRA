@@ -16,7 +16,6 @@ import {
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
 import {
   BaseViewMessageHandler,
   COMMON_COMMANDS,
@@ -24,6 +23,7 @@ import {
 } from '@common/webview';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { RecordingManager } from '@common/managers/RecordingManager';
+import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
@@ -124,12 +124,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     this.handlerRegistry = this.createHandlerRegistry();
 
-    bus.on('removeStream', ({ streamId }) => {
+    const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
       void this.handleDeleteStream({
         command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
         stream: streamId,
       });
     });
+    context.subscriptions.push({ dispose: unsubscribeRemoveStream });
   }
 
   /**

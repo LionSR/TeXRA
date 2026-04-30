@@ -282,6 +282,7 @@ export class BashTool extends defineTool({
         });
         const terminalStatus = result.success ? 'completed' : 'error';
         await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
+        unregisterInterruptible(childStreamId);
         finalizeChildStream(childStreamId, executionId, logger, {
           wallTimeMs,
           error: result.success
@@ -291,7 +292,6 @@ export class BashTool extends defineTool({
               ),
           autoClose: true,
         });
-        unregisterInterruptible(childStreamId);
 
         const msg = formatBashDelivery(
           executionId,
@@ -306,11 +306,11 @@ export class BashTool extends defineTool({
       })
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
+        unregisterInterruptible(childStreamId);
         finalizeChildStream(childStreamId, executionId, logger, {
           error: err,
           autoClose: true,
         });
-        unregisterInterruptible(childStreamId);
 
         const msg = formatBashError(executionId, command, err);
         await getExecutionStore(executionId).writeReport(msg);
