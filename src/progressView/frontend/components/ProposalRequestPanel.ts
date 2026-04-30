@@ -207,11 +207,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
     >
       <span class="workflow-proposal__file-label">Working directory:</span>
       <span
-<<<<<<< HEAD
-        class="workflow-proposal__file-name workflow-proposal__file-name--readonly"
-=======
         class="workflow-proposal__file-name workflow-proposal__file-name--readonly workflow-proposal__file-name--wrap"
->>>>>>> 797f511 (fix: place working directory inside files block and wrap long paths)
         >${workingDirectory}</span
       >
     </div>`;
