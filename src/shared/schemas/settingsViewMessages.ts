@@ -11,6 +11,11 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import {
+  LATEX_CONFIG_RANGES,
+  LATEX_FORMATTER_VALUES,
+  LATEXDIFF_MATH_MARKUP_VALUES,
+} from '@shared/constants/latex';
+import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
@@ -439,6 +444,50 @@ export type UpdateLatexSettingsStatusMessage = z.infer<
   typeof UpdateLatexSettingsStatusMessageSchema
 >;
 
+/**
+ * LaTeX/compile/diff configuration values, persisted in workspace storage.
+ * Migrated from VS Code `texra.*` configuration. The frontend tab edits these
+ * directly; the backend persists them via `workspaceSM`.
+ *
+ * Each property is optional so the UI can render either the user-set value
+ * (when defined) or the documented default (when undefined). Numeric ranges
+ * and enum values come from `@shared/constants/latex` so this schema, the UI,
+ * and the runtime readers all stay in lockstep.
+ */
+export const LatexFormatterSchema = z.enum(LATEX_FORMATTER_VALUES);
+export type LatexFormatter = z.infer<typeof LatexFormatterSchema>;
+
+export const LatexdiffMathMarkupSchema = z.enum(LATEXDIFF_MATH_MARKUP_VALUES);
+export type LatexdiffMathMarkup = z.infer<typeof LatexdiffMathMarkupSchema>;
+
+export const LatexConfigValuesSchema = z.object({
+  workflowAutoCompile: z.boolean().optional(),
+  workflowAutoCompileTimeoutMs: z
+    .number()
+    .int()
+    .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
+    .optional(),
+  latexdiffBetweenRounds: z.boolean().optional(),
+  latexdiffTimeoutMs: z
+    .number()
+    .int()
+    .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
+    .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max!)
+    .optional(),
+  latexdiffMathMarkup: LatexdiffMathMarkupSchema.optional(),
+  latexFormatter: LatexFormatterSchema.optional(),
+});
+export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
+
+/** Outbound: backend → frontend current LaTeX/compile/diff config values. */
+export const UpdateLatexConfigValuesMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES),
+  values: LatexConfigValuesSchema,
+});
+export type UpdateLatexConfigValuesMessage = z.infer<
+  typeof UpdateLatexConfigValuesMessageSchema
+>;
+
 // ============================================================
 // Inbound message schemas (frontend → backend)
 // ============================================================
@@ -728,6 +777,38 @@ const RunInstallCommandMessageSchema = z.object({
   installCommand: z.string().min(1),
 });
 
+// LaTeX/compile/diff config (storage-backed)
+const GetLatexConfigValuesMessageSchema = commandOnly(
+  CMD.GET_LATEX_CONFIG_VALUES,
+);
+/**
+ * Single-property write — frontend sends one value at a time. Surface a flat
+ * shape (single outer branch keyed on `command`) so it composes into the
+ * outer `SettingsViewInboundMessageSchema` discriminatedUnion('command', ...)
+ * without producing duplicate command discriminators (which would crash the
+ * whole inbound dispatcher at parse time, taking down every Settings view
+ * interaction). Per-field value validation happens in the backend handler
+ * using `LatexConfigValuesSchema.shape[field]`.
+ */
+const LatexConfigFieldSchema = z.enum([
+  'workflowAutoCompile',
+  'workflowAutoCompileTimeoutMs',
+  'latexdiffBetweenRounds',
+  'latexdiffTimeoutMs',
+  'latexdiffMathMarkup',
+  'latexFormatter',
+]);
+export type LatexConfigField = z.infer<typeof LatexConfigFieldSchema>;
+
+const SetLatexConfigValueMessageSchema = z.object({
+  command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
+  field: LatexConfigFieldSchema,
+  // Loose at the schema level — the handler validates per-field via
+  // LatexConfigValuesSchema.shape[field] before writing to workspace state.
+  // `undefined` clears the key (returns to documented default).
+  value: z.union([z.boolean(), z.number(), z.string(), z.null()]).optional(),
+});
+
 // Approval settings inbound messages
 const GetApprovalSettingsMessageSchema = commandOnly(CMD.GET_APPROVAL_SETTINGS);
 const SetBashApprovalEnabledMessageSchema = z.object({
@@ -769,6 +850,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,
     RunInstallCommandMessageSchema,
+    GetLatexConfigValuesMessageSchema,
+    SetLatexConfigValueMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,
