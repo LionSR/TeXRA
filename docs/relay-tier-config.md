@@ -21,8 +21,10 @@ All server-side API key access is provided as part of the **Researcher Access Pr
 
 Users can ALWAYS choose between:
 
-- **Server-side keys**: No API key needed, subject to fair use policy
-- **Personal API keys**: Full control, no restrictions
+- **Server-side keys**: No API key needed, subject to fair use policy and tier limits
+- **Personal API keys**: Full control, no tier restrictions — access any model including Opus, GPT-5, and other premium models
+
+> **Tip:** To use premium models (Opus, GPT-5, etc.) on the free tier, add your own API key in the Profile view. The tier limits only apply to server-side keys.
 
 Toggle this option in the Profile view settings.
 
@@ -32,7 +34,7 @@ Toggle this option in the Profile view settings.
 | --------- | ------------------------------- | ----------------- | -------------------- |
 | **Ultra** | All models (premium included)   | $3+/M input       | + DashScope          |
 | **Max**   | Mid-tier + all free tier models | $1-3/M input      | —                    |
-| **free**  | Budget models only              | <$1/M input       | —                    |
+| **free**  | Budget models only (no Opus/GPT-5) | <$1/M input    | —                    |
 
 All tiers have access to: OpenAI, Anthropic, Google, DeepSeek, xAI, Moonshot
 
