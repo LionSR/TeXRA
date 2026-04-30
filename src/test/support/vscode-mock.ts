@@ -59,5 +59,9 @@ export const ThemeColor = class {
   constructor(public id: string) {}
 };
 
-export const ProgressLocation = { Notification: 15, Window: 10, SourceControl: 1 };
+export const ProgressLocation = {
+  Notification: 15,
+  Window: 10,
+  SourceControl: 1,
+};
 export const StatusBarAlignment = { Left: 1, Right: 2 };
