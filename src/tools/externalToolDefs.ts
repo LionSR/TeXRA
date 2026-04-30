@@ -19,6 +19,10 @@ import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import { getGitHubToken } from '@tools/github/githubAuth';
+import {
+  MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+  PR_POLL_INTERVAL_MS,
+} from '@tools/github/prSubscriptionConstants';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { isGitRepository } from '@utils/system/isGitRepository';
 import { checkToolInstalled } from '@utils/system/toolUtils';
@@ -271,8 +275,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  4. Copy the token back into TeXRA via "Set token".\n\n' +
       'Alternatively, export GITHUB_TOKEN in the environment VS Code is launched from.',
     installUrl: 'https://github.com/settings/tokens',
-    configNotes:
-      'Token stored in VS Code SecretStorage (managed from Git tab). Requires a git repository in the workspace. Polls every 30s; subscription cap: 10 concurrent PRs.',
+    configNotes: `Token stored in VS Code SecretStorage (managed from Git tab). Requires a git repository in the workspace. Polls every ${PR_POLL_INTERVAL_MS / 1000}s; subscription cap: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs.`,
     authNote: 'Uses personal access token',
     toggleable: true,
     installActionCommand: 'texra.showGitSettings',
