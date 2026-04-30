@@ -1,7 +1,6 @@
 // Local file imports
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolDefinition } from '@model';
-import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
@@ -38,14 +37,10 @@ function extractTextFromReasoningDetails(details: unknown): string | undefined {
  * @see https://platform.minimax.io/docs/guides/text-m2-function-call
  */
 export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
+  protected override useReasoningStreamAggregator = true;
+
   protected override shouldIncludeReasoningInToolCalls(): boolean {
     return this.capabilities.supportsReasoning;
-  }
-
-  protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
-    return this.capabilities.supportsReasoning
-      ? new BaseReasoningStreamAggregator()
-      : null;
   }
 
   /**

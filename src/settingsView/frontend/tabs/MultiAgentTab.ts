@@ -26,6 +26,13 @@ import {
   clampNestedDelegationDepth,
 } from '@shared/constants/delegationPolicy';
 
+function clampSetting(value: number, min?: number, max?: number): number {
+  let result = value;
+  if (min != null) result = Math.max(min, result);
+  if (max != null) result = Math.min(max, result);
+  return result;
+}
+
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {
   static override styles = [
@@ -281,22 +288,6 @@ export class MultiAgentTab extends LitElement {
     );
   }
 
-  private handleToggle(event: Event): void {
-    this.emitToggle('super-yolo-toggle', event);
-  }
-
-  private handleKillToggle(event: Event): void {
-    this.emitToggle('allow-orchestrator-kill-toggle', event);
-  }
-
-  private handleDetachToggle(event: Event): void {
-    this.emitToggle('detach-subagents-on-stop-toggle', event);
-  }
-
-  private handleWorktreeSupportToggle(event: Event): void {
-    this.emitToggle('worktree-support-toggle', event);
-  }
-
   private handleNestedDelegationMaxDepthChange(input: HTMLInputElement): void {
     const parsed = Number(input.value);
     if (Number.isNaN(parsed)) {
@@ -333,9 +324,7 @@ export class MultiAgentTab extends LitElement {
       input.value = String(setting.value);
       return;
     }
-    let value = parsed;
-    if (setting.min != null) value = Math.max(setting.min, value);
-    if (setting.max != null) value = Math.min(setting.max, value);
+    const value = clampSetting(parsed, setting.min, setting.max);
     if (value !== parsed) input.value = String(value);
     this.dispatchEvent(
       createEvent('reliability-setting-change', { key: setting.key, value }),
@@ -501,7 +490,7 @@ export class MultiAgentTab extends LitElement {
           <vscode-checkbox
             ?checked=${this.superYoloEnabled}
             ?disabled=${this.toggleDisabled}
-            @change=${this.handleToggle}
+            @change=${(e: Event) => this.emitToggle('super-yolo-toggle', e)}
           >
             Auto-approve delegated tasks
           </vscode-checkbox>
@@ -516,7 +505,8 @@ export class MultiAgentTab extends LitElement {
         <div class="setting-block">
           <vscode-checkbox
             ?checked=${this.allowOrchestratorKill}
-            @change=${this.handleKillToggle}
+            @change=${(e: Event) =>
+              this.emitToggle('allow-orchestrator-kill-toggle', e)}
           >
             Let orchestrator stop agents early
           </vscode-checkbox>
@@ -530,7 +520,8 @@ export class MultiAgentTab extends LitElement {
         <div class="setting-block">
           <vscode-checkbox
             ?checked=${this.detachSubagentsOnStop}
-            @change=${this.handleDetachToggle}
+            @change=${(e: Event) =>
+              this.emitToggle('detach-subagents-on-stop-toggle', e)}
           >
             Keep agents running if I stop the orchestrator
           </vscode-checkbox>
@@ -543,7 +534,8 @@ export class MultiAgentTab extends LitElement {
         <div class="setting-block">
           <vscode-checkbox
             ?checked=${this.worktreeSupport}
-            @change=${this.handleWorktreeSupportToggle}
+            @change=${(e: Event) =>
+              this.emitToggle('worktree-support-toggle', e)}
           >
             Allow agents to work in git worktrees
           </vscode-checkbox>

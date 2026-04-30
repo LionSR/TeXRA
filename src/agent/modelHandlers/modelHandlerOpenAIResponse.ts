@@ -74,8 +74,6 @@ import {
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
-import type { EventEmitter } from 'node:events';
-import type { ModelConfig } from 'llm-zoo';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
@@ -2677,10 +2675,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return thoughtContent || null;
   }
 
-  private parseArguments(raw: unknown): unknown {
-    return parseToolArguments(raw, this.logger);
-  }
-
   extractToolUse(response: Response): OpenAIResponseToolCall[] {
     const items = response?.output;
     if (!Array.isArray(items)) return [];
@@ -2694,7 +2688,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       provider: 'openai-response',
       callId: call.call_id,
       name: call.name,
-      input: this.parseArguments(call.arguments),
+      input: parseToolArguments(call.arguments, this.logger),
       raw: call,
     }));
   }
