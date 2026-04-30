@@ -20,6 +20,8 @@ import {
   formatCIComplete,
   formatCIPassed,
   formatIssueComment,
+  formatMergeConflictDetected,
+  formatMergeConflictResolved,
   formatPRClosed,
   formatReview,
   formatReviewComment,
@@ -60,12 +62,26 @@ function createInitialState(pr: PRKey): SubscriptionState {
     headSha: undefined,
     state: undefined,
     merged: false,
+    mergeableState: undefined,
     etags: {},
     sinceCursors: {},
     lastSuccessAt: Date.now(),
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
   };
+}
+
+/**
+ * GitHub computes `mergeable_state` asynchronously after every push or base
+ * change; until it stabilizes the field reads `unknown`. We deliberately
+ * ignore that transient value when classifying transitions — recording
+ * `unknown` as the "previous" state would let a clean→unknown→dirty
+ * sequence look like clean→dirty (correct), but a dirty→unknown→clean
+ * sequence would silently lose the resolved transition. Treating
+ * `unknown` as "no observation" keeps both directions correct.
+ */
+function isDefiniteMergeableState(s: string | undefined): s is string {
+  return s !== undefined && s !== 'unknown';
 }
 
 // Coalesce this many same-kind events in a single tick into a summary.
@@ -113,6 +129,16 @@ interface SubscriptionState extends BasePollSubscriptionState {
   headSha: string | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
+  /**
+   * Last observed *definite* `mergeable_state` from GitHub (`undefined`
+   * before the first definite reading). Crucially we never store
+   * `'unknown'` here — that's the "still computing" placeholder GitHub
+   * returns right after a push or base change, and treating it as a real
+   * state would corrupt transition detection (a dirty→unknown→clean
+   * sequence would silently lose the "resolved" event because dirty would
+   * be overwritten by unknown before the clean reading arrived).
+   */
+  mergeableState: string | undefined;
   etags: {
     pr?: string;
     issueComments?: string;
@@ -189,6 +215,7 @@ export class PRPollingSource extends PollingSourceBase<
       const newHead = prRes.data.head.sha;
       const newState = prRes.data.state;
       const newMerged = prRes.data.merged;
+      const newMergeable = prRes.data.mergeable_state;
 
       // Detect close/merge on initialized subscriptions.
       if (
@@ -214,6 +241,43 @@ export class PRPollingSource extends PollingSourceBase<
         state.checkRunsCache = undefined;
       }
       state.headSha = newHead;
+
+      // Mergeable-state transitions. We only emit when we have a previous
+      // *definite* observation to compare against — `'unknown'` is the
+      // placeholder GitHub returns while mergeability is still being
+      // computed (right after a push or base change), and treating it as
+      // either a real state or the absence of one would corrupt detection:
+      //   - storing `'unknown'` as `prev` would mask a dirty→unknown→clean
+      //     sequence (the resolved guard `prev === 'dirty'` never fires);
+      //   - emitting on first definite reading after `prev === undefined`
+      //     would surface "merge conflict detected" for PRs that were
+      //     already dirty when we subscribed (or whose first reading just
+      //     happened to land on 'unknown' because mergeability had been
+      //     invalidated mid-poll).
+      // So: only the dirty/non-dirty *transition* between two definite
+      // observations counts. Anything before the first definite reading,
+      // including the seeding tick, is silent.
+      if (isDefiniteMergeableState(newMergeable)) {
+        const prev = state.mergeableState;
+        if (isDefiniteMergeableState(prev)) {
+          if (newMergeable === 'dirty' && prev !== 'dirty') {
+            this.emit(
+              state,
+              formatMergeConflictDetected(state.slug, pr.pullNumber, prev),
+            );
+          } else if (prev === 'dirty' && newMergeable !== 'dirty') {
+            this.emit(
+              state,
+              formatMergeConflictResolved(
+                state.slug,
+                pr.pullNumber,
+                newMergeable,
+              ),
+            );
+          }
+        }
+        state.mergeableState = newMergeable;
+      }
     }
 
     // Bail cleanly if the PR is already closed. On the first (initialization)

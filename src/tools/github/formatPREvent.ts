@@ -149,6 +149,41 @@ export function formatPRClosed(
 }
 
 /**
+ * Emitted when GitHub flips `mergeable_state` to `dirty` (the head can no
+ * longer be merged into the base without conflict). Triggered by either a
+ * push to the head branch or a change to the base branch landing
+ * conflicting content. The agent typically wants to either rebase or merge
+ * the base branch back in.
+ */
+export function formatMergeConflictDetected(
+  slug: string,
+  prNumber: number,
+  prevState: string | undefined,
+): string {
+  const prevDetail = prevState ? ` (was "${prevState}")` : '';
+  return wrap(
+    `Merge conflict detected on ${slug}/pulls/${prNumber}: GitHub now reports mergeable_state="dirty"${prevDetail}. ` +
+      `The PR head no longer cleanly merges into its base — rebase or merge the base back in to resolve.`,
+  );
+}
+
+/**
+ * Emitted when a previously-dirty PR returns to a non-dirty state (typically
+ * after a rebase / merge of the base, or after the conflicting change is
+ * reverted). Pairs with `formatMergeConflictDetected` so an agent that acted
+ * on the conflict notification gets a clean "resolved" signal too.
+ */
+export function formatMergeConflictResolved(
+  slug: string,
+  prNumber: number,
+  newState: string,
+): string {
+  return wrap(
+    `Merge conflict on ${slug}/pulls/${prNumber} is resolved: mergeable_state is now "${newState}".`,
+  );
+}
+
+/**
  * Error events delivered into the follow-up queue when the poller hits an
  * unrecoverable condition (auth rejected, repeated failures). Same
  * `<github-webhook-activity>` envelope + sanitize path as every other event

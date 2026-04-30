@@ -72,6 +72,41 @@ export function formatRepoReviewComment(
   );
 }
 
+/**
+ * Single-PR merge-conflict notification, mirroring the per-PR formatter but
+ * keyed under the repo subscription. Triggered by the holistic probe in
+ * `RepoPollingSource` when an open PR's `mergeable_state` flips to `dirty`.
+ */
+export function formatRepoMergeConflictDetected(
+  slug: string,
+  prNumber: number,
+  prevState: string | undefined,
+): string {
+  const prevDetail = prevState ? ` (was "${prevState}")` : '';
+  return wrap(
+    `Merge conflict detected on ${slug}/pulls/${prNumber}: mergeable_state="dirty"${prevDetail}. ` +
+      `Subscribe to ${slug}/pulls/${prNumber} for nuanced events, or rebase / merge the base back in to resolve.`,
+  );
+}
+
+/**
+ * Coalesced "many PRs newly conflicted" notification — fires when the same
+ * tick discovers `>= COALESCE_THRESHOLD` PRs that flipped to dirty. Avoids
+ * spraying the orchestrator with one event per PR after a base-branch
+ * merge invalidates many PRs at once.
+ */
+export function formatRepoMergeConflictSummary(
+  slug: string,
+  prNumbers: readonly number[],
+): string {
+  const list = prNumbers.map((n) => `${slug}/pulls/${n}`).join('\n');
+  return wrap(
+    `Merge conflicts detected on ${prNumbers.length} PRs in ${slug} (mergeable_state="dirty"). ` +
+      `Likely caused by a recent base-branch update — subscribe per-PR for nuanced events, or rebase / merge the base back in.\n\n` +
+      list,
+  );
+}
+
 export function formatRepoSubscriptionError(
   slug: string,
   detail: string,
