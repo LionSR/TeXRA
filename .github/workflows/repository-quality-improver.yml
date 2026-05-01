@@ -35,9 +35,10 @@ jobs:
 
             ## Dedup gate
 
-            Search `is:issue in:title "[quality]"`. If any open result was created
-            in the last 24 hours, exit with a one-line summary — prevents duplicate
-            firings on the same UTC day from manual re-dispatch.
+            Search `repo:${{ github.repository }} is:issue is:open in:title "[quality]"`.
+            If any result was created in the last 24 hours, exit with a one-line
+            summary — prevents duplicate firings on the same UTC day from manual
+            re-dispatch.
 
             ## Focus area
 
