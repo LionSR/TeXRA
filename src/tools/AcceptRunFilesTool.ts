@@ -22,6 +22,7 @@ import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 // Local imports - tools
+import { bus } from '@eventBus/ProgressEventBus';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatResultCount, pluralize } from '@tools/formatting';
@@ -182,6 +183,7 @@ Optional:
         return {
           path: mapping.path,
           original: dest.relativePath,
+          destAbsolutePath: dest.absolutePath,
           proposedContent,
           originalContent,
           destExists,
@@ -193,7 +195,11 @@ Optional:
     // Phase 2: Request approval and write each file
     const results: string[] = [];
     const edits: ToolResult['edits'] = [];
-    const acceptedEntries: { outputPath: string; originalPath: string }[] = [];
+    const acceptedEntries: {
+      outputPath: string;
+      originalPath: string;
+      destAbsolutePath: string;
+    }[] = [];
     let rejected = 0;
     const rejectionMessages: string[] = [];
 
@@ -239,6 +245,14 @@ Optional:
       acceptedEntries.push({
         outputPath: entry.path,
         originalPath: entry.original,
+        destAbsolutePath: entry.destAbsolutePath,
+      });
+    }
+
+    // Badge all accepted workspace files
+    if (acceptedEntries.length > 0) {
+      bus.emit('workspaceFilesWritten', {
+        absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
       });
     }
 
