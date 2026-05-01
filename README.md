@@ -78,12 +78,21 @@ configured for the providers those agents use.
 
 1. Install the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
    or [Open VSX](https://open-vsx.org/extension/texra-ai/texra).
-2. Run **`TeXRA: Run Setup Assistant Agent (Setup Wizard)`** from the command
-   palette, or click **Get Started** in the status bar. The Setup Wizard
-   diagnoses your environment, installs missing LaTeX tooling, helps you sign
-   in or add an API key, and verifies you're ready to run agents—asking
-   before every command and explaining what it's doing. It can hand off
-   interactive `sudo` prompts and installers to your VS Code terminal.
+2. Launch the **Setup Wizard**. Pick whichever is easiest:
+   - Click the **🚀 TeXRA: Get Started** pill in the status bar (shown
+     automatically until you sign in or add an API key).
+   - Click **Run the setup assistant agent** in the Getting Started banner
+     at the top of the TeXRA sidebar.
+   - Open VS Code's **Welcome / Walkthroughs** page and pick **TeXRA:
+     Getting Started** — Step 1 is a one-click button.
+   - Or, from the command palette, run
+     **`TeXRA: Run Setup Assistant Agent (Setup Wizard)`**.
+
+   The Setup Wizard diagnoses your environment, installs missing LaTeX
+   tooling, helps you sign in or add an API key, and verifies you're ready
+   to run agents—asking before every command and explaining what it's
+   doing. It can hand off interactive `sudo` prompts and installers to your
+   VS Code terminal.
 3. Pick an agent **team** in Settings → Multi-Agent (Physicist,
    Mathematician, CS/ML, or Lean Project), or stay with the default lineup.
 4. Open the TeXRA sidebar, select the **Orchestrator** (or any agent),
@@ -92,8 +101,9 @@ configured for the providers those agents use.
    and follow up at any time—messages are queued for whichever sub-agent
    needs them.
 
-New here? **`TeXRA: Create Sample Project`** spins up a fully configured
-workspace to experiment in.
+New here? Use the **Create Sample Project** button in the Getting Started
+banner (also available as `TeXRA: Create Sample Project` from the command
+palette) to spin up a fully configured workspace.
 
 ## Requirements
 
