@@ -47,9 +47,15 @@ jobs:
             2. Find clusters of **5 or more** orphans sharing a clear theme — a
                common `area:*` label is the strongest signal; root-cause overlap
                or feature decomposition also count.
-            3. Skip clusters whose theme already has an open `Tracking:` /
-               `[Parent]` / `Epic:` / `Meta:` issue, OR any open issue labeled
-               `tracking` regardless of title prefix.
+            3. Skip a cluster if the cluster's **theme** is already covered by
+               an existing open tracker. Match on either:
+               - title prefix `Tracking:` / `[Parent]` / `Epic:` / `Meta:` whose
+                 wording overlaps the cluster theme, OR
+               - an open issue labeled `tracking` whose `area:*` labels overlap
+                 the cluster's `area:*` labels and whose body or title indicates
+                 the same theme.
+               Do NOT skip merely because some unrelated tracker exists in the
+               repo — the check is theme-scoped, not global.
             4. From the `list_issues` response, capture each child's integer `id`
                (the REST database id, NOT the issue `number` and NOT the GraphQL
                `node_id` string).
