@@ -13,33 +13,36 @@ const CHANNEL = 'AddCriticismTool';
 logger.initialize(CHANNEL);
 
 /**
- * Sink injected by the extension host. Receives one criticism entry and
- * routes it to the inline-criticism `DiagnosticCollection`. Returns
- * `accepted: false` when the experimental setting is disabled — the tool
- * surfaces this back to the agent so it knows the call was a no-op.
+ * Shared shape for a single criticism entry. The tool emits this with `path`
+ * (which the host resolves to `absolutePath`) and the host re-emits the same
+ * shape into the diagnostic collection.
  */
-export interface AddCriticismSinkPayload {
+export interface ManualCriticismEntry {
+  /** Absolute path resolved by the host. */
+  absolutePath: string;
+  /** 1-based line number. */
+  line: number;
+  message: string;
+  /** 1–5; mapped to DiagnosticSeverity. */
+  severity: number;
+  /** 1–5; appended to the message as `(S/C)`. */
+  confidence: number;
+}
+
+/**
+ * Sink injected by the extension host. Returns `accepted: false` when the
+ * experimental setting is disabled so the tool can surface that to the agent.
+ */
+export type AddCriticismSink = (input: {
   path: string;
   line: number;
   message: string;
   severity: number;
   confidence: number;
-}
+}) => { accepted: boolean; resolvedPath: string };
 
-export type AddCriticismSink = (payload: AddCriticismSinkPayload) => {
-  accepted: boolean;
-  resolvedPath: string;
-};
+let sink: AddCriticismSink = () => ({ accepted: false, resolvedPath: '' });
 
-let sink: AddCriticismSink = () => ({
-  accepted: false,
-  resolvedPath: '',
-});
-
-/**
- * Inject the sink that pushes criticism entries to the VS Code diagnostic
- * collection. Wired in `extension.ts` once at activation.
- */
 export function setAddCriticismSink(provider: AddCriticismSink): void {
   sink = provider;
 }

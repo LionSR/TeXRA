@@ -1,14 +1,11 @@
 /**
- * Parser for `\criticize{message}{severity}{confidence}` annotations inserted
- * by critique-style agents (criticize, notation, elevate, verifyFix, ...).
+ * Brace-balanced parser for `\criticize{message}{severity}{confidence}`.
  *
- * Returns each occurrence with its position so the extension host can surface
- * them as VS Code diagnostics. Brace-balanced so `\criticize{...\cref{x}...}`
- * style nesting is handled correctly (the regex in `replacement/advanced.ts`
- * only allows one level of nesting).
+ * Needed in addition to the regex in `replacement/advanced.ts` because that
+ * one only handles a single level of brace nesting, while messages routinely
+ * contain `\cref{...}` and similar nested macros.
  *
- * Pure text in / data out — no `vscode` import so this stays usable in the
- * agent core too.
+ * No `vscode` import — usable from agent core too.
  */
 
 export interface CriticismAnnotation {
@@ -25,11 +22,6 @@ export interface CriticismAnnotation {
 
 const MACRO = '\\criticize';
 
-/**
- * Read one brace-balanced `{...}` argument starting at `source[index]`.
- * Returns the inner text and the index of the character after the closing `}`.
- * Returns null if the argument is malformed (unbalanced braces, no opening `{`).
- */
 function readBraceGroup(
   source: string,
   index: number,
@@ -56,44 +48,42 @@ function readBraceGroup(
   return null;
 }
 
-/** Convert a 0-based char offset into 0-based (line, column). */
-function offsetToLineCol(
-  source: string,
-  offset: number,
-): { line: number; column: number } {
-  let line = 0;
-  let lineStart = 0;
-  for (let i = 0; i < offset; i++) {
-    if (source[i] === '\n') {
-      line++;
-      lineStart = i + 1;
+/**
+ * Running line/column cursor: advances forward through `source` so the total
+ * cost of converting many offsets stays O(N) instead of O(N × matches).
+ */
+class LineColCursor {
+  private offset = 0;
+  private line = 0;
+  private lineStart = 0;
+  constructor(private readonly source: string) {}
+
+  advanceTo(target: number): { line: number; column: number } {
+    while (this.offset < target) {
+      if (this.source[this.offset] === '\n') {
+        this.line++;
+        this.lineStart = this.offset + 1;
+      }
+      this.offset++;
     }
+    return { line: this.line, column: this.offset - this.lineStart };
   }
-  return { line, column: offset - lineStart };
 }
 
-/**
- * Parse all `\criticize{message}{severity}{confidence}` occurrences in `source`.
- *
- * Severity/confidence are parsed as integers. If the second/third arg isn't
- * a clean integer (e.g. older single-arg form `\criticize{Fixed: ...}`), the
- * occurrence is skipped — those agents render visually but don't carry the
- * severity metadata diagnostics need.
- */
 export function parseCriticismAnnotations(
   source: string,
 ): CriticismAnnotation[] {
   if (!source.includes(MACRO)) return [];
 
   const out: CriticismAnnotation[] = [];
+  const cursor = new LineColCursor(source);
   let searchFrom = 0;
   while (searchFrom < source.length) {
     const macroAt = source.indexOf(MACRO, searchFrom);
     if (macroAt === -1) break;
 
     // Guard against partial matches like `\criticizeFoo`.
-    const after = source[macroAt + MACRO.length];
-    if (after !== '{') {
+    if (source[macroAt + MACRO.length] !== '{') {
       searchFrom = macroAt + MACRO.length;
       continue;
     }
@@ -122,7 +112,7 @@ export function parseCriticismAnnotations(
       severity >= 1 &&
       severity <= 5
     ) {
-      const { line, column } = offsetToLineCol(source, macroAt);
+      const { line, column } = cursor.advanceTo(macroAt);
       out.push({
         message: arg1.content,
         severity,
