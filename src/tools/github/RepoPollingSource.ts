@@ -39,22 +39,26 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatRepoIssueComment,
+  formatRepoMergeConflictDetected,
+  formatRepoMergeConflictSummary,
   formatRepoPRClosed,
   formatRepoPROpened,
   formatRepoReviewComment,
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
-import { getNewestTimestamp, trimSet } from './formatUtils';
+import { getNewestTimestamp, setRecent, trimMap, trimSet } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
   type Disposable,
 } from './PollingSourceBase';
-import type {
-  GhIssueComment,
-  GhPullsListEntry,
-  GhReviewComment,
+import {
+  isDefiniteMergeableState,
+  type GhIssueComment,
+  type GhPullRequest,
+  type GhPullsListEntry,
+  type GhReviewComment,
 } from './prTypes';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
@@ -75,6 +79,20 @@ const MAX_PR_STATE_ENTRIES = 500;
 // older than this fall out of the dedup window — but the `since` cursor
 // will normally have advanced past them by then anyway.
 const MAX_SEEN_IDS = 1000;
+// Holistic merge-conflict probing: each tick we GET `/pulls/{N}` for at
+// most this many open PRs whose `updated_at` advanced since the prior tick,
+// in newest-first order. Bounded so a busy repo can't fan out into one
+// extra GET per open PR — at 30s tick interval and 5 probes/tick we add
+// ~600 requests/hour per repo, well within the 5,000/hr token budget.
+// PRs that aren't probed this tick simply wait their turn: the next push
+// or comment will bubble them back to the top of the updated-at order.
+const MAX_MERGEABLE_PROBES_PER_TICK = 5;
+// Coalesce per-tick merge-conflict events into a single summary above this
+// threshold. Mirrors the PR-poller `COALESCE_THRESHOLD`: the typical cause
+// of many simultaneous transitions is a base-branch update invalidating
+// every open PR, and one summary message is more useful to an orchestrator
+// than five individual events.
+const MERGE_CONFLICT_COALESCE_THRESHOLD = 3;
 
 export type RepoKey = `${string}/${string}`;
 
@@ -120,6 +138,14 @@ interface SubscriptionState extends BasePollSubscriptionState {
    * time the PR shows up in the list endpoint.
    */
   prStateByNumber: Map<number, 'open' | 'closed' | 'merged'>;
+  /**
+   * Per-PR `updated_at` cursor for the merge-conflict probe; only advanced
+   * after a successful probe so transient probe failures keep the PR as a
+   * candidate next tick. See `probeMergeableStates`.
+   */
+  prUpdatedAtByNumber: Map<number, string>;
+  /** Per-PR last *definite* `mergeable_state`; see `isDefiniteMergeableState`. */
+  prMergeableByNumber: Map<number, string>;
 }
 
 export class RepoPollingSource extends PollingSourceBase<
@@ -187,6 +213,11 @@ export class RepoPollingSource extends PollingSourceBase<
       if (pullsRes.status === 200) {
         for (const pr of pullsRes.data) {
           state.prStateByNumber.set(pr.number, classifyPRState(pr));
+          // Seed the updated_at cursor so the next tick only treats real
+          // *advances* as probe triggers — without this the second tick
+          // would see every PR's updated_at as "advanced" relative to
+          // undefined and stampede MAX_PROBES probes on irrelevant PRs.
+          state.prUpdatedAtByNumber.set(pr.number, pr.updated_at);
         }
       }
       if (issueRes.status === 200) {
@@ -228,16 +259,9 @@ export class RepoPollingSource extends PollingSourceBase<
             formatRepoPRClosed(state.slug, pr.number, next === 'merged'),
           );
         }
-        // FIFO eviction relies on Map insertion order; delete-then-set
-        // re-inserts at the tail so recently-touched PRs are kept.
-        state.prStateByNumber.delete(pr.number);
-        state.prStateByNumber.set(pr.number, next);
+        setRecent(state.prStateByNumber, pr.number, next);
       }
-      while (state.prStateByNumber.size > MAX_PR_STATE_ENTRIES) {
-        const oldest = state.prStateByNumber.keys().next().value;
-        if (oldest === undefined) break;
-        state.prStateByNumber.delete(oldest);
-      }
+      trimMap(state.prStateByNumber, MAX_PR_STATE_ENTRIES);
     }
 
     if (issueRes.status === 200) {
@@ -271,6 +295,119 @@ export class RepoPollingSource extends PollingSourceBase<
     // live only on /pulls/{n}/reviews, which is per-PR. An orchestrator that
     // needs that fidelity should delegate a worker that calls
     // github_subscription with path="owner/repo#N".
+
+    // Holistic merge-conflict detection. The list endpoint doesn't return
+    // `mergeable_state`, so we probe `/pulls/{N}` for a bounded number of
+    // open PRs whose `updated_at` advanced since the prior tick. That
+    // signal naturally covers head pushes (the most common cause of new
+    // conflicts) and surfaces base-branch conflicts via the comments /
+    // reviews that typically follow a base merge. PRs that don't make the
+    // per-tick cap roll over: the next tick re-evaluates the candidate set.
+    if (pullsRes.status === 200) {
+      await this.probeMergeableStates(state, pullsRes.data);
+    }
+  }
+
+  /**
+   * Probe up to `MAX_MERGEABLE_PROBES_PER_TICK` open PRs for
+   * `mergeable_state` changes, prioritizing ones whose `updated_at`
+   * advanced since the prior tick (with newest-first tie-breaking).
+   *
+   * Emits one event per PR that flipped to `'dirty'`, or a single coalesced
+   * summary if `>= MERGE_CONFLICT_COALESCE_THRESHOLD` PRs flipped on the
+   * same tick. We do NOT emit "resolved" notifications at the repo level —
+   * an orchestrator monitoring conflicts wants the alert, and the agent it
+   * delegates the fix to will run a per-PR subscription that surfaces the
+   * resolved transition. Adding it here would just spray noise.
+   *
+   * Skips bot-authored PRs end-to-end (mirrors the open/close gate above)
+   * and PRs we've already classified as `'dirty'` so we don't re-emit
+   * every time updated_at advances on an already-conflicted PR.
+   */
+  private async probeMergeableStates(
+    state: SubscriptionState,
+    pulls: readonly GhPullsListEntry[],
+  ): Promise<void> {
+    // Build the candidate list: open PRs whose updated_at advanced since
+    // our last definite observation. First-seen PRs are seeded silently —
+    // probing on first observation would surface "merge conflict detected"
+    // for PRs that were already dirty before we attached. We update the
+    // updated_at cursor only AFTER a successful probe so a transient probe
+    // failure leaves the PR as a candidate next tick rather than waiting
+    // for the next push to bring it back into scope.
+    const candidates: GhPullsListEntry[] = [];
+    for (const pr of pulls) {
+      if (pr.state !== 'open') continue;
+      if (shouldDropBotEvent(pr.user)) continue;
+      const prevUpdatedAt = state.prUpdatedAtByNumber.get(pr.number);
+      if (prevUpdatedAt === undefined) {
+        state.prUpdatedAtByNumber.set(pr.number, pr.updated_at);
+        continue;
+      }
+      if (pr.updated_at > prevUpdatedAt) candidates.push(pr);
+    }
+    if (candidates.length === 0) return;
+
+    // Pulls list is already sorted by updated_at desc, so slicing yields
+    // the freshest candidates when the per-tick cap bites.
+    const probes = candidates.slice(0, MAX_MERGEABLE_PROBES_PER_TICK);
+    const probeResults = await Promise.allSettled(
+      probes.map(async (pr) => {
+        const path = `/repos/${state.owner}/${state.repo}/pulls/${pr.number}`;
+        const res = await ghGet<GhPullRequest>(path);
+        if (res.status !== 200) return undefined;
+        return {
+          number: pr.number,
+          updatedAt: pr.updated_at,
+          mergeable: res.data.mergeable_state,
+        };
+      }),
+    );
+
+    const newlyDirty: { number: number; prev: string }[] = [];
+    for (const result of probeResults) {
+      if (result.status !== 'fulfilled' || !result.value) continue;
+      const { number, updatedAt, mergeable } = result.value;
+      // Defer the cursor advance until we have a *definite* mergeable
+      // reading. GitHub commonly returns `'unknown'` for a few seconds
+      // after a push or base change while it computes mergeability;
+      // advancing updated_at on that response would drop the PR from the
+      // candidate set and let the subsequent dirty/clean transition slip
+      // by silently. Leaving the cursor unchanged keeps the PR a candidate
+      // next tick so we re-probe until GitHub resolves the state.
+      if (!isDefiniteMergeableState(mergeable)) continue;
+      // setRecent (delete + set) refreshes insertion order so the
+      // FIFO trimMap below evicts least-recently-touched, not first-seen.
+      setRecent(state.prUpdatedAtByNumber, number, updatedAt);
+      const prev = state.prMergeableByNumber.get(number);
+      setRecent(state.prMergeableByNumber, number, mergeable);
+      // Silent seed on first definite reading; resolved transitions are
+      // intentionally not surfaced at the repo level (see method doc).
+      if (!isDefiniteMergeableState(prev)) continue;
+      if (mergeable === 'dirty' && prev !== 'dirty') {
+        newlyDirty.push({ number, prev });
+      }
+    }
+
+    if (newlyDirty.length >= MERGE_CONFLICT_COALESCE_THRESHOLD) {
+      this.emit(
+        state,
+        formatRepoMergeConflictSummary(
+          state.slug,
+          newlyDirty.map((d) => d.number),
+        ),
+      );
+    } else {
+      for (const { number, prev } of newlyDirty) {
+        this.emit(
+          state,
+          formatRepoMergeConflictDetected(state.slug, number, prev),
+        );
+      }
+    }
+
+    trimMap(state.prMergeableByNumber, MAX_PR_STATE_ENTRIES);
+    trimMap(state.prUpdatedAtByNumber, MAX_PR_STATE_ENTRIES);
   }
 }
 
@@ -291,6 +428,8 @@ function createInitialState(owner: string, repo: string): SubscriptionState {
     seenIssueCommentIds: new Set(),
     seenReviewCommentIds: new Set(),
     prStateByNumber: new Map(),
+    prUpdatedAtByNumber: new Map(),
+    prMergeableByNumber: new Map(),
     lastSuccessAt: now,
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
