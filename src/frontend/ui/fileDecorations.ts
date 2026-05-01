@@ -62,7 +62,7 @@ export function registerFileDecorations(
 ): void {
   const provider = new TeXRAFileDecorationProvider();
 
-  const unsubscribe = bus.on('addOutputFiles', ({ filesByRound }) => {
+  const unsubscribeOutputFiles = bus.on('addOutputFiles', ({ filesByRound }) => {
     const paths = new Set<string>();
     for (const roundFiles of Object.values(filesByRound)) {
       for (const info of roundFiles) {
@@ -74,9 +74,17 @@ export function registerFileDecorations(
     }
   });
 
+  const unsubscribeWritten = bus.on(
+    'workspaceFilesWritten',
+    ({ absolutePaths }) => {
+      provider.markTouched(absolutePaths);
+    },
+  );
+
   context.subscriptions.push(
     vscode.window.registerFileDecorationProvider(provider),
     provider,
-    { dispose: unsubscribe },
+    { dispose: unsubscribeOutputFiles },
+    { dispose: unsubscribeWritten },
   );
 }
