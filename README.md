@@ -97,7 +97,8 @@ workspace to experiment in.
 
 ## Requirements
 
-- **VS Code** 1.105+
+- **VS Code** 1.105+ (also runs in compatible editors such as Cursor,
+  Windsurf, and Google Antigravity)
 - **LaTeX distribution** (TeX Live, MiKTeX, or MacTeX) for compilation and
   related tooling
 - **Perl** (required by `latexindent` and `latexdiff`)
