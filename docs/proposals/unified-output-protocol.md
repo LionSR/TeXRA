@@ -86,7 +86,7 @@ Gate the rollout on **no statistically meaningful regression** on the N=1 path. 
 
 ### Phase 1: Protocol constants and parser
 
-Land the unified container parser as the *only* parser path. Existing single-output agents temporarily emit the old container; the parser reads both. This is a non-breaking shim that lives for one release.
+Land the unified container parser as the _only_ parser path. Existing single-output agents temporarily emit the old container; the parser reads both. This is a non-breaking shim that lives for one release.
 
 ### Phase 2: Migrate prompts and YAML
 
