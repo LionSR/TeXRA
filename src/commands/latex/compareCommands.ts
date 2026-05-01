@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { bus } from '@eventBus/ProgressEventBus';
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
@@ -192,6 +193,12 @@ async function handleAcceptEdited(
 
     const editedContent = await flexibleFS.read(editedLocation);
     await flexibleFS.write(targetLocation, editedContent);
+
+    if (targetLocation.kind === 'workspace') {
+      bus.emit('workspaceFilesWritten', {
+        absolutePaths: [targetLocation.absolutePath],
+      });
+    }
 
     const operation = isNewFile && !targetExists ? 'created' : 'replaced';
     const successMessage = `Successfully ${operation} '${targetFileName}' with content from '${editedFileName}'`;
