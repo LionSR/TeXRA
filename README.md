@@ -58,12 +58,12 @@ a web-based launch page.
 
 ## Built-in Agent Teams
 
-| Team | What the team does |
-| --- | --- |
-| **Physicist** | Analytical derivations, numerical experiments, literature search, slide drafting, and critical review. |
-| **Mathematician** | Proofs, Lean 4 formalization, research, and LaTeX correction. |
-| **Computer Scientist (ML)** | Algorithm design, experiments and ablations, literature search, critical review, and reproducibility. |
-| **Lean Project** | Lean 4 projects—theorem search, tactic simplification, and blueprint-driven formalization. |
+| Team                        | What the team does                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Physicist**               | Analytical derivations, numerical experiments, literature search, slide drafting, and critical review. |
+| **Mathematician**           | Proofs, Lean 4 formalization, research, and LaTeX correction.                                          |
+| **Computer Scientist (ML)** | Algorithm design, experiments and ablations, literature search, critical review, and reproducibility.  |
+| **Lean Project**            | Lean 4 projects—theorem search, tactic simplification, and blueprint-driven formalization.             |
 
 Switch teams from the Multi-Agent tab in Settings, or build your own roster of
 workflow and tool-use agents.
