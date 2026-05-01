@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  cluster:
+  tend:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,10 +26,13 @@ jobs:
             --allowedTools "mcp__github__*"
 
           prompt: |
-            You are the Issue Arborist for ${{ github.repository }}. Cluster open
-            orphan issues into native sub-issue trees so the backlog stays coherent.
+            You are the Issue Arborist for ${{ github.repository }}. Daily, you
+            tend the issue tree: cluster orphans into parents, then close
+            completed trackers. Run both phases in this order.
 
-            ## Process
+            Use the GitHub MCP tools (not gh CLI) for all GitHub operations.
+
+            ## Phase A — Cluster orphan issues into parents
 
             1. List up to 100 open issues without a parent. Drop any item that
                has a `pull_request` field — GitHub's issues endpoint returns PRs
@@ -37,8 +40,8 @@ jobs:
                sub-issues. Then exclude issues labeled `tracking` or with titles
                starting `Tracking:` / `[Parent]` / `Epic:`.
             2. Find clusters of **5 or more** orphans sharing a clear theme — a
-               common `area:*` label is the strongest signal; root-cause overlap or
-               feature decomposition also count.
+               common `area:*` label is the strongest signal; root-cause overlap
+               or feature decomposition also count.
             3. Skip clusters whose theme already has an open `Tracking:` issue.
             4. From the `list_issues` response, capture each child's integer `id`
                (the REST database id, NOT the issue `number` and NOT the GraphQL
@@ -56,10 +59,34 @@ jobs:
                  Note: `sub_issue_id` is the child's numeric REST `id` (integer),
                  NOT its issue `number` and NOT its `node_id`.
 
-            ## Caps
+            ### Phase A caps
 
             - Max 5 new parents per run
             - Max 50 sub-issue links per run
             - Precision over recall: only link if the relationship is unambiguous
 
-            If no clusters meet the bar, exit with a one-line summary.
+            ## Phase B — Close completed trackers
+
+            For each open issue labeled `tracking` in ${{ github.repository }}
+            (excluding any parent created in Phase A this run):
+
+            - Read its sub-issues via `mcp__github__issue_read`.
+            - Qualifies for close ONLY if it has ≥1 sub-issue AND every sub-issue
+              is `closed` with `state_reason=completed` (skip if any are
+              `not_planned` or `duplicate`).
+            - Skip parents created less than 24 hours ago.
+            - Process leaf-up: close inner trackers first, then re-check outer
+              ones in the same run.
+
+            To close: comment
+            `✅ All N sub-issues closed as completed. Auto-closing this tracker.`,
+            then `mcp__github__issue_write` (method=update) with `state=closed`,
+            `state_reason=completed`.
+
+            ### Phase B caps
+
+            - Max 20 closures per run
+
+            ## Final report
+
+            One-line summary per phase. Skip silently when nothing matches.
