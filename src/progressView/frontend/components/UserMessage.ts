@@ -26,6 +26,7 @@ const STRUCTURED_DELIVERY_TAGS = [
   'codex-error',
   'execution-activity',
   'github-webhook-activity',
+  'subagent-progress',
   'subagent-result',
   'subagent-error',
 ] as const;
