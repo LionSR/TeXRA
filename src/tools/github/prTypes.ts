@@ -65,6 +65,18 @@ export interface GhPullRequest {
 }
 
 /**
+ * GitHub computes `mergeable_state` asynchronously after every push or base
+ * change; until it stabilizes the field reads `'unknown'`. Both polling
+ * sources filter out that transient value so a clean→unknown→dirty (or
+ * dirty→unknown→clean) sequence registers as a single transition rather
+ * than two — recording `'unknown'` as the prior state would mask the
+ * resolved-side transition.
+ */
+export function isDefiniteMergeableState(s: string | undefined): s is string {
+  return s !== undefined && s !== 'unknown';
+}
+
+/**
  * Subset of `GET /repos/{o}/{r}/issues/{n}` we consume. The `pull_request`
  * field is GitHub's discriminator: present (with a `url`) iff this issue
  * record is actually a PR. The disambiguator on subscribe uses it.
