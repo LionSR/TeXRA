@@ -4,7 +4,7 @@ Guidance for Claude Code when working with this repository. For detailed coding 
 
 ## Code review
 
-When reviewing TeXRA code (whether invoked via `/review`, asked for a code review, or auditing a PR/branch), **load the project skill at [skills/code-review/SKILL.md](./skills/code-review/SKILL.md) first** and use [skills/code-review/references/review-checklist.md](./skills/code-review/references/review-checklist.md) as the targeted check list. A "no issues found" review on this repo is almost always wrong — the skill encodes the repo-specific rules (platform decoupling, Zod v4, PocketFlow, factory layering, render-time workarounds) that generic review passes miss. Always include a `Verified` section listing what you actually opened.
+For `/review` or any code review on this repo, load [skills/code-review/SKILL.md](./skills/code-review/SKILL.md) first — generic passes miss the repo-specific rules below. Always include a `Verified` section listing what you opened.
 
 ## Project Overview
 
