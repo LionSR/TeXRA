@@ -1,4 +1,4 @@
-name: Issue Arborist
+name: Issue Tree
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: issue-arborist
+  group: issue-tree
   cancel-in-progress: false
 
 jobs:
@@ -26,9 +26,9 @@ jobs:
             --allowedTools "mcp__github__*"
 
           prompt: |
-            You are the Issue Arborist for ${{ github.repository }}. Daily, you
-            tend the issue tree: cluster orphans into parents, then close
-            completed trackers. Run both phases in this order.
+            You maintain the issue tree for ${{ github.repository }}. Daily,
+            cluster orphan issues into parents, then close completed trackers.
+            Run both phases in this order.
 
             Use the GitHub MCP tools (not gh CLI) for all GitHub operations.
 
