@@ -2,8 +2,6 @@ name: Sub-Issue Closer
 
 on:
   schedule:
-    # Daily 13:30 UTC, 30 min after issue-arborist so newly-created parents
-    # are not immediately re-evaluated for closure.
     - cron: '30 13 * * *'
   workflow_dispatch:
 
@@ -19,8 +17,7 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - name: Run Claude Code
-        uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
@@ -28,58 +25,19 @@ jobs:
             --allowedTools "mcp__github__*"
 
           prompt: |
-            You are the Sub-Issue Closer for ${{ github.repository }}. Daily, you
-            close parent tracking issues whose sub-issues are all done.
+            Close open `tracking` issues whose sub-issues are all completed.
 
-            Use the GitHub MCP tools (not gh CLI) for all GitHub operations.
+            For each open issue labeled `tracking` in ${{ github.repository }}:
+            - Read its sub-issues via `mcp__github__issue_read`.
+            - Qualifies for close ONLY if it has ≥1 sub-issue AND every sub-issue is
+              `closed` with `state_reason=completed` (skip if any are
+              `not_planned` or `duplicate`).
+            - Skip parents created less than 24 hours ago.
+            - Process leaf-up: close inner trackers first, then re-check outer ones.
 
-            ## Process
+            To close: comment
+            `✅ All N sub-issues closed as completed. Auto-closing this tracker.`,
+            then `mcp__github__issue_write` (method=update) with `state=closed`,
+            `state_reason=completed`.
 
-            1. List open issues labeled `tracking`:
-               `mcp__github__list_issues` with state=open, labels=`tracking`.
-
-            2. For each parent, enumerate its sub-issues. Try in this order:
-               - `mcp__github__issue_read` for the parent — the response should
-                 include linked sub-issues
-               - If the response lacks sub-issue data, parse the parent's body for
-                 GitHub-rendered checklist items referencing other issues
-
-            3. A parent qualifies for auto-close ONLY if ALL of:
-               - It has at least one sub-issue (count > 0)
-               - Every sub-issue is in state `closed` with `state_reason=completed`
-               - No sub-issue is closed as `not_planned` or `duplicate` (those
-                 indicate abandoned work, not completion)
-               - The parent itself is not labeled `tracking` AND `priority:p0`
-                 (p0 trackers always need human sign-off)
-
-            4. Process leaf-up: if a parent's sub-issues include other tracking
-               issues, close those first within the same run, then re-check the
-               outer parent. (Sort: parents whose only tracking-children just
-               closed, last.)
-
-            5. To close, use `mcp__github__issue_write` (method=update):
-               - state: `closed`
-               - state_reason: `completed`
-               - Add a comment first via `mcp__github__add_issue_comment`:
-                 `✅ All N sub-issues closed as completed. Auto-closing this tracking issue.`
-
-            ## Hard constraints
-
-            - At most **20 closures per run**.
-            - Never close a parent that was created less than 24 hours ago (give
-              the arborist a chance to add more children).
-            - Skip the `Tracking: Quality scan history` issue — it is auto-maintained
-              and should remain open indefinitely.
-            - If a parent has a body checklist with unchecked items that do NOT
-              correspond to any of its sub-issues, skip — the maintainer is
-              tracking work outside the sub-issue mechanism.
-
-            ## When no action is needed
-
-            Output a one-line summary ("no parents ready to close — examined N tracking issues") and exit.
-
-            ## Final report
-
-            - Parents closed (with numbers and child counts)
-            - Parents skipped with reason
-            - Or "no action needed"
+            Cap: 20 closures per run. Exit with a one-line summary if nothing matches.
