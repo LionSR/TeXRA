@@ -18,8 +18,9 @@
 with a single model, you direct an **Orchestrator** that delegates to a team of
 specialists—researchers, numericists, reviewers, formalizers, LaTeX
 fixers, presenters—each with their own tools, prompts, and model. The result
-is a coordinated lab in your editor that drafts, reviews, computes, formalizes,
-and ships rigorous scientific work alongside its LaTeX, code, figures, and PRs.
+is a coordinated lab in your editor that drafts, reviews, computes, and
+formalizes rigorous scientific work alongside its LaTeX, code, figures, and
+PRs.
 
 See [texra.ai](https://texra.ai) or the
 [full documentation](https://texra.ai/guide/) for tutorials, agent recipes, and
@@ -33,10 +34,10 @@ a web-based launch page.
   during delegation are queued, sub-agent runs can be inspected, waited on,
   resumed, or terminated, and the orchestrator builds long-term memory across
   sessions.
-- **Curated team presets** – ship as a **Physicist**, **Mathematician**,
-  **Computer Scientist (ML)**, or **Lean Project** team in one click—each a
-  preconfigured roster of workflow and tool-use agents tuned for that
-  discipline. Save your own teams from the Multi-Agent settings tab.
+- **Curated team presets** – switch to **Physicist**, **Mathematician**,
+  **Computer Scientist (ML)**, or **Lean Project** in one click from the
+  Multi-Agent settings tab. Each preset is a preconfigured roster of workflow
+  and tool-use agents tuned for that discipline; you can also save your own.
 - **A full cast of specialists** – locally bundled tool-use agents include
   `research`, `numerics`, `review`, `presenter`, `latexFixer`, `latexDiff`,
   `creator`, `lean`, `chat`, and the **Setup Wizard** (`setup`); workflow
@@ -47,12 +48,16 @@ a web-based launch page.
   `leanBlueprint` / `leanSearch` / `leanSimplifier` line.
 - **Tools that touch your project** – tool-use agents read and edit
   workspace files, run shell commands, drive LaTeX builds, work with Git and
-  GitHub PR subscriptions, and hand off to the Codex CLI for additional
-  reasoning surfaces—each call gated by an approval system you control.
-- **Live, replayable runs** – the **progress board** shows every active and
-  past run with streaming reasoning, sub-agent file diffs, cost and tool
-  metrics, and one-click replay. Pack a run into `History/` for a clean
-  audit trail.
+  GitHub PR subscriptions, and can delegate reasoning turns to the Codex
+  CLI—each tool call gated by per-stream approval (with an optional YOLO
+  bypass).
+- **Live, persistent runs** – the **progress board** streams reasoning, tool
+  calls, sub-agent file diffs, and per-run token usage and cost for active
+  and recently completed runs in your workspace. Saved task state can be
+  reopened later via **Show Agent Execution History**, tool-use agents can
+  be resumed via **Resume Tool-Use Agent**, and **Pack Output into History
+  Folder** archives a finished run's outputs into the workspace's `History/`
+  directory.
 - **Model flexibility with guardrails** – mix and match per agent: OpenAI
   (incl. GPT-5.5 and GPT Pro), Anthropic (incl. Claude Opus 4.7), Google
   Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Alibaba Qwen (DashScope),
