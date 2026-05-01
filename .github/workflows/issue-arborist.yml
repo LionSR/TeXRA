@@ -36,15 +36,21 @@ jobs:
                common `area:*` label is the strongest signal; root-cause overlap or
                feature decomposition also count.
             3. Skip clusters whose theme already has an open `Tracking:` issue.
-            4. For each surviving cluster:
+            4. From the `list_issues` response, capture each child's integer `id`
+               (the REST database id, NOT the issue `number` and NOT the GraphQL
+               `node_id` string).
+            5. For each surviving cluster:
                - Create the parent via `mcp__github__issue_write` (method=create):
                  - Title: `Tracking: <theme>`
                  - Labels: `tracking` + the cluster's `area:*` labels
                  - Body: one-paragraph theme + checklist of `- [ ] #N — title` rows
-                 - **Capture both `number` and integer `id` from the response.**
-               - Link each child as a native sub-issue with
-                 `mcp__github__sub_issue_write` (method=`add`,
-                 `issue_number=<parent-number>`, `sub_issue_id=<child-integer-id>`).
+                 - Capture both `number` AND integer `id` from the response.
+               - Link each child as a native sub-issue:
+                 `mcp__github__sub_issue_write` with method=`add`,
+                 `issue_number=<parent-number>`,
+                 `sub_issue_id=<child-id>`.
+                 Note: `sub_issue_id` is the child's numeric REST `id` (integer),
+                 NOT its issue `number` and NOT its `node_id`.
 
             ## Caps
 
