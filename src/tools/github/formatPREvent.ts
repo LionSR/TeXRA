@@ -8,6 +8,7 @@
  */
 
 import {
+  formatPreviousStateHint,
   truncate as truncateBody,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
@@ -160,9 +161,8 @@ export function formatMergeConflictDetected(
   prNumber: number,
   prevState: string | undefined,
 ): string {
-  const prevDetail = prevState ? ` (was "${prevState}")` : '';
   return wrap(
-    `Merge conflict detected on ${slug}/pulls/${prNumber}: GitHub now reports mergeable_state="dirty"${prevDetail}. ` +
+    `Merge conflict detected on ${slug}/pulls/${prNumber}: GitHub now reports mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
       `The PR head no longer cleanly merges into its base — rebase or merge the base back in to resolve.`,
   );
 }

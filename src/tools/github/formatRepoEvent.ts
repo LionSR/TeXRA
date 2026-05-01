@@ -17,6 +17,7 @@
  */
 
 import {
+  formatPreviousStateHint,
   truncate as truncateBody,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
@@ -82,9 +83,8 @@ export function formatRepoMergeConflictDetected(
   prNumber: number,
   prevState: string | undefined,
 ): string {
-  const prevDetail = prevState ? ` (was "${prevState}")` : '';
   return wrap(
-    `Merge conflict detected on ${slug}/pulls/${prNumber}: mergeable_state="dirty"${prevDetail}. ` +
+    `Merge conflict detected on ${slug}/pulls/${prNumber}: mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
       `Subscribe to ${slug}/pulls/${prNumber} for nuanced events, or rebase / merge the base back in to resolve.`,
   );
 }

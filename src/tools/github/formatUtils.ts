@@ -21,6 +21,15 @@ export function wrapWebhookEvent(inner: string): string {
   return wrapAndSanitizeTag(WEBHOOK_TAG, inner);
 }
 
+/**
+ * Renders an optional " (was \"X\")" hint for transition messages, or empty
+ * string when no prior state is known. Used by both PR and repo merge-
+ * conflict formatters.
+ */
+export function formatPreviousStateHint(prevState: string | undefined): string {
+  return prevState ? ` (was "${prevState}")` : '';
+}
+
 export function truncate(s: string | null | undefined, max: number): string {
   const body = (s ?? '').trim();
   if (body.length <= max) return body;
@@ -51,4 +60,17 @@ export function trimSet<T>(set: Set<T>, maxSize: number): void {
   if (excess <= 0) return;
   const iter = set.values();
   for (let i = 0; i < excess; i += 1) set.delete(iter.next().value as T);
+}
+
+/**
+ * FIFO-trim a Map to `maxSize` entries by deleting the oldest keys (Map
+ * iteration is insertion order, so deleting `keys().next().value` repeatedly
+ * evicts oldest-first). Mirrors `trimSet` for the Map case.
+ */
+export function trimMap<K, V>(map: Map<K, V>, maxSize: number): void {
+  while (map.size > maxSize) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
 }

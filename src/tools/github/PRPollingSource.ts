@@ -39,12 +39,13 @@ import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
   PR_POLL_INTERVAL_MS,
 } from './prSubscriptionConstants';
-import type {
-  GhCheckRun,
-  GhIssueComment,
-  GhPullRequest,
-  GhReview,
-  GhReviewComment,
+import {
+  isDefiniteMergeableState,
+  type GhCheckRun,
+  type GhIssueComment,
+  type GhPullRequest,
+  type GhReview,
+  type GhReviewComment,
 } from './prTypes';
 
 function createInitialState(pr: PRKey): SubscriptionState {
@@ -69,19 +70,6 @@ function createInitialState(pr: PRKey): SubscriptionState {
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
   };
-}
-
-/**
- * GitHub computes `mergeable_state` asynchronously after every push or base
- * change; until it stabilizes the field reads `unknown`. We deliberately
- * ignore that transient value when classifying transitions — recording
- * `unknown` as the "previous" state would let a clean→unknown→dirty
- * sequence look like clean→dirty (correct), but a dirty→unknown→clean
- * sequence would silently lose the resolved transition. Treating
- * `unknown` as "no observation" keeps both directions correct.
- */
-function isDefiniteMergeableState(s: string | undefined): s is string {
-  return s !== undefined && s !== 'unknown';
 }
 
 // Coalesce this many same-kind events in a single tick into a summary.
@@ -129,15 +117,7 @@ interface SubscriptionState extends BasePollSubscriptionState {
   headSha: string | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
-  /**
-   * Last observed *definite* `mergeable_state` from GitHub (`undefined`
-   * before the first definite reading). Crucially we never store
-   * `'unknown'` here — that's the "still computing" placeholder GitHub
-   * returns right after a push or base change, and treating it as a real
-   * state would corrupt transition detection (a dirty→unknown→clean
-   * sequence would silently lose the "resolved" event because dirty would
-   * be overwritten by unknown before the clean reading arrived).
-   */
+  /** Last *definite* `mergeable_state`; see `isDefiniteMergeableState`. */
   mergeableState: string | undefined;
   etags: {
     pr?: string;
@@ -242,30 +222,19 @@ export class PRPollingSource extends PollingSourceBase<
       }
       state.headSha = newHead;
 
-      // Mergeable-state transitions. We only emit when we have a previous
-      // *definite* observation to compare against — `'unknown'` is the
-      // placeholder GitHub returns while mergeability is still being
-      // computed (right after a push or base change), and treating it as
-      // either a real state or the absence of one would corrupt detection:
-      //   - storing `'unknown'` as `prev` would mask a dirty→unknown→clean
-      //     sequence (the resolved guard `prev === 'dirty'` never fires);
-      //   - emitting on first definite reading after `prev === undefined`
-      //     would surface "merge conflict detected" for PRs that were
-      //     already dirty when we subscribed (or whose first reading just
-      //     happened to land on 'unknown' because mergeability had been
-      //     invalidated mid-poll).
-      // So: only the dirty/non-dirty *transition* between two definite
-      // observations counts. Anything before the first definite reading,
-      // including the seeding tick, is silent.
+      // Mergeable-state transitions: only definite-to-definite reads count,
+      // so the seeding tick (and any tick where GitHub returns `'unknown'`)
+      // is silent. See `isDefiniteMergeableState` for the rationale.
       if (isDefiniteMergeableState(newMergeable)) {
         const prev = state.mergeableState;
-        if (isDefiniteMergeableState(prev)) {
-          if (newMergeable === 'dirty' && prev !== 'dirty') {
+        state.mergeableState = newMergeable;
+        if (isDefiniteMergeableState(prev) && prev !== newMergeable) {
+          if (newMergeable === 'dirty') {
             this.emit(
               state,
               formatMergeConflictDetected(state.slug, pr.pullNumber, prev),
             );
-          } else if (prev === 'dirty' && newMergeable !== 'dirty') {
+          } else if (prev === 'dirty') {
             this.emit(
               state,
               formatMergeConflictResolved(
@@ -276,7 +245,6 @@ export class PRPollingSource extends PollingSourceBase<
             );
           }
         }
-        state.mergeableState = newMergeable;
       }
     }
 

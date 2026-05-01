@@ -46,18 +46,19 @@ import {
   formatRepoReviewComment,
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
-import { getNewestTimestamp, trimSet } from './formatUtils';
+import { getNewestTimestamp, trimMap, trimSet } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
   type Disposable,
 } from './PollingSourceBase';
-import type {
-  GhIssueComment,
-  GhPullRequest,
-  GhPullsListEntry,
-  GhReviewComment,
+import {
+  isDefiniteMergeableState,
+  type GhIssueComment,
+  type GhPullRequest,
+  type GhPullsListEntry,
+  type GhReviewComment,
 } from './prTypes';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
@@ -138,21 +139,12 @@ interface SubscriptionState extends BasePollSubscriptionState {
    */
   prStateByNumber: Map<number, 'open' | 'closed' | 'merged'>;
   /**
-   * Last seen `updated_at` from the pulls list per PR. Used to drive the
-   * holistic merge-conflict probe: an advanced `updated_at` is a (necessary
-   * but not sufficient) signal that head was pushed or the base shifted,
-   * either of which can change `mergeable_state`. We probe `/pulls/{N}`
-   * only for PRs whose updated_at advanced since the prior tick — which
-   * naturally covers head pushes, and catches base-branch effects via the
-   * comment / review activity that typically follows a merge into base.
+   * Per-PR `updated_at` cursor for the merge-conflict probe; only advanced
+   * after a successful probe so transient probe failures keep the PR as a
+   * candidate next tick. See `probeMergeableStates`.
    */
   prUpdatedAtByNumber: Map<number, string>;
-  /**
-   * Last observed *definite* `mergeable_state` per PR (we never store
-   * `'unknown'` — see `isDefiniteMergeableState` in PRPollingSource for
-   * the same reasoning). Indexed by PR number; entries roll off with
-   * `prStateByNumber` via shared FIFO eviction.
-   */
+  /** Per-PR last *definite* `mergeable_state`; see `isDefiniteMergeableState`. */
   prMergeableByNumber: Map<number, string>;
 }
 
@@ -272,11 +264,7 @@ export class RepoPollingSource extends PollingSourceBase<
         state.prStateByNumber.delete(pr.number);
         state.prStateByNumber.set(pr.number, next);
       }
-      while (state.prStateByNumber.size > MAX_PR_STATE_ENTRIES) {
-        const oldest = state.prStateByNumber.keys().next().value;
-        if (oldest === undefined) break;
-        state.prStateByNumber.delete(oldest);
-      }
+      trimMap(state.prStateByNumber, MAX_PR_STATE_ENTRIES);
     }
 
     if (issueRes.status === 200) {
@@ -343,63 +331,58 @@ export class RepoPollingSource extends PollingSourceBase<
     state: SubscriptionState,
     pulls: readonly GhPullsListEntry[],
   ): Promise<void> {
-    // Build the candidate list: open PRs whose updated_at advanced (or is
-    // first-seen as open). Order by updated_at desc so the freshest wins
-    // when the per-tick cap bites. The pulls list is already newest-first
-    // by sort=updated&direction=desc — preserve that order.
+    // Build the candidate list: open PRs whose updated_at advanced since
+    // our last definite observation. First-seen PRs are seeded silently —
+    // probing on first observation would surface "merge conflict detected"
+    // for PRs that were already dirty before we attached. We update the
+    // updated_at cursor only AFTER a successful probe so a transient probe
+    // failure leaves the PR as a candidate next tick rather than waiting
+    // for the next push to bring it back into scope.
     const candidates: GhPullsListEntry[] = [];
     for (const pr of pulls) {
       if (pr.state !== 'open') continue;
       if (shouldDropBotEvent(pr.user)) continue;
       const prevUpdatedAt = state.prUpdatedAtByNumber.get(pr.number);
-      // Always record the latest updated_at so the next tick's "advanced"
-      // detection is correct — but only QUEUE a probe when we observed an
-      // advance. Without this we'd probe every open PR every tick.
-      const advanced =
-        prevUpdatedAt === undefined || pr.updated_at > prevUpdatedAt;
-      state.prUpdatedAtByNumber.set(pr.number, pr.updated_at);
-      // First-seen-after-init: predates our subscription; record updated_at
-      // and the next pulls-list response with a real change will bring it
-      // back as a candidate. Probing on first observation would silently
-      // emit for PRs that were already dirty when we attached.
-      if (prevUpdatedAt === undefined) continue;
-      if (!advanced) continue;
-      candidates.push(pr);
+      if (prevUpdatedAt === undefined) {
+        state.prUpdatedAtByNumber.set(pr.number, pr.updated_at);
+        continue;
+      }
+      if (pr.updated_at > prevUpdatedAt) candidates.push(pr);
     }
     if (candidates.length === 0) return;
 
+    // Pulls list is already sorted by updated_at desc, so slicing yields
+    // the freshest candidates when the per-tick cap bites.
     const probes = candidates.slice(0, MAX_MERGEABLE_PROBES_PER_TICK);
-    // Run probes in parallel — each is one independent GET, the budget cap
-    // is small (<=5), and serializing would multiply tick latency.
     const probeResults = await Promise.allSettled(
       probes.map(async (pr) => {
         const path = `/repos/${state.owner}/${state.repo}/pulls/${pr.number}`;
         const res = await ghGet<GhPullRequest>(path);
         if (res.status !== 200) return undefined;
-        return { number: pr.number, mergeable: res.data.mergeable_state };
+        return {
+          number: pr.number,
+          updatedAt: pr.updated_at,
+          mergeable: res.data.mergeable_state,
+        };
       }),
     );
-    // Capture (number, prev, next) for newly-dirty PRs *before* writing back
-    // to the map — otherwise the per-PR formatter's "(was X)" hint would
-    // read the just-overwritten value.
+
     const newlyDirty: { number: number; prev: string }[] = [];
     for (const result of probeResults) {
       if (result.status !== 'fulfilled' || !result.value) continue;
-      const { number, mergeable } = result.value;
+      const { number, updatedAt, mergeable } = result.value;
+      // Probe succeeded — advance updated_at so we don't re-probe until
+      // the next external change.
+      state.prUpdatedAtByNumber.set(number, updatedAt);
       if (!isDefiniteMergeableState(mergeable)) continue;
       const prev = state.prMergeableByNumber.get(number);
       state.prMergeableByNumber.set(number, mergeable);
-      if (!isDefiniteMergeableState(prev)) {
-        // First definite reading — silent seed. Same reasoning as the per-PR
-        // poller: we don't want to surface "merge conflict detected" for a
-        // PR that was already dirty before we observed it.
-        continue;
-      }
+      // Silent seed on first definite reading; resolved transitions are
+      // intentionally not surfaced at the repo level (see method doc).
+      if (!isDefiniteMergeableState(prev)) continue;
       if (mergeable === 'dirty' && prev !== 'dirty') {
         newlyDirty.push({ number, prev });
       }
-      // Resolved transitions are intentionally not emitted at the repo level
-      // — see method-level comment.
     }
 
     if (newlyDirty.length >= MERGE_CONFLICT_COALESCE_THRESHOLD) {
@@ -418,21 +401,9 @@ export class RepoPollingSource extends PollingSourceBase<
         );
       }
     }
-    // Bound `prMergeableByNumber` against unbounded growth on long-lived
-    // subscriptions watching busy repos. FIFO mirrors `prStateByNumber`'s
-    // policy: closed-and-forgotten PRs roll off first because they stop
-    // being re-inserted by the probe loop. Cap matches MAX_PR_STATE_ENTRIES
-    // so the two maps age out at roughly the same rate.
-    while (state.prMergeableByNumber.size > MAX_PR_STATE_ENTRIES) {
-      const oldest = state.prMergeableByNumber.keys().next().value;
-      if (oldest === undefined) break;
-      state.prMergeableByNumber.delete(oldest);
-    }
-    while (state.prUpdatedAtByNumber.size > MAX_PR_STATE_ENTRIES) {
-      const oldest = state.prUpdatedAtByNumber.keys().next().value;
-      if (oldest === undefined) break;
-      state.prUpdatedAtByNumber.delete(oldest);
-    }
+
+    trimMap(state.prMergeableByNumber, MAX_PR_STATE_ENTRIES);
+    trimMap(state.prUpdatedAtByNumber, MAX_PR_STATE_ENTRIES);
   }
 }
 
@@ -459,11 +430,6 @@ function createInitialState(owner: string, repo: string): SubscriptionState {
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
   };
-}
-
-/** Mirrors the PR poller's filter: anything but `'unknown'` is "definite". */
-function isDefiniteMergeableState(s: string | undefined): s is string {
-  return s !== undefined && s !== 'unknown';
 }
 
 function classifyPRState(pr: GhPullsListEntry): 'open' | 'closed' | 'merged' {
