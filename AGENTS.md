@@ -92,8 +92,8 @@ The project has two build systems with different trade-offs:
   - `utils/system/` - Shell command execution (`execUtils`)
   - `utils/text/` - Text and XML processing utilities
   - `utils/prompt/` - Prompt builder utilities
-- `src/explorer/` - VS Code file explorer integration and watchers
 - `src/settingsView/` - Unified settings webview combining History, Memory, Models, Agents, Multi-Agent, LaTeX, and Tools tabs
+- `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform`.
 
 ### Pragmatic implementations
 
