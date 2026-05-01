@@ -29,6 +29,7 @@
     "enhance_multiple": { "folder": "whitelist", "visibility": ["public"] },
     "generic": { "folder": "public", "visibility": ["public"] },
     "generic_multiple": { "folder": "public", "visibility": ["public"] },
+    "humanize": { "folder": "researcher", "visibility": ["researcher"] },
     "logic": { "folder": "researcher", "visibility": ["public"] },
     "logic_multiple": { "folder": "researcher", "visibility": ["public"] },
     "notation": { "folder": "researcher", "visibility": ["public"] },
