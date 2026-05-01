@@ -48,7 +48,8 @@ jobs:
                common `area:*` label is the strongest signal; root-cause overlap
                or feature decomposition also count.
             3. Skip clusters whose theme already has an open `Tracking:` /
-               `[Parent]` / `Epic:` / `Meta:` issue.
+               `[Parent]` / `Epic:` / `Meta:` issue, OR any open issue labeled
+               `tracking` regardless of title prefix.
             4. From the `list_issues` response, capture each child's integer `id`
                (the REST database id, NOT the issue `number` and NOT the GraphQL
                `node_id` string).
