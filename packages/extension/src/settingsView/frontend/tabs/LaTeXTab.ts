@@ -387,6 +387,13 @@ export class LaTeXTab extends LitElement {
         min-width: 0;
       }
 
+      .setting-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        white-space: nowrap;
+      }
+
       .setting-name {
         font-weight: var(--font-weight-medium);
         color: var(--texra-foreground);
@@ -442,6 +449,7 @@ export class LaTeXTab extends LitElement {
   configValues: LatexConfigValues = {};
 
   @property({ type: Boolean, attribute: 'config-loaded' }) configLoaded = false;
+  @property({ type: Boolean }) inlineCriticismEnabled = false;
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   @state() private expandedGuides = new Set<string>();
@@ -455,6 +463,14 @@ export class LaTeXTab extends LitElement {
 
   private handleApply(field?: SettingInfo['key'], reset = false): void {
     this.dispatchEvent(createEvent('latex-apply-settings', { field, reset }));
+  }
+
+  private handleInlineCriticismToggle(event: Event): void {
+    this.dispatchEvent(
+      createEvent('inline-criticism-toggle', {
+        enabled: (event.target as HTMLInputElement).checked,
+      }),
+    );
   }
 
   private allSettingsSet(): boolean {
@@ -777,7 +793,39 @@ export class LaTeXTab extends LitElement {
                 this.renderSettingCard(info),
               )}
             `}
+        ${this.renderInlineCriticismSetting()}
         ${this.renderCompileDiffSettings()}
+      </div>
+    `;
+  }
+
+  private renderInlineCriticismSetting(): TemplateResult {
+    return html`
+      <div class="section-header" style="margin-top:var(--spacing-large)">
+        <span class="codicon codicon-comment-discussion"></span>
+        Inline Criticism
+      </div>
+      <div class="setting-card">
+        <span
+          class="codicon setting-status-icon ${this.inlineCriticismEnabled
+            ? 'is-set codicon-check'
+            : 'not-set codicon-circle-slash'}"
+        ></span>
+        <div class="setting-info">
+          <div class="setting-name">Surface \\criticize annotations</div>
+          <div class="setting-description">
+            Parse \\criticize{message}{severity}{confidence} annotations from
+            agent-revised LaTeX files and show them as editor diagnostics.
+          </div>
+        </div>
+        <label class="setting-toggle">
+          <input
+            type="checkbox"
+            .checked=${this.inlineCriticismEnabled}
+            @change=${this.handleInlineCriticismToggle}
+          />
+          <span>${this.inlineCriticismEnabled ? 'On' : 'Off'}</span>
+        </label>
       </div>
     `;
   }

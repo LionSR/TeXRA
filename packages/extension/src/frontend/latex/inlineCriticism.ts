@@ -10,23 +10,23 @@
  *   2. `add_criticism` tool routes through `pushManualCriticism` here for
  *      tool-use agents that want to flag issues without inserting the macro.
  *
- * Gated on `texra.inlineCriticism.enabled` (default: false).
+ * Gated on the `INLINE_CRITICISM_ENABLED` global state key, surfaced as a
+ * toggle in the LaTeX settings tab (default: false).
  */
 
 // Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports
+import { globalSM, GlobalStateKey } from '@common/state';
 import { bus } from '@eventBus/ProgressEventBus';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo } from '@shared/schemas';
 import type { ManualCriticismEntry } from '@tools/AddCriticismTool';
-import { getConfig, watchConfig } from '@utils/config';
 import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'InlineCriticism';
-const SETTING_KEY = 'inlineCriticism.enabled';
 const COLLECTION_NAME = 'texra-criticism';
 const SOURCE_LABEL = 'TeXRA';
 const CODE_PARSED = 'criticize';
@@ -34,6 +34,7 @@ const CODE_TOOL = 'criticize:tool';
 
 let collection: vscode.DiagnosticCollection | undefined;
 let busUnsubscribe: (() => void) | undefined;
+let extensionContext: vscode.ExtensionContext | undefined;
 
 /** Criticism severity (1–5) → VS Code DiagnosticSeverity. */
 function mapSeverity(severity: number): vscode.DiagnosticSeverity {
@@ -43,8 +44,9 @@ function mapSeverity(severity: number): vscode.DiagnosticSeverity {
   return vscode.DiagnosticSeverity.Hint;
 }
 
-function isEnabled(): boolean {
-  return getConfig<boolean>(SETTING_KEY, false) === true;
+export function isInlineCriticismEnabled(): boolean {
+  return globalSM?.get<boolean>(GlobalStateKey.INLINE_CRITICISM_ENABLED, false)
+    === true;
 }
 
 function buildDiagnostic(
@@ -169,11 +171,20 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
 export function registerInlineCriticism(
   context: vscode.ExtensionContext,
 ): void {
-  if (isEnabled()) enable(context);
-
-  watchConfig(context, `texra.${SETTING_KEY}`, () => {
-    if (isEnabled()) enable(context);
-    else disable();
-  });
+  extensionContext = context;
+  if (isInlineCriticismEnabled()) enable(context);
   context.subscriptions.push({ dispose: disable });
+}
+
+/**
+ * Persist the new setting value and reconcile the active subsystem. Called
+ * from the settings webview handler when the user toggles the checkbox.
+ */
+export async function setInlineCriticismEnabled(
+  enabled: boolean,
+): Promise<void> {
+  await globalSM?.update(GlobalStateKey.INLINE_CRITICISM_ENABLED, enabled);
+  if (!extensionContext) return;
+  if (enabled) enable(extensionContext);
+  else disable();
 }
