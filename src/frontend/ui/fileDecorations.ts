@@ -62,17 +62,20 @@ export function registerFileDecorations(
 ): void {
   const provider = new TeXRAFileDecorationProvider();
 
-  const unsubscribeOutputFiles = bus.on('addOutputFiles', ({ filesByRound }) => {
-    const paths = new Set<string>();
-    for (const roundFiles of Object.values(filesByRound)) {
-      for (const info of roundFiles) {
-        collectWorkspacePaths(paths, info);
+  const unsubscribeOutputFiles = bus.on(
+    'addOutputFiles',
+    ({ filesByRound }) => {
+      const paths = new Set<string>();
+      for (const roundFiles of Object.values(filesByRound)) {
+        for (const info of roundFiles) {
+          collectWorkspacePaths(paths, info);
+        }
       }
-    }
-    if (paths.size > 0) {
-      provider.markTouched(paths);
-    }
-  });
+      if (paths.size > 0) {
+        provider.markTouched(paths);
+      }
+    },
+  );
 
   const unsubscribeWritten = bus.on(
     'workspaceFilesWritten',
