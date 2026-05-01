@@ -36,6 +36,20 @@ import { extendEnvPath } from '@utils/system/platformPaths';
 const LATEX_CONFIG_VERSION = 2;
 
 /**
+ * Legacy agent files that should be deleted from GlobalStorage.
+ * These agents have been removed or renamed and should not exist locally.
+ */
+const LEGACY_AGENT_FILES = [
+  'agents/generic.yaml',
+  'agents/generic_multiple.yaml',
+  'agents/correct_multiple.yaml',
+  'agents/polish_multiple.yaml',
+  'agents/merge_multiple.yaml',
+  'agents/write/paper2cover.yaml',
+  'agents/write/write_slide.yaml',
+];
+
+/**
  * Seed the disabled-tool list for first-time users only.
  *
  * Every tool group flagged `toggleable: true` in EXTERNAL_TOOL_DEFS is

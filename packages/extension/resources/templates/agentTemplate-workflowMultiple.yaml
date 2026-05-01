@@ -1,23 +1,16 @@
 # --- Agent Inheritance (Optional) ---
 # inherits: base
 name: {{ AGENT_NAME }}
-description: '{{ DESCRIPTION | replace("'", "''") }}'
+description: '{{ DESCRIPTION | replace("''", "''''") }}'
 
 # --- Agent Settings ---
 settings:
   agentCategory: workflow
-  isMultipleOutput: true
   temperature: 0.1
   isRewrite: true
-  documentTag: latex_documents
-  endTag: </latex_documents>
   defaultOutputFiles:
     {{ OUTPUT_FILES }}
   outputExt: tex
-  # Optional: `prefills` can force the assistant turn to start with a specific
-  # token (e.g., - "<latex_documents>") for agents that should skip preamble
-  # and jump straight to output. Most workflow agents do not need this --- modern
-  # thinking-capable models reason natively before producing the final output.
 
 # --- Agent Prompts ---
 prompts:
@@ -28,13 +21,12 @@ prompts:
     AI agents defined in YAML. TeXRA loads selected files and exposes them as
     variables, allowing prompts to reference {{ INPUT_CONTENT }},
     {{ ALL_INPUTS }}, or {{ OUTPUT_FILES_ORDER }}. Each agent runs one or
-    more rounds and produces its final output wrapped in the configured
-    documentTag.
+    more rounds and produces its final output wrapped in <documents> containers.
 
     Variable Retrieval (VR) exposes runtime data as variables in these prompts:
       - {{ INPUT_FILE }} / {{ INPUT_CONTENT }}: main file path and text
       - {{ ALL_INPUTS }}: XML list of all input files
-      - {{ OUTPUT_FILES_ORDER }}: expected output files
+      - {{ OUTPUT_FILES_ORDER }}: expected output files (comma-separated)
       - {{ REFERENCE_CONTENT }} / {{ AUXILIARY_CONTENT }}: extra context
     Use them as needed.
 
@@ -70,8 +62,28 @@ prompts:
 
   userRequest:
     - |
-        Wrap each output in <latex_documents> with <document name="..."> blocks
-        following the order in OUTPUT_FILES_ORDER.
+      {% raw %}{% if OUTPUT_FILES_ORDER %}{% endraw %}
+      Output updated versions of all \LaTeX documents. The output files should
+      be in the following order: {{ OUTPUT_FILES_ORDER }}.
+
+      <documents>
+      <document name="{OUTPUT_FILES_ORDER[0]}">
+      % 1ST UPDATED LATEX DOCUMENT HERE
+      </document>
+      <document name="{OUTPUT_FILES_ORDER[1]}">
+      % 2ND UPDATED LATEX DOCUMENT HERE
+      </document>
+      ... (repeat for all output files)
+      </documents>
+      {% raw %}{% else %}{% endraw %}
+      Output an updated version of the \LaTeX document:
+
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      % UPDATED LATEX DOCUMENT HERE
+      </document>
+      </documents>
+      {% raw %}{% endif %}{% endraw %}
     - |
-        Review the draft outputs, apply targeted refinements for each document,
-        and emit the updated <latex_documents> content in the same order.
+      Review the draft outputs, apply targeted refinements for each document,
+      and emit the updated content in the same format and order as before.
