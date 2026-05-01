@@ -2,6 +2,10 @@
 
 Guidance for Claude Code when working with this repository. For detailed coding conventions and patterns, see [AGENTS.md](./AGENTS.md).
 
+## Code review
+
+When reviewing TeXRA code (whether invoked via `/review`, asked for a code review, or auditing a PR/branch), **load the project skill at [skills/code-review/SKILL.md](./skills/code-review/SKILL.md) first** and use [skills/code-review/references/review-checklist.md](./skills/code-review/references/review-checklist.md) as the targeted check list. A "no issues found" review on this repo is almost always wrong — the skill encodes the repo-specific rules (platform decoupling, Zod v4, PocketFlow, factory layering, render-time workarounds) that generic review passes miss. Always include a `Verified` section listing what you actually opened.
+
 ## Project Overview
 
 TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assistant. It uses Large Language Models to help academics with writing, research, and document processing.
@@ -79,8 +83,9 @@ The core of TeXRA is its agent architecture in `src/agent/`:
 
 Key directories in `src/`:
 
-- `agent/` - Agent core, implementations, model handlers, runtime, tool-use
-  - `implementations/flows/` - PocketFlow-based flow implementations (reflection, tool-use)
+- `agent/` - Agent core, implementations, model handlers, runtime, toolUse, output, storage, remote, node
+  - `implementations/flows/` - PocketFlow-based flow implementations (reflection, tooluse)
+- `platform/` - Platform abstraction layer (composition root). Hosts (VS Code, future CLI/Electron) call `initPlatform()` once at startup; core code accesses host services via `platform()` from `@platform`. See `src/platform/platform.ts`.
 - `commands/` - Commands organized by domain (see below)
 - `common/` - Backend-only helpers (errors, state, files, webview base classes)
 - `frontend/` - Extension-host utilities for shared UI flows
@@ -98,6 +103,7 @@ Key directories in `src/`:
 - `logger/` - Logging infrastructure
 - `eventBus/` - Progress event system
 - `replacement/` - Text cleanup rules
+- `test/` - Mocha test suites (do NOT run via `npm test`; see Development Commands)
 
 Key documentation in `docs/`:
 
@@ -262,7 +268,8 @@ For good separation of concerns, testability, and platform independence, core bu
 
 **VS Code-allowed zones** — platform-specific wiring belongs here:
 
-- `src/extension.ts` (entry point)
+- `src/extension.ts` (entry point — calls `initPlatform()` exactly once with the VS Code-backed services)
+- `src/platform/` interfaces themselves (interface definitions; concrete VS Code implementations are wired from `extension.ts`)
 - `src/commands/` (VS Code command handlers)
 - `src/frontend/` (VS Code UI utilities)
 - `src/common/webview/` (webview base classes)
@@ -274,6 +281,7 @@ For good separation of concerns, testability, and platform independence, core bu
 
 **Patterns for keeping code platform-agnostic:**
 
+- Reach host services through `platform()` from `@platform` (config, state, log, fs, workspace, storage, secrets) — never import `vscode` in agnostic zones.
 - Use `isFile()` / `isDirectory()` from `@common/files/fsEntryType` instead of `vscode.FileType`
 - Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
 - Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
@@ -287,6 +295,7 @@ Common aliases (full list in `tsconfig.json`):
 - `@model/*`, `@latex/*`, `@logger/*`, `@tools/*`, `@webview/*`
 - `@progressView/*`, `@settingsView/*`, `@shared/*`, `@eventBus/*`
 - `@replacement/*`, `@housekeeping/*`, `@auth/*`, `@types/*`
+- `@platform`, `@platform/*` (platform abstraction layer)
 
 ## Adding New Components
 
