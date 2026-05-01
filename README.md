@@ -93,6 +93,7 @@ configured for the providers those agents use.
    to run agents—asking before every command and explaining what it's
    doing. It can hand off interactive `sudo` prompts and installers to your
    VS Code terminal.
+
 3. Pick an agent **team** in Settings → Multi-Agent (Physicist,
    Mathematician, CS/ML, or Lean Project), or stay with the default lineup.
 4. Open the TeXRA sidebar, select the **Orchestrator** (or any agent),
