@@ -22,7 +22,7 @@ Search the diff for the patterns below.
 - **Duplicated field definitions** across schemas instead of `.extend()` / `.pick()` / `.partial()`.
 - **Manual `safeParse` + ternary** to provide a default — should be `Schema.catch(default).parse(data)`.
 - **Backward-compat handled via scattered `if`s** in consumers — should be a single `z.union([NewFormat, LegacyFormat.transform(...)])` at the entry point producing one canonical shape.
-- **Default value confusion**: `.prefault(v)` for normalizing inputs *before* validation (deserialization); `.default(v)` for *after* validation succeeds with missing field; `.catch(v)` for validation throw. Wrong choice silently corrupts state.
+- **Default value confusion**: `.prefault(v)` for normalizing inputs _before_ validation (deserialization); `.default(v)` for _after_ validation succeeds with missing field; `.catch(v)` for validation throw. Wrong choice silently corrupts state.
 - **Compile-time sync**: when a schema must mirror an external SDK type, a `satisfies` assertion should pin them together.
 
 ## 3. PocketFlow / agent runtime
@@ -119,4 +119,4 @@ Search the diff for the patterns below.
 
 - Re-read your findings list. Cut anything not tied to a real file:line in the diff.
 - Add the **Verified** section that names what you actually opened.
-- If the diff is small and clean, say so and explain *what you checked*. "No issues found" alone is never a sufficient review on this repo.
+- If the diff is small and clean, say so and explain _what you checked_. "No issues found" alone is never a sufficient review on this repo.
