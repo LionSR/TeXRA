@@ -127,8 +127,9 @@ The Setup Wizard checks for and helps install most of the above for you.
 ## Configuring Models
 
 Sign in through the Profile view to use the Researcher Access Program (which
-also unlocks the hosted Orchestrator and remote specialists), or set your own
-API keys in VS Code settings or a workspace `.env` file:
+also unlocks the hosted Orchestrator and remote specialists), or store your
+own API keys via the **`TeXRA: Set API Key`** command (kept in VS Code's
+encrypted SecretStorage), or place them in a workspace `.env` file:
 
 ```env
 OPENAI_API_KEY=your_openai_key_here
@@ -150,8 +151,8 @@ the [installation guide](https://texra.ai/guide/installation.html) and the
 ## Customization
 
 Configure agents, prompts, models, and reliability policy in VS Code settings
-or the unified Settings view (History, Memory, Models, Agents, Multi-Agent,
-LaTeX, Tools tabs). The Multi-Agent tab covers team presets, parallel
+or the unified Settings view (Memory, History, Models, Agents, Multi-Agent,
+Tools, Git, LaTeX tabs). The Multi-Agent tab covers team presets, parallel
 tool-call limits, compaction thresholds, retry/backoff, and the orchestrator
 kill toggle. Power users can define new workflow or tool-use agents in YAML
 or register new model handlers.
