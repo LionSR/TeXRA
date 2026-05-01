@@ -109,9 +109,9 @@ export function formatRepoMergeConflictDetected(
 
 /**
  * Coalesced "many PRs newly conflicted" notification — fires when the same
- * tick discovers `>= COALESCE_THRESHOLD` PRs that flipped to dirty. Avoids
- * spraying the orchestrator with one event per PR after a base-branch
- * merge invalidates many PRs at once.
+ * tick discovers enough PRs flipping to dirty to cross the repo poller's
+ * coalescing threshold. Avoids spraying the orchestrator with one event
+ * per PR after a base-branch update invalidates many PRs at once.
  */
 export function formatRepoMergeConflictSummary(
   slug: string,

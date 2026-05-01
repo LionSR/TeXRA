@@ -46,7 +46,7 @@ import {
   formatRepoReviewComment,
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
-import { getNewestTimestamp, trimMap, trimSet } from './formatUtils';
+import { getNewestTimestamp, setRecent, trimMap, trimSet } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
   PollingSourceBase,
@@ -259,10 +259,7 @@ export class RepoPollingSource extends PollingSourceBase<
             formatRepoPRClosed(state.slug, pr.number, next === 'merged'),
           );
         }
-        // FIFO eviction relies on Map insertion order; delete-then-set
-        // re-inserts at the tail so recently-touched PRs are kept.
-        state.prStateByNumber.delete(pr.number);
-        state.prStateByNumber.set(pr.number, next);
+        setRecent(state.prStateByNumber, pr.number, next);
       }
       trimMap(state.prStateByNumber, MAX_PR_STATE_ENTRIES);
     }
@@ -371,12 +368,19 @@ export class RepoPollingSource extends PollingSourceBase<
     for (const result of probeResults) {
       if (result.status !== 'fulfilled' || !result.value) continue;
       const { number, updatedAt, mergeable } = result.value;
-      // Probe succeeded — advance updated_at so we don't re-probe until
-      // the next external change.
-      state.prUpdatedAtByNumber.set(number, updatedAt);
+      // Defer the cursor advance until we have a *definite* mergeable
+      // reading. GitHub commonly returns `'unknown'` for a few seconds
+      // after a push or base change while it computes mergeability;
+      // advancing updated_at on that response would drop the PR from the
+      // candidate set and let the subsequent dirty/clean transition slip
+      // by silently. Leaving the cursor unchanged keeps the PR a candidate
+      // next tick so we re-probe until GitHub resolves the state.
       if (!isDefiniteMergeableState(mergeable)) continue;
+      // setRecent (delete + set) refreshes insertion order so the
+      // FIFO trimMap below evicts least-recently-touched, not first-seen.
+      setRecent(state.prUpdatedAtByNumber, number, updatedAt);
       const prev = state.prMergeableByNumber.get(number);
-      state.prMergeableByNumber.set(number, mergeable);
+      setRecent(state.prMergeableByNumber, number, mergeable);
       // Silent seed on first definite reading; resolved transitions are
       // intentionally not surfaced at the repo level (see method doc).
       if (!isDefiniteMergeableState(prev)) continue;
