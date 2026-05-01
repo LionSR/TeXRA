@@ -1,10 +1,15 @@
 /**
  * Natural-language formatters for `IssuePollingSource`.
  *
- * Path form mirrors GitHub's REST URL shape: `owner/repo/issues/N`.
+ * Path form mirrors GitHub's REST URL shape: `owner/repo/issues/N`. Each
+ * formatter declares the message structure (headline + optional body +
+ * optional URL) via shared helpers from `formatUtils`.
  */
 
 import {
+  authorOf,
+  issueRef,
+  sections,
   truncate as truncateBody,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
@@ -12,18 +17,20 @@ import type { GhIssue, GhIssueComment } from './prTypes';
 
 const MAX_BODY = 500;
 
-function truncate(s: string | null | undefined): string {
-  return truncateBody(s, MAX_BODY);
-}
+const truncate = (s: string | null | undefined): string =>
+  truncateBody(s, MAX_BODY);
 
 export function formatIssueComment(
   slug: string,
   issueNumber: number,
   c: GhIssueComment,
 ): string {
-  const author = c.user?.login ?? 'someone';
   return wrap(
-    `New comment on ${slug}/issues/${issueNumber} by @${author}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
+    sections(
+      `New comment on ${issueRef(slug, issueNumber)} by ${authorOf(c.user)}:`,
+      truncate(c.body),
+      c.html_url,
+    ),
   );
 }
 
@@ -36,7 +43,7 @@ export function formatIssueClosed(
     ? ` (state_reason: ${issue.state_reason})`
     : '';
   return wrap(
-    `${slug}/issues/${issueNumber} was closed${reason}. Subscription remains active in case the issue reopens.`,
+    `${issueRef(slug, issueNumber)} was closed${reason}. Subscription remains active in case the issue reopens.`,
   );
 }
 
@@ -46,7 +53,10 @@ export function formatIssueReopened(
   issue: GhIssue,
 ): string {
   return wrap(
-    `${slug}/issues/${issueNumber} was reopened: "${truncate(issue.title)}"\n\n${issue.html_url}`,
+    sections(
+      `${issueRef(slug, issueNumber)} was reopened: "${truncate(issue.title)}"`,
+      issue.html_url,
+    ),
   );
 }
 
@@ -56,6 +66,6 @@ export function formatIssueSubscriptionError(
   detail: string,
 ): string {
   return wrap(
-    `Issue subscription to ${slug}/issues/${issueNumber} halted: ${detail}`,
+    `Issue subscription to ${issueRef(slug, issueNumber)} halted: ${detail}`,
   );
 }
