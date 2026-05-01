@@ -15,10 +15,7 @@ All notable changes to this project will be documented in this file.
 
 - **Workflow outputs stay out of your workspace until accepted** — generated files remain in run storage and your source files are not marked as modified until you explicitly accept the output.
 - **Disk-full errors show an actionable message** — a full disk now produces a clear "free up disk space" notification instead of a raw error, and no retry is attempted.
-- **Delegation no longer stalls on a spurious approval prompt** — an extra confirmation step between the orchestrator and a delegated subtask has been removed.
-- **Follow-up input handles long lines correctly** — URLs, paths, and pasted log output in the follow-up box now wrap instead of overflowing the panel.
-- **Progress board opens cleanly after a crash** — corrupted or outdated saved state shows a friendly error rather than crashing on startup.
-- **Various smaller fixes** — stable toggle icons; reliable DeepSeek reasoning output; LaTeX fixer button always enabled when appropriate; AI responses no longer silently drop tool calls.
+- **Various smaller fixes** — stable toggle icons; reliable DeepSeek reasoning output; LaTeX fixer button always enabled when appropriate; AI responses no longer silently drop tool calls; no extra approval prompt between orchestrator and delegated subtask; follow-up input wraps long URLs, paths, and pasted log output instead of overflowing the panel; progress board recovers from corrupted or outdated saved state instead of crashing on startup.
 
 ## [0.37.6] - 2026-04-27
 
