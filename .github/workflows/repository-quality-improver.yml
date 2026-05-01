@@ -1,0 +1,63 @@
+name: Repository Quality Improver
+
+on:
+  schedule:
+    - cron: '0 14 * * 1-5'
+  workflow_dispatch:
+
+concurrency:
+  group: quality-improver
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: 'github-actions[bot]'
+          claude_args: |
+            --model claude-opus-4-7
+            --allowedTools "mcp__github__*" "Bash(find:*)" "Bash(grep:*)" "Bash(wc:*)" "Bash(jq:*)" "Bash(git log:*)" "Bash(git diff:*)"
+
+          prompt: |
+            You are the Quality Improvement Agent for ${{ github.repository }}.
+            Pick ONE focus area, scan the codebase, and file AT MOST ONE issue.
+
+            ## Dedup gate
+
+            Search `repo:${{ github.repository }} is:issue in:title "[quality]"`
+            (any state — open OR closed). If any result was created in the last
+            24 hours, exit with a one-line summary — prevents duplicate firings
+            on the same UTC day from manual re-dispatch, even if the prior issue
+            was closed quickly as `not planned`.
+
+            ## Focus area
+
+            Read CLAUDE.md and AGENTS.md to ground choices. Look at the last 5 closed
+            `[quality]` issues to see what's been covered recently — pick something
+            different. Bias toward TeXRA-specific concerns (VS Code coupling
+            violations, render-time workarounds, abstraction layers worth
+            flattening, stale `_multiple` agent variants, Zod schema duplication)
+            over generic categories.
+
+            ## Scan and file
+
+            Run targeted bash analysis. File an issue only if you have **at least 3
+            findings backed by file:line citations**. Otherwise exit silently.
+
+            Title: `[quality] <area>: <2-4 word finding>`
+            Labels: one of `bug`/`enhancement`/`tech-debt`/`documentation`, plus
+            matching `area:*` from `.github/labels.yml`.
+
+            Body: brief findings list with file:line refs and an actions checklist.
+            Note that closing as `not planned` is a valid outcome.
