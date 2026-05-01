@@ -30,6 +30,38 @@ export function formatPreviousStateHint(prevState: string | undefined): string {
   return prevState ? ` (was "${prevState}")` : '';
 }
 
+/** Canonical PR reference path, e.g. `owner/repo/pulls/42`. */
+export function prRef(slug: string, prNumber: number): string {
+  return `${slug}/pulls/${prNumber}`;
+}
+
+/** Canonical issue reference path, e.g. `owner/repo/issues/42`. */
+export function issueRef(slug: string, issueNumber: number): string {
+  return `${slug}/issues/${issueNumber}`;
+}
+
+/**
+ * `@login` for an author, falling back to `@someone` for anonymous /
+ * deleted-account events. Centralized so the fallback string stays
+ * consistent across every formatter.
+ */
+export function authorOf(user: { login: string } | null | undefined): string {
+  return `@${user?.login ?? 'someone'}`;
+}
+
+/**
+ * Compose paragraph-separated sections, dropping empty / falsy entries so
+ * a missing comment body or URL doesn't produce a stray blank paragraph.
+ * Each non-empty entry becomes a paragraph separated by a blank line.
+ */
+export function sections(
+  ...parts: ReadonlyArray<string | null | undefined | false>
+): string {
+  return parts
+    .filter((s): s is string => typeof s === 'string' && s.length > 0)
+    .join('\n\n');
+}
+
 export function truncate(s: string | null | undefined, max: number): string {
   const body = (s ?? '').trim();
   if (body.length <= max) return body;

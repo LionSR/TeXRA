@@ -1,14 +1,19 @@
 /**
  * Natural-language formatting for PR webhook-style events.
  *
- * Output text is wrapped in a `<github-webhook-activity>` tag so the agent can
- * recognize that the follow-up came from an external subscription rather than
- * direct user typing. Keep text short and factual — the agent will fetch more
- * detail via its tools if needed.
+ * Each `format*` function declares a single message: a headline, optional
+ * body, optional URL, all composed via `sections(...)` and wrapped in the
+ * `<github-webhook-activity>` envelope. Variants (review verbs, passing
+ * conclusions, prefixes) live as data tables at the top of the file rather
+ * than inline ternary cascades — adding a new review state or passing
+ * conclusion is a one-line table edit.
  */
 
 import {
+  authorOf,
   formatPreviousStateHint,
+  prRef,
+  sections,
   truncate as truncateBody,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
@@ -21,18 +26,54 @@ import type {
 
 const MAX_BODY = 500;
 
-function truncate(s: string | null | undefined): string {
-  return truncateBody(s, MAX_BODY);
+const truncate = (s: string | null | undefined): string =>
+  truncateBody(s, MAX_BODY);
+
+/** Verb fragments per `GhReview.state`. Unknown states fall back to "reviewed". */
+const REVIEW_VERBS: Readonly<Record<string, string>> = {
+  APPROVED: 'approved',
+  CHANGES_REQUESTED: 'requested changes on',
+  COMMENTED: 'commented on',
+  DISMISSED: 'dismissed a review on',
+};
+
+const FALLBACK_REVIEW_VERB = 'reviewed';
+
+/** Conclusions GitHub treats as non-blocking (success / advisory / skipped). */
+const PASSING_CONCLUSIONS: ReadonlySet<string> = new Set([
+  'success',
+  'neutral',
+  'skipped',
+]);
+
+export function isPassingConclusion(conclusion: string | null): boolean {
+  return conclusion !== null && PASSING_CONCLUSIONS.has(conclusion);
 }
+
+const reviewCommentLocation = (c: GhReviewComment): string => {
+  const line = c.line ?? c.original_line;
+  return line ? `${c.path}:${line}` : c.path;
+};
+
+const reviewCommentPrefix = (c: GhReviewComment): string =>
+  c.in_reply_to_id != null
+    ? 'Reply to inline review thread'
+    : 'New line review comment';
+
+const checkRunBlock = (run: GhCheckRun): string =>
+  `Check: ${run.name}\nConclusion: ${run.conclusion}\nDetails: ${run.html_url}`;
 
 export function formatIssueComment(
   slug: string,
   prNumber: number,
   c: GhIssueComment,
 ): string {
-  const author = c.user?.login ?? 'someone';
   return wrap(
-    `New comment on ${slug}/pulls/${prNumber} by @${author}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
+    sections(
+      `New comment on ${prRef(slug, prNumber)} by ${authorOf(c.user)}:`,
+      truncate(c.body),
+      c.html_url,
+    ),
   );
 }
 
@@ -41,15 +82,12 @@ export function formatReviewComment(
   prNumber: number,
   c: GhReviewComment,
 ): string {
-  const author = c.user?.login ?? 'someone';
-  const line = c.line ?? c.original_line;
-  const loc = line ? `${c.path}:${line}` : c.path;
-  const prefix =
-    c.in_reply_to_id != null
-      ? 'Reply to inline review thread'
-      : 'New line review comment';
   return wrap(
-    `${prefix} on ${slug}/pulls/${prNumber} by @${author} at ${loc}:\n\n${truncate(c.body)}\n\n${c.html_url}`,
+    sections(
+      `${reviewCommentPrefix(c)} on ${prRef(slug, prNumber)} by ${authorOf(c.user)} at ${reviewCommentLocation(c)}:`,
+      truncate(c.body),
+      c.html_url,
+    ),
   );
 }
 
@@ -58,20 +96,13 @@ export function formatReview(
   prNumber: number,
   r: GhReview,
 ): string {
-  const author = r.user?.login ?? 'someone';
-  const verb =
-    r.state === 'APPROVED'
-      ? 'approved'
-      : r.state === 'CHANGES_REQUESTED'
-        ? 'requested changes on'
-        : r.state === 'COMMENTED'
-          ? 'commented on'
-          : r.state === 'DISMISSED'
-            ? 'dismissed a review on'
-            : 'reviewed';
-  const body = r.body ? `\n\n${truncate(r.body)}` : '';
+  const verb = REVIEW_VERBS[r.state] ?? FALLBACK_REVIEW_VERB;
   return wrap(
-    `@${author} ${verb} ${slug}/pulls/${prNumber}.${body}\n\n${r.html_url}`,
+    sections(
+      `${authorOf(r.user)} ${verb} ${prRef(slug, prNumber)}.`,
+      r.body && truncate(r.body),
+      r.html_url,
+    ),
   );
 }
 
@@ -81,11 +112,10 @@ export function formatCheckFailure(
   run: GhCheckRun,
 ): string {
   return wrap(
-    `The following CI check failed on the PR. Investigate the failure and determine what action (if any) is needed.\n\n` +
-      `PR: ${slug}/pulls/${prNumber}\n` +
-      `Check: ${run.name}\n` +
-      `Conclusion: ${run.conclusion}\n` +
-      `Details: ${run.html_url}`,
+    sections(
+      'The following CI check failed on the PR. Investigate the failure and determine what action (if any) is needed.',
+      `PR: ${prRef(slug, prNumber)}\n${checkRunBlock(run)}`,
+    ),
   );
 }
 
@@ -94,25 +124,12 @@ export function formatCheckFailureSummary(
   prNumber: number,
   runs: GhCheckRun[],
 ): string {
-  const entries = runs
-    .map(
-      (r) =>
-        `Check: ${r.name}\nConclusion: ${r.conclusion}\nDetails: ${r.html_url}`,
-    )
-    .join('\n\n');
   return wrap(
-    `${runs.length} CI checks failed on the PR. Investigate the failures and determine what action (if any) is needed.\n\n` +
-      `PR: ${slug}/pulls/${prNumber}\n\n` +
-      entries,
-  );
-}
-
-/** Non-blocking conclusions: `success`, `neutral` (advisory), `skipped`. */
-export function isPassingConclusion(conclusion: string | null): boolean {
-  return (
-    conclusion === 'success' ||
-    conclusion === 'neutral' ||
-    conclusion === 'skipped'
+    sections(
+      `${runs.length} CI checks failed on the PR. Investigate the failures and determine what action (if any) is needed.`,
+      `PR: ${prRef(slug, prNumber)}`,
+      runs.map(checkRunBlock).join('\n\n'),
+    ),
   );
 }
 
@@ -123,7 +140,7 @@ export function formatCIPassed(
   runs: GhCheckRun[],
 ): string {
   return wrap(
-    `All ${runs.length} CI checks passed on ${slug}/pulls/${prNumber} (head ${sha.slice(0, 7)}).`,
+    `All ${runs.length} CI checks passed on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}).`,
   );
 }
 
@@ -136,7 +153,7 @@ export function formatCIComplete(
   const passed = runs.filter((r) => isPassingConclusion(r.conclusion)).length;
   const failed = runs.length - passed;
   return wrap(
-    `CI completed on ${slug}/pulls/${prNumber} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
+    `CI completed on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}): ${passed} passed, ${failed} failed.`,
   );
 }
 
@@ -145,8 +162,9 @@ export function formatPRClosed(
   prNumber: number,
   merged: boolean,
 ): string {
-  const verb = merged ? 'merged' : 'closed';
-  return wrap(`${slug}/pulls/${prNumber} was ${verb}. Subscription ended.`);
+  return wrap(
+    `${prRef(slug, prNumber)} was ${merged ? 'merged' : 'closed'}. Subscription ended.`,
+  );
 }
 
 /**
@@ -162,7 +180,7 @@ export function formatMergeConflictDetected(
   prevState: string | undefined,
 ): string {
   return wrap(
-    `Merge conflict detected on ${slug}/pulls/${prNumber}: GitHub now reports mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
+    `Merge conflict detected on ${prRef(slug, prNumber)}: GitHub now reports mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
       `The PR head no longer cleanly merges into its base — rebase or merge the base back in to resolve.`,
   );
 }
@@ -179,7 +197,7 @@ export function formatMergeConflictResolved(
   newState: string,
 ): string {
   return wrap(
-    `Merge conflict on ${slug}/pulls/${prNumber} is resolved: mergeable_state is now "${newState}".`,
+    `Merge conflict on ${prRef(slug, prNumber)} is resolved: mergeable_state is now "${newState}".`,
   );
 }
 
@@ -195,5 +213,5 @@ export function formatSubscriptionError(
   prNumber: number,
   detail: string,
 ): string {
-  return wrap(`PR subscription to ${slug}/pulls/${prNumber} halted: ${detail}`);
+  return wrap(`PR subscription to ${prRef(slug, prNumber)} halted: ${detail}`);
 }
