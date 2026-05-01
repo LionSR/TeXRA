@@ -20,6 +20,8 @@ import {
   formatCIComplete,
   formatCIPassed,
   formatIssueComment,
+  formatMergeConflictDetected,
+  formatMergeConflictResolved,
   formatPRClosed,
   formatReview,
   formatReviewComment,
@@ -37,12 +39,13 @@ import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
   PR_POLL_INTERVAL_MS,
 } from './prSubscriptionConstants';
-import type {
-  GhCheckRun,
-  GhIssueComment,
-  GhPullRequest,
-  GhReview,
-  GhReviewComment,
+import {
+  isDefiniteMergeableState,
+  type GhCheckRun,
+  type GhIssueComment,
+  type GhPullRequest,
+  type GhReview,
+  type GhReviewComment,
 } from './prTypes';
 
 function createInitialState(pr: PRKey): SubscriptionState {
@@ -60,6 +63,7 @@ function createInitialState(pr: PRKey): SubscriptionState {
     headSha: undefined,
     state: undefined,
     merged: false,
+    mergeableState: undefined,
     etags: {},
     sinceCursors: {},
     lastSuccessAt: Date.now(),
@@ -113,6 +117,8 @@ interface SubscriptionState extends BasePollSubscriptionState {
   headSha: string | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
+  /** Last *definite* `mergeable_state`; see `isDefiniteMergeableState`. */
+  mergeableState: string | undefined;
   etags: {
     pr?: string;
     issueComments?: string;
@@ -189,6 +195,7 @@ export class PRPollingSource extends PollingSourceBase<
       const newHead = prRes.data.head.sha;
       const newState = prRes.data.state;
       const newMerged = prRes.data.merged;
+      const newMergeable = prRes.data.mergeable_state;
 
       // Detect close/merge on initialized subscriptions.
       if (
@@ -214,6 +221,31 @@ export class PRPollingSource extends PollingSourceBase<
         state.checkRunsCache = undefined;
       }
       state.headSha = newHead;
+
+      // Mergeable-state transitions: only definite-to-definite reads count,
+      // so the seeding tick (and any tick where GitHub returns `'unknown'`)
+      // is silent. See `isDefiniteMergeableState` for the rationale.
+      if (isDefiniteMergeableState(newMergeable)) {
+        const prev = state.mergeableState;
+        state.mergeableState = newMergeable;
+        if (isDefiniteMergeableState(prev) && prev !== newMergeable) {
+          if (newMergeable === 'dirty') {
+            this.emit(
+              state,
+              formatMergeConflictDetected(state.slug, pr.pullNumber, prev),
+            );
+          } else if (prev === 'dirty') {
+            this.emit(
+              state,
+              formatMergeConflictResolved(
+                state.slug,
+                pr.pullNumber,
+                newMergeable,
+              ),
+            );
+          }
+        }
+      }
     }
 
     // Bail cleanly if the PR is already closed. On the first (initialization)
