@@ -54,7 +54,6 @@ interface CreatorConfig {
   retryPrompts: Record<AgentCategory, string>;
   templates: {
     workflowSingle: string;
-    workflowMultiple: string;
     toolUse: string;
   };
 }
@@ -103,15 +102,6 @@ const PASSTHROUGH: Record<AgentCategory, Record<string, string>> = {
   toolUse: buildPassthrough(TOOL_USE_VARS),
   workflow: buildPassthrough(WORKFLOW_VARS),
 };
-
-const MULTIPLE_OUTPUT_INSTRUCTIONS = [
-  'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
-  '- Set isMultipleOutput: true',
-  '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
-  '- Add defaultOutputFiles with the file list below',
-  '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
-  '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
-].join('\n');
 
 const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
   toolUse:
@@ -277,23 +267,15 @@ async function loadCreatorConfig(
     'resources',
     'templates',
   );
-  const [
-    workflowYaml,
-    toolUseYaml,
-    workflowSingle,
-    workflowMultiple,
-    toolUseTpl,
-  ] = await Promise.all([
-    AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
-    AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
-    AbsoluteFS.read(
-      path.join(templatesDir, 'agentTemplate-workflowSingle.yaml'),
-    ),
-    AbsoluteFS.read(
-      path.join(templatesDir, 'agentTemplate-workflowMultiple.yaml'),
-    ),
-    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
-  ]);
+  const [workflowYaml, toolUseYaml, workflowSingle, toolUseTpl] =
+    await Promise.all([
+      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
+      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
+      AbsoluteFS.read(
+        path.join(templatesDir, 'agentTemplate-workflowSingle.yaml'),
+      ),
+      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
+    ]);
   const wf = yaml.parse(workflowYaml) as ParsedCreatorYaml;
   const tu = yaml.parse(toolUseYaml) as ParsedCreatorYaml;
   const defaultRetry =
@@ -305,7 +287,7 @@ async function loadCreatorConfig(
       workflow: wf.prompts.retryPrompt ?? defaultRetry,
       toolUse: tu.prompts.retryPrompt ?? defaultRetry,
     },
-    templates: { workflowSingle, workflowMultiple, toolUse: toolUseTpl },
+    templates: { workflowSingle, toolUse: toolUseTpl },
   };
   return creatorConfig;
 }

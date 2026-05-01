@@ -61,6 +61,7 @@ function normalizeAgentSettingInput(input: unknown): unknown {
     agentType,
     maxRounds,
     xmlStructureMode: _xmlStructureMode,
+    isMultipleOutput: _isMultipleOutput,
     ...rest
   } = input as Record<string, unknown>;
 

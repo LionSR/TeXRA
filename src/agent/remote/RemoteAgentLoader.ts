@@ -114,9 +114,7 @@ export class RemoteAgentLoader {
     try {
       const config = await fetchAgentConfig(agentName, agentName, true);
 
-      const registryId = getAgent(`remote:${agentName}`)
-        ? `remote:${agentName}`
-        : `remote:${agentName}`;
+      const registryId = `remote:${agentName}`;
       if (config.description) {
         updateAgentDescription(registryId, config.description);
       }
