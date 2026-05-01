@@ -18,9 +18,7 @@ import { FREE_TIER, MAX_TIER, ULTRA_TIER } from '@auth/config';
 import * as serverKeysModule from '@auth/serverKeys';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
-function buildGpt5Config(
-  overrides: Partial<ModelConfig> = {},
-): ModelConfig {
+function buildGpt5Config(overrides: Partial<ModelConfig> = {}): ModelConfig {
   return {
     name: 'gpt5-mini',
     label: 'GPT-5 Mini',
@@ -140,7 +138,10 @@ describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
   it('does not cap non-GPT-5 models even on free tier with server-side keys', () => {
     stubServerSideKeys(FREE_TIER);
     const handler = new ModelHandlerOpenRouterNative(
-      buildGpt5Config({ name: 'claude-sonnet-4-6', shortName: 'claude-sonnet-4-6' }),
+      buildGpt5Config({
+        name: 'claude-sonnet-4-6',
+        shortName: 'claude-sonnet-4-6',
+      }),
     );
     assert.equal(
       (handler as any).getEffectiveReasoningEffort(),
