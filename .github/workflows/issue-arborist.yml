@@ -31,8 +31,11 @@ jobs:
 
             ## Process
 
-            1. List up to 100 open issues without a parent. Exclude issues labeled
-               `tracking` or with titles starting `Tracking:` / `[Parent]` / `Epic:`.
+            1. List up to 100 open issues without a parent. Drop any item that
+               has a `pull_request` field — GitHub's issues endpoint returns PRs
+               alongside issues, and PRs must never be clustered or linked as
+               sub-issues. Then exclude issues labeled `tracking` or with titles
+               starting `Tracking:` / `[Parent]` / `Epic:`.
             2. Find clusters of **5 or more** orphans sharing a clear theme — a
                common `area:*` label is the strongest signal; root-cause overlap or
                feature decomposition also count.
