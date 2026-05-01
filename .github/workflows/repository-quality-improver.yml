@@ -2,8 +2,10 @@ name: Repository Quality Improver
 
 on:
   schedule:
-    # Weekly Monday 14:00 UTC. Stays quiet — at most one issue per run.
-    - cron: '0 14 * * MON'
+    # Daily on weekdays 14:00 UTC. The 3-day dedup gate below caps effective
+    # output around 2 issues/week; the daily cadence just gives the rotation
+    # algorithm more tries to land on a good focus area.
+    - cron: '0 14 * * 1-5'
   workflow_dispatch:
 
 concurrency:
@@ -44,7 +46,7 @@ jobs:
               `mcp__github__search_issues` with query
               `repo:${{ github.repository }} is:issue is:open in:title "[quality]"`
 
-            If any result was created in the last 7 days, STOP — output a one-line
+            If any result was created in the last 3 days, STOP — output a one-line
             summary ("skipped: recent quality issue #N still open") and exit. Do not
             file another.
 
