@@ -175,6 +175,48 @@ The "what you choose now" picks. Each is grounded in current (May 2026) state-of
 - **React/Vue rewrite of webviews** — they're already Lit and work fine in Electron renderer.
 - **npm workspaces** — pnpm is 2-3× faster, has `workspace:*`, has `--filter`.
 
+### 5.1 Small modern conveniences (low cost, high payoff)
+
+A handful of mature one-purpose libraries that solve real Electron pain points in <500 LOC each. Each is a "don't reinvent" pick — the alternative is rolling our own subtly-buggy version.
+
+| Pick                          | Solves                                                                                                                | Why this not roll-own                                                                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`electron-window-state`**   | Persist `BrowserWindow` size/position across launches; clamp to current display geometry on monitor changes           | Multi-monitor edge cases (window restored off-screen, screen disconnected) are the kind of thing nobody gets right the first time. ~200 LOC, mature. |
+| **`electron-context-menu`**   | Right-click menu in renderer with sensible defaults (Cut/Copy/Paste in inputs, Inspect Element in dev, custom items) | Default Electron has no context menu; users notice immediately. Lib is configurable, themeable.                                                        |
+| **`vite-plugin-monaco-editor`** | Wires Monaco's web workers under Vite (TS, JSON, CSS, HTML, editor workers as separate `?worker` chunks)            | The manual `MonacoEnvironment.getWorker` setup is tricky under asar; this plugin is the canonical solution.                                            |
+| **`electron-log`**            | File-rotated logs under `app.getPath('logs')`, renderer→main forwarding, Sentry transport                              | Already implicit in §7.3 (`LogBackend` impl). Pino is more modern but Node-only. `electron-log` ships the renderer integration we need.                |
+| **`Vitest`** (Electron-side)  | Test runner for `packages/core/` and `packages/desktop/`; existing extension tests stay on Mocha                       | We already use Vite — Vitest reuses the same config, transformers, and aliases. Faster and more modern than Mocha for new tests; doesn't disrupt the extension. |
+| **`@playwright/test`** + `playwright-electron` | E2E renderer tests for the Electron app                                                                | Spectron was deprecated by the Electron team in 2022; Playwright is the documented modern replacement and matches the broader testing ecosystem.       |
+
+Total added dep weight: ~1.5MB before tree-shaking. All actively maintained, all Electron-aware, all backed by either Sindre Sorhus or VS Code/Microsoft.
+
+### 5.2 Tooling discipline: things we explicitly do NOT add
+
+The temptation when starting a new app is to grab every "modern" tool. Here's the anti-list, with reasoning, so future contributors don't reopen these:
+
+- **Bun (instead of pnpm)** — Bun's compatibility with native Electron toolchain (`electron-builder`, `electron-rebuild`) isn't bulletproof yet. pnpm is the conservative-modern pick. Revisit in 12 months.
+- **Biome (instead of ESLint + Prettier)** — Existing project is on ESLint flat config + Prettier. Biome is faster (Rust) but switching means rewriting the config and losing the existing rule set. Not justified for the Electron port specifically.
+- **`electron-trpc` / `@trpc/server`** — Type-safe IPC over tRPC sounds good, but the codebase already has Zod-validated message dispatchers (per §4.4 scout). Adding tRPC is a parallel layer of typing without removing the existing one.
+- **`electron-conf` (instead of `conf`)** — Adds a renderer-side IPC bridge. The renderer should not be writing config directly; that's a `platform()` consumer concern. `conf` in main is sufficient.
+- **`better-sqlite3` for state** — Native dep + asar unpacking + migration tooling for what's currently flat JSON files. v1 doesn't have data volumes that justify it. v2 if session histories grow.
+- **`electron-trayWindow` / dock helpers** — TeXRA isn't a tray app; we don't need a docked-window pattern.
+- **`@electron/remote`** — Officially deprecated. We use `contextBridge` + IPC, the modern path.
+- **`spectron`** — Deprecated by Electron team in 2022; Playwright is the replacement.
+- **A custom IPC abstraction layer** — The `BaseViewMessageHandler` pattern already in `src/common/webview/` is the dispatcher; we add a transport adapter and stop. New abstractions accumulate cost.
+
+### 5.3 Module system + tsconfig modernization (Electron side)
+
+The existing extension is CommonJS (`"module": "commonjs"` in `tsconfig.json`). The Electron desktop app should be ESM-first since Electron 28+ supports ESM in main, and the renderer is already ESM via Vite.
+
+| Layer                     | `module` / `moduleResolution`            | Notes                                                                                              |
+| ------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `packages/core/`          | `"module": "esnext"`, `"moduleResolution": "bundler"` | Consumed by both extension (CJS) and desktop (ESM) — bundlers handle the format conversion. |
+| `packages/extension/`     | `"module": "commonjs"` (unchanged)       | VS Code extension host expects CJS. No churn.                                                      |
+| `packages/desktop/main`   | `"module": "nodenext"`, `"type": "module"` in `package.json` | Modern Electron main process; ESM with top-level await for `await fixPath()`. |
+| `packages/desktop/renderer` | `"module": "esnext"`, `"moduleResolution": "bundler"` | Vite handles bundling; same conventions as the existing webview frontends.    |
+
+This is a Phase 0 decision — gets it right once during the monorepo split. CommonJS-only modules in `core/` (if any sneak in) get caught at build time.
+
 ## 6. Tech stack rationale (highlights)
 
 ### 6.1 Why `conf` + Zod, not `electron-store`
@@ -676,9 +718,11 @@ From the parallel scout:
 
 ```
 electron-vite + electron-builder + electron-updater (→ public release repo)
-+ conf + safeStorage + chokidar4 + Monaco (lazy-loaded, diff + read-only)
++ conf + safeStorage + chokidar4 + Monaco (lazy-loaded, diff only)
 + Lit (existing) + diff-match-patch (existing, inline only) + fix-path
-+ pnpm workspaces (3 packages) + Sentry Electron (opt-in)
++ pnpm workspaces (3 packages, ESM-first) + Sentry Electron (opt-in)
++ electron-window-state + electron-context-menu + vite-plugin-monaco-editor
++ Vitest (Electron-side tests) + Playwright (E2E)
 ```
 
 That's the whole story. Every other line of code already exists.
