@@ -33,4 +33,11 @@ export const PROMO_NOTICE_LONG = {
   privacyMiddle: ' store your prompts or responses, and they are ',
   privacyNever: 'never',
   privacyTrailing: ' used for training.',
+  supportLead: 'Help keep the relay running for everyone — support TeXRA via ',
+  supportSponsorsUrl: 'https://github.com/sponsors/texra-ai',
+  supportSponsorsLabel: 'GitHub Sponsors',
+  supportMiddle: ' or ',
+  supportCoffeeUrl: 'https://buymeacoffee.com/texra.ai',
+  supportCoffeeLabel: 'Buy Me a Coffee',
+  supportTail: '.',
 } as const;

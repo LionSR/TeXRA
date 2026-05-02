@@ -123,7 +123,7 @@ export const TIER_CONFIG: TierModelConfig = {
 export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
   free: 20, // $20/month - promo (bumped from $10)
   Max: 100, // $100/month - promo (bumped from $50)
-  Ultra: 1500, // $1500/month - sponsor access
+  Ultra: 300, // $300/month - sponsor access
 };
 
 // =============================================================================
