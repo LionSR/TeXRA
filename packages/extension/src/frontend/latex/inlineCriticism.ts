@@ -184,7 +184,11 @@ export async function setInlineCriticismEnabled(
   enabled: boolean,
 ): Promise<void> {
   await globalSM?.update(GlobalStateKey.INLINE_CRITICISM_ENABLED, enabled);
-  if (!extensionContext) return;
+  if (!extensionContext) {
+    throw new Error(
+      'setInlineCriticismEnabled called before registerInlineCriticism',
+    );
+  }
   if (enabled) enable(extensionContext);
   else disable();
 }

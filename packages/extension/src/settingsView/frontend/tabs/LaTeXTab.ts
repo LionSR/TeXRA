@@ -437,6 +437,14 @@ export class LaTeXTab extends LitElement {
         background: var(--texra-badge-background);
         color: var(--texra-badge-foreground);
       }
+
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-small);
+        cursor: pointer;
+      }
     `,
   ];
 
