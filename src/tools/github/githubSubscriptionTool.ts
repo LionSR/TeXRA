@@ -374,7 +374,7 @@ async function getFindCurrentFallbackInfo(
     defaultBranch:
       defaultBranchResult.status === 'fulfilled'
         ? defaultBranchResult.value
-        : undefined,
+        : 'main',
     suggestions:
       suggestionsResult.status === 'fulfilled' ? suggestionsResult.value : '',
   };
