@@ -192,8 +192,7 @@ export class UserMessage extends LitElement {
                   icon="code"
                   title=${rawMessageCopyState.title}
                   aria-label=${rawMessageCopyState.ariaLabel}
-                  @click=${() =>
-                    this.rawMessageCopyController.copy(this.text)}
+                  @click=${() => this.rawMessageCopyController.copy(this.text)}
                 ></vscode-toolbar-button>`
               : nothing}
           </div>
