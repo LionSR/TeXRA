@@ -28,6 +28,7 @@ describe('FakePlatform', () => {
       platform.workspace.asRelativePath('/workspace/src/main.tex'),
       'src/main.tex',
     );
+    assert.equal(platform.workspace.asRelativePath('/workspace'), '');
     assert.equal(
       platform.storage.getStoragePath(),
       '/workspace/.texra/storage',
@@ -80,5 +81,19 @@ describe('FakePlatform', () => {
 
     const stat = await fs.stat('/workspace/docs');
     assert.equal(stat.type, FileType.Directory);
+  });
+
+  it('matches real writeFile parent directory semantics', async () => {
+    const fs = new FakeFileSystemProvider();
+
+    await assert.rejects(
+      () => fs.writeFile('/workspace/missing/a.txt', Buffer.from('A')),
+      /Parent directory not found/,
+    );
+
+    fs.setFile('/workspace/missing/a.txt', 'seed');
+    await fs.writeFile('/workspace/missing/a.txt', Buffer.from('updated'));
+
+    assert.equal(fs.getText('/workspace/missing/a.txt'), 'updated');
   });
 });

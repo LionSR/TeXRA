@@ -50,17 +50,19 @@ function cloneBytes(content: Uint8Array): Uint8Array {
 }
 
 function normalizePath(target: string): string {
-  return path.resolve('/', target);
+  return path.posix.resolve('/', target.replaceAll('\\', '/'));
 }
 
 function parentPath(target: string): string {
-  return path.dirname(normalizePath(target));
+  return path.posix.dirname(normalizePath(target));
 }
 
 function hasChildPath(parent: string, candidate: string): boolean {
-  const relative = path.relative(parent, candidate);
+  const relative = path.posix.relative(parent, candidate);
   return (
-    relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+    relative !== '' &&
+    !relative.startsWith('..') &&
+    !path.posix.isAbsolute(relative)
   );
 }
 
@@ -68,15 +70,15 @@ function directChildName(
   parent: string,
   candidate: string,
 ): string | undefined {
-  const relative = path.relative(parent, candidate);
+  const relative = path.posix.relative(parent, candidate);
   if (
     relative === '' ||
     relative.startsWith('..') ||
-    path.isAbsolute(relative)
+    path.posix.isAbsolute(relative)
   ) {
     return undefined;
   }
-  return relative.split(path.sep).at(0);
+  return relative.split(path.posix.sep).at(0);
 }
 
 function fileSize(record: FakeFileRecord): number {
@@ -190,7 +192,7 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   constructor(files: Record<string, string | Uint8Array> = {}) {
     this.createDirectorySync('/');
     for (const [target, content] of Object.entries(files)) {
-      this.writeFileSync(target, stringToBytes(content));
+      this.setFile(target, content);
     }
   }
 
@@ -207,7 +209,7 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   }
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
-    this.writeFileSync(target, content);
+    this.writeFileSync(target, content, { overwrite: true });
   }
 
   async delete(
@@ -252,7 +254,7 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     for (const [candidate, candidateRecord] of this.records) {
       const name = directChildName(normalized, candidate);
       if (name == null) continue;
-      const childPath = path.join(normalized, name);
+      const childPath = path.posix.join(normalized, name);
       const childRecord = this.records.get(childPath) ?? candidateRecord;
       entries.set(name, childRecord.type);
     }
@@ -272,14 +274,16 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     this.assertWritableTarget(normalizedDest, options?.overwrite);
 
     if (sourceRecord.type === FileType.File) {
-      this.writeFileSync(normalizedDest, sourceRecord.content);
+      this.writeFileSync(normalizedDest, sourceRecord.content, {
+        overwrite: options?.overwrite,
+      });
       return;
     }
 
     this.createDirectorySync(normalizedDest);
     for (const child of this.childPaths(normalizedSource)) {
-      const relative = path.relative(normalizedSource, child);
-      const childDest = path.join(normalizedDest, relative);
+      const relative = path.posix.relative(normalizedSource, child);
+      const childDest = path.posix.join(normalizedDest, relative);
       this.records.set(childDest, cloneRecord(this.requireRecord(child)));
     }
   }
@@ -295,15 +299,17 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     this.assertWritableTarget(normalizedDest, options?.overwrite);
 
     if (sourceRecord.type === FileType.File) {
-      this.writeFileSync(normalizedDest, sourceRecord.content);
+      this.writeFileSync(normalizedDest, sourceRecord.content, {
+        overwrite: options?.overwrite,
+      });
       this.records.delete(normalizedSource);
       return;
     }
 
     this.createDirectorySync(normalizedDest);
     for (const child of this.childPaths(normalizedSource)) {
-      const relative = path.relative(normalizedSource, child);
-      const childDest = path.join(normalizedDest, relative);
+      const relative = path.posix.relative(normalizedSource, child);
+      const childDest = path.posix.join(normalizedDest, relative);
       this.records.set(childDest, cloneRecord(this.requireRecord(child)));
     }
     await this.delete(normalizedSource, { recursive: true });
@@ -314,7 +320,10 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   }
 
   setFile(target: string, content: string | Uint8Array): void {
-    this.writeFileSync(target, stringToBytes(content));
+    this.writeFileSync(target, stringToBytes(content), {
+      createParent: true,
+      overwrite: true,
+    });
   }
 
   getText(target: string): string {
@@ -340,13 +349,36 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     return record;
   }
 
-  private writeFileSync(target: string, content: Uint8Array): void {
+  private writeFileSync(
+    target: string,
+    content: Uint8Array,
+    options: { createParent?: boolean; overwrite?: boolean } = {},
+  ): void {
     const normalized = normalizePath(target);
     const existing = this.records.get(normalized);
     if (existing?.type === FileType.Directory) {
       throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
     }
-    this.createDirectorySync(parentPath(normalized));
+    if (existing && !options.overwrite) {
+      throw fakeFsError('EEXIST', `Target already exists: ${target}`);
+    }
+
+    const parent = parentPath(normalized);
+    if (options.createParent) {
+      this.createDirectorySync(parent);
+    } else {
+      const parentRecord = this.records.get(parent);
+      if (!parentRecord) {
+        throw fakeFsError('ENOENT', `Parent directory not found: ${parent}`);
+      }
+      if (parentRecord.type !== FileType.Directory) {
+        throw fakeFsError(
+          'ENOTDIR',
+          `Parent path is not a directory: ${parent}`,
+        );
+      }
+    }
+
     const timestamp = now();
     this.records.set(normalized, {
       type: FileType.File,
@@ -363,11 +395,11 @@ export class FakeFileSystemProvider implements FileSystemProvider {
       throw fakeFsError('ENOTDIR', `Path is a file: ${target}`);
     }
 
-    const parts = normalized.split(path.sep).filter(Boolean);
-    let current: string = path.sep;
+    const parts = normalized.split(path.posix.sep).filter(Boolean);
+    let current: string = path.posix.sep;
     this.ensureDirectoryRecord(current);
     for (const part of parts) {
-      current = path.join(current, part);
+      current = path.posix.join(current, part);
       this.ensureDirectoryRecord(current);
     }
   }
@@ -397,23 +429,6 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     if (!overwrite && this.records.has(target)) {
       throw fakeFsError('EEXIST', `Target already exists: ${target}`);
     }
-    if (overwrite && this.records.has(target)) {
-      this.deleteSync(target);
-    }
-  }
-
-  private deleteSync(target: string): void {
-    const record = this.records.get(target);
-    if (!record) return;
-
-    if (record.type === FileType.Directory) {
-      for (const child of this.childPaths(target)) {
-        this.records.delete(child);
-      }
-    }
-    if (target !== '/') {
-      this.records.delete(target);
-    }
   }
 }
 
@@ -427,15 +442,11 @@ export class FakeWorkspaceProvider implements WorkspaceProvider {
   asRelativePath(filePath: string): string {
     const workspacePath = normalizePath(this.workspacePath);
     const normalized = normalizePath(filePath);
-    const relative = path.relative(workspacePath, normalized);
-    if (
-      relative === '' ||
-      relative.startsWith('..') ||
-      path.isAbsolute(relative)
-    ) {
+    const relative = path.posix.relative(workspacePath, normalized);
+    if (relative.startsWith('..') || path.posix.isAbsolute(relative)) {
       return filePath;
     }
-    return relative;
+    return relative.replaceAll('\\', '/');
   }
 }
 
