@@ -512,7 +512,17 @@ contextBridge.exposeInMainWorld('texra', {
 **Authority checks in `ipcMain`:**
 
 1. Each `ipcMain.handle('texra:<view>-rpc:<method>', ...)` is registered exactly once and points to one typed controller method. There is no "look up method by string" path.
-2. Before dispatching, the handler validates `event.senderFrame`: which `BrowserWindow` and which mounted route is calling. A `texra:settings-rpc` call from the diff modal frame is rejected. (At v1 with one window, this means asserting `event.senderFrame === mainWindow.webContents.mainFrame` and that the active route is the expected one — the renderer reports its active route on every push.)
+2. Before dispatching, the handler validates `event.senderFrame`: it must be the main frame of an expected `BrowserWindow`. A message claiming to come from main but from an off-screen frame or another window is rejected. (At v1 with one window: `event.senderFrame === mainWindow.webContents.mainFrame`.)
+
+**What this layer does and does not protect against.** Be honest about the boundary, especially because XSS from rendered markdown / model output is in the threat model:
+
+- ✅ **Bounds the attack surface.** A compromised renderer can only call allowlisted methods with allowlisted payload shapes against the specific controllers we wired. It can't ask main to execute arbitrary code, read arbitrary files, or open arbitrary processes — the bridge has no generic "execute" or "spawn" path.
+- ✅ **Blocks off-frame / off-window senders.** `event.senderFrame` validation stops messages from third-party origins or stray frames.
+- ✅ **Validates payloads.** Zod runs after authority is established.
+- ❌ **Does NOT enforce cross-view isolation in a single window.** A compromised renderer running the progress route can still invoke `texra:settings-rpc:*` methods. We do **not** trust renderer-reported route state for authorization — that would be checkable-state-from-the-untrusted-side. Per-view channel naming exists for code organization and auditability, not security separation across views in the same window.
+- ❌ **Does NOT prevent abuse of legitimately exposed methods.** If a method has destructive side effects, that method itself needs server-side rules (rate limits, confirmation flows via `PromptHost`, idempotency keys) — the IPC layer can't substitute for per-method authorization.
+
+If real cross-view isolation becomes a requirement post-v1 (e.g., embedding untrusted third-party agent dashboards), the right answer is per-view sandboxed `BrowserView`/`<webview>` tags or separate `BrowserWindow`s, not stronger checks on a single shared renderer. Documented in §13.1 as a future-divergence item.
 3. Zod validates the args _after_ authority is established, against the per-method schema.
 
 **Push direction** (host → renderer) uses `webContents.send('texra:<view>-push', message)`. Pushes go to specific views, not broadcast. The renderer's per-view dispatcher remains unchanged from the existing webview pattern.
