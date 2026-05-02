@@ -13,19 +13,24 @@
  * - free tier: Budget models only (under $1/M input)
  */
 
-import * as vscode from 'vscode';
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { getTierService } from '../tier';
 import {
   ServerSideKeyService,
   type AuthProvider,
+  type ServerSideKeyServiceContext,
 } from './ServerSideKeyService';
+import type * as vscode from 'vscode';
 
 // Types
 export { SERVER_SIDE_PROVIDERS, type ServerSideProvider } from './types';
 
 // Service class
-export { ServerSideKeyService, type AuthProvider };
+export {
+  ServerSideKeyService,
+  type AuthProvider,
+  type ServerSideKeyServiceContext,
+};
 
 // ==========================================================================
 // Singleton Instance

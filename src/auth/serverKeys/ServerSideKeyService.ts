@@ -14,7 +14,7 @@
  * - free tier: Budget models only (under $1/M input)
  */
 
-import * as vscode from 'vscode';
+import { EventEmitter } from 'events';
 import * as logger from '@logger/logUtils';
 import {
   SERVER_SIDE_CACHE_TTL_MS,
@@ -40,6 +40,44 @@ const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
 
 /** Global state key for the "use included model access" preference. */
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
+
+export interface Disposable {
+  dispose(): void;
+}
+
+export interface Event<T> {
+  (listener: (event: T) => void): Disposable;
+}
+
+export interface MementoStore {
+  get<T>(key: string, defaultValue: T): T;
+  get<T>(key: string): T | undefined;
+  update<T>(key: string, value: T): PromiseLike<void>;
+}
+
+export interface ServerSideKeyServiceContext {
+  subscriptions: Disposable[];
+  globalState: MementoStore;
+}
+
+class NodeEvent<T> {
+  private readonly emitter = new EventEmitter();
+
+  readonly event: Event<T> = (listener) => {
+    this.emitter.on('event', listener);
+    return {
+      dispose: () => this.emitter.off('event', listener),
+    };
+  };
+
+  fire(event: T): void {
+    this.emitter.emit('event', event);
+  }
+
+  dispose(): void {
+    this.emitter.removeAllListeners();
+  }
+}
 
 /**
  * Interface for authentication provider that can check auth state and get user tier.
@@ -71,10 +109,10 @@ export class ServerSideKeyService {
 
   // Settings
   private useIncludedModelAccess = true;
-  private globalState: vscode.Memento | null = null;
-  private readonly _onDidChangeModelAccess = new vscode.EventEmitter<boolean>();
-  private readonly _onCacheCleared = new vscode.EventEmitter<void>();
-  private readonly _tierServiceClearSubscription: vscode.Disposable;
+  private globalState: MementoStore | null = null;
+  private readonly _onDidChangeModelAccess = new NodeEvent<boolean>();
+  private readonly _onCacheCleared = new NodeEvent<void>();
+  private readonly _tierServiceClearSubscription: Disposable;
 
   readonly onDidChangeModelAccess = this._onDidChangeModelAccess.event;
   readonly onCacheCleared = this._onCacheCleared.event;
@@ -93,7 +131,7 @@ export class ServerSideKeyService {
    * Initialize the service with VS Code extension context.
    * This enables settings persistence.
    */
-  initialize(context: vscode.ExtensionContext): void {
+  initialize(context: ServerSideKeyServiceContext): void {
     context.subscriptions.push(this._onDidChangeModelAccess);
     context.subscriptions.push(this._onCacheCleared);
     context.subscriptions.push(this._tierServiceClearSubscription);
