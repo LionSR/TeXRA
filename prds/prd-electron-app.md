@@ -142,9 +142,11 @@ The Electron app is **agent-view native**: the main window is the agent surface 
 
 **If the model diverges in the future** — multi-window for power users, embedded Monaco file editor, project-switcher windows, drag-out diff to second monitor — those go in §13 as future work, not v1 scope.
 
-## 5. Decisions (the 12 stack picks)
+## 5. Decisions (12 core picks + §5.1 small libraries)
 
-The "what you choose now" picks. Each is grounded in current (May 2026) state-of-the-art research and the actual TeXRA codebase. One-line rationale here; deeper justification in §6.
+The 12 core architectural picks below define the stack's shape. §5.1 layers in six small one-purpose libraries that solve recurring Electron pain (window state, context menus, Monaco workers, logging, tests). §5.2 is the explicit anti-list. §5.3 covers module-system modernization.
+
+Each pick is grounded in current (May 2026) state-of-the-art research and the actual TeXRA codebase. One-line rationale here; deeper justification in §6.
 
 | #   | Concern         | Pick                                                                                                                                      | Why in one line                                                                                                                                                                                                                                                           |
 | --- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -316,19 +318,23 @@ TeXRA/
 │       ├── electron-builder.yml
 │       └── src/
 │           ├── main/
-│           │   ├── index.ts          # app lifecycle, window mgmt, fix-path()
-│           │   ├── platform/         # Electron-backed Platform impls (8 files)
-│           │   ├── ipc/              # typed channels, Zod-validated
-│           │   ├── menu.ts           # native app menu
-│           │   ├── protocol.ts       # texra:// handler
+│           │   ├── index.ts          # app lifecycle, fix-path() at top, single-instance lock
+│           │   ├── platform/         # 8 Electron-backed Platform impls
+│           │   ├── ipc/              # typed channels, Zod-validated dispatchers
+│           │   ├── menu.ts           # native app Menu (top 20 commands)
+│           │   ├── protocol.ts       # texra:// handler (auth callbacks)
 │           │   ├── updater.ts        # electron-updater wiring
-│           │   └── pathFix.ts        # fix-path + augmentation
+│           │   ├── windowManager.ts  # BrowserWindow factory + electron-window-state
+│           │   ├── contextMenu.ts    # electron-context-menu wiring
+│           │   ├── log.ts            # electron-log → LogBackend impl
+│           │   └── pathFix.ts        # fix-path + explicit PATH augmentation
 │           ├── preload/
 │           │   └── index.ts          # contextBridge → typed renderer API
 │           └── renderer/
-│               ├── index.html        # main shell window
-│               ├── main.ts           # mounts <main-app> Lit component from @texra/core
-│               ├── windows/          # progress / settings / diff modal entrypoints
+│               ├── index.html        # single-window shell
+│               ├── main.ts           # mounts <main-app> / <progress-app> / <settings-app>
+│               │                     #   from @texra/core; route via toggleView state
+│               ├── themeTokens.css   # 53 --vscode-* token mappings (light/dark/HC)
 │               └── components/
 │                   └── TexraDiffView.ts  # Lit wrapper around lazy-loaded Monaco diff editor
 └── (no src/ at root — moved into packages/)
@@ -460,8 +466,8 @@ These changes are safe to ship in the VS Code extension today. Each one shrinks 
 
 ### Tier 1 — high leverage, low risk
 
-**1. Move `src/utils/config/configUtils.ts` behind `ConfigProvider`.**
-Today it calls `vscode.workspace.getConfiguration()` directly with a 3-namespace fallback (`x.y.z` → `texra.*` prefix → full `texra.x.y.z`). Push that fallback logic into the `ConfigProvider.get()` contract (or expose `getRaw()`), then route every consumer through `platform().config`. The VS Code-side `ConfigProvider` impl absorbs the namespace logic. **Why now:** this is the single hardest-to-port file in code that's nominally shared. ~126 LOC of pure refactor with zero behavior change.
+**1. Move `src/utils/config/configUtils.ts` behind `ConfigProvider`.** *(~126 LOC refactored, ~40 LOC added to `ConfigProvider`.)*
+Today it calls `vscode.workspace.getConfiguration()` directly with a 3-namespace fallback (`x.y.z` → `texra.*` prefix → full `texra.x.y.z`). Push that fallback logic into the `ConfigProvider.get()` contract (or expose `getRaw()`), then route every consumer through `platform().config`. The VS Code-side `ConfigProvider` impl absorbs the namespace logic. **Why now:** this is the single hardest-to-port file in code that's nominally shared. Pure refactor, zero behavior change.
 
 **2. Introduce a `DiffViewHost` interface and move the `vscode.diff` call behind it.**
 `src/frontend/approval/nativeToolEditApproval.ts:277-282` currently invokes `vscode.commands.executeCommand('vscode.diff', uri1, uri2, title, opts)` inline. Define an interface:
@@ -479,42 +485,42 @@ interface DiffViewHost {
 }
 ```
 
-The current native impl wraps `executeCommand`. The Electron impl swaps in Monaco. **Why now:** isolates the largest UX-rewrite behind a stable contract. Phase 5 of the port becomes "implement DiffViewHost against Monaco" instead of "rewrite the approval flow."
+The current native impl wraps `executeCommand`. The Electron impl swaps in Monaco. **Why now:** isolates the largest UX-rewrite behind a stable contract. Phase 5 of the port becomes "implement DiffViewHost against Monaco" instead of "rewrite the approval flow." *(~120 LOC: ~40 for the interface, ~80 for the VS Code impl wrapper around the existing call site.)*
 
-**3. Swap `vscode.EventEmitter` → Node `EventEmitter`** in `src/auth/tier/TierService.ts`, `src/auth/serverKeys/ServerSideKeyService.ts`, and any other `vscode.EventEmitter` site outside the explicitly VS Code-coupled zones. ~10 call sites, mechanical. **Why now:** these files leave the `vscode`-coupled set entirely and move into the agnostic core, with no functional change.
+**3. Swap `vscode.EventEmitter` → Node `EventEmitter`** in `src/auth/tier/TierService.ts`, `src/auth/serverKeys/ServerSideKeyService.ts`, and any other `vscode.EventEmitter` site outside the explicitly VS Code-coupled zones. **Why now:** these files leave the `vscode`-coupled set entirely and move into the agnostic core, with no functional change. *(~10 call sites, ~30 LOC mechanical.)*
 
 **4. Add `WorkspaceProvider.watch(pattern, listener)` to the platform interface.**
-The current interface (per scout) doesn't expose file watching. Any code today that needs watchers reaches for `vscode.workspace.createFileSystemWatcher` directly, leaking. Add `watch(glob, listener): Disposable`. VS Code impl wraps `createFileSystemWatcher`; Electron impl uses chokidar later. **Why now:** prevents new leaks; gives the extension a cleaner watcher abstraction in passing.
+The current interface (per scout) doesn't expose file watching. Any code today that needs watchers reaches for `vscode.workspace.createFileSystemWatcher` directly, leaking. Add `watch(glob, listener): Disposable`. VS Code impl wraps `createFileSystemWatcher`; Electron impl uses chokidar later. **Why now:** prevents new leaks; gives the extension a cleaner watcher abstraction in passing. *(~60 LOC: 15 for interface, 45 for VS Code impl.)*
 
 ### Tier 2 — medium leverage
 
-**5. Extract the auth-callback URL parser.**
+**5. Extract the auth-callback URL parser.** *(~80 LOC — 50 for the pure function, 30 to slim down `UriHandler.ts`.)*
 `src/auth/UriHandler.ts` parses the `code`/`state`/error params from the callback URI. Pull the parsing into a pure function `parseAuthCallback(url: string): AuthCallbackResult` in `src/auth/parseAuthCallback.ts` (no `vscode` import). The handler becomes a thin VS Code-specific wrapper that calls the pure function. **Why now:** the Electron protocol handler reuses the parser unchanged.
 
-**6. Rename `src/shared/vscode.ts` → `src/shared/hostBridge.ts`.**
+**6. Rename `src/shared/vscode.ts` → `src/shared/hostBridge.ts`.** *(~45 LOC moved, ~5 LOC re-export shim.)*
 The file is already a transport-agnostic wrapper with a fallback API (per webview scout). The name lies. Rename, document it as the host-transport seam, keep a re-export for compatibility during the migration. **Why now:** the Electron transport drops in alongside the existing one without naming friction.
 
-**7. Theme-token indirection layer.**
+**7. Theme-token indirection layer.** *(~450 LOC of CSS find-replace across ~25 components, ~100 LOC for the new `themeTokens.css` mapping file.)*
 Webview Lit components reference `--vscode-button-background`, `--vscode-foreground`, etc. directly. Introduce a `--texra-*` token layer that maps to `--vscode-*` today; rewrite component CSS to reference `--texra-*`. Single search-replace, plus a small `themeTokens.css` that defines the mapping. **Why now:** Electron just ships its own `themeTokens.css` with explicit values. No per-component changes during the port.
 
-**8. Centralize external-binary resolution in `BinaryResolver`.**
+**8. Centralize external-binary resolution in `BinaryResolver`.** *(~80 LOC for the new service, ~120 LOC of call-site changes audit.)*
 `src/utils/system/platformPaths.ts` already probes Homebrew / TeX Live / MikTeX paths. Extract a `BinaryResolver` service that's the one place `execa()` calls go through to look up `pdflatex`, `latexmk`, `pandoc`, `gm`, etc. Audit existing call sites; route them all through it. **Why now:** the Electron port's `fix-path` augmentation has a single injection point.
 
 ### Tier 3 — nice to have, can also be done during Phase 0
 
-**9. Settings Zod schema as canonical source.**
+**9. Settings Zod schema as canonical source.** *(~600 LOC of new Zod schemas mirroring the JSON-schema; ~50 LOC for the optional generator.)*
 `package.json` `contributes.configuration` is a 600-line JSON-schema literal duplicating the runtime types. Define a Zod schema in `core/` mirroring it; runtime reads validate against the Zod schema. Optionally generate `package.json` from the Zod schema (`zod-to-json-schema`). **Why now:** Electron's `conf` instance gets its schema from the same source. Zero drift between the two hosts.
 
-**10. Audit notification leaks.**
+**10. Audit notification leaks.** *(audit only; expected ~20 LOC of fixes if any leaks found.)*
 `CLAUDE.md` already mandates that business logic returns error results, not `vscode.window.show*Message()`. Spot-check the agnostic zones for leaks (the build-time guard catches the egregious ones, but subtle wrappers like `import { window } from 'vscode'` in non-allowed zones can hide). **Why now:** any leak found here is a port blocker found cheaply.
 
-**11. CI guard: vscode-import lint rule.**
+**11. CI guard: vscode-import lint rule.** *(~50 LOC — ESLint flat-config addition + custom rule.)*
 Add an ESLint rule (or a custom check) that fails CI if any file under the "vscode-free zones" imports `vscode`. Pin the existing 747/853 ratio so it can only improve. **Why now:** prevents regression while the Electron port is in flight.
 
-**12. Codex SDK binary unpack rehearsal.**
+**12. Codex SDK binary unpack rehearsal.** *(~80 LOC harness + ~30 LOC of `electron-builder.yml` config.)*
 Create a tiny harness that bundles `@openai/codex-sdk` under an asar-like wrapper (or test it via electron-builder's `asarUnpack: ['**/node_modules/@openai/codex-*/**']`) and verifies the spawn works from inside the bundle on all three OSes. **Why now:** de-risks Phase 6 packaging; surface OS-specific path bugs early.
 
-**13. Extract `settingsViewDispatcher.ts`.**
+**13. Extract `settingsViewDispatcher.ts`.** *(~120 LOC moved out of `SettingsApp.handleMessage()`, ~40 LOC of new wiring.)*
 Main and progress views have separate dispatcher files; settings inlines dispatch in a switch inside `SettingsApp.handleMessage()`. Mirror the pattern of the other two — pull the switch into `src/settingsView/frontend/settingsViewDispatcher.ts`. **Why now:** all three webviews share the same shape, simplifying the IPC adapter we drop in for Electron.
 
 ### Suggested ordering
@@ -625,7 +631,6 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 | `src/utils/config/configUtils.ts` refactor breaks extension                         | Medium     | High     | Phase 0 explicitly verifies VSIX boots after refactor. Land behind feature flag if needed.                                                                           |
 | macOS GUI launch can't find `pdflatex`/`pandoc`/`gm`                                | High       | High     | `fix-path` at startup + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`. Log resolved PATH for support diagnosis.              |
 | Windows deep-link cold-start bug (electron #40173)                                  | High       | Medium   | Capture `process.argv` synchronously at module top of `main/index.ts`; not in async handler.                                                                         |
-| Linux `safeStorage` falls back to "basic" mode without keyring                      | Medium     | Medium   | Detect via `getSelectedStorageBackend()`, surface one-time warning, document keyring install.                                                                        |
 | Code-signing budget surprise                                                        | Medium     | High     | Budget Azure Trusted Signing (~$10/mo) and Apple Developer Program ($99/yr) **before** Phase 6.                                                                      |
 | Auto-update certificate expires / mac notarization breaks                           | Low        | High     | Document key rotation in runbook. CI uploads test build to `latest-mac.yml` weekly to catch regressions.                                                             |
 | `@openai/codex-sdk` binaries don't unpack from asar                                 | Medium     | Medium   | `asarUnpack: ['**/node_modules/@openai/codex-*/**']` in `electron-builder.yml`. Test on all platforms.                                                               |
@@ -713,6 +718,90 @@ From the parallel scout:
 | Frontend LOC needing genuine reimplementation                        | 141 (0.5%)                                      |
 | Custom elements (`@customElement`) reused                            | 62                                              |
 | Unique `--vscode-*` CSS tokens to shim                               | 53                                              |
+
+### 14.1 Effort-by-the-numbers (LOC budget)
+
+Consolidates every LOC estimate scattered through the doc. Rough order-of-magnitude figures based on existing analogues (the VS Code platform impls, the diff-handler, similar Electron apps). Each line is "code we write" — not "code we touch via find-replace." Ranges reflect the medium/large items where I'd give ±30% confidence.
+
+#### LOC by phase (`packages/desktop/`)
+
+| Phase | Scope                                          | New LOC     | Modified LOC | Notes                                                                                                                                |
+| ----- | ---------------------------------------------- | ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 0     | Monorepo split                                 | ~50         | ~200         | Package.jsons, tsconfig.base.json, pnpm-workspace.yaml, electron-vite skeleton "Hello TeXRA". Most work is moving files, not writing. |
+| 1     | Platform impls (8 files) + initPlatform + fix-path | 400–550 | ~10          | Eight 30–60-LOC impls + ~80 LOC bootstrap + ~50 LOC fix-path / PATH augmentation.                                                    |
+| 2     | Renderer + main view (preload, IPC bridge, window manager, theme tokens) | 400–500 | ~45 (`hostBridge.ts`) | 4 files at ~50–100 LOC each, plus `themeTokens.css` ~150 LOC.                          |
+| 3     | Progress, settings, command palette, native menu | 250–350   | ~60          | Lit palette ~150 LOC, native `Menu` ~100 LOC, settings adapter wiring ~60 LOC.                                                       |
+| 4     | Auth, secrets, remote agents (Electron-side)   | 250–350     | ~50 in core  | `texra://` protocol ~80 LOC, `safeStorage` adapter ~80 LOC, Supabase Electron adapter ~150 LOC.                                      |
+| 5     | Diff surface (`<texra-diff-view>` + IPC)       | 400–550     | —            | Lit Monaco wrapper 200–400 LOC, worker config ~50 LOC, `editApproval.ts` IPC handler ~120 LOC.                                       |
+| 6     | Packaging, signing, auto-update                | 250–350 (mostly config) | — | `electron-builder.yml` ~150 LOC YAML, GitHub Actions workflow ~80 LOC, updater wiring ~80 LOC.                                       |
+| 7     | Beta polish (walkthrough, Sentry, log viewer, importer) | 350–450 | ~30 | Walkthrough modal ~150 LOC, Sentry init + scrubber ~80 LOC, log-viewer pane ~120 LOC, migration importer ~100 LOC.                   |
+| **Total `desktop/`** | | **~2,400–3,150** | **~395** | Within the §12 cap of ~3,000 net new LOC.                                                                                            |
+
+#### LOC by component (`packages/desktop/src/main/` + `renderer/`)
+
+| Component                                  | New LOC | Notes                                                                                                                |
+| ------------------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `main/index.ts` (lifecycle, single-instance lock, fix-path top-of-file) | ~120    | Cold-start bookkeeping, single-instance, `fix-path()` cached.                                       |
+| `main/platform/` (8 files: config, state×2, log, fs, workspace, storage, secrets) | 250–400 | Mirrors VS Code impls in `src/frontend/vscode/` (~300 LOC today).                                  |
+| `main/ipc/` (typed channels + dispatcher adapter)                        | ~150    | Wraps Zod schemas from `core/shared/`; one new transport adapter file.                              |
+| `main/menu.ts`                            | ~100    | Native menu mapping top 20 commands.                                                                                 |
+| `main/protocol.ts` (`texra://` handler)   | ~80     | Mirrors `src/auth/UriHandler.ts` logic (~150 LOC) but reuses the extracted `parseAuthCallback()`.                    |
+| `main/updater.ts`                         | ~80     | electron-updater event wiring + user-consent dialog.                                                                 |
+| `main/windowManager.ts` + electron-window-state | ~120    | Single-window for v1; dependency injection for window-state lib.                                                     |
+| `main/contextMenu.ts` (electron-context-menu) | ~30     | Configuration only.                                                                                                  |
+| `main/log.ts` (electron-log → LogBackend) | ~80     | Adapter pattern, file rotation config.                                                                               |
+| `main/pathFix.ts`                         | ~50     | `fix-path` + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`.                  |
+| `main/ipc/editApproval.ts`                | ~120    | Replaces `nativeToolEditApproval.ts` (439 LOC); most of the diff-temp-file work moves to `core/`.                    |
+| `preload/index.ts`                        | ~80     | `contextBridge` API surface (~10 methods).                                                                           |
+| `renderer/main.ts` (mounts the three Lit apps) | ~100   | Boots `<main-app>` / `<progress-app>` / `<settings-app>` and routes via `toggleView` state.                          |
+| `renderer/components/TexraDiffView.ts`    | 200–400 | Largest single new component; lazy-loads Monaco.                                                                     |
+| `renderer/themeTokens.css`                | ~150    | 53 tokens × 3 themes (light/dark/HC).                                                                                |
+| `renderer/index.html`                     | ~30     | Single-window shell.                                                                                                 |
+| Beta polish (walkthrough modal, log-viewer pane, migration importer) | ~370 | Phase 7 deliverables. |
+| **Subtotal**                              | **~2,500–3,000** |                                                                                                                |
+
+#### LOC for `packages/core/` and `packages/extension/` (changes to existing code)
+
+These are the §9 pre-refactorings + the unavoidable cross-cutting changes during Phase 0–5.
+
+| Item                                                                  | Net new LOC | Modified / refactored LOC | Notes                                                                                                       |
+| --------------------------------------------------------------------- | ----------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| §9 #1 `configUtils.ts` behind `ConfigProvider`                        | ~40         | ~126                      | Pure refactor inside core.                                                                                  |
+| §9 #2 `DiffViewHost` interface + VS Code wrapper                      | ~40         | ~80                       | Native impl wraps existing `vscode.diff` call site.                                                         |
+| §9 #3 `vscode.EventEmitter` → Node `EventEmitter`                     | —           | ~30                       | 10 mechanical sites.                                                                                        |
+| §9 #4 `WorkspaceProvider.watch()` interface + impl                    | ~60         | —                         | Interface + VS Code impl wraps `createFileSystemWatcher`.                                                   |
+| §9 #5 `parseAuthCallback()` extraction                                | ~50         | ~30                       | Pure function + slimmed `UriHandler.ts`.                                                                    |
+| §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch | ~5         | ~45                       | Re-export shim + feature-detect Electron.                                                                   |
+| §9 #7 `--vscode-*` → `--texra-*` token shim                           | ~100        | ~450                      | New `themeTokens.css` + ~25 components touched by find-replace.                                             |
+| §9 #8 `BinaryResolver` extraction                                     | ~80         | ~120                      | Service + call-site routing audit.                                                                          |
+| §9 #9 Settings Zod schema (optional)                                  | ~600        | —                         | Mirrors `package.json` `contributes.configuration`. Optional, skip from v1 if needed.                       |
+| §9 #11 ESLint vscode-import rule                                      | ~50         | —                         | Custom flat-config rule.                                                                                    |
+| §9 #12 Codex unpack rehearsal harness                                 | ~80         | ~30                       | Test harness + electron-builder config.                                                                     |
+| §9 #13 `settingsViewDispatcher.ts` extraction                         | ~40         | ~120                      | Move switch out of `SettingsApp.handleMessage()`.                                                           |
+| **Subtotal core/extension**                                           | **~1,145**  | **~1,031**                | Of which ~600 LOC (the Zod schema, #9) is optional. Floor without #9: **~545 net new + ~1,031 refactored.** |
+
+#### Aggregate budget
+
+| Bucket                                                               | Net new LOC      | Modified LOC | Total touched    |
+| -------------------------------------------------------------------- | ---------------- | ------------ | ---------------- |
+| `packages/desktop/`                                                  | 2,400–3,150      | ~395         | ~2,800–3,550     |
+| `packages/core/` + `extension/` (mandatory pre-refactorings)         | ~545             | ~1,031       | ~1,576           |
+| `packages/core/` (optional Zod-schema effort)                        | ~600             | —            | ~600             |
+| **Total v1 (without optional Zod schema)**                           | **~2,950–3,700** | **~1,425**   | **~4,375–5,125** |
+| **Total v1 (with Zod schema)**                                       | **~3,550–4,300** | **~1,425**   | **~4,975–5,725** |
+
+For comparison: the VS Code extension today is ~853 source files. The agent core (which is reused unchanged) is ~141 files. The Electron port is roughly **3% the size of the existing extension's source base** in net-new code, and roughly **6% if you count refactored + new together**.
+
+The §12 success criterion is "Total Electron-side new code (in `packages/desktop/`) under ~3,000 LOC." Current estimate sits inside that range when Phase 5 (the diff component) lands at the lower end of its 200–400 LOC band, and slightly over if it lands at the upper end. We adjust scope by deferring Phase 7 polish items (log-viewer pane, migration importer) if needed.
+
+#### What's NOT counted in this LOC budget
+
+- **Configuration files**: `electron-builder.yml`, GitHub Actions workflows, `pnpm-workspace.yaml`, `tsconfig.json`s. Roughly ~400 LOC of YAML / JSON / TS config, not application code.
+- **CI scripts**: signing, notarization, sourcemap upload. ~150 LOC of shell + workflow YAML.
+- **Test code**: Vitest + Playwright suites. Estimated 600–1,000 LOC for v1 coverage; written alongside features but not in the budget above.
+- **Documentation**: install guide, troubleshooting, migration doc, runbook. Markdown only.
+
+Total config + CI + tests + docs: another ~1,500–2,200 LOC of non-application code spread across the project.
 
 ## 15. Tech stack one-liner
 
