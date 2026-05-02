@@ -36,7 +36,7 @@ A six-front parallel scout of the codebase confirmed:
 - **853 TypeScript files** in `src/`. Only **106** import `vscode`. The remainder access host services through `platform()` from `@platform`.
 - **The `Platform` interface is tiny.** Total surface across `config`, `state`, `log`, `filesystem`, `workspace`, `storage`, `secrets`: ~470 LOC of interfaces. The existing VS Code implementation is ~300 LOC across 6 files (`src/frontend/vscode/`). The Electron-side mirror is ~200–300 LOC of glue.
 - **Webviews are pure Lit.** No React/Vue/Svelte. All three (`webview`, `progressView`, `settingsView`) extend `LitElement`, use `@lit-labs/signals`, communicate via Zod-validated message schemas in `src/shared/`. The transport wrapper at `src/shared/vscode.ts` already includes a fallback API for non-webview contexts — the Electron transport is essentially a one-file swap.
-- **Agent runtime is `vscode`-free.** All ~141 files in `src/agent/` confirmed. Streaming uses callbacks; cancellation uses standard `AbortController`; persistence is filesystem-based JSON validated by Zod. **Runs in the Electron main process at v1** (utility-process execution deferred to §13.1 — `ProgressEventBus` is an in-memory singleton that would need a `MessagePort` bridge + per-process `initPlatform()`).
+- **Agent runtime is `vscode`-free.** All ~141 files in `src/agent/` confirmed. Streaming uses callbacks; cancellation uses standard `AbortController`; persistence is filesystem-based JSON validated by Zod. **Runs in the Electron main process at v1.** Per §9 #20, the runtime takes an `AgentRuntimeHost` / `ProgressSink` as a constructor dep (no `ProgressEventBus` singleton import) so utility-process execution becomes a single adapter swap in v2 (§13.1).
 - **Inline word-diff infrastructure already exists.** `src/agent/output/diffComputation.ts` + `src/progressView/frontend/formatters/wordDiff.ts` already implement word-level inline diff over `diff-match-patch` — reused as-is in the Electron progress view. The side-by-side approval surface is built on Monaco (see §6.2); the two layers compose cleanly.
 
 ### 4.2 Coupling inventory (the 106 files)
@@ -460,7 +460,7 @@ Eight files, ~250–400 LOC total. Each mirrors an existing VS Code impl in `src
 | ------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ConfigProvider`         | `vscode.workspace.getConfiguration` w/ 3-namespace fallback | `conf` instance + Zod schema mirroring `package.json` `contributes.configuration`                                                                                                                                                                                                                                                                                                                                                                                               |
 | `StateStore` (global)    | `ExtensionContext.globalState`                              | `conf` (file: `state.global.json`) under `app.getPath('userData')`                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `StateStore` (workspace) | `ExtensionContext.workspaceState` (app-private Memento)     | `conf` keyed by **stable hash of the project path**, stored under `app.getPath('userData')/workspace-state/<sha256(projectPath)>.json`. **Not** in `<project>/.texra/` — workspace state contains agent history, stream logs, task states, and run instructions; writing those into the user's repo would dirty git, fail on read-only/shared folders, and risk committing local run history. Project-local state is reserved for an explicit settings-as-code feature (§13.1). |
+| `StateStore` (workspace) | `ExtensionContext.workspaceState` (app-private Memento) for **all** workspace state | **Two storage classes, not one** (the existing extension also conflates them — fix it once at port time): (a) **small mementos** (last-selected agent, last-opened tab, UI toggles, migration markers) in `conf` keyed by hashed project path under `userData/workspace-state/<sha256(projectPath)>.json`; (b) **run artifacts** (agent history, stream logs, task states, run instructions, output-file metadata) under append-oriented per-run directories at `userData/projects/<sha256(projectPath)>/runs/<runId>/`. Append-only writes, explicit retention/compaction (default: keep last 50 runs per project, summarize older). **Not** in `<project>/.texra/` either way. Putting run artifacts in `conf` JSON would mean rewriting the same blob on every progress event — works in demos, garbage under real sessions. |
 | `LogBackend`             | `vscode.OutputChannel`                                      | `electron-log` to `app.getPath('logs')/` + in-app log viewer pane                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `FileSystemProvider`     | `vscode.workspace.fs`                                       | `node:fs/promises` + `fs-extra` (already a dep)                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `WorkspaceProvider`      | `workspace.workspaceFolders[0]` + `asRelativePath`          | Project-folder model + `chokidar`. "Open Project" replaces "Open Folder."                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -469,35 +469,59 @@ Eight files, ~250–400 LOC total. Each mirrors an existing VS Code impl in `src
 
 `initPlatform()` is called once at top of `main/index.ts`, before any agent code runs. Mirrors the call site in `src/extension.ts:144-153`.
 
-### 7.4 IPC contract — two channels, one schema
+### 7.4 IPC contract — capability-scoped channels, one schema
 
-The existing webview message system has two directions and they map onto two different Electron IPC primitives. Conflating them (as an earlier draft did) loses the host→renderer push capability that progress streams, log lines, and approval prompts depend on.
+Renderer and main process exchange messages, but **the IPC layer is also a security boundary**. The renderer renders markdown, model output, file content, and tool transcripts — treating an XSS or prototype-pollution there as impossible would be wrong. Zod validates payload _shape_, not _authority_: a generic `texra:rpc` channel that accepts any well-formed message lets a compromised renderer ask main to execute any privileged controller action. The bridge has to enforce **what** the renderer is allowed to call, not just **whether** the message is parseable.
 
-**Two channels:**
+**Capability model: one channel per view, one allowlisted method set per channel.**
 
-| Direction                  | Today (VS Code)                                   | Electron primitive                                             | Used for                                                                                             |
-| -------------------------- | ------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Renderer → host (RPC)**  | `vscode.postMessage()` → `BaseViewMessageHandler` | `ipcRenderer.invoke()` ⇄ `ipcMain.handle()` (request/response) | User actions: "execute agent", "save settings", "approve diff", "open project."                      |
-| **Host → renderer (push)** | `webview.postMessage()` from `WebviewUpdater`     | `webContents.send()` → `ipcRenderer.on()` (fire-and-forget)    | Streamed logs, progress events, status updates, approval requests, theme changes, state restoration. |
+| Channel               | Sender (preload exposes)                  | `ipcMain.handle` allowlist (controllers)            | Lives at                              |
+| --------------------- | ----------------------------------------- | --------------------------------------------------- | ------------------------------------- |
+| `texra:main-rpc`      | `window.texra.main.<method>(args)`        | `MainViewController.<allowlisted methods>`          | main window's `<main-app>`            |
+| `texra:progress-rpc`  | `window.texra.progress.<method>(args)`    | `ProgressViewController.<allowlisted methods>`      | progress route in main window         |
+| `texra:settings-rpc`  | `window.texra.settings.<method>(args)`    | `SettingsViewController.<allowlisted methods>`      | settings route in main window         |
+| `texra:diff-rpc`      | `window.texra.diff.<method>(args)`        | `editApproval` only (approve/reject)                | diff component embedded in progress   |
+| `texra:<view>-push`   | `ipcRenderer.on(...)`                     | (host → renderer; one-way; no allowlist needed)     | each view subscribes to its own push  |
 
-**One schema layer.** Both directions use the existing Zod-validated message schemas in `core/shared/`. Inbound schemas (renderer→host) become `ipcMain.handle('texra:rpc', validate(payload))`. Outbound schemas (host→renderer) become `webContents.send('texra:push', validate(message))`. The dispatcher pattern in `mainViewDispatcher.ts` / `messageDispatcher.ts` is unchanged — it still receives a single message argument and routes by discriminator.
+The preload script does **not** expose a generic `rpc(channel, msg)` function. It exposes per-view namespaces with explicit method shapes:
 
-**One transport file.** The renderer-side transport is the preload's `contextBridge`-exposed API; no separate file in `core/`. The earlier "transport adapter" was a phantom file — the bridge IS the transport.
-
+```ts
+// desktop/preload/index.ts
+contextBridge.exposeInMainWorld('texra', {
+  main: {
+    runWorkflow:  (args: RunWorkflowArgs) => ipcRenderer.invoke('texra:main-rpc:runWorkflow', args),
+    selectFiles:  (args: SelectFilesArgs) => ipcRenderer.invoke('texra:main-rpc:selectFiles', args),
+    // ...one method per allowlisted controller method
+  },
+  progress: {
+    approveEdit:  (args: ApproveEditArgs) => ipcRenderer.invoke('texra:progress-rpc:approveEdit', args),
+    // ...
+  },
+  // ...
+  on: {
+    progress: (cb: (msg: PushMessage) => void) => ipcRenderer.on('texra:progress-push', (_, m) => cb(m)),
+    // ...
+  },
+});
 ```
-RPC:   renderer ─ipcRenderer.invoke('texra:rpc', msg)→ preload bridge → ipcMain.handle('texra:rpc') → core dispatcher → @agent/*
-push:  @agent/* → eventBus → main process listener → webContents.send('texra:push', msg) → preload bridge → ipcRenderer.on('texra:push') → renderer dispatcher
-```
 
-**Streaming large payloads** (Phase 5+): for diffs >1MB or transcripts that risk hitting Electron's IPC size limit (~100MB), bypass the push channel and use a `MessageChannelMain` / `MessagePort` between main and renderer. Streamed via the same Zod schemas, just on a different transport.
+**Authority checks in `ipcMain`:**
 
-Net change to **dispatcher / schema code**: zero — the existing Zod schemas and discriminated-union dispatch shape transfer unchanged. **Handler code does change materially**, however — see §9 #18: today the three `*ViewMessageHandler` files (~3,551 LOC) live in `extension/` and import `vscode`. Phase 0 extracts the host-neutral controllers into `core/controllers/` (gates Phase 2/3 of the desktop port). New desktop code is just the two preload functions (`invoke`, `on`), the two main-process listeners, and the generic dispatcher in `desktop/main/ipc.ts` that routes messages to controller methods.
+1. Each `ipcMain.handle('texra:<view>-rpc:<method>', ...)` is registered exactly once and points to one typed controller method. There is no "look up method by string" path.
+2. Before dispatching, the handler validates `event.senderFrame`: which `BrowserWindow` and which mounted route is calling. A `texra:settings-rpc` call from the diff modal frame is rejected. (At v1 with one window, this means asserting `event.senderFrame === mainWindow.webContents.mainFrame` and that the active route is the expected one — the renderer reports its active route on every push.)
+3. Zod validates the args _after_ authority is established, against the per-method schema.
+
+**Push direction** (host → renderer) uses `webContents.send('texra:<view>-push', message)`. Pushes go to specific views, not broadcast. The renderer's per-view dispatcher remains unchanged from the existing webview pattern.
+
+**Streaming large payloads** (Phase 5+): for diffs >1MB or transcripts that risk hitting Electron's IPC size limit (~100MB), bypass the push channel and use a `MessageChannelMain` / `MessagePort` between main and renderer. Streamed via the same Zod schemas, just on a different transport. The MessagePort is also capability-scoped — one port per view, established by the main process, never created by the renderer.
+
+**Net change to dispatcher / schema code:** zero — the existing Zod schemas and per-view discriminated-union dispatch transfer unchanged. **Net change to the bridge layer:** the preload exposes per-view namespaces (~150 LOC) and main registers one `ipcMain.handle` per allowlisted controller method (~250 LOC of type-safe glue replacing the previously imagined ~150 LOC generic dispatcher). **Handler code does change materially** per §9 #18 — controllers move from `extension/` into `core/`.
 
 ### 7.5 Process model
 
 - **Main process** — app lifecycle, window mgmt, native menu, auto-update, protocol handler, platform impls.
 - **Renderer (one per window)** — Lit UI; `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`. Talks to main via preload bridge.
-- **No utility process at v1.** Agents run in the main process. The earlier "Phase 4+ utility-process split" was misleading — the existing `ProgressEventBus` is an in-memory singleton, and moving agents to a utility process means bridging every `bus.emit(...)` over `MessagePort` (otherwise progress, logs, and approvals don't reach main or renderer). The utility process would also need its own `initPlatform()` with proxied platform interfaces. Real work, no v1 benefit. Deferred to §13.1 future divergence; v2 candidate.
+- **No utility process at v1, but the boundary exists.** Agents run in the main process at v1, but the agent runtime takes `AgentRuntimeHost` / `ProgressSink` as a constructor dep (per §9 #20), not a singleton. v1 ships an `InProcessProgressSink` that forwards to in-process subscribers; v2's utility-process variant ships a `MessagePortProgressSink` against the same interface. No rewrites of progress / approval / cancellation / logging when v2 lands. Deferred to §13.1 because the v2 *implementation* (utility-process spawning + IPC plumbing) isn't worth doing for v1, but the *abstraction* lands now to prevent the cross-cutting rewrite later.
 
 ### 7.6 Replacing VS Code-specific UX
 
@@ -555,7 +579,16 @@ A fourth aggregator job (Linux runner) downloads all artifacts, merges manifests
 
 **Local dev:** developers running `pnpm --filter desktop build` on their own machine get only their OS's installer; that's expected and fine for testing. Cross-OS builds happen only in CI.
 
-- Both share the same `node_modules` (workspace hoisting via pnpm) and the same `tsconfig.base.json` aliases. No shared `dist/`, no shared cache, no shared bundler config.
+- Both share the same `tsconfig.base.json` aliases. No shared `dist/`, no shared cache, no shared bundler config.
+
+**Per-package dependency hygiene (hard rule).** pnpm hoists transitive deps to the workspace root for dev convenience, but **packaged installers don't ship the workspace root** — `electron-builder` prunes against `packages/desktop/package.json`'s declared production dependencies. So:
+
+1. Every package declares **every runtime dependency it imports** in its own `package.json` (`dependencies`, not `peerDependencies` or root-only). No reaching through hoisted siblings.
+2. Phase 6 CI step: build the desktop installer, extract the asar, list every package under `app.asar/node_modules/`, and verify the set matches the closure of `packages/desktop/package.json` `dependencies`. Fail the release on any extra or missing package.
+3. A `pnpm install --frozen-lockfile --filter desktop --prod` in CI catches "I imported it in dev but didn't declare it" mismatches before they reach packaging.
+4. The vscode-import lint rule from §9 #11 has a sibling rule: `desktop/` and `core/` cannot import packages not declared in their own `package.json`.
+
+Workspace hoisting is dev convenience, not an architectural property. Treat it that way.
 
 ### 8.2 Path aliases
 
@@ -689,6 +722,28 @@ The VS Code-side wrapper becomes ~190 LOC of glue: register `AuthenticationProvi
 **11. CI guard: vscode-import lint rule.** _(~50 LOC — ESLint flat-config addition + custom rule.)_
 Add an ESLint rule (or a custom check) that fails CI if any file under the "vscode-free zones" imports `vscode`. Pin the existing 747/853 ratio so it can only improve. **Why now:** prevents regression while the Electron port is in flight.
 
+**20. Define `AgentRuntimeHost` + `ProgressSink` boundary now.** _(~120 LOC: ~60 LOC interface + ~40 LOC `InProcessProgressSink` adapter + ~20 LOC of agent-runtime constructor wiring; ~150 LOC refactored at the existing `ProgressEventBus` site.)_
+
+The current `ProgressEventBus` is an in-memory singleton: agent runtime code does `bus.emit(...)`, and the extension host's progress webview subscribes via the same module. That works in-process, but it bakes "agents and UI share an address space" into the core event path. Moving agents to a utility process (or a CLI in §13.1) becomes a cross-cutting rewrite of progress, approval, cancellation, logging, and platform access — exactly the trap the platform abstraction was supposed to prevent.
+
+Define the boundary now, even though v1 implements it in-process:
+
+```ts
+// core/agent/runtime/ports.ts
+export interface ProgressSink {
+  emit(event: ProgressEvent): void;
+  onApprovalRequest(handler: (req: ApprovalRequest) => Promise<ApprovalResponse>): Disposable;
+}
+export interface AgentRuntimeHost {
+  sink: ProgressSink;
+  // (also: cancellation tokens, log channel, platform handle — passed through)
+}
+```
+
+The agent runtime (everything in `core/agent/`) takes an `AgentRuntimeHost` as a constructor dependency instead of importing `ProgressEventBus` directly. v1 ships an `InProcessProgressSink` adapter in `desktop/main/` (and the equivalent in `extension/`) that just forwards to the existing in-process subscribers — same behavior, same code path, but no singleton import in the core. v2's utility-process variant implements the same interface over `MessagePort` without touching agent code.
+
+**Why now:** the cost is small (~120 LOC of glue + a refactor at the singleton's call sites), and doing it as a pre-refactoring means the utility-process v2 work is "implement one adapter" rather than "rewrite progress/approval/cancellation/logging." The current PRD's "deferred to v2 because of the singleton" framing is honest about the cost of NOT doing this now; #20 removes the cost.
+
 **19. Host-agnostic `AgentDirectories` / resource-sync adapter.** _(~150 LOC: ~80 LOC for the core adapter + ~50 LOC for the VS Code wrapper + ~20 LOC for the desktop wrapper.)_
 
 Today's bundled-agent flow is **not** "read from `resources/agents/` at runtime." It's:
@@ -755,6 +810,7 @@ Cleaner split: keep `Platform` as **OS primitives**, and introduce a separate se
 ```ts
 // core/hosts/index.ts
 export interface UIHosts {
+<<<<<<< Updated upstream
   prompt: PromptHost; // confirm / info / warning / error / input
   externalOpener: ExternalOpener; // openExternal(url), openPath(file)
   diff: DiffViewHost; // (already defined in §9 #2)
@@ -772,6 +828,26 @@ export interface UIHosts {
 | `TerminalHost`   | `vscode.window.createTerminal`                                                  | xterm.js component already in renderer + spawned subprocess                |
 | `CommandHost`    | `vscode.commands.executeCommand` (registered via #17 catalog)                   | In-process registry built from #17 catalog                                 |
 | `ClipboardHost`  | `vscode.env.clipboard`                                                          | `clipboard` from Electron's `electron` module                              |
+=======
+  prompt:         PromptHost;        // confirm / info / warning / error / input
+  externalOpener: ExternalOpener;    // openExternal(url), openPath(file)
+  diff:           DiffViewHost;      // (already defined in §9 #2)
+  terminal:       TerminalHost;      // create / send / dispose terminal
+  clipboard:      ClipboardHost;     // read / write text
+}
+```
+
+| Port             | VS Code adapter                                                | Electron adapter                                                            |
+| ---------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `PromptHost`     | `vscode.window.show{Information,Warning,Error,InputBox}`       | `dialog.showMessageBox` + in-app Lit modal for input                         |
+| `ExternalOpener` | `vscode.env.openExternal`, `vscode.commands.executeCommand('vscode.open', uri)` | `shell.openExternal`, `shell.openPath`                            |
+| `DiffViewHost`   | `vscode.commands.executeCommand('vscode.diff', ...)` (existing #2) | Inline `<texra-diff-view>` (Monaco) rendered into the progress view (§4.5) |
+| `TerminalHost`   | `vscode.window.createTerminal`                                 | xterm.js component already in renderer + spawned subprocess                  |
+| `ClipboardHost`  | `vscode.env.clipboard`                                         | `clipboard` from Electron's `electron` module                                |
+
+**Why no `CommandHost`.** A string-typed `commands.execute(id)` port would be a back door: it would import host command names into the supposedly host-neutral core, recreate VS Code's dynamic command bus inside the kernel, and turn the catalog into both metadata and runtime authority. The clean alternative is **one-way only**: the host shell's menu/palette layer reads the #17 catalog and dispatches each catalog entry to a typed controller method or explicit port (e.g., `progressView.openLatexDiff()`). Controllers themselves never hold a stringly executor — they expose typed methods that the per-host shell wires up. Catalog stays metadata; runtime authority lives at the boundary, not in core.
+| `ClipboardHost`  | `vscode.env.clipboard`                                         | `clipboard` from Electron's `electron` module                                |
+>>>>>>> Stashed changes
 
 Controllers use `platform().fs` to read files but `hosts.prompt.confirm("Delete this memory?")` to ask the user. `FakePlatform` (#16) gets a sibling `FakeHosts` so kernel tests can record-and-assert UI effects deterministically. The result: each port is ~30–80 LOC of interface + adapter, the boundary is explicit, and we don't expand `Platform`.
 
@@ -814,7 +890,7 @@ The fix replaces the broken pipeline rather than patching it:
 
 ### Suggested ordering
 
-If we land them all, ~7–9 engineering weeks total, parallelizable. Suggested order: **3 → 1 → 4 → 16 → 2 → 14 → 18 → 17 → 6 → 11 → 15 → 9 → 19 → 7 → 8 → 13 → 10 → 12**. Mechanical fixes first (#3 EventEmitter), then the foundational items (#1 ConfigProvider expansion, #4 watch, #16 FakePlatform — pre-test infrastructure pays off immediately), then the structural extractions in dependency order (#2 DiffViewHost, #14 SupabaseSession+Client, #18 host-neutral controllers, #17 command catalog), then the lint guards (#11 and #15) to lock in agnostic-zone + composition-root purity, then the schema unification (#9), resource-sync adapter (#19), CSS shim (#7), binary resolver (#8), dispatcher cleanup (#13), audit/rehearsal items.
+If we land them all, ~7.5–9.5 engineering weeks total, parallelizable. Suggested order: **3 → 1 → 4 → 16 → 2 → 20 → 14 → 18 → 17 → 6 → 11 → 15 → 9 → 19 → 7 → 8 → 13 → 10 → 12**. Mechanical fixes first (#3 EventEmitter), then the foundational items (#1 ConfigProvider expansion, #4 watch, #16 FakePlatform — pre-test infrastructure pays off immediately), then the structural extractions in dependency order (#2 DiffViewHost, #20 ProgressSink boundary, #14 SupabaseSession+Client, #18 host-neutral controllers + UI ports, #17 command catalog), then the lint guards (#11 and #15) to lock in agnostic-zone + composition-root purity, then the schema unification (#9), resource-sync adapter (#19), CSS shim (#7), binary resolver (#8), dispatcher cleanup (#13), audit/rehearsal items.
 
 Each Tier 1 item is independently shippable to the extension and produces a smaller, cleaner extension regardless of the Electron decision.
 
@@ -1014,7 +1090,7 @@ Things explicitly out of scope for v1 under the agent-native model. Each is a co
 - **File-tree explorer in the launcher route.** v1 launcher is "pick the input file"; a v2 could show the project tree, modification times, and last-run status per file.
 - **Settings-as-code** (read/write a `texra.config.yaml` instead of `conf` JSON). Some users will want to commit settings to repos. Easy add later.
 - **CLI mode** (`texra run agent --input foo.tex`). Headless invocations from a terminal, useful for batch jobs. Already feasible today since the agent core is `vscode`-free; just needs a CLI entry point in a fourth `packages/cli/` workspace.
-- **Utility-process agent execution.** Move long agent runs into a separate Electron utility process so a renderer crash doesn't lose the run. The blocker is the in-memory `ProgressEventBus` singleton — every progress/log/approval event would need to bridge over `MessagePort`, and the utility process needs its own `initPlatform()` with proxied platform interfaces. ~600–900 LOC of bridge code, all of it cross-process plumbing rather than user-visible value. v2 candidate.
+- **Utility-process agent execution.** Move long agent runs into a separate Electron utility process so a renderer crash doesn't lose the run. With §9 #20's `AgentRuntimeHost` / `ProgressSink` boundary in place, this is a single new adapter (~250–400 LOC: a `MessagePortProgressSink` + utility-process `initPlatform()` proxy) — no rewrites of progress, approval, cancellation, or logging. v2 candidate.
 - **Extension-side credential export handoff** (`texra.exportForDesktop` command). Writes a one-shot encrypted blob from `SecretStorage` for the desktop to import. Default Phase 7 plan is "re-auth on first launch"; this is the optional alternative if user demand surfaces.
 
 ## 14. Appendix: Reuse-by-the-numbers
@@ -1088,6 +1164,7 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 
 These are the §9 pre-refactorings + the unavoidable cross-cutting changes during Phase 0–5.
 
+<<<<<<< Updated upstream
 | Item                                                                                            | Net new LOC                        | Modified / refactored LOC                              | Notes                                                                                                                                                                                                                                                           |
 | ----------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | §9 #1 Expanded `ConfigProvider` (write/inspect/isExplicitlySet/watch) + `configUtils.ts` rewire | ~200                               | ~126                                                   | Interface expansion required for Phase 3 settings round-trip; not just a `get()` wrapper.                                                                                                                                                                       |
@@ -1108,14 +1185,37 @@ These are the §9 pre-refactorings + the unavoidable cross-cutting changes durin
 | §9 #16 `FakePlatform` for unit tests                                                            | ~150                               | —                                                      | In-memory impls of the 7 platform interfaces; enables fast kernel tests via Vitest.                                                                                                                                                                             |
 | §9 #17 Host-agnostic command catalog                                                            | ~250                               | ~120 (slimmed `src/commands.ts`)                       | Splits per-host wiring out of catalog metadata.                                                                                                                                                                                                                 |
 | **Subtotal core/extension**                                                                     | **~2,195**                         | **~5,901**                                             | The bulk of the modified LOC is moved code (~3,800 LOC across #14 and #18) — same logic, new home. Net-new is dominated by interface definitions, narrow UI ports, dispatchers, and lint rules.                                                                 |
+=======
+| Item                                                                                            | Net new LOC      | Modified / refactored LOC                              | Notes                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| §9 #1 Expanded `ConfigProvider` (write/inspect/isExplicitlySet/watch) + `configUtils.ts` rewire | ~200             | ~126                                                   | Interface expansion required for Phase 3 settings round-trip; not just a `get()` wrapper.                                                                                      |
+| §9 #2 `DiffViewHost` interface + VS Code wrapper                                                | ~40              | ~80                                                    | Native impl wraps existing `vscode.diff` call site.                                                                                                                            |
+| §9 #3 `vscode.EventEmitter` → Node `EventEmitter`                                               | —                | ~30                                                    | 10 mechanical sites.                                                                                                                                                           |
+| §9 #4 `WorkspaceProvider.watch()` interface + impl                                              | ~60              | —                                                      | Interface + VS Code impl wraps `createFileSystemWatcher`.                                                                                                                      |
+| §9 #14 `SupabaseSession` + `SupabaseClient` extraction                                          | ~80              | ~1,000 moved + ~190 glue                               | Two host-agnostic classes (auth + API client) with `TokenProvider` boundary. Subsumes #5.                                                                                      |
+| §9 #18 Host-neutral controller extraction + narrow UI ports                                     | ~280 (interfaces + 6 narrow ports) | ~2,800 moved + ~750 glue rewritten   | Splits ~3,551 LOC of handlers into core controllers; introduces 6 narrow UI ports (Prompt, ExternalOpener, Diff (=#2), Terminal, Commands, Clipboard) at ~30–60 LOC each so `Platform` doesn't become a UI mega-facade. Phase 2/3 desktop work depends on this. |
+| §9 #19 `AgentDirectories` / resource-sync adapter                                               | ~150             | ~100 (slim `AgentDirectoryManager` of `vscode` import) | Host-agnostic copy-on-version-bump from bundled `resources/agents/` into per-host writable storage.                                                                            |
+| §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch                          | ~5               | ~45                                                    | Re-export shim + feature-detect Electron.                                                                                                                                      |
+| §9 #7 `--vscode-*` → `--texra-*` token shim                                                     | ~100             | ~450                                                   | New `themeTokens.css` + ~25 components touched by find-replace.                                                                                                                |
+| §9 #8 `BinaryResolver` extraction                                                               | ~80              | ~120                                                   | Service + call-site routing audit.                                                                                                                                             |
+| §9 #9 Settings Zod schema (Tier 2 — recommended)                                                | ~600             | —                                                      | Mirrors `package.json` `contributes.configuration`; eliminates JSON-schema/Zod drift.                                                                                          |
+| §9 #11 ESLint vscode-import rule                                                                | ~50              | —                                                      | Custom flat-config rule.                                                                                                                                                       |
+| §9 #12 Codex unpack rehearsal harness                                                           | ~80              | ~30                                                    | Test harness + electron-builder config.                                                                                                                                        |
+| §9 #13 `settingsViewDispatcher.ts` extraction                                                   | ~40              | ~120                                                   | Move switch out of `SettingsApp.handleMessage()`.                                                                                                                              |
+| §9 #15 `no-platform-init-outside-composition-root` ESLint rule                                  | ~30              | —                                                      | Codifies §6.6 composition-root invariant.                                                                                                                                      |
+| §9 #16 `FakePlatform` for unit tests                                                            | ~150             | —                                                      | In-memory impls of the 7 platform interfaces; enables fast kernel tests via Vitest.                                                                                            |
+| §9 #20 `AgentRuntimeHost` / `ProgressSink` boundary                                             | ~120             | ~150 (refactored at ProgressEventBus call sites)       | Removes the singleton import from agent runtime; v2 utility-process becomes a single adapter swap.                                                                             |
+| §9 #17 Host-agnostic command catalog                                                            | ~250             | ~120 (slimmed `src/commands.ts`)                       | Splits per-host wiring out of catalog metadata.                                                                                                                                |
+| **Subtotal core/extension**                                                                     | **~2,275**       | **~6,051**                                             | The bulk of the modified LOC is moved code (~3,800 LOC across #14 and #18) — same logic, new home. Net-new is dominated by interface definitions, narrow UI ports, the ProgressSink boundary (#20), dispatchers, and lint rules. |
+>>>>>>> Stashed changes
 
 #### Aggregate budget
 
 | Bucket                                                                   | Net new LOC      | Modified LOC | Total touched      |
 | ------------------------------------------------------------------------ | ---------------- | ------------ | ------------------ |
 | `packages/desktop/`                                                      | 2,180–2,900      | ~395         | ~2,575–3,295       |
-| `packages/core/` + `extension/` (all §9 pre-refactorings, incl. #15–#19) | ~2,195           | ~5,901       | ~8,096             |
-| **Total v1**                                                             | **~4,375–5,095** | **~6,296**   | **~10,671–11,391** |
+| `packages/core/` + `extension/` (all §9 pre-refactorings, incl. #15–#20) | ~2,275           | ~6,051       | ~8,326             |
+| **Total v1**                                                             | **~4,455–5,175** | **~6,446**   | **~10,901–11,621** |
 
 For comparison: the VS Code extension today is ~853 source files. The agent core (reused unchanged) is ~141 files. The Electron port itself is **~4% of the existing source base** in net-new code. **Most of the "modified LOC" total is not rewriting** — it's existing handler/auth logic relocating from `extension/` into `core/` so it becomes host-neutral. The shape of the work is "move code into the right place" much more than "write new code."
 
