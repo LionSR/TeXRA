@@ -20,8 +20,8 @@ export const categoryBadgeStyles: CSSResult = css`
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-small);
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--texra-badge-background);
+    color: var(--texra-badge-foreground);
   }
 
   .category-badge .codicon,
@@ -32,37 +32,37 @@ export const categoryBadgeStyles: CSSResult = css`
   .category-workflow,
   .category-badge.workflow {
     background-color: var(
-      --vscode-editorInfo-background,
+      --texra-editorInfo-background,
       rgba(0, 127, 212, 0.15)
     );
-    color: var(--vscode-editorInfo-foreground, #3794ff);
+    color: var(--texra-editorInfo-foreground, #3794ff);
   }
 
   .category-tool-use,
   .category-badge.tooluse,
   .category-badge.tool-use {
     background-color: var(
-      --vscode-editorWarning-background,
+      --texra-editorWarning-background,
       rgba(255, 204, 0, 0.15)
     );
-    color: var(--vscode-editorWarning-foreground, #cca700);
+    color: var(--texra-editorWarning-foreground, #cca700);
   }
 `;
 
 export const searchHighlightStyles: CSSResult = css`
   mark {
     background-color: var(
-      --vscode-editor-findMatchHighlightBackground,
+      --texra-editor-findMatchHighlightBackground,
       #ffef0b80
     );
-    color: var(--vscode-editor-findMatchHighlightForeground, inherit);
+    color: var(--texra-editor-findMatchHighlightForeground, inherit);
     padding: 0;
     border-radius: var(--border-radius-small);
   }
 
   mark[data-current='true'] {
-    background-color: var(--vscode-editor-findMatchBackground, #ff8b0088);
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    background-color: var(--texra-editor-findMatchBackground, #ff8b0088);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
   }
 `;
 

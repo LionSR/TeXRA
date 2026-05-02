@@ -10,7 +10,7 @@ export const permissionCardStyles: CSSResult = css`
     z-index: 1000;
     background: color-mix(
       in srgb,
-      var(--vscode-editor-background) 70%,
+      var(--texra-editor-background) 70%,
       transparent
     );
   }
@@ -20,15 +20,15 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .permission-card {
-    background: var(--vscode-editor-background);
-    border: var(--border-thin) solid var(--vscode-panel-border);
+    background: var(--texra-editor-background);
+    border: var(--border-thin) solid var(--texra-panel-border);
     border-radius: var(--border-radius-large);
     padding: var(--spacing-xlarge);
     max-width: 600px;
     width: min(92vw, 600px);
     max-height: min(80vh, 44rem);
     overflow: hidden;
-    box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.24));
+    box-shadow: 0 2px 8px var(--texra-widget-shadow, rgba(0, 0, 0, 0.24));
   }
 
   .permission-header {
@@ -50,10 +50,10 @@ export const permissionCardStyles: CSSResult = css`
   .code-block {
     display: block;
     padding: var(--spacing-medium);
-    background: var(--vscode-textCodeBlock-background);
+    background: var(--texra-textCodeBlock-background);
     border-radius: var(--border-radius);
-    color: var(--vscode-terminal-foreground);
-    font-family: var(--vscode-editor-font-family);
+    color: var(--texra-terminal-foreground);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size);
     white-space: pre-wrap;
     word-break: break-word;
@@ -79,9 +79,9 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .file-path {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size-sm);
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
     word-break: break-word;
   }
 
@@ -90,21 +90,21 @@ export const permissionCardStyles: CSSResult = css`
     align-items: baseline;
     gap: var(--spacing-small);
     font-size: var(--font-size-sm);
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
   }
 
   .diff-added {
-    color: var(--vscode-gitDecoration-addedResourceForeground, #89d185);
+    color: var(--texra-gitDecoration-addedResourceForeground, #89d185);
     font-weight: var(--font-weight-medium);
   }
 
   .diff-removed {
-    color: var(--vscode-gitDecoration-deletedResourceForeground, #f48771);
+    color: var(--texra-gitDecoration-deletedResourceForeground, #f48771);
     font-weight: var(--font-weight-medium);
   }
 
   .meta-text {
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     margin-left: var(--spacing-small);
   }
 
@@ -122,8 +122,8 @@ export const permissionCardStyles: CSSResult = css`
     font-weight: var(--font-weight-semibold);
     padding: var(--spacing-tiny) var(--spacing-small);
     border-radius: var(--border-radius);
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--texra-badge-background);
+    color: var(--texra-badge-foreground);
   }
 
   .file-list {
@@ -131,12 +131,12 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .file-list-label {
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     margin-right: var(--spacing-small);
   }
 
   .file-link {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
     cursor: pointer;
     text-decoration: none;
     transition: color var(--transition-fast);
@@ -147,7 +147,7 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .file-link:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -169,16 +169,16 @@ export const permissionCardStyles: CSSResult = css`
     display: block;
     margin-bottom: var(--spacing-small);
     font-size: var(--font-size-sm);
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
   }
 
   .feedback-input {
     width: 100%;
     min-height: 60px;
     padding: var(--spacing-medium);
-    border: var(--border-thin) solid var(--vscode-input-border);
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
+    border: var(--border-thin) solid var(--texra-input-border);
+    background: var(--texra-input-background);
+    color: var(--texra-input-foreground);
     border-radius: var(--border-radius);
     font-family: inherit;
     font-size: var(--font-size);
@@ -187,6 +187,6 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .feedback-input:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
   }
 `;
