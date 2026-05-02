@@ -28,28 +28,38 @@ interface PackageJson {
   };
 }
 
-const require = createRequire(__filename);
-const packageJson = require('../../../package.json') as PackageJson;
+const packageRequire = createRequire(__filename);
+const packageJson = packageRequire('../../../package.json') as PackageJson;
+
+function normalizeCommand(command: PackageCommand): PackageCommand {
+  return {
+    command: command.command,
+    title: command.title,
+    ...(command.shortTitle == null ? {} : { shortTitle: command.shortTitle }),
+    category: command.category,
+    ...(command.icon == null ? {} : { icon: command.icon }),
+    ...(command.enablement == null ? {} : { enablement: command.enablement }),
+  };
+}
 
 function normalizeCatalogCommands(): PackageCommand[] {
-  return commandCatalog.map((entry) => {
-    const command: PackageCommand = {
+  return commandCatalog.map((entry) =>
+    normalizeCommand({
       command: entry.id,
       title: entry.title,
+      ...('shortTitle' in entry ? { shortTitle: entry.shortTitle } : {}),
       category: entry.category,
-    };
-    if ('shortTitle' in entry) command.shortTitle = entry.shortTitle;
-    if ('icon' in entry) command.icon = entry.icon;
-    if ('enablement' in entry) command.enablement = entry.enablement;
-    return command;
-  });
+      ...('icon' in entry ? { icon: entry.icon } : {}),
+      ...('enablement' in entry ? { enablement: entry.enablement } : {}),
+    }),
+  );
 }
 
 describe('commandCatalog', () => {
   it('matches package command contributions', () => {
     assert.deepEqual(
       normalizeCatalogCommands(),
-      packageJson.contributes.commands,
+      packageJson.contributes.commands.map(normalizeCommand),
     );
   });
 
