@@ -73,6 +73,49 @@ Beyond platform interfaces:
 
 Every item has a clean Electron-native replacement.
 
+### 4.4 Webview reuse — measured
+
+A deep scout enumerated every Lit component, every host-bridge call, every CSS token, and every third-party UI dep in the three frontends. The key numbers:
+
+| Metric | Value |
+|---|---|
+| Total frontend LOC across the three webviews | 30,631 |
+| Webview frontend LOC by view | main 5,596 / progress 16,471 / settings 8,564 |
+| Custom elements (`@customElement`) | 62 (main 11 / progress 33 / settings 18) |
+| Abstract LitElement base classes | 2 (`BaseRequestPanel`, `BaseFeedbackPanel`) |
+| Direct `acquireVsCodeApi` calls in components | **0** (single seam at `src/shared/vscode.ts:28`) |
+| Raw `vscode.postMessage` calls bypassing the wrapper | **0** (36+ calls all go through `postMessage()` helper) |
+| Raw `window.addEventListener('message', ...)` outside the dispatcher | 1 (in `BaseWebviewApp.ts:91`, inherited by all three) |
+| Unique `--vscode-*` CSS tokens referenced | 53 (all have fallback values) |
+| Hardcoded colors outside `var(--vscode-*, ...)` fallbacks | 2 (terminal default `#1e1e1e`, markdown error `#cc0000`) |
+| Components from `@vscode-elements/elements` used | 19 distinct (`vscode-toolbar-button` ×95, `vscode-checkbox` ×17, etc.) — all framework-agnostic web components |
+| `@vscode/codicons` glyphs referenced | ~50 unique, all present in the npm package's CSS |
+| Monaco usage in frontends today | **0** (confirmed) |
+
+**Reuse breakdown across all 30,631 LOC:**
+
+| Bucket | LOC | % |
+|---|---|---|
+| Byte-for-byte reusable | 29,550 | 96.5% |
+| Token rename (`--vscode-*` → `--texra-*` mapping layer) | 450 | 1.5% |
+| API swap (`postMessage` wrapper transport) | 490 | 1.6% |
+| Reimplementation (terminal font init, markdown error color, HTML token substitution) | 141 | 0.5% |
+
+**The minimum Electron-side changeset to mount all three frontends:**
+
+- 1 file modified: `src/shared/vscode.ts` (~45 LOC) — feature-detect Electron, route through `window.electron` instead of `acquireVsCodeApi`. Component code unchanged.
+- 4 new files (~250 LOC total) in `desktop/src/`: preload script, IPC bridge, window manager, per-view bootstrap.
+- 1 new file: `desktop/src/renderer/themeTokens.css` defining the 53 `--vscode-*` token values for light/dark/high-contrast themes (the existing fallbacks document the defaults).
+- 0 component template changes, 0 signal/context-architecture changes, 0 changes to message dispatchers.
+
+**Pop-out already exists.** `ProgressApp.ts:697-701` emits `POP_OUT` / `POP_BACK` commands; `ProgressViewProvider.ts:525-571` materializes the panel. The Lit app already renders in two contexts (sidebar `WebviewView` vs editor `WebviewPanel`) by reading a `placement` state — this maps directly to "embedded location vs separate `BrowserWindow`" in Electron with no Lit changes.
+
+**Theme detection is host-driven, not browser-driven.** Frontends don't read `prefers-color-scheme` or `data-vscode-theme-kind`; they wait for a `COMMON_COMMANDS.SET_THEME` message and update `document.body.className` (`BaseWebviewApp.ts:69-71`). Electron just sends the same message from main when its `nativeTheme.shouldUseDarkColors` changes. Zero frontend code change.
+
+**One inconsistency worth flagging.** Main and progress views have separate dispatcher files (`mainViewDispatcher.ts`, `messageDispatcher.ts`). Settings inlines its dispatch in a switch statement inside `SettingsApp.handleMessage()`. Cleaning this up — extracting a `settingsViewDispatcher.ts` mirroring the others — is a small Tier 2 pre-refactoring (added to §9 as item #13).
+
+**Bottom line:** webview reuse is essentially complete. The Electron port's renderer work is bridge-and-bootstrap, not UI rewriting.
+
 ## 5. Decisions (the 12 stack picks)
 
 The "what you choose now" picks. Each is grounded in current (May 2026) state-of-the-art research and the actual TeXRA codebase. One-line rationale here; deeper justification in §6.
@@ -394,6 +437,9 @@ Webview Lit components reference `--vscode-button-background`, `--vscode-foregro
 **11. CI guard: vscode-import lint rule.**
 Add an ESLint rule (or a custom check) that fails CI if any file under the "vscode-free zones" imports `vscode`. Pin the existing 754/853 ratio so it can only improve. **Why now:** prevents regression while the Electron port is in flight.
 
+**13. Extract `settingsViewDispatcher.ts`.**
+Main and progress views have separate dispatcher files; settings inlines dispatch in a switch inside `SettingsApp.handleMessage()`. Mirror the pattern of the other two — pull the switch into `src/settingsView/frontend/settingsViewDispatcher.ts`. **Why now:** all three webviews share the same shape, simplifying the IPC adapter we drop in for Electron.
+
 **12. Codex SDK binary unpack rehearsal.**
 Create a tiny harness that bundles `@openai/codex-sdk` under an asar-like wrapper (or test it via electron-builder's `asarUnpack: ['**/node_modules/@openai/codex-*/**']`) and verifies the spawn works from inside the bundle on all three OSes. **Why now:** de-risks Phase 6 packaging; surface OS-specific path bugs early.
 
@@ -426,18 +472,21 @@ The biggest mechanical change. Do this first; everything else is downstream.
 - Smoke test: load an agent definition, list models. No UI yet.
 - **Exit criteria:** A subset of `src/test/` (the platform-agnostic Mocha suites) runs green inside the Electron main process.
 
-### Phase 2 — Renderer + main view (2 weeks)
+### Phase 2 — Renderer + main view (1.5 weeks)
 
-- Mount `<main-app>` Lit component in an Electron `BrowserWindow`.
-- IPC adapter in `packages/core/src/shared/transport/electron.ts` so existing message dispatchers route through `contextBridge`.
+Tighter than originally scoped: per the §4.4 measurement, the existing Lit components are 97% byte-for-byte reusable. Renderer work is bridge-and-bootstrap, not UI.
+
+- 4 new files (~250 LOC) in `desktop/src/`: `preload.ts`, `ipc/bridge.ts`, `windowManager.ts`, `renderer/main.ts`.
+- 1 modified file: `src/shared/vscode.ts` (~45 LOC) — feature-detect `window.electron`, fall through to `acquireVsCodeApi` otherwise. Keeps both hosts working from one codebase.
+- 1 new file: `desktop/src/renderer/themeTokens.css` defining the 53 `--vscode-*` tokens for light/dark/high-contrast (cribbed from the existing fallback values).
 - "Open Project" file picker → `WorkspaceProvider`.
-- File select group, agent dropdown, model dropdown all functional.
+- File select group, agent dropdown, model dropdown all functional via existing Lit components, no template changes.
 - First end-to-end agent execution.
-- **Exit criteria:** Run the Direct agent on a `.tex` file from an opened project. See output in renderer.
+- **Exit criteria:** Run the Direct agent on a `.tex` file from an opened project. See output in renderer. Light/dark/high-contrast themes round-trip correctly. `<main-app>` renders pixel-faithful to the extension version.
 
-### Phase 3 — Progress view, settings, command palette (2 weeks)
+### Phase 3 — Progress view, settings, command palette (1.5 weeks)
 
-- Mount `progressView` and `settingsView` Lit apps (decision pending: separate `BrowserWindow`s or routes in main window).
+- Mount `progressView` and `settingsView` Lit apps. Per §4.4: existing pop-out machinery (`POP_OUT`/`POP_BACK` already wired in `ProgressApp.ts:697-701`) maps directly onto Electron's "embedded vs separate `BrowserWindow`" dichotomy with no Lit changes.
 - Lit command palette over the existing `src/commands.ts` registry.
 - Native `Menu` with the most-used commands (top 20 from `package.json` `commandPalette`).
 - Settings tabs read/write through `conf` via `ConfigProvider`.
@@ -485,7 +534,7 @@ The single largest UI port.
 - Documentation site updates; new download page.
 - Migration doc: how to import API keys / settings from the VS Code extension's `globalState`.
 
-**Estimated timeline (single engineer):** 12.5–14 weeks. With a two-engineer team running Phases 1+2 in parallel after Phase 0, achievable in 8–10 weeks. The original optimistic 11-week single-dev figure didn't fully account for Phase 0 monorepo work or Phase 5 diff-surface implementation.
+**Estimated timeline (single engineer):** 11.5–13 weeks. Trimmed from the v2 estimate after the §4.4 webview scout confirmed renderer work is bridge-and-bootstrap (~250 LOC + theme tokens) rather than the originally feared UI rewrite. With a two-engineer team running Phases 1+2 in parallel after Phase 0, achievable in 7–9 weeks.
 
 A separate scout report estimated 22–24 weeks single-dev for "full feature parity including every command and complete auth rebuild." That figure is realistic if we treat the extension's command surface as a hard requirement to port verbatim. Our Phase 3 scope is "top 20 commands"; reaching parity on all ~60 is another 4–6 weeks of straightforward porting work past v1.
 
@@ -548,6 +597,13 @@ From the parallel scout:
 | Estimated `desktop/src/` total LOC at v1                             | ~3,000                                          |
 | Estimated diff in `core/` for monorepo split                         | ~0 (path aliases handle it)                     |
 | Estimated diff in `core/` for behavioral changes                     | ~500 (configUtils refactor + EventEmitter swap) |
+| Total Lit frontend LOC across the three webviews                     | 30,631                                          |
+| Frontend LOC reused byte-for-byte                                    | 29,550 (96.5%)                                  |
+| Frontend LOC needing `--vscode-*` token shim                         | 450 (1.5%)                                      |
+| Frontend LOC needing transport-wrapper swap                          | 490 (1.6%)                                      |
+| Frontend LOC needing genuine reimplementation                        | 141 (0.5%)                                      |
+| Custom elements (`@customElement`) reused                            | 62                                              |
+| Unique `--vscode-*` CSS tokens to shim                               | 53                                              |
 
 ## 15. Tech stack one-liner
 
