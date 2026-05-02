@@ -20,7 +20,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { MAX_TIER } from '@auth/config';
+import { MAX_TIER, FREE_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 
 // Local imports - platform
@@ -466,8 +466,8 @@ export abstract class ModelHandler<
 
   /**
    * Returns the effective reasoning effort for the current user and model.
-   * Max tier users should not receive xhigh reasoning on GPT-5 models when
-   * using included (server-side) access.
+   * On GPT-5 models accessed via included (server-side) keys, xhigh reasoning
+   * is capped: Max tier → high, free tier → medium.
    */
   protected getEffectiveReasoningEffort(): ReasoningEffort | null {
     const { supportsReasoningEffort, reasoningEffort } = this.capabilities;
@@ -488,6 +488,9 @@ export abstract class ModelHandler<
       const userTier = getServerSideKeyService().getUserTier();
       if (userTier === MAX_TIER) {
         return ReasoningEffort.HIGH;
+      }
+      if (userTier === FREE_TIER) {
+        return ReasoningEffort.MEDIUM;
       }
     }
 
