@@ -179,14 +179,14 @@ The "what you choose now" picks. Each is grounded in current (May 2026) state-of
 
 A handful of mature one-purpose libraries that solve real Electron pain points in <500 LOC each. Each is a "don't reinvent" pick — the alternative is rolling our own subtly-buggy version.
 
-| Pick                          | Solves                                                                                                                | Why this not roll-own                                                                                                                                  |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`electron-window-state`**   | Persist `BrowserWindow` size/position across launches; clamp to current display geometry on monitor changes           | Multi-monitor edge cases (window restored off-screen, screen disconnected) are the kind of thing nobody gets right the first time. ~200 LOC, mature. |
-| **`electron-context-menu`**   | Right-click menu in renderer with sensible defaults (Cut/Copy/Paste in inputs, Inspect Element in dev, custom items) | Default Electron has no context menu; users notice immediately. Lib is configurable, themeable.                                                        |
-| **`vite-plugin-monaco-editor`** | Wires Monaco's web workers under Vite (TS, JSON, CSS, HTML, editor workers as separate `?worker` chunks)            | The manual `MonacoEnvironment.getWorker` setup is tricky under asar; this plugin is the canonical solution.                                            |
-| **`electron-log`**            | File-rotated logs under `app.getPath('logs')`, renderer→main forwarding, Sentry transport                              | Already implicit in §7.3 (`LogBackend` impl). Pino is more modern but Node-only. `electron-log` ships the renderer integration we need.                |
-| **`Vitest`** (Electron-side)  | Test runner for `packages/core/` and `packages/desktop/`; existing extension tests stay on Mocha                       | We already use Vite — Vitest reuses the same config, transformers, and aliases. Faster and more modern than Mocha for new tests; doesn't disrupt the extension. |
-| **`@playwright/test`** + `playwright-electron` | E2E renderer tests for the Electron app                                                                | Spectron was deprecated by the Electron team in 2022; Playwright is the documented modern replacement and matches the broader testing ecosystem.       |
+| Pick                                           | Solves                                                                                                               | Why this not roll-own                                                                                                                                           |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`electron-window-state`**                    | Persist `BrowserWindow` size/position across launches; clamp to current display geometry on monitor changes          | Multi-monitor edge cases (window restored off-screen, screen disconnected) are the kind of thing nobody gets right the first time. ~200 LOC, mature.            |
+| **`electron-context-menu`**                    | Right-click menu in renderer with sensible defaults (Cut/Copy/Paste in inputs, Inspect Element in dev, custom items) | Default Electron has no context menu; users notice immediately. Lib is configurable, themeable.                                                                 |
+| **`vite-plugin-monaco-editor`**                | Wires Monaco's web workers under Vite (TS, JSON, CSS, HTML, editor workers as separate `?worker` chunks)             | The manual `MonacoEnvironment.getWorker` setup is tricky under asar; this plugin is the canonical solution.                                                     |
+| **`electron-log`**                             | File-rotated logs under `app.getPath('logs')`, renderer→main forwarding, Sentry transport                            | Already implicit in §7.3 (`LogBackend` impl). Pino is more modern but Node-only. `electron-log` ships the renderer integration we need.                         |
+| **`Vitest`** (Electron-side)                   | Test runner for `packages/core/` and `packages/desktop/`; existing extension tests stay on Mocha                     | We already use Vite — Vitest reuses the same config, transformers, and aliases. Faster and more modern than Mocha for new tests; doesn't disrupt the extension. |
+| **`@playwright/test`** + `playwright-electron` | E2E renderer tests for the Electron app                                                                              | Spectron was deprecated by the Electron team in 2022; Playwright is the documented modern replacement and matches the broader testing ecosystem.                |
 
 Total added dep weight: ~1.5MB before tree-shaking. All actively maintained, all Electron-aware, all backed by either Sindre Sorhus or VS Code/Microsoft.
 
@@ -208,12 +208,12 @@ The temptation when starting a new app is to grab every "modern" tool. Here's th
 
 The existing extension is CommonJS (`"module": "commonjs"` in `tsconfig.json`). The Electron desktop app should be ESM-first since Electron 28+ supports ESM in main, and the renderer is already ESM via Vite.
 
-| Layer                     | `module` / `moduleResolution`            | Notes                                                                                              |
-| ------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `packages/core/`          | `"module": "esnext"`, `"moduleResolution": "bundler"` | Consumed by both extension (CJS) and desktop (ESM) — bundlers handle the format conversion. |
-| `packages/extension/`     | `"module": "commonjs"` (unchanged)       | VS Code extension host expects CJS. No churn.                                                      |
-| `packages/desktop/main`   | `"module": "nodenext"`, `"type": "module"` in `package.json` | Modern Electron main process; ESM with top-level await for `await fixPath()`. |
-| `packages/desktop/renderer` | `"module": "esnext"`, `"moduleResolution": "bundler"` | Vite handles bundling; same conventions as the existing webview frontends.    |
+| Layer                       | `module` / `moduleResolution`                                | Notes                                                                                       |
+| --------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `packages/core/`            | `"module": "esnext"`, `"moduleResolution": "bundler"`        | Consumed by both extension (CJS) and desktop (ESM) — bundlers handle the format conversion. |
+| `packages/extension/`       | `"module": "commonjs"` (unchanged)                           | VS Code extension host expects CJS. No churn.                                               |
+| `packages/desktop/main`     | `"module": "nodenext"`, `"type": "module"` in `package.json` | Modern Electron main process; ESM with top-level await for `await fixPath()`.               |
+| `packages/desktop/renderer` | `"module": "esnext"`, `"moduleResolution": "bundler"`        | Vite handles bundling; same conventions as the existing webview frontends.                  |
 
 This is a Phase 0 decision — gets it right once during the monorepo split. CommonJS-only modules in `core/` (if any sneak in) get caught at build time.
 
