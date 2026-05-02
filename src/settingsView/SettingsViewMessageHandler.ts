@@ -727,13 +727,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     void this.sendToolDashboardData(webview);
 
     await this.primeIncludedAccessIfAuthenticated();
+    await this.sendProfileData(webview);
+    await this.sendModelSelectionData(webview);
 
     await Promise.all([
       this.sendMemoryData(webview),
       this.sendMemoryEnabled(webview),
       this.sendHistoryData(webview),
-      this.sendProfileData(webview),
-      this.sendModelSelectionData(webview),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
       this.sendSuperYoloEnabled(webview),
