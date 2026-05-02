@@ -59,6 +59,7 @@ import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
 import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
 import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
+import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
@@ -142,7 +143,7 @@ export async function activate(context: vscode.ExtensionContext) {
   initializePolishModel(context.extensionPath);
   initializeStateManagers(context);
   initPlatform({
-    config: { get: getConfig },
+    config: new VscodeConfigProvider(),
     globalState: context.globalState,
     workspaceState: context.workspaceState,
     log: logger,
