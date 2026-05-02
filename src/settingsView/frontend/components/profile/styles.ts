@@ -57,7 +57,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .profile-notice code {
-    font-family: var(--texra-editor-font-family, monospace);
+    font-family: var(--texra-editor-font-family, monospace), monospace;
     font-size: 0.95em;
     padding: 0 var(--spacing-tiny);
     border-radius: var(--border-radius-small);
