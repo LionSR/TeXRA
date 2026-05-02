@@ -43,16 +43,16 @@ A six-front parallel scout of the codebase confirmed:
 
 Categorized by VS Code API surface:
 
-| Category | Files | Uses | Effort | Replacement |
-|---|---|---|---|---|
-| Window/UX (`showInformationMessage`, `withProgress`, `OutputChannel`) | 54 | 96+ | small–medium | `dialog.showMessageBox` + in-app toast component |
-| Workspace (`workspace.fs`, `getConfiguration`, `workspaceFolders`) | 4–5 | 20 | small | Already wrapped — Electron impls of `FileSystemProvider`/`WorkspaceProvider` |
-| Editor (`TextDocument`, `Range`, `showTextDocument`, `vscode.diff`) | 10+ | 56+ | **medium-large** | Lit diff component + Monaco-free preview pane |
-| Commands (`registerCommand`, `executeCommand`) | 56 | 152+ | medium | Custom command registry + IPC dispatch |
-| Webviews (`WebviewView`, `WebviewPanel`, `asWebviewUri`) | 14+ | 37 | small–medium | `BrowserWindow` + `contextBridge` |
-| Auth/Secrets (`authentication`, `SecretStorage`, `UriHandler`) | 20 | 15+ | **large** | `safeStorage` + custom protocol handler; reuse 80% of `SupabaseAuthProvider` |
-| Memento (`globalState`, `workspaceState`) | 25 | 77 | small | `conf`-backed `StateStore` |
-| URIs/External (`Uri`, `env.openExternal`) | 6+ | 26 | small | Node `URL` + `shell.openExternal` |
+| Category                                                              | Files | Uses | Effort           | Replacement                                                                  |
+| --------------------------------------------------------------------- | ----- | ---- | ---------------- | ---------------------------------------------------------------------------- |
+| Window/UX (`showInformationMessage`, `withProgress`, `OutputChannel`) | 54    | 96+  | small–medium     | `dialog.showMessageBox` + in-app toast component                             |
+| Workspace (`workspace.fs`, `getConfiguration`, `workspaceFolders`)    | 4–5   | 20   | small            | Already wrapped — Electron impls of `FileSystemProvider`/`WorkspaceProvider` |
+| Editor (`TextDocument`, `Range`, `showTextDocument`, `vscode.diff`)   | 10+   | 56+  | **medium-large** | Lit diff component + Monaco-free preview pane                                |
+| Commands (`registerCommand`, `executeCommand`)                        | 56    | 152+ | medium           | Custom command registry + IPC dispatch                                       |
+| Webviews (`WebviewView`, `WebviewPanel`, `asWebviewUri`)              | 14+   | 37   | small–medium     | `BrowserWindow` + `contextBridge`                                            |
+| Auth/Secrets (`authentication`, `SecretStorage`, `UriHandler`)        | 20    | 15+  | **large**        | `safeStorage` + custom protocol handler; reuse 80% of `SupabaseAuthProvider` |
+| Memento (`globalState`, `workspaceState`)                             | 25    | 77   | small            | `conf`-backed `StateStore`                                                   |
+| URIs/External (`Uri`, `env.openExternal`)                             | 6+    | 26   | small            | Node `URL` + `shell.openExternal`                                            |
 
 **Two specific gotchas surfaced by the scout that aren't visible in the table:**
 
@@ -77,20 +77,20 @@ Every item has a clean Electron-native replacement.
 
 The "what you choose now" picks. Each is grounded in current (May 2026) state-of-the-art research and the actual TeXRA codebase. One-line rationale here; deeper justification in §6.
 
-| # | Concern | Pick | Why in one line |
-|---|---|---|---|
-| 1 | Bundler / dev | **electron-vite** | Purpose-built for the Vite + esbuild split we already run; Forge's Vite plugin is officially experimental as of 7.5.0 |
-| 2 | Packaging | **electron-builder** | Best-in-class signed mac universal + signed Windows NSIS + AppImage/deb/rpm in one config; integrates with `electron-updater` |
-| 3 | Auto-update | **electron-updater → public release repo** (separate from source repo) | A separate public `texra-ai/texra-desktop-releases` repo unblocks `update.electronjs.org` and avoids `GH_TOKEN`-baked-into-build with the private source repo |
-| 4 | Settings store | **`conf` + Zod schemas** (NOT `electron-store`) | `electron-store`'s validator is AJV; `conf` (its parent) lets us reuse Zod schemas as the single source of truth, matching the codebase's existing pattern |
-| 5 | Secrets | **Electron `safeStorage` + `conf` blob** (NOT `keytar`) | `keytar` was archived Dec 2022; VS Code itself migrated to `safeStorage` |
-| 6 | File watcher | **chokidar 4** | Pure JS — `@parcel/watcher` is faster on huge trees but adds a native module under asar; LaTeX project sizes don't justify the operational cost |
-| 7 | Diff/preview UI | **Monaco Editor** (`monaco-editor` standalone, lazy-loaded, diff + read-only modes only) | Same diff engine VS Code uses — keeps visual + behavioral parity with the extension; bundle cost (~5–10MB) is acceptable for a desktop app and is recouped via Vite code-splitting / lazy load |
-| 8 | Menu + palette | **Native `Menu` + custom Lit palette over existing `src/commands.ts` registry** | Avoids React/cmdk; ~150 LOC reuses what's there |
-| 9 | OAuth deep-link | **Roll own** with `setAsDefaultProtocolClient` + `requestSingleInstanceLock` + `open-url` + `second-instance` + `process.argv` cold-start | Logic mirrors existing `src/auth/UriHandler.ts`; `electron-deeplink` adds 200 LOC of indirection over a 40-LOC implementation |
-| 10 | macOS PATH fix | **`fix-path`** (cached at startup) + explicit PATH augmentation belt-and-suspenders | LaTeX/pandoc binaries live in `/Library/TeX/texbin`, `/opt/homebrew/bin`; Finder-launched apps don't see these by default |
-| 11 | Repo structure | **pnpm workspaces, three packages** (`core`, `extension`, `desktop`) | `workspace:*` protocol, `--filter` builds, single `tsconfig.base.json`; Turborepo is overkill for three packages |
-| 12 | Crash reporting | **Sentry Electron SDK, opt-in, native crashes only at v1** | Free tier sufficient; opt-in matters for academic users; performance tracing off (noisy) |
+| #   | Concern         | Pick                                                                                                                                      | Why in one line                                                                                                                                                                                |
+| --- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Bundler / dev   | **electron-vite**                                                                                                                         | Purpose-built for the Vite + esbuild split we already run; Forge's Vite plugin is officially experimental as of 7.5.0                                                                          |
+| 2   | Packaging       | **electron-builder**                                                                                                                      | Best-in-class signed mac universal + signed Windows NSIS + AppImage/deb/rpm in one config; integrates with `electron-updater`                                                                  |
+| 3   | Auto-update     | **electron-updater → public release repo** (separate from source repo)                                                                    | A separate public `texra-ai/texra-desktop-releases` repo unblocks `update.electronjs.org` and avoids `GH_TOKEN`-baked-into-build with the private source repo                                  |
+| 4   | Settings store  | **`conf` + Zod schemas** (NOT `electron-store`)                                                                                           | `electron-store`'s validator is AJV; `conf` (its parent) lets us reuse Zod schemas as the single source of truth, matching the codebase's existing pattern                                     |
+| 5   | Secrets         | **Electron `safeStorage` + `conf` blob** (NOT `keytar`)                                                                                   | `keytar` was archived Dec 2022; VS Code itself migrated to `safeStorage`                                                                                                                       |
+| 6   | File watcher    | **chokidar 4**                                                                                                                            | Pure JS — `@parcel/watcher` is faster on huge trees but adds a native module under asar; LaTeX project sizes don't justify the operational cost                                                |
+| 7   | Diff/preview UI | **Monaco Editor** (`monaco-editor` standalone, lazy-loaded, diff + read-only modes only)                                                  | Same diff engine VS Code uses — keeps visual + behavioral parity with the extension; bundle cost (~5–10MB) is acceptable for a desktop app and is recouped via Vite code-splitting / lazy load |
+| 8   | Menu + palette  | **Native `Menu` + custom Lit palette over existing `src/commands.ts` registry**                                                           | Avoids React/cmdk; ~150 LOC reuses what's there                                                                                                                                                |
+| 9   | OAuth deep-link | **Roll own** with `setAsDefaultProtocolClient` + `requestSingleInstanceLock` + `open-url` + `second-instance` + `process.argv` cold-start | Logic mirrors existing `src/auth/UriHandler.ts`; `electron-deeplink` adds 200 LOC of indirection over a 40-LOC implementation                                                                  |
+| 10  | macOS PATH fix  | **`fix-path`** (cached at startup) + explicit PATH augmentation belt-and-suspenders                                                       | LaTeX/pandoc binaries live in `/Library/TeX/texbin`, `/opt/homebrew/bin`; Finder-launched apps don't see these by default                                                                      |
+| 11  | Repo structure  | **pnpm workspaces, three packages** (`core`, `extension`, `desktop`)                                                                      | `workspace:*` protocol, `--filter` builds, single `tsconfig.base.json`; Turborepo is overkill for three packages                                                                               |
+| 12  | Crash reporting | **Sentry Electron SDK, opt-in, native crashes only at v1**                                                                                | Free tier sufficient; opt-in matters for academic users; performance tracing off (noisy)                                                                                                       |
 
 ### Stacks explicitly rejected
 
@@ -172,7 +172,7 @@ This split is the **largest mechanical change** in the project. Do it before the
 Existing `src/auth/UriHandler.ts` already handles the `vscode://vscode.texra/auth-callback?code=...&state=...` parse-and-dispatch logic. The Electron equivalent registers `texra://` and reuses the same parse/dispatch on the URL. Three platform-specific gotchas worth budgeting:
 
 - **macOS:** `app.on('open-url')` fires for already-running app; for cold-start the URL arrives in `process.argv`. Capture synchronously at module top.
-- **Windows:** Single-instance lock + `second-instance` event for warm starts. Cold starts have the URL in `process.argv` *before* `ready` fires (electron/electron #40173). In dev, must pass executable path explicitly: `app.setAsDefaultProtocolClient('texra', process.execPath, [path.resolve(process.argv[1])])`.
+- **Windows:** Single-instance lock + `second-instance` event for warm starts. Cold starts have the URL in `process.argv` _before_ `ready` fires (electron/electron #40173). In dev, must pass executable path explicitly: `app.setAsDefaultProtocolClient('texra', process.execPath, [path.resolve(process.argv[1])])`.
 - **Linux:** Same pattern but desktop-environment specific. Test on GNOME, KDE.
 
 `electron-deeplink` adds ~200 LOC of indirection. Roll our own at ~40 LOC.
@@ -228,20 +228,20 @@ TeXRA/
 
 What `desktop/` imports from `core/` verbatim:
 
-| Path under core | What it provides | LOC (approx) |
-|---|---|---|
-| `agent/` | Core, implementations, runtime, toolUse, model handlers | ~141 files |
-| `model/` | Registry, capabilities, pricing | small |
-| `latex/` | Processing, formatting, diff, TikZ, PDF | ~20 files |
-| `tools/` | Tool implementations (~120 files) | large |
-| `shared/` | IPC schemas, message types — doubles as Electron IPC contract | ~75 files |
-| `replacement/` | Text cleanup rules | ~23 files |
-| `eventBus/` | Progress events | ~2 files |
-| `webview/frontend/` | Main Lit app | mounted as-is |
-| `progressView/frontend/` | Progress board Lit app | mounted as-is |
-| `settingsView/frontend/` | Settings dashboard Lit app | mounted as-is |
-| `platform/` | The interfaces themselves | ~470 LOC |
-| `utils/` (non-vscode parts) | Generic helpers | varies |
+| Path under core             | What it provides                                              | LOC (approx)  |
+| --------------------------- | ------------------------------------------------------------- | ------------- |
+| `agent/`                    | Core, implementations, runtime, toolUse, model handlers       | ~141 files    |
+| `model/`                    | Registry, capabilities, pricing                               | small         |
+| `latex/`                    | Processing, formatting, diff, TikZ, PDF                       | ~20 files     |
+| `tools/`                    | Tool implementations (~120 files)                             | large         |
+| `shared/`                   | IPC schemas, message types — doubles as Electron IPC contract | ~75 files     |
+| `replacement/`              | Text cleanup rules                                            | ~23 files     |
+| `eventBus/`                 | Progress events                                               | ~2 files      |
+| `webview/frontend/`         | Main Lit app                                                  | mounted as-is |
+| `progressView/frontend/`    | Progress board Lit app                                        | mounted as-is |
+| `settingsView/frontend/`    | Settings dashboard Lit app                                    | mounted as-is |
+| `platform/`                 | The interfaces themselves                                     | ~470 LOC      |
+| `utils/` (non-vscode parts) | Generic helpers                                               | varies        |
 
 What `desktop/` does **not** import from `extension/`:
 
@@ -257,16 +257,16 @@ What `desktop/` does **not** import from `extension/`:
 
 Eight files, ~250–400 LOC total. Each mirrors an existing VS Code impl in `src/frontend/vscode/`.
 
-| Interface | VS Code (today) | Electron |
-|---|---|---|
-| `ConfigProvider` | `vscode.workspace.getConfiguration` w/ 3-namespace fallback | `conf` instance + Zod schema mirroring `package.json` `contributes.configuration` |
-| `StateStore` (global) | `ExtensionContext.globalState` | `conf` (file: `state.global.json`) under `app.getPath('userData')` |
-| `StateStore` (workspace) | `ExtensionContext.workspaceState` | `conf` per-project: `<project>/.texra/state.json` |
-| `LogBackend` | `vscode.OutputChannel` | `electron-log` to `app.getPath('logs')/` + in-app log viewer pane |
-| `FileSystemProvider` | `vscode.workspace.fs` | `node:fs/promises` + `fs-extra` (already a dep) |
-| `WorkspaceProvider` | `workspace.workspaceFolders[0]` + `asRelativePath` | Project-folder model + `chokidar`. "Open Project" replaces "Open Folder." |
-| `StorageProvider` | `context.storageUri`, `context.globalStorageUri` | `app.getPath('userData')` + per-project `<project>/.texra/` |
-| `PlatformSecrets` | `context.secrets` | `safeStorage.encryptString` over a `conf`-backed JSON blob |
+| Interface                | VS Code (today)                                             | Electron                                                                          |
+| ------------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `ConfigProvider`         | `vscode.workspace.getConfiguration` w/ 3-namespace fallback | `conf` instance + Zod schema mirroring `package.json` `contributes.configuration` |
+| `StateStore` (global)    | `ExtensionContext.globalState`                              | `conf` (file: `state.global.json`) under `app.getPath('userData')`                |
+| `StateStore` (workspace) | `ExtensionContext.workspaceState`                           | `conf` per-project: `<project>/.texra/state.json`                                 |
+| `LogBackend`             | `vscode.OutputChannel`                                      | `electron-log` to `app.getPath('logs')/` + in-app log viewer pane                 |
+| `FileSystemProvider`     | `vscode.workspace.fs`                                       | `node:fs/promises` + `fs-extra` (already a dep)                                   |
+| `WorkspaceProvider`      | `workspace.workspaceFolders[0]` + `asRelativePath`          | Project-folder model + `chokidar`. "Open Project" replaces "Open Folder."         |
+| `StorageProvider`        | `context.storageUri`, `context.globalStorageUri`            | `app.getPath('userData')` + per-project `<project>/.texra/`                       |
+| `PlatformSecrets`        | `context.secrets`                                           | `safeStorage.encryptString` over a `conf`-backed JSON blob                        |
 
 `initPlatform()` is called once at top of `main/index.ts`, before any agent code runs. Mirrors the call site in `src/extension.ts:144-153`.
 
@@ -289,21 +289,21 @@ Net change to message-handling code: zero. Net change to transport code: one new
 
 ### 7.6 Replacing VS Code-specific UX
 
-| VS Code feature | Electron replacement |
-|---|---|
-| Activity bar view (`texra.mainView`) | Default `BrowserWindow` mounting `<main-app>` |
+| VS Code feature                                                             | Electron replacement                                                                                                                                         |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Activity bar view (`texra.mainView`)                                        | Default `BrowserWindow` mounting `<main-app>`                                                                                                                |
 | `vscode.commands.executeCommand('vscode.diff', ...)` for tool-edit approval | `<texra-diff-view>` Lit component wrapping `monaco.editor.createDiffEditor`, lazy-loaded; rendered in a modal `BrowserWindow` (or embedded in progress view) |
-| `vscode.window.showInformationMessage` (et al.) | `dialog.showMessageBox` from main; in-app toast for non-blocking |
-| Status bar | Footer in main window (already mocked in webview frontend) |
-| Walkthrough (`getting-started.md`) | First-run modal rendering the same markdown |
-| Command palette | Lit palette (Cmd/Ctrl-Shift-P) over the existing `src/commands.ts` registry; `globalShortcut` only when window focused |
-| Keybindings (`package.json` `keybindings`) | `app.on('browser-window-focus')` + key handlers in renderer; native menu accelerators for app-level shortcuts |
-| `vscode.AuthenticationProvider` | `texra://` protocol handler; tokens land in `safeStorage` |
-| Settings UI (`contributes.configuration`) | Reuse the existing `settingsView` Lit app — point it at `conf` instead of `vscode.workspace.getConfiguration` |
-| `vscode.window.tabGroups.close()` | Window-close API for the diff modal |
-| `vscode.window.onDidChangeVisibleTextEditors` | Dropped — diff-view ready-state comes from renderer load event |
-| `vscode.workspace.onDidChangeConfiguration` | `conf`'s `onDidChange` |
-| `vscode.EventEmitter` (in `src/auth/tier/`, `src/auth/serverKeys/`) | Node `EventEmitter` (mechanical swap, ~10 sites) |
+| `vscode.window.showInformationMessage` (et al.)                             | `dialog.showMessageBox` from main; in-app toast for non-blocking                                                                                             |
+| Status bar                                                                  | Footer in main window (already mocked in webview frontend)                                                                                                   |
+| Walkthrough (`getting-started.md`)                                          | First-run modal rendering the same markdown                                                                                                                  |
+| Command palette                                                             | Lit palette (Cmd/Ctrl-Shift-P) over the existing `src/commands.ts` registry; `globalShortcut` only when window focused                                       |
+| Keybindings (`package.json` `keybindings`)                                  | `app.on('browser-window-focus')` + key handlers in renderer; native menu accelerators for app-level shortcuts                                                |
+| `vscode.AuthenticationProvider`                                             | `texra://` protocol handler; tokens land in `safeStorage`                                                                                                    |
+| Settings UI (`contributes.configuration`)                                   | Reuse the existing `settingsView` Lit app — point it at `conf` instead of `vscode.workspace.getConfiguration`                                                |
+| `vscode.window.tabGroups.close()`                                           | Window-close API for the diff modal                                                                                                                          |
+| `vscode.window.onDidChangeVisibleTextEditors`                               | Dropped — diff-view ready-state comes from renderer load event                                                                                               |
+| `vscode.workspace.onDidChangeConfiguration`                                 | `conf`'s `onDidChange`                                                                                                                                       |
+| `vscode.EventEmitter` (in `src/auth/tier/`, `src/auth/serverKeys/`)         | Node `EventEmitter` (mechanical swap, ~10 sites)                                                                                                             |
 
 ## 8. Build & compilation
 
@@ -425,23 +425,23 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 
 ## 10. Risks & mitigations
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| Hidden `vscode` imports in nominally-agnostic zones break Electron build | Medium | Medium | Build-time guard plugin in CI. Re-run scout after every refactor. |
-| `@vscode-elements/elements` styling assumes VS Code CSS variables | Medium | Low | Library ships its own CSS variables; we override the few VS Code-only ones with theme tokens. Already partial in webview styles. |
-| `src/utils/config/configUtils.ts` refactor breaks extension | Medium | High | Phase 0 explicitly verifies VSIX boots after refactor. Land behind feature flag if needed. |
-| macOS GUI launch can't find `pdflatex`/`pandoc`/`gm` | High | High | `fix-path` at startup + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`. Log resolved PATH for support diagnosis. |
-| Windows deep-link cold-start bug (electron #40173) | High | Medium | Capture `process.argv` synchronously at module top of `main/index.ts`; not in async handler. |
-| Linux `safeStorage` falls back to "basic" mode without keyring | Medium | Medium | Detect via `getSelectedStorageBackend()`, surface one-time warning, document keyring install. |
-| Code-signing budget surprise | Medium | High | Budget Azure Trusted Signing (~$10/mo) and Apple Developer Program ($99/yr) **before** Phase 6. |
-| Auto-update certificate expires / mac notarization breaks | Low | High | Document key rotation in runbook. CI uploads test build to `latest-mac.yml` weekly to catch regressions. |
-| `@openai/codex-sdk` binaries don't unpack from asar | Medium | Medium | `asarUnpack: ['**/node_modules/@openai/codex-*/**']` in `electron-builder.yml`. Test on all platforms. |
-| User confusion: extension and desktop sharing/colliding settings on same machine | Medium | Low | Distinct `userData` paths. Phase 7 ships a one-time importer for API keys + settings from the VS Code globalState file. |
-| Monaco worker resolution fails under asar | Medium | Medium | Test all OSes in CI; configure `MonacoEnvironment.getWorker` against `?worker`-built chunks; if asar bites, `asarUnpack` the worker chunks. |
-| Monaco bundle inflates renderer cold-start | Medium | Low | Lazy-load via `await import('monaco-editor')` only when diff opens; ship only registered languages. Initial window doesn't load Monaco at all. |
-| Release-repo publish workflow leaks PAT | Low | High | Use a GitHub App over a PAT; scope `contents: write` to the release repo only; rotate annually. |
-| Diff performance on large files | Low | Low | Monaco handles 100k-line files comfortably; hard cap at ~10MB with "open in external" fallback. |
-| 943-line `SupabaseAuthProvider` rewrite cost underestimated | Medium | Medium | Phase 4 budget is 1 week; if it slips, scope GitHub auth as fast-follow rather than v1. |
+| Risk                                                                             | Likelihood | Impact | Mitigation                                                                                                                                              |
+| -------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hidden `vscode` imports in nominally-agnostic zones break Electron build         | Medium     | Medium | Build-time guard plugin in CI. Re-run scout after every refactor.                                                                                       |
+| `@vscode-elements/elements` styling assumes VS Code CSS variables                | Medium     | Low    | Library ships its own CSS variables; we override the few VS Code-only ones with theme tokens. Already partial in webview styles.                        |
+| `src/utils/config/configUtils.ts` refactor breaks extension                      | Medium     | High   | Phase 0 explicitly verifies VSIX boots after refactor. Land behind feature flag if needed.                                                              |
+| macOS GUI launch can't find `pdflatex`/`pandoc`/`gm`                             | High       | High   | `fix-path` at startup + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`. Log resolved PATH for support diagnosis. |
+| Windows deep-link cold-start bug (electron #40173)                               | High       | Medium | Capture `process.argv` synchronously at module top of `main/index.ts`; not in async handler.                                                            |
+| Linux `safeStorage` falls back to "basic" mode without keyring                   | Medium     | Medium | Detect via `getSelectedStorageBackend()`, surface one-time warning, document keyring install.                                                           |
+| Code-signing budget surprise                                                     | Medium     | High   | Budget Azure Trusted Signing (~$10/mo) and Apple Developer Program ($99/yr) **before** Phase 6.                                                         |
+| Auto-update certificate expires / mac notarization breaks                        | Low        | High   | Document key rotation in runbook. CI uploads test build to `latest-mac.yml` weekly to catch regressions.                                                |
+| `@openai/codex-sdk` binaries don't unpack from asar                              | Medium     | Medium | `asarUnpack: ['**/node_modules/@openai/codex-*/**']` in `electron-builder.yml`. Test on all platforms.                                                  |
+| User confusion: extension and desktop sharing/colliding settings on same machine | Medium     | Low    | Distinct `userData` paths. Phase 7 ships a one-time importer for API keys + settings from the VS Code globalState file.                                 |
+| Monaco worker resolution fails under asar                                        | Medium     | Medium | Test all OSes in CI; configure `MonacoEnvironment.getWorker` against `?worker`-built chunks; if asar bites, `asarUnpack` the worker chunks.             |
+| Monaco bundle inflates renderer cold-start                                       | Medium     | Low    | Lazy-load via `await import('monaco-editor')` only when diff opens; ship only registered languages. Initial window doesn't load Monaco at all.          |
+| Release-repo publish workflow leaks PAT                                          | Low        | High   | Use a GitHub App over a PAT; scope `contents: write` to the release repo only; rotate annually.                                                         |
+| Diff performance on large files                                                  | Low        | Low    | Monaco handles 100k-line files comfortably; hard cap at ~10MB with "open in external" fallback.                                                         |
+| 943-line `SupabaseAuthProvider` rewrite cost underestimated                      | Medium     | Medium | Phase 4 budget is 1 week; if it slips, scope GitHub auth as fast-follow rather than v1.                                                                 |
 
 ## 11. Success criteria
 
@@ -468,20 +468,20 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 
 From the parallel scout:
 
-| Metric | Value |
-|---|---|
-| Total TS/TSX files in `src/` | 853 |
-| Files importing `vscode` | 106 (12.4%) |
-| `Platform` interface LOC | ~470 |
-| Existing VS Code platform impl LOC | ~303 (6 files) |
-| Estimated Electron platform impl LOC | ~250–400 (8 files) |
-| Lines in `nativeToolEditApproval.ts` (the diff blocker) | 439 |
-| Estimated `<texra-diff-view>` Lit wrapper LOC (Monaco hosted inside) | ~200–400 |
-| Lines in `SupabaseAuthProvider.ts` | 943 |
-| Estimated reuse from `SupabaseAuthProvider.ts` | ~80% |
-| Estimated `desktop/src/` total LOC at v1 | ~3,000 |
-| Estimated diff in `core/` for monorepo split | ~0 (path aliases handle it) |
-| Estimated diff in `core/` for behavioral changes | ~500 (configUtils refactor + EventEmitter swap) |
+| Metric                                                               | Value                                           |
+| -------------------------------------------------------------------- | ----------------------------------------------- |
+| Total TS/TSX files in `src/`                                         | 853                                             |
+| Files importing `vscode`                                             | 106 (12.4%)                                     |
+| `Platform` interface LOC                                             | ~470                                            |
+| Existing VS Code platform impl LOC                                   | ~303 (6 files)                                  |
+| Estimated Electron platform impl LOC                                 | ~250–400 (8 files)                              |
+| Lines in `nativeToolEditApproval.ts` (the diff blocker)              | 439                                             |
+| Estimated `<texra-diff-view>` Lit wrapper LOC (Monaco hosted inside) | ~200–400                                        |
+| Lines in `SupabaseAuthProvider.ts`                                   | 943                                             |
+| Estimated reuse from `SupabaseAuthProvider.ts`                       | ~80%                                            |
+| Estimated `desktop/src/` total LOC at v1                             | ~3,000                                          |
+| Estimated diff in `core/` for monorepo split                         | ~0 (path aliases handle it)                     |
+| Estimated diff in `core/` for behavioral changes                     | ~500 (configUtils refactor + EventEmitter swap) |
 
 ## 14. Tech stack one-liner
 
