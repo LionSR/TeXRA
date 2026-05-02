@@ -7,6 +7,7 @@ export * from './agent';
 export * from './fileFields';
 export * from './proposalFields';
 export * from './toolConfig';
+export * from './settingsConfiguration';
 export * from './errors';
 export * from './usage';
 export * from './contextManagement';
