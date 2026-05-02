@@ -32,10 +32,9 @@ export class QueuedFollowUps extends LitElement {
 
       /* Info-style collapsible for queued messages */
       .queued-collapsible {
-        border: var(--border-thin) solid
-          var(--vscode-inputValidation-infoBorder);
+        border: var(--border-thin) solid var(--texra-inputValidation-infoBorder);
         border-radius: var(--border-radius);
-        background-color: var(--vscode-inputValidation-infoBackground);
+        background-color: var(--texra-inputValidation-infoBackground);
       }
 
       .queued-collapsible::part(header) {
@@ -61,7 +60,7 @@ export class QueuedFollowUps extends LitElement {
         padding: var(--spacing-tiny) var(--spacing-small);
         font-size: var(--font-size);
         line-height: var(--line-height-normal);
-        background-color: var(--vscode-editor-background);
+        background-color: var(--texra-editor-background);
         border-radius: var(--border-radius-small);
         border: var(--border-thin) solid var(--color-border);
         min-width: 0;
@@ -72,7 +71,7 @@ export class QueuedFollowUps extends LitElement {
         font-size: var(--font-size-icon-sm);
         line-height: var(--line-height-normal);
         margin-top: var(--border-thin);
-        color: var(--vscode-inputValidation-infoBorder);
+        color: var(--texra-inputValidation-infoBorder);
       }
 
       .queued-follow-up-text {
@@ -80,7 +79,7 @@ export class QueuedFollowUps extends LitElement {
         min-width: 0;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
     `,
   ];

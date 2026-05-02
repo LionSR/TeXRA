@@ -8,7 +8,7 @@ export const statusIndicatorStyles: CSSResult = css`
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
-    background-color: var(--vscode-descriptionForeground);
+    background-color: var(--texra-descriptionForeground);
     opacity: var(--opacity-subtle, 0.7);
     transition:
       background-color var(--transition-slow),
@@ -25,7 +25,7 @@ export const statusIndicatorStyles: CSSResult = css`
 
   .status-indicator.is-stopped,
   .tab-status.is-stopped {
-    background-color: var(--vscode-descriptionForeground);
+    background-color: var(--texra-descriptionForeground);
     opacity: var(--opacity-subtle, 0.7);
   }
 
@@ -37,28 +37,28 @@ export const statusIndicatorStyles: CSSResult = css`
 
   .status-indicator.is-waiting,
   .tab-status.is-waiting {
-    background-color: var(--vscode-textLink-foreground);
+    background-color: var(--texra-textLink-foreground);
     opacity: var(--opacity-full);
     animation: pulse-scale 3s infinite;
   }
 
   .status-indicator.is-resuming,
   .tab-status.is-resuming {
-    background-color: var(--vscode-textLink-foreground);
+    background-color: var(--texra-textLink-foreground);
     opacity: var(--opacity-full);
     animation: pulse-scale 1.5s infinite;
   }
 
   .status-indicator.is-initializing,
   .tab-status.is-initializing {
-    background-color: var(--vscode-descriptionForeground);
+    background-color: var(--texra-descriptionForeground);
     opacity: var(--opacity-full);
     animation: pulse-scale 2.5s infinite;
   }
 
   .status-indicator.is-ready,
   .tab-status.is-ready {
-    background-color: var(--vscode-descriptionForeground);
+    background-color: var(--texra-descriptionForeground);
     opacity: var(--opacity-disabled, 0.5);
   }
 
@@ -72,7 +72,7 @@ export const statusIndicatorStyles: CSSResult = css`
   }
 
   .status-text.is-stopped {
-    color: var(--color-text-secondary, var(--vscode-descriptionForeground));
+    color: var(--color-text-secondary, var(--texra-descriptionForeground));
   }
 
   .status-text.is-error {
@@ -82,6 +82,6 @@ export const statusIndicatorStyles: CSSResult = css`
   .status-text.is-waiting,
   .status-text.is-resuming,
   .status-text.is-initializing {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
   }
 `;

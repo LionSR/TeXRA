@@ -117,7 +117,7 @@ export class ToolsTab extends LitElement {
         gap: var(--spacing-small);
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-medium);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       .tools-summary {
@@ -142,13 +142,13 @@ export class ToolsTab extends LitElement {
 
       .tools-health-ring__track {
         fill: none;
-        stroke: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.25));
+        stroke: var(--texra-editorWidget-border, rgba(128, 128, 128, 0.25));
         stroke-width: 4;
       }
 
       .tools-health-ring__available {
         fill: none;
-        stroke: var(--vscode-testing-iconPassed, #73c991);
+        stroke: var(--texra-testing-iconPassed, #73c991);
         stroke-width: 4;
         stroke-linecap: round;
         transition: stroke-dashoffset var(--transition-slow);
@@ -156,7 +156,7 @@ export class ToolsTab extends LitElement {
 
       .tools-health-ring__missing {
         fill: none;
-        stroke: var(--vscode-testing-iconFailed, #f48771);
+        stroke: var(--texra-testing-iconFailed, #f48771);
         stroke-width: 4;
         stroke-linecap: round;
         transition: stroke-dashoffset var(--transition-slow);
@@ -179,11 +179,11 @@ export class ToolsTab extends LitElement {
       }
 
       .tools-stat-available {
-        color: var(--vscode-testing-iconPassed, #73c991);
+        color: var(--texra-testing-iconPassed, #73c991);
       }
 
       .tools-stat-missing {
-        color: var(--vscode-testing-iconFailed, #f48771);
+        color: var(--texra-testing-iconFailed, #f48771);
       }
 
       /* Base recheck-btn styles provided by .tab-action-btn in commonViewStyles */
@@ -237,7 +237,7 @@ export class ToolsTab extends LitElement {
         margin-bottom: var(--spacing-small);
         border-radius: var(--border-radius);
         background: var(
-          --vscode-textCodeBlock-background,
+          --texra-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
         );
       }

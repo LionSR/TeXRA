@@ -26,11 +26,11 @@ export class WorkflowHintBanner extends LitElement {
       gap: 8px;
       padding: 8px 10px;
       margin: 0 0 8px 0;
-      background: var(--vscode-textBlockQuote-background);
-      border-left: 3px solid var(--vscode-textLink-foreground);
+      background: var(--texra-textBlockQuote-background);
+      border-left: 3px solid var(--texra-textLink-foreground);
       border-radius: 3px;
       font-size: 0.9em;
-      color: var(--vscode-foreground);
+      color: var(--texra-foreground);
     }
     .text {
       flex: 1;
