@@ -17,7 +17,7 @@ function shouldNotify(
   globPattern: string,
   relativePath: string | null,
 ): boolean {
-  if (relativePath == null) return true;
+  if (relativePath == null) return false;
   return minimatch(normalizeRelativePath(relativePath), globPattern, {
     dot: true,
   });
@@ -52,16 +52,20 @@ function createRecursiveFallbackWatcher(
   globPattern: string,
   listener: () => void,
 ): { dispose(): void } {
-  const watchers: fs.FSWatcher[] = [];
+  let disposed = false;
+  const watchers = new Set<fs.FSWatcher>();
   const watchedDirectories = new Set<string>();
 
   const watchDirectory = (directory: string): void => {
+    if (disposed) return;
     if (watchedDirectories.has(directory)) return;
     watchedDirectories.add(directory);
 
     let watcher: fs.FSWatcher;
     try {
       watcher = fs.watch(directory, (_event, filename) => {
+        if (disposed) return;
+
         const absolutePath =
           filename == null ? null : path.join(directory, filename.toString());
         const relativePath =
@@ -90,10 +94,11 @@ function createRecursiveFallbackWatcher(
 
     watcher.on('error', () => {
       closeWatcher(watcher);
+      watchers.delete(watcher);
       watchedDirectories.delete(directory);
     });
 
-    watchers.push(watcher);
+    watchers.add(watcher);
   };
 
   for (const directory of listDirectories(root)) {
@@ -101,7 +106,14 @@ function createRecursiveFallbackWatcher(
   }
 
   return {
-    dispose: () => watchers.forEach(closeWatcher),
+    dispose: () => {
+      disposed = true;
+      for (const watcher of watchers) {
+        closeWatcher(watcher);
+      }
+      watchers.clear();
+      watchedDirectories.clear();
+    },
   };
 }
 
@@ -127,10 +139,13 @@ export const nodeWorkspace: WorkspaceProvider = {
     }
 
     try {
+      let disposed = false;
       const watcher = fs.watch(
         root,
         { recursive: true },
         (_event, filename) => {
+          if (disposed) return;
+
           const absolutePath =
             filename == null ? null : path.join(root, filename.toString());
           const relativePath =
@@ -142,7 +157,10 @@ export const nodeWorkspace: WorkspaceProvider = {
       );
       watcher.on('error', () => closeWatcher(watcher));
       return {
-        dispose: () => closeWatcher(watcher),
+        dispose: () => {
+          disposed = true;
+          closeWatcher(watcher);
+        },
       };
     } catch {
       return createRecursiveFallbackWatcher(root, globPattern, listener);
