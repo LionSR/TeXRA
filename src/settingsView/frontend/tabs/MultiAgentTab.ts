@@ -51,7 +51,7 @@ export class MultiAgentTab extends LitElement {
 
       .setting-block {
         padding: var(--spacing-medium);
-        background-color: var(--vscode-editor-inactiveSelectionBackground);
+        background-color: var(--texra-editor-inactiveSelectionBackground);
         border-radius: var(--border-radius);
       }
 
@@ -80,7 +80,7 @@ export class MultiAgentTab extends LitElement {
         flex-direction: column;
         gap: var(--spacing-small);
         padding: var(--spacing-medium);
-        background-color: var(--vscode-editor-inactiveSelectionBackground);
+        background-color: var(--texra-editor-inactiveSelectionBackground);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
         cursor: pointer;
@@ -90,25 +90,25 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-card:hover {
-        border-color: var(--vscode-focusBorder);
+        border-color: var(--texra-focusBorder);
         background-color: var(
-          --vscode-list-hoverBackground,
+          --texra-list-hoverBackground,
           rgba(128, 128, 128, 0.1)
         );
       }
 
       .preset-card:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: 1px;
       }
 
       .preset-card.active {
-        background-color: var(--vscode-list-activeSelectionBackground);
+        background-color: var(--texra-list-activeSelectionBackground);
         color: var(
-          --vscode-list-activeSelectionForeground,
-          var(--vscode-foreground)
+          --texra-list-activeSelectionForeground,
+          var(--texra-foreground)
         );
-        border-color: var(--vscode-focusBorder);
+        border-color: var(--texra-focusBorder);
       }
 
       .preset-card.active .preset-card-name,
@@ -125,10 +125,10 @@ export class MultiAgentTab extends LitElement {
         padding: var(--border-thin) var(--border-radius-large);
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-medium);
-        color: var(--vscode-focusBorder);
+        color: var(--texra-focusBorder);
         background: color-mix(
           in srgb,
-          var(--vscode-focusBorder) 15%,
+          var(--texra-focusBorder) 15%,
           transparent
         );
         border-radius: var(--border-radius-medium);
@@ -146,14 +146,14 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card-icon {
         font-size: var(--font-size-lg);
-        color: var(--vscode-focusBorder);
+        color: var(--texra-focusBorder);
         flex-shrink: 0;
       }
 
       .preset-card-name {
         font-size: var(--font-size-sm);
         font-weight: var(--font-weight-medium);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         flex: 1;
         min-width: 0;
         overflow: hidden;
@@ -188,16 +188,16 @@ export class MultiAgentTab extends LitElement {
         gap: var(--spacing-tiny);
         padding: var(--border-thin) var(--border-radius-large);
         font-size: var(--font-size-xs);
-        color: var(--vscode-badge-foreground);
-        background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
+        color: var(--texra-badge-foreground);
+        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);
       }
 
       .preset-agent-badge--orchestrator {
-        color: var(--vscode-button-foreground);
-        background: var(--vscode-button-background);
+        color: var(--texra-button-foreground);
+        background: var(--texra-button-background);
         border: var(--border-thin) solid
-          var(--vscode-button-background, var(--vscode-focusBorder));
+          var(--texra-button-background, var(--texra-focusBorder));
         font-weight: var(--font-weight-semibold);
       }
 
@@ -223,11 +223,11 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-delete-btn:hover {
-        color: var(--vscode-errorForeground);
+        color: var(--texra-errorForeground);
       }
 
       .preset-delete-btn:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }
@@ -247,7 +247,7 @@ export class MultiAgentTab extends LitElement {
       .reliability-row label {
         min-width: 140px;
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       .reliability-input {

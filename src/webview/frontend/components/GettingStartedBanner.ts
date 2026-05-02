@@ -35,10 +35,9 @@ export class GettingStartedBanner extends LitElement {
         border-radius: var(--border-radius);
         padding: var(--spacing-small) var(--spacing-medium);
         margin-bottom: var(--spacing-large);
-        background-color: var(--vscode-inputValidation-infoBackground);
-        color: var(--vscode-inputValidation-infoForeground);
-        border: var(--border-thin) solid
-          var(--vscode-inputValidation-infoBorder);
+        background-color: var(--texra-inputValidation-infoBackground);
+        color: var(--texra-inputValidation-infoForeground);
+        border: var(--border-thin) solid var(--texra-inputValidation-infoBorder);
         line-height: var(--line-height-relaxed);
       }
 

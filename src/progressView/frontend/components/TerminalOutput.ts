@@ -13,22 +13,22 @@ const DEFAULT_THEME = {
 
 /** VS Code terminal ANSI color CSS variables mapped to xterm.js theme keys. */
 const ANSI_COLOR_MAP = [
-  ['black', '--vscode-terminal-ansiBlack'],
-  ['red', '--vscode-terminal-ansiRed'],
-  ['green', '--vscode-terminal-ansiGreen'],
-  ['yellow', '--vscode-terminal-ansiYellow'],
-  ['blue', '--vscode-terminal-ansiBlue'],
-  ['magenta', '--vscode-terminal-ansiMagenta'],
-  ['cyan', '--vscode-terminal-ansiCyan'],
-  ['white', '--vscode-terminal-ansiWhite'],
-  ['brightBlack', '--vscode-terminal-ansiBrightBlack'],
-  ['brightRed', '--vscode-terminal-ansiBrightRed'],
-  ['brightGreen', '--vscode-terminal-ansiBrightGreen'],
-  ['brightYellow', '--vscode-terminal-ansiBrightYellow'],
-  ['brightBlue', '--vscode-terminal-ansiBrightBlue'],
-  ['brightMagenta', '--vscode-terminal-ansiBrightMagenta'],
-  ['brightCyan', '--vscode-terminal-ansiBrightCyan'],
-  ['brightWhite', '--vscode-terminal-ansiBrightWhite'],
+  ['black', '--texra-terminal-ansiBlack'],
+  ['red', '--texra-terminal-ansiRed'],
+  ['green', '--texra-terminal-ansiGreen'],
+  ['yellow', '--texra-terminal-ansiYellow'],
+  ['blue', '--texra-terminal-ansiBlue'],
+  ['magenta', '--texra-terminal-ansiMagenta'],
+  ['cyan', '--texra-terminal-ansiCyan'],
+  ['white', '--texra-terminal-ansiWhite'],
+  ['brightBlack', '--texra-terminal-ansiBrightBlack'],
+  ['brightRed', '--texra-terminal-ansiBrightRed'],
+  ['brightGreen', '--texra-terminal-ansiBrightGreen'],
+  ['brightYellow', '--texra-terminal-ansiBrightYellow'],
+  ['brightBlue', '--texra-terminal-ansiBrightBlue'],
+  ['brightMagenta', '--texra-terminal-ansiBrightMagenta'],
+  ['brightCyan', '--texra-terminal-ansiBrightCyan'],
+  ['brightWhite', '--texra-terminal-ansiBrightWhite'],
 ] as const;
 
 const MIN_SCROLLBACK = 4_000;
@@ -223,10 +223,10 @@ export class TerminalOutput extends LitElement {
 
     const theme: Record<string, string> = {
       background:
-        styles.getPropertyValue('--vscode-editor-background').trim() ||
+        styles.getPropertyValue('--texra-editor-background').trim() ||
         DEFAULT_THEME.background,
       foreground:
-        styles.getPropertyValue('--vscode-editor-foreground').trim() ||
+        styles.getPropertyValue('--texra-editor-foreground').trim() ||
         DEFAULT_THEME.foreground,
     };
 
@@ -236,17 +236,17 @@ export class TerminalOutput extends LitElement {
     }
 
     const cursor = styles
-      .getPropertyValue('--vscode-terminalCursor-foreground')
+      .getPropertyValue('--texra-terminalCursor-foreground')
       .trim();
     if (cursor) theme['cursor'] = cursor;
 
     const selectionBg = styles
-      .getPropertyValue('--vscode-terminal-selectionBackground')
+      .getPropertyValue('--texra-terminal-selectionBackground')
       .trim();
     if (selectionBg) theme['selectionBackground'] = selectionBg;
 
     const fontFamily =
-      styles.getPropertyValue('--vscode-editor-font-family').trim() ||
+      styles.getPropertyValue('--texra-editor-font-family').trim() ||
       DEFAULT_THEME.fontFamily;
 
     return { theme, fontFamily };
