@@ -349,11 +349,11 @@ This is a problem #16 (FakePlatform + Vitest migration) doesn't just optimize �
 
 **Three test surfaces, in increasing cost:**
 
-| Surface | Tooling | Where it runs | Speed | What it covers |
-|---|---|---|---|---|
-| **Kernel tests** | Vitest + `FakePlatform` | Pure Node (any CI) | <1s for the suite | Agent runtime, model handlers, LaTeX processing, tool implementations, replacement rules, schema validation. ~80% of the test budget. The existing 25 Mocha tests get migrated. |
-| **Platform-impl tests** | Vitest against real platform impls (no UI) | Node + Electron's main-process libs | seconds | The eight `desktop/main/platform/*.ts` files (and the existing VS Code adapters in `extension/frontend/vscode/`). Each runs the same invariant suite `FakePlatform` passes — guarantees behavioral parity. ~15% of the budget. |
-| **E2E tests** | Playwright + `playwright-electron` | Spawns the packaged Electron app, drives the UI | tens of seconds | Sign-in flow, agent execution, tool-edit approval, project switcher. A handful of golden-path scenarios. ~5% of the budget. |
+| Surface                 | Tooling                                    | Where it runs                                   | Speed             | What it covers                                                                                                                                                                                                                 |
+| ----------------------- | ------------------------------------------ | ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Kernel tests**        | Vitest + `FakePlatform`                    | Pure Node (any CI)                              | <1s for the suite | Agent runtime, model handlers, LaTeX processing, tool implementations, replacement rules, schema validation. ~80% of the test budget. The existing 25 Mocha tests get migrated.                                                |
+| **Platform-impl tests** | Vitest against real platform impls (no UI) | Node + Electron's main-process libs             | seconds           | The eight `desktop/main/platform/*.ts` files (and the existing VS Code adapters in `extension/frontend/vscode/`). Each runs the same invariant suite `FakePlatform` passes — guarantees behavioral parity. ~15% of the budget. |
+| **E2E tests**           | Playwright + `playwright-electron`         | Spawns the packaged Electron app, drives the UI | tens of seconds   | Sign-in flow, agent execution, tool-edit approval, project switcher. A handful of golden-path scenarios. ~5% of the budget.                                                                                                    |
 
 **What we deliberately do NOT do:**
 
