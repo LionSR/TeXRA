@@ -152,7 +152,7 @@ Each pick is grounded in current (May 2026) state-of-the-art research and the ac
 | --- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Bundler / dev   | **electron-vite**                                                                                                                         | Purpose-built for the Vite + esbuild split we already run; Forge's Vite plugin is officially experimental as of 7.5.0                                                                                                                                                     |
 | 2   | Packaging       | **electron-builder**                                                                                                                      | Best-in-class signed mac universal + signed Windows NSIS + AppImage/deb/rpm in one config; integrates with `electron-updater`                                                                                                                                             |
-| 3   | Auto-update     | **electron-updater → public release repo** (separate from source repo)                                                                    | A separate public `texra-ai/texra-desktop-releases` repo unblocks `update.electronjs.org` and avoids `GH_TOKEN`-baked-into-build with the private source repo                                                                                                             |
+| 3   | Auto-update     | **electron-updater → public release repo** (separate from source repo)                                                                    | Avoids `GH_TOKEN`-in-binary problems; the public repo is for `electron-builder`'s `latest*.yml` flow only. We don't layer `update.electronjs.org` (Squirrel-only, mac+win, no Linux). |
 | 4   | Settings store  | **`conf` + Zod schemas** (NOT `electron-store`)                                                                                           | `electron-store`'s validator is AJV; `conf` (its parent) lets us reuse Zod schemas as the single source of truth, matching the codebase's existing pattern                                                                                                                |
 | 5   | Secrets         | **Electron `safeStorage` + `conf` blob** (NOT `keytar`)                                                                                   | `keytar` was archived Dec 2022; VS Code itself migrated to `safeStorage`                                                                                                                                                                                                  |
 | 6   | File watcher    | **chokidar 4**                                                                                                                            | Pure JS — `@parcel/watcher` is faster on huge trees but adds a native module under asar; LaTeX project sizes don't justify the operational cost                                                                                                                           |
@@ -167,7 +167,7 @@ Each pick is grounded in current (May 2026) state-of-the-art research and the ac
 
 - **Tauri** — would force rewriting `@anthropic-ai/sdk`, `@google/genai`, `openai`, `execa`, `pdf2pic`, `tar` for a Rust/WebView2 runtime. Not "easy reuse."
 - **Electron Forge instead of electron-builder** — Forge's Vite plugin is experimental; mixing Forge makers with electron-vite means two config dialects.
-- **`update.electronjs.org` directly against the source repo** — source repo is private. We sidestep this by publishing builds to a separate public `texra-ai/texra-desktop-releases` repo (see §6.2.5).
+- **`update.electronjs.org`** — Squirrel-based feed service for `autoUpdater` (mac + win only, no Linux). Not a drop-in fallback for `electron-builder`'s `latest*.yml` artifact flow. The public release repo is built for `electron-updater`, not for this service.
 - **`electron-store`** — wraps `conf` and adds AJV; we want `conf` direct + Zod.
 - **`keytar`** / **`@napi-rs/keyring`** — archived; `safeStorage` ships in Electron.
 - **`@parcel/watcher`** — native deps under asar packing; not justified for our tree size.
@@ -246,7 +246,7 @@ This is essentially the pattern Sourcegraph used pre-2023 and that VS Code uses 
 The TeXRA source repo is private. Two complications follow:
 
 1. **`electron-updater` against a private GitHub repo** requires a `GH_TOKEN` to be available at update-check time. The two delivery paths are: (a) bake the token into the build (harvestable from any installed binary, bad pattern), or (b) require each end-user to set `GH_TOKEN` in their environment (works but is a deployment-burden non-starter for desktop apps). Either way, the private repo is the wrong shape for client distribution.
-2. **`update.electronjs.org`** (the free CDN/redirector that handles thundering-herd traffic on releases) refuses private repos outright.
+2. **`update.electronjs.org`** (a Squirrel-based feed service for the legacy `autoUpdater` API) is a separate, incompatible update path — mac + win only, no Linux, no blockmap differential updates. It refuses private repos outright. We're not using it; this is just to head off "why don't we use it?" questions.
 
 We solve both by publishing builds to a **separate public repo**, e.g. `texra-ai/texra-desktop-releases`. The release repo contains only signed installers, `latest-mac.yml` / `latest.yml` / `latest-linux.yml` manifests, and a license. The source repo's CI workflow uses a release-repo-scoped PAT (or a GitHub App with `contents: write` on just that repo) to push artifacts. Clients embed only the release-repo URL; no token in the binary.
 
@@ -460,11 +460,11 @@ Eight files, ~250–400 LOC total. Each mirrors an existing VS Code impl in `src
 | ------------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `ConfigProvider`         | `vscode.workspace.getConfiguration` w/ 3-namespace fallback | `conf` instance + Zod schema mirroring `package.json` `contributes.configuration` |
 | `StateStore` (global)    | `ExtensionContext.globalState`                              | `conf` (file: `state.global.json`) under `app.getPath('userData')`                |
-| `StateStore` (workspace) | `ExtensionContext.workspaceState`                           | `conf` per-project: `<project>/.texra/state.json`                                 |
+| `StateStore` (workspace) | `ExtensionContext.workspaceState` (app-private Memento)     | `conf` keyed by **stable hash of the project path**, stored under `app.getPath('userData')/workspace-state/<sha256(projectPath)>.json`. **Not** in `<project>/.texra/` — workspace state contains agent history, stream logs, task states, and run instructions; writing those into the user's repo would dirty git, fail on read-only/shared folders, and risk committing local run history. Project-local state is reserved for an explicit settings-as-code feature (§13.1). |
 | `LogBackend`             | `vscode.OutputChannel`                                      | `electron-log` to `app.getPath('logs')/` + in-app log viewer pane                 |
 | `FileSystemProvider`     | `vscode.workspace.fs`                                       | `node:fs/promises` + `fs-extra` (already a dep)                                   |
 | `WorkspaceProvider`      | `workspace.workspaceFolders[0]` + `asRelativePath`          | Project-folder model + `chokidar`. "Open Project" replaces "Open Folder."         |
-| `StorageProvider`        | `context.storageUri`, `context.globalStorageUri`            | `app.getPath('userData')` + per-project `<project>/.texra/`                       |
+| `StorageProvider`        | `context.storageUri`, `context.globalStorageUri`            | `app.getPath('userData')` (global) + per-project storage scoped under `userData/projects/<sha256(projectPath)>/` (NOT inside the user's repo, same reasoning as `StateStore` workspace). |
 | `PlatformSecrets`        | `context.secrets`                                           | `safeStorage.encryptString` over a `conf`-backed JSON blob                        |
 
 `initPlatform()` is called once at top of `main/index.ts`, before any agent code runs. Mirrors the call site in `src/extension.ts:144-153`.
@@ -497,7 +497,7 @@ Net change to handler code in `core/`: zero. New code is the two preload functio
 
 - **Main process** — app lifecycle, window mgmt, native menu, auto-update, protocol handler, platform impls.
 - **Renderer (one per window)** — Lit UI; `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`. Talks to main via preload bridge.
-- **Utility process** (Phase 4+) — long agent runs spawned from main on `texra:execute`, streaming progress events back via `MessagePort`. Crashes recoverable; renderer survives. Phase 1–3 runs agents in main for simplicity.
+- **No utility process at v1.** Agents run in the main process. The earlier "Phase 4+ utility-process split" was misleading — the existing `ProgressEventBus` is an in-memory singleton, and moving agents to a utility process means bridging every `bus.emit(...)` over `MessagePort` (otherwise progress, logs, and approvals don't reach main or renderer). The utility process would also need its own `initPlatform()` with proxied platform interfaces. Real work, no v1 benefit. Deferred to §13.1 future divergence; v2 candidate.
 
 ### 7.6 Replacing VS Code-specific UX
 
@@ -568,7 +568,7 @@ Confirmed by scout:
 - `pdf2pic` — uses GraphicsMagick subprocess. PATH-dependent (see §10), no native rebuild.
 - `@cantoo/pdf-lib`, `tar`, `katex`, `markdown-it`, `lit` — all pure JS.
 - `@anthropic-ai/sdk`, `openai`, `@google/genai`, `@openrouter/sdk`, `@modelcontextprotocol/sdk` — pure JS.
-- `@openai/codex-sdk` — bundles platform-specific binaries (`@openai/codex-{linux,darwin,win32}-{arch}`). Works in Electron via subprocess spawn; binaries must be unpacked from asar (`asarUnpack` glob in `electron-builder.yml`).
+- `@openai/codex-sdk` — bundles platform-specific binaries (`@openai/codex-{linux,darwin,win32}-{arch}`). The SDK is constructed with `codexPathOverride: findCodexBinaryPath()`, where the helper uses `createRequire(__dirname)` to resolve platform packages and falls back to global npm + PATH. **`asarUnpack` alone is not enough** — `createRequire` doesn't automatically prefer `app.asar.unpacked/` over `app.asar/`, so a packaged build can resolve to an asar path that won't spawn or silently use a stale global Codex. v1 plan: extend `findCodexBinaryPath()` (per #8 `BinaryResolver`) to detect `app.isPackaged` and resolve from `process.resourcesPath/app.asar.unpacked/node_modules/@openai/codex-{platform}-{arch}/...` first, then fall back to `createRequire`. Phase 6 harness verifies the exact resolved path.
 - `@xterm/xterm` + `@xterm/addon-fit` — work in Electron renderers (already run in browsers).
 - `chokidar` — pure JS in v4.
 
@@ -593,8 +593,21 @@ These changes are safe to ship in the VS Code extension today. Each one shrinks 
 
 ### Tier 1 — high leverage, low risk
 
-**1. Move `src/utils/config/configUtils.ts` behind `ConfigProvider`.** _(~126 LOC refactored, ~40 LOC added to `ConfigProvider`.)_
-Today it calls `vscode.workspace.getConfiguration()` directly with a 3-namespace fallback (`x.y.z` → `texra.*` prefix → full `texra.x.y.z`). Push that fallback logic into the `ConfigProvider.get()` contract (or expose `getRaw()`), then route every consumer through `platform().config`. The VS Code-side `ConfigProvider` impl absorbs the namespace logic. **Why now:** this is the single hardest-to-port file in code that's nominally shared. Pure refactor, zero behavior change.
+**1. Expand `ConfigProvider` to a full settings store; route `configUtils.ts` through it.** _(~200 LOC added to interface + VS Code adapter; ~126 LOC of `configUtils.ts` body refactored to thin wrappers; ~40 LOC of consumer-site updates.)_
+
+The current `ConfigProvider` only exposes `get<T>(key, default?)`. That's not enough — the existing `configUtils.ts` surface that consumers in the settings view, setup flow, file lister, and main view depend on includes `updateConfig` (write), `inspectConfig` (default/global/workspace + sources), `isConfigExplicitlySet`, and `watchConfig`. Phase 3's "settings round-trip through `conf`" requires all four. Extend the interface:
+
+```ts
+interface ConfigProvider {
+  get<T>(key: string, defaultValue?: T): T | undefined;
+  update<T>(key: string, value: T, scope?: 'global' | 'workspace'): Promise<void>;
+  inspect<T>(key: string): { default?: T; global?: T; workspace?: T; effective?: T };
+  isExplicitlySet(key: string): boolean;
+  watch(key: string | RegExp, listener: () => void): Disposable;
+}
+```
+
+VS Code adapter wraps `vscode.workspace.getConfiguration().{get,update,inspect,onDidChangeConfiguration}`. Electron adapter wraps `conf`'s `get`, `set`, `onDidChange` with default-value tracking layered on (`conf` lacks native `inspect` semantics — store the default schema separately and compute the layered view). Push `configUtils.ts`'s 3-namespace fallback (`x.y.z` → `texra.*` prefix → full `texra.x.y.z`) into the VS Code-side adapter so consumers see a single canonical key shape. **Why now:** Phase 3 cannot exist with just `get<T>()`; better to expand once than twice.
 
 **2. Introduce a `DiffViewHost` interface and move the `vscode.diff` call behind it.**
 `src/frontend/approval/nativeToolEditApproval.ts:277-282` currently invokes `vscode.commands.executeCommand('vscode.diff', uri1, uri2, title, opts)` inline. Define an interface:
@@ -635,8 +648,21 @@ Webview Lit components reference `--vscode-button-background`, `--vscode-foregro
 **9. Settings Zod schema as canonical source.** _(~600 LOC of new Zod schemas mirroring the JSON-schema; ~50 LOC for the generator.)_
 `package.json` `contributes.configuration` is a ~600-line JSON-schema literal duplicating the runtime types. Define a Zod schema in `core/` mirroring it; runtime reads validate against the Zod schema. Generate `package.json` from the Zod schema via `zod-to-json-schema`. **Why now:** eliminates a real middleman — today the JSON-schema and the runtime types drift independently. Electron's `conf` instance gets its schema from the same source, so adopting it before Phase 1 means the ConfigProvider impl writes itself.
 
-**14. Extract host-agnostic OAuth state machine from `SupabaseAuthProvider`.** _(~750 LOC moved into a new `core/auth/SupabaseSession.ts`; ~190 LOC of VS Code-specific glue stays in `extension/`.)_
-Today `src/auth/SupabaseAuthProvider.ts` (943 LOC) interleaves OAuth state-machine logic with VS Code-specific surfaces (`vscode.AuthenticationProvider`, `vscode.UriHandler`, `context.secrets`). Pull the state machine — sign-in initiation, PKCE handling, token storage, refresh, GitHub token exchange — into a host-agnostic `SupabaseSession` class in `core/`. Inject the host-specific surfaces as constructor dependencies: `(secrets: PlatformSecrets, openExternal: (url) => void, onAuthCallback: Listener<AuthCallbackResult>)`. The VS Code-side wrapper becomes ~190 LOC of glue: register `AuthenticationProvider`, register `UriHandler`, wire its callback into `SupabaseSession`. **Why now:** the Electron auth surface becomes ~50 LOC of glue against the same `SupabaseSession` class — no parallel implementation, no "80% reuse" estimation; **it's literally one class with two thin host wrappers**. Subsumes #5 (the URL parser is part of the state machine).
+**14. Extract host-agnostic Supabase auth + client.** _(~750 LOC `SupabaseAuthProvider` + ~250 LOC `SupabaseClient` body moved to core; ~190 LOC of VS Code glue + ~50 LOC desktop glue.)_
+
+The auth port is two coupled files, not one. Both today import `vscode` and need extraction:
+
+- **`src/auth/SupabaseAuthProvider.ts` (943 LOC)** — interleaves OAuth state machine (sign-in, PKCE, token storage, refresh, GitHub exchange) with `vscode.AuthenticationProvider`, `vscode.UriHandler`, `context.secrets`.
+- **`src/auth/SupabaseClient.ts`** — also imports `vscode`, holds a `vscode.ExtensionContext`, reads session tokens via `context.secrets`, and `isReady()` blocks on `vscodeProviderRegistered`. Remote-agent loading + tier checks call `getSessionTokens()` directly, so without extracting this too, those flows stay coupled to VS Code readiness even if `SupabaseAuthProvider` is host-neutral.
+
+The fix moves both into `core/auth/`:
+
+- `core/auth/SupabaseSession.ts` — the OAuth state machine. Constructor deps: `(secrets: PlatformSecrets, openExternal: (url) => void, onAuthCallback: Listener<AuthCallbackResult>)`.
+- `core/auth/SupabaseClient.ts` — the API client. Constructor takes a `TokenProvider` interface (`{ getSessionTokens(): Promise<Tokens | null>; whenReady: () => Promise<void> }`) — `SupabaseSession` implements it. No more `vscode.ExtensionContext` field, no `vscodeProviderRegistered` flag. `isReady()` becomes `await tokenProvider.whenReady()`.
+
+The VS Code-side wrapper becomes ~190 LOC of glue: register `AuthenticationProvider`, register `UriHandler`, wire its callback into `SupabaseSession`, instantiate `SupabaseClient` with the session as `TokenProvider`. The Electron-side wrapper becomes ~50 LOC: `texra://` protocol handler routes callbacks into `SupabaseSession`, instantiates `SupabaseClient` the same way.
+
+**Why now:** the Electron auth surface becomes ~50 LOC of glue against the same `SupabaseSession` + `SupabaseClient` classes — no parallel implementation, no "80% reuse" estimation; **it's two classes with two thin host wrappers**. Without extracting `SupabaseClient`, remote-agent loading and tier checks still go through `vscodeProviderRegistered` and silently break in Electron. Subsumes #5 (the URL parser is part of the state machine).
 
 ### Tier 3 — nice to have
 
@@ -646,14 +672,70 @@ Today `src/auth/SupabaseAuthProvider.ts` (943 LOC) interleaves OAuth state-machi
 **11. CI guard: vscode-import lint rule.** _(~50 LOC — ESLint flat-config addition + custom rule.)_
 Add an ESLint rule (or a custom check) that fails CI if any file under the "vscode-free zones" imports `vscode`. Pin the existing 747/853 ratio so it can only improve. **Why now:** prevents regression while the Electron port is in flight.
 
-**12. Codex SDK binary unpack rehearsal.** _(~80 LOC harness + ~30 LOC of `electron-builder.yml` config.)_
-Create a tiny harness that bundles `@openai/codex-sdk` under an asar-like wrapper (or test it via electron-builder's `asarUnpack: ['**/node_modules/@openai/codex-*/**']`) and verifies the spawn works from inside the bundle on all three OSes. **Why now:** de-risks Phase 6 packaging; surface OS-specific path bugs early.
+**19. Host-agnostic `AgentDirectories` / resource-sync adapter.** _(~150 LOC: ~80 LOC for the core adapter + ~50 LOC for the VS Code wrapper + ~20 LOC for the desktop wrapper.)_
+
+Today's bundled-agent flow is **not** "read from `resources/agents/` at runtime." It's:
+
+1. `copyDefaultAgents(context)` reads `context.extensionPath/resources/{agents,tool_use_agents}` and copies into `GlobalStorageFS` on version changes or missing files (lazy bootstrap).
+2. `AgentDirectoryManager` then serves built-in + user-custom directories from global storage; `AgentDirectoryManager` itself imports `vscode`.
+3. Agent registry reads from global storage, never from the extension bundle directly.
+
+If the desktop app only bundles YAMLs inside `app.asar` and reads them via `platform().fs.readFile`, the version-bump bootstrap doesn't run, user customizations are lost, and update flows silently break.
+
+The fix:
+
+- Move the bootstrap logic into a host-agnostic `AgentDirectories` class in `core/agents/`. It takes (a) a `bundleSource` path-or-bundle abstraction and (b) a `userStorage: FileSystemProvider` writable area. It owns: detect-bundled-version, compare-to-stored-version, copy-on-bump, list-directories.
+- VS Code wrapper passes `extensionPath/resources` as `bundleSource` and `globalStorageUri` as `userStorage`. ~50 LOC.
+- Desktop wrapper passes `app.getAppPath()/resources` as `bundleSource` and `app.getPath('userData')/agents/` as `userStorage`. ~20 LOC.
+- `AgentDirectoryManager` then loses its `vscode` import — it consumes `AgentDirectories` instead.
+
+**Why now:** without this, "Phase 1 loads an agent definition" works in dev but fails on packaged builds because `app.asar` reads don't trigger the bootstrap. Same risk shape as the Codex resolution bug — works in dev, fails in production. Catch in pre-refactor.
+
+**12. Codex SDK packaged-resolution + unpack rehearsal.** _(~80 LOC harness + ~30 LOC of `electron-builder.yml` config + ~50 LOC update to `findCodexBinaryPath()`.)_
+Three-part fix because `asarUnpack` alone misses the `createRequire` resolution path:
+
+1. **Teach `findCodexBinaryPath()` (and the broader `BinaryResolver` from #8) to prefer `app.asar.unpacked` when `app.isPackaged` is true.** Resolution order in packaged Electron: `process.resourcesPath/app.asar.unpacked/...` → `createRequire` (current behavior) → global npm → `PATH`.
+2. **`electron-builder.yml`** ships with `asarUnpack: ['**/node_modules/@openai/codex-*/**']` and any vendor sub-deps the SDK needs at runtime.
+3. **Phase 6 harness** loads the packaged app, calls `findCodexBinaryPath()`, asserts the result is under `app.asar.unpacked/`, and spawns the binary on all three OSes (mac universal × x64 + arm64, win x64 + arm64, linux x64). Single failure fails the release.
+
+**Why now:** the existing `findCodexBinaryPath()` works perfectly in dev because `createRequire` resolves source-tree node_modules; it fails silently in packaged builds because `createRequire` from inside the asar can't see `app.asar.unpacked` siblings. Catching this in dev costs nothing; catching it after a v1 release costs every install.
 
 **13. Extract `settingsViewDispatcher.ts`.** _(~120 LOC moved out of `SettingsApp.handleMessage()`, ~40 LOC of new wiring.)_
 Main and progress views have separate dispatcher files; settings inlines dispatch in a switch inside `SettingsApp.handleMessage()`. Mirror the pattern of the other two — pull the switch into `src/settingsView/frontend/settingsViewDispatcher.ts`. **Why now:** all three webviews share the same shape, simplifying the IPC adapter we drop in for Electron.
 
 **15. Codify the composition-root rule as a lint check.** _(~30 LOC of ESLint flat-config rule.)_
 Per §6.6, `initPlatform()` may be called only from `extension/src/extension.ts` (and the future `desktop/src/main/index.ts`). Everywhere else accesses host services via `platform()`. Add an ESLint rule (`no-platform-init-outside-composition-root`) that fails on `import { initPlatform } from '@platform'` outside the designated files. **Why now:** locks in the composition-root invariant before the desktop shell exists; prevents the kind of "I just need to init the platform from this one place" creep that hexagonal architectures degrade into.
+
+**18. Extract host-neutral controllers from the three message handlers.** _(~3,551 LOC of handlers split: ~2,800 LOC of business logic moved to `core/controllers/`; ~750 LOC of host glue stays in `extension/` and is mirrored at ~150 LOC in `desktop/`.)_
+
+This is the largest pre-refactoring and was previously hidden behind §4.4's "bridge-and-bootstrap" framing. That framing is right for the **renderer** (the Lit components are 96.5% reusable) but wrong for the **host-side handlers**. The three handlers in `extension/` total **~3,551 LOC** and all import `vscode`:
+
+- `MainViewMessageHandler` (~440 LOC) — file selection, command routing, instruction submission.
+- `ProgressViewMessageHandler` (~1,366 LOC) — stream lifecycle, log streaming, approval routing, terminal creation, push updates.
+- `SettingsViewMessageHandler` (~1,745 LOC) — every settings tab's writes, history queries, memory management, auth/API-key dialogs, model dashboard.
+
+Per §8.1 the desktop must not import `extension/` or `vscode`. So without extraction we'd either rewrite all three handlers in `desktop/` from scratch (parallel maintenance forever) or violate the boundary.
+
+Split each handler into a host-neutral controller in `core/` plus thin per-host IPC routing:
+
+```
+core/controllers/MainViewController.ts        (~400 LOC, takes platform() as dep)
+core/controllers/ProgressViewController.ts    (~1,200 LOC)
+core/controllers/SettingsViewController.ts    (~1,600 LOC)
+
+extension/handlers/MainViewMessageHandler.ts  (~120 LOC, parses msg → calls controller → wraps reply)
+extension/handlers/ProgressViewMessageHandler.ts  (~250 LOC)
+extension/handlers/SettingsViewMessageHandler.ts  (~380 LOC)
+
+desktop/main/ipc.ts                            (~150 LOC total for all three — generic dispatcher
+                                                routes Zod-typed messages to controller methods)
+```
+
+The host glue is reduced to: validate message via Zod, look up controller method by message type, call it, send response (extension uses `webview.postMessage`; desktop uses `webContents.send`). Real business logic lives in the controllers, takes `platform()` for any host capabilities (file pickers, openExternal, secret input).
+
+Side benefit: this finally provides a place to register the per-host handlers from §9 #17's command catalog — the catalog's command IDs map to controller methods.
+
+**Why now:** Phase 2/3 of the desktop port currently has no plan for the ~3,551 LOC of handler logic. Without #18, those phases are missing several thousand LOC of work or break the §8.1 boundary. With #18, Phase 2/3 desktop work is just IPC plumbing (~150 LOC of routing in `desktop/main/ipc.ts`), which is what §4.4 originally implied. Tier 1 is the right place because skipping it breaks the LOC budget and the architectural rule simultaneously.
 
 **17. Extract a host-agnostic command catalog from `src/commands.ts`.** _(~250 LOC: ~150 LOC for `core/commands/catalog.ts` + ~80 LOC of `extension/commands/register.ts` adapter + ~20 LOC of glue.)_
 
@@ -690,7 +772,7 @@ The fix replaces the broken pipeline rather than patching it:
 
 ### Suggested ordering
 
-If we land them all, ~5–6 engineering weeks total, parallelizable. Suggested order: **3 → 1 → 4 → 16 → 2 → 14 → 17 → 6 → 11 → 15 → 9 → 7 → 8 → 13 → 10 → 12**. Mechanical fixes first (#3 EventEmitter), then the foundational items (#1 ConfigProvider, #4 watch, #16 FakePlatform — pre-test infrastructure pays off immediately), then the structural wins (#2 DiffViewHost, #14 SupabaseSession, #17 command catalog), then the lint guards (#11 and #15) to lock in agnostic-zone + composition-root purity, then the schema unification (#9), CSS shim (#7), binary resolver (#8), dispatcher cleanup (#13), audit/rehearsal items.
+If we land them all, ~7–9 engineering weeks total, parallelizable. Suggested order: **3 → 1 → 4 → 16 → 2 → 14 → 18 → 17 → 6 → 11 → 15 → 9 → 19 → 7 → 8 → 13 → 10 → 12**. Mechanical fixes first (#3 EventEmitter), then the foundational items (#1 ConfigProvider expansion, #4 watch, #16 FakePlatform — pre-test infrastructure pays off immediately), then the structural extractions in dependency order (#2 DiffViewHost, #14 SupabaseSession+Client, #18 host-neutral controllers, #17 command catalog), then the lint guards (#11 and #15) to lock in agnostic-zone + composition-root purity, then the schema unification (#9), resource-sync adapter (#19), CSS shim (#7), binary resolver (#8), dispatcher cleanup (#13), audit/rehearsal items.
 
 Each Tier 1 item is independently shippable to the extension and produces a smaller, cleaner extension regardless of the Electron decision. After Tier 1 lands, the Electron port is mostly "implement the four interfaces (`ConfigProvider`, `DiffViewHost`, `WorkspaceProvider`-watch, `SupabaseSession` host wrapper) against Electron primitives" — and we can verify each implementation against `FakePlatform`'s invariants.
 
@@ -774,7 +856,7 @@ The single largest UI port.
 - Source repo CI publishes signed builds to the release repo via a trusted GitHub Actions workflow with a release-repo-scoped PAT.
 - Differential updates via blockmaps.
 - `autoDownload: false` for v1; user consents per update.
-- Optionally also register with `update.electronjs.org` since the release repo is public — gives a fallback CDN if the GitHub Releases API is degraded.
+- We do **not** layer `update.electronjs.org` on top — it speaks Squirrel/`autoUpdater` (mac + win only, no Linux) and isn't a drop-in fallback for `electron-builder`'s `latest*.yml` manifest flow. Mixing the two would mean two parallel update pipelines and a Linux gap.
 - **Exit criteria:** Signed installers from CI on all three platforms. Auto-update from `v0.0.1 → v0.0.2` works.
 
 ### Phase 7 — Beta, polish, docs (2 weeks)
@@ -784,7 +866,9 @@ The single largest UI port.
 - Telemetry parity with extension (or explicit opt-out path).
 - In-app log viewer pane.
 - Documentation site updates; new download page.
-- Migration doc: how to import API keys / settings from the VS Code extension's `globalState`.
+- Migration plan for users coming from the VS Code extension. **Settings** (workspace + global state, non-secret config values) can be auto-imported by reading the extension's `globalState` JSON from disk — that's straightforward. **Secrets cannot.** API keys, GitHub tokens, and the Supabase session live in VS Code's `SecretStorage` (encrypted via the OS keychain via VS Code's own keytar replacement) and aren't readable by an external Electron process. Two options for credentials:
+  - **Re-auth on first launch** (recommended) — desktop prompts the user to sign in / re-enter API keys. Simple, secure, no fragile cross-app reads.
+  - **Extension-side export handoff** — a new `texra.exportForDesktop` command in the extension writes a one-shot encrypted blob to disk that the desktop reads on first launch and immediately deletes. More effort, more risk, narrow benefit. Defer unless users actually ask.
 
 **Estimated timeline (single engineer):** 11.5–13 weeks. Trimmed from the v2 estimate after the §4.4 webview scout confirmed renderer work is bridge-and-bootstrap (~250 LOC + theme tokens) rather than the originally feared UI rewrite. With a two-engineer team running Phases 1+2 in parallel after Phase 0, achievable in 7–9 weeks.
 
@@ -801,8 +885,8 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 | Windows deep-link cold-start bug (electron #40173)                                            | High       | Medium   | Capture `process.argv` synchronously at module top of `main/index.ts`; not in async handler.                                                                                                                                                                             |
 | Code-signing budget surprise                                                                  | Medium     | High     | Budget Azure Trusted Signing (~$10/mo) and Apple Developer Program ($99/yr) **before** Phase 6.                                                                                                                                                                          |
 | Auto-update certificate expires / mac notarization breaks                                     | Low        | High     | Document key rotation in runbook. CI uploads test build to `latest-mac.yml` weekly to catch regressions.                                                                                                                                                                 |
-| `@openai/codex-sdk` binaries don't unpack from asar                                           | Medium     | Medium   | `asarUnpack: ['**/node_modules/@openai/codex-*/**']` in `electron-builder.yml`. Test on all platforms.                                                                                                                                                                   |
-| User confusion: extension and desktop sharing/colliding settings on same machine              | Medium     | Low      | Distinct `userData` paths. Phase 7 ships a one-time importer for API keys + settings from the VS Code globalState file.                                                                                                                                                  |
+| `@openai/codex-sdk` resolves to wrong path under packaging                                    | High       | High     | Two parts: (1) `asarUnpack` glob covers `**/node_modules/@openai/codex-*/**`. (2) `findCodexBinaryPath()` updated to prefer `process.resourcesPath/app.asar.unpacked/...` when `app.isPackaged` (per §9 #12). Phase 6 harness asserts the resolved path on all three OSes. |
+| User confusion: extension and desktop sharing/colliding settings on same machine              | Medium     | Low      | Distinct `userData` paths. Phase 7 ships a one-time importer for **non-secret settings** from the VS Code `globalState` file; **API keys / tokens require re-auth** since `SecretStorage` is not externally readable (see Phase 7 in §10).                              |
 | Monaco worker resolution fails under asar                                                     | Medium     | Medium   | Test all OSes in CI; configure `MonacoEnvironment.getWorker` against `?worker`-built chunks; if asar bites, `asarUnpack` the worker chunks.                                                                                                                              |
 | Monaco bundle inflates renderer cold-start                                                    | Medium     | Low      | Lazy-load via `await import('monaco-editor')` only when diff opens; ship only registered languages. Initial window doesn't load Monaco at all.                                                                                                                           |
 | Release-repo publish workflow leaks PAT                                                       | Low        | High     | Use a GitHub App over a PAT; scope `contents: write` to the release repo only; rotate annually.                                                                                                                                                                          |
@@ -845,7 +929,7 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 - **Bundled LaTeX:** v1 expects user-installed TeX (current model). Reconsider `tectonic` (~30MB statically-linked) for v2.
 - **Codex CLI PATH discovery:** verify that `@openai/codex-sdk`'s bundled binaries are found from inside the asar after `asarUnpack`, on all three platforms.
 - **GitHub auth:** drop the existing experimental `texra.auth.enableVSCodeGitHub` flag in Electron; use Supabase's GitHub OAuth provider directly. Confirm the edge function token-exchange flow (`GITHUB_TOKEN_EXCHANGE_URL`) still works without the VS Code session.
-- **Migration path:** users with existing VS Code extension install — do we offer a one-shot importer (read `globalState` JSON, copy API keys via SecretStorage if accessible)? Phase 7 candidate.
+- **Migration path:** non-secret settings importer in Phase 7 (reads `globalState` JSON). Credentials are not auto-importable — `SecretStorage` requires the VS Code extension host to decrypt. Default plan: re-auth on first launch. An optional extension-side export-handoff command is available if user demand surfaces.
 
 ### 13.1 Future divergence (post-v1)
 
@@ -860,6 +944,8 @@ Things explicitly out of scope for v1 under the agent-native model. Each is a co
 - **File-tree explorer in the launcher route.** v1 launcher is "pick the input file"; a v2 could show the project tree, modification times, and last-run status per file.
 - **Settings-as-code** (read/write a `texra.config.yaml` instead of `conf` JSON). Some users will want to commit settings to repos. Easy add later.
 - **CLI mode** (`texra run agent --input foo.tex`). Headless invocations from a terminal, useful for batch jobs. Already feasible today since the agent core is `vscode`-free; just needs a CLI entry point in a fourth `packages/cli/` workspace.
+- **Utility-process agent execution.** Move long agent runs into a separate Electron utility process so a renderer crash doesn't lose the run. The blocker is the in-memory `ProgressEventBus` singleton — every progress/log/approval event would need to bridge over `MessagePort`, and the utility process needs its own `initPlatform()` with proxied platform interfaces. ~600–900 LOC of bridge code, all of it cross-process plumbing rather than user-visible value. v2 candidate.
+- **Extension-side credential export handoff** (`texra.exportForDesktop` command). Writes a one-shot encrypted blob from `SecretStorage` for the desktop to import. Default Phase 7 plan is "re-auth on first launch"; this is the optional alternative if user demand surfaces.
 
 ## 14. Appendix: Reuse-by-the-numbers
 
@@ -934,11 +1020,13 @@ These are the §9 pre-refactorings + the unavoidable cross-cutting changes durin
 
 | Item                                                                   | Net new LOC | Modified / refactored LOC          | Notes                                                                                          |
 | ---------------------------------------------------------------------- | ----------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| §9 #1 `configUtils.ts` behind `ConfigProvider`                         | ~40         | ~126                               | Pure refactor inside core.                                                                     |
+| §9 #1 Expanded `ConfigProvider` (write/inspect/isExplicitlySet/watch) + `configUtils.ts` rewire | ~200 | ~126 | Interface expansion required for Phase 3 settings round-trip; not just a `get()` wrapper.       |
 | §9 #2 `DiffViewHost` interface + VS Code wrapper                       | ~40         | ~80                                | Native impl wraps existing `vscode.diff` call site.                                            |
 | §9 #3 `vscode.EventEmitter` → Node `EventEmitter`                      | —           | ~30                                | 10 mechanical sites.                                                                           |
 | §9 #4 `WorkspaceProvider.watch()` interface + impl                     | ~60         | —                                  | Interface + VS Code impl wraps `createFileSystemWatcher`.                                      |
-| §9 #14 `SupabaseSession` extraction                                    | ~80         | ~750 (moved) + ~190 (slimmed glue) | Host-agnostic OAuth class in core; subsumes #5. Saves ~150 LOC at Phase 4.                     |
+| §9 #14 `SupabaseSession` + `SupabaseClient` extraction                 | ~80         | ~1,000 moved + ~190 glue           | Two host-agnostic classes (auth + API client) with `TokenProvider` boundary. Subsumes #5.       |
+| §9 #18 Host-neutral controller extraction from 3 message handlers      | ~80 (interfaces) | ~2,800 moved + ~750 glue rewritten | The largest pre-refactoring. Splits ~3,551 LOC of handlers into core controllers + thin host glue. Phase 2/3 desktop work depends on this. |
+| §9 #19 `AgentDirectories` / resource-sync adapter                      | ~150        | ~100 (slim `AgentDirectoryManager` of `vscode` import) | Host-agnostic copy-on-version-bump from bundled `resources/agents/` into per-host writable storage. |
 | §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch | ~5          | ~45                                | Re-export shim + feature-detect Electron.                                                      |
 | §9 #7 `--vscode-*` → `--texra-*` token shim                            | ~100        | ~450                               | New `themeTokens.css` + ~25 components touched by find-replace.                                |
 | §9 #8 `BinaryResolver` extraction                                      | ~80         | ~120                               | Service + call-site routing audit.                                                             |
@@ -949,19 +1037,21 @@ These are the §9 pre-refactorings + the unavoidable cross-cutting changes durin
 | §9 #15 `no-platform-init-outside-composition-root` ESLint rule         | ~30         | —                                  | Codifies §6.6 composition-root invariant.                                                      |
 | §9 #16 `FakePlatform` for unit tests                                   | ~150        | —                                  | In-memory impls of the 7 platform interfaces; enables fast kernel tests via Vitest.            |
 | §9 #17 Host-agnostic command catalog                                   | ~250        | ~120 (slimmed `src/commands.ts`)   | Splits per-host wiring out of catalog metadata.                                                |
-| **Subtotal core/extension**                                            | **~1,605**  | **~2,061**                         | Of which #14 contributes ~940 LOC of refactored (mostly moved code). Floor of net-new: ~1,605. |
+| **Subtotal core/extension**                                            | **~1,995**  | **~5,901**                         | The bulk of the modified LOC is moved code (~3,800 LOC across #14 and #18) — same logic, new home. Net-new is dominated by interface definitions, dispatchers, and lint rules. |
 
 #### Aggregate budget
 
 | Bucket                                                                         | Net new LOC      | Modified LOC | Total touched    |
 | ------------------------------------------------------------------------------ | ---------------- | ------------ | ---------------- |
 | `packages/desktop/`                                                            | 2,180–2,900      | ~395         | ~2,575–3,295     |
-| `packages/core/` + `extension/` (all §9 pre-refactorings, incl. #15, #16, #17) | ~1,605           | ~2,061       | ~3,666           |
-| **Total v1**                                                                   | **~3,785–4,505** | **~2,456**   | **~6,241–6,961** |
+| `packages/core/` + `extension/` (all §9 pre-refactorings, incl. #15–#19)              | ~1,995           | ~5,901       | ~7,896           |
+| **Total v1**                                                                          | **~4,175–4,895** | **~6,296**   | **~10,471–11,191** |
 
-For comparison: the VS Code extension today is ~853 source files. The agent core (which is reused unchanged) is ~141 files. The Electron port is roughly **3% the size of the existing extension's source base** in net-new code, and roughly **6% if you count refactored + new together**.
+For comparison: the VS Code extension today is ~853 source files. The agent core (reused unchanged) is ~141 files. The Electron port itself is **~4% of the existing source base** in net-new code. **Most of the "modified LOC" total is not rewriting** — it's existing handler/auth logic relocating from `extension/` into `core/` so it becomes host-neutral. The shape of the work is "move code into the right place" much more than "write new code."
 
 The §12 success criterion is "Total Electron-side new code (in `packages/desktop/`) under ~3,000 LOC." Current estimate sits inside that range when Phase 5 (the diff component) lands at the lower end of its 200–400 LOC band, and slightly over if it lands at the upper end. We adjust scope by deferring Phase 7 polish items (log-viewer pane, migration importer) if needed.
+
+**The bigger story is the pre-refactoring effort** — ~5,800 LOC of moved code in `core/`+`extension/` is real engineering work even if the LOC count is mostly relocation. Without it, Phase 2/3 of the Electron port has no plan for the ~3,551 LOC of host-side message-handler logic and the auth client. Pre-refactorings #1, #14, and especially #18 are the gates; they pay off twice — they unblock the Electron port AND give the extension a cleaner architecture today.
 
 #### What's NOT counted in this LOC budget
 
