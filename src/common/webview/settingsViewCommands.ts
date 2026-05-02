@@ -79,6 +79,7 @@ export const SETTINGS_VIEW_CMD = {
   SET_BASH_APPROVAL_ENABLED: 'setBashApprovalEnabled',
   SET_CODEX_SANDBOX_MODE: 'setCodexSandboxMode',
   SET_CODEX_REASONING_EFFORT: 'setCodexReasoningEffort',
+  SET_CODEX_APPROVAL_POLICY: 'setCodexApprovalPolicy',
   // Tool dashboard commands
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',

@@ -194,6 +194,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly bashApprovalEnabled = signal(true);
   private readonly codexSandboxMode = signal<string>('workspace-write');
   private readonly codexReasoningEffort = signal<string>('high');
+  private readonly codexApprovalPolicy = signal<string>('never');
 
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
@@ -345,6 +346,7 @@ export class SettingsApp extends SettingsAppBase {
         this.bashApprovalEnabled.set(data.bashApprovalEnabled);
         this.codexSandboxMode.set(data.codexSandboxMode);
         this.codexReasoningEffort.set(data.codexReasoningEffort);
+        this.codexApprovalPolicy.set(data.codexApprovalPolicy);
         return;
       }
 
@@ -637,6 +639,10 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT,
   );
 
+  private handleCodexApprovalPolicyChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY,
+  );
+
   // Git settings event handlers
   private handleGitMarkCommitsToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS,
@@ -894,6 +900,7 @@ export class SettingsApp extends SettingsAppBase {
               .bashApprovalEnabled=${this.bashApprovalEnabled.get()}
               .codexSandboxMode=${this.codexSandboxMode.get()}
               .codexReasoningEffort=${this.codexReasoningEffort.get()}
+              .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-run-command=${this.handleToolRunCommand}
@@ -903,6 +910,8 @@ export class SettingsApp extends SettingsAppBase {
               @codex-sandbox-mode-change=${this.handleCodexSandboxModeChange}
               @codex-reasoning-effort-change=${this
                 .handleCodexReasoningEffortChange}
+              @codex-approval-policy-change=${this
+                .handleCodexApprovalPolicyChange}
             ></tools-tab>
           </vscode-tab-panel>
 
