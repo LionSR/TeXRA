@@ -8,9 +8,13 @@ import { glob } from 'glob';
 // Local imports
 import { GlobalStorageFS } from '@utils/files';
 
-const BUNDLED_AGENT_DIRECTORY_NAMES = ['agents', 'tool_use_agents'] as const;
+export const BUNDLED_AGENT_DIRECTORY_NAMES = [
+  'agents',
+  'tool_use_agents',
+] as const;
 
-type BundledAgentDirectoryName = (typeof BUNDLED_AGENT_DIRECTORY_NAMES)[number];
+export type BundledAgentDirectoryName =
+  (typeof BUNDLED_AGENT_DIRECTORY_NAMES)[number];
 
 const LEGACY_AGENT_FILES = [
   'agents/generic.yaml',
@@ -36,7 +40,7 @@ export interface AgentDirectoryStorage {
 
 export interface AgentDirectoryVersionStore {
   get(): string | undefined;
-  update(version: string | undefined): Promise<void>;
+  update(version: string | undefined): PromiseLike<void>;
 }
 
 export interface AgentDirectorySyncLogger {
