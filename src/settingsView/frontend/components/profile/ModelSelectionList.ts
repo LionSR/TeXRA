@@ -139,21 +139,40 @@ export class ModelSelectionList extends LitElement {
     );
   }
 
+  private getIncludedAccessReasoningCap(
+    model: ModelSelectionItem,
+  ): ReasoningLevel | null {
+    if (
+      !this.authenticated ||
+      this.apiAccessMode !== 'included' ||
+      !this.isRelayAvailable(model.name) ||
+      model.reasoningLevel ||
+      !model.includedAccessReasoningCap
+    ) {
+      return null;
+    }
+    return model.includedAccessReasoningCap;
+  }
+
   private renderReasoningDropdown(
     model: ModelSelectionItem,
   ): TemplateResult | typeof nothing {
     if (!model.supportsReasoningLevel) return nothing;
 
     const currentValue = model.reasoningLevel ?? '';
+    const includedAccessCap = this.getIncludedAccessReasoningCap(model);
     const defaultLabel = model.defaultReasoningLevel
       ? `Default (${REASONING_LEVEL_LABELS[model.defaultReasoningLevel]})`
       : 'Default';
+    const title = includedAccessCap
+      ? `Reasoning level. Included Access uses the TeXRA relay and caps this model's default Extra high reasoning to ${REASONING_LEVEL_LABELS[includedAccessCap]}. Use your own provider API key for uncapped provider-side access.`
+      : 'Reasoning level';
 
     return html`
       <vscode-single-select
         class="reasoning-level-select"
         .value=${currentValue}
-        title="Reasoning level"
+        title=${title}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
         <vscode-option value="" ?selected=${currentValue === ''}>
@@ -167,6 +186,13 @@ export class ModelSelectionList extends LitElement {
           `,
         )}
       </vscode-single-select>
+      ${includedAccessCap
+        ? html`<span
+            class="codicon codicon-warning model-row-icon model-row-icon--warning"
+            title=${title}
+            aria-hidden="true"
+          ></span>`
+        : nothing}
     `;
   }
 

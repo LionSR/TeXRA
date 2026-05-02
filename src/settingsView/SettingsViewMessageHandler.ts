@@ -13,8 +13,8 @@ import {
   MODELS,
   MODEL_CONFIGS,
   ModelProvider,
+  ReasoningEffort,
   type ModelConfig,
-  type ReasoningEffort,
 } from 'llm-zoo';
 
 // Shared schemas and dispatchers
@@ -31,7 +31,7 @@ import { getHelperModelName } from '@agent/runtime/helperModel';
 import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { ULTRA_TIER, MAX_TIER } from '@auth/config';
+import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
@@ -276,6 +276,23 @@ function supportsReasoningLevel(config: ModelConfig): boolean {
   );
 }
 
+function getIncludedAccessReasoningCap(
+  config: ModelConfig,
+): ReasoningLevel | undefined {
+  if (
+    !getServerSideKeyService().getUseIncludedModelAccess() ||
+    !config.name.startsWith('gpt5') ||
+    config.capabilities.reasoningEffort !== ReasoningEffort.XHIGH
+  ) {
+    return undefined;
+  }
+
+  const userTier = getServerSideKeyService().getUserTier();
+  if (userTier === MAX_TIER) return 'high';
+  if (userTier === FREE_TIER) return 'medium';
+  return undefined;
+}
+
 function buildModelSelectionItems(): ModelSelectionItem[] {
   const enabledSet = new Set(
     globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
@@ -307,6 +324,10 @@ function buildModelSelectionItems(): ModelSelectionItem[] {
       const defaultLevel = EFFORT_TO_LEVEL.get(reasoningEffort);
       if (defaultLevel) {
         item.defaultReasoningLevel = defaultLevel;
+      }
+      const includedAccessCap = getIncludedAccessReasoningCap(config);
+      if (includedAccessCap) {
+        item.includedAccessReasoningCap = includedAccessCap;
       }
       // Validate persisted override against the schema instead of blindly casting.
       const parsed = ReasoningLevelSchema.safeParse(reasoningOverrides[name]);
@@ -691,6 +712,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     if (view) await fn(view.webview);
   }
 
+  private async primeIncludedAccessIfAuthenticated(): Promise<boolean> {
+    const serverSideKeyService = getServerSideKeyService();
+    if (
+      !serverSideKeyService.getUseIncludedModelAccess() ||
+      !(await SupabaseClient.isAuthenticated())
+    ) {
+      return false;
+    }
+
+    return serverSideKeyService.canUseServerSideKeys();
+  }
+
   // ============================================================
   // Public methods for external access
   // ============================================================
@@ -701,12 +734,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // spinner until data arrives.
     void this.sendToolDashboardData(webview);
 
+    const hasServerSideAccess = await this.primeIncludedAccessIfAuthenticated();
+    await this.sendProfileData(webview, { hasServerSideAccess });
+    await this.sendModelSelectionData(webview);
+
     await Promise.all([
       this.sendMemoryData(webview),
       this.sendMemoryEnabled(webview),
       this.sendHistoryData(webview),
-      this.sendProfileData(webview),
-      this.sendModelSelectionData(webview),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
       this.sendSuperYoloEnabled(webview),
@@ -779,7 +814,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  public async sendProfileData(webview: vscode.Webview): Promise<void> {
+  public async sendProfileData(
+    webview: vscode.Webview,
+    options: { hasServerSideAccess?: boolean } = {},
+  ): Promise<void> {
     const isAuthenticated = await SupabaseClient.isAuthenticated();
     const providerKeyStatuses = await getProviderKeyStatuses();
 
@@ -807,7 +845,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const serverSideKeyService = getServerSideKeyService();
     const hasServerSideAccess =
-      await serverSideKeyService.canUseServerSideKeys();
+      options.hasServerSideAccess ??
+      (await serverSideKeyService.canUseServerSideKeys());
 
     const user = await SupabaseClient.getUser();
     const authContext = await SupabaseClient.getUserAuthContext();
@@ -1466,7 +1505,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // Access mode affects model availability — invalidate cached options.
     invalidateModelOptionsCache();
-    await this.withActiveWebview((w) => this.sendProfileData(w));
+    const hasServerSideAccess = await this.primeIncludedAccessIfAuthenticated();
+    await this.withActiveWebview(async (w) => {
+      await this.sendProfileData(w, { hasServerSideAccess });
+      await this.sendModelSelectionData(w);
+    });
 
     const modeLabel =
       data.mode === 'included' ? 'Included Access' : 'My Own Keys';
