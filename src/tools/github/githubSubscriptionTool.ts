@@ -391,16 +391,6 @@ async function execFindCurrent(
   if (branch === 'HEAD') {
     throw new ToolError('HEAD is detached — cannot infer a PR branch.');
   }
-  const defaultBranch = await getDefaultBranch(remote.owner, remote.repo);
-  if (branch === defaultBranch) {
-    const suggestions = await listOpenPullSuggestions(
-      remote.owner,
-      remote.repo,
-    );
-    throw new ToolError(
-      `Current branch is the default branch "${branch}", so command="find_current" cannot infer a single PR. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
-    );
-  }
   const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
   const res =
     await ghGet<
@@ -411,10 +401,16 @@ async function execFindCurrent(
   }
   const pr = res.data[0];
   if (!pr) {
+    const defaultBranch = await getDefaultBranch(remote.owner, remote.repo);
     const suggestions = await listOpenPullSuggestions(
       remote.owner,
       remote.repo,
     );
+    if (branch === defaultBranch) {
+      throw new ToolError(
+        `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+      );
+    }
     throw new ToolError(
       `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
     );
