@@ -362,6 +362,24 @@ async function listOpenPullSuggestions(
   return `\n\nOpen PRs you can subscribe to directly:\n${lines.join('\n')}`;
 }
 
+async function getFindCurrentFallbackInfo(
+  owner: string,
+  repo: string,
+): Promise<{ defaultBranch?: string; suggestions: string }> {
+  const [defaultBranchResult, suggestionsResult] = await Promise.allSettled([
+    getDefaultBranch(owner, repo),
+    listOpenPullSuggestions(owner, repo),
+  ]);
+  return {
+    defaultBranch:
+      defaultBranchResult.status === 'fulfilled'
+        ? defaultBranchResult.value
+        : undefined,
+    suggestions:
+      suggestionsResult.status === 'fulfilled' ? suggestionsResult.value : '',
+  };
+}
+
 async function execFindCurrent(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
@@ -401,8 +419,7 @@ async function execFindCurrent(
   }
   const pr = res.data[0];
   if (!pr) {
-    const defaultBranch = await getDefaultBranch(remote.owner, remote.repo);
-    const suggestions = await listOpenPullSuggestions(
+    const { defaultBranch, suggestions } = await getFindCurrentFallbackInfo(
       remote.owner,
       remote.repo,
     );

@@ -129,13 +129,6 @@ export function killExecution(executionId: string): boolean {
   const handle = registry.get(executionId);
   if (!handle) return false;
   const result = handle.terminate();
-  if (
-    result &&
-    handle instanceof AgentExecutionHandle &&
-    handle.parentStreamId !== handle.childStreamId
-  ) {
-    emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
-  }
   // Always notify waiters — even if terminate() returned false (e.g. PID not
   // yet assigned), callers blocking on this execution should be unblocked.
   notifyWaiters(executionId);
