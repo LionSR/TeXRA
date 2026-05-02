@@ -64,6 +64,19 @@ export class ProfileInfo extends LitElement {
           ${PROMO_NOTICE_LONG.promoLead}<code>${PROMO_NOTICE_LONG.promoCode}</code>${PROMO_NOTICE_LONG.promoTail}
           ${PROMO_NOTICE_LONG.privacyLead}<strong>${PROMO_NOTICE_LONG.privacyNot}</strong>${PROMO_NOTICE_LONG.privacyMiddle}<strong>${PROMO_NOTICE_LONG.privacyNever}</strong>${PROMO_NOTICE_LONG.privacyTrailing}
         </div>
+        <div class="profile-notice">
+          ${PROMO_NOTICE_LONG.supportLead}<a
+            href=${PROMO_NOTICE_LONG.supportSponsorsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            >${PROMO_NOTICE_LONG.supportSponsorsLabel}</a
+          >${PROMO_NOTICE_LONG.supportMiddle}<a
+            href=${PROMO_NOTICE_LONG.supportCoffeeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            >${PROMO_NOTICE_LONG.supportCoffeeLabel}</a
+          >${PROMO_NOTICE_LONG.supportTail}
+        </div>
         ${expiration
           ? html`
               <div class="info-row">
