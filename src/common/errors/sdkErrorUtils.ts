@@ -346,11 +346,12 @@ export function takeTail(text: string, maxChars: number): string {
   return text.length <= maxChars ? text : text.slice(text.length - maxChars);
 }
 
-/** True if `err` is an SDK user-abort error (OpenAI or Anthropic). */
+/** True if `err` is an abort/cancellation error (SDK abort, AbortController, or similar). */
 export function isUserAbort(err: unknown): boolean {
   return (
     err instanceof OpenAIUserAbortError ||
-    err instanceof AnthropicUserAbortError
+    err instanceof AnthropicUserAbortError ||
+    (err instanceof DOMException && err.name === 'AbortError')
   );
 }
 
