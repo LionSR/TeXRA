@@ -1124,7 +1124,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     enabled: boolean,
   ): Promise<void> {
     await updateConfig(configKey, enabled, {
-      target: vscode.ConfigurationTarget.Global,
+      target: 'global',
       prefix: false,
     });
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
@@ -1657,7 +1657,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await globalSM?.update(def.globalStateKey, data.value);
     } else {
       await updateConfig(data.key, data.value, {
-        target: vscode.ConfigurationTarget.Global,
+        target: 'global',
         prefix: false,
       });
     }

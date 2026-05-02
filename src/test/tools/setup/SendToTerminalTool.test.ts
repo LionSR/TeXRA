@@ -34,6 +34,10 @@ function installApprovalSkippingPlatform(): void {
     config: {
       get: <T>(key: string, defaultValue?: T): T =>
         key === BASH_APPROVAL_CONFIG_KEY ? (false as T) : (defaultValue as T),
+      update: async () => {},
+      inspect: () => undefined,
+      isExplicitlySet: () => false,
+      watch: () => ({ dispose: () => {} }),
     },
   };
   initPlatform(stub as Platform);
