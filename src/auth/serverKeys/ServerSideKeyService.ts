@@ -61,7 +61,7 @@ export interface ServerSideKeyServiceContext {
 }
 
 class NodeEvent<T> {
-  private readonly emitter = new EventEmitter();
+  private readonly emitter = new EventEmitter().setMaxListeners(0);
 
   readonly event: Event<T> = (listener) => {
     this.emitter.on('event', listener);
@@ -70,8 +70,19 @@ class NodeEvent<T> {
     };
   };
 
-  fire(event: T): void {
-    this.emitter.emit('event', event);
+  fire(this: NodeEvent<void>): void;
+  fire(event: T): void;
+  fire(event?: T): void {
+    const listeners = this.emitter.listeners('event') as Array<
+      (event: T) => void
+    >;
+    for (const listener of listeners) {
+      try {
+        listener(event as T);
+      } catch (error) {
+        logger.error(CHANNEL, 'Event listener failed.', { data: error });
+      }
+    }
   }
 
   dispose(): void {
@@ -128,7 +139,7 @@ export class ServerSideKeyService {
   }
 
   /**
-   * Initialize the service with VS Code extension context.
+   * Initialize the service with a host-provided persistence context.
    * This enables settings persistence.
    */
   initialize(context: ServerSideKeyServiceContext): void {
