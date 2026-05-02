@@ -706,14 +706,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     if (view) await fn(view.webview);
   }
 
-  private async primeIncludedAccessIfAuthenticated(): Promise<void> {
+  private async primeIncludedAccessIfAuthenticated(): Promise<boolean> {
     const serverSideKeyService = getServerSideKeyService();
     if (
-      serverSideKeyService.getUseIncludedModelAccess() &&
-      (await SupabaseClient.isAuthenticated())
+      !serverSideKeyService.getUseIncludedModelAccess() ||
+      !(await SupabaseClient.isAuthenticated())
     ) {
-      await serverSideKeyService.canUseServerSideKeys();
+      return false;
     }
+
+    return serverSideKeyService.canUseServerSideKeys();
   }
 
   // ============================================================
@@ -726,8 +728,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // spinner until data arrives.
     void this.sendToolDashboardData(webview);
 
-    await this.primeIncludedAccessIfAuthenticated();
-    await this.sendProfileData(webview);
+    const hasServerSideAccess = await this.primeIncludedAccessIfAuthenticated();
+    await this.sendProfileData(webview, { hasServerSideAccess });
     await this.sendModelSelectionData(webview);
 
     await Promise.all([
@@ -806,7 +808,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  public async sendProfileData(webview: vscode.Webview): Promise<void> {
+  public async sendProfileData(
+    webview: vscode.Webview,
+    options: { hasServerSideAccess?: boolean } = {},
+  ): Promise<void> {
     const isAuthenticated = await SupabaseClient.isAuthenticated();
     const providerKeyStatuses = await getProviderKeyStatuses();
 
@@ -834,7 +839,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const serverSideKeyService = getServerSideKeyService();
     const hasServerSideAccess =
-      await serverSideKeyService.canUseServerSideKeys();
+      options.hasServerSideAccess ??
+      (await serverSideKeyService.canUseServerSideKeys());
 
     const user = await SupabaseClient.getUser();
     const authContext = await SupabaseClient.getUserAuthContext();
@@ -1487,8 +1493,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // Access mode affects model availability — invalidate cached options.
     invalidateModelOptionsCache();
+    const hasServerSideAccess = await this.primeIncludedAccessIfAuthenticated();
     await this.withActiveWebview(async (w) => {
-      await this.sendProfileData(w);
+      await this.sendProfileData(w, { hasServerSideAccess });
       await this.sendModelSelectionData(w);
     });
 
