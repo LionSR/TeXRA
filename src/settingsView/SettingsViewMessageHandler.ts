@@ -106,6 +106,7 @@ import {
 import {
   parseCodexSandboxMode,
   parseCodexReasoningEffort,
+  parseCodexApprovalPolicy,
 } from '@tools/codexConfig';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
@@ -603,6 +604,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           WorkspaceStateKey.CODEX_REASONING_EFFORT,
           data.effort,
         ),
+      [SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY]: (data) =>
+        this.updateCodexSetting(
+          WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+          data.policy,
+        ),
 
       // Tool dashboard handlers
       [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
@@ -1064,6 +1070,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           WorkspaceStateKey.CODEX_REASONING_EFFORT,
           'high',
         ) ?? 'high',
+      ),
+      codexApprovalPolicy: parseCodexApprovalPolicy(
+        workspaceSM.get<string>(
+          WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+          'never',
+        ) ?? 'never',
       ),
     });
   }

@@ -18,6 +18,7 @@ import type {
   ToolCategory,
   CodexSandboxMode,
   CodexReasoningEffort,
+  CodexApprovalPolicy,
 } from '@shared/schemas/settingsViewMessages';
 
 // Side-effect: register tool card component
@@ -42,6 +43,17 @@ const REASONING_EFFORT_OPTIONS: readonly {
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
   { value: 'xhigh', label: 'Extra high' },
+] as const;
+
+/** Codex approval policy display labels — single source of truth for the UI. */
+const APPROVAL_POLICY_OPTIONS: readonly {
+  value: CodexApprovalPolicy;
+  label: string;
+}[] = [
+  { value: 'never', label: 'Auto approve' },
+  { value: 'on-request', label: 'Ask when requested' },
+  { value: 'untrusted', label: 'Ask for untrusted' },
+  { value: 'on-failure', label: 'Ask on failure' },
 ] as const;
 
 /** Per-category display metadata. */
@@ -254,6 +266,7 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: String }) codexSandboxMode = 'workspace-write';
   @property({ type: String }) codexReasoningEffort = 'high';
+  @property({ type: String }) codexApprovalPolicy = 'never';
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
@@ -283,6 +296,10 @@ export class ToolsTab extends LitElement {
 
   private handleCodexReasoningEffortChange = (e: Event): void => {
     this.emitSelect('codex-reasoning-effort-change', 'effort', e);
+  };
+
+  private handleCodexApprovalPolicyChange = (e: Event): void => {
+    this.emitSelect('codex-approval-policy-change', 'policy', e);
   };
 
   private renderApprovalSettings(): TemplateResult {
@@ -348,6 +365,12 @@ export class ToolsTab extends LitElement {
           this.codexReasoningEffort,
           REASONING_EFFORT_OPTIONS,
           this.handleCodexReasoningEffortChange,
+        )}
+        ${this.renderSelectRow(
+          'Approval policy',
+          this.codexApprovalPolicy,
+          APPROVAL_POLICY_OPTIONS,
+          this.handleCodexApprovalPolicyChange,
         )}
       </div>
     `;
