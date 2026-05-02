@@ -14,8 +14,6 @@ import { CopyButtonController } from '@shared/controllers';
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
-// Local imports - controllers
-
 // Local imports - formatter helpers
 import { formatTimestamp } from '../formatters/timestampUtils';
 
@@ -26,15 +24,20 @@ const STRUCTURED_DELIVERY_TAGS = [
   'codex-error',
   'execution-activity',
   'github-webhook-activity',
+  'subagent-progress',
   'subagent-result',
   'subagent-error',
 ] as const;
 
-const XML_ESCAPED_DELIVERY_TAGS = new Set<string>([
+// Subset whose content is XML-entity-escaped and needs decoding for display.
+// subagent-progress is included because the "todos" variant runs todo text
+// through escapeText(), producing &amp;/&lt; entities in the body.
+const XML_ESCAPED_TAGS = new Set([
   'background-result',
   'background-error',
   'codex-result',
   'codex-error',
+  'subagent-progress',
   'subagent-result',
   'subagent-error',
 ]);
@@ -44,8 +47,7 @@ const STRUCTURED_DELIVERY_PATTERN = new RegExp(
 );
 
 function getStructuredDeliveryTag(text: string): string | null {
-  const match = STRUCTURED_DELIVERY_PATTERN.exec(text);
-  return match?.[1] ?? null;
+  return STRUCTURED_DELIVERY_PATTERN.exec(text)?.[1] ?? null;
 }
 
 function decodeXmlEntitiesForDisplay(text: string): string {
@@ -81,10 +83,6 @@ export class UserMessage extends LitElement {
         background-color: var(--vscode-editor-selectionBackground);
         border: var(--border-thin) solid var(--vscode-panel-border);
         border-radius: var(--border-radius);
-      }
-
-      .user-message--structured-delivery {
-        max-width: 100%;
       }
 
       .user-message-header {
@@ -146,8 +144,6 @@ export class UserMessage extends LitElement {
         );
         font-size: var(--vscode-editor-font-size, var(--font-size-sm));
         line-height: 1.35;
-        white-space: pre;
-        word-wrap: normal;
       }
 
       .user-message-timestamp {
@@ -189,10 +185,9 @@ export class UserMessage extends LitElement {
       return this.displayCache;
     }
 
-    const structuredTag = getStructuredDeliveryTag(this.text);
-    const isStructuredDelivery = structuredTag != null;
-    const hasRawMessage =
-      structuredTag != null && XML_ESCAPED_DELIVERY_TAGS.has(structuredTag);
+    const tag = getStructuredDeliveryTag(this.text);
+    const isStructuredDelivery = tag != null;
+    const hasRawMessage = tag != null && XML_ESCAPED_TAGS.has(tag);
     const displayText = hasRawMessage
       ? decodeXmlEntitiesForDisplay(this.text)
       : this.text;
