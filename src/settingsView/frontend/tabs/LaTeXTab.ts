@@ -268,7 +268,7 @@ export class LaTeXTab extends LitElement {
 
       .dependency-path {
         margin-top: 4px;
-        font-family: var(--texra-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
       }
@@ -288,7 +288,7 @@ export class LaTeXTab extends LitElement {
           rgba(128, 128, 128, 0.08)
         );
         border-radius: var(--border-radius-small);
-        font-family: var(--texra-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--texra-foreground);
         overflow: hidden;
@@ -394,14 +394,14 @@ export class LaTeXTab extends LitElement {
       }
 
       .setting-config-key {
-        font-family: var(--texra-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         margin-bottom: var(--spacing-small);
       }
 
       .setting-value {
-        font-family: var(--texra-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--texra-textLink-foreground);
       }

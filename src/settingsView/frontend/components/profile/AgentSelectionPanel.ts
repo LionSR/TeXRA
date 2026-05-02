@@ -320,7 +320,7 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-detail-path {
         font-size: var(--font-size-xs);
-        font-family: var(--texra-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         color: var(--color-text-secondary);
         margin-bottom: var(--spacing-large);
         overflow: hidden;
