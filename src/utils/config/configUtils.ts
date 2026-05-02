@@ -32,7 +32,8 @@ function configProvider() {
  * @returns The configuration value or default value
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
-  return configProvider()?.get(path, defaultValue) ?? (defaultValue as T);
+  const provider = configProvider();
+  return provider ? provider.get(path, defaultValue) : (defaultValue as T);
 }
 
 /**
