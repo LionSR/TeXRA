@@ -73,6 +73,7 @@ import type {
   SandboxMode,
   Thread,
   ThreadItem,
+  ThreadOptions,
   TodoListItem,
   WebSearchItem,
 } from '@openai/codex-sdk';
@@ -173,10 +174,12 @@ export function interruptAllCodexSessions(): void {
 class CodexFollowUpSession implements IInterruptible {
   private interrupted = false;
   private queue: FollowUpQueue | null = null;
+  private turnAbortController: AbortController | null = null;
 
   interrupt(): void {
     this.interrupted = true;
     this.queue?.cancelWait();
+    this.turnAbortController?.abort();
   }
 
   setQueue(q: FollowUpQueue): void {
@@ -185,6 +188,15 @@ class CodexFollowUpSession implements IInterruptible {
 
   isInterrupted(): boolean {
     return this.interrupted;
+  }
+
+  startTurn(): AbortSignal {
+    this.turnAbortController = new AbortController();
+    return this.turnAbortController.signal;
+  }
+
+  finishTurn(): void {
+    this.turnAbortController = null;
   }
 }
 
@@ -305,9 +317,10 @@ async function runStreamedTurn(
   prompt: string,
   childStreamId: StreamTabId,
   logger: AgentLogger,
+  signal?: AbortSignal,
 ): Promise<RunResult> {
   logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
-  const { events } = await thread.runStreamed(prompt);
+  const { events } = await thread.runStreamed(prompt, { signal });
   const responseParts: string[] = [];
   let usage: RunResult['usage'] = null;
 
@@ -402,15 +415,24 @@ function startCodexLoop(params: {
         const prompt = messages.join('\n\n');
         StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
         const startedAt = Date.now();
+        const signal = session.startTurn();
 
         let turn: RunResult | null = null;
         let err: unknown = null;
         try {
-          turn = await runStreamedTurn(thread, prompt, childStreamId, logger);
+          turn = await runStreamedTurn(
+            thread,
+            prompt,
+            childStreamId,
+            logger,
+            signal,
+          );
           logTurnSummary(logger, Date.now() - startedAt, turn.usage);
         } catch (caught) {
           err = caught;
           logger.error(toErrorMessage(caught));
+        } finally {
+          session.finishTurn();
         }
 
         const wallTimeMs = Date.now() - startedAt;
@@ -483,15 +505,16 @@ async function createCodexThread(
   const CodexClass = await importCodexClass();
   const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
   const config = await getCodexConfig();
-  const sandboxMode = input.sandbox_mode;
+  const sandboxMode = input.sandbox_mode ?? undefined;
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =
     workingDir || !input.thread_id
       ? config.buildCodexWorkspaceOptions(workingDir)
       : {};
-  const threadOptions = {
+  const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
+    approvalPolicy: config.getCodexApprovalPolicy(),
     model: config.CODEX_CLI_MODEL,
     modelReasoningEffort: config.getCodexCliReasoningEffort(),
     skipGitRepoCheck: true as const,
