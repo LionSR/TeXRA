@@ -5,9 +5,9 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { bus } from '@eventBus/ProgressEventBus';
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
+import { bus } from '@eventBus/ProgressEventBus';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
