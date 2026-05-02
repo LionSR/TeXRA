@@ -1,10 +1,10 @@
 name: paper2poster
 settings:
   agentCategory: workflow
-  documentTag: beamer_poster
-  endTag: </beamer_poster>
   outputExt: tex
   isRewrite: False
+  prefills:
+    - "Here is the Beamer poster. <documents>"
   requiredFilesInternal:
     TEMPLATE_POSTER: template_poster.tex
     TEMPLATE_POSTER_STYLE: beamercolorthemempi.sty
@@ -75,9 +75,19 @@ prompts:
     - |
       Create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
 
-      <beamer_poster>
+      {% if OUTPUT_FILES_ORDER %}
+      <documents>
+      <document name="{OUTPUT_FILES_ORDER[0]}">
       {{ TEMPLATE_POSTER_CONTENT }}
-      </beamer_poster>
+      </document>
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      {{ TEMPLATE_POSTER_CONTENT }}
+      </document>
+      </documents>
+      {% endif %}
     - |
       Critically review your draft and output a revised version. Check these aspects and fix any issues found:
       \begin{enumerate}
@@ -96,6 +106,16 @@ prompts:
 
       Output the revised poster based on the previous version, balancing detailed mathematical content with visual appeal:
 
-      <beamer_poster>
+      {% if OUTPUT_FILES_ORDER %}
+      <documents>
+      <document name="{OUTPUT_FILES_ORDER[0]}">
       % Complete revised LaTeX Beamer poster here
-      </beamer_poster>
+      </document>
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      % Complete revised LaTeX Beamer poster here
+      </document>
+      </documents>
+      {% endif %}
