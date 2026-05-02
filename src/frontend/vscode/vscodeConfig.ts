@@ -15,6 +15,24 @@ interface VscodeConfigInspection<T> {
   workspaceFolderValue?: T;
 }
 
+function configKeys(key: string): string[] {
+  if (key.startsWith('texra.')) return [key];
+  return [key, `texra.${key}`];
+}
+
+function inspectKey<T>(key: string): VscodeConfigInspection<T> | undefined {
+  return vscode.workspace.getConfiguration().inspect<T>(key);
+}
+
+function resolveWriteKey(key: string): string {
+  if (key.startsWith('texra.')) return key;
+
+  if (inspectKey(key)) return key;
+
+  const texraKey = `texra.${key}`;
+  return inspectKey(texraKey) ? texraKey : key;
+}
+
 function toConfigurationTarget(
   target: ConfigTarget,
 ): vscode.ConfigurationTarget {
@@ -24,8 +42,8 @@ function toConfigurationTarget(
 }
 
 function normalizeInspection<T>(
-  key: string,
   inspection: VscodeConfigInspection<T> | undefined,
+  effectiveValue: T,
 ): ConfigInspection<T> | undefined {
   if (!inspection) return undefined;
   return {
@@ -33,7 +51,7 @@ function normalizeInspection<T>(
     globalValue: inspection.globalValue,
     workspaceValue: inspection.workspaceValue,
     workspaceFolderValue: inspection.workspaceFolderValue,
-    effectiveValue: vscode.workspace.getConfiguration().get<T>(key),
+    effectiveValue,
   };
 }
 
@@ -67,14 +85,15 @@ export class VscodeConfigProvider implements ConfigProvider {
   ): Promise<void> {
     await vscode.workspace
       .getConfiguration()
-      .update(key, value, toConfigurationTarget(target));
+      .update(resolveWriteKey(key), value, toConfigurationTarget(target));
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
-    return normalizeInspection(
-      key,
-      vscode.workspace.getConfiguration().inspect<T>(key),
-    );
+    const inspection = configKeys(key)
+      .map((item) => inspectKey<T>(item))
+      .find((item) => item !== undefined);
+
+    return normalizeInspection(inspection, this.get<T>(key));
   }
 
   isExplicitlySet(key: string): boolean {
@@ -93,11 +112,21 @@ export class VscodeConfigProvider implements ConfigProvider {
   ): vscode.Disposable {
     return vscode.workspace.onDidChangeConfiguration((event) => {
       if (typeof key === 'string') {
-        if (event.affectsConfiguration(key)) listener();
+        if (configKeys(key).some((item) => event.affectsConfiguration(item))) {
+          listener();
+        }
         return;
       }
       if (Array.isArray(key)) {
-        if (key.some((item) => event.affectsConfiguration(item))) listener();
+        if (
+          key.some((item) =>
+            configKeys(item).some((candidate) =>
+              event.affectsConfiguration(candidate),
+            ),
+          )
+        ) {
+          listener();
+        }
         return;
       }
 
