@@ -397,13 +397,20 @@ Confirmed by scout:
 - `@xterm/xterm` + `@xterm/addon-fit` — work in Electron renderers (already run in browsers).
 - `chokidar` — pure JS in v4.
 
-**Runtime closure has no `.node` files.** Verified by walking `package-lock.json` — every package containing native bindings (`@rolldown/binding-*`, `lightningcss-*-*`) is marked `dev: true, optional: true`, so they're Vite/Rolldown build-time only and never ship in the production bundle. To prevent regression, Phase 6 packaging adds a CI check that fails if `electron-builder`'s emitted asar contains any `.node` file we didn't explicitly allow-list (Codex SDK is the only exception, and it ships as `extraResources` outside asar via `asarUnpack`).
+**Runtime closure has no `.node` files.** Verified by walking `package-lock.json` — every package containing native bindings (`@rolldown/binding-*`, `lightningcss-*-*`) is marked `dev: true, optional: true`, so they're Vite/Rolldown build-time only and never ship in the production bundle. To prevent regression, Phase 6 packaging adds a CI check that fails if `electron-builder`'s emitted asar contains any `.node` file we didn't explicitly allow-list (Codex SDK is the only exception, and ships unpacked from asar via `asarUnpack` — see §8.4).
 
 A build-time guard plugin (custom esbuild plugin: any `import 'vscode'` in `packages/desktop/` or `packages/core/` fails the build) prevents leakage as the codebase grows.
 
 ### 8.4 Resources
 
-`resources/agents/`, `resources/walkthroughs/`, `resources/logo-128x128.png`, replacement rules — copied into the asar via `electron-builder` `extraResources`. Loaded through `app.getAppPath()`. Existing code reads via `platform().fs.readFile`, so no path code changes.
+`resources/agents/`, `resources/walkthroughs/`, `resources/logo-128x128.png`, replacement rules — bundled **inside `app.asar`** via `electron-builder`'s `files` glob (so `app.getAppPath() + '/resources/...'` resolves correctly in dev and after packaging). Existing code reads via `platform().fs.readFile`, so no path code changes.
+
+**Two distinct asset locations to keep straight in `electron-builder.yml`:**
+
+- **`files`** (default — bundled inside `app.asar`): YAML agent definitions, walkthrough markdown, logos, replacement rules, every TS/JS we ship. Path: `app.getAppPath()` + relative.
+- **`asarUnpack`** (extracted from asar at install time, lives under `process.resourcesPath/app.asar.unpacked/...`): native binaries that subprocess-spawn won't tolerate inside an asar. Currently just `**/node_modules/@openai/codex-*/**`. Resolve via `process.resourcesPath + '/app.asar.unpacked/...'`.
+
+We do **not** use `extraResources` for v1 — it places files in `process.resourcesPath` (a third pathing convention) with no benefit for our asset shapes. Reserved for the future only if we ever ship user-patchable assets meant to be edited out-of-band.
 
 ## 9. Pre-refactorings — land these in the extension first
 
