@@ -192,6 +192,32 @@ export const profileViewStyles: CSSResult = css`
     accent-color: var(--vscode-focusBorder);
   }
 
+  .api-access-support {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-small);
+    padding: var(--spacing-small) var(--spacing-medium);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+  }
+
+  .api-access-support-icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: var(--vscode-charts-red, var(--vscode-errorForeground));
+  }
+
+  .api-access-support a {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: none;
+  }
+
+  .api-access-support a:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+  }
+
   .option-content {
     display: flex;
     flex-direction: column;
