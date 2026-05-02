@@ -30,8 +30,8 @@ export function cleanSessionDescription(text: string): string {
   const cleaned = text
     .trim()
     .replaceAll(/\s*\n\s*/g, ' ')
-    .replace(/^["'`]+|["'`]+$/g, '')
-    .replace(/[.!?…]+$/, '')
+    .replaceAll(/^["'`]+|["'`]+$/g, '')
+    .replaceAll(/[.!?…]+$/g, '')
     .trim();
   if (!cleaned) return '';
   return truncateWithEllipsis(cleaned, MAX_DESCRIPTION_LENGTH);
