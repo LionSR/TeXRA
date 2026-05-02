@@ -42,6 +42,7 @@ export enum WorkspaceStateKey {
   // Codex settings
   CODEX_SANDBOX_MODE = 'texra.codexSandboxMode',
   CODEX_REASONING_EFFORT = 'texra.codexReasoningEffort',
+  CODEX_APPROVAL_POLICY = 'texra.codexApprovalPolicy',
 
   // Git commit author settings
   GIT_MARK_COMMITS = 'texra.git.markCommits',
