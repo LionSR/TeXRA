@@ -456,16 +456,16 @@ What `desktop/` does **not** import from `extension/`:
 
 Eight files, ~250–400 LOC total. Each mirrors an existing VS Code impl in `src/frontend/vscode/`.
 
-| Interface                | VS Code (today)                                             | Electron                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ConfigProvider`         | `vscode.workspace.getConfiguration` w/ 3-namespace fallback | `conf` instance + Zod schema mirroring `package.json` `contributes.configuration`                                                                                                                                                                                                                                                                                                                                                                                               |
-| `StateStore` (global)    | `ExtensionContext.globalState`                              | `conf` (file: `state.global.json`) under `app.getPath('userData')`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Interface                | VS Code (today)                                                                     | Electron                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ConfigProvider`         | `vscode.workspace.getConfiguration` w/ 3-namespace fallback                         | `conf` instance + Zod schema mirroring `package.json` `contributes.configuration`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `StateStore` (global)    | `ExtensionContext.globalState`                                                      | `conf` (file: `state.global.json`) under `app.getPath('userData')`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `StateStore` (workspace) | `ExtensionContext.workspaceState` (app-private Memento) for **all** workspace state | **Two storage classes, not one** (the existing extension also conflates them — fix it once at port time): (a) **small mementos** (last-selected agent, last-opened tab, UI toggles, migration markers) in `conf` keyed by hashed project path under `userData/workspace-state/<sha256(projectPath)>.json`; (b) **run artifacts** (agent history, stream logs, task states, run instructions, output-file metadata) under append-oriented per-run directories at `userData/projects/<sha256(projectPath)>/runs/<runId>/`. Append-only writes, explicit retention/compaction (default: keep last 50 runs per project, summarize older). **Not** in `<project>/.texra/` either way. Putting run artifacts in `conf` JSON would mean rewriting the same blob on every progress event — works in demos, garbage under real sessions. |
-| `LogBackend`             | `vscode.OutputChannel`                                      | `electron-log` to `app.getPath('logs')/` + in-app log viewer pane                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `FileSystemProvider`     | `vscode.workspace.fs`                                       | `node:fs/promises` + `fs-extra` (already a dep)                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `WorkspaceProvider`      | `workspace.workspaceFolders[0]` + `asRelativePath`          | Project-folder model + `chokidar`. "Open Project" replaces "Open Folder."                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `StorageProvider`        | `context.storageUri`, `context.globalStorageUri`            | `app.getPath('userData')` (global) + per-project storage scoped under `userData/projects/<sha256(projectPath)>/` (NOT inside the user's repo, same reasoning as `StateStore` workspace).                                                                                                                                                                                                                                                                                        |
-| `PlatformSecrets`        | `context.secrets`                                           | `safeStorage.encryptString` over a `conf`-backed JSON blob                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `LogBackend`             | `vscode.OutputChannel`                                                              | `electron-log` to `app.getPath('logs')/` + in-app log viewer pane                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `FileSystemProvider`     | `vscode.workspace.fs`                                                               | `node:fs/promises` + `fs-extra` (already a dep)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `WorkspaceProvider`      | `workspace.workspaceFolders[0]` + `asRelativePath`                                  | Project-folder model + `chokidar`. "Open Project" replaces "Open Folder."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `StorageProvider`        | `context.storageUri`, `context.globalStorageUri`                                    | `app.getPath('userData')` (global) + per-project storage scoped under `userData/projects/<sha256(projectPath)>/` (NOT inside the user's repo, same reasoning as `StateStore` workspace).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `PlatformSecrets`        | `context.secrets`                                                                   | `safeStorage.encryptString` over a `conf`-backed JSON blob                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 `initPlatform()` is called once at top of `main/index.ts`, before any agent code runs. Mirrors the call site in `src/extension.ts:144-153`.
 
@@ -475,13 +475,13 @@ Renderer and main process exchange messages, but **the IPC layer is also a secur
 
 **Capability model: one channel per view, one allowlisted method set per channel.**
 
-| Channel               | Sender (preload exposes)                  | `ipcMain.handle` allowlist (controllers)            | Lives at                              |
-| --------------------- | ----------------------------------------- | --------------------------------------------------- | ------------------------------------- |
-| `texra:main-rpc`      | `window.texra.main.<method>(args)`        | `MainViewController.<allowlisted methods>`          | main window's `<main-app>`            |
-| `texra:progress-rpc`  | `window.texra.progress.<method>(args)`    | `ProgressViewController.<allowlisted methods>`      | progress route in main window         |
-| `texra:settings-rpc`  | `window.texra.settings.<method>(args)`    | `SettingsViewController.<allowlisted methods>`      | settings route in main window         |
-| `texra:diff-rpc`      | `window.texra.diff.<method>(args)`        | `editApproval` only (approve/reject)                | diff component embedded in progress   |
-| `texra:<view>-push`   | `ipcRenderer.on(...)`                     | (host → renderer; one-way; no allowlist needed)     | each view subscribes to its own push  |
+| Channel              | Sender (preload exposes)               | `ipcMain.handle` allowlist (controllers)        | Lives at                             |
+| -------------------- | -------------------------------------- | ----------------------------------------------- | ------------------------------------ |
+| `texra:main-rpc`     | `window.texra.main.<method>(args)`     | `MainViewController.<allowlisted methods>`      | main window's `<main-app>`           |
+| `texra:progress-rpc` | `window.texra.progress.<method>(args)` | `ProgressViewController.<allowlisted methods>`  | progress route in main window        |
+| `texra:settings-rpc` | `window.texra.settings.<method>(args)` | `SettingsViewController.<allowlisted methods>`  | settings route in main window        |
+| `texra:diff-rpc`     | `window.texra.diff.<method>(args)`     | `editApproval` only (approve/reject)            | diff component embedded in progress  |
+| `texra:<view>-push`  | `ipcRenderer.on(...)`                  | (host → renderer; one-way; no allowlist needed) | each view subscribes to its own push |
 
 The preload script does **not** expose a generic `rpc(channel, msg)` function. It exposes per-view namespaces with explicit method shapes:
 
@@ -489,17 +489,21 @@ The preload script does **not** expose a generic `rpc(channel, msg)` function. I
 // desktop/preload/index.ts
 contextBridge.exposeInMainWorld('texra', {
   main: {
-    runWorkflow:  (args: RunWorkflowArgs) => ipcRenderer.invoke('texra:main-rpc:runWorkflow', args),
-    selectFiles:  (args: SelectFilesArgs) => ipcRenderer.invoke('texra:main-rpc:selectFiles', args),
+    runWorkflow: (args: RunWorkflowArgs) =>
+      ipcRenderer.invoke('texra:main-rpc:runWorkflow', args),
+    selectFiles: (args: SelectFilesArgs) =>
+      ipcRenderer.invoke('texra:main-rpc:selectFiles', args),
     // ...one method per allowlisted controller method
   },
   progress: {
-    approveEdit:  (args: ApproveEditArgs) => ipcRenderer.invoke('texra:progress-rpc:approveEdit', args),
+    approveEdit: (args: ApproveEditArgs) =>
+      ipcRenderer.invoke('texra:progress-rpc:approveEdit', args),
     // ...
   },
   // ...
   on: {
-    progress: (cb: (msg: PushMessage) => void) => ipcRenderer.on('texra:progress-push', (_, m) => cb(m)),
+    progress: (cb: (msg: PushMessage) => void) =>
+      ipcRenderer.on('texra:progress-push', (_, m) => cb(m)),
     // ...
   },
 });
@@ -521,7 +525,7 @@ contextBridge.exposeInMainWorld('texra', {
 
 - **Main process** — app lifecycle, window mgmt, native menu, auto-update, protocol handler, platform impls.
 - **Renderer (one per window)** — Lit UI; `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`. Talks to main via preload bridge.
-- **No utility process at v1, but the boundary exists.** Agents run in the main process at v1, but the agent runtime takes `AgentRuntimeHost` / `ProgressSink` as a constructor dep (per §9 #20), not a singleton. v1 ships an `InProcessProgressSink` that forwards to in-process subscribers; v2's utility-process variant ships a `MessagePortProgressSink` against the same interface. No rewrites of progress / approval / cancellation / logging when v2 lands. Deferred to §13.1 because the v2 *implementation* (utility-process spawning + IPC plumbing) isn't worth doing for v1, but the *abstraction* lands now to prevent the cross-cutting rewrite later.
+- **No utility process at v1, but the boundary exists.** Agents run in the main process at v1, but the agent runtime takes `AgentRuntimeHost` / `ProgressSink` as a constructor dep (per §9 #20), not a singleton. v1 ships an `InProcessProgressSink` that forwards to in-process subscribers; v2's utility-process variant ships a `MessagePortProgressSink` against the same interface. No rewrites of progress / approval / cancellation / logging when v2 lands. Deferred to §13.1 because the v2 _implementation_ (utility-process spawning + IPC plumbing) isn't worth doing for v1, but the _abstraction_ lands now to prevent the cross-cutting rewrite later.
 
 ### 7.6 Replacing VS Code-specific UX
 
@@ -732,7 +736,9 @@ Define the boundary now, even though v1 implements it in-process:
 // core/agent/runtime/ports.ts
 export interface ProgressSink {
   emit(event: ProgressEvent): void;
-  onApprovalRequest(handler: (req: ApprovalRequest) => Promise<ApprovalResponse>): Disposable;
+  onApprovalRequest(
+    handler: (req: ApprovalRequest) => Promise<ApprovalResponse>,
+  ): Disposable;
 }
 export interface AgentRuntimeHost {
   sink: ProgressSink;
@@ -828,13 +834,15 @@ export interface UIHosts {
 | `TerminalHost`   | `vscode.window.createTerminal`                                                  | xterm.js component already in renderer + spawned subprocess                |
 | `CommandHost`    | `vscode.commands.executeCommand` (registered via #17 catalog)                   | In-process registry built from #17 catalog                                 |
 | `ClipboardHost`  | `vscode.env.clipboard`                                                          | `clipboard` from Electron's `electron` module                              |
+
 =======
-  prompt:         PromptHost;        // confirm / info / warning / error / input
-  externalOpener: ExternalOpener;    // openExternal(url), openPath(file)
-  diff:           DiffViewHost;      // (already defined in §9 #2)
-  terminal:       TerminalHost;      // create / send / dispose terminal
-  clipboard:      ClipboardHost;     // read / write text
+prompt: PromptHost; // confirm / info / warning / error / input
+externalOpener: ExternalOpener; // openExternal(url), openPath(file)
+diff: DiffViewHost; // (already defined in §9 #2)
+terminal: TerminalHost; // create / send / dispose terminal
+clipboard: ClipboardHost; // read / write text
 }
+
 ```
 
 | Port             | VS Code adapter                                                | Electron adapter                                                            |
@@ -1235,12 +1243,16 @@ Total config + CI + tests + docs: another ~1,500–2,200 LOC of non-application 
 ## 15. Tech stack one-liner
 
 ```
+
 electron-vite + electron-builder + electron-updater (→ public release repo)
-+ conf + safeStorage + chokidar4 + Monaco (lazy-loaded, diff only)
-+ Lit (existing) + diff-match-patch (existing, inline only) + fix-path
-+ pnpm workspaces (3 packages, ESM-first) + Sentry Electron (opt-in)
-+ electron-window-state + electron-context-menu + vite-plugin-monaco-editor
-+ Vitest (Electron-side tests) + Playwright (E2E)
+
+- conf + safeStorage + chokidar4 + Monaco (lazy-loaded, diff only)
+- Lit (existing) + diff-match-patch (existing, inline only) + fix-path
+- pnpm workspaces (3 packages, ESM-first) + Sentry Electron (opt-in)
+- electron-window-state + electron-context-menu + vite-plugin-monaco-editor
+- Vitest (Electron-side tests) + Playwright (E2E)
+
 ```
 
 That's the whole story. Every other line of code already exists.
+```
