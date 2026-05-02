@@ -824,26 +824,26 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 
 #### LOC by component (`packages/desktop/src/main/` + `renderer/`)
 
-| Component                                                                         | New LOC          | Notes                                                                                               |
-| --------------------------------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
-| `main/index.ts` (lifecycle, single-instance lock, fix-path top-of-file)           | ~120             | Cold-start bookkeeping, single-instance, `fix-path()` cached.                                       |
-| `main/platform/` (8 files: config, state×2, log, fs, workspace, storage, secrets) | 250–400          | Mirrors VS Code impls in `src/frontend/vscode/` (~300 LOC today).                                   |
-| `main/ipc/` (typed channels + dispatcher adapter)                                 | ~150             | Wraps Zod schemas from `core/shared/`; one new transport adapter file.                              |
-| `main/menu.ts`                                                                    | ~100             | Native menu mapping top 20 commands.                                                                |
-| `main/protocol.ts` (`texra://` handler)                                           | ~80              | Mirrors `src/auth/UriHandler.ts` logic (~150 LOC) but reuses the extracted `parseAuthCallback()`.   |
-| `main/updater.ts`                                                                 | ~80              | electron-updater event wiring + user-consent dialog.                                                |
+| Component                                                                         | New LOC          | Notes                                                                                                 |
+| --------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `main/index.ts` (lifecycle, single-instance lock, fix-path top-of-file)           | ~120             | Cold-start bookkeeping, single-instance, `fix-path()` cached.                                         |
+| `main/platform/` (8 files: config, state×2, log, fs, workspace, storage, secrets) | 250–400          | Mirrors VS Code impls in `src/frontend/vscode/` (~300 LOC today).                                     |
+| `main/ipc/` (typed channels + dispatcher adapter)                                 | ~150             | Wraps Zod schemas from `core/shared/`; one new transport adapter file.                                |
+| `main/menu.ts`                                                                    | ~100             | Native menu mapping top 20 commands.                                                                  |
+| `main/protocol.ts` (`texra://` handler)                                           | ~80              | Mirrors `src/auth/UriHandler.ts` logic (~150 LOC) but reuses the extracted `parseAuthCallback()`.     |
+| `main/updater.ts`                                                                 | ~80              | electron-updater event wiring + user-consent dialog.                                                  |
 | (window creation in `main/index.ts`)                                              | included above   | electron-window-state inlined into `main/index.ts`; no separate file at v1 (per §7.1 simplification). |
-| `main/contextMenu.ts` (electron-context-menu)                                     | ~30              | Configuration only.                                                                                 |
-| `main/log.ts` (electron-log → LogBackend)                                         | ~80              | Adapter pattern, file rotation config.                                                              |
-| `main/pathFix.ts`                                                                 | ~50              | `fix-path` + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`. |
-| `main/ipc/editApproval.ts`                                                        | ~120             | Replaces `nativeToolEditApproval.ts` (439 LOC); most of the diff-temp-file work moves to `core/`.   |
-| `preload/index.ts`                                                                | ~80              | `contextBridge` API surface (~10 methods).                                                          |
-| `renderer/main.ts` (mounts the three Lit apps)                                    | ~100             | Boots `<main-app>` / `<progress-app>` / `<settings-app>` and routes via `toggleView` state.         |
-| `renderer/components/TexraDiffView.ts`                                            | 200–400          | Largest single new component; lazy-loads Monaco.                                                    |
-| `renderer/themeTokens.css`                                                        | ~150             | 53 tokens × 3 themes (light/dark/HC).                                                               |
-| `renderer/index.html`                                                             | ~30              | Single-window shell.                                                                                |
-| Beta polish (walkthrough modal, log-viewer pane, migration importer)              | ~370             | Phase 7 deliverables.                                                                               |
-| **Subtotal**                                                                      | **~2,500–3,000** |                                                                                                     |
+| `main/contextMenu.ts` (electron-context-menu)                                     | ~30              | Configuration only.                                                                                   |
+| `main/log.ts` (electron-log → LogBackend)                                         | ~80              | Adapter pattern, file rotation config.                                                                |
+| `main/pathFix.ts`                                                                 | ~50              | `fix-path` + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`.   |
+| `main/ipc/editApproval.ts`                                                        | ~120             | Replaces `nativeToolEditApproval.ts` (439 LOC); most of the diff-temp-file work moves to `core/`.     |
+| `preload/index.ts`                                                                | ~80              | `contextBridge` API surface (~10 methods).                                                            |
+| `renderer/main.ts` (mounts the three Lit apps)                                    | ~100             | Boots `<main-app>` / `<progress-app>` / `<settings-app>` and routes via `toggleView` state.           |
+| `renderer/components/TexraDiffView.ts`                                            | 200–400          | Largest single new component; lazy-loads Monaco.                                                      |
+| `renderer/themeTokens.css`                                                        | ~150             | 53 tokens × 3 themes (light/dark/HC).                                                                 |
+| `renderer/index.html`                                                             | ~30              | Single-window shell.                                                                                  |
+| Beta polish (walkthrough modal, log-viewer pane, migration importer)              | ~370             | Phase 7 deliverables.                                                                                 |
+| **Subtotal**                                                                      | **~2,500–3,000** |                                                                                                       |
 
 #### LOC for `packages/core/` and `packages/extension/` (changes to existing code)
 
