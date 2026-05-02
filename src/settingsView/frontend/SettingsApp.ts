@@ -25,30 +25,12 @@ import {
 
 // Local imports - shared schemas and constants
 import {
-  UpdateMemoryEnabledMessageSchema,
-  UpdateMemoryMessageSchema,
   type MemoryViewItem,
-  UpdateHistoryMessageSchema,
-  HistoryClearedMessageSchema,
   type HistoryItem,
-  UpdateProfileMessageSchema,
   type ProviderKeyStatus,
   type ModelSelectionItem,
-  UpdateModelSelectionMessageSchema,
-  SetTabMessageSchema,
 } from '@shared/schemas';
 import {
-  UpdateAgentSelectionMessageSchema,
-  UpdateCustomAgentDirMessageSchema,
-  UpdateSuperYoloEnabledMessageSchema,
-  UpdateAgentModePresetsMessageSchema,
-  UpdateApprovalSettingsMessageSchema,
-  UpdateToolDashboardMessageSchema,
-  UpdateGitAuthorSettingsMessageSchema,
-  UpdateGitHubTokenStatusMessageSchema,
-  UpdatePRSubscriptionsMessageSchema,
-  UpdateLatexSettingsStatusMessageSchema,
-  UpdateLatexConfigValuesMessageSchema,
   type AgentSelectionItem,
   type LatexConfigValues,
   type NumberVscodeSetting,
@@ -68,6 +50,10 @@ import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolic
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import { settingsViewStyles } from './styles';
+import {
+  dispatchSettingsViewMessage,
+  type SettingsMessageHandlerContext,
+} from './settingsViewDispatcher';
 import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
 // Side-effect: register tab components
@@ -219,213 +205,59 @@ export class SettingsApp extends SettingsAppBase {
   private readonly latexConfigValues = signal<LatexConfigValues>({});
   private readonly latexConfigValuesLoaded = signal(false);
 
-  private parseMessage<T>(
-    raw: unknown,
-    schema: {
-      safeParse(
-        data: unknown,
-      ): { success: true; data: T } | { success: false; error: unknown };
-    },
-  ): T | null {
-    const result = schema.safeParse(raw);
-    if (!result.success) {
-      this.logSchemaError(
-        '[SettingsApp] Message validation failed.',
-        result.error,
-      );
-      return null;
-    }
-    return result.data;
+  private getMessageHandlerContext(): SettingsMessageHandlerContext {
+    return {
+      selectedTabIndex: this.selectedTabIndex,
+      memoryItems: this.memoryItems,
+      memoryEnabled: this.memoryEnabled,
+      memoryToggleDisabled: this.memoryToggleDisabled,
+      historyItems: this.historyItems,
+      authenticated: this.authenticated,
+      userEmail: this.userEmail,
+      userId: this.userId,
+      tier: this.tier,
+      apiAccessMode: this.apiAccessMode,
+      allowedModels: this.allowedModels,
+      accessExpiresAt: this.accessExpiresAt,
+      providerKeyStatuses: this.providerKeyStatuses,
+      globalStreamingDefault: this.globalStreamingDefault,
+      modelSelectionItems: this.modelSelectionItems,
+      helperModel: this.helperModel,
+      preferShortModelNames: this.preferShortModelNames,
+      workflowAgents: this.workflowAgents,
+      toolUseAgents: this.toolUseAgents,
+      customAgentDir: this.customAgentDir,
+      customAgentDirIsDefault: this.customAgentDirIsDefault,
+      agentSubTab: this.agentSubTab,
+      customPresets: this.customPresets,
+      reliabilitySettings: this.reliabilitySettings,
+      allowOrchestratorKill: this.allowOrchestratorKill,
+      detachSubagentsOnStop: this.detachSubagentsOnStop,
+      nestedDelegationMaxDepth: this.nestedDelegationMaxDepth,
+      bashApprovalEnabled: this.bashApprovalEnabled,
+      codexSandboxMode: this.codexSandboxMode,
+      codexReasoningEffort: this.codexReasoningEffort,
+      codexApprovalPolicy: this.codexApprovalPolicy,
+      toolDashboardItems: this.toolDashboardItems,
+      toolDashboardLoaded: this.toolDashboardLoaded,
+      gitMarkCommits: this.gitMarkCommits,
+      gitAuthorName: this.gitAuthorName,
+      gitAuthorEmail: this.gitAuthorEmail,
+      gitWorktreeSupport: this.gitWorktreeSupport,
+      gitSettingsLoaded: this.gitSettingsLoaded,
+      githubTokenStatus: this.githubTokenStatus,
+      prSubscriptions: this.prSubscriptions,
+      latexSettingsStatus: this.latexSettingsStatus,
+      latexSettingsLoaded: this.latexSettingsLoaded,
+      latexConfigValues: this.latexConfigValues,
+      latexConfigValuesLoaded: this.latexConfigValuesLoaded,
+      clearHistorySearch: () => this.historyTab?.clearSearch(),
+      logSchemaError: (message, error) => this.logSchemaError(message, error),
+    };
   }
 
   protected override handleMessage(raw: unknown): void {
-    if (!raw || typeof raw !== 'object' || !('command' in raw)) {
-      return;
-    }
-
-    const command = (raw as { command: string }).command;
-
-    switch (command) {
-      case SETTINGS_VIEW_COMMANDS.SET_TAB: {
-        const data = this.parseMessage(raw, SetTabMessageSchema);
-        if (!data) return;
-        this.selectedTabIndex.set(data.tabIndex);
-        this.agentSubTab.set(data.agentSubTab);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY: {
-        const data = this.parseMessage(raw, UpdateMemoryMessageSchema);
-        if (!data) return;
-        this.memoryItems.set(data.items ?? []);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED: {
-        const data = this.parseMessage(raw, UpdateMemoryEnabledMessageSchema);
-        if (!data) return;
-        this.memoryEnabled.set(data.enabled);
-        this.memoryToggleDisabled.set(false);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY: {
-        const data = this.parseMessage(raw, UpdateHistoryMessageSchema);
-        if (!data) return;
-        this.historyItems.set(
-          [...data.historyItems].sort(
-            (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-          ),
-        );
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED: {
-        const data = this.parseMessage(raw, HistoryClearedMessageSchema);
-        if (!data) return;
-        this.historyItems.set([]);
-        this.historyTab?.clearSearch();
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION: {
-        const data = this.parseMessage(raw, UpdateModelSelectionMessageSchema);
-        if (!data) return;
-        this.modelSelectionItems.set(data.models);
-        this.helperModel.set(data.helperModel);
-        this.preferShortModelNames.set(data.preferShortModelNames);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION: {
-        const data = this.parseMessage(raw, UpdateAgentSelectionMessageSchema);
-        if (!data) return;
-        this.workflowAgents.set(data.workflow);
-        this.toolUseAgents.set(data.toolUse);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR: {
-        const data = this.parseMessage(raw, UpdateCustomAgentDirMessageSchema);
-        if (!data) return;
-        this.customAgentDir.set(data.path);
-        this.customAgentDirIsDefault.set(data.isDefault);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED: {
-        const data = this.parseMessage(
-          raw,
-          UpdateSuperYoloEnabledMessageSchema,
-        );
-        if (!data) return;
-        this.reliabilitySettings.set(data.reliabilitySettings);
-        this.allowOrchestratorKill.set(data.allowOrchestratorKill);
-        this.detachSubagentsOnStop.set(data.detachSubagentsOnStop);
-        this.nestedDelegationMaxDepth.set(data.nestedDelegationMaxDepth);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS: {
-        const data = this.parseMessage(
-          raw,
-          UpdateAgentModePresetsMessageSchema,
-        );
-        if (!data) return;
-        this.customPresets.set(data.customPresets);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS: {
-        const data = this.parseMessage(
-          raw,
-          UpdateApprovalSettingsMessageSchema,
-        );
-        if (!data) return;
-        this.bashApprovalEnabled.set(data.bashApprovalEnabled);
-        this.codexSandboxMode.set(data.codexSandboxMode);
-        this.codexReasoningEffort.set(data.codexReasoningEffort);
-        this.codexApprovalPolicy.set(data.codexApprovalPolicy);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD: {
-        const data = this.parseMessage(raw, UpdateToolDashboardMessageSchema);
-        if (!data) return;
-        this.toolDashboardItems.set(data.items);
-        this.toolDashboardLoaded.set(true);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS: {
-        const data = this.parseMessage(
-          raw,
-          UpdateGitAuthorSettingsMessageSchema,
-        );
-        if (!data) return;
-        this.gitMarkCommits.set(data.markCommits);
-        this.gitAuthorName.set(data.authorName);
-        this.gitAuthorEmail.set(data.authorEmail);
-        this.gitWorktreeSupport.set(data.worktreeSupport);
-        this.gitSettingsLoaded.set(true);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS: {
-        const data = this.parseMessage(
-          raw,
-          UpdateGitHubTokenStatusMessageSchema,
-        );
-        if (!data) return;
-        this.githubTokenStatus.set(data.status);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS: {
-        const data = this.parseMessage(raw, UpdatePRSubscriptionsMessageSchema);
-        if (!data) return;
-        this.prSubscriptions.set(data.subscriptions);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS: {
-        const data = this.parseMessage(
-          raw,
-          UpdateLatexSettingsStatusMessageSchema,
-        );
-        if (!data) return;
-        this.latexSettingsStatus.set(data.settings);
-        this.latexSettingsLoaded.set(true);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES: {
-        const data = this.parseMessage(
-          raw,
-          UpdateLatexConfigValuesMessageSchema,
-        );
-        if (!data) return;
-        this.latexConfigValues.set(data.values);
-        this.latexConfigValuesLoaded.set(true);
-        return;
-      }
-
-      case SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE: {
-        const data = this.parseMessage(raw, UpdateProfileMessageSchema);
-        if (!data) return;
-        this.authenticated.set(data.authenticated);
-        this.userEmail.set(data.user?.email ?? 'N/A');
-        this.userId.set(data.user?.id ?? '');
-        this.tier.set(data.tier ?? 'free');
-        this.apiAccessMode.set(data.apiAccessMode);
-        this.allowedModels.set(data.allowedModels ?? null);
-        this.accessExpiresAt.set(data.accessExpiresAt ?? null);
-        this.providerKeyStatuses.set(data.providerKeyStatuses ?? []);
-        this.globalStreamingDefault.set(data.globalStreamingDefault ?? true);
-        return;
-      }
-    }
+    dispatchSettingsViewMessage(raw, this.getMessageHandlerContext());
   }
 
   private handleTabSelect(event: VscTabsSelectEvent): void {
