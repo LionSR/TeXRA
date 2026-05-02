@@ -328,6 +328,58 @@ async function gitInDir(args: string[], cwd: string): Promise<string> {
   return stdout.trim();
 }
 
+interface OpenPullSummary {
+  number: number;
+  title?: string;
+  head?: { ref?: string };
+}
+
+async function getDefaultBranch(owner: string, repo: string): Promise<string> {
+  const res = await ghGet<{ default_branch?: string }>(
+    `/repos/${owner}/${repo}`,
+  );
+  if (res.status !== 200) {
+    throw new ToolError(`Unexpected GitHub response status: ${res.status}`);
+  }
+  return res.data.default_branch ?? 'main';
+}
+
+async function listOpenPullSuggestions(
+  owner: string,
+  repo: string,
+): Promise<string> {
+  const res = await ghGet<OpenPullSummary[]>(
+    `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
+  );
+  if (res.status !== 200 || res.data.length === 0) {
+    return '';
+  }
+  const lines = res.data.map((pr) => {
+    const title = pr.title ? ` - ${pr.title}` : '';
+    const head = pr.head?.ref ? ` (${pr.head.ref})` : '';
+    return `- ${owner}/${repo}/pulls/${pr.number}${head}${title}`;
+  });
+  return `\n\nOpen PRs you can subscribe to directly:\n${lines.join('\n')}`;
+}
+
+async function getFindCurrentFallbackInfo(
+  owner: string,
+  repo: string,
+): Promise<{ defaultBranch?: string; suggestions: string }> {
+  const [defaultBranchResult, suggestionsResult] = await Promise.allSettled([
+    getDefaultBranch(owner, repo),
+    listOpenPullSuggestions(owner, repo),
+  ]);
+  return {
+    defaultBranch:
+      defaultBranchResult.status === 'fulfilled'
+        ? defaultBranchResult.value
+        : undefined,
+    suggestions:
+      suggestionsResult.status === 'fulfilled' ? suggestionsResult.value : '',
+  };
+}
+
 async function execFindCurrent(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
@@ -367,8 +419,22 @@ async function execFindCurrent(
   }
   const pr = res.data[0];
   if (!pr) {
+    const { defaultBranch, suggestions } = await getFindCurrentFallbackInfo(
+      remote.owner,
+      remote.repo,
+    );
+    if (branch === defaultBranch) {
+      throw new ToolError(
+        `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+      );
+    }
+    if (!defaultBranch && branch === 'main') {
+      throw new ToolError(
+        `Current branch is "main", no open PR uses it as the head branch, and the default branch could not be confirmed. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+      );
+    }
     throw new ToolError(
-      `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push the branch and open a PR first.`,
+      `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
     );
   }
   const path = `${remote.owner}/${remote.repo}/pulls/${pr.number}`;
