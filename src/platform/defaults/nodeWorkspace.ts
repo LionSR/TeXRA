@@ -25,11 +25,26 @@ function shouldNotify(
 
 function listDirectories(root: string): string[] {
   const directories = [root];
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return directories;
+  }
+
+  for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     directories.push(...listDirectories(path.join(root, entry.name)));
   }
   return directories;
+}
+
+function closeWatcher(watcher: fs.FSWatcher): void {
+  try {
+    watcher.close();
+  } catch {
+    // Watcher may already be closed by the OS after an async error.
+  }
 }
 
 function createRecursiveFallbackWatcher(
@@ -44,28 +59,40 @@ function createRecursiveFallbackWatcher(
     if (watchedDirectories.has(directory)) return;
     watchedDirectories.add(directory);
 
-    const watcher = fs.watch(directory, (_event, filename) => {
-      const absolutePath =
-        filename == null ? null : path.join(directory, filename.toString());
-      const relativePath =
-        absolutePath == null ? null : path.relative(root, absolutePath);
+    let watcher: fs.FSWatcher;
+    try {
+      watcher = fs.watch(directory, (_event, filename) => {
+        const absolutePath =
+          filename == null ? null : path.join(directory, filename.toString());
+        const relativePath =
+          absolutePath == null ? null : path.relative(root, absolutePath);
 
-      if (absolutePath && fs.existsSync(absolutePath)) {
-        try {
-          if (fs.statSync(absolutePath).isDirectory()) {
-            for (const nested of listDirectories(absolutePath)) {
-              watchDirectory(nested);
+        if (absolutePath && fs.existsSync(absolutePath)) {
+          try {
+            if (fs.statSync(absolutePath).isDirectory()) {
+              for (const nested of listDirectories(absolutePath)) {
+                watchDirectory(nested);
+              }
             }
+          } catch {
+            // File may have been removed between existsSync and statSync.
           }
-        } catch {
-          // File may have been removed between existsSync and statSync.
         }
-      }
 
-      if (shouldNotify(globPattern, relativePath)) {
-        listener();
-      }
+        if (shouldNotify(globPattern, relativePath)) {
+          listener();
+        }
+      });
+    } catch {
+      watchedDirectories.delete(directory);
+      return;
+    }
+
+    watcher.on('error', () => {
+      closeWatcher(watcher);
+      watchedDirectories.delete(directory);
     });
+
     watchers.push(watcher);
   };
 
@@ -74,7 +101,7 @@ function createRecursiveFallbackWatcher(
   }
 
   return {
-    dispose: () => watchers.forEach((watcher) => watcher.close()),
+    dispose: () => watchers.forEach(closeWatcher),
   };
 }
 
@@ -104,14 +131,18 @@ export const nodeWorkspace: WorkspaceProvider = {
         root,
         { recursive: true },
         (_event, filename) => {
-          const relativePath = filename?.toString() ?? null;
+          const absolutePath =
+            filename == null ? null : path.join(root, filename.toString());
+          const relativePath =
+            absolutePath == null ? null : path.relative(root, absolutePath);
           if (shouldNotify(globPattern, relativePath)) {
             listener();
           }
         },
       );
+      watcher.on('error', () => closeWatcher(watcher));
       return {
-        dispose: () => watcher.close(),
+        dispose: () => closeWatcher(watcher),
       };
     } catch {
       return createRecursiveFallbackWatcher(root, globPattern, listener);
