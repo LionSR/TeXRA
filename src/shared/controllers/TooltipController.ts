@@ -7,7 +7,7 @@ const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   position: 'fixed',
   padding: 'var(--spacing-small, 4px) var(--spacing-medium, 8px)',
   fontSize: 'var(--texra-font-size, 13px)',
-  fontFamily: 'var(--texra-font-family, system-ui)',
+  fontFamily: 'var(--texra-font-family, system-ui), system-ui',
   color: 'var(--texra-editorHoverWidget-foreground, var(--texra-foreground))',
   background:
     'var(--texra-editorHoverWidget-background, var(--texra-editor-background))',

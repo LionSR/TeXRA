@@ -117,7 +117,7 @@ export class ToolCard extends LitElement {
       }
 
       .tool-id-tag {
-        font-family: var(--texra-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-xs);
         padding: var(--border-thin) var(--border-radius-large);
         background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
