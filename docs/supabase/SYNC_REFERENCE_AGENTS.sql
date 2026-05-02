@@ -203,6 +203,22 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
+  'humanize',
+  'Removes LLM stylistic tells from research prose. Phase 1 annotates problems; phase 2 directly rewrites for natural voice while strictly preserving meaning.',
+  'researcher/humanize.yaml',
+  ARRAY['researcher'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  storage_path   = EXCLUDED.storage_path,
+  visibility     = EXCLUDED.visibility,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
   'logic',
   'Logical flow analyzer for research papers. Improves argument structure and coherence.',
   'researcher/logic.yaml',
@@ -308,7 +324,7 @@ VALUES (
   'tool-use/orchestrator.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount', 'external_inquiry', 'codex', 'subscribe_pr_activity', 'unsubscribe_pr_activity', 'find_current_pr']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount', 'external_inquiry', 'codex', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -340,7 +356,7 @@ VALUES (
   'tool-use/progressCheck.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['executions', 'read_file', 'glob', 'grep', 'ls', 'bash', 'memory', 'find_current_pr', 'web_fetch', 'external_inquiry']
+  ARRAY['executions', 'read_file', 'glob', 'grep', 'ls', 'bash', 'memory', 'github_subscription', 'web_fetch', 'external_inquiry']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -392,7 +408,7 @@ VALUES (
   'tool-use-lean/lean.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'subscribe_pr_activity', 'unsubscribe_pr_activity', 'find_current_pr']
+  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -424,7 +440,7 @@ VALUES (
   'tool-use-lean/leanOrchestrator.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'codex', 'lean_diagnostics', 'lean_inspect', 'lean_loogle', 'lean_file', 'lean_project', 'subscribe_pr_activity', 'unsubscribe_pr_activity', 'find_current_pr']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'codex', 'lean_diagnostics', 'lean_inspect', 'lean_loogle', 'lean_file', 'lean_project', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,

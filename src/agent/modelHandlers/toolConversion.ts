@@ -7,11 +7,7 @@ import type {
   Tool as AnthropicTool,
   ToolUnion,
 } from '@anthropic-ai/sdk/resources/messages';
-import type {
-  Tool as GeminiTool,
-  FunctionDeclaration,
-  Schema,
-} from '@google/genai';
+import type { Tool as GeminiTool, FunctionDeclaration } from '@google/genai';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
@@ -229,7 +225,7 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   const declarations: FunctionDeclaration[] = defs.map((d) => ({
     name: d.name,
     description: d.description,
-    parameters: convertToolSchema(d) as Schema | undefined,
+    parametersJsonSchema: convertToolSchema(d) ?? undefined,
   }));
 
   return [{ functionDeclarations: declarations }];
