@@ -108,13 +108,39 @@ A deep scout enumerated every Lit component, every host-bridge call, every CSS t
 - 1 new file: `desktop/src/renderer/themeTokens.css` defining the 53 `--vscode-*` token values for light/dark/high-contrast themes (the existing fallbacks document the defaults).
 - 0 component template changes, 0 signal/context-architecture changes, 0 changes to message dispatchers.
 
-**Pop-out already exists.** `ProgressApp.ts:697-701` emits `POP_OUT` / `POP_BACK` commands; `ProgressViewProvider.ts:525-571` materializes the panel. The Lit app already renders in two contexts (sidebar `WebviewView` vs editor `WebviewPanel`) by reading a `placement` state — this maps directly to "embedded location vs separate `BrowserWindow`" in Electron with no Lit changes.
+**Pop-out machinery is preserved but unused at v1.** The existing `POP_OUT`/`POP_BACK` plumbing in `ProgressApp.ts:697-701` and `ProgressViewProvider.ts:525-571` lets the Lit app render in two contexts. We deliberately don't activate it for the desktop app — see §4.5 for the agent-native architecture. The code stays so the extension build keeps working; the Electron renderer simply ignores the messages.
 
 **Theme detection is host-driven, not browser-driven.** Frontends don't read `prefers-color-scheme` or `data-vscode-theme-kind`; they wait for a `COMMON_COMMANDS.SET_THEME` message and update `document.body.className` (`BaseWebviewApp.ts:69-71`). Electron just sends the same message from main when its `nativeTheme.shouldUseDarkColors` changes. Zero frontend code change.
 
 **One inconsistency worth flagging.** Main and progress views have separate dispatcher files (`mainViewDispatcher.ts`, `messageDispatcher.ts`). Settings inlines its dispatch in a switch statement inside `SettingsApp.handleMessage()`. Cleaning this up — extracting a `settingsViewDispatcher.ts` mirroring the others — is a small Tier 2 pre-refactoring (added to §9 as item #13).
 
 **Bottom line:** webview reuse is essentially complete. The Electron port's renderer work is bridge-and-bootstrap, not UI rewriting.
+
+### 4.5 Agent-native architecture (v1)
+
+The Electron app is **agent-view native**: the main window is the agent surface — what users actually came to do. We deliberately do **not** mirror VS Code's activity-bar / multi-view / pop-out structure.
+
+**Concretely:**
+
+- **One `BrowserWindow`.** Internal routing between three modes — *launcher* (today's main view: file/agent/model picker), *progress* (today's progress view: streams, logs, approvals), *settings* (today's settings view). The existing `texra.toggleView` command already implements this routing for the extension; we reuse the same Lit components and the same routing state.
+- **No pop-out, no separate progress window, no separate settings window.** Settings is a route in the same window. Diff approval renders inline inside the progress view (the existing `ToolEditRequestPanel` is the natural anchor).
+- **File preview / edit defers to the OS.** `shell.openPath(filePath)` opens the file in the user's default app — TeXShop, Overleaf desktop, VS Code, whatever they prefer. We don't ship an in-app editor at v1. This was already a non-goal (§3); making it explicit here means we don't accidentally build half of one for the diff modal.
+- **Drag-and-drop in:** dropping a `.tex` or folder onto the window opens it in the launcher. Native Electron event, ~20 LOC.
+- **No "open in new window" affordances** for v1. Single window keeps cold-start fast, IPC simple, memory low.
+
+**What this drops from earlier drafts:**
+
+- The "modal `BrowserWindow` for diff approval" idea — replaced by inline rendering in the progress view.
+- The pop-out branch of the progress view — code stays, message ignored.
+- Per-project windows — single instance, project switcher in the launcher route.
+
+**What it preserves:**
+
+- Pixel-faithful Lit rendering of the existing main, progress, and settings views.
+- All 62 components, all 30,631 LOC of frontend, no template changes.
+- The pop-out plumbing in `ProgressApp.ts` (still used by the VS Code extension).
+
+**If the model diverges in the future** — multi-window for power users, embedded Monaco file editor, project-switcher windows, drag-out diff to second monitor — those go in §13 as future work, not v1 scope.
 
 ## 5. Decisions (the 12 stack picks)
 
@@ -486,7 +512,9 @@ Tighter than originally scoped: per the §4.4 measurement, the existing Lit comp
 
 ### Phase 3 — Progress view, settings, command palette (1.5 weeks)
 
-- Mount `progressView` and `settingsView` Lit apps. Per §4.4: existing pop-out machinery (`POP_OUT`/`POP_BACK` already wired in `ProgressApp.ts:697-701`) maps directly onto Electron's "embedded vs separate `BrowserWindow`" dichotomy with no Lit changes.
+Per §4.5 (agent-native architecture): one window, internal routing.
+
+- Mount `<progress-app>` and `<settings-app>` Lit components in the same `BrowserWindow`, switched via the existing `texra.toggleView` routing state. No new windows.
 - Lit command palette over the existing `src/commands.ts` registry.
 - Native `Menu` with the most-used commands (top 20 from `package.json` `commandPalette`).
 - Settings tabs read/write through `conf` via `ConfigProvider`.
@@ -506,12 +534,14 @@ Tighter than originally scoped: per the §4.4 measurement, the existing Lit comp
 The single largest UI port.
 
 - `<texra-diff-view>` Lit component wrapping `monaco.editor.createDiffEditor`. Lazy-loads Monaco on first open. Registers only the languages we ship (`latex`, `bibtex`, `markdown`, `plaintext`, `typescript`, `python`). Honors light/dark theme via existing webview tokens. ~200–400 LOC of wrapper code; Monaco itself drops in via npm.
+- **Renders inline inside the progress view** (anchored to `ToolEditRequestPanel`), not in a modal `BrowserWindow`. Per §4.5 the agent-native model puts the diff in-flow with the approval card; this also removes the focus-juggling we'd hit with a modal.
 - Vite worker setup: configure `monaco-editor`'s standard `MonacoEnvironment.getWorker` to point at `?worker`-built chunks. Tested on all three OSes since worker resolution under asar can be fiddly.
-- `desktop/src/main/ipc/editApproval.ts` replaces `nativeToolEditApproval.ts`. Same temp-file flow (lines 246–255 of original); replaces the `vscode.commands.executeCommand('vscode.diff', ...)` call with a "show diff window" IPC.
+- `desktop/src/main/ipc/editApproval.ts` replaces `nativeToolEditApproval.ts`. Same temp-file flow (lines 246–255 of original); replaces the `vscode.commands.executeCommand('vscode.diff', ...)` call with an inline-render IPC dispatched into the progress view.
 - Bash approval reuses existing `BashRequestPanel.ts` — no new work.
-- LaTeX preview: inject Electron-aware `openBuildDisplayIfTex` callback (already a callback injection point at `latexPreview.ts:23`).
+- File preview (the non-diff case) uses `shell.openPath()` to hand the file to the user's default app. No in-app reader.
+- LaTeX preview: inject Electron-aware `openBuildDisplayIfTex` callback (already a callback injection point at `latexPreview.ts:23`). Default action: open the produced PDF via `shell.openPath()`.
 - Resume flow: confirmed in scout — only conversation history is persisted, approvals are transient. No additional work.
-- **Exit criteria:** Tool-use agent edits a file, user sees Monaco side-by-side diff, approves, file changes on disk. LaTeX preview opens in a viewer.
+- **Exit criteria:** Tool-use agent edits a file, user sees inline Monaco side-by-side diff, approves, file changes on disk. PDF preview opens in user's default PDF viewer.
 
 ### Phase 6 — Packaging, signing, auto-update (1.5 weeks)
 
@@ -557,6 +587,23 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 | Release-repo publish workflow leaks PAT                                          | Low        | High   | Use a GitHub App over a PAT; scope `contents: write` to the release repo only; rotate annually.                                                         |
 | Diff performance on large files                                                  | Low        | Low    | Monaco handles 100k-line files comfortably; hard cap at ~10MB with "open in external" fallback.                                                         |
 | 943-line `SupabaseAuthProvider` rewrite cost underestimated                      | Medium     | Medium | Phase 4 budget is 1 week; if it slips, scope GitHub auth as fast-follow rather than v1.                                                                 |
+| **Apple Developer Program lapse** invalidates all signed builds                 | Low        | Critical | $99/yr renewal must not be missed. Calendar reminder + secondary owner. Document the resign + republish recovery in the runbook.                       |
+| **Code-signing identity rotation breaks the auto-update chain**                 | Medium     | High   | When Apple Developer ID or Azure Trusted Signing cert changes, existing installs can't verify the new signature. Test rotation in beta channel first.    |
+| **Notarization intermittent failures** stall CI                                 | Medium     | Medium | Apple's notary service has occasional outages. Retry with backoff; don't block merges; manual override available.                                       |
+| **`process.argv` deep-link cold-start** subtly differs across the three OSes    | High       | Medium | macOS, Windows (#40173), Linux argv shapes diverge on cold-start. Test all four flows × three OSes (12 cases) explicitly in Phase 4.                    |
+| **macOS App Nap / Windows modern standby** kills the renderer mid-run           | Medium     | Medium | `powerSaveBlocker.start('prevent-app-suspension')` while an agent run is in-flight. Release on idle.                                                    |
+| **`asar` packing misses native binaries** (Codex SDK, Monaco workers, codicon font) | Medium  | High   | `electron-builder.yml` `asarUnpack` glob covers `@openai/codex-*/**`, Monaco worker chunks, the codicon TTF. Verified per-platform in CI.               |
+| **Codex SDK platform-binary mismatch** under mac-universal builds               | Low        | High   | Confirm `@openai/codex-sdk`'s install-time platform detection works under `electron-builder` lipo'd builds. Test ARM64 + x64 explicitly.                |
+| **`safeStorage` Linux fallback to "basic" mode** = secrets with a hardcoded key | Medium     | High   | Detect via `getSelectedStorageBackend()`. Surface a one-time warning. Document keyring install. Don't silently degrade.                                 |
+| **Single-instance lock collides** with extension running on same machine        | Medium     | Low    | Use distinct lock IDs. Test cohabitation explicitly.                                                                                                    |
+| **Subprocess env leaks API keys** via `ps`-style enumeration                    | Medium     | Medium | Pass keys via stdin / temp file with restrictive perms where SDKs support it. Audit existing `execa` call sites.                                        |
+| **IPC message size limits** (~100MB) hit on large diffs / long transcripts      | Low        | Medium | Stream large payloads via `MessagePort` chunks; "diff too large" → `shell.openPath()` fallback at ~10MB.                                                |
+| **License compliance** — codicons CC-BY-4.0 requires attribution                | Low        | Medium | Bundle `LICENSES.txt` and visible attribution in About box. Audit Monaco (MIT), codicons (CC-BY-4.0), `@vscode-elements/elements` (Apache-2.0), KaTeX, highlight.js. |
+| **Sentry sourcemap upload regression** = useless crash reports                  | Low        | Medium | `electron-builder` `afterAllArtifactBuild` hook uploads sourcemaps; CI guard fails the release if upload step skipped.                                  |
+| **Custom protocol hijack** — another app registers `texra://` after us          | Low        | Low    | Re-assert on every launch via `setAsDefaultProtocolClient`. Document in support FAQ.                                                                    |
+| **Renderer memory growth** on long sessions (no auto-recycle)                   | Medium     | Low    | Virtualize logs via `@lit-labs/virtualizer` (already a dep). Soft cap on retained log lines; spill to file.                                             |
+| **Cross-platform path normalization** in persisted runs                         | Medium     | Medium | Store POSIX-style internally; convert to `path.sep` only at the OS boundary. Audit storage code for naive `path.join` use.                              |
+| **Corp proxy / SSL inspection** breaks model API or auto-update                 | Medium     | Medium | Respect `HTTP_PROXY` / `HTTPS_PROXY`. Electron's `net` module does by default; verify SDKs do too. Document for IT admins.                              |
 
 ## 12. Success criteria
 
@@ -570,14 +617,28 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 
 ## 13. Open questions
 
-- **Multi-window model:** one window per project (VS Code-style) or single window with project-switcher? Recommend single window + recents for v1. Multi-window can come later.
-- **Diff window: modal vs embedded?** Modal `BrowserWindow` feels native (close = reject); embedded keeps focus on progress. Lean modal for v1.
+- ~~**Multi-window model:** one window per project (VS Code-style) or single window with project-switcher?~~ **Resolved (§4.5):** single window, project-switcher in the launcher route. Multi-window deferred to §13.1.
+- ~~**Diff window: modal vs embedded?**~~ **Resolved (§4.5):** embedded inline in the progress view, anchored to `ToolEditRequestPanel`.
 - **Distribution:** texra.ai download page + GitHub Releases for v1. Mac App Store / Microsoft Store are separate compliance projects — defer.
 - **Pricing/tier gating:** unchanged from extension (Supabase tier checks). Confirm "no internet on first run" path doesn't lock users out.
 - **Bundled LaTeX:** v1 expects user-installed TeX (current model). Reconsider `tectonic` (~30MB statically-linked) for v2.
 - **Codex CLI PATH discovery:** verify that `@openai/codex-sdk`'s bundled binaries are found from inside the asar after `asarUnpack`, on all three platforms.
 - **GitHub auth:** drop the existing experimental `texra.auth.enableVSCodeGitHub` flag in Electron; use Supabase's GitHub OAuth provider directly. Confirm the edge function token-exchange flow (`GITHUB_TOKEN_EXCHANGE_URL`) still works without the VS Code session.
 - **Migration path:** users with existing VS Code extension install — do we offer a one-shot importer (read `globalState` JSON, copy API keys via SecretStorage if accessible)? Phase 7 candidate.
+
+### 13.1 Future divergence (post-v1)
+
+Things explicitly out of scope for v1 under the agent-native model. Each is a coherent post-v1 chunk if demand surfaces.
+
+- **In-app file editor.** Today users open files via `shell.openPath()` to their default app. A future v2 could embed Monaco in a non-diff editing surface (right pane in progress view, or a new "edit" route). Bundle and feature scope grows substantially — defer until users ask.
+- **Multi-window pop-out.** The Lit code already supports it (`POP_OUT`/`POP_BACK`). Re-enabling means wiring the desktop renderer to spawn a second `BrowserWindow` and run the same Lit bundle there. Add when multi-monitor users complain.
+- **Per-project windows** (VS Code "open folder in new window"). Requires single-instance lock changes, per-window `Platform` scoping, and IPC for cross-window state. Significant work; not justified by current usage patterns.
+- **Bundled TeX distribution** (`tectonic` or similar, ~30MB statically linked). Saves users from MikTeX/MacTeX install. Worth a v2 experiment.
+- **Drag diff to a second monitor.** Requires the multi-window infrastructure above plus diff-state serialization across windows.
+- **Native PDF viewer pane.** Today PDFs open in the OS default viewer. An embedded `pdf.js`-based viewer would let us scroll-sync with the source — interesting but not v1.
+- **File-tree explorer in the launcher route.** v1 launcher is "pick the input file"; a v2 could show the project tree, modification times, and last-run status per file.
+- **Settings-as-code** (read/write a `texra.config.yaml` instead of `conf` JSON). Some users will want to commit settings to repos. Easy add later.
+- **CLI mode** (`texra run agent --input foo.tex`). Headless invocations from a terminal, useful for batch jobs. Already feasible today since the agent core is `vscode`-free; just needs a CLI entry point in a fourth `packages/cli/` workspace.
 
 ## 14. Appendix: Reuse-by-the-numbers
 
