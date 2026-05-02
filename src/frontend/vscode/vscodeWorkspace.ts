@@ -18,23 +18,25 @@ export class VscodeWorkspace implements WorkspaceProvider {
 
   watch(globPattern: string, listener: () => void): vscode.Disposable {
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    const patterns = workspaceFolders?.length
-      ? workspaceFolders.map(
-          (folder) => new vscode.RelativePattern(folder, globPattern),
-        )
-      : [globPattern];
-    const watchers = patterns.map((pattern) =>
-      vscode.workspace.createFileSystemWatcher(pattern, false, false, false),
+    const pattern =
+      workspaceFolders?.length === 1
+        ? new vscode.RelativePattern(workspaceFolders[0], globPattern)
+        : globPattern;
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      pattern,
+      false,
+      false,
+      false,
     );
-    const subscriptions = watchers.flatMap((watcher) => [
+    const subscriptions = [
       watcher.onDidCreate(listener),
       watcher.onDidChange(listener),
       watcher.onDidDelete(listener),
-    ]);
+    ];
 
     return new vscode.Disposable(() => {
       subscriptions.forEach((subscription) => subscription.dispose());
-      watchers.forEach((watcher) => watcher.dispose());
+      watcher.dispose();
     });
   }
 }
