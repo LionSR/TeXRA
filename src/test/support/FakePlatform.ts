@@ -1,0 +1,515 @@
+// Standard library imports
+import * as path from 'path';
+
+// Local imports - platform
+import {
+  FileType,
+  type FileStat,
+  type FileSystemProvider,
+} from '@platform/interfaces/filesystem';
+import type { ConfigProvider } from '@platform/interfaces/config';
+import type { LogBackend, LogUtilsOptions } from '@platform/interfaces/log';
+import type { StateStore } from '@platform/interfaces/state';
+import type { StorageProvider } from '@platform/interfaces/storage';
+import type { WorkspaceProvider } from '@platform/interfaces/workspace';
+import type { Platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
+
+type FakeFileRecord =
+  | {
+      type: typeof FileType.Directory;
+      ctime: number;
+      mtime: number;
+    }
+  | {
+      type: typeof FileType.File;
+      ctime: number;
+      mtime: number;
+      content: Uint8Array;
+    };
+
+export type RecordingLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface RecordingLogEntry {
+  level: RecordingLogLevel;
+  channel: string;
+  message: string;
+  options?: LogUtilsOptions;
+}
+
+function fakeFsError(code: string, message: string): Error {
+  return Object.assign(new Error(message), { code });
+}
+
+function now(): number {
+  return Date.now();
+}
+
+function cloneBytes(content: Uint8Array): Uint8Array {
+  return new Uint8Array(content);
+}
+
+function normalizePath(target: string): string {
+  return path.resolve('/', target);
+}
+
+function parentPath(target: string): string {
+  return path.dirname(normalizePath(target));
+}
+
+function hasChildPath(parent: string, candidate: string): boolean {
+  const relative = path.relative(parent, candidate);
+  return (
+    relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+  );
+}
+
+function directChildName(
+  parent: string,
+  candidate: string,
+): string | undefined {
+  const relative = path.relative(parent, candidate);
+  if (
+    relative === '' ||
+    relative.startsWith('..') ||
+    path.isAbsolute(relative)
+  ) {
+    return undefined;
+  }
+  return relative.split(path.sep).at(0);
+}
+
+function fileSize(record: FakeFileRecord): number {
+  return record.type === FileType.File ? record.content.byteLength : 0;
+}
+
+function fileStat(record: FakeFileRecord): FileStat {
+  return {
+    type: record.type,
+    ctime: record.ctime,
+    mtime: record.mtime,
+    size: fileSize(record),
+  };
+}
+
+function cloneRecord(record: FakeFileRecord): FakeFileRecord {
+  if (record.type === FileType.File) {
+    return {
+      ...record,
+      content: cloneBytes(record.content),
+    };
+  }
+  return { ...record };
+}
+
+export class FakeConfigProvider implements ConfigProvider {
+  private readonly values = new Map<string, unknown>();
+
+  constructor(values: Record<string, unknown> = {}) {
+    for (const [key, value] of Object.entries(values)) {
+      this.values.set(key, value);
+    }
+  }
+
+  get<T>(key: string, defaultValue?: T): T {
+    if (!this.values.has(key)) {
+      return defaultValue as T;
+    }
+    return this.values.get(key) as T;
+  }
+
+  set(key: string, value: unknown): void {
+    this.values.set(key, value);
+  }
+}
+
+export class FakeStateStore implements StateStore {
+  private readonly values = new Map<string, unknown>();
+
+  constructor(values: Record<string, unknown> = {}) {
+    for (const [key, value] of Object.entries(values)) {
+      this.values.set(key, value);
+    }
+  }
+
+  get<T>(key: string, defaultValue?: T): T {
+    if (!this.values.has(key)) {
+      return defaultValue as T;
+    }
+    return this.values.get(key) as T;
+  }
+
+  async update(key: string, value: unknown): Promise<void> {
+    if (value === undefined) {
+      this.values.delete(key);
+      return;
+    }
+    this.values.set(key, value);
+  }
+}
+
+export class RecordingLogBackend implements LogBackend {
+  readonly initializedChannels: Array<{ channel: string; isAgent?: boolean }> =
+    [];
+
+  readonly entries: RecordingLogEntry[] = [];
+
+  initialize(channel: string, isAgent?: boolean): void {
+    this.initializedChannels.push({ channel, isAgent });
+  }
+
+  debug(channel: string, message: string, options?: LogUtilsOptions): void {
+    this.record('debug', channel, message, options);
+  }
+
+  info(channel: string, message: string, options?: LogUtilsOptions): void {
+    this.record('info', channel, message, options);
+  }
+
+  warn(channel: string, message: string, options?: LogUtilsOptions): void {
+    this.record('warn', channel, message, options);
+  }
+
+  error(channel: string, message: string, options?: LogUtilsOptions): void {
+    this.record('error', channel, message, options);
+  }
+
+  private record(
+    level: RecordingLogLevel,
+    channel: string,
+    message: string,
+    options?: LogUtilsOptions,
+  ): void {
+    this.entries.push({ level, channel, message, options });
+  }
+}
+
+export class FakeFileSystemProvider implements FileSystemProvider {
+  private readonly records = new Map<string, FakeFileRecord>();
+
+  constructor(files: Record<string, string | Uint8Array> = {}) {
+    this.createDirectorySync('/');
+    for (const [target, content] of Object.entries(files)) {
+      this.writeFileSync(target, stringToBytes(content));
+    }
+  }
+
+  async stat(target: string): Promise<FileStat> {
+    return fileStat(this.requireRecord(target));
+  }
+
+  async readFile(target: string): Promise<Uint8Array> {
+    const record = this.requireRecord(target);
+    if (record.type !== FileType.File) {
+      throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
+    }
+    return cloneBytes(record.content);
+  }
+
+  async writeFile(target: string, content: Uint8Array): Promise<void> {
+    this.writeFileSync(target, content);
+  }
+
+  async delete(
+    target: string,
+    options?: { recursive?: boolean },
+  ): Promise<void> {
+    const normalized = normalizePath(target);
+    const record = this.records.get(normalized);
+    if (!record) {
+      return;
+    }
+
+    if (record.type === FileType.File) {
+      this.records.delete(normalized);
+      return;
+    }
+
+    const children = this.childPaths(normalized);
+    if (children.length > 0 && !options?.recursive) {
+      throw fakeFsError('ENOTEMPTY', `Directory is not empty: ${target}`);
+    }
+    for (const child of children) {
+      this.records.delete(child);
+    }
+    if (normalized !== '/') {
+      this.records.delete(normalized);
+    }
+  }
+
+  async createDirectory(target: string): Promise<void> {
+    this.createDirectorySync(target);
+  }
+
+  async readDirectory(target: string): Promise<[string, number][]> {
+    const normalized = normalizePath(target);
+    const record = this.requireRecord(normalized);
+    if (record.type !== FileType.Directory) {
+      throw fakeFsError('ENOTDIR', `Path is not a directory: ${target}`);
+    }
+
+    const entries = new Map<string, number>();
+    for (const [candidate, candidateRecord] of this.records) {
+      const name = directChildName(normalized, candidate);
+      if (name == null) continue;
+      const childPath = path.join(normalized, name);
+      const childRecord = this.records.get(childPath) ?? candidateRecord;
+      entries.set(name, childRecord.type);
+    }
+    return [...entries.entries()].sort(([left], [right]) =>
+      left.localeCompare(right),
+    );
+  }
+
+  async copy(
+    source: string,
+    dest: string,
+    options?: { overwrite?: boolean },
+  ): Promise<void> {
+    const normalizedSource = normalizePath(source);
+    const normalizedDest = normalizePath(dest);
+    const sourceRecord = this.requireRecord(normalizedSource);
+    this.assertWritableTarget(normalizedDest, options?.overwrite);
+
+    if (sourceRecord.type === FileType.File) {
+      this.writeFileSync(normalizedDest, sourceRecord.content);
+      return;
+    }
+
+    this.createDirectorySync(normalizedDest);
+    for (const child of this.childPaths(normalizedSource)) {
+      const relative = path.relative(normalizedSource, child);
+      const childDest = path.join(normalizedDest, relative);
+      this.records.set(childDest, cloneRecord(this.requireRecord(child)));
+    }
+  }
+
+  async rename(
+    source: string,
+    dest: string,
+    options?: { overwrite?: boolean },
+  ): Promise<void> {
+    const normalizedSource = normalizePath(source);
+    const normalizedDest = normalizePath(dest);
+    const sourceRecord = this.requireRecord(normalizedSource);
+    this.assertWritableTarget(normalizedDest, options?.overwrite);
+
+    if (sourceRecord.type === FileType.File) {
+      this.writeFileSync(normalizedDest, sourceRecord.content);
+      this.records.delete(normalizedSource);
+      return;
+    }
+
+    this.createDirectorySync(normalizedDest);
+    for (const child of this.childPaths(normalizedSource)) {
+      const relative = path.relative(normalizedSource, child);
+      const childDest = path.join(normalizedDest, relative);
+      this.records.set(childDest, cloneRecord(this.requireRecord(child)));
+    }
+    await this.delete(normalizedSource, { recursive: true });
+  }
+
+  exists(target: string): boolean {
+    return this.records.has(normalizePath(target));
+  }
+
+  setFile(target: string, content: string | Uint8Array): void {
+    this.writeFileSync(target, stringToBytes(content));
+  }
+
+  getText(target: string): string {
+    return Buffer.from(this.requireFile(target).content).toString('utf8');
+  }
+
+  private requireRecord(target: string): FakeFileRecord {
+    const normalized = normalizePath(target);
+    const record = this.records.get(normalized);
+    if (!record) {
+      throw fakeFsError('ENOENT', `File not found: ${target}`);
+    }
+    return record;
+  }
+
+  private requireFile(
+    target: string,
+  ): Extract<FakeFileRecord, { content: Uint8Array }> {
+    const record = this.requireRecord(target);
+    if (record.type !== FileType.File) {
+      throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
+    }
+    return record;
+  }
+
+  private writeFileSync(target: string, content: Uint8Array): void {
+    const normalized = normalizePath(target);
+    const existing = this.records.get(normalized);
+    if (existing?.type === FileType.Directory) {
+      throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
+    }
+    this.createDirectorySync(parentPath(normalized));
+    const timestamp = now();
+    this.records.set(normalized, {
+      type: FileType.File,
+      ctime: timestamp,
+      mtime: timestamp,
+      content: cloneBytes(content),
+    });
+  }
+
+  private createDirectorySync(target: string): void {
+    const normalized = normalizePath(target);
+    const existing = this.records.get(normalized);
+    if (existing?.type === FileType.File) {
+      throw fakeFsError('ENOTDIR', `Path is a file: ${target}`);
+    }
+
+    const parts = normalized.split(path.sep).filter(Boolean);
+    let current: string = path.sep;
+    this.ensureDirectoryRecord(current);
+    for (const part of parts) {
+      current = path.join(current, part);
+      this.ensureDirectoryRecord(current);
+    }
+  }
+
+  private ensureDirectoryRecord(target: string): void {
+    const existing = this.records.get(target);
+    if (existing?.type === FileType.File) {
+      throw fakeFsError('ENOTDIR', `Path is a file: ${target}`);
+    }
+    if (!existing) {
+      const timestamp = now();
+      this.records.set(target, {
+        type: FileType.Directory,
+        ctime: timestamp,
+        mtime: timestamp,
+      });
+    }
+  }
+
+  private childPaths(parent: string): string[] {
+    return [...this.records.keys()].filter((candidate) =>
+      hasChildPath(parent, candidate),
+    );
+  }
+
+  private assertWritableTarget(target: string, overwrite?: boolean): void {
+    if (!overwrite && this.records.has(target)) {
+      throw fakeFsError('EEXIST', `Target already exists: ${target}`);
+    }
+    if (overwrite && this.records.has(target)) {
+      this.deleteSync(target);
+    }
+  }
+
+  private deleteSync(target: string): void {
+    const record = this.records.get(target);
+    if (!record) return;
+
+    if (record.type === FileType.Directory) {
+      for (const child of this.childPaths(target)) {
+        this.records.delete(child);
+      }
+    }
+    if (target !== '/') {
+      this.records.delete(target);
+    }
+  }
+}
+
+export class FakeWorkspaceProvider implements WorkspaceProvider {
+  constructor(private readonly workspacePath = '/workspace') {}
+
+  getWorkspacePath(): string | undefined {
+    return this.workspacePath;
+  }
+
+  asRelativePath(filePath: string): string {
+    const workspacePath = normalizePath(this.workspacePath);
+    const normalized = normalizePath(filePath);
+    const relative = path.relative(workspacePath, normalized);
+    if (
+      relative === '' ||
+      relative.startsWith('..') ||
+      path.isAbsolute(relative)
+    ) {
+      return filePath;
+    }
+    return relative;
+  }
+}
+
+export class FakeStorageProvider implements StorageProvider {
+  constructor(
+    private readonly storagePath = '/workspace/.texra/storage',
+    private readonly globalStoragePath = '/global/.texra/storage',
+  ) {}
+
+  getStoragePath(): string {
+    return this.storagePath;
+  }
+
+  getGlobalStoragePath(): string {
+    return this.globalStoragePath;
+  }
+}
+
+export class FakeSecrets implements PlatformSecrets {
+  private readonly values = new Map<string, string>();
+
+  constructor(values: Record<string, string> = {}) {
+    for (const [key, value] of Object.entries(values)) {
+      this.values.set(key, value);
+    }
+  }
+
+  async get(key: string): Promise<string | undefined> {
+    return this.values.get(key);
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    this.values.set(key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    this.values.delete(key);
+  }
+}
+
+export interface FakePlatformOptions {
+  config?: Record<string, unknown>;
+  globalState?: Record<string, unknown>;
+  workspaceState?: Record<string, unknown>;
+  files?: Record<string, string | Uint8Array>;
+  secrets?: Record<string, string>;
+  workspacePath?: string;
+  storagePath?: string;
+  globalStoragePath?: string;
+}
+
+export function createFakePlatform(
+  options: FakePlatformOptions = {},
+  overrides: Partial<Platform> = {},
+): Platform {
+  return {
+    config: new FakeConfigProvider(options.config),
+    globalState: new FakeStateStore(options.globalState),
+    workspaceState: new FakeStateStore(options.workspaceState),
+    log: new RecordingLogBackend(),
+    fs: new FakeFileSystemProvider(options.files),
+    workspace: new FakeWorkspaceProvider(options.workspacePath),
+    storage: new FakeStorageProvider(
+      options.storagePath,
+      options.globalStoragePath,
+    ),
+    secrets: new FakeSecrets(options.secrets),
+    ...overrides,
+  };
+}
+
+function stringToBytes(content: string | Uint8Array): Uint8Array {
+  if (typeof content === 'string') {
+    return Buffer.from(content, 'utf8');
+  }
+  return content;
+}
