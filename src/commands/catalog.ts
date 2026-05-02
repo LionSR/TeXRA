@@ -371,6 +371,28 @@ export const commandCatalogById = new Map<CommandId, CommandCatalogEntry>(
   commandCatalog.map((entry) => [entry.id, entry]),
 );
 
-export const commandKeybindings = commandCatalog.flatMap((entry) =>
-  'keybinding' in entry ? [{ command: entry.id, ...entry.keybinding }] : [],
-);
+const commandKeybindingOrder = [
+  'texra.showMainView',
+  'texra.showProgressView',
+  'texra.cleanOutput',
+  'texra.cleanBuild',
+  'texra.toggleView',
+  'texra.execute',
+] as const satisfies readonly CommandId[];
+
+function keybindingForCommand(id: CommandId): CommandKeybinding {
+  const entry = commandCatalogById.get(id);
+  if (!entry || !('keybinding' in entry)) {
+    throw new Error(`Command has no keybinding: ${id}`);
+  }
+  const keybinding = entry.keybinding;
+  if (keybinding == null) {
+    throw new Error(`Command has no keybinding: ${id}`);
+  }
+  return keybinding;
+}
+
+export const commandKeybindings = commandKeybindingOrder.map((id) => ({
+  command: id,
+  ...keybindingForCommand(id),
+}));
