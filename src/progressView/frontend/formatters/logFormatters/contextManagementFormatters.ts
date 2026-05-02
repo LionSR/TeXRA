@@ -47,27 +47,27 @@ const ACTION_CONFIG: Record<
   compaction: {
     icon: 'codicon-fold',
     label: 'Compacted',
-    color: 'var(--vscode-charts-blue)',
+    color: 'var(--texra-charts-blue)',
   },
   clear_tool_uses: {
     icon: 'codicon-trash',
     label: 'Cleared Tool Uses',
-    color: 'var(--vscode-charts-green)',
+    color: 'var(--texra-charts-green)',
   },
   clear_thinking: {
     icon: 'codicon-lightbulb',
     label: 'Cleared Thinking',
-    color: 'var(--vscode-charts-green)',
+    color: 'var(--texra-charts-green)',
   },
   truncation: {
     icon: 'codicon-ellipsis',
     label: 'Truncated',
-    color: 'var(--vscode-charts-orange)',
+    color: 'var(--texra-charts-orange)',
   },
   max_tokens_reduced: {
     icon: 'codicon-arrow-small-down',
     label: 'Max Tokens Reduced',
-    color: 'var(--vscode-charts-yellow)',
+    color: 'var(--texra-charts-yellow)',
   },
 };
 
@@ -82,7 +82,7 @@ function buildContextManagementItems(data: ContextManagementData): {
   const config: ActionConfig = ACTION_CONFIG[action] || {
     icon: 'codicon-history',
     label: action || 'Context Management',
-    color: 'var(--vscode-foreground)',
+    color: 'var(--texra-foreground)',
   };
 
   const items: ContextStatItem[] = [];

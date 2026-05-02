@@ -17,13 +17,13 @@ export const codeBlockStyles = css`
     align-items: center;
     justify-content: space-between;
     padding: var(--spacing-tiny) var(--spacing-small);
-    background-color: var(--vscode-editorGroupHeader-tabsBackground);
+    background-color: var(--texra-editorGroupHeader-tabsBackground);
     border-bottom: var(--border-thin) solid var(--color-border);
     font-size: var(--font-size-xs);
   }
 
   .code-block-language {
-    color: var(--vscode-descriptionForeground, #888);
+    color: var(--texra-descriptionForeground, #888);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: var(--font-weight-medium);
@@ -32,8 +32,8 @@ export const codeBlockStyles = css`
   .code-block pre {
     margin: 0;
     padding: var(--spacing-small);
-    background-color: var(--vscode-editor-background);
-    border: var(--border-thin) solid var(--vscode-editorWidget-border);
+    background-color: var(--texra-editor-background);
+    border: var(--border-thin) solid var(--texra-editorWidget-border);
     border-radius: 0;
     overflow-x: auto;
   }
@@ -49,7 +49,7 @@ export const codeBlockStyles = css`
     padding: var(--spacing-small) var(--spacing-medium);
     border: none;
     background: transparent;
-    color: var(--vscode-descriptionForeground, #888);
+    color: var(--texra-descriptionForeground, #888);
     cursor: pointer;
     border-radius: var(--border-radius-small);
     transition:
@@ -59,25 +59,25 @@ export const codeBlockStyles = css`
 
     &:hover {
       background-color: var(
-        --vscode-toolbar-hoverBackground,
+        --texra-toolbar-hoverBackground,
         rgba(90, 93, 94, 0.31)
       );
-      color: var(--vscode-foreground);
+      color: var(--texra-foreground);
     }
 
     &:active {
       background-color: var(
-        --vscode-toolbar-activeBackground,
+        --texra-toolbar-activeBackground,
         rgba(99, 102, 103, 0.31)
       );
     }
 
     &.copied {
-      color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+      color: var(--texra-gitDecoration-addedResourceForeground, #3fb950);
     }
 
     &:focus-visible {
-      outline: var(--border-thin) solid var(--vscode-focusBorder);
+      outline: var(--border-thin) solid var(--texra-focusBorder);
       outline-offset: 1px;
     }
   }
@@ -96,13 +96,13 @@ export const codeBlockStyles = css`
   /* Highlight.js theme - VS Code colors for Shadow DOM */
   pre.hljs,
   .hljs {
-    background: var(--vscode-editor-background);
-    color: var(--vscode-editor-foreground);
+    background: var(--texra-editor-background);
+    color: var(--texra-editor-foreground);
   }
 
   .hljs-comment,
   .hljs-quote {
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     font-style: italic;
   }
 
@@ -110,8 +110,8 @@ export const codeBlockStyles = css`
   .hljs-selector-tag,
   .hljs-tag {
     color: var(
-      --vscode-symbolIcon-keywordForeground,
-      var(--vscode-textLink-foreground)
+      --texra-symbolIcon-keywordForeground,
+      var(--texra-textLink-foreground)
     );
   }
 
@@ -120,70 +120,70 @@ export const codeBlockStyles = css`
   .hljs-regexp,
   .hljs-template-tag,
   .hljs-template-variable {
-    color: var(--vscode-debugTokenExpression-string, #a31515);
+    color: var(--texra-debugTokenExpression-string, #a31515);
   }
 
   .hljs-number,
   .hljs-literal,
   .hljs-built_in,
   .hljs-type {
-    color: var(--vscode-debugTokenExpression-number, #098658);
+    color: var(--texra-debugTokenExpression-number, #098658);
   }
 
   .hljs-variable,
   .hljs-params,
   .hljs-attr {
     color: var(
-      --vscode-symbolIcon-variableForeground,
-      var(--vscode-editor-foreground)
+      --texra-symbolIcon-variableForeground,
+      var(--texra-editor-foreground)
     );
   }
 
   .hljs-function,
   .hljs-title,
   .hljs-title.function_ {
-    color: var(--vscode-symbolIcon-functionForeground, #795e26);
+    color: var(--texra-symbolIcon-functionForeground, #795e26);
   }
 
   .hljs-class .hljs-title,
   .hljs-title.class_,
   .hljs-title.class_.inherited__ {
-    color: var(--vscode-symbolIcon-classForeground, #267f99);
+    color: var(--texra-symbolIcon-classForeground, #267f99);
   }
 
   .hljs-property,
   .hljs-name {
     color: var(
-      --vscode-symbolIcon-propertyForeground,
-      var(--vscode-editor-foreground)
+      --texra-symbolIcon-propertyForeground,
+      var(--texra-editor-foreground)
     );
   }
 
   .hljs-operator,
   .hljs-punctuation {
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
   }
 
   .hljs-section,
   .hljs-selector-class,
   .hljs-selector-id {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
   }
 
   .hljs-meta,
   .hljs-meta .hljs-keyword,
   .hljs-meta .hljs-string {
-    color: var(--vscode-symbolIcon-keywordForeground, #0000ff);
+    color: var(--texra-symbolIcon-keywordForeground, #0000ff);
   }
 
   .hljs-addition {
-    background-color: var(--vscode-diffEditor-insertedTextBackground);
-    color: var(--vscode-gitDecoration-addedResourceForeground, #22863a);
+    background-color: var(--texra-diffEditor-insertedTextBackground);
+    color: var(--texra-gitDecoration-addedResourceForeground, #22863a);
   }
 
   .hljs-deletion {
-    background-color: var(--vscode-diffEditor-removedTextBackground);
-    color: var(--vscode-gitDecoration-deletedResourceForeground, #b31d28);
+    background-color: var(--texra-diffEditor-removedTextBackground);
+    color: var(--texra-gitDecoration-deletedResourceForeground, #b31d28);
   }
 
   .hljs-emphasis {
@@ -196,11 +196,11 @@ export const codeBlockStyles = css`
 
   .hljs-symbol,
   .hljs-bullet {
-    color: var(--vscode-symbolIcon-constantForeground, #36acaa);
+    color: var(--texra-symbolIcon-constantForeground, #36acaa);
   }
 
   .hljs-link {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
     text-decoration: underline;
   }
 `;
