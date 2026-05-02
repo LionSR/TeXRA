@@ -104,7 +104,7 @@ A deep scout enumerated every Lit component, every host-bridge call, every CSS t
 **The minimum Electron-side changeset to mount all three frontends:**
 
 - 1 file modified: `src/shared/vscode.ts` (~45 LOC) — feature-detect Electron, route through `window.electron` instead of `acquireVsCodeApi`. Component code unchanged.
-- 4 new files (~250 LOC total) in `desktop/src/`: preload script, IPC bridge, window manager, per-view bootstrap.
+- 3 new files (~230 LOC total) in `desktop/src/`: `main/ipc.ts`, `preload/index.ts`, `renderer/main.ts`. Window creation is inline in `main/index.ts` (per §7.1).
 - 1 new file: `desktop/src/renderer/themeTokens.css` defining the 53 `--vscode-*` token values for light/dark/high-contrast themes (the existing fallbacks document the defaults).
 - 0 component template changes, 0 signal/context-architecture changes, 0 changes to message dispatchers.
 
@@ -624,7 +624,7 @@ The biggest mechanical change. Do this first; everything else is downstream.
 
 Tighter than originally scoped: per the §4.4 measurement, the existing Lit components are 97% byte-for-byte reusable. Renderer work is bridge-and-bootstrap, not UI.
 
-- 4 new files (~250 LOC) in `desktop/src/`: `preload.ts`, `ipc/bridge.ts`, `windowManager.ts`, `renderer/main.ts`.
+- 3 new files (~230 LOC) in `desktop/src/`: `main/ipc.ts` (RPC + push handlers), `preload/index.ts` (contextBridge surface), `renderer/main.ts` (mounts the three Lit apps). Window creation lives in `main/index.ts` directly per §7.1.
 - 1 modified file: `src/shared/vscode.ts` (~45 LOC) — feature-detect `window.electron`, fall through to `acquireVsCodeApi` otherwise. Keeps both hosts working from one codebase.
 - 1 new file: `desktop/src/renderer/themeTokens.css` defining the 53 `--vscode-*` tokens for light/dark/high-contrast (cribbed from the existing fallback values).
 - "Open Project" file picker → `WorkspaceProvider`.
@@ -832,7 +832,7 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 | `main/menu.ts`                                                                    | ~100             | Native menu mapping top 20 commands.                                                                |
 | `main/protocol.ts` (`texra://` handler)                                           | ~80              | Mirrors `src/auth/UriHandler.ts` logic (~150 LOC) but reuses the extracted `parseAuthCallback()`.   |
 | `main/updater.ts`                                                                 | ~80              | electron-updater event wiring + user-consent dialog.                                                |
-| `main/windowManager.ts` + electron-window-state                                   | ~120             | Single-window for v1; dependency injection for window-state lib.                                    |
+| (window creation in `main/index.ts`)                                              | included above   | electron-window-state inlined into `main/index.ts`; no separate file at v1 (per §7.1 simplification). |
 | `main/contextMenu.ts` (electron-context-menu)                                     | ~30              | Configuration only.                                                                                 |
 | `main/log.ts` (electron-log → LogBackend)                                         | ~80              | Adapter pattern, file rotation config.                                                              |
 | `main/pathFix.ts`                                                                 | ~50              | `fix-path` + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`. |
