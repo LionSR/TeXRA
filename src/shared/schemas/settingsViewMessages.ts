@@ -329,12 +329,22 @@ export const CodexReasoningEffortSchema = z.enum([
 ]);
 export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>;
 
+/** Valid Codex approval policies (mirrors CODEX_APPROVAL_POLICIES in codexConfig.ts). */
+export const CodexApprovalPolicySchema = z.enum([
+  'never',
+  'on-request',
+  'on-failure',
+  'untrusted',
+]);
+export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
+
 /** Outbound: backend → frontend approval settings */
 export const UpdateApprovalSettingsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
   bashApprovalEnabled: z.boolean(),
   codexSandboxMode: CodexSandboxModeSchema,
   codexReasoningEffort: CodexReasoningEffortSchema,
+  codexApprovalPolicy: CodexApprovalPolicySchema,
 });
 export type UpdateApprovalSettingsMessage = z.infer<
   typeof UpdateApprovalSettingsMessageSchema
@@ -823,6 +833,10 @@ const SetCodexReasoningEffortMessageSchema = z.object({
   command: z.literal(CMD.SET_CODEX_REASONING_EFFORT),
   effort: CodexReasoningEffortSchema,
 });
+const SetCodexApprovalPolicyMessageSchema = z.object({
+  command: z.literal(CMD.SET_CODEX_APPROVAL_POLICY),
+  policy: CodexApprovalPolicySchema,
+});
 
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
@@ -929,6 +943,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetBashApprovalEnabledMessageSchema,
     SetCodexSandboxModeMessageSchema,
     SetCodexReasoningEffortMessageSchema,
+    SetCodexApprovalPolicyMessageSchema,
     // Agent team messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,
