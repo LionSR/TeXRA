@@ -24,15 +24,6 @@ function inspectKey<T>(key: string): VscodeConfigInspection<T> | undefined {
   return vscode.workspace.getConfiguration().inspect<T>(key);
 }
 
-function resolveWriteKey(key: string): string {
-  if (key.startsWith('texra.')) return key;
-
-  if (inspectKey(key)) return key;
-
-  const texraKey = `texra.${key}`;
-  return inspectKey(texraKey) ? texraKey : key;
-}
-
 function toConfigurationTarget(
   target: ConfigTarget,
 ): vscode.ConfigurationTarget {
@@ -83,9 +74,11 @@ export class VscodeConfigProvider implements ConfigProvider {
     value: T,
     target: ConfigTarget = 'workspace',
   ): Promise<void> {
+    // `configUtils.updateConfig` owns prefix policy, including explicit
+    // `prefix: false` writes. Preserve the exact key passed to this adapter.
     await vscode.workspace
       .getConfiguration()
-      .update(resolveWriteKey(key), value, toConfigurationTarget(target));
+      .update(key, value, toConfigurationTarget(target));
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
