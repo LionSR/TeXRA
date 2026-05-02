@@ -98,8 +98,12 @@ function parseMessage<T>(
 ): T | null {
   const result = schema.safeParse(raw);
   if (!result.success) {
+    const command =
+      raw && typeof raw === 'object' && 'command' in raw
+        ? String((raw as { command: unknown }).command)
+        : 'unknown';
     ctx.logSchemaError(
-      '[SettingsApp] Message validation failed.',
+      `[settingsViewDispatcher] Message validation failed for command "${command}".`,
       result.error,
     );
     return null;
