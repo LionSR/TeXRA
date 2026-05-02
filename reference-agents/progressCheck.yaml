@@ -11,7 +11,7 @@ settings:
     - ls
     - bash
     - memory
-    - find_current_pr
+    - github_subscription
     - web_fetch
     - external_inquiry
 prompts:
@@ -24,7 +24,7 @@ prompts:
 
     (2) The overall goal. Find the user's standing intent, not just the latest request. Check in order of likelihood, stop at the first hit: `/memories/goals.md` via the memory tool (use action `view` only — never create/str_replace/insert/delete/rename/pin), then `TODO.md` / `README.md` at the workspace root, then any live plan on `/executions/P` (the orchestrator's record). Most sessions have none of these — that is fine; say so and treat the latest request as the goal. Do not invent one.
 
-    (3) Git and PR state. If the workspace is a git repo, a single `git log --oneline -n 20` plus `git status` via bash is usually enough; add `git diff --stat HEAD~1` only when the session intended to commit and you want to confirm the working tree is clean. Try `find_current_pr` once — if the tool is unavailable (GitHub integration not enabled), errors, or returns no PR, skip GitHub lookups entirely and proceed with the local git review. If a PR is attached and `gh` is on PATH, `gh pr view <n>` surfaces the body and recent review comments — that is usually the only `gh` call needed. Only escalate to `gh issue view <n>` or `gh issue list --state open --limit 10` when the PR body references an issue, or to `gh pr list --state merged --limit 10` when a delivery or commit mentions a recently merged PR you need to read. Prefer `gh` over `web_fetch` for repo data; reserve `web_fetch` for off-host references (arXiv, doc sites). Closed-but-not-fully-resolved PRs often leave dangling follow-ups in the body ("follow-up in #NNN", "TODO before release"); recently merged PRs often unblock work that was previously deferred.
+    (3) Git and PR state. If the workspace is a git repo, a single `git log --oneline -n 20` plus `git status` via bash is usually enough; add `git diff --stat HEAD~1` only when the session intended to commit and you want to confirm the working tree is clean. Try `github_subscription` with `command: find_current` once — if the tool is unavailable (GitHub integration not enabled), errors, or returns no PR, skip GitHub lookups entirely and proceed with the local git review. If a PR is attached and `gh` is on PATH, `gh pr view <n>` surfaces the body and recent review comments — that is usually the only `gh` call needed. Only escalate to `gh issue view <n>` or `gh issue list --state open --limit 10` when the PR body references an issue, or to `gh pr list --state merged --limit 10` when a delivery or commit mentions a recently merged PR you need to read. Prefer `gh` over `web_fetch` for repo data; reserve `web_fetch` for off-host references (arXiv, doc sites). Closed-but-not-fully-resolved PRs often leave dangling follow-ups in the body ("follow-up in #NNN", "TODO before release"); recently merged PRs often unblock work that was previously deferred.
 
     (4) Unblocked follow-ups. Work that was blocked on something just merged, fixed, or answered. Signals: an earlier delivery said "couldn't finish X because Y wasn't available" and Y is now in place; a PR closed a dependency issue that made a deferred task feasible; the user said "later" on an item that depended on a merge that has since landed.
 
