@@ -883,7 +883,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
-    await this.primeIncludedAccessIfAuthenticated();
     const models = buildModelSelectionItems();
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
