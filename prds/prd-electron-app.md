@@ -406,7 +406,7 @@ TeXRA/
 │           │   ├── pathFix.ts        # fix-path + explicit PATH augmentation
 │           │   └── editApproval.ts   # diff-temp-file flow (replaces nativeToolEditApproval.ts)
 │           ├── preload/
-│           │   └── index.ts          # contextBridge: { rpc(msg), on(channel, cb) }
+│           │   └── index.ts          # contextBridge: per-view typed methods (texra.main.*, texra.progress.*, texra.settings.*, texra.diff.*) + per-view push subscriptions (texra.on.*); no generic rpc(channel, msg). See §7.4.
 │           └── renderer/
 │               ├── index.html        # single-window shell
 │               ├── main.ts           # mounts <main-app>/<progress-app>/<settings-app> from
@@ -845,7 +845,7 @@ export interface UIHosts {
 
 Controllers use `platform().fs` to read files but `hosts.prompt.confirm("Delete this memory?")` to ask the user. `FakePlatform` (#16) gets a sibling `FakeHosts` so kernel tests can record-and-assert UI effects deterministically. The result: each port is ~30–80 LOC of interface + adapter, the boundary is explicit, and we don't expand `Platform`.
 
-Side benefit: this finally provides a place to register the per-host handlers from §9 #17's command catalog — the catalog's command IDs map to controller methods, and `CommandHost.execute(id)` is what the palette ends up calling.
+Side benefit: this finally provides a place to register the per-host handlers from §9 #17's command catalog — the catalog's command IDs map to typed controller methods directly (per-host dispatch table), with no `CommandHost` indirection. The palette and menu in each host walk the catalog and dispatch each entry to a controller method or explicit port; runtime authority stays at the host boundary, not in core.
 
 **Why now:** Phase 2/3 of the desktop port currently has no plan for the ~3,551 LOC of handler logic. Without #18, those phases are missing several thousand LOC of work or break the §8.1 boundary. Without the narrow UI ports above, `Platform` collapses into a UI mega-facade. Tier 1 is the right place because skipping any of it breaks the LOC budget AND the architectural rule simultaneously.
 
@@ -891,7 +891,7 @@ Each Tier 1 item is independently shippable to the extension and produces a smal
 **After Tier 1 lands, the Electron port is "wire up the extracted abstractions":**
 
 - Implement the platform interfaces against Electron primitives (`ConfigProvider` from #1, `WorkspaceProvider.watch` from #4, `DiffViewHost` from #2, `PlatformSecrets` for `safeStorage`).
-- Implement the narrow UI ports (`PromptHost`, `ExternalOpener`, `TerminalHost`, `CommandHost`, `ClipboardHost`) against Electron + the renderer.
+- Implement the 5 narrow UI ports (`PromptHost`, `ExternalOpener`, `DiffViewHost`, `TerminalHost`, `ClipboardHost`) against Electron + the renderer. **No `CommandHost`** — per §9 #18, command dispatch is a typed per-host wiring of the catalog (#17), not a stringly bus.
 - Wire the Electron-side wrappers around the extracted **host-neutral controllers** (#18) via `desktop/main/ipc.ts`.
 - Wire the Electron-side wrapper around the extracted **`SupabaseSession` + `SupabaseClient`** (#14).
 - Wire the Electron-side **command-catalog consumer** (#17) for the native menu + Lit palette.
@@ -955,7 +955,7 @@ Per §4.5 (agent-native architecture): one window, internal routing.
 
 - Mount `<progress-app>` and `<settings-app>` Lit components in the same `BrowserWindow`, switched via the existing `texra.toggleView` routing state. No new windows.
 - `ProgressViewController` + `SettingsViewController` wired through `desktop/main/ipc.ts` (controllers from #18; Phase 3 is just the IPC routing).
-- Lit command palette consumes the host-agnostic command catalog (§9 #17); palette dispatch goes through `CommandHost`.
+- Lit command palette consumes the host-agnostic command catalog (§9 #17); each catalog entry maps to a typed controller method or narrow UI-port call via the desktop-side dispatch table (no stringly `CommandHost` — see §9 #18 "Why no `CommandHost`").
 - Native `Menu` populated from the same catalog — top 20 commands at v1.
 - Settings tabs round-trip through the expanded `ConfigProvider` (#1).
 - **Exit criteria:** Feature parity for the top 20 commands. Settings round-trip through `conf` correctly. Both progress and settings webviews receive push updates from their respective controllers.
