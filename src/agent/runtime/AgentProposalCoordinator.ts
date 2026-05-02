@@ -11,8 +11,6 @@
  * 3. On resolution → emits 'resolveAgentProposal' to dismiss UI
  */
 
-// Local imports
-import { bus } from '@eventBus/ProgressEventBus';
 import type { AgentProposal } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -70,10 +68,10 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
     const { proposalId, proposal, timeoutMs } = options;
 
     // Request host to show progress view so user sees the proposal
-    bus.emit('requestEnsureProgressView', {});
+    this.progressSink.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    bus.emit('setActiveStream', { streamId });
+    this.progressSink.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       proposalId,

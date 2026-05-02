@@ -18,7 +18,11 @@
  */
 
 // Local imports
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import {
+  defaultProgressSink,
+  type ProgressSink,
+} from '@agent/runtime/ProgressSink';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // ============================================================================
 // Types
@@ -61,6 +65,10 @@ export abstract class BasePromiseCoordinator<
   TResult extends BaseResult,
   TShowPayload extends Record<string, unknown>,
 > {
+  constructor(
+    protected readonly progressSink: ProgressSink = defaultProgressSink,
+  ) {}
+
   /** Single source of truth for all pending requests */
   protected readonly requests = new Map<string, RequestState<TResult>>();
 
@@ -112,7 +120,7 @@ export abstract class BasePromiseCoordinator<
       });
 
       // Emit show event (cast needed for generic base class)
-      bus.emit(this.config.showEventName, payload as any);
+      this.progressSink.emit(this.config.showEventName, payload as any);
     });
   }
 
@@ -177,7 +185,7 @@ export abstract class BasePromiseCoordinator<
     this.requests.set(id, { status: 'resolved' });
 
     // Emit resolve event (cast needed for generic base class)
-    bus.emit(this.config.resolveEventName, {
+    this.progressSink.emit(this.config.resolveEventName, {
       [this.config.idFieldName]: id,
     } as any);
 
