@@ -26,7 +26,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { PersistedState } from '@shared/state';
 import { codiconStyles, designTokens } from '@shared/styles';
-import { postMessage } from '@shared/vscode';
+import { postMessage } from '@shared/hostBridge';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { webviewStorage } from '../webviewStorage';
