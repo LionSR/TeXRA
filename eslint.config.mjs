@@ -53,6 +53,58 @@ const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const COMPOSITION_ROOT_FILES = new Set([
+  path.join(__dirname, 'src/extension.ts'),
+]);
+
+const localRules = {
+  rules: {
+    'no-platform-init-outside-composition-root': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description:
+            'Disallow initPlatform imports outside composition roots.',
+        },
+        messages: {
+          forbidden:
+            'initPlatform may only be imported by composition roots; use platform() elsewhere.',
+        },
+        schema: [],
+      },
+      create(context) {
+        const filename = path.normalize(context.filename);
+        const isAllowedFile =
+          COMPOSITION_ROOT_FILES.has(filename) ||
+          filename.includes(`${path.sep}src${path.sep}test${path.sep}`);
+
+        if (isAllowedFile) {
+          return {};
+        }
+
+        return {
+          ImportDeclaration(node) {
+            const importsInitPlatform = node.specifiers.some((specifier) => {
+              return (
+                specifier.type === 'ImportSpecifier' &&
+                specifier.imported.type === 'Identifier' &&
+                specifier.imported.name === 'initPlatform'
+              );
+            });
+
+            if (!importsInitPlatform) return;
+
+            context.report({
+              node,
+              messageId: 'forbidden',
+            });
+          },
+        };
+      },
+    },
+  },
+};
+
 export default tseslint.config(
   // Global ignores specified in the old config
   {
@@ -75,9 +127,12 @@ export default tseslint.config(
     plugins: {
       '@stylistic': stylistic,
       import: importPlugin,
+      local: localRules,
       unicorn,
     },
     rules: {
+      'local/no-platform-init-outside-composition-root': 'error',
+
       // --- Unicorn modernization rules (ES2023+) ---
       'unicorn/prefer-string-replace-all': 'warn',
       'unicorn/prefer-at': 'warn',
