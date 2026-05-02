@@ -9,7 +9,7 @@ export const selectStyles: CSSResult = css`
 
   .select-group .codicon {
     margin-right: var(--spacing-small);
-    color: var(--text-color, var(--vscode-foreground));
+    color: var(--text-color, var(--texra-foreground));
     vertical-align: text-bottom;
   }
 
@@ -33,14 +33,14 @@ export const selectStyles: CSSResult = css`
   }
 
   vscode-option {
-    font-family: var(--vscode-font-family);
+    font-family: var(--texra-font-family);
   }
 
   vscode-option.disabled-option,
   vscode-option.disabled-model,
   vscode-option.disabled-agent,
   vscode-option[data-requires-key='true'] {
-    color: var(--color-text-secondary, var(--vscode-descriptionForeground));
+    color: var(--color-text-secondary, var(--texra-descriptionForeground));
     opacity: var(--opacity-subtle, 0.7);
     font-style: italic;
   }
@@ -55,17 +55,17 @@ export const selectStyles: CSSResult = css`
   }
 
   .clickable:hover {
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
   }
 
   .clickable:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
 
   .codicon.clickable:hover {
-    color: var(--button-hover-background, var(--vscode-button-hoverBackground));
+    color: var(--button-hover-background, var(--texra-button-hoverBackground));
   }
 
   vscode-single-select::part(listbox) {
@@ -73,7 +73,7 @@ export const selectStyles: CSSResult = css`
   }
 
   .api-key-missing {
-    color: var(--vscode-errorForeground);
+    color: var(--texra-errorForeground);
     opacity: var(--opacity-full);
     font-style: normal;
     margin-left: var(--spacing-tiny);

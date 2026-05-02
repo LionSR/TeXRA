@@ -3,34 +3,34 @@ import { css, type CSSResult } from 'lit';
 export const designTokens: CSSResult = css`
   :host {
     /* Text colors */
-    --color-text-secondary: var(--vscode-descriptionForeground);
-    --color-text-link: var(--vscode-textLink-foreground);
-    --color-text-link-active: var(--vscode-textLink-activeForeground);
+    --color-text-secondary: var(--texra-descriptionForeground);
+    --color-text-link: var(--texra-textLink-foreground);
+    --color-text-link-active: var(--texra-textLink-activeForeground);
 
     /* Background colors */
-    --color-bg-secondary: var(--vscode-sideBar-background);
+    --color-bg-secondary: var(--texra-sideBar-background);
 
     /* Border colors */
-    --color-border: var(--vscode-panel-border);
+    --color-border: var(--texra-panel-border);
 
     /* Status colors */
-    --color-success: var(--vscode-testing-iconPassed, #2ea043);
-    --color-error: var(--vscode-editorError-foreground, #f14c4c);
-    --color-warning: var(--vscode-editorWarning-foreground, #cca700);
-    --color-info: var(--vscode-charts-blue, #3794ff);
-    --color-added: var(--vscode-charts-green, #4caf50);
-    --color-removed: var(--vscode-charts-red, #f44336);
+    --color-success: var(--texra-testing-iconPassed, #2ea043);
+    --color-error: var(--texra-editorError-foreground, #f14c4c);
+    --color-warning: var(--texra-editorWarning-foreground, #cca700);
+    --color-info: var(--texra-charts-blue, #3794ff);
+    --color-added: var(--texra-charts-green, #4caf50);
+    --color-removed: var(--texra-charts-red, #f44336);
 
     /* Component aliases */
     --background-color: var(--color-bg-secondary);
-    --text-color: var(--vscode-sideBar-foreground);
-    --button-hover-background: var(--vscode-button-hoverBackground);
-    --dropdown-border: var(--vscode-dropdown-border);
+    --text-color: var(--texra-sideBar-foreground);
+    --button-hover-background: var(--texra-button-hoverBackground);
+    --dropdown-border: var(--texra-dropdown-border);
 
     /* Typography */
-    --font-size: var(--vscode-font-size);
-    --font-family: var(--vscode-font-family);
-    --font-weight: var(--vscode-font-weight);
+    --font-size: var(--texra-font-size);
+    --font-family: var(--texra-font-family);
+    --font-weight: var(--texra-font-weight);
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
