@@ -128,7 +128,7 @@ export class PlanView extends LitElement {
         background: var(--texra-badge-background);
         padding: var(--border-thin) var(--spacing-medium);
         border-radius: var(--border-radius);
-        font-family: var(--texra-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
       }
 
       /* Status-specific styles */
