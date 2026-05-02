@@ -46,7 +46,7 @@ import {
   isDiskFullError,
   toErrorMessage,
 } from '@common/errors/errorHandlingUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage, isUserAbort } from '@common/errors/sdkErrorUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   AgentLogger,
@@ -427,17 +427,22 @@ async function runFlowWithLifecycle(
     untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
+    // Aborts are user- or system-initiated cancellations — not errors to surface.
+    const aborted = isUserAbort(err);
+
     // Log error BEFORE ending the group so it gets the correct groupId
-    await ctx.logger.logError(errorMsg, err, {
-      operation: `execute ${agentName}`,
-    });
+    if (!aborted) {
+      await ctx.logger.logError(errorMsg, err, {
+        operation: `execute ${agentName}`,
+      });
+    }
 
     ctx.parentStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamId, STREAM_STATUS.ERROR);
 
     // Subagents propagate errors to the orchestrator via FollowUpQueue —
     // don't show VS Code popups that would confuse the user.
-    if (!options?.isSubagent) {
+    if (!options?.isSubagent && !aborted) {
       if (isDiskFullError(err)) {
         bus.emit('requestShowError', { message: getSdkErrorMessage(err) });
       } else {
