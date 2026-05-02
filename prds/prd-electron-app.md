@@ -293,19 +293,19 @@ Existing `src/auth/UriHandler.ts` already handles the `vscode://vscode.texra/aut
 
 The "one source tree, multiple targets" problem is well-trodden. VS Code, Slack, Standard Notes, Discord, and Linear have all converged on a similar set of patterns. This section names them explicitly so the team has shared vocabulary, defends against drift, and can defer architectural decisions to "what does VS Code do here?" instead of inventing.
 
-| Pattern                          | Industry source                                | TeXRA realization                                                                                                                                        |
-| -------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hexagonal / ports & adapters** | Cockburn 2005 — universal in modern apps       | `core/platform/*.ts` defines ports (`ConfigProvider`, `LogBackend`, etc.); `extension/frontend/vscode/*.ts` and `desktop/main/platform/*.ts` are adapters. |
-| **Composition root**             | Mark Seemann, *Dependency Injection Principles* | `extension/src/extension.ts:144` and `desktop/src/main/index.ts` are the only places `initPlatform()` is called. Everywhere else uses `platform()`.       |
-| **Thin shell over a kernel**     | VS Code (`src/vs/` + `code/` binary), Standard Notes (`web` core + 5K-LOC Electron shell) | `@texra/core` is the kernel; `@texra/extension` and `@texra/desktop` are thin shells. §12 caps the desktop shell at ~3,000 LOC. |
-| **Bare-minimum port surface**    | VS Code (every API addition is a debate)        | `Platform` is 7 interfaces, ~470 LOC. New methods need a documented reason. (Codified in CLAUDE.md's "platform()" rule.)                                  |
-| **Test the kernel with fakes**   | Hexagonal architecture orthodoxy                | `FakePlatform` impl in `core/test/fakes/` (Phase 1) lets Vitest run agent + LaTeX + tool tests in <1s with zero host setup. **Make this explicit.**       |
-| **TS project references**        | Microsoft's own monorepo guidance               | `tsconfig.base.json` + `composite: true` on each package; `tsc --build` understands the graph (§8.2).                                                    |
-| **Strict-direction imports**     | Nx, Turborepo, custom ESLint rules              | Per the §8.1 matrix: `core/` imports nothing from siblings; `extension/` and `desktop/` may import only from `core/`. Enforced by ESLint.                |
-| **Environment-tagged folders**   | VS Code (`src/vs/{common,node,browser,electron-main,electron-sandbox}/`) | **Considered, deferred.** See discussion below — TeXRA's scale doesn't yet justify the reorg. |
-| **Per-OS CI matrix**             | electron-builder docs; Slack, Discord, Cursor   | Three parallel jobs on macos/windows/ubuntu runners + aggregator (§8.1).                                                                                  |
-| **Per-target build with shared bundler** | electron-vite, vite-plugin-electron, Tauri   | electron-vite drives main/preload/renderer; existing extension build keeps esbuild + Vite (§8.1).                                                        |
-| **Capability check, not host check** | Modern cross-platform JS (e.g. `tabs` API)    | Code calls `platform().secrets.set(...)` not `if (isElectron) ...`. Avoids lock-in; new hosts (web, CLI) can flip capabilities on. (Existing pattern — keep enforcing.) |
+| Pattern                                  | Industry source                                                                           | TeXRA realization                                                                                                                                                       |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hexagonal / ports & adapters**         | Cockburn 2005 — universal in modern apps                                                  | `core/platform/*.ts` defines ports (`ConfigProvider`, `LogBackend`, etc.); `extension/frontend/vscode/*.ts` and `desktop/main/platform/*.ts` are adapters.              |
+| **Composition root**                     | Mark Seemann, _Dependency Injection Principles_                                           | `extension/src/extension.ts:144` and `desktop/src/main/index.ts` are the only places `initPlatform()` is called. Everywhere else uses `platform()`.                     |
+| **Thin shell over a kernel**             | VS Code (`src/vs/` + `code/` binary), Standard Notes (`web` core + 5K-LOC Electron shell) | `@texra/core` is the kernel; `@texra/extension` and `@texra/desktop` are thin shells. §12 caps the desktop shell at ~3,000 LOC.                                         |
+| **Bare-minimum port surface**            | VS Code (every API addition is a debate)                                                  | `Platform` is 7 interfaces, ~470 LOC. New methods need a documented reason. (Codified in CLAUDE.md's "platform()" rule.)                                                |
+| **Test the kernel with fakes**           | Hexagonal architecture orthodoxy                                                          | `FakePlatform` impl in `core/test/fakes/` (Phase 1) lets Vitest run agent + LaTeX + tool tests in <1s with zero host setup. **Make this explicit.**                     |
+| **TS project references**                | Microsoft's own monorepo guidance                                                         | `tsconfig.base.json` + `composite: true` on each package; `tsc --build` understands the graph (§8.2).                                                                   |
+| **Strict-direction imports**             | Nx, Turborepo, custom ESLint rules                                                        | Per the §8.1 matrix: `core/` imports nothing from siblings; `extension/` and `desktop/` may import only from `core/`. Enforced by ESLint.                               |
+| **Environment-tagged folders**           | VS Code (`src/vs/{common,node,browser,electron-main,electron-sandbox}/`)                  | **Considered, deferred.** See discussion below — TeXRA's scale doesn't yet justify the reorg.                                                                           |
+| **Per-OS CI matrix**                     | electron-builder docs; Slack, Discord, Cursor                                             | Three parallel jobs on macos/windows/ubuntu runners + aggregator (§8.1).                                                                                                |
+| **Per-target build with shared bundler** | electron-vite, vite-plugin-electron, Tauri                                                | electron-vite drives main/preload/renderer; existing extension build keeps esbuild + Vite (§8.1).                                                                       |
+| **Capability check, not host check**     | Modern cross-platform JS (e.g. `tabs` API)                                                | Code calls `platform().secrets.set(...)` not `if (isElectron) ...`. Avoids lock-in; new hosts (web, CLI) can flip capabilities on. (Existing pattern — keep enforcing.) |
 
 #### Why we don't adopt VS Code's environment-tagged folders (yet)
 
@@ -835,17 +835,17 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 
 #### LOC by phase (`packages/desktop/`)
 
-| Phase | Scope | New LOC | Modified LOC | Notes |
-| ----- | ---------------------------------------------- | ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 0 | Monorepo split | ~50 | ~200 | Package.jsons, tsconfig.base.json, pnpm-workspace.yaml, electron-vite skeleton "Hello TeXRA". Most work is moving files, not writing. |
-| 1 | Platform impls (8 files) + initPlatform + fix-path + Vitest invariant suite | 450–600 | ~10 | Eight 30–60-LOC impls + ~80 LOC bootstrap + ~50 LOC fix-path / PATH augmentation + ~50 LOC of platform-impl Vitest tests sharing FakePlatform invariants. |
-| 2 | Renderer + main view (3 files: ipc.ts, preload, renderer/main.ts; window creation in main/index.ts) | 230–330 | ~45 (`hostBridge.ts`) | 3 files at ~70–100 LOC each, plus `themeTokens.css` ~150 LOC. |
-| 3 | Progress, settings, command palette, native menu | 250–350 | ~60 | Lit palette ~150 LOC, native `Menu` ~100 LOC, settings adapter wiring ~60 LOC. |
-| 4 | Auth, secrets, remote agents (Electron-side) | 150–220 | ~10 in core | Slimmer because §9 #14 lands first: `texra://` protocol ~80 LOC, `safeStorage` adapter ~80 LOC, `SupabaseSession` host wrapper ~50 LOC. |
-| 5 | Diff surface (`<texra-diff-view>` + IPC) | 400–550 | — | Lit Monaco wrapper 200–400 LOC, worker config ~50 LOC, `editApproval.ts` IPC handler ~120 LOC. |
-| 6 | Packaging, signing, auto-update | 250–350 (mostly config) | — | `electron-builder.yml` ~150 LOC YAML, per-OS GitHub Actions matrix ~120 LOC, updater wiring ~80 LOC. |
-| 7 | Beta polish (walkthrough, Sentry, log viewer, importer) | 350–450 | ~30 | Walkthrough modal ~150 LOC, Sentry init + scrubber ~80 LOC, log-viewer pane ~120 LOC, migration importer ~100 LOC. |
-| **Total `desktop/`** | | **~2,180–2,900** | **~395** | Within the §12 cap of ~3,000 net new LOC. Trimmed since the renderer collapsed (3 files instead of 4, no separate windowManager) and Phase 4 became a thin wrapper around the extracted `SupabaseSession`. |
+| Phase                | Scope                                                                                               | New LOC                 | Modified LOC          | Notes                                                                                                                                                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------- | ----------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0                    | Monorepo split                                                                                      | ~50                     | ~200                  | Package.jsons, tsconfig.base.json, pnpm-workspace.yaml, electron-vite skeleton "Hello TeXRA". Most work is moving files, not writing.                                                                      |
+| 1                    | Platform impls (8 files) + initPlatform + fix-path + Vitest invariant suite                         | 450–600                 | ~10                   | Eight 30–60-LOC impls + ~80 LOC bootstrap + ~50 LOC fix-path / PATH augmentation + ~50 LOC of platform-impl Vitest tests sharing FakePlatform invariants.                                                  |
+| 2                    | Renderer + main view (3 files: ipc.ts, preload, renderer/main.ts; window creation in main/index.ts) | 230–330                 | ~45 (`hostBridge.ts`) | 3 files at ~70–100 LOC each, plus `themeTokens.css` ~150 LOC.                                                                                                                                              |
+| 3                    | Progress, settings, command palette, native menu                                                    | 250–350                 | ~60                   | Lit palette ~150 LOC, native `Menu` ~100 LOC, settings adapter wiring ~60 LOC.                                                                                                                             |
+| 4                    | Auth, secrets, remote agents (Electron-side)                                                        | 150–220                 | ~10 in core           | Slimmer because §9 #14 lands first: `texra://` protocol ~80 LOC, `safeStorage` adapter ~80 LOC, `SupabaseSession` host wrapper ~50 LOC.                                                                    |
+| 5                    | Diff surface (`<texra-diff-view>` + IPC)                                                            | 400–550                 | —                     | Lit Monaco wrapper 200–400 LOC, worker config ~50 LOC, `editApproval.ts` IPC handler ~120 LOC.                                                                                                             |
+| 6                    | Packaging, signing, auto-update                                                                     | 250–350 (mostly config) | —                     | `electron-builder.yml` ~150 LOC YAML, per-OS GitHub Actions matrix ~120 LOC, updater wiring ~80 LOC.                                                                                                       |
+| 7                    | Beta polish (walkthrough, Sentry, log viewer, importer)                                             | 350–450                 | ~30                   | Walkthrough modal ~150 LOC, Sentry init + scrubber ~80 LOC, log-viewer pane ~120 LOC, migration importer ~100 LOC.                                                                                         |
+| **Total `desktop/`** |                                                                                                     | **~2,180–2,900**        | **~395**              | Within the §12 cap of ~3,000 net new LOC. Trimmed since the renderer collapsed (3 files instead of 4, no separate windowManager) and Phase 4 became a thin wrapper around the extracted `SupabaseSession`. |
 
 #### LOC by component (`packages/desktop/src/main/` + `renderer/`)
 
@@ -874,31 +874,31 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 
 These are the §9 pre-refactorings + the unavoidable cross-cutting changes during Phase 0–5.
 
-| Item | Net new LOC | Modified / refactored LOC | Notes |
-| --------------------------------------------------------------------- | ----------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| §9 #1 `configUtils.ts` behind `ConfigProvider` | ~40 | ~126 | Pure refactor inside core. |
-| §9 #2 `DiffViewHost` interface + VS Code wrapper | ~40 | ~80 | Native impl wraps existing `vscode.diff` call site. |
-| §9 #3 `vscode.EventEmitter` → Node `EventEmitter` | — | ~30 | 10 mechanical sites. |
-| §9 #4 `WorkspaceProvider.watch()` interface + impl | ~60 | — | Interface + VS Code impl wraps `createFileSystemWatcher`. |
-| §9 #14 `SupabaseSession` extraction | ~80 | ~750 (moved) + ~190 (slimmed glue) | Host-agnostic OAuth class in core; subsumes #5. Saves ~150 LOC at Phase 4. |
-| §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch | ~5 | ~45 | Re-export shim + feature-detect Electron. |
-| §9 #7 `--vscode-*` → `--texra-*` token shim | ~100 | ~450 | New `themeTokens.css` + ~25 components touched by find-replace. |
-| §9 #8 `BinaryResolver` extraction | ~80 | ~120 | Service + call-site routing audit. |
-| §9 #9 Settings Zod schema (Tier 2 — recommended) | ~600 | — | Mirrors `package.json` `contributes.configuration`; eliminates JSON-schema/Zod drift. |
-| §9 #11 ESLint vscode-import rule | ~50 | — | Custom flat-config rule. |
-| §9 #12 Codex unpack rehearsal harness | ~80 | ~30 | Test harness + electron-builder config. |
-| §9 #13 `settingsViewDispatcher.ts` extraction | ~40 | ~120 | Move switch out of `SettingsApp.handleMessage()`. |
-| §9 #15 `no-platform-init-outside-composition-root` ESLint rule | ~30 | — | Codifies §6.6 composition-root invariant. |
-| §9 #16 `FakePlatform` for unit tests | ~150 | — | In-memory impls of the 7 platform interfaces; enables fast kernel tests via Vitest. |
-| **Subtotal core/extension** | **~1,355** | **~1,941** | Of which #14 contributes ~940 LOC of refactored (mostly moved code). Floor of net-new: ~1,355. |
+| Item                                                                   | Net new LOC | Modified / refactored LOC          | Notes                                                                                          |
+| ---------------------------------------------------------------------- | ----------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| §9 #1 `configUtils.ts` behind `ConfigProvider`                         | ~40         | ~126                               | Pure refactor inside core.                                                                     |
+| §9 #2 `DiffViewHost` interface + VS Code wrapper                       | ~40         | ~80                                | Native impl wraps existing `vscode.diff` call site.                                            |
+| §9 #3 `vscode.EventEmitter` → Node `EventEmitter`                      | —           | ~30                                | 10 mechanical sites.                                                                           |
+| §9 #4 `WorkspaceProvider.watch()` interface + impl                     | ~60         | —                                  | Interface + VS Code impl wraps `createFileSystemWatcher`.                                      |
+| §9 #14 `SupabaseSession` extraction                                    | ~80         | ~750 (moved) + ~190 (slimmed glue) | Host-agnostic OAuth class in core; subsumes #5. Saves ~150 LOC at Phase 4.                     |
+| §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch | ~5          | ~45                                | Re-export shim + feature-detect Electron.                                                      |
+| §9 #7 `--vscode-*` → `--texra-*` token shim                            | ~100        | ~450                               | New `themeTokens.css` + ~25 components touched by find-replace.                                |
+| §9 #8 `BinaryResolver` extraction                                      | ~80         | ~120                               | Service + call-site routing audit.                                                             |
+| §9 #9 Settings Zod schema (Tier 2 — recommended)                       | ~600        | —                                  | Mirrors `package.json` `contributes.configuration`; eliminates JSON-schema/Zod drift.          |
+| §9 #11 ESLint vscode-import rule                                       | ~50         | —                                  | Custom flat-config rule.                                                                       |
+| §9 #12 Codex unpack rehearsal harness                                  | ~80         | ~30                                | Test harness + electron-builder config.                                                        |
+| §9 #13 `settingsViewDispatcher.ts` extraction                          | ~40         | ~120                               | Move switch out of `SettingsApp.handleMessage()`.                                              |
+| §9 #15 `no-platform-init-outside-composition-root` ESLint rule         | ~30         | —                                  | Codifies §6.6 composition-root invariant.                                                      |
+| §9 #16 `FakePlatform` for unit tests                                   | ~150        | —                                  | In-memory impls of the 7 platform interfaces; enables fast kernel tests via Vitest.            |
+| **Subtotal core/extension**                                            | **~1,355**  | **~1,941**                         | Of which #14 contributes ~940 LOC of refactored (mostly moved code). Floor of net-new: ~1,355. |
 
 #### Aggregate budget
 
-| Bucket                                                    | Net new LOC      | Modified LOC | Total touched    |
-| --------------------------------------------------------- | ---------------- | ------------ | ---------------- |
-| `packages/desktop/`                                       | 2,180–2,900      | ~395         | ~2,575–3,295     |
+| Bucket                                                                     | Net new LOC      | Modified LOC | Total touched    |
+| -------------------------------------------------------------------------- | ---------------- | ------------ | ---------------- |
+| `packages/desktop/`                                                        | 2,180–2,900      | ~395         | ~2,575–3,295     |
 | `packages/core/` + `extension/` (all §9 pre-refactorings, incl. #15 + #16) | ~1,355           | ~1,941       | ~3,296           |
-| **Total v1**                                              | **~3,535–4,255** | **~2,336**   | **~5,871–6,591** |
+| **Total v1**                                                               | **~3,535–4,255** | **~2,336**   | **~5,871–6,591** |
 
 For comparison: the VS Code extension today is ~853 source files. The agent core (which is reused unchanged) is ~141 files. The Electron port is roughly **3% the size of the existing extension's source base** in net-new code, and roughly **6% if you count refactored + new together**.
 
