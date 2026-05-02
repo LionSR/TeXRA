@@ -280,6 +280,13 @@ export class FakeFileSystemProvider implements FileSystemProvider {
       return;
     }
 
+    this.assertNotSelfDescendant(normalizedSource, normalizedDest, 'copy');
+    if (normalizedSource === normalizedDest) {
+      throw fakeFsError(
+        'EINVAL',
+        `Cannot copy a directory onto itself: ${source} -> ${dest}`,
+      );
+    }
     this.createDirectorySync(normalizedDest);
     for (const child of this.childPaths(normalizedSource)) {
       const relative = path.posix.relative(normalizedSource, child);
@@ -295,6 +302,10 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   ): Promise<void> {
     const normalizedSource = normalizePath(source);
     const normalizedDest = normalizePath(dest);
+    if (normalizedSource === normalizedDest) {
+      return;
+    }
+
     const sourceRecord = this.requireRecord(normalizedSource);
     this.assertWritableTarget(normalizedDest, options?.overwrite);
 
@@ -306,6 +317,9 @@ export class FakeFileSystemProvider implements FileSystemProvider {
       return;
     }
 
+    this.assertNotSelfDescendant(normalizedSource, normalizedDest, 'rename');
+    this.assertDirectoryRenameTarget(normalizedDest);
+    this.assertParentDirectoryExists(normalizedDest);
     this.createDirectorySync(normalizedDest);
     for (const child of this.childPaths(normalizedSource)) {
       const relative = path.posix.relative(normalizedSource, child);
@@ -428,6 +442,43 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   private assertWritableTarget(target: string, overwrite?: boolean): void {
     if (!overwrite && this.records.has(target)) {
       throw fakeFsError('EEXIST', `Target already exists: ${target}`);
+    }
+  }
+
+  private assertNotSelfDescendant(
+    source: string,
+    dest: string,
+    operation: string,
+  ): void {
+    if (hasChildPath(source, dest)) {
+      throw fakeFsError(
+        'EINVAL',
+        `Cannot ${operation} a directory into itself: ${source} -> ${dest}`,
+      );
+    }
+  }
+
+  private assertDirectoryRenameTarget(dest: string): void {
+    const destRecord = this.records.get(dest);
+    if (destRecord?.type === FileType.File) {
+      throw fakeFsError('ENOTDIR', `Path is a file: ${dest}`);
+    }
+    if (
+      destRecord?.type === FileType.Directory &&
+      this.childPaths(dest).length > 0
+    ) {
+      throw fakeFsError('ENOTEMPTY', `Directory is not empty: ${dest}`);
+    }
+  }
+
+  private assertParentDirectoryExists(target: string): void {
+    const parent = parentPath(target);
+    const parentRecord = this.records.get(parent);
+    if (!parentRecord) {
+      throw fakeFsError('ENOENT', `Parent directory not found: ${parent}`);
+    }
+    if (parentRecord.type !== FileType.Directory) {
+      throw fakeFsError('ENOTDIR', `Parent path is not a directory: ${parent}`);
     }
   }
 }

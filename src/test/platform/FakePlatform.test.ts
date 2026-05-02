@@ -96,4 +96,71 @@ describe('FakePlatform', () => {
 
     assert.equal(fs.getText('/workspace/missing/a.txt'), 'updated');
   });
+
+  it('rejects directory operations into self descendants', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/a.txt': 'A',
+    });
+
+    await assert.rejects(
+      () => fs.copy('/workspace/source', '/workspace/source/nested'),
+      /Cannot copy a directory into itself/,
+    );
+    await assert.rejects(
+      () => fs.rename('/workspace/source', '/workspace/source/nested'),
+      /Cannot rename a directory into itself/,
+    );
+
+    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
+    assert.equal(fs.exists('/workspace/source/nested'), false);
+  });
+
+  it('rejects directory rename over non-empty targets', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/a.txt': 'A',
+      '/workspace/dest/existing.txt': 'B',
+    });
+
+    await assert.rejects(
+      () =>
+        fs.rename('/workspace/source', '/workspace/dest', { overwrite: true }),
+      /Directory is not empty/,
+    );
+
+    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
+    assert.equal(fs.getText('/workspace/dest/existing.txt'), 'B');
+  });
+
+  it('rejects directory rename when destination parent is missing', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/a.txt': 'A',
+    });
+
+    await assert.rejects(
+      () =>
+        fs.rename('/workspace/source', '/workspace/missing/dest', {
+          overwrite: true,
+        }),
+      /Parent directory not found/,
+    );
+
+    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
+    assert.equal(fs.exists('/workspace/missing'), false);
+  });
+
+  it('rejects directory copy onto itself with overwrite', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/a.txt': 'A',
+    });
+
+    await assert.rejects(
+      () =>
+        fs.copy('/workspace/source', '/workspace/source', {
+          overwrite: true,
+        }),
+      /Cannot copy a directory onto itself/,
+    );
+
+    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
+  });
 });
