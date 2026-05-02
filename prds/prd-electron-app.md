@@ -77,29 +77,29 @@ Every item has a clean Electron-native replacement.
 
 A deep scout enumerated every Lit component, every host-bridge call, every CSS token, and every third-party UI dep in the three frontends. The key numbers:
 
-| Metric | Value |
-|---|---|
-| Total frontend LOC across the three webviews | 30,631 |
-| Webview frontend LOC by view | main 5,596 / progress 16,471 / settings 8,564 |
-| Custom elements (`@customElement`) | 62 (main 11 / progress 33 / settings 18) |
-| Abstract LitElement base classes | 2 (`BaseRequestPanel`, `BaseFeedbackPanel`) |
-| Direct `acquireVsCodeApi` calls in components | **0** (single seam at `src/shared/vscode.ts:28`) |
-| Raw `vscode.postMessage` calls bypassing the wrapper | **0** (36+ calls all go through `postMessage()` helper) |
-| Raw `window.addEventListener('message', ...)` outside the dispatcher | 1 (in `BaseWebviewApp.ts:91`, inherited by all three) |
-| Unique `--vscode-*` CSS tokens referenced | 53 (all have fallback values) |
-| Hardcoded colors outside `var(--vscode-*, ...)` fallbacks | 2 (terminal default `#1e1e1e`, markdown error `#cc0000`) |
-| Components from `@vscode-elements/elements` used | 19 distinct (`vscode-toolbar-button` ×95, `vscode-checkbox` ×17, etc.) — all framework-agnostic web components |
-| `@vscode/codicons` glyphs referenced | ~50 unique, all present in the npm package's CSS |
-| Monaco usage in frontends today | **0** (confirmed) |
+| Metric                                                               | Value                                                                                                          |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Total frontend LOC across the three webviews                         | 30,631                                                                                                         |
+| Webview frontend LOC by view                                         | main 5,596 / progress 16,471 / settings 8,564                                                                  |
+| Custom elements (`@customElement`)                                   | 62 (main 11 / progress 33 / settings 18)                                                                       |
+| Abstract LitElement base classes                                     | 2 (`BaseRequestPanel`, `BaseFeedbackPanel`)                                                                    |
+| Direct `acquireVsCodeApi` calls in components                        | **0** (single seam at `src/shared/vscode.ts:28`)                                                               |
+| Raw `vscode.postMessage` calls bypassing the wrapper                 | **0** (36+ calls all go through `postMessage()` helper)                                                        |
+| Raw `window.addEventListener('message', ...)` outside the dispatcher | 1 (in `BaseWebviewApp.ts:91`, inherited by all three)                                                          |
+| Unique `--vscode-*` CSS tokens referenced                            | 53 (all have fallback values)                                                                                  |
+| Hardcoded colors outside `var(--vscode-*, ...)` fallbacks            | 2 (terminal default `#1e1e1e`, markdown error `#cc0000`)                                                       |
+| Components from `@vscode-elements/elements` used                     | 19 distinct (`vscode-toolbar-button` ×95, `vscode-checkbox` ×17, etc.) — all framework-agnostic web components |
+| `@vscode/codicons` glyphs referenced                                 | ~50 unique, all present in the npm package's CSS                                                               |
+| Monaco usage in frontends today                                      | **0** (confirmed)                                                                                              |
 
 **Reuse breakdown across all 30,631 LOC:**
 
-| Bucket | LOC | % |
-|---|---|---|
-| Byte-for-byte reusable | 29,550 | 96.5% |
-| Token rename (`--vscode-*` → `--texra-*` mapping layer) | 450 | 1.5% |
-| API swap (`postMessage` wrapper transport) | 490 | 1.6% |
-| Reimplementation (terminal font init, markdown error color, HTML token substitution) | 141 | 0.5% |
+| Bucket                                                                               | LOC    | %     |
+| ------------------------------------------------------------------------------------ | ------ | ----- |
+| Byte-for-byte reusable                                                               | 29,550 | 96.5% |
+| Token rename (`--vscode-*` → `--texra-*` mapping layer)                              | 450    | 1.5%  |
+| API swap (`postMessage` wrapper transport)                                           | 490    | 1.6%  |
+| Reimplementation (terminal font init, markdown error color, HTML token substitution) | 141    | 0.5%  |
 
 **The minimum Electron-side changeset to mount all three frontends:**
 
