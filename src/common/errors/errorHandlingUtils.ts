@@ -75,7 +75,11 @@ export function isDiskFullError(err: unknown): boolean {
   return false;
 }
 
-export type AgentErrorKind = 'abort' | 'disk-full' | 'missing-api-key' | 'unexpected';
+export type AgentErrorKind =
+  | 'abort'
+  | 'disk-full'
+  | 'missing-api-key'
+  | 'unexpected';
 
 /** Classify an agent execution error so callers can dispatch without inline predicates. */
 export function classifyAgentError(err: unknown): AgentErrorKind {
