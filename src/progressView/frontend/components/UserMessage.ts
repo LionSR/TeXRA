@@ -84,10 +84,6 @@ export class UserMessage extends LitElement {
         border-radius: var(--border-radius);
       }
 
-      .user-message--structured-delivery {
-        max-width: 100%;
-      }
-
       .user-message-header {
         display: flex;
         align-items: center;
