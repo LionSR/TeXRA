@@ -157,7 +157,7 @@ Each pick is grounded in current (May 2026) state-of-the-art research and the ac
 | 5   | Secrets         | **Electron `safeStorage` + `conf` blob** (NOT `keytar`)                                                                                   | `keytar` was archived Dec 2022; VS Code itself migrated to `safeStorage`                                                                                                                                                                                                  |
 | 6   | File watcher    | **chokidar 4**                                                                                                                            | Pure JS — `@parcel/watcher` is faster on huge trees but adds a native module under asar; LaTeX project sizes don't justify the operational cost                                                                                                                           |
 | 7   | Diff UI         | **Monaco Editor** (`monaco-editor` standalone, lazy-loaded, **diff editor only** at v1)                                                   | Same diff engine VS Code uses — keeps visual + behavioral parity with the extension; bundle cost (~5–10MB) is acceptable for a desktop app and is recouped via Vite code-splitting / lazy load. File preview is `shell.openPath()` (§4.5), not a Monaco read-only viewer. |
-| 8   | Menu + palette  | **Native `Menu` + custom Lit palette over existing `src/commands.ts` registry**                                                           | Avoids React/cmdk; ~150 LOC reuses what's there                                                                                                                                                                                                                           |
+| 8   | Menu + palette  | **Native `Menu` + custom Lit palette over a host-agnostic command catalog (extracted from `src/commands.ts` per §9 #17)**                 | Avoids React/cmdk; existing `src/commands.ts` imports `vscode` so it can't be reused directly — the catalog is the metadata layer (id, title, category, icon, keybinding) that both hosts wire actions to. |
 | 9   | OAuth deep-link | **Roll own** with `setAsDefaultProtocolClient` + `requestSingleInstanceLock` + `open-url` + `second-instance` + `process.argv` cold-start | Logic mirrors existing `src/auth/UriHandler.ts`; `electron-deeplink` adds 200 LOC of indirection over a 40-LOC implementation                                                                                                                                             |
 | 10  | macOS PATH fix  | **`fix-path`** (cached at startup) + explicit PATH augmentation belt-and-suspenders                                                       | LaTeX/pandoc binaries live in `/Library/TeX/texbin`, `/opt/homebrew/bin`; Finder-launched apps don't see these by default                                                                                                                                                 |
 | 11  | Repo structure  | **pnpm workspaces, three packages** (`core`, `extension`, `desktop`)                                                                      | `workspace:*` protocol, `--filter` builds, single `tsconfig.base.json`; Turborepo is overkill for three packages                                                                                                                                                          |
@@ -245,7 +245,7 @@ This is essentially the pattern Sourcegraph used pre-2023 and that VS Code uses 
 
 The TeXRA source repo is private. Two complications follow:
 
-1. **`electron-updater` against a private GitHub repo** requires a `GH_TOKEN` baked into every client at build time. That token is harvestable from any installed binary; even if it's read-only-on-releases-only, it's a bad pattern.
+1. **`electron-updater` against a private GitHub repo** requires a `GH_TOKEN` to be available at update-check time. The two delivery paths are: (a) bake the token into the build (harvestable from any installed binary, bad pattern), or (b) require each end-user to set `GH_TOKEN` in their environment (works but is a deployment-burden non-starter for desktop apps). Either way, the private repo is the wrong shape for client distribution.
 2. **`update.electronjs.org`** (the free CDN/redirector that handles thundering-herd traffic on releases) refuses private repos outright.
 
 We solve both by publishing builds to a **separate public repo**, e.g. `texra-ai/texra-desktop-releases`. The release repo contains only signed installers, `latest-mac.yml` / `latest.yml` / `latest-linux.yml` manifests, and a license. The source repo's CI workflow uses a release-repo-scoped PAT (or a GitHub App with `contents: write` on just that repo) to push artifacts. Clients embed only the release-repo URL; no token in the binary.
@@ -281,13 +281,13 @@ This split is the **largest mechanical change** in the project. Do it before the
 
 ### 6.5 Why roll-own deep-link
 
-Existing `src/auth/UriHandler.ts` already handles the `vscode://vscode.texra/auth-callback?code=...&state=...` parse-and-dispatch logic. The Electron equivalent registers `texra://` and reuses the same parse/dispatch on the URL. Three platform-specific gotchas worth budgeting:
+Existing `src/auth/UriHandler.ts` already handles the `vscode://vscode.texra/auth-callback?code=...&state=...` parse-and-dispatch logic. The Electron equivalent registers `texra://` and reuses the same parse/dispatch on the URL. The platforms diverge meaningfully on cold-start delivery — get this wrong and packaged macOS auth callbacks silently disappear:
 
-- **macOS:** `app.on('open-url')` fires for already-running app; for cold-start the URL arrives in `process.argv`. Capture synchronously at module top.
-- **Windows:** Single-instance lock + `second-instance` event for warm starts. Cold starts have the URL in `process.argv` _before_ `ready` fires (electron/electron #40173). In dev, must pass executable path explicitly: `app.setAsDefaultProtocolClient('texra', process.execPath, [path.resolve(process.argv[1])])`.
-- **Linux:** Same pattern but desktop-environment specific. Test on GNOME, KDE.
+- **macOS — always `open-url`.** Register `app.on('open-url', (event, url) => ...)` **before** `app.whenReady()` resolves. The OS delivers all `texra://` URLs through this event, both for warm-start (already-running app) and cold-start (launches the app). `process.argv` does **not** contain the URL on macOS in either case. Missing the early registration is the canonical "auth callbacks broken on first launch" bug.
+- **Windows — `second-instance` for warm-start, `process.argv` for cold-start.** Cold-start: the URL arrives in `process.argv` _before_ `ready` fires (electron/electron #40173). Capture synchronously at module top. Warm-start: rely on `app.requestSingleInstanceLock()` + `app.on('second-instance', (event, argv) => ...)`. In dev, must pass executable path explicitly: `app.setAsDefaultProtocolClient('texra', process.execPath, [path.resolve(process.argv[1])])`.
+- **Linux — same as Windows** for argv/second-instance shape, plus desktop-environment specifics. Test on GNOME and KDE.
 
-`electron-deeplink` adds ~200 LOC of indirection. Roll our own at ~40 LOC.
+`electron-deeplink` adds ~200 LOC of indirection. Roll our own at ~40 LOC, with the platform branch made explicit.
 
 ### 6.6 Industry-tested patterns we adopt (and why)
 
@@ -447,7 +447,7 @@ What `desktop/` does **not** import from `extension/`:
 - `extension.ts` — replaced by `desktop/src/main/index.ts`.
 - `commands/` — VS Code command handlers; replaced by Electron menu actions and renderer-initiated IPC.
 - `common/webview/` and `frontend/` — VS Code webview hosting; replaced by `BrowserWindow` + `contextBridge`.
-- `frontend/approval/nativeToolEditApproval.ts` — replaced by `desktop/src/main/ipc/editApproval.ts` + `<texra-diff-view>`.
+- `frontend/approval/nativeToolEditApproval.ts` — replaced by `desktop/src/main/editApproval.ts` + `<texra-diff-view>` (path matches §7.1's collapsed layout).
 - `frontend/vscode/` — replaced by `desktop/src/main/platform/`.
 - `auth/UriHandler.ts` — replaced by `desktop/src/main/protocol.ts` (mirrors logic).
 - `auth/SupabaseAuthProvider.ts` — replaced by an Electron-native version (~80% logic reuse).
@@ -508,7 +508,7 @@ Net change to handler code in `core/`: zero. New code is the two preload functio
 | `vscode.window.showInformationMessage` (et al.)                             | `dialog.showMessageBox` from main; in-app toast for non-blocking                                                                                                                 |
 | Status bar                                                                  | Footer in main window (already mocked in webview frontend)                                                                                                                       |
 | Walkthrough (`getting-started.md`)                                          | First-run modal rendering the same markdown                                                                                                                                      |
-| Command palette                                                             | Lit palette (Cmd/Ctrl-Shift-P) over the existing `src/commands.ts` registry; `globalShortcut` only when window focused                                                           |
+| Command palette                                                             | Lit palette (Cmd/Ctrl-Shift-P) over the host-agnostic command catalog (§9 #17); `globalShortcut` only when window focused                                                        |
 | Keybindings (`package.json` `keybindings`)                                  | `app.on('browser-window-focus')` + key handlers in renderer; native menu accelerators for app-level shortcuts                                                                    |
 | `vscode.AuthenticationProvider`                                             | `texra://` protocol handler; tokens land in `safeStorage`                                                                                                                        |
 | Settings UI (`contributes.configuration`)                                   | Reuse the existing `settingsView` Lit app — point it at `conf` instead of `vscode.workspace.getConfiguration`                                                                    |
@@ -655,6 +655,19 @@ Main and progress views have separate dispatcher files; settings inlines dispatc
 **15. Codify the composition-root rule as a lint check.** _(~30 LOC of ESLint flat-config rule.)_
 Per §6.6, `initPlatform()` may be called only from `extension/src/extension.ts` (and the future `desktop/src/main/index.ts`). Everywhere else accesses host services via `platform()`. Add an ESLint rule (`no-platform-init-outside-composition-root`) that fails on `import { initPlatform } from '@platform'` outside the designated files. **Why now:** locks in the composition-root invariant before the desktop shell exists; prevents the kind of "I just need to init the platform from this one place" creep that hexagonal architectures degrade into.
 
+**17. Extract a host-agnostic command catalog from `src/commands.ts`.** _(~250 LOC: ~150 LOC for `core/commands/catalog.ts` + ~80 LOC of `extension/commands/register.ts` adapter + ~20 LOC of glue.)_
+
+Today `src/commands.ts` registers ~60 commands by importing `vscode.commands.registerCommand` and wiring handlers inline — it's host-coupled by construction. The Electron palette and native menu can't reuse it (per §8.1 separation rule).
+
+Split into two layers:
+
+- **`core/commands/catalog.ts`** — pure data: `{ id, title, category, icon, keybinding?, description?, when? }` for each command. ~60 entries; no `vscode` import.
+- **Per-host wiring** — extension's `register.ts` reads the catalog and registers each `id` against `vscode.commands.registerCommand(id, handler)` from a handler map. Desktop's `menu.ts` reads the catalog to build the native `Menu`; the renderer reads it to populate the Lit palette and key handler.
+
+The handler map stays per-host because handlers genuinely differ — extension handlers receive `vscode.ExtensionContext`, desktop handlers receive an Electron `BrowserWindow`. Shape: `Record<CommandId, () => Promise<void>>`.
+
+**Why now:** unblocks §5's pick #8 (Lit palette over the registry) which is currently broken — `src/commands.ts` can't be imported from `desktop/` per §8.1. Without #17, Phase 3's command palette either re-implements the catalog inline (drift) or violates the separation rule. Doing it as a Tier 1 pre-refactoring is cleaner and lets the extension benefit from the metadata layer too (better menu generation, easier docs).
+
 **16. Stand up Vitest + `FakePlatform`; migrate the existing Mocha tests.** _(~150 LOC for the fake impl + helpers; Mocha → Vitest port for ~25 existing test files; ~50 LOC of `vitest.config.ts` + scripts.)_
 
 Today's kernel test pipeline is broken in two places (see §6.7):
@@ -677,7 +690,7 @@ The fix replaces the broken pipeline rather than patching it:
 
 ### Suggested ordering
 
-If we land them all, ~4.5–5.5 engineering weeks total, parallelizable. Suggested order: **3 → 1 → 4 → 16 → 2 → 14 → 6 → 11 → 15 → 9 → 7 → 8 → 13 → 10 → 12**. Mechanical fixes first (#3 EventEmitter), then the foundational items (#1 ConfigProvider, #4 watch, #16 FakePlatform — pre-test infrastructure pays off immediately), then the structural wins (#2 DiffViewHost, #14 SupabaseSession), then the lint guards (#11 and #15) to lock in agnostic-zone + composition-root purity, then the schema unification (#9), CSS shim (#7), binary resolver (#8), dispatcher cleanup (#13), audit/rehearsal items.
+If we land them all, ~5–6 engineering weeks total, parallelizable. Suggested order: **3 → 1 → 4 → 16 → 2 → 14 → 17 → 6 → 11 → 15 → 9 → 7 → 8 → 13 → 10 → 12**. Mechanical fixes first (#3 EventEmitter), then the foundational items (#1 ConfigProvider, #4 watch, #16 FakePlatform — pre-test infrastructure pays off immediately), then the structural wins (#2 DiffViewHost, #14 SupabaseSession, #17 command catalog), then the lint guards (#11 and #15) to lock in agnostic-zone + composition-root purity, then the schema unification (#9), CSS shim (#7), binary resolver (#8), dispatcher cleanup (#13), audit/rehearsal items.
 
 Each Tier 1 item is independently shippable to the extension and produces a smaller, cleaner extension regardless of the Electron decision. After Tier 1 lands, the Electron port is mostly "implement the four interfaces (`ConfigProvider`, `DiffViewHost`, `WorkspaceProvider`-watch, `SupabaseSession` host wrapper) against Electron primitives" — and we can verify each implementation against `FakePlatform`'s invariants.
 
@@ -722,7 +735,7 @@ Tighter than originally scoped: per the §4.4 measurement, the existing Lit comp
 Per §4.5 (agent-native architecture): one window, internal routing.
 
 - Mount `<progress-app>` and `<settings-app>` Lit components in the same `BrowserWindow`, switched via the existing `texra.toggleView` routing state. No new windows.
-- Lit command palette over the existing `src/commands.ts` registry.
+- Lit command palette over the host-agnostic command catalog (§9 #17 — extracted from `src/commands.ts`).
 - Native `Menu` with the most-used commands (top 20 from `package.json` `commandPalette`).
 - Settings tabs read/write through `conf` via `ConfigProvider`.
 - **Exit criteria:** Feature parity for the top 20 commands. Settings round-trip through `conf` correctly.
@@ -734,7 +747,7 @@ Tighter if §9 #14 (SupabaseSession extraction) lands as a pre-refactoring — t
 - `texra://` protocol handler. Cold-start, warm-start tested on all three OSes.
 - `safeStorage`-backed `PlatformSecrets`.
 - New ~50-LOC Electron host wrapper around the (already extracted) `SupabaseSession` class — registers `texra://` callback, calls `openExternal()` for sign-in, persists tokens via `safeStorage`. **No 943-line rewrite, no "80% reuse" estimation.**
-- API key set/remove dialogs (native `dialog.showInputBox` analog or in-app modal).
+- API key set/remove via in-app Lit modal (Electron's `dialog` module has no input-box primitive; `dialog.showMessageBox` is button-only). Reuse the existing settings-tab Lit components for consistency.
 - GitHub auth: drop the `texra.auth.enableVSCodeGitHub` flag in Electron; use Supabase's built-in GitHub OAuth provider (per §13).
 - **Exit criteria:** Sign in, run a remote agent, sign out. Linux fallback warning appears when `safeStorage.getSelectedStorageBackend() === 'basic_text'`.
 
@@ -745,7 +758,7 @@ The single largest UI port.
 - `<texra-diff-view>` Lit component wrapping `monaco.editor.createDiffEditor`. Lazy-loads Monaco on first open. Registers only the languages we ship (`latex`, `bibtex`, `markdown`, `plaintext`, `typescript`, `python`). Honors light/dark theme via existing webview tokens. ~200–400 LOC of wrapper code; Monaco itself drops in via npm.
 - **Renders inline inside the progress view** (anchored to `ToolEditRequestPanel`), not in a modal `BrowserWindow`. Per §4.5 the agent-native model puts the diff in-flow with the approval card; this also removes the focus-juggling we'd hit with a modal.
 - Vite worker setup: configure `monaco-editor`'s standard `MonacoEnvironment.getWorker` to point at `?worker`-built chunks. Tested on all three OSes since worker resolution under asar can be fiddly.
-- `desktop/src/main/ipc/editApproval.ts` replaces `nativeToolEditApproval.ts`. Same temp-file flow (lines 246–255 of original); replaces the `vscode.commands.executeCommand('vscode.diff', ...)` call with an inline-render IPC dispatched into the progress view.
+- `desktop/src/main/editApproval.ts` replaces `nativeToolEditApproval.ts`. Same temp-file flow (lines 246–255 of original); replaces the `vscode.commands.executeCommand('vscode.diff', ...)` call with an inline-render IPC dispatched into the progress view.
 - Bash approval reuses existing `BashRequestPanel.ts` — no new work.
 - File preview (the non-diff case) uses `shell.openPath()` to hand the file to the user's default app. No in-app reader.
 - LaTeX preview: inject Electron-aware `openBuildDisplayIfTex` callback (already a callback injection point at `latexPreview.ts:23`). Default action: open the produced PDF via `shell.openPath()`.
@@ -798,11 +811,11 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 | **Apple Developer Program lapse** invalidates all signed builds                     | Low        | Critical | $99/yr renewal must not be missed. Calendar reminder + secondary owner. Document the resign + republish recovery in the runbook.                                                                                                                                         |
 | **Code-signing identity rotation breaks the auto-update chain**                     | Medium     | High     | When Apple Developer ID or Azure Trusted Signing cert changes, existing installs can't verify the new signature. Test rotation in beta channel first.                                                                                                                    |
 | **Notarization intermittent failures** stall CI                                     | Medium     | Medium   | Apple's notary service has occasional outages. Retry with backoff; don't block merges; manual override available.                                                                                                                                                        |
-| **`process.argv` deep-link cold-start** subtly differs across the three OSes        | High       | Medium   | macOS, Windows (#40173), Linux argv shapes diverge on cold-start. Test all four flows × three OSes (12 cases) explicitly in Phase 4.                                                                                                                                     |
+| **Deep-link cold-start path differs by OS, not just by argv shape**                 | High       | Medium   | Per §6.5: macOS uses `app.on('open-url')` registered before `ready` (URL is **not** in `process.argv`). Windows + Linux use `process.argv` cold-start + `second-instance` warm-start. Test all four flows × three OSes (12 cases) explicitly in Phase 4. |
 | **macOS App Nap / Windows modern standby** kills the renderer mid-run               | Medium     | Medium   | `powerSaveBlocker.start('prevent-app-suspension')` while an agent run is in-flight. Release on idle.                                                                                                                                                                     |
 | **`asar` packing misses native binaries** (Codex SDK, Monaco workers, codicon font) | Medium     | High     | `electron-builder.yml` `asarUnpack` glob covers `@openai/codex-*/**`, Monaco worker chunks, the codicon TTF. Verified per-platform in CI.                                                                                                                                |
 | **Codex SDK platform-binary mismatch** under mac-universal builds                   | Low        | High     | Confirm `@openai/codex-sdk`'s install-time platform detection works under `electron-builder` lipo'd builds. Test ARM64 + x64 explicitly.                                                                                                                                 |
-| **`safeStorage` Linux fallback to "basic" mode** = secrets with a hardcoded key     | Medium     | High     | Detect via `getSelectedStorageBackend()`. Surface a one-time warning. Document keyring install. Don't silently degrade.                                                                                                                                                  |
+| **`safeStorage` Linux fallback to `'basic_text'` mode** = secrets stored with a hardcoded key | Medium | High | Detect via `getSelectedStorageBackend() === 'basic_text'` (see §6.3). Surface a one-time warning. Document keyring install. Don't silently degrade. |
 | **Two desktop instances racing on the same machine**                                | Low        | Low      | `app.requestSingleInstanceLock()` is per-binary and gracefully reuses the existing window via `second-instance` event. The earlier "extension + desktop collide" framing was wrong — they're separate Electron binaries with distinct identities and don't share a lock. |
 | **Subprocess env leaks API keys** via `ps`-style enumeration                        | Medium     | Medium   | Pass keys via stdin / temp file with restrictive perms where SDKs support it. Audit existing `execa` call sites.                                                                                                                                                         |
 | **IPC message size limits** (~100MB) hit on large diffs / long transcripts          | Low        | Medium   | Stream large payloads via `MessagePort` chunks; "diff too large" → `shell.openPath()` fallback at ~10MB.                                                                                                                                                                 |
@@ -818,7 +831,7 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 - v1 ships signed installers: macOS (Universal DMG + ZIP), Windows (NSIS x64 + arm64), Linux (AppImage + deb).
 - A user can: sign in (or set API key), open a project folder, pick an agent and model, execute, view progress, approve tool edits via the new diff component, see final output. End-to-end without VS Code installed.
 - No regression in the VS Code extension. Same `pnpm --filter extension build` produces a working VSIX from the same `packages/core/`.
-- Total Electron-side new code (in `packages/desktop/`) under ~3,000 LOC. Diff in `packages/core/` and `packages/extension/` (excluding the monorepo move itself) under ~500 LOC. Anything more means an abstraction leak.
+- Total **net-new** code in `packages/desktop/` under ~3,000 LOC (the v1 hard gate; per §14.1 we sit at 2,180–2,900). The pre-refactorings in §9 land in `packages/core/` and `packages/extension/` and are budgeted separately at ~1,355 net-new + ~1,941 modified LOC; they are *prep work*, not v1 surface. Going over the ~3,000-LOC desktop cap means an abstraction leak — that's the gate.
 - Cold start < 2s. Memory at idle < 250MB.
 - Auto-update verified end-to-end on all three platforms before v1 announcement.
 - Sentry confirms <1% crash rate on native code paths in beta cohort before public v1.
@@ -862,7 +875,7 @@ From the parallel scout:
 | Lines in `nativeToolEditApproval.ts` (the diff blocker)              | 439                                             |
 | Estimated `<texra-diff-view>` Lit wrapper LOC (Monaco hosted inside) | ~200–400                                        |
 | Lines in `SupabaseAuthProvider.ts`                                   | 943                                             |
-| Estimated reuse from `SupabaseAuthProvider.ts`                       | ~80%                                            |
+| `SupabaseAuthProvider.ts` extraction (§9 #14)                        | ~750 LOC moved into `core/auth/SupabaseSession.ts`; ~190 LOC of VS Code glue in `extension/` + ~50 LOC of glue in `desktop/`. No "% reuse" estimate — one class with two thin wrappers. |
 | Estimated `desktop/src/` total LOC at v1                             | ~3,000                                          |
 | Estimated diff in `core/` for monorepo split                         | ~0 (path aliases handle it)                     |
 | Estimated diff in `core/` for behavioral changes                     | ~500 (configUtils refactor + EventEmitter swap) |
@@ -898,7 +911,7 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 | --------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
 | `main/index.ts` (lifecycle, single-instance lock, fix-path top-of-file)           | ~120             | Cold-start bookkeeping, single-instance, `fix-path()` cached.                                         |
 | `main/platform/` (8 files: config, state×2, log, fs, workspace, storage, secrets) | 250–400          | Mirrors VS Code impls in `src/frontend/vscode/` (~300 LOC today).                                     |
-| `main/ipc/` (typed channels + dispatcher adapter)                                 | ~150             | Wraps Zod schemas from `core/shared/`; one new transport adapter file.                                |
+| `main/ipc.ts` (single file: `ipcMain.handle` for RPC + `webContents.send` for push) | ~150           | Wraps Zod schemas from `core/shared/` directly; the preload bridge IS the transport — no separate adapter file in `core/`. |
 | `main/menu.ts`                                                                    | ~100             | Native menu mapping top 20 commands.                                                                  |
 | `main/protocol.ts` (`texra://` handler)                                           | ~80              | Mirrors `src/auth/UriHandler.ts` logic (~150 LOC) but reuses the extracted `parseAuthCallback()`.     |
 | `main/updater.ts`                                                                 | ~80              | electron-updater event wiring + user-consent dialog.                                                  |
@@ -906,10 +919,10 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 | `main/contextMenu.ts` (electron-context-menu)                                     | ~30              | Configuration only.                                                                                   |
 | `main/log.ts` (electron-log → LogBackend)                                         | ~80              | Adapter pattern, file rotation config.                                                                |
 | `main/pathFix.ts`                                                                 | ~50              | `fix-path` + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`.   |
-| `main/ipc/editApproval.ts`                                                        | ~120             | Replaces `nativeToolEditApproval.ts` (439 LOC); most of the diff-temp-file work moves to `core/`.     |
+| `main/editApproval.ts`                                                            | ~120             | Replaces `nativeToolEditApproval.ts` (439 LOC); most of the diff-temp-file work moves to `core/`.     |
 | `preload/index.ts`                                                                | ~80              | `contextBridge` API surface (~10 methods).                                                            |
 | `renderer/main.ts` (mounts the three Lit apps)                                    | ~100             | Boots `<main-app>` / `<progress-app>` / `<settings-app>` and routes via `toggleView` state.           |
-| `renderer/components/TexraDiffView.ts`                                            | 200–400          | Largest single new component; lazy-loads Monaco.                                                      |
+| `renderer/TexraDiffView.ts`                                                       | 200–400          | Largest single new component; lazy-loads Monaco. Lives directly under `renderer/` (no `components/` subdir at v1 — only one component). |
 | `renderer/themeTokens.css`                                                        | ~150             | 53 tokens × 3 themes (light/dark/HC).                                                                 |
 | `renderer/index.html`                                                             | ~30              | Single-window shell.                                                                                  |
 | Beta polish (walkthrough modal, log-viewer pane, migration importer)              | ~370             | Phase 7 deliverables.                                                                                 |
@@ -935,15 +948,16 @@ These are the §9 pre-refactorings + the unavoidable cross-cutting changes durin
 | §9 #13 `settingsViewDispatcher.ts` extraction                          | ~40         | ~120                               | Move switch out of `SettingsApp.handleMessage()`.                                              |
 | §9 #15 `no-platform-init-outside-composition-root` ESLint rule         | ~30         | —                                  | Codifies §6.6 composition-root invariant.                                                      |
 | §9 #16 `FakePlatform` for unit tests                                   | ~150        | —                                  | In-memory impls of the 7 platform interfaces; enables fast kernel tests via Vitest.            |
-| **Subtotal core/extension**                                            | **~1,355**  | **~1,941**                         | Of which #14 contributes ~940 LOC of refactored (mostly moved code). Floor of net-new: ~1,355. |
+| §9 #17 Host-agnostic command catalog                                   | ~250        | ~120 (slimmed `src/commands.ts`)   | Splits per-host wiring out of catalog metadata.                                                |
+| **Subtotal core/extension**                                            | **~1,605**  | **~2,061**                         | Of which #14 contributes ~940 LOC of refactored (mostly moved code). Floor of net-new: ~1,605. |
 
 #### Aggregate budget
 
 | Bucket                                                                     | Net new LOC      | Modified LOC | Total touched    |
 | -------------------------------------------------------------------------- | ---------------- | ------------ | ---------------- |
 | `packages/desktop/`                                                        | 2,180–2,900      | ~395         | ~2,575–3,295     |
-| `packages/core/` + `extension/` (all §9 pre-refactorings, incl. #15 + #16) | ~1,355           | ~1,941       | ~3,296           |
-| **Total v1**                                                               | **~3,535–4,255** | **~2,336**   | **~5,871–6,591** |
+| `packages/core/` + `extension/` (all §9 pre-refactorings, incl. #15, #16, #17)        | ~1,605           | ~2,061       | ~3,666           |
+| **Total v1**                                                                          | **~3,785–4,505** | **~2,456**   | **~6,241–6,961** |
 
 For comparison: the VS Code extension today is ~853 source files. The agent core (which is reused unchanged) is ~141 files. The Electron port is roughly **3% the size of the existing extension's source base** in net-new code, and roughly **6% if you count refactored + new together**.
 
