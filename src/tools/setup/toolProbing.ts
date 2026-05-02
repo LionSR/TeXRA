@@ -1,6 +1,6 @@
 // Local imports
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { BinaryResolver } from '@utils/system/BinaryResolver';
+import { BinaryResolver } from '@utils/system/binaryResolver';
 
 /**
  * Single source of truth for the core LaTeX toolchain the setup assistant
