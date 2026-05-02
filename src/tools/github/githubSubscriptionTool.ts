@@ -328,6 +328,40 @@ async function gitInDir(args: string[], cwd: string): Promise<string> {
   return stdout.trim();
 }
 
+interface OpenPullSummary {
+  number: number;
+  title?: string;
+  head?: { ref?: string };
+}
+
+async function getDefaultBranch(owner: string, repo: string): Promise<string> {
+  const res = await ghGet<{ default_branch?: string }>(
+    `/repos/${owner}/${repo}`,
+  );
+  if (res.status !== 200) {
+    throw new ToolError(`Unexpected GitHub response status: ${res.status}`);
+  }
+  return res.data.default_branch ?? 'main';
+}
+
+async function listOpenPullSuggestions(
+  owner: string,
+  repo: string,
+): Promise<string> {
+  const res = await ghGet<OpenPullSummary[]>(
+    `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
+  );
+  if (res.status !== 200 || res.data.length === 0) {
+    return '';
+  }
+  const lines = res.data.map((pr) => {
+    const title = pr.title ? ` - ${pr.title}` : '';
+    const head = pr.head?.ref ? ` (${pr.head.ref})` : '';
+    return `- ${owner}/${repo}/pulls/${pr.number}${head}${title}`;
+  });
+  return `\n\nOpen PRs you can subscribe to directly:\n${lines.join('\n')}`;
+}
+
 async function execFindCurrent(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
@@ -357,6 +391,16 @@ async function execFindCurrent(
   if (branch === 'HEAD') {
     throw new ToolError('HEAD is detached — cannot infer a PR branch.');
   }
+  const defaultBranch = await getDefaultBranch(remote.owner, remote.repo);
+  if (branch === defaultBranch) {
+    const suggestions = await listOpenPullSuggestions(
+      remote.owner,
+      remote.repo,
+    );
+    throw new ToolError(
+      `Current branch is the default branch "${branch}", so command="find_current" cannot infer a single PR. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+    );
+  }
   const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
   const res =
     await ghGet<
@@ -367,8 +411,12 @@ async function execFindCurrent(
   }
   const pr = res.data[0];
   if (!pr) {
+    const suggestions = await listOpenPullSuggestions(
+      remote.owner,
+      remote.repo,
+    );
     throw new ToolError(
-      `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push the branch and open a PR first.`,
+      `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
     );
   }
   const path = `${remote.owner}/${remote.repo}/pulls/${pr.number}`;
