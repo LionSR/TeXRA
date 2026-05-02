@@ -1158,29 +1158,6 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 
 These are the §9 pre-refactorings + the unavoidable cross-cutting changes during Phase 0–5.
 
-<<<<<<< Updated upstream
-| Item | Net new LOC | Modified / refactored LOC | Notes |
-| ----------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| §9 #1 Expanded `ConfigProvider` (write/inspect/isExplicitlySet/watch) + `configUtils.ts` rewire | ~200 | ~126 | Interface expansion required for Phase 3 settings round-trip; not just a `get()` wrapper. |
-| §9 #2 `DiffViewHost` interface + VS Code wrapper | ~40 | ~80 | Native impl wraps existing `vscode.diff` call site. |
-| §9 #3 `vscode.EventEmitter` → Node `EventEmitter` | — | ~30 | 10 mechanical sites. |
-| §9 #4 `WorkspaceProvider.watch()` interface + impl | ~60 | — | Interface + VS Code impl wraps `createFileSystemWatcher`. |
-| §9 #14 `SupabaseSession` + `SupabaseClient` extraction | ~80 | ~1,000 moved + ~190 glue | Two host-agnostic classes (auth + API client) with `TokenProvider` boundary. Subsumes #5. |
-| §9 #18 Host-neutral controller extraction + narrow UI ports | ~280 (interfaces + 5 narrow ports) | ~2,800 moved + ~750 glue rewritten | Splits ~3,551 LOC of handlers into core controllers; introduces 5 narrow UI ports (Prompt, ExternalOpener, Diff, Terminal, Clipboard — no CommandHost) at ~30–60 LOC each so `Platform` doesn't become a UI mega-facade. Phase 2/3 desktop work depends on this. |
-| §9 #19 `AgentDirectories` / resource-sync adapter | ~150 | ~100 (slim `AgentDirectoryManager` of `vscode` import) | Host-agnostic copy-on-version-bump from bundled `resources/agents/` into per-host writable storage. |
-| §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch | ~5 | ~45 | Re-export shim + feature-detect Electron. |
-| §9 #7 `--vscode-*` → `--texra-*` token shim | ~100 | ~450 | New `themeTokens.css` + ~25 components touched by find-replace. |
-| §9 #8 `BinaryResolver` extraction | ~80 | ~120 | Service + call-site routing audit. |
-| §9 #9 Settings Zod schema (Tier 2 — recommended) | ~600 | — | Mirrors `package.json` `contributes.configuration`; eliminates JSON-schema/Zod drift. |
-| §9 #11 ESLint vscode-import rule | ~50 | — | Custom flat-config rule. |
-| §9 #12 Codex unpack rehearsal harness | ~80 | ~30 | Test harness + electron-builder config. |
-| §9 #13 `settingsViewDispatcher.ts` extraction | ~40 | ~120 | Move switch out of `SettingsApp.handleMessage()`. |
-| §9 #15 `no-platform-init-outside-composition-root` ESLint rule | ~30 | — | Codifies §6.6 composition-root invariant. |
-| §9 #16 `FakePlatform` for unit tests | ~150 | — | In-memory impls of the 7 platform interfaces; enables fast kernel tests via Vitest. |
-| §9 #20 `AgentRuntimeHost` / `ProgressSink` boundary | ~120 | ~150 (refactored at ProgressEventBus call sites) | Removes the singleton import from agent runtime; v2 utility-process becomes a single adapter swap. |
-| §9 #17 Host-agnostic command catalog | ~250 | ~120 (slimmed `src/commands.ts`) | Splits per-host wiring out of catalog metadata. |
-| **Subtotal core/extension** | **~2,275** | **~6,051** | The bulk of the modified LOC is moved code (~3,800 LOC across #14 and #18) — same logic, new home. Net-new is dominated by interface definitions, narrow UI ports, the ProgressSink boundary (#20), dispatchers, and lint rules. |
-=======
 | Item | Net new LOC | Modified / refactored LOC | Notes |
 | ----------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | §9 #1 Expanded `ConfigProvider` (write/inspect/isExplicitlySet/watch) + `configUtils.ts` rewire | ~200 | ~126 | Interface expansion required for Phase 3 settings round-trip; not just a `get()` wrapper. |
@@ -1203,7 +1180,6 @@ These are the §9 pre-refactorings + the unavoidable cross-cutting changes durin
 | §9 #17 Host-agnostic command catalog | ~250 | ~120 (slimmed `src/commands.ts`) | Splits per-host wiring out of catalog metadata. |
 | **Subtotal core/extension** | **~2,275** | **~6,051** | The bulk of the modified LOC is moved code (~3,800 LOC across #14 and #18) — same logic, new home. Net-new is dominated by interface definitions, narrow UI ports, the ProgressSink boundary (#20), dispatchers, and lint rules. |
 
-> > > > > > > Stashed changes
 
 #### Aggregate budget
 
