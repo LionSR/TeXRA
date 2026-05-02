@@ -27,27 +27,27 @@ export function createBackendStorage(memento: {
 }
 
 /**
- * Create storage adapter for webview (vscode.getState/setState).
+ * Create storage adapter for webview host state.
  * All keys share a single state object.
  *
  * Caches state in memory to avoid repeated getState() calls on rapid updates.
  *
  * @example
- * import { vscode } from '@shared/vscode';
- * const storage = createWebviewStorage(vscode);
+ * import { hostBridge } from '@shared/hostBridge';
+ * const storage = createWebviewStorage(hostBridge);
  */
-export function createWebviewStorage(vscode: {
+export function createWebviewStorage(hostBridge: {
   getState(): unknown;
   setState(state: unknown): void;
 }): StateStorage {
   // Cache full state - read once, update in memory
-  let cache = (vscode.getState() as Record<string, unknown>) ?? {};
+  let cache = (hostBridge.getState() as Record<string, unknown>) ?? {};
 
   return {
     get: (key) => cache[key],
     set: (key, value) => {
       cache = { ...cache, [key]: value };
-      vscode.setState(cache);
+      hostBridge.setState(cache);
     },
   };
 }
@@ -57,7 +57,7 @@ export function createWebviewStorage(vscode: {
  *
  * Works identically for both backend and frontend - only the storage differs:
  * - Backend: `createBackendStorage(workspaceSM)` → workspace-scoped, persists across sessions
- * - Frontend: `createWebviewStorage(vscode)` → webview-scoped, transient UI state
+ * - Frontend: `createWebviewStorage(hostBridge)` → webview-scoped, transient UI state
  *
  * Schemas should use .prefault() or .catch() for fields to provide defaults.
  * If storage returns undefined or invalid data, falls back to schema defaults.
@@ -73,7 +73,7 @@ export function createWebviewStorage(vscode: {
  * @example
  * // Frontend (UI state - transient, fast)
  * const ui = new PersistedState(
- *   createWebviewStorage(vscode),
+ *   createWebviewStorage(hostBridge),
  *   'toggleStates',
  *   z.object({ expanded: z.array(z.string()).prefault([]) }),
  * );

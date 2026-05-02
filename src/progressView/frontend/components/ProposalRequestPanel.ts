@@ -31,7 +31,7 @@ import {
   type AgentProposalPermission,
   type WorkflowAgentProposalPermission,
 } from '@shared/schemas';
-import { postMessage } from '@shared/vscode';
+import { postMessage } from '@shared/hostBridge';
 import {
   renderAgentOptions,
   renderModelOptions,

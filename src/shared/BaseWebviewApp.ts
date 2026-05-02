@@ -5,7 +5,7 @@ import { state } from 'lit/decorators.js';
 
 // Local imports - shared handlers
 import { COMMON_COMMANDS } from '@common/webview/commands';
-import { postMessage } from '@shared/vscode';
+import { postMessage } from '@shared/hostBridge';
 import { installToolbarTooltips } from '@shared/controllers';
 import { handleCommonMessage } from '@shared/handlers/commonMessageHandlers';
 

@@ -8,7 +8,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { AGENT_CATEGORY } from '@shared/schemas';
-import { postMessage } from '@shared/vscode';
+import { postMessage } from '@shared/hostBridge';
 import type {
   AgentOptionData,
   AgentProposalPermission,
