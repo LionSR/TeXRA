@@ -7,9 +7,9 @@
 
 ## 1. Summary
 
-Ship TeXRA as a standalone cross-platform desktop application built on Electron, alongside the existing VS Code extension. The Electron app reuses the agent core, model handlers, LaTeX processing, tool implementations, and webview UIs unchanged. Only the host shell — window management, file system, settings, secrets, command surface, edit-approval UI — is rewritten for Electron. Compilation is fully separate: the existing `npm run build:fast` pipeline keeps producing a VSIX from the same `src/`, while a new `pnpm --filter desktop build` pipeline produces signed installers.
+Ship TeXRA as a standalone cross-platform desktop application built on Electron, alongside the existing VS Code extension. The Electron app reuses the agent core, model handlers, LaTeX processing, tool implementations, and webview UIs unchanged. Only the host shell — window management, file system, settings, secrets, command surface, edit-approval UI — is rewritten for Electron. Compilation is fully separate: the existing extension build keeps producing a VSIX from the same shared sources (the agnostic core moves into `packages/core/` during Phase 0; see §7.1), while a new `pnpm --filter desktop build` pipeline produces signed installers.
 
-Per a parallel codebase scout, ~88% of source files (754 of 860 TS/TSX files) have **zero** `vscode` imports. Of the remaining ~106 coupled files, the heavy hitters are localized to `src/commands/`, `src/progressView/`, `src/settingsView/`, and `src/frontend/`. The Electron port is fundamentally a host-shell rewrite, not a core rewrite.
+Per a parallel codebase scout, ~88% of source files (747 of 853 TS/TSX files) have **zero** `vscode` imports. Of the remaining 106 coupled files, the heavy hitters are localized to `src/commands/`, `src/progressView/`, `src/settingsView/`, and `src/frontend/`. The Electron port is fundamentally a host-shell rewrite, not a core rewrite.
 
 ## 2. Goals
 
@@ -37,7 +37,7 @@ A six-front parallel scout of the codebase confirmed:
 - **The `Platform` interface is tiny.** Total surface across `config`, `state`, `log`, `filesystem`, `workspace`, `storage`, `secrets`: ~470 LOC of interfaces. The existing VS Code implementation is ~300 LOC across 6 files (`src/frontend/vscode/`). The Electron-side mirror is ~200–300 LOC of glue.
 - **Webviews are pure Lit.** No React/Vue/Svelte. All three (`webview`, `progressView`, `settingsView`) extend `LitElement`, use `@lit-labs/signals`, communicate via Zod-validated message schemas in `src/shared/`. The transport wrapper at `src/shared/vscode.ts` already includes a fallback API for non-webview contexts — the Electron transport is essentially a one-file swap.
 - **Agent runtime is `vscode`-free.** All ~141 files in `src/agent/` confirmed. Streaming uses callbacks; cancellation uses standard `AbortController`; persistence is filesystem-based JSON validated by Zod. Drops into an Electron main or utility process unchanged.
-- **Diff infrastructure already exists.** `src/agent/output/diffComputation.ts` + `src/progressView/frontend/formatters/wordDiff.ts` already implement word-level inline diff over `diff-match-patch`. Reused as the Electron tool-edit approval UI — no Monaco needed.
+- **Inline word-diff infrastructure already exists.** `src/agent/output/diffComputation.ts` + `src/progressView/frontend/formatters/wordDiff.ts` already implement word-level inline diff over `diff-match-patch` — reused as-is in the Electron progress view. The side-by-side approval surface is built on Monaco (see §6.2); the two layers compose cleanly.
 
 ### 4.2 Coupling inventory (the 106 files)
 
@@ -47,7 +47,7 @@ Categorized by VS Code API surface:
 | --------------------------------------------------------------------- | ----- | ---- | ---------------- | ---------------------------------------------------------------------------- |
 | Window/UX (`showInformationMessage`, `withProgress`, `OutputChannel`) | 54    | 96+  | small–medium     | `dialog.showMessageBox` + in-app toast component                             |
 | Workspace (`workspace.fs`, `getConfiguration`, `workspaceFolders`)    | 4–5   | 20   | small            | Already wrapped — Electron impls of `FileSystemProvider`/`WorkspaceProvider` |
-| Editor (`TextDocument`, `Range`, `showTextDocument`, `vscode.diff`)   | 10+   | 56+  | **medium-large** | Lit diff component + Monaco-free preview pane                                |
+| Editor (`TextDocument`, `Range`, `showTextDocument`, `vscode.diff`)   | 10+   | 56+  | **medium-large** | Lit `<texra-diff-view>` wrapping Monaco's diff editor (lazy-loaded); file preview defers to OS via `shell.openPath()` |
 | Commands (`registerCommand`, `executeCommand`)                        | 56    | 152+ | medium           | Custom command registry + IPC dispatch                                       |
 | Webviews (`WebviewView`, `WebviewPanel`, `asWebviewUri`)              | 14+   | 37   | small–medium     | `BrowserWindow` + `contextBridge`                                            |
 | Auth/Secrets (`authentication`, `SecretStorage`, `UriHandler`)        | 20    | 15+  | **large**        | `safeStorage` + custom protocol handler; reuse 80% of `SupabaseAuthProvider` |
@@ -154,7 +154,7 @@ The "what you choose now" picks. Each is grounded in current (May 2026) state-of
 | 4   | Settings store  | **`conf` + Zod schemas** (NOT `electron-store`)                                                                                           | `electron-store`'s validator is AJV; `conf` (its parent) lets us reuse Zod schemas as the single source of truth, matching the codebase's existing pattern                                     |
 | 5   | Secrets         | **Electron `safeStorage` + `conf` blob** (NOT `keytar`)                                                                                   | `keytar` was archived Dec 2022; VS Code itself migrated to `safeStorage`                                                                                                                       |
 | 6   | File watcher    | **chokidar 4**                                                                                                                            | Pure JS — `@parcel/watcher` is faster on huge trees but adds a native module under asar; LaTeX project sizes don't justify the operational cost                                                |
-| 7   | Diff/preview UI | **Monaco Editor** (`monaco-editor` standalone, lazy-loaded, diff + read-only modes only)                                                  | Same diff engine VS Code uses — keeps visual + behavioral parity with the extension; bundle cost (~5–10MB) is acceptable for a desktop app and is recouped via Vite code-splitting / lazy load |
+| 7   | Diff UI         | **Monaco Editor** (`monaco-editor` standalone, lazy-loaded, **diff editor only** at v1)                                                   | Same diff engine VS Code uses — keeps visual + behavioral parity with the extension; bundle cost (~5–10MB) is acceptable for a desktop app and is recouped via Vite code-splitting / lazy load. File preview is `shell.openPath()` (§4.5), not a Monaco read-only viewer. |
 | 8   | Menu + palette  | **Native `Menu` + custom Lit palette over existing `src/commands.ts` registry**                                                           | Avoids React/cmdk; ~150 LOC reuses what's there                                                                                                                                                |
 | 9   | OAuth deep-link | **Roll own** with `setAsDefaultProtocolClient` + `requestSingleInstanceLock` + `open-url` + `second-instance` + `process.argv` cold-start | Logic mirrors existing `src/auth/UriHandler.ts`; `electron-deeplink` adds 200 LOC of indirection over a 40-LOC implementation                                                                  |
 | 10  | macOS PATH fix  | **`fix-path`** (cached at startup) + explicit PATH augmentation belt-and-suspenders                                                       | LaTeX/pandoc binaries live in `/Library/TeX/texbin`, `/opt/homebrew/bin`; Finder-launched apps don't see these by default                                                                      |
@@ -181,13 +181,12 @@ The "what you choose now" picks. Each is grounded in current (May 2026) state-of
 
 `electron-store` is a thin Electron wrapper on `conf` (same author, Sindre Sorhus). It adds a renderer IPC bridge and uses `app.getPath('userData')` automatically. The catch: its built-in validator is AJV. The TeXRA codebase mandates Zod as the single source of truth (`CLAUDE.md` § "Schema and Type Guidelines") and uses `z.union([New, Legacy.transform(...)])` for backward-compat (`CLAUDE.md` § "Backward Compatibility with Zod"). Going one level deeper to `conf` lets us validate at read/write with our own Zod schemas, run migrations through the same `.transform()` pipeline we already use, and avoid a second validation framework. The renderer IPC bridge isn't a loss — the renderer should never write config directly anyway; it's a `platform()` consumer.
 
-### 6.2 Why Monaco for diff/preview
+### 6.2 Why Monaco for diff
 
-VS Code's diff editor is what TeXRA users already know — same gutters, same minimap, same keybindings. Behavioral parity matters more than bundle savings for a desktop app where users have committed to a download. We adopt `monaco-editor` (the standalone npm package, not `@monaco-editor/react`) directly, used in three constrained modes:
+VS Code's diff editor is what TeXRA users already know — same gutters, same minimap, same keybindings. Behavioral parity matters more than bundle savings for a desktop app where users have committed to a download. We adopt `monaco-editor` (the standalone npm package, not `@monaco-editor/react`) directly, used in **one** constrained mode at v1:
 
 - **Diff editor** (`monaco.editor.createDiffEditor`) — for tool-edit approval, replacing the `vscode.commands.executeCommand('vscode.diff', ...)` call site at `src/frontend/approval/nativeToolEditApproval.ts:277-282`.
-- **Read-only viewer** (`createEditor` with `readOnly: true`) — for file preview when previewing without an active diff.
-- **No editing surface** — we don't expose write-mode Monaco to users in v1; that's an IDE feature we intentionally don't ship.
+- **No file viewer, no editing surface.** Per §4.5 (agent-native), file preview defers to the OS via `shell.openPath()` — TeXShop, Overleaf desktop, VS Code, whatever the user prefers. A Monaco read-only viewer would be the start of an in-app editor; we explicitly defer that to §13.1.
 
 Bundle integration:
 
@@ -216,7 +215,7 @@ This is a one-time setup task in Phase 6:
 
 ### 6.3 Why `safeStorage` over `keytar`
 
-`keytar` was archived Dec 2022; VS Code itself migrated off it (microsoft/vscode #185677). `safeStorage` (Electron 30+) gives Keychain (mac), DPAPI (win), libsecret/kwallet (linux when available), and `getSelectedStorageBackend()` to detect the Linux fallback to "basic" mode (encrypted with a hardcoded key). Combine with `conf` for storage of the encrypted blob, and surface a one-time "your secrets are stored with reduced security on this Linux configuration; install gnome-keyring for full protection" warning when `getSelectedStorageBackend() === 'basic'`.
+`keytar` was archived Dec 2022; VS Code itself migrated off it (microsoft/vscode #185677). `safeStorage` (Electron 15+) gives Keychain (mac), DPAPI (win), libsecret/kwallet (linux when available); `getSelectedStorageBackend()` (Electron 30+) returns one of `'basic_text'`, `'gnome_libsecret'`, `'kwallet'`, `'kwallet5'`, `'kwallet6'`, or `'unknown'`. The Linux fallback to plaintext (`'basic_text'`) is encrypted with a hardcoded key — effectively no protection. Combine with `conf` for storage of the encrypted blob, and surface a one-time "your secrets are stored with reduced security on this Linux configuration; install gnome-keyring for full protection" warning when `getSelectedStorageBackend() === 'basic_text'`.
 
 ### 6.4 Why pnpm workspaces, three packages
 
@@ -361,7 +360,7 @@ Net change to message-handling code: zero. Net change to transport code: one new
 | VS Code feature                                                             | Electron replacement                                                                                                                                         |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Activity bar view (`texra.mainView`)                                        | Default `BrowserWindow` mounting `<main-app>`                                                                                                                |
-| `vscode.commands.executeCommand('vscode.diff', ...)` for tool-edit approval | `<texra-diff-view>` Lit component wrapping `monaco.editor.createDiffEditor`, lazy-loaded; rendered in a modal `BrowserWindow` (or embedded in progress view) |
+| `vscode.commands.executeCommand('vscode.diff', ...)` for tool-edit approval | `<texra-diff-view>` Lit component wrapping `monaco.editor.createDiffEditor`, lazy-loaded; rendered **inline** in the progress view (anchored to `ToolEditRequestPanel`) per §4.5 |
 | `vscode.window.showInformationMessage` (et al.)                             | `dialog.showMessageBox` from main; in-app toast for non-blocking                                                                                             |
 | Status bar                                                                  | Footer in main window (already mocked in webview frontend)                                                                                                   |
 | Walkthrough (`getting-started.md`)                                          | First-run modal rendering the same markdown                                                                                                                  |
@@ -398,7 +397,7 @@ Confirmed by scout:
 - `@xterm/xterm` + `@xterm/addon-fit` — work in Electron renderers (already run in browsers).
 - `chokidar` — pure JS in v4.
 
-**No** packages with `.node` files. Confirmed.
+**Runtime closure has no `.node` files.** Verified by walking `package-lock.json` — every package containing native bindings (`@rolldown/binding-*`, `lightningcss-*-*`) is marked `dev: true, optional: true`, so they're Vite/Rolldown build-time only and never ship in the production bundle. To prevent regression, Phase 6 packaging adds a CI check that fails if `electron-builder`'s emitted asar contains any `.node` file we didn't explicitly allow-list (Codex SDK is the only exception, and it ships as `extraResources` outside asar via `asarUnpack`).
 
 A build-time guard plugin (custom esbuild plugin: any `import 'vscode'` in `packages/desktop/` or `packages/core/` fails the build) prevents leakage as the codebase grows.
 
@@ -461,17 +460,17 @@ Webview Lit components reference `--vscode-button-background`, `--vscode-foregro
 `CLAUDE.md` already mandates that business logic returns error results, not `vscode.window.show*Message()`. Spot-check the agnostic zones for leaks (the build-time guard catches the egregious ones, but subtle wrappers like `import { window } from 'vscode'` in non-allowed zones can hide). **Why now:** any leak found here is a port blocker found cheaply.
 
 **11. CI guard: vscode-import lint rule.**
-Add an ESLint rule (or a custom check) that fails CI if any file under the "vscode-free zones" imports `vscode`. Pin the existing 754/853 ratio so it can only improve. **Why now:** prevents regression while the Electron port is in flight.
-
-**13. Extract `settingsViewDispatcher.ts`.**
-Main and progress views have separate dispatcher files; settings inlines dispatch in a switch inside `SettingsApp.handleMessage()`. Mirror the pattern of the other two — pull the switch into `src/settingsView/frontend/settingsViewDispatcher.ts`. **Why now:** all three webviews share the same shape, simplifying the IPC adapter we drop in for Electron.
+Add an ESLint rule (or a custom check) that fails CI if any file under the "vscode-free zones" imports `vscode`. Pin the existing 747/853 ratio so it can only improve. **Why now:** prevents regression while the Electron port is in flight.
 
 **12. Codex SDK binary unpack rehearsal.**
 Create a tiny harness that bundles `@openai/codex-sdk` under an asar-like wrapper (or test it via electron-builder's `asarUnpack: ['**/node_modules/@openai/codex-*/**']`) and verifies the spawn works from inside the bundle on all three OSes. **Why now:** de-risks Phase 6 packaging; surface OS-specific path bugs early.
 
+**13. Extract `settingsViewDispatcher.ts`.**
+Main and progress views have separate dispatcher files; settings inlines dispatch in a switch inside `SettingsApp.handleMessage()`. Mirror the pattern of the other two — pull the switch into `src/settingsView/frontend/settingsViewDispatcher.ts`. **Why now:** all three webviews share the same shape, simplifying the IPC adapter we drop in for Electron.
+
 ### Suggested ordering
 
-If we land them all, ~3–4 engineering weeks total, can be parallelized across the team. Suggested order: **3 → 1 → 4 → 2 → 5 → 6 → 11 → 7 → 8 → 9 → 10 → 12**. Cheapest-first up to the two big wins (#1 and #2), then the lint guard (#11) to lock in gains, then the rest.
+If we land them all, ~3–4 engineering weeks total, can be parallelized across the team. Suggested order: **3 → 1 → 4 → 2 → 5 → 6 → 11 → 7 → 8 → 13 → 9 → 10 → 12**. Cheapest-first up to the two big wins (#1 and #2), then the lint guard (#11) to lock in gains, the dispatcher cleanup (#13) before the desktop bridge work, then the rest.
 
 Each Tier 1 item is independently shippable to the extension and produces a smaller, cleaner extension regardless of the Electron decision.
 
@@ -527,7 +526,7 @@ Per §4.5 (agent-native architecture): one window, internal routing.
 - Supabase OAuth flow. Reuse 80% of `SupabaseAuthProvider.ts`; new ~50-LOC adapter for Electron protocol surface.
 - API key set/remove dialogs.
 - GitHub auth via OAuth (no `vscode.authentication.getSession('github')` parallel — use Supabase's built-in GitHub provider).
-- **Exit criteria:** Sign in, run a remote agent, sign out. Linux fallback warning appears when `safeStorage.getSelectedStorageBackend() === 'basic'`.
+- **Exit criteria:** Sign in, run a remote agent, sign out. Linux fallback warning appears when `safeStorage.getSelectedStorageBackend() === 'basic_text'`.
 
 ### Phase 5 — Diff/preview surface for tool-edit approval (1.5–2 weeks)
 
