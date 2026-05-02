@@ -47,14 +47,14 @@ export class GitTab extends LitElement {
 
       .setting-block {
         padding: var(--spacing-medium);
-        background-color: var(--vscode-editor-inactiveSelectionBackground);
+        background-color: var(--texra-editor-inactiveSelectionBackground);
         border-radius: var(--border-radius);
       }
 
       .setting-description {
         margin: var(--spacing-small) 0 0 0;
         font-size: var(--font-size-sm);
-        color: var(--vscode-descriptionForeground);
+        color: var(--texra-descriptionForeground);
       }
 
       .input-row {
@@ -88,7 +88,7 @@ export class GitTab extends LitElement {
 
       .token-row-label {
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       .token-actions {
@@ -99,27 +99,27 @@ export class GitTab extends LitElement {
       }
 
       .token-remove-btn:hover {
-        color: var(--vscode-errorForeground);
-        border-color: var(--vscode-errorForeground);
+        color: var(--texra-errorForeground);
+        border-color: var(--texra-errorForeground);
       }
 
       .tinted-badge--ok {
         --_tint: var(
-          --vscode-testing-iconPassed,
-          var(--vscode-terminal-ansiGreen)
+          --texra-testing-iconPassed,
+          var(--texra-terminal-ansiGreen)
         );
       }
       .tinted-badge--warn {
-        --_tint: var(--vscode-editorWarning-foreground, #cca700);
+        --_tint: var(--texra-editorWarning-foreground, #cca700);
       }
       .tinted-badge--info {
-        --_tint: var(--vscode-badge-background);
+        --_tint: var(--texra-badge-background);
       }
 
       .instructions {
         margin: var(--spacing-small) 0 0 0;
         font-size: var(--font-size-sm);
-        color: var(--vscode-descriptionForeground);
+        color: var(--texra-descriptionForeground);
       }
       .instructions ol {
         margin: var(--spacing-tiny) 0 0 0;
@@ -129,7 +129,7 @@ export class GitTab extends LitElement {
         margin: 2px 0;
       }
       .instructions code {
-        background: var(--vscode-textBlockQuote-background);
+        background: var(--texra-textBlockQuote-background);
         padding: 0 var(--spacing-small);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
@@ -148,7 +148,7 @@ export class GitTab extends LitElement {
         padding: var(--spacing-tiny) 0;
       }
       .subscriptions-list code {
-        background: var(--vscode-textBlockQuote-background);
+        background: var(--texra-textBlockQuote-background);
         padding: var(--border-thin) var(--spacing-medium);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
@@ -176,7 +176,7 @@ export class GitTab extends LitElement {
       .subscription-owner-label,
       .subscription-owner-placeholder {
         font-size: var(--font-size-sm);
-        color: var(--vscode-descriptionForeground);
+        color: var(--texra-descriptionForeground);
       }
       .subscription-owner-placeholder {
         margin: 0;

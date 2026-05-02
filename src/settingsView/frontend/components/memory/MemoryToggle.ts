@@ -23,7 +23,7 @@ export class MemoryToggle extends LitElement {
 
       .memory-settings {
         padding: var(--spacing-medium);
-        background-color: var(--vscode-editor-inactiveSelectionBackground);
+        background-color: var(--texra-editor-inactiveSelectionBackground);
         border-radius: var(--border-radius);
         margin-bottom: var(--spacing-small);
       }
