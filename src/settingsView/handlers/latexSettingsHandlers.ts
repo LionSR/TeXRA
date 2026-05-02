@@ -39,7 +39,7 @@ import {
   checkToolInstalled,
   detectPackageManager,
 } from '@utils/system/toolUtils';
-import { BinaryResolver } from '@utils/system/BinaryResolver';
+import { BinaryResolver } from '@utils/system/binaryResolver';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 

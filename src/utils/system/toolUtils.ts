@@ -27,7 +27,7 @@ import {
 
 // Local file imports
 import { IS_WINDOWS, extendEnvPath } from './platformPaths';
-import { BinaryResolver } from './BinaryResolver';
+import { BinaryResolver } from './binaryResolver';
 import { executeCommand } from './execUtils';
 
 const CHANNEL = 'toolUtils';
