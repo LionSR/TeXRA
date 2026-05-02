@@ -6,7 +6,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
-import { postMessage, vscode } from '@shared/vscode';
+import { hostBridge, postMessage } from '@shared/hostBridge';
 import { PersistedState, createWebviewStorage } from '@shared/state';
 import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
 import {
@@ -227,7 +227,7 @@ export class MainApp extends MainAppBase {
   private sessionContextValue: SessionContextValue = this.sessionContext$.get();
 
   private readonly stateManager = new PersistedState(
-    createWebviewStorage(vscode),
+    createWebviewStorage(hostBridge),
     'mainViewState',
     MainViewPersistedStateSchema,
   );

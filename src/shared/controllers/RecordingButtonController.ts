@@ -1,5 +1,5 @@
 // Third-party imports
-import { postMessage } from '@shared/vscode';
+import { postMessage } from '@shared/hostBridge';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 // Local imports
