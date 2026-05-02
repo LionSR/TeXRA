@@ -14,7 +14,7 @@ The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open i
 - **Agents** - Turn agents on or off for the current workspace. Agents that support multiple output files are marked with a badge.
 - **Multi-Agent** - Configure multi-agent orchestration and presets.
 - **Tools** - Manage tool-use agent capabilities and approval settings.
-- **Git** - Set a GitHub personal access token (required for the `subscribe_pr_activity` tool) and optionally attribute TeXRA commits to a custom author.
+- **Git** - Set a GitHub personal access token (required for the `github_subscription` tool) and optionally attribute TeXRA commits to a custom author.
 - **LaTeX** - Configure LaTeX formatting, diff, and TikZ settings.
 
 ::: tip
@@ -245,7 +245,7 @@ The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Dashboard` → **Git**) cov
 
 ### GitHub personal access token
 
-Several tool-use agents can call `subscribe_pr_activity` to watch a pull request and inject new comments, reviews, line comments, and failed CI runs into the current agent stream as follow-up messages — the same mechanism that handles user-typed follow-ups. The tool polls GitHub's REST API every 30 seconds and needs an authenticated token.
+Several tool-use agents can call `github_subscription` to watch a repo, pull request, or issue and inject new comments, reviews, line comments, failed CI runs, and merge-conflict events into the current agent stream as follow-up messages — the same mechanism that handles user-typed follow-ups. The tool polls GitHub's REST API every 30 seconds and needs an authenticated token.
 
 Setup:
 
@@ -259,7 +259,7 @@ Setup:
 
 The token is stored in VS Code's encrypted **Secret Storage** — never written to `settings.json`. Alternatively, export `GITHUB_TOKEN` in the shell VS Code is launched from and the tool will pick it up automatically (the Git tab will show **Env** as the status).
 
-Once a token is configured, an agent can run `subscribe_pr_activity owner=… repo=… pullNumber=…` and every new PR event arrives wrapped in a `<github-webhook-activity>` tag in the follow-up queue. Subscriptions auto-terminate when the PR closes or merges, and up to 25 PRs can be watched concurrently.
+Once a token is configured, an agent can run `github_subscription command=subscribe path=owner/repo/pulls/N` (or `path=owner/repo` for the whole repo, `path=owner/repo/issues/N` for a single issue) and every new event arrives wrapped in a `<github-webhook-activity>` tag in the follow-up queue. Use `command=unsubscribe` with the same path to stop, `command=list` to see active subscriptions, and `command=find_current` to resolve the current branch's PR. Subscriptions auto-terminate when the PR closes or merges, and up to 25 PRs can be watched concurrently.
 
 ### TeXRA commit author
 
