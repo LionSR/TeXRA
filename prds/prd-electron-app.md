@@ -399,10 +399,10 @@ The existing webview message system has two directions and they map onto two dif
 
 **Two channels:**
 
-| Direction                        | Today (VS Code)                               | Electron primitive                                                | Used for                                                                                              |
-| -------------------------------- | --------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Renderer → host (RPC)**        | `vscode.postMessage()` → `BaseViewMessageHandler` | `ipcRenderer.invoke()` ⇄ `ipcMain.handle()` (request/response)    | User actions: "execute agent", "save settings", "approve diff", "open project."                       |
-| **Host → renderer (push)**       | `webview.postMessage()` from `WebviewUpdater`     | `webContents.send()` → `ipcRenderer.on()` (fire-and-forget)       | Streamed logs, progress events, status updates, approval requests, theme changes, state restoration. |
+| Direction                  | Today (VS Code)                                   | Electron primitive                                             | Used for                                                                                             |
+| -------------------------- | ------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Renderer → host (RPC)**  | `vscode.postMessage()` → `BaseViewMessageHandler` | `ipcRenderer.invoke()` ⇄ `ipcMain.handle()` (request/response) | User actions: "execute agent", "save settings", "approve diff", "open project."                      |
+| **Host → renderer (push)** | `webview.postMessage()` from `WebviewUpdater`     | `webContents.send()` → `ipcRenderer.on()` (fire-and-forget)    | Streamed logs, progress events, status updates, approval requests, theme changes, state restoration. |
 
 **One schema layer.** Both directions use the existing Zod-validated message schemas in `core/shared/`. Inbound schemas (renderer→host) become `ipcMain.handle('texra:rpc', validate(payload))`. Outbound schemas (host→renderer) become `webContents.send('texra:push', validate(message))`. The dispatcher pattern in `mainViewDispatcher.ts` / `messageDispatcher.ts` is unchanged — it still receives a single message argument and routes by discriminator.
 
@@ -436,7 +436,7 @@ Net change to handler code in `core/`: zero. New code is the two preload functio
 | Keybindings (`package.json` `keybindings`)                                  | `app.on('browser-window-focus')` + key handlers in renderer; native menu accelerators for app-level shortcuts                                                                    |
 | `vscode.AuthenticationProvider`                                             | `texra://` protocol handler; tokens land in `safeStorage`                                                                                                                        |
 | Settings UI (`contributes.configuration`)                                   | Reuse the existing `settingsView` Lit app — point it at `conf` instead of `vscode.workspace.getConfiguration`                                                                    |
-| `vscode.window.tabGroups.close()`                                           | Renderer dismisses the inline `<texra-diff-view>` (no separate window — see §4.5)                                                                                                 |
+| `vscode.window.tabGroups.close()`                                           | Renderer dismisses the inline `<texra-diff-view>` (no separate window — see §4.5)                                                                                                |
 | `vscode.window.onDidChangeVisibleTextEditors`                               | Dropped — diff-view ready-state comes from the Lit component's connected callback                                                                                                |
 | `vscode.workspace.onDidChangeConfiguration`                                 | `conf`'s `onDidChange`                                                                                                                                                           |
 | `vscode.EventEmitter` (in `src/auth/tier/`, `src/auth/serverKeys/`)         | Node `EventEmitter` (mechanical swap, ~10 sites)                                                                                                                                 |
@@ -447,18 +447,18 @@ Net change to handler code in `core/`: zero. New code is the two preload functio
 
 Two independent build graphs sharing one source tree. The separation is enforced at the package level: `pnpm --filter extension` and `pnpm --filter desktop` cannot accidentally cross-pollute because they have separate `dist/` outputs, separate `package.json` `main`/`exports`, separate dependency closures (only `core/` is shared), and separate CI jobs.
 
-| Concern                | Extension build                                    | Desktop build                                                      |
-| ---------------------- | -------------------------------------------------- | ------------------------------------------------------------------ |
-| Command                | `pnpm --filter extension build`                    | `pnpm --filter desktop build`                                      |
-| Output                 | `packages/extension/dist/` → VSIX                  | `packages/desktop/dist/` + `packages/desktop/release/` → installers |
-| Bundler                | esbuild (host) + Vite (3 webviews)                 | electron-vite (main + preload + renderer)                          |
-| Module format          | CommonJS (VS Code requires)                        | ESM (Electron 28+ in main, Vite in renderer)                       |
-| Dev loop               | `npm run watch:fast` (unchanged)                   | `pnpm --filter desktop dev` (electron-vite HMR)                    |
-| CI runner              | One Linux runner (cross-OS-irrelevant)             | Per-OS matrix (mac/win/linux) — see below                          |
-| Signing identity       | None (extension is unsigned in the marketplace)    | Apple Developer ID (mac) + Azure Trusted Signing (win)             |
-| Release artifact       | `texra-{version}.vsix` → vsce/ovsx publish         | Signed installers → public release repo                            |
-| Allowed to import from | `@texra/core` only                                 | `@texra/core` only                                                 |
-| **Forbidden imports**  | Anything from `@texra/desktop`                     | Anything from `@texra/extension` or `vscode`                       |
+| Concern                | Extension build                                 | Desktop build                                                       |
+| ---------------------- | ----------------------------------------------- | ------------------------------------------------------------------- |
+| Command                | `pnpm --filter extension build`                 | `pnpm --filter desktop build`                                       |
+| Output                 | `packages/extension/dist/` → VSIX               | `packages/desktop/dist/` + `packages/desktop/release/` → installers |
+| Bundler                | esbuild (host) + Vite (3 webviews)              | electron-vite (main + preload + renderer)                           |
+| Module format          | CommonJS (VS Code requires)                     | ESM (Electron 28+ in main, Vite in renderer)                        |
+| Dev loop               | `npm run watch:fast` (unchanged)                | `pnpm --filter desktop dev` (electron-vite HMR)                     |
+| CI runner              | One Linux runner (cross-OS-irrelevant)          | Per-OS matrix (mac/win/linux) — see below                           |
+| Signing identity       | None (extension is unsigned in the marketplace) | Apple Developer ID (mac) + Azure Trusted Signing (win)              |
+| Release artifact       | `texra-{version}.vsix` → vsce/ovsx publish      | Signed installers → public release repo                             |
+| Allowed to import from | `@texra/core` only                              | `@texra/core` only                                                  |
+| **Forbidden imports**  | Anything from `@texra/desktop`                  | Anything from `@texra/extension` or `vscode`                        |
 
 **Cross-pollution guards** (CI):
 
@@ -549,8 +549,9 @@ The current interface (per scout) doesn't expose file watching. Any code today t
 **5. Extract the auth-callback URL parser.** _(~80 LOC — 50 for the pure function, 30 to slim down `UriHandler.ts`.)_
 `src/auth/UriHandler.ts` parses the `code`/`state`/error params from the callback URI. Pull the parsing into a pure function `parseAuthCallback(url: string): AuthCallbackResult` in `src/auth/parseAuthCallback.ts` (no `vscode` import). The handler becomes a thin VS Code-specific wrapper that calls the pure function. **Why now:** the Electron protocol handler reuses the parser unchanged.
 =======
-**5. ~~Extract the auth-callback URL parser.~~** *Subsumed by Tier 1 #14 — the URL parser is part of the OAuth state machine that #14 extracts wholesale.*
->>>>>>> Stashed changes
+**5. ~~Extract the auth-callback URL parser.~~** _Subsumed by Tier 1 #14 — the URL parser is part of the OAuth state machine that #14 extracts wholesale._
+
+> > > > > > > Stashed changes
 
 **6. Rename `src/shared/vscode.ts` → `src/shared/hostBridge.ts`.** _(~45 LOC moved, ~5 LOC re-export shim.)_
 The file is already a transport-agnostic wrapper with a fallback API (per webview scout). The name lies. Rename, document it as the host-transport seam, keep a re-export for compatibility during the migration. **Why now:** the Electron transport drops in alongside the existing one without naming friction.
@@ -562,19 +563,21 @@ Webview Lit components reference `--vscode-button-background`, `--vscode-foregro
 `src/utils/system/platformPaths.ts` already probes Homebrew / TeX Live / MikTeX paths. Extract a `BinaryResolver` service that's the one place `execa()` calls go through to look up `pdflatex`, `latexmk`, `pandoc`, `gm`, etc. Audit existing call sites; route them all through it. **Why now:** the Electron port's `fix-path` augmentation has a single injection point.
 
 <<<<<<< Updated upstream
+
 ### Tier 3 — nice to have, can also be done during Phase 0
 
 **9. Settings Zod schema as canonical source.** _(~600 LOC of new Zod schemas mirroring the JSON-schema; ~50 LOC for the optional generator.)_
 `package.json` `contributes.configuration` is a 600-line JSON-schema literal duplicating the runtime types. Define a Zod schema in `core/` mirroring it; runtime reads validate against the Zod schema. Optionally generate `package.json` from the Zod schema (`zod-to-json-schema`). **Why now:** Electron's `conf` instance gets its schema from the same source. Zero drift between the two hosts.
 =======
-**9. Settings Zod schema as canonical source.** *(~600 LOC of new Zod schemas mirroring the JSON-schema; ~50 LOC for the optional generator.)*
+**9. Settings Zod schema as canonical source.** _(~600 LOC of new Zod schemas mirroring the JSON-schema; ~50 LOC for the optional generator.)_
 `package.json` `contributes.configuration` is a ~600-line JSON-schema literal duplicating the runtime types. Define a Zod schema in `core/` mirroring it; runtime reads validate against the Zod schema. Generate `package.json` from the Zod schema via `zod-to-json-schema`. **Why now:** eliminates a real middleman — today the JSON-schema and the runtime types drift independently. Promoting from Tier 3: Electron's `conf` instance gets its schema from the same source, so adopting it before Phase 1 means the ConfigProvider impl writes itself.
 
-**14. Extract host-agnostic OAuth state machine from `SupabaseAuthProvider`.** *(~750 LOC moved into a new `core/auth/SupabaseSession.ts`; ~190 LOC of VS Code-specific glue stays in `extension/`.)*
+**14. Extract host-agnostic OAuth state machine from `SupabaseAuthProvider`.** _(~750 LOC moved into a new `core/auth/SupabaseSession.ts`; ~190 LOC of VS Code-specific glue stays in `extension/`.)_
 Today `src/auth/SupabaseAuthProvider.ts` (943 LOC) interleaves OAuth state-machine logic with VS Code-specific surfaces (`vscode.AuthenticationProvider`, `vscode.UriHandler`, `context.secrets`). Pull the state machine — sign-in initiation, PKCE handling, token storage, refresh, GitHub token exchange — into a host-agnostic `SupabaseSession` class in `core/`. Inject the host-specific surfaces as constructor dependencies: `(secrets: PlatformSecrets, openExternal: (url) => void, onAuthCallback: Listener<AuthCallbackResult>)`. The VS Code-side wrapper becomes ~190 LOC of glue: register `AuthenticationProvider`, register `UriHandler`, wire its callback into `SupabaseSession`. **Why now:** the Electron auth surface becomes ~50 LOC of glue against the same `SupabaseSession` class — no parallel implementation, no "80% reuse" estimation; **it's literally one class with two thin host wrappers**. Subsumes #5 (the URL parser is part of the state machine).
 
 ### Tier 3 — nice to have
->>>>>>> Stashed changes
+
+> > > > > > > Stashed changes
 
 **10. Audit notification leaks.** _(audit only; expected ~20 LOC of fixes if any leaks found.)_
 `CLAUDE.md` already mandates that business logic returns error results, not `vscode.window.show*Message()`. Spot-check the agnostic zones for leaks (the build-time guard catches the egregious ones, but subtle wrappers like `import { window } from 'vscode'` in non-allowed zones can hide). **Why now:** any leak found here is a port blocker found cheaply.
@@ -691,39 +694,39 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 
 ## 11. Risks & mitigations
 
-| Risk                                                                                | Likelihood | Impact   | Mitigation                                                                                                                                                           |
-| ----------------------------------------------------------------------------------- | ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hidden `vscode` imports in nominally-agnostic zones break Electron build            | Medium     | Medium   | Build-time guard plugin in CI. Re-run scout after every refactor.                                                                                                    |
-| `@vscode-elements/elements` styling assumes VS Code CSS variables                   | Medium     | Low      | Library ships its own CSS variables; we override the few VS Code-only ones with theme tokens. Already partial in webview styles.                                     |
-| `src/utils/config/configUtils.ts` refactor breaks extension                         | Medium     | High     | Phase 0 explicitly verifies VSIX boots after refactor. Land behind feature flag if needed.                                                                           |
-| macOS GUI launch can't find `pdflatex`/`pandoc`/`gm`                                | High       | High     | `fix-path` at startup + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`. Log resolved PATH for support diagnosis.              |
-| Windows deep-link cold-start bug (electron #40173)                                  | High       | Medium   | Capture `process.argv` synchronously at module top of `main/index.ts`; not in async handler.                                                                         |
-| Code-signing budget surprise                                                        | Medium     | High     | Budget Azure Trusted Signing (~$10/mo) and Apple Developer Program ($99/yr) **before** Phase 6.                                                                      |
-| Auto-update certificate expires / mac notarization breaks                           | Low        | High     | Document key rotation in runbook. CI uploads test build to `latest-mac.yml` weekly to catch regressions.                                                             |
-| `@openai/codex-sdk` binaries don't unpack from asar                                 | Medium     | Medium   | `asarUnpack: ['**/node_modules/@openai/codex-*/**']` in `electron-builder.yml`. Test on all platforms.                                                               |
-| User confusion: extension and desktop sharing/colliding settings on same machine    | Medium     | Low      | Distinct `userData` paths. Phase 7 ships a one-time importer for API keys + settings from the VS Code globalState file.                                              |
-| Monaco worker resolution fails under asar                                           | Medium     | Medium   | Test all OSes in CI; configure `MonacoEnvironment.getWorker` against `?worker`-built chunks; if asar bites, `asarUnpack` the worker chunks.                          |
-| Monaco bundle inflates renderer cold-start                                          | Medium     | Low      | Lazy-load via `await import('monaco-editor')` only when diff opens; ship only registered languages. Initial window doesn't load Monaco at all.                       |
-| Release-repo publish workflow leaks PAT                                             | Low        | High     | Use a GitHub App over a PAT; scope `contents: write` to the release repo only; rotate annually.                                                                      |
-| Diff performance on large files                                                     | Low        | Low      | Monaco handles 100k-line files comfortably; hard cap at ~10MB with "open in external" fallback.                                                                      |
-| 943-line `SupabaseAuthProvider` rewrite cost underestimated                         | Medium     | Medium   | Phase 4 budget is 1 week; if it slips, scope GitHub auth as fast-follow rather than v1.                                                                              |
-| **Apple Developer Program lapse** invalidates all signed builds                     | Low        | Critical | $99/yr renewal must not be missed. Calendar reminder + secondary owner. Document the resign + republish recovery in the runbook.                                     |
-| **Code-signing identity rotation breaks the auto-update chain**                     | Medium     | High     | When Apple Developer ID or Azure Trusted Signing cert changes, existing installs can't verify the new signature. Test rotation in beta channel first.                |
-| **Notarization intermittent failures** stall CI                                     | Medium     | Medium   | Apple's notary service has occasional outages. Retry with backoff; don't block merges; manual override available.                                                    |
-| **`process.argv` deep-link cold-start** subtly differs across the three OSes        | High       | Medium   | macOS, Windows (#40173), Linux argv shapes diverge on cold-start. Test all four flows × three OSes (12 cases) explicitly in Phase 4.                                 |
-| **macOS App Nap / Windows modern standby** kills the renderer mid-run               | Medium     | Medium   | `powerSaveBlocker.start('prevent-app-suspension')` while an agent run is in-flight. Release on idle.                                                                 |
-| **`asar` packing misses native binaries** (Codex SDK, Monaco workers, codicon font) | Medium     | High     | `electron-builder.yml` `asarUnpack` glob covers `@openai/codex-*/**`, Monaco worker chunks, the codicon TTF. Verified per-platform in CI.                            |
-| **Codex SDK platform-binary mismatch** under mac-universal builds                   | Low        | High     | Confirm `@openai/codex-sdk`'s install-time platform detection works under `electron-builder` lipo'd builds. Test ARM64 + x64 explicitly.                             |
-| **`safeStorage` Linux fallback to "basic" mode** = secrets with a hardcoded key     | Medium     | High     | Detect via `getSelectedStorageBackend()`. Surface a one-time warning. Document keyring install. Don't silently degrade.                                              |
-| **Two desktop instances racing on the same machine**                            | Low        | Low      | `app.requestSingleInstanceLock()` is per-binary and gracefully reuses the existing window via `second-instance` event. The earlier "extension + desktop collide" framing was wrong — they're separate Electron binaries with distinct identities and don't share a lock. |
-| **Subprocess env leaks API keys** via `ps`-style enumeration                        | Medium     | Medium   | Pass keys via stdin / temp file with restrictive perms where SDKs support it. Audit existing `execa` call sites.                                                     |
-| **IPC message size limits** (~100MB) hit on large diffs / long transcripts          | Low        | Medium   | Stream large payloads via `MessagePort` chunks; "diff too large" → `shell.openPath()` fallback at ~10MB.                                                             |
-| **License compliance** — codicons CC-BY-4.0 requires attribution                    | Low        | Medium   | Bundle `LICENSES.txt` and visible attribution in About box. Audit Monaco (MIT), codicons (CC-BY-4.0), `@vscode-elements/elements` (Apache-2.0), KaTeX, highlight.js. |
-| **Sentry sourcemap upload regression** = useless crash reports                      | Low        | Medium   | `electron-builder` `afterAllArtifactBuild` hook uploads sourcemaps; CI guard fails the release if upload step skipped.                                               |
-| **Custom protocol hijack** — another app registers `texra://` after us              | Low        | Low      | Re-assert on every launch via `setAsDefaultProtocolClient`. Document in support FAQ.                                                                                 |
-| **Renderer memory growth** on long sessions (no auto-recycle)                       | Medium     | Low      | Virtualize logs via `@lit-labs/virtualizer` (already a dep). Soft cap on retained log lines; spill to file.                                                          |
-| **Cross-platform path normalization** in persisted runs                             | Medium     | Medium   | Store POSIX-style internally; convert to `path.sep` only at the OS boundary. Audit storage code for naive `path.join` use.                                           |
-| **Corp proxy / SSL inspection** breaks model API or auto-update                     | Medium     | Medium   | Respect `HTTP_PROXY` / `HTTPS_PROXY`. Electron's `net` module does by default; verify SDKs do too. Document for IT admins.                                           |
+| Risk                                                                                | Likelihood | Impact   | Mitigation                                                                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------- | ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hidden `vscode` imports in nominally-agnostic zones break Electron build            | Medium     | Medium   | Build-time guard plugin in CI. Re-run scout after every refactor.                                                                                                                                                                                                        |
+| `@vscode-elements/elements` styling assumes VS Code CSS variables                   | Medium     | Low      | Library ships its own CSS variables; we override the few VS Code-only ones with theme tokens. Already partial in webview styles.                                                                                                                                         |
+| `src/utils/config/configUtils.ts` refactor breaks extension                         | Medium     | High     | Phase 0 explicitly verifies VSIX boots after refactor. Land behind feature flag if needed.                                                                                                                                                                               |
+| macOS GUI launch can't find `pdflatex`/`pandoc`/`gm`                                | High       | High     | `fix-path` at startup + explicit augmentation of `/Library/TeX/texbin`, `/opt/homebrew/bin`, `/usr/local/bin`. Log resolved PATH for support diagnosis.                                                                                                                  |
+| Windows deep-link cold-start bug (electron #40173)                                  | High       | Medium   | Capture `process.argv` synchronously at module top of `main/index.ts`; not in async handler.                                                                                                                                                                             |
+| Code-signing budget surprise                                                        | Medium     | High     | Budget Azure Trusted Signing (~$10/mo) and Apple Developer Program ($99/yr) **before** Phase 6.                                                                                                                                                                          |
+| Auto-update certificate expires / mac notarization breaks                           | Low        | High     | Document key rotation in runbook. CI uploads test build to `latest-mac.yml` weekly to catch regressions.                                                                                                                                                                 |
+| `@openai/codex-sdk` binaries don't unpack from asar                                 | Medium     | Medium   | `asarUnpack: ['**/node_modules/@openai/codex-*/**']` in `electron-builder.yml`. Test on all platforms.                                                                                                                                                                   |
+| User confusion: extension and desktop sharing/colliding settings on same machine    | Medium     | Low      | Distinct `userData` paths. Phase 7 ships a one-time importer for API keys + settings from the VS Code globalState file.                                                                                                                                                  |
+| Monaco worker resolution fails under asar                                           | Medium     | Medium   | Test all OSes in CI; configure `MonacoEnvironment.getWorker` against `?worker`-built chunks; if asar bites, `asarUnpack` the worker chunks.                                                                                                                              |
+| Monaco bundle inflates renderer cold-start                                          | Medium     | Low      | Lazy-load via `await import('monaco-editor')` only when diff opens; ship only registered languages. Initial window doesn't load Monaco at all.                                                                                                                           |
+| Release-repo publish workflow leaks PAT                                             | Low        | High     | Use a GitHub App over a PAT; scope `contents: write` to the release repo only; rotate annually.                                                                                                                                                                          |
+| Diff performance on large files                                                     | Low        | Low      | Monaco handles 100k-line files comfortably; hard cap at ~10MB with "open in external" fallback.                                                                                                                                                                          |
+| 943-line `SupabaseAuthProvider` rewrite cost underestimated                         | Medium     | Medium   | Phase 4 budget is 1 week; if it slips, scope GitHub auth as fast-follow rather than v1.                                                                                                                                                                                  |
+| **Apple Developer Program lapse** invalidates all signed builds                     | Low        | Critical | $99/yr renewal must not be missed. Calendar reminder + secondary owner. Document the resign + republish recovery in the runbook.                                                                                                                                         |
+| **Code-signing identity rotation breaks the auto-update chain**                     | Medium     | High     | When Apple Developer ID or Azure Trusted Signing cert changes, existing installs can't verify the new signature. Test rotation in beta channel first.                                                                                                                    |
+| **Notarization intermittent failures** stall CI                                     | Medium     | Medium   | Apple's notary service has occasional outages. Retry with backoff; don't block merges; manual override available.                                                                                                                                                        |
+| **`process.argv` deep-link cold-start** subtly differs across the three OSes        | High       | Medium   | macOS, Windows (#40173), Linux argv shapes diverge on cold-start. Test all four flows × three OSes (12 cases) explicitly in Phase 4.                                                                                                                                     |
+| **macOS App Nap / Windows modern standby** kills the renderer mid-run               | Medium     | Medium   | `powerSaveBlocker.start('prevent-app-suspension')` while an agent run is in-flight. Release on idle.                                                                                                                                                                     |
+| **`asar` packing misses native binaries** (Codex SDK, Monaco workers, codicon font) | Medium     | High     | `electron-builder.yml` `asarUnpack` glob covers `@openai/codex-*/**`, Monaco worker chunks, the codicon TTF. Verified per-platform in CI.                                                                                                                                |
+| **Codex SDK platform-binary mismatch** under mac-universal builds                   | Low        | High     | Confirm `@openai/codex-sdk`'s install-time platform detection works under `electron-builder` lipo'd builds. Test ARM64 + x64 explicitly.                                                                                                                                 |
+| **`safeStorage` Linux fallback to "basic" mode** = secrets with a hardcoded key     | Medium     | High     | Detect via `getSelectedStorageBackend()`. Surface a one-time warning. Document keyring install. Don't silently degrade.                                                                                                                                                  |
+| **Two desktop instances racing on the same machine**                                | Low        | Low      | `app.requestSingleInstanceLock()` is per-binary and gracefully reuses the existing window via `second-instance` event. The earlier "extension + desktop collide" framing was wrong — they're separate Electron binaries with distinct identities and don't share a lock. |
+| **Subprocess env leaks API keys** via `ps`-style enumeration                        | Medium     | Medium   | Pass keys via stdin / temp file with restrictive perms where SDKs support it. Audit existing `execa` call sites.                                                                                                                                                         |
+| **IPC message size limits** (~100MB) hit on large diffs / long transcripts          | Low        | Medium   | Stream large payloads via `MessagePort` chunks; "diff too large" → `shell.openPath()` fallback at ~10MB.                                                                                                                                                                 |
+| **License compliance** — codicons CC-BY-4.0 requires attribution                    | Low        | Medium   | Bundle `LICENSES.txt` and visible attribution in About box. Audit Monaco (MIT), codicons (CC-BY-4.0), `@vscode-elements/elements` (Apache-2.0), KaTeX, highlight.js.                                                                                                     |
+| **Sentry sourcemap upload regression** = useless crash reports                      | Low        | Medium   | `electron-builder` `afterAllArtifactBuild` hook uploads sourcemaps; CI guard fails the release if upload step skipped.                                                                                                                                                   |
+| **Custom protocol hijack** — another app registers `texra://` after us              | Low        | Low      | Re-assert on every launch via `setAsDefaultProtocolClient`. Document in support FAQ.                                                                                                                                                                                     |
+| **Renderer memory growth** on long sessions (no auto-recycle)                       | Medium     | Low      | Virtualize logs via `@lit-labs/virtualizer` (already a dep). Soft cap on retained log lines; spill to file.                                                                                                                                                              |
+| **Cross-platform path normalization** in persisted runs                             | Medium     | Medium   | Store POSIX-style internally; convert to `path.sep` only at the OS boundary. Audit storage code for naive `path.join` use.                                                                                                                                               |
+| **Corp proxy / SSL inspection** breaks model API or auto-update                     | Medium     | Medium   | Respect `HTTP_PROXY` / `HTTPS_PROXY`. Electron's `net` module does by default; verify SDKs do too. Document for IT admins.                                                                                                                                               |
 
 ## 12. Success criteria
 
@@ -793,30 +796,31 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 #### LOC by phase (`packages/desktop/`)
 
 <<<<<<< Updated upstream
-| Phase                | Scope                                                                    | New LOC                 | Modified LOC          | Notes                                                                                                                                 |
+| Phase | Scope | New LOC | Modified LOC | Notes |
 | -------------------- | ------------------------------------------------------------------------ | ----------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 0                    | Monorepo split                                                           | ~50                     | ~200                  | Package.jsons, tsconfig.base.json, pnpm-workspace.yaml, electron-vite skeleton "Hello TeXRA". Most work is moving files, not writing. |
-| 1                    | Platform impls (8 files) + initPlatform + fix-path                       | 400–550                 | ~10                   | Eight 30–60-LOC impls + ~80 LOC bootstrap + ~50 LOC fix-path / PATH augmentation.                                                     |
-| 2                    | Renderer + main view (preload, IPC bridge, window manager, theme tokens) | 400–500                 | ~45 (`hostBridge.ts`) | 4 files at ~50–100 LOC each, plus `themeTokens.css` ~150 LOC.                                                                         |
-| 3                    | Progress, settings, command palette, native menu                         | 250–350                 | ~60                   | Lit palette ~150 LOC, native `Menu` ~100 LOC, settings adapter wiring ~60 LOC.                                                        |
-| 4                    | Auth, secrets, remote agents (Electron-side)                             | 250–350                 | ~50 in core           | `texra://` protocol ~80 LOC, `safeStorage` adapter ~80 LOC, Supabase Electron adapter ~150 LOC.                                       |
-| 5                    | Diff surface (`<texra-diff-view>` + IPC)                                 | 400–550                 | —                     | Lit Monaco wrapper 200–400 LOC, worker config ~50 LOC, `editApproval.ts` IPC handler ~120 LOC.                                        |
-| 6                    | Packaging, signing, auto-update                                          | 250–350 (mostly config) | —                     | `electron-builder.yml` ~150 LOC YAML, GitHub Actions workflow ~80 LOC, updater wiring ~80 LOC.                                        |
-| 7                    | Beta polish (walkthrough, Sentry, log viewer, importer)                  | 350–450                 | ~30                   | Walkthrough modal ~150 LOC, Sentry init + scrubber ~80 LOC, log-viewer pane ~120 LOC, migration importer ~100 LOC.                    |
-| **Total `desktop/`** |                                                                          | **~2,400–3,150**        | **~395**              | Within the §12 cap of ~3,000 net new LOC.                                                                                             |
+| 0 | Monorepo split | ~50 | ~200 | Package.jsons, tsconfig.base.json, pnpm-workspace.yaml, electron-vite skeleton "Hello TeXRA". Most work is moving files, not writing. |
+| 1 | Platform impls (8 files) + initPlatform + fix-path | 400–550 | ~10 | Eight 30–60-LOC impls + ~80 LOC bootstrap + ~50 LOC fix-path / PATH augmentation. |
+| 2 | Renderer + main view (preload, IPC bridge, window manager, theme tokens) | 400–500 | ~45 (`hostBridge.ts`) | 4 files at ~50–100 LOC each, plus `themeTokens.css` ~150 LOC. |
+| 3 | Progress, settings, command palette, native menu | 250–350 | ~60 | Lit palette ~150 LOC, native `Menu` ~100 LOC, settings adapter wiring ~60 LOC. |
+| 4 | Auth, secrets, remote agents (Electron-side) | 250–350 | ~50 in core | `texra://` protocol ~80 LOC, `safeStorage` adapter ~80 LOC, Supabase Electron adapter ~150 LOC. |
+| 5 | Diff surface (`<texra-diff-view>` + IPC) | 400–550 | — | Lit Monaco wrapper 200–400 LOC, worker config ~50 LOC, `editApproval.ts` IPC handler ~120 LOC. |
+| 6 | Packaging, signing, auto-update | 250–350 (mostly config) | — | `electron-builder.yml` ~150 LOC YAML, GitHub Actions workflow ~80 LOC, updater wiring ~80 LOC. |
+| 7 | Beta polish (walkthrough, Sentry, log viewer, importer) | 350–450 | ~30 | Walkthrough modal ~150 LOC, Sentry init + scrubber ~80 LOC, log-viewer pane ~120 LOC, migration importer ~100 LOC. |
+| **Total `desktop/`** | | **~2,400–3,150** | **~395** | Within the §12 cap of ~3,000 net new LOC. |
 =======
-| Phase | Scope                                          | New LOC     | Modified LOC | Notes                                                                                                                                |
+| Phase | Scope | New LOC | Modified LOC | Notes |
 | ----- | ---------------------------------------------- | ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 0     | Monorepo split                                 | ~50         | ~200         | Package.jsons, tsconfig.base.json, pnpm-workspace.yaml, electron-vite skeleton "Hello TeXRA". Most work is moving files, not writing. |
-| 1     | Platform impls (8 files) + initPlatform + fix-path | 400–550 | ~10          | Eight 30–60-LOC impls + ~80 LOC bootstrap + ~50 LOC fix-path / PATH augmentation.                                                    |
-| 2     | Renderer + main view (preload, IPC bridge, window manager, theme tokens) | 400–500 | ~45 (`hostBridge.ts`) | 4 files at ~50–100 LOC each, plus `themeTokens.css` ~150 LOC.                          |
-| 3     | Progress, settings, command palette, native menu | 250–350   | ~60          | Lit palette ~150 LOC, native `Menu` ~100 LOC, settings adapter wiring ~60 LOC.                                                       |
-| 4     | Auth, secrets, remote agents (Electron-side)   | 150–220     | ~10 in core  | Slimmer if §9 #14 lands first: `texra://` protocol ~80 LOC, `safeStorage` adapter ~80 LOC, `SupabaseSession` host wrapper ~50 LOC.   |
-| 5     | Diff surface (`<texra-diff-view>` + IPC)       | 400–550     | —            | Lit Monaco wrapper 200–400 LOC, worker config ~50 LOC, `editApproval.ts` IPC handler ~120 LOC.                                       |
-| 6     | Packaging, signing, auto-update                | 250–350 (mostly config) | — | `electron-builder.yml` ~150 LOC YAML, GitHub Actions workflow ~80 LOC, updater wiring ~80 LOC.                                       |
-| 7     | Beta polish (walkthrough, Sentry, log viewer, importer) | 350–450 | ~30 | Walkthrough modal ~150 LOC, Sentry init + scrubber ~80 LOC, log-viewer pane ~120 LOC, migration importer ~100 LOC.                   |
-| **Total `desktop/`** | | **~2,300–3,020** | **~395** | Within the §12 cap of ~3,000 net new LOC. Phase 4 trimmed by ~100 LOC if pre-refactoring #14 lands first.                            |
->>>>>>> Stashed changes
+| 0 | Monorepo split | ~50 | ~200 | Package.jsons, tsconfig.base.json, pnpm-workspace.yaml, electron-vite skeleton "Hello TeXRA". Most work is moving files, not writing. |
+| 1 | Platform impls (8 files) + initPlatform + fix-path | 400–550 | ~10 | Eight 30–60-LOC impls + ~80 LOC bootstrap + ~50 LOC fix-path / PATH augmentation. |
+| 2 | Renderer + main view (preload, IPC bridge, window manager, theme tokens) | 400–500 | ~45 (`hostBridge.ts`) | 4 files at ~50–100 LOC each, plus `themeTokens.css` ~150 LOC. |
+| 3 | Progress, settings, command palette, native menu | 250–350 | ~60 | Lit palette ~150 LOC, native `Menu` ~100 LOC, settings adapter wiring ~60 LOC. |
+| 4 | Auth, secrets, remote agents (Electron-side) | 150–220 | ~10 in core | Slimmer if §9 #14 lands first: `texra://` protocol ~80 LOC, `safeStorage` adapter ~80 LOC, `SupabaseSession` host wrapper ~50 LOC. |
+| 5 | Diff surface (`<texra-diff-view>` + IPC) | 400–550 | — | Lit Monaco wrapper 200–400 LOC, worker config ~50 LOC, `editApproval.ts` IPC handler ~120 LOC. |
+| 6 | Packaging, signing, auto-update | 250–350 (mostly config) | — | `electron-builder.yml` ~150 LOC YAML, GitHub Actions workflow ~80 LOC, updater wiring ~80 LOC. |
+| 7 | Beta polish (walkthrough, Sentry, log viewer, importer) | 350–450 | ~30 | Walkthrough modal ~150 LOC, Sentry init + scrubber ~80 LOC, log-viewer pane ~120 LOC, migration importer ~100 LOC. |
+| **Total `desktop/`** | | **~2,300–3,020** | **~395** | Within the §12 cap of ~3,000 net new LOC. Phase 4 trimmed by ~100 LOC if pre-refactoring #14 lands first. |
+
+> > > > > > > Stashed changes
 
 #### LOC by component (`packages/desktop/src/main/` + `renderer/`)
 
@@ -846,21 +850,21 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 These are the §9 pre-refactorings + the unavoidable cross-cutting changes during Phase 0–5.
 
 <<<<<<< Updated upstream
-| Item                                                                   | Net new LOC | Modified / refactored LOC | Notes                                                                                                       |
+| Item | Net new LOC | Modified / refactored LOC | Notes |
 | ---------------------------------------------------------------------- | ----------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| §9 #1 `configUtils.ts` behind `ConfigProvider`                         | ~40         | ~126                      | Pure refactor inside core.                                                                                  |
-| §9 #2 `DiffViewHost` interface + VS Code wrapper                       | ~40         | ~80                       | Native impl wraps existing `vscode.diff` call site.                                                         |
-| §9 #3 `vscode.EventEmitter` → Node `EventEmitter`                      | —           | ~30                       | 10 mechanical sites.                                                                                        |
-| §9 #4 `WorkspaceProvider.watch()` interface + impl                     | ~60         | —                         | Interface + VS Code impl wraps `createFileSystemWatcher`.                                                   |
-| §9 #5 `parseAuthCallback()` extraction                                 | ~50         | ~30                       | Pure function + slimmed `UriHandler.ts`.                                                                    |
-| §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch | ~5          | ~45                       | Re-export shim + feature-detect Electron.                                                                   |
-| §9 #7 `--vscode-*` → `--texra-*` token shim                            | ~100        | ~450                      | New `themeTokens.css` + ~25 components touched by find-replace.                                             |
-| §9 #8 `BinaryResolver` extraction                                      | ~80         | ~120                      | Service + call-site routing audit.                                                                          |
-| §9 #9 Settings Zod schema (optional)                                   | ~600        | —                         | Mirrors `package.json` `contributes.configuration`. Optional, skip from v1 if needed.                       |
-| §9 #11 ESLint vscode-import rule                                       | ~50         | —                         | Custom flat-config rule.                                                                                    |
-| §9 #12 Codex unpack rehearsal harness                                  | ~80         | ~30                       | Test harness + electron-builder config.                                                                     |
-| §9 #13 `settingsViewDispatcher.ts` extraction                          | ~40         | ~120                      | Move switch out of `SettingsApp.handleMessage()`.                                                           |
-| **Subtotal core/extension**                                            | **~1,145**  | **~1,031**                | Of which ~600 LOC (the Zod schema, #9) is optional. Floor without #9: **~545 net new + ~1,031 refactored.** |
+| §9 #1 `configUtils.ts` behind `ConfigProvider` | ~40 | ~126 | Pure refactor inside core. |
+| §9 #2 `DiffViewHost` interface + VS Code wrapper | ~40 | ~80 | Native impl wraps existing `vscode.diff` call site. |
+| §9 #3 `vscode.EventEmitter` → Node `EventEmitter` | — | ~30 | 10 mechanical sites. |
+| §9 #4 `WorkspaceProvider.watch()` interface + impl | ~60 | — | Interface + VS Code impl wraps `createFileSystemWatcher`. |
+| §9 #5 `parseAuthCallback()` extraction | ~50 | ~30 | Pure function + slimmed `UriHandler.ts`. |
+| §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch | ~5 | ~45 | Re-export shim + feature-detect Electron. |
+| §9 #7 `--vscode-*` → `--texra-*` token shim | ~100 | ~450 | New `themeTokens.css` + ~25 components touched by find-replace. |
+| §9 #8 `BinaryResolver` extraction | ~80 | ~120 | Service + call-site routing audit. |
+| §9 #9 Settings Zod schema (optional) | ~600 | — | Mirrors `package.json` `contributes.configuration`. Optional, skip from v1 if needed. |
+| §9 #11 ESLint vscode-import rule | ~50 | — | Custom flat-config rule. |
+| §9 #12 Codex unpack rehearsal harness | ~80 | ~30 | Test harness + electron-builder config. |
+| §9 #13 `settingsViewDispatcher.ts` extraction | ~40 | ~120 | Move switch out of `SettingsApp.handleMessage()`. |
+| **Subtotal core/extension** | **~1,145** | **~1,031** | Of which ~600 LOC (the Zod schema, #9) is optional. Floor without #9: **~545 net new + ~1,031 refactored.** |
 
 #### Aggregate budget
 
@@ -871,31 +875,33 @@ These are the §9 pre-refactorings + the unavoidable cross-cutting changes durin
 | `packages/core/` (optional Zod-schema effort)                | ~600             | —            | ~600             |
 | **Total v1 (without optional Zod schema)**                   | **~2,950–3,700** | **~1,425**   | **~4,375–5,125** |
 | **Total v1 (with Zod schema)**                               | **~3,550–4,300** | **~1,425**   | **~4,975–5,725** |
+
 =======
-| Item                                                                  | Net new LOC | Modified / refactored LOC | Notes                                                                                                       |
+| Item | Net new LOC | Modified / refactored LOC | Notes |
 | --------------------------------------------------------------------- | ----------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| §9 #1 `configUtils.ts` behind `ConfigProvider`                        | ~40         | ~126                      | Pure refactor inside core.                                                                                  |
-| §9 #2 `DiffViewHost` interface + VS Code wrapper                      | ~40         | ~80                       | Native impl wraps existing `vscode.diff` call site.                                                         |
-| §9 #3 `vscode.EventEmitter` → Node `EventEmitter`                     | —           | ~30                       | 10 mechanical sites.                                                                                        |
-| §9 #4 `WorkspaceProvider.watch()` interface + impl                    | ~60         | —                         | Interface + VS Code impl wraps `createFileSystemWatcher`.                                                   |
-| §9 #14 `SupabaseSession` extraction                                   | ~80         | ~750 (moved) + ~190 (slimmed glue) | Host-agnostic OAuth class in core; subsumes #5. Saves ~150 LOC at Phase 4.                         |
-| §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch | ~5         | ~45                       | Re-export shim + feature-detect Electron.                                                                   |
-| §9 #7 `--vscode-*` → `--texra-*` token shim                           | ~100        | ~450                      | New `themeTokens.css` + ~25 components touched by find-replace.                                             |
-| §9 #8 `BinaryResolver` extraction                                     | ~80         | ~120                      | Service + call-site routing audit.                                                                          |
-| §9 #9 Settings Zod schema (Tier 2 — recommended)                      | ~600        | —                         | Mirrors `package.json` `contributes.configuration`; eliminates JSON-schema/Zod drift.                       |
-| §9 #11 ESLint vscode-import rule                                      | ~50         | —                         | Custom flat-config rule.                                                                                    |
-| §9 #12 Codex unpack rehearsal harness                                 | ~80         | ~30                       | Test harness + electron-builder config.                                                                     |
-| §9 #13 `settingsViewDispatcher.ts` extraction                         | ~40         | ~120                      | Move switch out of `SettingsApp.handleMessage()`.                                                           |
-| **Subtotal core/extension**                                           | **~1,175**  | **~1,941**                | Of which #14 contributes ~940 LOC of refactored (mostly moved code). Floor of net-new: ~1,175.              |
+| §9 #1 `configUtils.ts` behind `ConfigProvider` | ~40 | ~126 | Pure refactor inside core. |
+| §9 #2 `DiffViewHost` interface + VS Code wrapper | ~40 | ~80 | Native impl wraps existing `vscode.diff` call site. |
+| §9 #3 `vscode.EventEmitter` → Node `EventEmitter` | — | ~30 | 10 mechanical sites. |
+| §9 #4 `WorkspaceProvider.watch()` interface + impl | ~60 | — | Interface + VS Code impl wraps `createFileSystemWatcher`. |
+| §9 #14 `SupabaseSession` extraction | ~80 | ~750 (moved) + ~190 (slimmed glue) | Host-agnostic OAuth class in core; subsumes #5. Saves ~150 LOC at Phase 4. |
+| §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch | ~5 | ~45 | Re-export shim + feature-detect Electron. |
+| §9 #7 `--vscode-*` → `--texra-*` token shim | ~100 | ~450 | New `themeTokens.css` + ~25 components touched by find-replace. |
+| §9 #8 `BinaryResolver` extraction | ~80 | ~120 | Service + call-site routing audit. |
+| §9 #9 Settings Zod schema (Tier 2 — recommended) | ~600 | — | Mirrors `package.json` `contributes.configuration`; eliminates JSON-schema/Zod drift. |
+| §9 #11 ESLint vscode-import rule | ~50 | — | Custom flat-config rule. |
+| §9 #12 Codex unpack rehearsal harness | ~80 | ~30 | Test harness + electron-builder config. |
+| §9 #13 `settingsViewDispatcher.ts` extraction | ~40 | ~120 | Move switch out of `SettingsApp.handleMessage()`. |
+| **Subtotal core/extension** | **~1,175** | **~1,941** | Of which #14 contributes ~940 LOC of refactored (mostly moved code). Floor of net-new: ~1,175. |
 
 #### Aggregate budget
 
-| Bucket                                                               | Net new LOC      | Modified LOC | Total touched    |
-| -------------------------------------------------------------------- | ---------------- | ------------ | ---------------- |
-| `packages/desktop/`                                                  | 2,300–3,020      | ~395         | ~2,700–3,420     |
-| `packages/core/` + `extension/` (all §9 pre-refactorings)            | ~1,175           | ~1,941       | ~3,116           |
-| **Total v1**                                                         | **~3,475–4,195** | **~2,336**   | **~5,800–6,520** |
->>>>>>> Stashed changes
+| Bucket                                                    | Net new LOC      | Modified LOC | Total touched    |
+| --------------------------------------------------------- | ---------------- | ------------ | ---------------- |
+| `packages/desktop/`                                       | 2,300–3,020      | ~395         | ~2,700–3,420     |
+| `packages/core/` + `extension/` (all §9 pre-refactorings) | ~1,175           | ~1,941       | ~3,116           |
+| **Total v1**                                              | **~3,475–4,195** | **~2,336**   | **~5,800–6,520** |
+
+> > > > > > > Stashed changes
 
 For comparison: the VS Code extension today is ~853 source files. The agent core (which is reused unchanged) is ~141 files. The Electron port is roughly **3% the size of the existing extension's source base** in net-new code, and roughly **6% if you count refactored + new together**.
 
