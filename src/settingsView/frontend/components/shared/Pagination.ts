@@ -62,7 +62,7 @@ export class Pagination extends LitElement {
       }
 
       .pagination-status {
-        font-family: var(--texra-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         letter-spacing: 0.02em;
       }
 
@@ -80,7 +80,7 @@ export class Pagination extends LitElement {
         height: var(--height-control);
         padding: 0 var(--spacing-small);
         font-size: var(--font-size-xs);
-        font-family: var(--texra-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         color: var(--color-text-secondary);
         background: none;
         border: var(--border-thin) solid var(--color-border);
