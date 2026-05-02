@@ -182,6 +182,8 @@ export const ModelSelectionItemSchema = z.object({
   defaultReasoningLevel: ReasoningLevelSchema.optional(),
   /** The user's chosen reasoning level override (undefined = use default). */
   reasoningLevel: ReasoningLevelSchema.optional(),
+  /** Included access relay cap applied to the default xhigh effort, if any. */
+  includedAccessReasoningCap: ReasoningLevelSchema.optional(),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: z.boolean().optional(),
 });
