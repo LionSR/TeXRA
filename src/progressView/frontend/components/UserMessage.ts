@@ -17,7 +17,19 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 // Local imports - formatter helpers
 import { formatTimestamp } from '../formatters/timestampUtils';
 
-// Tags whose text content is XML-entity-escaped and needs decoding for display.
+const STRUCTURED_DELIVERY_TAGS = [
+  'background-result',
+  'background-error',
+  'codex-result',
+  'codex-error',
+  'execution-activity',
+  'github-webhook-activity',
+  'subagent-progress',
+  'subagent-result',
+  'subagent-error',
+] as const;
+
+// Subset whose content is XML-entity-escaped and needs decoding for display.
 const XML_ESCAPED_TAGS = new Set([
   'background-result',
   'background-error',
@@ -27,12 +39,12 @@ const XML_ESCAPED_TAGS = new Set([
   'subagent-error',
 ]);
 
-const XML_ESCAPED_PATTERN = new RegExp(
-  `^\\s*<(${[...XML_ESCAPED_TAGS].join('|')})(\\s|>)`,
+const STRUCTURED_DELIVERY_PATTERN = new RegExp(
+  `^\\s*<(${STRUCTURED_DELIVERY_TAGS.join('|')})(\\s|>)`,
 );
 
-function isXmlEscaped(text: string): boolean {
-  return XML_ESCAPED_PATTERN.test(text);
+function getStructuredDeliveryTag(text: string): string | null {
+  return STRUCTURED_DELIVERY_PATTERN.exec(text)?.[1] ?? null;
 }
 
 function decodeXmlEntitiesForDisplay(text: string): string {
@@ -111,6 +123,26 @@ export class UserMessage extends LitElement {
         font-size: var(--font-size-sm);
       }
 
+      .user-message--structured-delivery .user-message-content {
+        max-height: min(45vh, 520px);
+        overflow: auto;
+        padding: var(--spacing-small);
+        background: var(
+          --vscode-textCodeBlock-background,
+          var(--vscode-editor-background)
+        );
+        border-radius: var(--border-radius-small);
+        font-family: var(
+          --vscode-editor-font-family,
+          ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace
+        );
+        font-size: var(--vscode-editor-font-size, var(--font-size-sm));
+        line-height: 1.35;
+      }
+
       .user-message-timestamp {
         font-size: var(--font-size-xs);
       }
@@ -136,21 +168,33 @@ export class UserMessage extends LitElement {
 
   private displayCache = {
     text: '',
+    isStructuredDelivery: false,
     hasRawMessage: false,
     displayText: '',
   };
 
-  private getDisplayState(): { hasRawMessage: boolean; displayText: string } {
+  private getDisplayState(): {
+    isStructuredDelivery: boolean;
+    hasRawMessage: boolean;
+    displayText: string;
+  } {
     if (this.displayCache.text === this.text) {
       return this.displayCache;
     }
 
-    const hasRawMessage = isXmlEscaped(this.text);
+    const tag = getStructuredDeliveryTag(this.text);
+    const isStructuredDelivery = tag != null;
+    const hasRawMessage = tag != null && XML_ESCAPED_TAGS.has(tag);
     const displayText = hasRawMessage
       ? decodeXmlEntitiesForDisplay(this.text)
       : this.text;
 
-    this.displayCache = { text: this.text, hasRawMessage, displayText };
+    this.displayCache = {
+      text: this.text,
+      isStructuredDelivery,
+      hasRawMessage,
+      displayText,
+    };
     return this.displayCache;
   }
 
@@ -160,11 +204,17 @@ export class UserMessage extends LitElement {
     );
     const copyState = this.copyController.state;
     const rawMessageCopyState = this.rawMessageCopyController.state;
-    const { hasRawMessage, displayText } = this.getDisplayState();
+    const { isStructuredDelivery, hasRawMessage, displayText } =
+      this.getDisplayState();
 
     return html`
       <div class="user-message-container">
-        <div class="user-message">
+        <div
+          class=${classMap({
+            'user-message': true,
+            'user-message--structured-delivery': isStructuredDelivery,
+          })}
+        >
           <div class="user-message-header">
             <span class="user-message-header-left">
               <i class="codicon codicon-comment user-message-icon"></i>
