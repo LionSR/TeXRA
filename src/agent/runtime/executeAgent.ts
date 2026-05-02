@@ -43,10 +43,10 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { normalizeRunId } from '@common/constants/runIds';
 import {
-  isDiskFullError,
+  classifyAgentError,
   toErrorMessage,
 } from '@common/errors/errorHandlingUtils';
-import { getSdkErrorMessage, isUserAbort } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   AgentLogger,
@@ -426,12 +426,10 @@ async function runFlowWithLifecycle(
     await writeTerminalStatus(ctx.executionId, 'error').catch(() => {});
     untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
-
-    // Aborts are user- or system-initiated cancellations — not errors to surface.
-    const aborted = isUserAbort(err);
+    const kind = classifyAgentError(err);
 
     // Log error BEFORE ending the group so it gets the correct groupId
-    if (!aborted) {
+    if (kind !== 'abort') {
       await ctx.logger.logError(errorMsg, err, {
         operation: `execute ${agentName}`,
       });
@@ -442,32 +440,26 @@ async function runFlowWithLifecycle(
 
     // Subagents propagate errors to the orchestrator via FollowUpQueue —
     // don't show VS Code popups that would confuse the user.
-    if (!options?.isSubagent && !aborted) {
-      if (isDiskFullError(err)) {
+    if (!options?.isSubagent) {
+      if (kind === 'disk-full') {
         bus.emit('requestShowError', { message: getSdkErrorMessage(err) });
-      } else {
-        const msg = toErrorMessage(err);
-        if (
-          msg.includes('Missing API key') ||
-          msg.includes('API key not found')
-        ) {
-          bus.emit('requestShowInstruction', {
-            key: 'missingApiKey',
-            message:
-              'API key not found. Set your API key in the extension settings and run again.',
-            actions: [
-              { title: 'Set API Key', command: 'texra.setApiKey' },
-              {
-                title: 'Open Settings Guide',
-                command: 'texra.openDoc',
-                args: ['configuration'],
-              },
-            ],
-            showSuppress: false,
-          });
-        } else {
-          bus.emit('requestShowError', { message: errorMsg });
-        }
+      } else if (kind === 'missing-api-key') {
+        bus.emit('requestShowInstruction', {
+          key: 'missingApiKey',
+          message:
+            'API key not found. Set your API key in the extension settings and run again.',
+          actions: [
+            { title: 'Set API Key', command: 'texra.setApiKey' },
+            {
+              title: 'Open Settings Guide',
+              command: 'texra.openDoc',
+              args: ['configuration'],
+            },
+          ],
+          showSuppress: false,
+        });
+      } else if (kind === 'unexpected') {
+        bus.emit('requestShowError', { message: errorMsg });
       }
     }
 
