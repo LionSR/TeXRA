@@ -14,7 +14,7 @@ import {
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
-import { postMessage } from '@shared/vscode';
+import { postMessage } from '@shared/hostBridge';
 import { PersistedState } from '@shared/state';
 
 // Local imports - shared schemas
