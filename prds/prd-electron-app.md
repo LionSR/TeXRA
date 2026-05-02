@@ -337,6 +337,34 @@ We revisit if any of these become true:
 
 For now: **pnpm alone, plus `tsc --build` for incremental TS, plus the per-OS CI matrix for the desktop release.** Turborepo / Nx stay on the §13.1 future-divergence list.
 
+### 6.7 Testing strategy — three surfaces, no host coupling
+
+VS Code testing is genuinely hard. The state of testing in this repo today, verified empirically:
+
+- `npm test` runs `vscode-test`, which downloads a VS Code test electron and boots Mocha inside the extension host. `CLAUDE.md` forbids it because it fails. **Doesn't work.**
+- An unofficial route exists: ~25 Mocha test files in `src/test/` plus `src/test/setup.ts` + `src/test/support/vscode-mock.ts` for stubbing the `vscode` import. There's also `test-loader.mjs` that registers `tsconfig-paths` for ESM. Trying to invoke it directly fails with `SyntaxError: Identifier 'resolve' has already been declared` in the loader. **Also doesn't work.**
+- Net result: there is currently no working way to run the kernel test suite. The tests exist, the mocks exist, but the runner is broken.
+
+This is a problem #16 (FakePlatform + Vitest migration) doesn't just optimize — it fixes. The replacement is:
+
+**Three test surfaces, in increasing cost:**
+
+| Surface | Tooling | Where it runs | Speed | What it covers |
+|---|---|---|---|---|
+| **Kernel tests** | Vitest + `FakePlatform` | Pure Node (any CI) | <1s for the suite | Agent runtime, model handlers, LaTeX processing, tool implementations, replacement rules, schema validation. ~80% of the test budget. The existing 25 Mocha tests get migrated. |
+| **Platform-impl tests** | Vitest against real platform impls (no UI) | Node + Electron's main-process libs | seconds | The eight `desktop/main/platform/*.ts` files (and the existing VS Code adapters in `extension/frontend/vscode/`). Each runs the same invariant suite `FakePlatform` passes — guarantees behavioral parity. ~15% of the budget. |
+| **E2E tests** | Playwright + `playwright-electron` | Spawns the packaged Electron app, drives the UI | tens of seconds | Sign-in flow, agent execution, tool-edit approval, project switcher. A handful of golden-path scenarios. ~5% of the budget. |
+
+**What we deliberately do NOT do:**
+
+- **Don't try to fix `vscode-test`.** Tests that genuinely need a VS Code host (extension activation, command registration, real `WebviewView`) are a small minority and not in the v1 critical path. They can stay broken in this repo until the VS Code team's `@vscode/test-electron` story improves; we'll revisit if a real bug forces it. Until then, those tests live alongside the extension code as documentation.
+- **Don't try to run the kernel tests inside Electron.** The kernel doesn't depend on Electron. Vitest in plain Node is faster, cheaper, and runs on any CI.
+- **Don't test the renderer in jsdom.** Lit components need real DOM + custom-elements + shadow DOM. Vitest's browser mode (Playwright-driven) is the right tool when component tests are warranted; we lean on E2E for v1.
+
+**The `FakePlatform` invariant suite is the contract.** Every platform impl — `FakePlatform`, the existing VS Code adapters, the new Electron adapters — passes the same Vitest suite. If a kernel test passes on one host but fails on another, the platform contract is being violated and we know exactly where to look.
+
+This isn't a TeXRA invention. It's the pattern VS Code uses for its workbench tests, Standard Notes uses for desktop/mobile parity, and every hexagonal codebase converges on. The novelty for TeXRA is moving from a broken `vscode-test`/Mocha pipeline to a working Vitest one — that's the actual delta.
+
 ## 7. Architecture
 
 ### 7.1 Repo layout (proposed)
@@ -627,8 +655,25 @@ Main and progress views have separate dispatcher files; settings inlines dispatc
 **15. Codify the composition-root rule as a lint check.** _(~30 LOC of ESLint flat-config rule.)_
 Per §6.6, `initPlatform()` may be called only from `extension/src/extension.ts` (and the future `desktop/src/main/index.ts`). Everywhere else accesses host services via `platform()`. Add an ESLint rule (`no-platform-init-outside-composition-root`) that fails on `import { initPlatform } from '@platform'` outside the designated files. **Why now:** locks in the composition-root invariant before the desktop shell exists; prevents the kind of "I just need to init the platform from this one place" creep that hexagonal architectures degrade into.
 
-**16. Add `FakePlatform` for unit tests.** _(~150 LOC for the fake impl + test helpers.)_
-Hexagonal's payoff is unit-testing the kernel with fake adapters. Today the agnostic core (`agent/`, `latex/`, `tools/`) is tested via Mocha with a real VS Code extension host bootstrapped — slow and OS-dependent. Add `core/test/fakes/FakePlatform.ts` providing in-memory impls of all 7 platform interfaces (config = Map, secrets = Map, fs = memfs, log = array, etc.). **Why now:** Phase 0/1 lands a working Vitest pipeline. Tests against `FakePlatform` run in <1s with zero host setup, which makes Phase 1's eight Electron platform impls regression-testable without opening Electron at all. Pays off forever and is exactly the pattern VS Code uses for its workbench tests.
+**16. Stand up Vitest + `FakePlatform`; migrate the existing Mocha tests.** _(~150 LOC for the fake impl + helpers; Mocha → Vitest port for ~25 existing test files; ~50 LOC of `vitest.config.ts` + scripts.)_
+
+Today's kernel test pipeline is broken in two places (see §6.7):
+
+- `npm test` (`vscode-test`) is forbidden by `CLAUDE.md` because it fails.
+- The unofficial Mocha-with-loader path also fails — `test-loader.mjs` throws `SyntaxError: Identifier 'resolve' has already been declared` on modern Node. Verified empirically.
+
+Net result: there is no working way to run the kernel test suite right now. The tests exist (~25 files) and the mocks exist, but the runner doesn't.
+
+The fix replaces the broken pipeline rather than patching it:
+
+- New `core/test/fakes/FakePlatform.ts` — in-memory impls of all 7 platform interfaces (config = Map, secrets = Map, fs = memfs, log = array, etc.).
+- New `vitest.config.ts` per package using path aliases from `tsconfig.base.json`.
+- Migrate the ~25 existing Mocha test files to Vitest. Replace the `vscode-mock` import with `setPlatform(new FakePlatform())` in test setup. Most tests need only mechanical changes (`assert` → `expect`, `describe`/`it` is identical).
+- Discard `test-loader.mjs` and `vscode-test`-driven invocations.
+
+`pnpm --filter core test` becomes the canonical command. Tests run in Vitest in plain Node, in <1s for the whole suite.
+
+**Why now:** the existing test pipeline is genuinely non-functional, so the cost of switching is "fix the pipeline" not "rewrite working tests." Doing it as a pre-refactoring means Phase 1's eight Electron platform impls land with a working invariant suite from day one, instead of inheriting a broken-by-default test story.
 
 ### Suggested ordering
 
