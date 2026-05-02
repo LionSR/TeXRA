@@ -10,7 +10,8 @@ export type VSCodeApi = HostBridgeApi;
 
 declare const acquireVsCodeApi: (() => HostBridgeApi) | undefined;
 
-const API_KEY = '__texraVscodeApi';
+const API_KEY = '__texraHostBridgeApi';
+const LEGACY_API_KEY = '__texraVscodeApi';
 
 const fallbackApi: HostBridgeApi = {
   postMessage: () => undefined,
@@ -21,9 +22,15 @@ const fallbackApi: HostBridgeApi = {
 function resolveHostBridgeApi(): HostBridgeApi {
   const globalScope = globalThis as typeof globalThis & {
     [API_KEY]?: HostBridgeApi;
+    [LEGACY_API_KEY]?: HostBridgeApi;
   };
 
   if (globalScope[API_KEY]) {
+    return globalScope[API_KEY] as HostBridgeApi;
+  }
+
+  if (globalScope[LEGACY_API_KEY]) {
+    globalScope[API_KEY] = globalScope[LEGACY_API_KEY];
     return globalScope[API_KEY] as HostBridgeApi;
   }
 
