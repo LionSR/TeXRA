@@ -593,12 +593,18 @@ These changes are safe to ship in the VS Code extension today. Each one shrinks 
 
 ### Tier 1 — high leverage, low risk
 
-**1. Expand `ConfigProvider` to a full settings store; route `configUtils.ts` through it.** _(~200 LOC added to interface + VS Code adapter; ~126 LOC of `configUtils.ts` body refactored to thin wrappers; ~40 LOC of consumer-site updates.)_
+**1. Expand `ConfigProvider` to a full settings store; route `configUtils.ts` through it.** _(~200 LOC added to interface + VS Code adapter; ~126 LOC of `configUtils.ts` body refactored to thin wrappers; ~40 LOC of consumer-site updates; +~10 LOC for the host-neutral `Disposable`.)_
 
-The current `ConfigProvider` only exposes `get<T>(key, default?)`. That's not enough — the existing `configUtils.ts` surface that consumers in the settings view, setup flow, file lister, and main view depend on includes `updateConfig` (write), `inspectConfig` (default/global/workspace + sources), `isConfigExplicitlySet`, and `watchConfig`. Phase 3's "settings round-trip through `conf`" requires all four. Extend the interface:
+The current `ConfigProvider` only exposes `get<T>(key, default?)`. That's not enough — the existing `configUtils.ts` surface that consumers in the settings view, setup flow, file lister, and main view depend on includes `updateConfig` (write), `inspectConfig` (default/global/workspace + sources), `isConfigExplicitlySet`, and `watchConfig`. Phase 3's "settings round-trip through `conf`" requires all four. Extend the interface, plus a small host-neutral `Disposable` type so `watch()` returns something each adapter can implement without leaking `vscode.Disposable`:
 
 ```ts
-interface ConfigProvider {
+// core/platform/types.ts
+export interface Disposable {
+  dispose(): void;
+}
+
+// core/platform/config.ts
+export interface ConfigProvider {
   get<T>(key: string, defaultValue?: T): T | undefined;
   update<T>(
     key: string,
@@ -616,7 +622,9 @@ interface ConfigProvider {
 }
 ```
 
-VS Code adapter wraps `vscode.workspace.getConfiguration().{get,update,inspect,onDidChangeConfiguration}`. Electron adapter wraps `conf`'s `get`, `set`, `onDidChange` with default-value tracking layered on (`conf` lacks native `inspect` semantics — store the default schema separately and compute the layered view). Push `configUtils.ts`'s 3-namespace fallback (`x.y.z` → `texra.*` prefix → full `texra.x.y.z`) into the VS Code-side adapter so consumers see a single canonical key shape. **Why now:** Phase 3 cannot exist with just `get<T>()`; better to expand once than twice.
+VS Code adapter wraps `vscode.workspace.getConfiguration().{get,update,inspect,onDidChangeConfiguration}` and returns the existing `vscode.Disposable` (which structurally matches `{ dispose(): void }`). Electron adapter wraps `conf`'s `get`/`set`/`onDidChange` with default-value tracking layered on (`conf` lacks native `inspect` semantics — store the default schema separately and compute the layered view) and returns `{ dispose: unsubscribe }`. The same `Disposable` is used by `WorkspaceProvider.watch()` (#4) and the narrow UI ports introduced in §9 #18 below. **No `vscode` types in `core/`.**
+
+Push `configUtils.ts`'s 3-namespace fallback (`x.y.z` → `texra.*` prefix → full `texra.x.y.z`) into the VS Code-side adapter so consumers see a single canonical key shape. **Why now:** Phase 3 cannot exist with just `get<T>()`; better to expand once than twice.
 
 **2. Introduce a `DiffViewHost` interface and move the `vscode.diff` call behind it.**
 `src/frontend/approval/nativeToolEditApproval.ts:277-282` currently invokes `vscode.commands.executeCommand('vscode.diff', uri1, uri2, title, opts)` inline. Define an interface:
@@ -639,7 +647,7 @@ The current native impl wraps `executeCommand`. The Electron impl swaps in Monac
 **3. Swap `vscode.EventEmitter` → Node `EventEmitter`** in `src/auth/tier/TierService.ts`, `src/auth/serverKeys/ServerSideKeyService.ts`, and any other `vscode.EventEmitter` site outside the explicitly VS Code-coupled zones. **Why now:** these files leave the `vscode`-coupled set entirely and move into the agnostic core, with no functional change. _(~10 call sites, ~30 LOC mechanical.)_
 
 **4. Add `WorkspaceProvider.watch(pattern, listener)` to the platform interface.**
-The current interface (per scout) doesn't expose file watching. Any code today that needs watchers reaches for `vscode.workspace.createFileSystemWatcher` directly, leaking. Add `watch(glob, listener): Disposable`. VS Code impl wraps `createFileSystemWatcher`; Electron impl uses chokidar later. **Why now:** prevents new leaks; gives the extension a cleaner watcher abstraction in passing. _(~60 LOC: 15 for interface, 45 for VS Code impl.)_
+The current interface (per scout) doesn't expose file watching. Any code today that needs watchers reaches for `vscode.workspace.createFileSystemWatcher` directly, leaking. Add `watch(glob, listener): Disposable` (using the same host-neutral `Disposable` type from #1). VS Code impl wraps `createFileSystemWatcher`; Electron impl uses chokidar later. **Why now:** prevents new leaks; gives the extension a cleaner watcher abstraction in passing. _(~60 LOC: 15 for interface, 45 for VS Code impl.)_
 
 ### Tier 2 — medium leverage
 
@@ -725,10 +733,10 @@ This is the largest pre-refactoring and was previously hidden behind §4.4's "br
 
 Per §8.1 the desktop must not import `extension/` or `vscode`. So without extraction we'd either rewrite all three handlers in `desktop/` from scratch (parallel maintenance forever) or violate the boundary.
 
-Split each handler into a host-neutral controller in `core/` plus thin per-host IPC routing:
+Split each handler into a host-neutral controller in `core/` plus thin per-host glue:
 
 ```
-core/controllers/MainViewController.ts        (~400 LOC, takes platform() as dep)
+core/controllers/MainViewController.ts        (~400 LOC, takes platform() + UIHosts as deps)
 core/controllers/ProgressViewController.ts    (~1,200 LOC)
 core/controllers/SettingsViewController.ts    (~1,600 LOC)
 
@@ -736,15 +744,40 @@ extension/handlers/MainViewMessageHandler.ts  (~120 LOC, parses msg → calls co
 extension/handlers/ProgressViewMessageHandler.ts  (~250 LOC)
 extension/handlers/SettingsViewMessageHandler.ts  (~380 LOC)
 
-desktop/main/ipc.ts                            (~150 LOC total for all three — generic dispatcher
-                                                routes Zod-typed messages to controller methods)
+desktop/main/ipc.ts                            (~150 LOC total — generic dispatcher routing
+                                                Zod-typed messages to controller methods)
 ```
 
-The host glue is reduced to: validate message via Zod, look up controller method by message type, call it, send response (extension uses `webview.postMessage`; desktop uses `webContents.send`). Real business logic lives in the controllers, takes `platform()` for any host capabilities (file pickers, openExternal, secret input).
+**The boundary problem and how we resolve it.** Today's handlers do far more than read filesystem state — they invoke `vscode.window.showInformationMessage`, `vscode.window.showInputBox`, `vscode.window.createTerminal`, `vscode.commands.executeCommand`, `vscode.env.openExternal`, `vscode.env.clipboard`, and so on. Stuffing all of that into the existing `Platform` (which is deliberately tiny: config, state, log, fs, workspace, storage, secrets) would turn `Platform` into a UI mega-facade and import exactly the host coupling we're removing.
 
-Side benefit: this finally provides a place to register the per-host handlers from §9 #17's command catalog — the catalog's command IDs map to controller methods.
+Cleaner split: keep `Platform` as **OS primitives**, and introduce a separate set of **narrow UI effect ports** in `core/hosts/` that controllers take alongside `platform()`. Each port is small, has one job, and adapts cleanly to both VS Code and Electron primitives:
 
-**Why now:** Phase 2/3 of the desktop port currently has no plan for the ~3,551 LOC of handler logic. Without #18, those phases are missing several thousand LOC of work or break the §8.1 boundary. With #18, Phase 2/3 desktop work is just IPC plumbing (~150 LOC of routing in `desktop/main/ipc.ts`), which is what §4.4 originally implied. Tier 1 is the right place because skipping it breaks the LOC budget and the architectural rule simultaneously.
+```ts
+// core/hosts/index.ts
+export interface UIHosts {
+  prompt:        PromptHost;        // confirm / info / warning / error / input
+  externalOpener: ExternalOpener;   // openExternal(url), openPath(file)
+  diff:          DiffViewHost;      // (already defined in §9 #2)
+  terminal:      TerminalHost;      // create / send / dispose terminal
+  commands:      CommandHost;       // runtime invoker (catalog from #17 is metadata)
+  clipboard:     ClipboardHost;     // read / write text
+}
+```
+
+| Port             | VS Code adapter                                                | Electron adapter                                                            |
+| ---------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `PromptHost`     | `vscode.window.show{Information,Warning,Error,InputBox}`       | `dialog.showMessageBox` + in-app Lit modal for input                         |
+| `ExternalOpener` | `vscode.env.openExternal`, `vscode.commands.executeCommand('vscode.open', uri)` | `shell.openExternal`, `shell.openPath`                            |
+| `DiffViewHost`   | `vscode.commands.executeCommand('vscode.diff', ...)` (existing #2) | Inline `<texra-diff-view>` (Monaco) rendered into the progress view (§4.5) |
+| `TerminalHost`   | `vscode.window.createTerminal`                                 | xterm.js component already in renderer + spawned subprocess                  |
+| `CommandHost`    | `vscode.commands.executeCommand` (registered via #17 catalog)  | In-process registry built from #17 catalog                                   |
+| `ClipboardHost`  | `vscode.env.clipboard`                                         | `clipboard` from Electron's `electron` module                                |
+
+Controllers use `platform().fs` to read files but `hosts.prompt.confirm("Delete this memory?")` to ask the user. `FakePlatform` (#16) gets a sibling `FakeHosts` so kernel tests can record-and-assert UI effects deterministically. The result: each port is ~30–80 LOC of interface + adapter, the boundary is explicit, and we don't expand `Platform`.
+
+Side benefit: this finally provides a place to register the per-host handlers from §9 #17's command catalog — the catalog's command IDs map to controller methods, and `CommandHost.execute(id)` is what the palette ends up calling.
+
+**Why now:** Phase 2/3 of the desktop port currently has no plan for the ~3,551 LOC of handler logic. Without #18, those phases are missing several thousand LOC of work or break the §8.1 boundary. Without the narrow UI ports above, `Platform` collapses into a UI mega-facade. Tier 1 is the right place because skipping any of it breaks the LOC budget AND the architectural rule simultaneously.
 
 **17. Extract a host-agnostic command catalog from `src/commands.ts`.** _(~250 LOC: ~150 LOC for `core/commands/catalog.ts` + ~80 LOC of `extension/commands/register.ts` adapter + ~20 LOC of glue.)_
 
@@ -783,7 +816,18 @@ The fix replaces the broken pipeline rather than patching it:
 
 If we land them all, ~7–9 engineering weeks total, parallelizable. Suggested order: **3 → 1 → 4 → 16 → 2 → 14 → 18 → 17 → 6 → 11 → 15 → 9 → 19 → 7 → 8 → 13 → 10 → 12**. Mechanical fixes first (#3 EventEmitter), then the foundational items (#1 ConfigProvider expansion, #4 watch, #16 FakePlatform — pre-test infrastructure pays off immediately), then the structural extractions in dependency order (#2 DiffViewHost, #14 SupabaseSession+Client, #18 host-neutral controllers, #17 command catalog), then the lint guards (#11 and #15) to lock in agnostic-zone + composition-root purity, then the schema unification (#9), resource-sync adapter (#19), CSS shim (#7), binary resolver (#8), dispatcher cleanup (#13), audit/rehearsal items.
 
-Each Tier 1 item is independently shippable to the extension and produces a smaller, cleaner extension regardless of the Electron decision. After Tier 1 lands, the Electron port is mostly "implement the four interfaces (`ConfigProvider`, `DiffViewHost`, `WorkspaceProvider`-watch, `SupabaseSession` host wrapper) against Electron primitives" — and we can verify each implementation against `FakePlatform`'s invariants.
+Each Tier 1 item is independently shippable to the extension and produces a smaller, cleaner extension regardless of the Electron decision.
+
+**After Tier 1 lands, the Electron port is "wire up the extracted abstractions":**
+
+- Implement the platform interfaces against Electron primitives (`ConfigProvider` from #1, `WorkspaceProvider.watch` from #4, `DiffViewHost` from #2, `PlatformSecrets` for `safeStorage`).
+- Implement the narrow UI ports (`PromptHost`, `ExternalOpener`, `TerminalHost`, `CommandHost`, `ClipboardHost`) against Electron + the renderer.
+- Wire the Electron-side wrappers around the extracted **host-neutral controllers** (#18) via `desktop/main/ipc.ts`.
+- Wire the Electron-side wrapper around the extracted **`SupabaseSession` + `SupabaseClient`** (#14).
+- Wire the Electron-side **command-catalog consumer** (#17) for the native menu + Lit palette.
+- Stand up the Electron-side **`AgentDirectories`** wrapper (#19) so bundled-agent bootstrap actually runs.
+
+Each implementation is verifiable against the `FakePlatform`/`FakeHosts` invariant suite from #16 — the Electron port becomes "make these existing tests pass against real adapters."
 
 ## 10. Migration phases
 
@@ -797,39 +841,54 @@ The biggest mechanical change. Do this first; everything else is downstream.
 - Move source files per the layout in §7.1. Update path aliases in `tsconfig.base.json`. Update import sites if needed (most stay the same via aliases).
 - Refactor `src/utils/config/configUtils.ts` behind `ConfigProvider` (or accept that it remains in `extension/`).
 - Swap `vscode.EventEmitter` → Node `EventEmitter` in `src/auth/tier/` and `src/auth/serverKeys/`.
-- Update CI: `pnpm install`, `pnpm --filter extension build`. Verify VSIX is byte-equivalent (modulo timestamps) to pre-split build.
-- **Exit criteria:** VSIX from `pnpm --filter extension build` boots in VS Code and passes existing smoke tests. Empty `desktop` package builds a "Hello TeXRA" Electron window.
+- Update CI: `pnpm install`, `pnpm --filter extension build`.
+- **Exit criteria (behavioral, not byte-equivalent):**
+  - `pnpm --filter extension typecheck` and `pnpm --filter extension build` succeed in CI.
+  - The new VSIX installs and activates cleanly in a fresh VS Code instance — extension activates, the three webviews render, no errors in the dev tools console.
+  - `package.json` `contributes.{commands,configuration,views,...}` is identical to the pre-split build (compare via JSON diff, not byte diff).
+  - Bundled runtime asset set (`resources/agents/`, walkthroughs, codicon font, etc.) matches pre-split — assert by `find dist/resources -type f | sort | sha256sum`.
+  - Empty `desktop` package builds a "Hello TeXRA" Electron window.
 
-### Phase 1 — Platform impls (1.5 weeks)
+  We deliberately **do not** require byte-equivalence on the VSIX itself — zip ordering, package metadata, sourcemap paths, and lockfile artifacts can legitimately change without runtime impact, and byte equality wouldn't actually prove the new layout resolves resources correctly.
+
+### Phase 1 — Platform impls + AgentDirectories (1.5–2 weeks)
+
+**Gates:** §9 #1 (expanded `ConfigProvider`), #4 (`WorkspaceProvider.watch` + `Disposable`), #16 (`FakePlatform`), #19 (`AgentDirectories` + resource-sync) must be merged before Phase 1 starts.
 
 - All eight Electron-side `Platform` interface impls in `desktop/src/main/platform/`.
 - `initPlatform(...)` wired in `desktop/src/main/index.ts` (the Electron composition root, per §6.6).
 - `fix-path()` called at startup; PATH augmentation belt-and-suspenders.
-- Smoke test: load an agent definition, list models. No UI yet.
-- Each Electron platform impl gets a Vitest suite that runs the same invariant checks as `FakePlatform` (from §9 #16) — so we know `ConfigProvider` behaves identically across hosts. Catches subtle differences cheaply.
-- **Exit criteria:** Vitest suite passes for all 8 impls. Both `FakePlatform`-based kernel tests and Electron platform-impl tests run green in CI.
+- **Resource bootstrap**: Electron-side `AgentDirectories` wrapper (per #19) so bundled YAMLs from `app.getAppPath()/resources/` get copied into `app.getPath('userData')/agents/` on version bumps. Without this, built-in agent discovery silently breaks in packaged builds.
+- Each Electron platform impl gets a Vitest suite that runs the same invariant checks as `FakePlatform` — so we know `ConfigProvider` behaves identically across hosts. Catches subtle differences cheaply.
+- **Exit criteria:** Vitest invariant suite passes for all 8 platform impls + AgentDirectories. Built-in agents load on a fresh-userData run.
 
-### Phase 2 — Renderer + main view (1.5 weeks)
+### Phase 2 — Renderer + main view + UI-host wiring (1.5–2 weeks)
+
+**Gates:** §9 #18 (host-neutral controllers + narrow UI ports) must be merged. Phase 2 is "wire the controllers up over IPC," not "rewrite the handlers."
 
 Tighter than originally scoped: per the §4.4 measurement, the existing Lit components are 97% byte-for-byte reusable. Renderer work is bridge-and-bootstrap, not UI.
 
 - 3 new files (~230 LOC) in `desktop/src/`: `main/ipc.ts` (RPC + push handlers), `preload/index.ts` (contextBridge surface), `renderer/main.ts` (mounts the three Lit apps). Window creation lives in `main/index.ts` directly per §7.1.
 - 1 modified file: `src/shared/vscode.ts` (~45 LOC) — feature-detect `window.electron`, fall through to `acquireVsCodeApi` otherwise. Keeps both hosts working from one codebase.
 - 1 new file: `desktop/src/renderer/themeTokens.css` defining the 53 `--vscode-*` tokens for light/dark/high-contrast (cribbed from the existing fallback values).
-- "Open Project" file picker → `WorkspaceProvider`.
-- File select group, agent dropdown, model dropdown all functional via existing Lit components, no template changes.
+- **UI host adapters in `desktop/main/hosts/`** (per §9 #18 narrow ports): `PromptHost` (in-app Lit modal + `dialog.showMessageBox`), `ExternalOpener` (`shell.openExternal` / `shell.openPath`), `TerminalHost`, `ClipboardHost`. ~50–80 LOC each.
+- `MainViewController` (extracted in #18) wired through `desktop/main/ipc.ts`.
+- "Open Project" file picker → `WorkspaceProvider` + `PromptHost`.
 - First end-to-end agent execution.
 - **Exit criteria:** Run the Direct agent on a `.tex` file from an opened project. See output in renderer. Light/dark/high-contrast themes round-trip correctly. `<main-app>` renders pixel-faithful to the extension version.
 
 ### Phase 3 — Progress view, settings, command palette (1.5 weeks)
 
+**Gates:** §9 #17 (command catalog) and #18 (controllers) must be merged. Phase 3 is "wire `ProgressViewController` and `SettingsViewController` through IPC + populate the catalog-driven menu and palette."
+
 Per §4.5 (agent-native architecture): one window, internal routing.
 
 - Mount `<progress-app>` and `<settings-app>` Lit components in the same `BrowserWindow`, switched via the existing `texra.toggleView` routing state. No new windows.
-- Lit command palette over the host-agnostic command catalog (§9 #17 — extracted from `src/commands.ts`).
-- Native `Menu` with the most-used commands (top 20 from `package.json` `commandPalette`).
-- Settings tabs read/write through `conf` via `ConfigProvider`.
-- **Exit criteria:** Feature parity for the top 20 commands. Settings round-trip through `conf` correctly.
+- `ProgressViewController` + `SettingsViewController` wired through `desktop/main/ipc.ts` (controllers from #18; Phase 3 is just the IPC routing).
+- Lit command palette consumes the host-agnostic command catalog (§9 #17); palette dispatch goes through `CommandHost`.
+- Native `Menu` populated from the same catalog — top 20 commands at v1.
+- Settings tabs round-trip through the expanded `ConfigProvider` (#1).
+- **Exit criteria:** Feature parity for the top 20 commands. Settings round-trip through `conf` correctly. Both progress and settings webviews receive push updates from their respective controllers.
 
 ### Phase 4 — Auth, secrets, remote agents (0.5–1 week)
 
@@ -926,7 +985,7 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 - v1 ships signed installers: macOS (Universal DMG + ZIP), Windows (NSIS x64 + arm64), Linux (AppImage + deb).
 - A user can: sign in (or set API key), open a project folder, pick an agent and model, execute, view progress, approve tool edits via the new diff component, see final output. End-to-end without VS Code installed.
 - No regression in the VS Code extension. Same `pnpm --filter extension build` produces a working VSIX from the same `packages/core/`.
-- Total **net-new** code in `packages/desktop/` under ~3,000 LOC (the v1 hard gate; per §14.1 we sit at 2,180–2,900). The pre-refactorings in §9 land in `packages/core/` and `packages/extension/` and are budgeted separately at **~1,995 net-new + ~5,901 modified** LOC (per §14.1) — most of the modified count is moved code (existing handler/auth logic relocating into `core/` to become host-neutral). They are _prep work_, not v1 surface. Going over the ~3,000-LOC desktop cap means an abstraction leak — that's the gate.
+- Total **net-new** code in `packages/desktop/` under ~3,000 LOC (the v1 hard gate; per §14.1 we sit at 2,180–2,900, plus ~250 LOC of UI-host adapters in `desktop/main/hosts/` per §9 #18). The pre-refactorings in §9 land in `packages/core/` and `packages/extension/` and are budgeted separately at **~2,195 net-new + ~5,901 modified** LOC (per §14.1) — most of the modified count is moved code (existing handler/auth logic relocating into `core/` to become host-neutral). They are _prep work_, not v1 surface. Going over the ~3,000-LOC desktop cap means an abstraction leak — that's the gate.
 - Cold start < 2s. Memory at idle < 250MB.
 - Auto-update verified end-to-end on all three platforms before v1 announcement.
 - Sentry confirms <1% crash rate on native code paths in beta cohort before public v1.
@@ -1036,7 +1095,7 @@ These are the §9 pre-refactorings + the unavoidable cross-cutting changes durin
 | §9 #3 `vscode.EventEmitter` → Node `EventEmitter`                                               | —                | ~30                                                    | 10 mechanical sites.                                                                                                                                                           |
 | §9 #4 `WorkspaceProvider.watch()` interface + impl                                              | ~60              | —                                                      | Interface + VS Code impl wraps `createFileSystemWatcher`.                                                                                                                      |
 | §9 #14 `SupabaseSession` + `SupabaseClient` extraction                                          | ~80              | ~1,000 moved + ~190 glue                               | Two host-agnostic classes (auth + API client) with `TokenProvider` boundary. Subsumes #5.                                                                                      |
-| §9 #18 Host-neutral controller extraction from 3 message handlers                               | ~80 (interfaces) | ~2,800 moved + ~750 glue rewritten                     | The largest pre-refactoring. Splits ~3,551 LOC of handlers into core controllers + thin host glue. Phase 2/3 desktop work depends on this.                                     |
+| §9 #18 Host-neutral controller extraction + narrow UI ports                                     | ~280 (interfaces + 6 narrow ports) | ~2,800 moved + ~750 glue rewritten   | Splits ~3,551 LOC of handlers into core controllers; introduces 6 narrow UI ports (Prompt, ExternalOpener, Diff (=#2), Terminal, Commands, Clipboard) at ~30–60 LOC each so `Platform` doesn't become a UI mega-facade. Phase 2/3 desktop work depends on this. |
 | §9 #19 `AgentDirectories` / resource-sync adapter                                               | ~150             | ~100 (slim `AgentDirectoryManager` of `vscode` import) | Host-agnostic copy-on-version-bump from bundled `resources/agents/` into per-host writable storage.                                                                            |
 | §9 #6 `vscode.ts` → `hostBridge.ts` rename + Electron transport branch                          | ~5               | ~45                                                    | Re-export shim + feature-detect Electron.                                                                                                                                      |
 | §9 #7 `--vscode-*` → `--texra-*` token shim                                                     | ~100             | ~450                                                   | New `themeTokens.css` + ~25 components touched by find-replace.                                                                                                                |
@@ -1048,15 +1107,15 @@ These are the §9 pre-refactorings + the unavoidable cross-cutting changes durin
 | §9 #15 `no-platform-init-outside-composition-root` ESLint rule                                  | ~30              | —                                                      | Codifies §6.6 composition-root invariant.                                                                                                                                      |
 | §9 #16 `FakePlatform` for unit tests                                                            | ~150             | —                                                      | In-memory impls of the 7 platform interfaces; enables fast kernel tests via Vitest.                                                                                            |
 | §9 #17 Host-agnostic command catalog                                                            | ~250             | ~120 (slimmed `src/commands.ts`)                       | Splits per-host wiring out of catalog metadata.                                                                                                                                |
-| **Subtotal core/extension**                                                                     | **~1,995**       | **~5,901**                                             | The bulk of the modified LOC is moved code (~3,800 LOC across #14 and #18) — same logic, new home. Net-new is dominated by interface definitions, dispatchers, and lint rules. |
+| **Subtotal core/extension**                                                                     | **~2,195**       | **~5,901**                                             | The bulk of the modified LOC is moved code (~3,800 LOC across #14 and #18) — same logic, new home. Net-new is dominated by interface definitions, narrow UI ports, dispatchers, and lint rules. |
 
 #### Aggregate budget
 
 | Bucket                                                                   | Net new LOC      | Modified LOC | Total touched      |
 | ------------------------------------------------------------------------ | ---------------- | ------------ | ------------------ |
 | `packages/desktop/`                                                      | 2,180–2,900      | ~395         | ~2,575–3,295       |
-| `packages/core/` + `extension/` (all §9 pre-refactorings, incl. #15–#19) | ~1,995           | ~5,901       | ~7,896             |
-| **Total v1**                                                             | **~4,175–4,895** | **~6,296**   | **~10,471–11,191** |
+| `packages/core/` + `extension/` (all §9 pre-refactorings, incl. #15–#19) | ~2,195           | ~5,901       | ~8,096             |
+| **Total v1**                                                             | **~4,375–5,095** | **~6,296**   | **~10,671–11,391** |
 
 For comparison: the VS Code extension today is ~853 source files. The agent core (reused unchanged) is ~141 files. The Electron port itself is **~4% of the existing source base** in net-new code. **Most of the "modified LOC" total is not rewriting** — it's existing handler/auth logic relocating from `extension/` into `core/` so it becomes host-neutral. The shape of the work is "move code into the right place" much more than "write new code."
 
