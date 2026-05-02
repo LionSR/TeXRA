@@ -7,8 +7,6 @@
  * 3. On resolution → emits 'resolvePlanApproval' to dismiss UI
  */
 
-// Local imports
-import { bus } from '@eventBus/ProgressEventBus';
 import type { Plan } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -74,10 +72,10 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     this.approvalStreamMap.set(approvalId, streamId);
 
     // Request host to show progress view so user sees the approval prompt
-    bus.emit('requestEnsureProgressView', {});
+    this.progressSink.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    bus.emit('setActiveStream', { streamId });
+    this.progressSink.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       approvalId,
