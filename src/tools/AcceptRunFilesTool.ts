@@ -17,12 +17,12 @@ import { z } from 'zod';
 
 // Local imports - shared
 import { getExecutionStore } from '@agent/storage';
+import { bus } from '@eventBus/ProgressEventBus';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 // Local imports - tools
-import { bus } from '@eventBus/ProgressEventBus';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatResultCount, pluralize } from '@tools/formatting';
