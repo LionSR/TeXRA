@@ -348,13 +348,20 @@ Today it calls `vscode.workspace.getConfiguration()` directly with a 3-namespace
 
 **2. Introduce a `DiffViewHost` interface and move the `vscode.diff` call behind it.**
 `src/frontend/approval/nativeToolEditApproval.ts:277-282` currently invokes `vscode.commands.executeCommand('vscode.diff', uri1, uri2, title, opts)` inline. Define an interface:
+
 ```ts
 interface DiffViewHost {
-  openDiff(left: DiffSource, right: DiffSource, title: string, opts?: DiffOpts): Promise<DiffSession>;
+  openDiff(
+    left: DiffSource,
+    right: DiffSource,
+    title: string,
+    opts?: DiffOpts,
+  ): Promise<DiffSession>;
   closeDiff(session: DiffSession): Promise<void>;
   revealFirstChange(session: DiffSession, line: number): void;
 }
 ```
+
 The current native impl wraps `executeCommand`. The Electron impl swaps in Monaco. **Why now:** isolates the largest UX-rewrite behind a stable contract. Phase 5 of the port becomes "implement DiffViewHost against Monaco" instead of "rewrite the approval flow."
 
 **3. Swap `vscode.EventEmitter` → Node `EventEmitter`** in `src/auth/tier/TierService.ts`, `src/auth/serverKeys/ServerSideKeyService.ts`, and any other `vscode.EventEmitter` site outside the explicitly VS Code-coupled zones. ~10 call sites, mechanical. **Why now:** these files leave the `vscode`-coupled set entirely and move into the agnostic core, with no functional change.
