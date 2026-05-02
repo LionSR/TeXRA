@@ -12,6 +12,7 @@ import {
   BasePromiseCoordinator,
   type CoordinatorConfig,
 } from './BasePromiseCoordinator';
+import type { ProgressSink } from './ProgressSink';
 
 // ============================================================================
 // Types
@@ -42,7 +43,7 @@ interface PlanApprovalShowPayload extends Record<string, unknown> {
 // ============================================================================
 
 /** Manages pending plan approval requests. */
-class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
+export class PlanApprovalCoordinator extends BasePromiseCoordinator<
   PlanApprovalResult,
   PlanApprovalShowPayload
 > {
@@ -124,5 +125,11 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
 // Singleton Export
 // ============================================================================
 
+export function createPlanApprovalCoordinator(
+  progressSink: ProgressSink,
+): PlanApprovalCoordinator {
+  return new PlanApprovalCoordinator(progressSink);
+}
+
 /** Singleton coordinator instance. */
-export const planApprovalCoordinator = new PlanApprovalCoordinatorImpl();
+export const planApprovalCoordinator = new PlanApprovalCoordinator();
