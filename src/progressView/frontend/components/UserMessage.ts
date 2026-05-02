@@ -30,11 +30,14 @@ const STRUCTURED_DELIVERY_TAGS = [
 ] as const;
 
 // Subset whose content is XML-entity-escaped and needs decoding for display.
+// subagent-progress is included because the "todos" variant runs todo text
+// through escapeText(), producing &amp;/&lt; entities in the body.
 const XML_ESCAPED_TAGS = new Set([
   'background-result',
   'background-error',
   'codex-result',
   'codex-error',
+  'subagent-progress',
   'subagent-result',
   'subagent-error',
 ]);
