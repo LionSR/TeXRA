@@ -34,7 +34,7 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-path {
-        font-family: var(--texra-editor-font-family), monospace;
+        font-family: var(--texra-editor-font-family, monospace);
         font-size: var(--font-size);
         font-weight: var(--font-weight-medium);
         color: var(--texra-textLink-foreground);
