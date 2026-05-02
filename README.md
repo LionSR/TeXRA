@@ -13,6 +13,12 @@
 > and more—plus a hosted **Orchestrator** and a roster of remote specialist
 > agents. Sign in through the Profile view to get started—no API keys
 > required.
+>
+> The relay runs on sponsor credits. If TeXRA helps your research, please
+> consider supporting it via
+> [GitHub Sponsors](https://github.com/sponsors/texra-ai) or
+> [Buy Me a Coffee](https://buymeacoffee.com/texra.ai) to keep the program
+> open for everyone.
 
 **TeXRA is a multi-agent research assistant for VS Code.** Instead of chatting
 with a single model, you direct an **Orchestrator** that delegates to a team of
