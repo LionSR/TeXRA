@@ -16,6 +16,12 @@ import * as vscode from 'vscode';
 
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { bus } from '@eventBus/ProgressEventBus';
+import {
+  type DiffSession,
+  type DiffSource,
+  type DiffViewHost,
+} from '@frontend/approval/DiffViewHost';
+import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
 import type { StreamTabId } from '@shared/schemas';
 import type { LineChanges } from '@tools/result';
 import {
@@ -29,7 +35,6 @@ import {
   firstChangedLine,
   isApprovalBypassedForStream,
   registerPendingApproval,
-  REVEAL_TIMEOUT_MS,
   setToolEditApprovalHandler,
   unregisterPendingApproval,
   type ToolEditApprovalAction,
@@ -41,8 +46,7 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 interface PendingApprovalEntry extends LatexPreviewEntry {
   request: ToolEditApprovalRequest;
-  originalUri: vscode.Uri;
-  proposedUri: vscode.Uri;
+  diffSession: DiffSession;
   title: string;
   streamId?: StreamTabId;
   lineChanges: LineChanges;
@@ -57,6 +61,7 @@ interface ToolEditApprovalActionPayload {
 
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
+const diffViewHost: DiffViewHost = new VscodeDiffViewHost();
 let storageDirectory: string | undefined;
 
 function getStorageDir(): string {
@@ -76,21 +81,21 @@ async function createTempFile(
   side: 'original' | 'proposed',
   targetPath: string,
   content: string,
-): Promise<vscode.Uri> {
+): Promise<DiffSource> {
   const dir = await ensureStorageDir();
   const ext = path.extname(targetPath) || '.txt';
   const fileName = `${randomUUID()}-${side}${ext}`;
   const filePath = path.join(dir, fileName);
   await fs.writeFile(filePath, content, 'utf8');
-  return vscode.Uri.file(filePath);
+  return { filePath };
 }
 
-async function cleanupTempFile(uri: vscode.Uri): Promise<void> {
-  await fs.unlink(uri.fsPath).catch(() => {});
+async function cleanupTempFile(source: DiffSource): Promise<void> {
+  await fs.unlink(source.filePath).catch(() => {});
 }
 
-async function revealFirstChange(
-  proposedUri: vscode.Uri,
+async function revealFirstChangedLine(
+  session: DiffSession,
   originalContent: string,
   proposedContent: string,
 ): Promise<void> {
@@ -99,98 +104,7 @@ async function revealFirstChange(
     return;
   }
 
-  const targetUri = proposedUri.toString();
-  const position = new vscode.Position(line, 0);
-
-  const tryReveal = () => {
-    const editor = vscode.window.visibleTextEditors.find(
-      (candidate) => candidate.document.uri.toString() === targetUri,
-    );
-
-    if (!editor) {
-      return false;
-    }
-
-    editor.selections = [new vscode.Selection(position, position)];
-    editor.revealRange(
-      new vscode.Range(position, position),
-      vscode.TextEditorRevealType.InCenter,
-    );
-    return true;
-  };
-
-  if (tryReveal()) {
-    return;
-  }
-
-  await new Promise<void>((resolve) => {
-    let resolved = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const disposable = vscode.window.onDidChangeVisibleTextEditors(() => {
-      if (!resolved && tryReveal()) {
-        resolved = true;
-        disposeAll();
-        resolve();
-      }
-    });
-
-    function disposeAll() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
-      disposable.dispose();
-    }
-
-    timer = setTimeout(() => {
-      if (resolved) {
-        return;
-      }
-      resolved = true;
-      disposeAll();
-      tryReveal();
-      resolve();
-    }, REVEAL_TIMEOUT_MS);
-  });
-}
-
-async function closeApprovalEditors(
-  originalUri: vscode.Uri,
-  proposedUri: vscode.Uri,
-): Promise<void> {
-  const targetUris = new Set([originalUri.toString(), proposedUri.toString()]);
-
-  const tabsToClose: vscode.Tab[] = [];
-  for (const group of vscode.window.tabGroups.all) {
-    for (const tab of group.tabs) {
-      const input = tab.input;
-      if (
-        typeof vscode.TabInputTextDiff !== 'undefined' &&
-        input instanceof vscode.TabInputTextDiff
-      ) {
-        const original = input.original.toString();
-        const modified = input.modified.toString();
-        if (targetUris.has(original) && targetUris.has(modified)) {
-          tabsToClose.push(tab);
-        }
-        continue;
-      }
-
-      if (
-        typeof vscode.TabInputText !== 'undefined' &&
-        input instanceof vscode.TabInputText
-      ) {
-        if (targetUris.has(input.uri.toString())) {
-          tabsToClose.push(tab);
-        }
-      }
-    }
-  }
-
-  if (tabsToClose.length > 0) {
-    await vscode.window.tabGroups.close(tabsToClose);
-  }
+  await diffViewHost.revealFirstChange(session, line);
 }
 
 async function showProgressViewApprovalPrompt(
@@ -243,12 +157,12 @@ async function nativeRequestApproval(
 
   approvalCounter += 1;
   const requestId = `approval-${Date.now().toString(36)}-${approvalCounter}`;
-  const originalUri = await createTempFile(
+  const originalSource = await createTempFile(
     'original',
     filePath,
     originalContent,
   );
-  const proposedUri = await createTempFile(
+  const proposedSource = await createTempFile(
     'proposed',
     filePath,
     proposedContent,
@@ -273,16 +187,21 @@ async function nativeRequestApproval(
     : '';
   const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
   let result: ToolEditApprovalResult = { accepted: false };
+  let diffSession: DiffSession | undefined;
   try {
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      originalUri,
-      proposedUri,
+    const openedSession = await diffViewHost.openDiff(
+      originalSource,
+      proposedSource,
       title,
-      { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
+      { preserveFocus: true },
     );
+    diffSession = openedSession;
 
-    await revealFirstChange(proposedUri, originalContent, proposedContent);
+    await revealFirstChangedLine(
+      openedSession,
+      originalContent,
+      proposedContent,
+    );
 
     result = await new Promise<ToolEditApprovalResult>((resolve) => {
       let settled = false;
@@ -298,8 +217,9 @@ async function nativeRequestApproval(
 
       const entry: PendingApprovalEntry = {
         request,
-        originalUri,
-        proposedUri,
+        diffSession: openedSession,
+        originalUri: { fsPath: originalSource.filePath },
+        proposedUri: { fsPath: proposedSource.filePath },
         originalContent,
         proposedContent,
         title,
@@ -328,17 +248,9 @@ async function nativeRequestApproval(
     });
 
     if (result.accepted) {
-      // Read current content from open document or file, falling back to proposedContent
-      const openDocument = vscode.workspace.textDocuments.find(
-        (doc) => doc.uri.toString() === proposedUri.toString(),
-      );
       // Normalize here: these reads bypass BaseFS so may contain CRLF.
       const appliedContent = normalizeLineEndings(
-        openDocument
-          ? openDocument.getText()
-          : await fs
-              .readFile(proposedUri.fsPath, 'utf8')
-              .catch(() => proposedContent),
+        await diffViewHost.readProposedContent(openedSession, proposedContent),
       );
       const userPatch = computeUserPatch(proposedContent, appliedContent);
       result = {
@@ -357,9 +269,11 @@ async function nativeRequestApproval(
     const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);
     unregisterPendingApproval(requestId);
-    await closeApprovalEditors(originalUri, proposedUri);
-    await cleanupTempFile(originalUri);
-    await cleanupTempFile(proposedUri);
+    if (diffSession) {
+      await diffViewHost.closeDiff(diffSession);
+    }
+    await cleanupTempFile(originalSource);
+    await cleanupTempFile(proposedSource);
 
     // Clean up any workspace temp files created by preview/latexdiff (parallel for performance)
     if (entry?.workspaceTempCleanup.length) {
@@ -382,15 +296,14 @@ export async function handleProgressViewToolEditApprovalAction(
 
   switch (payload.action) {
     case 'openDiff':
-      await vscode.commands.executeCommand(
-        'vscode.diff',
-        entry.originalUri,
-        entry.proposedUri,
+      entry.diffSession = await diffViewHost.openDiff(
+        entry.diffSession.original,
+        entry.diffSession.proposed,
         entry.title,
-        { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
+        { preserveFocus: true },
       );
-      await revealFirstChange(
-        entry.proposedUri,
+      await revealFirstChangedLine(
+        entry.diffSession,
         entry.originalContent,
         entry.proposedContent,
       );
@@ -408,9 +321,10 @@ export async function handleProgressViewToolEditApprovalAction(
     case 'approve': {
       // Normalize: this read bypasses BaseFS so may contain CRLF.
       const appliedContent = normalizeLineEndings(
-        await fs
-          .readFile(entry.proposedUri.fsPath, 'utf-8')
-          .catch(() => entry.proposedContent),
+        await diffViewHost.readProposedContent(
+          entry.diffSession,
+          entry.proposedContent,
+        ),
       );
       entry.settle({ accepted: true, appliedContent });
       break;
