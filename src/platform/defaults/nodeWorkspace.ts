@@ -11,29 +11,23 @@ import type { WorkspaceProvider } from '../interfaces/workspace';
 
 const CASE_INSENSITIVE_GLOBS =
   process.platform === 'win32' || process.platform === 'darwin';
-const IGNORED_WATCH_DIRECTORIES = new Set([
-  '.cache',
-  '.git',
-  '.next',
-  '.pnpm',
-  '.turbo',
-  'build',
-  'coverage',
-  'dist',
-  'node_modules',
-  'out',
-]);
 
 function normalizeRelativePath(filePath: string): string {
   return filePath.replaceAll('\\', '/');
 }
 
-function shouldWatchDirectory(root: string, directory: string): boolean {
+function shouldTraverseDirectory(
+  root: string,
+  directory: string,
+  globPattern: string,
+): boolean {
   const relativePath = normalizeRelativePath(path.relative(root, directory));
   if (!relativePath) return true;
-  return !relativePath
-    .split('/')
-    .some((segment) => IGNORED_WATCH_DIRECTORIES.has(segment));
+  return minimatch(relativePath, globPattern, {
+    dot: true,
+    nocase: CASE_INSENSITIVE_GLOBS,
+    partial: true,
+  });
 }
 
 function shouldNotify(
@@ -47,19 +41,28 @@ function shouldNotify(
   });
 }
 
-function listDirectories(root: string): string[] {
-  const directories = [root];
+function listDirectories(
+  workspaceRoot: string,
+  directory: string,
+  globPattern: string,
+): string[] {
+  const directories = [directory];
   let entries: fs.Dirent[];
   try {
-    entries = fs.readdirSync(root, { withFileTypes: true });
+    entries = fs.readdirSync(directory, { withFileTypes: true });
   } catch {
     return directories;
   }
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    if (IGNORED_WATCH_DIRECTORIES.has(entry.name)) continue;
-    directories.push(...listDirectories(path.join(root, entry.name)));
+    const absolutePath = path.join(directory, entry.name);
+    if (!shouldTraverseDirectory(workspaceRoot, absolutePath, globPattern)) {
+      continue;
+    }
+    directories.push(
+      ...listDirectories(workspaceRoot, absolutePath, globPattern),
+    );
   }
   return directories;
 }
@@ -99,8 +102,14 @@ function createRecursiveFallbackWatcher(
         if (absolutePath && fs.existsSync(absolutePath)) {
           try {
             if (fs.statSync(absolutePath).isDirectory()) {
-              if (!shouldWatchDirectory(root, absolutePath)) return;
-              for (const nested of listDirectories(absolutePath)) {
+              if (!shouldTraverseDirectory(root, absolutePath, globPattern)) {
+                return;
+              }
+              for (const nested of listDirectories(
+                root,
+                absolutePath,
+                globPattern,
+              )) {
                 watchDirectory(nested);
               }
             }
@@ -127,7 +136,7 @@ function createRecursiveFallbackWatcher(
     watchers.add(watcher);
   };
 
-  for (const directory of listDirectories(root)) {
+  for (const directory of listDirectories(root, root, globPattern)) {
     watchDirectory(directory);
   }
 
