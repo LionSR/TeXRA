@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 import type { z } from 'zod';
 
+import { isUserAbort } from '@common/errors/sdkErrorUtils';
+
 /** Valid documentation identifiers for error messages. */
 export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
 
@@ -71,6 +73,19 @@ export function isDiskFullError(err: unknown): boolean {
     if ((current as { code?: string }).code === 'ENOSPC') return true;
   }
   return false;
+}
+
+export type AgentErrorKind = 'abort' | 'disk-full' | 'missing-api-key' | 'unexpected';
+
+/** Classify an agent execution error so callers can dispatch without inline predicates. */
+export function classifyAgentError(err: unknown): AgentErrorKind {
+  if (isUserAbort(err)) return 'abort';
+  if (isDiskFullError(err)) return 'disk-full';
+  const msg = toErrorMessage(err);
+  if (msg.includes('Missing API key') || msg.includes('API key not found')) {
+    return 'missing-api-key';
+  }
+  return 'unexpected';
 }
 
 /** Log a formatted error message and return it. */
