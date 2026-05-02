@@ -337,7 +337,66 @@ A build-time guard plugin (custom esbuild plugin: any `import 'vscode'` in `pack
 
 `resources/agents/`, `resources/walkthroughs/`, `resources/logo-128x128.png`, replacement rules — copied into the asar via `electron-builder` `extraResources`. Loaded through `app.getAppPath()`. Existing code reads via `platform().fs.readFile`, so no path code changes.
 
-## 9. Migration phases
+## 9. Pre-refactorings — land these in the extension first
+
+These changes are safe to ship in the VS Code extension today. Each one shrinks the Electron port's blast radius, none of them require Electron to land. Tier 1 are high-leverage; pick those first.
+
+### Tier 1 — high leverage, low risk
+
+**1. Move `src/utils/config/configUtils.ts` behind `ConfigProvider`.**
+Today it calls `vscode.workspace.getConfiguration()` directly with a 3-namespace fallback (`x.y.z` → `texra.*` prefix → full `texra.x.y.z`). Push that fallback logic into the `ConfigProvider.get()` contract (or expose `getRaw()`), then route every consumer through `platform().config`. The VS Code-side `ConfigProvider` impl absorbs the namespace logic. **Why now:** this is the single hardest-to-port file in code that's nominally shared. ~126 LOC of pure refactor with zero behavior change.
+
+**2. Introduce a `DiffViewHost` interface and move the `vscode.diff` call behind it.**
+`src/frontend/approval/nativeToolEditApproval.ts:277-282` currently invokes `vscode.commands.executeCommand('vscode.diff', uri1, uri2, title, opts)` inline. Define an interface:
+```ts
+interface DiffViewHost {
+  openDiff(left: DiffSource, right: DiffSource, title: string, opts?: DiffOpts): Promise<DiffSession>;
+  closeDiff(session: DiffSession): Promise<void>;
+  revealFirstChange(session: DiffSession, line: number): void;
+}
+```
+The current native impl wraps `executeCommand`. The Electron impl swaps in Monaco. **Why now:** isolates the largest UX-rewrite behind a stable contract. Phase 5 of the port becomes "implement DiffViewHost against Monaco" instead of "rewrite the approval flow."
+
+**3. Swap `vscode.EventEmitter` → Node `EventEmitter`** in `src/auth/tier/TierService.ts`, `src/auth/serverKeys/ServerSideKeyService.ts`, and any other `vscode.EventEmitter` site outside the explicitly VS Code-coupled zones. ~10 call sites, mechanical. **Why now:** these files leave the `vscode`-coupled set entirely and move into the agnostic core, with no functional change.
+
+**4. Add `WorkspaceProvider.watch(pattern, listener)` to the platform interface.**
+The current interface (per scout) doesn't expose file watching. Any code today that needs watchers reaches for `vscode.workspace.createFileSystemWatcher` directly, leaking. Add `watch(glob, listener): Disposable`. VS Code impl wraps `createFileSystemWatcher`; Electron impl uses chokidar later. **Why now:** prevents new leaks; gives the extension a cleaner watcher abstraction in passing.
+
+### Tier 2 — medium leverage
+
+**5. Extract the auth-callback URL parser.**
+`src/auth/UriHandler.ts` parses the `code`/`state`/error params from the callback URI. Pull the parsing into a pure function `parseAuthCallback(url: string): AuthCallbackResult` in `src/auth/parseAuthCallback.ts` (no `vscode` import). The handler becomes a thin VS Code-specific wrapper that calls the pure function. **Why now:** the Electron protocol handler reuses the parser unchanged.
+
+**6. Rename `src/shared/vscode.ts` → `src/shared/hostBridge.ts`.**
+The file is already a transport-agnostic wrapper with a fallback API (per webview scout). The name lies. Rename, document it as the host-transport seam, keep a re-export for compatibility during the migration. **Why now:** the Electron transport drops in alongside the existing one without naming friction.
+
+**7. Theme-token indirection layer.**
+Webview Lit components reference `--vscode-button-background`, `--vscode-foreground`, etc. directly. Introduce a `--texra-*` token layer that maps to `--vscode-*` today; rewrite component CSS to reference `--texra-*`. Single search-replace, plus a small `themeTokens.css` that defines the mapping. **Why now:** Electron just ships its own `themeTokens.css` with explicit values. No per-component changes during the port.
+
+**8. Centralize external-binary resolution in `BinaryResolver`.**
+`src/utils/system/platformPaths.ts` already probes Homebrew / TeX Live / MikTeX paths. Extract a `BinaryResolver` service that's the one place `execa()` calls go through to look up `pdflatex`, `latexmk`, `pandoc`, `gm`, etc. Audit existing call sites; route them all through it. **Why now:** the Electron port's `fix-path` augmentation has a single injection point.
+
+### Tier 3 — nice to have, can also be done during Phase 0
+
+**9. Settings Zod schema as canonical source.**
+`package.json` `contributes.configuration` is a 600-line JSON-schema literal duplicating the runtime types. Define a Zod schema in `core/` mirroring it; runtime reads validate against the Zod schema. Optionally generate `package.json` from the Zod schema (`zod-to-json-schema`). **Why now:** Electron's `conf` instance gets its schema from the same source. Zero drift between the two hosts.
+
+**10. Audit notification leaks.**
+`CLAUDE.md` already mandates that business logic returns error results, not `vscode.window.show*Message()`. Spot-check the agnostic zones for leaks (the build-time guard catches the egregious ones, but subtle wrappers like `import { window } from 'vscode'` in non-allowed zones can hide). **Why now:** any leak found here is a port blocker found cheaply.
+
+**11. CI guard: vscode-import lint rule.**
+Add an ESLint rule (or a custom check) that fails CI if any file under the "vscode-free zones" imports `vscode`. Pin the existing 754/853 ratio so it can only improve. **Why now:** prevents regression while the Electron port is in flight.
+
+**12. Codex SDK binary unpack rehearsal.**
+Create a tiny harness that bundles `@openai/codex-sdk` under an asar-like wrapper (or test it via electron-builder's `asarUnpack: ['**/node_modules/@openai/codex-*/**']`) and verifies the spawn works from inside the bundle on all three OSes. **Why now:** de-risks Phase 6 packaging; surface OS-specific path bugs early.
+
+### Suggested ordering
+
+If we land them all, ~3–4 engineering weeks total, can be parallelized across the team. Suggested order: **3 → 1 → 4 → 2 → 5 → 6 → 11 → 7 → 8 → 9 → 10 → 12**. Cheapest-first up to the two big wins (#1 and #2), then the lint guard (#11) to lock in gains, then the rest.
+
+Each Tier 1 item is independently shippable to the extension and produces a smaller, cleaner extension regardless of the Electron decision.
+
+## 10. Migration phases
 
 Each phase is independently reviewable. The extension never breaks during this work — every change is additive until Phase 6.
 
@@ -423,7 +482,7 @@ The single largest UI port.
 
 A separate scout report estimated 22–24 weeks single-dev for "full feature parity including every command and complete auth rebuild." That figure is realistic if we treat the extension's command surface as a hard requirement to port verbatim. Our Phase 3 scope is "top 20 commands"; reaching parity on all ~60 is another 4–6 weeks of straightforward porting work past v1.
 
-## 10. Risks & mitigations
+## 11. Risks & mitigations
 
 | Risk                                                                             | Likelihood | Impact | Mitigation                                                                                                                                              |
 | -------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -443,7 +502,7 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 | Diff performance on large files                                                  | Low        | Low    | Monaco handles 100k-line files comfortably; hard cap at ~10MB with "open in external" fallback.                                                         |
 | 943-line `SupabaseAuthProvider` rewrite cost underestimated                      | Medium     | Medium | Phase 4 budget is 1 week; if it slips, scope GitHub auth as fast-follow rather than v1.                                                                 |
 
-## 11. Success criteria
+## 12. Success criteria
 
 - v1 ships signed installers: macOS (Universal DMG + ZIP), Windows (NSIS x64 + arm64), Linux (AppImage + deb).
 - A user can: sign in (or set API key), open a project folder, pick an agent and model, execute, view progress, approve tool edits via the new diff component, see final output. End-to-end without VS Code installed.
@@ -453,7 +512,7 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 - Auto-update verified end-to-end on all three platforms before v1 announcement.
 - Sentry confirms <1% crash rate on native code paths in beta cohort before public v1.
 
-## 12. Open questions
+## 13. Open questions
 
 - **Multi-window model:** one window per project (VS Code-style) or single window with project-switcher? Recommend single window + recents for v1. Multi-window can come later.
 - **Diff window: modal vs embedded?** Modal `BrowserWindow` feels native (close = reject); embedded keeps focus on progress. Lean modal for v1.
@@ -464,7 +523,7 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 - **GitHub auth:** drop the existing experimental `texra.auth.enableVSCodeGitHub` flag in Electron; use Supabase's GitHub OAuth provider directly. Confirm the edge function token-exchange flow (`GITHUB_TOKEN_EXCHANGE_URL`) still works without the VS Code session.
 - **Migration path:** users with existing VS Code extension install — do we offer a one-shot importer (read `globalState` JSON, copy API keys via SecretStorage if accessible)? Phase 7 candidate.
 
-## 13. Appendix: Reuse-by-the-numbers
+## 14. Appendix: Reuse-by-the-numbers
 
 From the parallel scout:
 
@@ -483,7 +542,7 @@ From the parallel scout:
 | Estimated diff in `core/` for monorepo split                         | ~0 (path aliases handle it)                     |
 | Estimated diff in `core/` for behavioral changes                     | ~500 (configUtils refactor + EventEmitter swap) |
 
-## 14. Tech stack one-liner
+## 15. Tech stack one-liner
 
 ```
 electron-vite + electron-builder + electron-updater (→ public release repo)
