@@ -374,7 +374,7 @@ async function getFindCurrentFallbackInfo(
     defaultBranch:
       defaultBranchResult.status === 'fulfilled'
         ? defaultBranchResult.value
-        : 'main',
+        : undefined,
     suggestions:
       suggestionsResult.status === 'fulfilled' ? suggestionsResult.value : '',
   };
@@ -426,6 +426,11 @@ async function execFindCurrent(
     if (branch === defaultBranch) {
       throw new ToolError(
         `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+      );
+    }
+    if (!defaultBranch && branch === 'main') {
+      throw new ToolError(
+        `Current branch is "main", no open PR uses it as the head branch, and the default branch could not be confirmed. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
       );
     }
     throw new ToolError(
