@@ -90,9 +90,7 @@ export async function copyDefaultAgents(
     versionStore: {
       get: () => globalSM.get<string>(GlobalStateKey.LAST_KNOWN_VERSION),
       update: (version) =>
-        Promise.resolve(
-          globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, version),
-        ),
+        globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, version),
     },
     logger: {
       info: (message) => logger.info('extension', message),
