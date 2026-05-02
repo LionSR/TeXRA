@@ -179,6 +179,14 @@ const localRules = {
               });
             }
           },
+          ImportExpression(node) {
+            if (node.source?.value === 'vscode') {
+              context.report({
+                node: node.source,
+                messageId: 'forbiddenVscodeImport',
+              });
+            }
+          },
         };
       },
     },
