@@ -9,8 +9,31 @@ import { minimatch } from 'minimatch';
 
 import type { WorkspaceProvider } from '../interfaces/workspace';
 
+const CASE_INSENSITIVE_GLOBS =
+  process.platform === 'win32' || process.platform === 'darwin';
+const IGNORED_WATCH_DIRECTORIES = new Set([
+  '.cache',
+  '.git',
+  '.next',
+  '.pnpm',
+  '.turbo',
+  'build',
+  'coverage',
+  'dist',
+  'node_modules',
+  'out',
+]);
+
 function normalizeRelativePath(filePath: string): string {
   return filePath.replaceAll('\\', '/');
+}
+
+function shouldWatchDirectory(root: string, directory: string): boolean {
+  const relativePath = normalizeRelativePath(path.relative(root, directory));
+  if (!relativePath) return true;
+  return !relativePath
+    .split('/')
+    .some((segment) => IGNORED_WATCH_DIRECTORIES.has(segment));
 }
 
 function shouldNotify(
@@ -20,6 +43,7 @@ function shouldNotify(
   if (relativePath == null) return false;
   return minimatch(normalizeRelativePath(relativePath), globPattern, {
     dot: true,
+    nocase: CASE_INSENSITIVE_GLOBS,
   });
 }
 
@@ -34,6 +58,7 @@ function listDirectories(root: string): string[] {
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
+    if (IGNORED_WATCH_DIRECTORIES.has(entry.name)) continue;
     directories.push(...listDirectories(path.join(root, entry.name)));
   }
   return directories;
@@ -74,6 +99,7 @@ function createRecursiveFallbackWatcher(
         if (absolutePath && fs.existsSync(absolutePath)) {
           try {
             if (fs.statSync(absolutePath).isDirectory()) {
+              if (!shouldWatchDirectory(root, absolutePath)) return;
               for (const nested of listDirectories(absolutePath)) {
                 watchDirectory(nested);
               }
