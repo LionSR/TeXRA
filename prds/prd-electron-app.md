@@ -36,7 +36,7 @@ A six-front parallel scout of the codebase confirmed:
 - **853 TypeScript files** in `src/`. Only **106** import `vscode`. The remainder access host services through `platform()` from `@platform`.
 - **The `Platform` interface is tiny.** Total surface across `config`, `state`, `log`, `filesystem`, `workspace`, `storage`, `secrets`: ~470 LOC of interfaces. The existing VS Code implementation is ~300 LOC across 6 files (`src/frontend/vscode/`). The Electron-side mirror is ~200–300 LOC of glue.
 - **Webviews are pure Lit.** No React/Vue/Svelte. All three (`webview`, `progressView`, `settingsView`) extend `LitElement`, use `@lit-labs/signals`, communicate via Zod-validated message schemas in `src/shared/`. The transport wrapper at `src/shared/vscode.ts` already includes a fallback API for non-webview contexts — the Electron transport is essentially a one-file swap.
-- **Agent runtime is `vscode`-free.** All ~141 files in `src/agent/` confirmed. Streaming uses callbacks; cancellation uses standard `AbortController`; persistence is filesystem-based JSON validated by Zod. Drops into an Electron main or utility process unchanged.
+- **Agent runtime is `vscode`-free.** All ~141 files in `src/agent/` confirmed. Streaming uses callbacks; cancellation uses standard `AbortController`; persistence is filesystem-based JSON validated by Zod. **Runs in the Electron main process at v1** (utility-process execution deferred to §13.1 — `ProgressEventBus` is an in-memory singleton that would need a `MessagePort` bridge + per-process `initPlatform()`).
 - **Inline word-diff infrastructure already exists.** `src/agent/output/diffComputation.ts` + `src/progressView/frontend/formatters/wordDiff.ts` already implement word-level inline diff over `diff-match-patch` — reused as-is in the Electron progress view. The side-by-side approval surface is built on Monaco (see §6.2); the two layers compose cleanly.
 
 ### 4.2 Coupling inventory (the 106 files)
@@ -50,7 +50,7 @@ Categorized by VS Code API surface:
 | Editor (`TextDocument`, `Range`, `showTextDocument`, `vscode.diff`)   | 10+   | 56+  | **medium-large** | Lit `<texra-diff-view>` wrapping Monaco's diff editor (lazy-loaded); file preview defers to OS via `shell.openPath()` |
 | Commands (`registerCommand`, `executeCommand`)                        | 56    | 152+ | medium           | Custom command registry + IPC dispatch                                                                                |
 | Webviews (`WebviewView`, `WebviewPanel`, `asWebviewUri`)              | 14+   | 37   | small–medium     | `BrowserWindow` + `contextBridge`                                                                                     |
-| Auth/Secrets (`authentication`, `SecretStorage`, `UriHandler`)        | 20    | 15+  | **large**        | `safeStorage` + custom protocol handler; reuse 80% of `SupabaseAuthProvider`                                          |
+| Auth/Secrets (`authentication`, `SecretStorage`, `UriHandler`)        | 20    | 15+  | **large**        | `safeStorage` + custom protocol handler; per §9 #14, both `SupabaseAuthProvider` and `SupabaseClient` extracted to `core/` with a `TokenProvider` boundary (~1,000 LOC moved), then ~50 LOC of Electron host glue. No "% reuse" — it's two classes with thin host wrappers. |
 | Memento (`globalState`, `workspaceState`)                             | 25    | 77   | small            | `conf`-backed `StateStore`                                                                                            |
 | URIs/External (`Uri`, `env.openExternal`)                             | 6+    | 26   | small            | Node `URL` + `shell.openExternal`                                                                                     |
 
@@ -450,7 +450,7 @@ What `desktop/` does **not** import from `extension/`:
 - `frontend/approval/nativeToolEditApproval.ts` — replaced by `desktop/src/main/editApproval.ts` + `<texra-diff-view>` (path matches §7.1's collapsed layout).
 - `frontend/vscode/` — replaced by `desktop/src/main/platform/`.
 - `auth/UriHandler.ts` — replaced by `desktop/src/main/protocol.ts` (mirrors logic).
-- `auth/SupabaseAuthProvider.ts` — replaced by an Electron-native version (~80% logic reuse).
+- `auth/SupabaseAuthProvider.ts` + `auth/SupabaseClient.ts` — both moved to `core/auth/` per §9 #14 with a `TokenProvider` boundary; the Electron-side wrapper is ~50 LOC of glue.
 
 ### 7.3 Platform impls (Electron)
 
@@ -491,7 +491,7 @@ push:  @agent/* → eventBus → main process listener → webContents.send('tex
 
 **Streaming large payloads** (Phase 5+): for diffs >1MB or transcripts that risk hitting Electron's IPC size limit (~100MB), bypass the push channel and use a `MessageChannelMain` / `MessagePort` between main and renderer. Streamed via the same Zod schemas, just on a different transport.
 
-Net change to handler code in `core/`: zero. New code is the two preload functions (`invoke`, `on`) and the two main-process listeners.
+Net change to **dispatcher / schema code**: zero — the existing Zod schemas and discriminated-union dispatch shape transfer unchanged. **Handler code does change materially**, however — see §9 #18: today the three `*ViewMessageHandler` files (~3,551 LOC) live in `extension/` and import `vscode`. Phase 0 extracts the host-neutral controllers into `core/controllers/` (gates Phase 2/3 of the desktop port). New desktop code is just the two preload functions (`invoke`, `on`), the two main-process listeners, and the generic dispatcher in `desktop/main/ipc.ts` that routes messages to controller methods.
 
 ### 7.5 Process model
 
@@ -924,7 +924,7 @@ A separate scout report estimated 22–24 weeks single-dev for "full feature par
 - v1 ships signed installers: macOS (Universal DMG + ZIP), Windows (NSIS x64 + arm64), Linux (AppImage + deb).
 - A user can: sign in (or set API key), open a project folder, pick an agent and model, execute, view progress, approve tool edits via the new diff component, see final output. End-to-end without VS Code installed.
 - No regression in the VS Code extension. Same `pnpm --filter extension build` produces a working VSIX from the same `packages/core/`.
-- Total **net-new** code in `packages/desktop/` under ~3,000 LOC (the v1 hard gate; per §14.1 we sit at 2,180–2,900). The pre-refactorings in §9 land in `packages/core/` and `packages/extension/` and are budgeted separately at ~1,355 net-new + ~1,941 modified LOC; they are _prep work_, not v1 surface. Going over the ~3,000-LOC desktop cap means an abstraction leak — that's the gate.
+- Total **net-new** code in `packages/desktop/` under ~3,000 LOC (the v1 hard gate; per §14.1 we sit at 2,180–2,900). The pre-refactorings in §9 land in `packages/core/` and `packages/extension/` and are budgeted separately at **~1,995 net-new + ~5,901 modified** LOC (per §14.1) — most of the modified count is moved code (existing handler/auth logic relocating into `core/` to become host-neutral). They are _prep work_, not v1 surface. Going over the ~3,000-LOC desktop cap means an abstraction leak — that's the gate.
 - Cold start < 2s. Memory at idle < 250MB.
 - Auto-update verified end-to-end on all three platforms before v1 announcement.
 - Sentry confirms <1% crash rate on native code paths in beta cohort before public v1.
@@ -1021,7 +1021,7 @@ Consolidates every LOC estimate scattered through the doc. Rough order-of-magnit
 | `renderer/themeTokens.css`                                                          | ~150             | 53 tokens × 3 themes (light/dark/HC).                                                                                                   |
 | `renderer/index.html`                                                               | ~30              | Single-window shell.                                                                                                                    |
 | Beta polish (walkthrough modal, log-viewer pane, migration importer)                | ~370             | Phase 7 deliverables.                                                                                                                   |
-| **Subtotal**                                                                        | **~2,500–3,000** |                                                                                                                                         |
+| **Subtotal**                                                                        | **~1,990–2,340** | Sum of the rows above. The phase table reaches ~2,180–2,900 because it also counts ~150 LOC of `electron-builder.yml` YAML, ~120 LOC of GitHub Actions workflow YAML, and ~50 LOC of platform-impl Vitest invariant tests — which aren't standalone runtime components but do ship in the desktop package's source tree. |
 
 #### LOC for `packages/core/` and `packages/extension/` (changes to existing code)
 
