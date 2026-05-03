@@ -340,5 +340,29 @@ describe('SupabaseSession', () => {
 
       assert.ok(fetchSignal);
     });
+
+    it('preserves upstream abort errors instead of reporting timeout', async () => {
+      const upstream = new AbortController();
+
+      await assert.rejects(
+        fetchWithTimeout(
+          'https://example.com',
+          { signal: upstream.signal },
+          30_000,
+          'timeout',
+          async (_url, init) => {
+            upstream.abort();
+            throw new DOMException(
+              init?.signal?.reason ?? 'Aborted',
+              'AbortError',
+            );
+          },
+        ),
+        (error) =>
+          error instanceof DOMException &&
+          error.name === 'AbortError' &&
+          error.message !== 'timeout',
+      );
+    });
   });
 });
