@@ -283,6 +283,7 @@ async function executeSubagent(
   const parentContext = getCurrentToolFileInteractionContext();
   const parentExecutionId = parentContext?.executionId;
   const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
+  const runtimeHost = parentContext?.runtimeHost;
 
   const gated = depthGateError(
     parentDelegationDepth,
@@ -319,6 +320,7 @@ async function executeSubagent(
   }
 
   const promise = executeAgent(configPayload, executionId, {
+    runtimeHost,
     isSubagent: true,
     enforceCategory: true,
     parentStreamId: orchestratorStreamId,

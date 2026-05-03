@@ -766,6 +766,7 @@ class ToolUseDispatchNode<C> extends Node<
           model: options.modelName ?? options.config.model,
           agentName: options.agentName,
           workingDirectory: options.workingDirectory,
+          runtimeHost: options.runtimeHost,
           delegationDepth: options.delegationDepth,
           delegationConfig: options.delegationConfig,
           onExecutionReady,
