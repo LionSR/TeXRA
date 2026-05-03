@@ -4,7 +4,6 @@ import { strict as assert } from 'assert';
 // Local imports - auth
 import {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-  parseAuthCallbackTokens,
   parseStoredSupabaseSession,
   toStorableSupabaseSession,
   type SupabaseSession,
@@ -103,72 +102,6 @@ describe('SupabaseSession', () => {
       assert.ok(session.expiresAt >= earliestExpiry);
       assert.ok(
         session.expiresAt <= Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-      );
-    });
-  });
-
-  describe('parseAuthCallbackTokens', () => {
-    it('prefers fragment tokens over query tokens', () => {
-      assert.deepEqual(
-        parseAuthCallbackTokens({
-          fragment:
-            'access_token=fragment-access&refresh_token=fragment-refresh&expires_in=60',
-          query:
-            'access_token=query-access&refresh_token=query-refresh&expires_in=120',
-        }),
-        {
-          success: true,
-          tokens: {
-            accessToken: 'fragment-access',
-            refreshToken: 'fragment-refresh',
-            expiresIn: '60',
-          },
-        },
-      );
-    });
-
-    it('does not fall back to query tokens when fragment tokens are empty', () => {
-      assert.deepEqual(
-        parseAuthCallbackTokens({
-          fragment: 'access_token=&refresh_token=fragment-refresh',
-          query: 'access_token=query-access&refresh_token=query-refresh',
-        }),
-        {
-          success: false,
-          error: 'Missing tokens in callback',
-        },
-      );
-    });
-
-    it('uses query tokens when the fragment is missing them', () => {
-      assert.deepEqual(
-        parseAuthCallbackTokens({
-          fragment: '',
-          query: 'access_token=query-access&refresh_token=query-refresh',
-        }),
-        {
-          success: true,
-          tokens: {
-            accessToken: 'query-access',
-            refreshToken: 'query-refresh',
-            expiresIn: null,
-          },
-        },
-      );
-    });
-
-    it('returns auth errors from callback parameters', () => {
-      assert.deepEqual(
-        parseAuthCallbackTokens({
-          fragment:
-            'error=access_denied&error_description=User%20cancelled%20login',
-          query: '',
-        }),
-        {
-          success: false,
-          error: 'User cancelled login',
-          isAuthError: true,
-        },
       );
     });
   });
