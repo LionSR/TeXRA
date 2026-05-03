@@ -27,6 +27,7 @@ export class SupabaseClient {
    * Used to provide meaningful error messages to users.
    */
   private static initError: Error | null = null;
+  private static readinessError: Error | null = null;
 
   /**
    * Cached token expiry time (ms since epoch).
@@ -49,6 +50,7 @@ export class SupabaseClient {
     this.config = null;
     this.authProvider = null;
     this.initError = null;
+    this.readinessError = null;
     this.tokenExpiresAt = null;
   }
 
@@ -64,7 +66,7 @@ export class SupabaseClient {
    * Get initialization error if any occurred.
    */
   static getInitError(): Error | null {
-    return this.initError;
+    return this.initError ?? this.readinessError;
   }
 
   /**
@@ -100,8 +102,11 @@ export class SupabaseClient {
 
     try {
       await this.authProvider.whenReady();
+      this.readinessError = null;
       return true;
     } catch (error) {
+      this.readinessError =
+        error instanceof Error ? error : new Error(toErrorMessage(error));
       logger.error(
         'SupabaseClient',
         `Auth provider not ready: ${toErrorMessage(error)}`,
