@@ -48,6 +48,13 @@ export interface GhReview {
   submitted_at: string | null;
 }
 
+export interface GhCheckRunOutput {
+  title?: string | null;
+  summary?: string | null;
+  /** Treat undefined / null / 0 as "no annotations to fetch". */
+  annotations_count?: number | null;
+}
+
 export interface GhCheckRun {
   id: number;
   name: string;
@@ -55,6 +62,27 @@ export interface GhCheckRun {
   conclusion: string | null; // success, failure, cancelled, timed_out, ...
   html_url: string;
   completed_at: string | null;
+  /** Surfaced for `annotations_count` so the poller can skip the separate
+   * annotations endpoint on the common case of zero annotations. */
+  output?: GhCheckRunOutput | null;
+}
+
+/**
+ * Subset of `GET /repos/{o}/{r}/check-runs/{id}/annotations` we consume.
+ * GitHub renders these as inline warning/notice bubbles on the PR diff view.
+ */
+export interface GhCheckAnnotation {
+  path: string;
+  start_line: number;
+  end_line: number;
+  start_column?: number | null;
+  end_column?: number | null;
+  /** notice | warning | failure (per GitHub); tolerate unexpected values. */
+  annotation_level: string | null;
+  title?: string | null;
+  message: string;
+  raw_details?: string | null;
+  blob_href?: string;
 }
 
 export interface GhPullRequest {
