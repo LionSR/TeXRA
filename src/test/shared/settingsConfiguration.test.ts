@@ -89,6 +89,31 @@ describe('TexraSettingsSchema', () => {
     assert.deepEqual(buildTexraPackageConfiguration(sections), sections);
   });
 
+  it('removes stale generated package schema fields during regeneration', () => {
+    const sections = getPackageConfigurationSections();
+    const sectionWithStaleField = {
+      ...sections[0],
+      properties: {
+        ...sections[0].properties,
+        'texra.model.compactionThresholdPercent': {
+          ...sections[0].properties?.['texra.model.compactionThresholdPercent'],
+          description: 'Preserved description',
+          enum: [75],
+        },
+      },
+    };
+
+    const [regenerated] = buildTexraPackageConfiguration([
+      sectionWithStaleField,
+      ...sections.slice(1),
+    ]);
+    const regeneratedProperty =
+      regenerated.properties?.['texra.model.compactionThresholdPercent'];
+
+    assert.equal(regeneratedProperty?.description, 'Preserved description');
+    assert.equal(Object.hasOwn(regeneratedProperty ?? {}, 'enum'), false);
+  });
+
   it('enforces package numeric ranges and setting enums', () => {
     assert.throws(() =>
       TexraSettingsSchema.parse({ model: { compactionThresholdPercent: 101 } }),
