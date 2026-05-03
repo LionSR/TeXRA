@@ -229,6 +229,29 @@ describe('FakePlatform', () => {
     assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
   });
 
+  it('reports implicit readDirectory path prefixes as directories', async () => {
+    const fs = new FakeFileSystemProvider();
+    await fs.createDirectory('/workspace');
+    const records = (
+      fs as unknown as {
+        records: Map<
+          string,
+          { type: number; ctime: number; mtime: number; content?: Uint8Array }
+        >;
+      }
+    ).records;
+    records.set('/workspace/implicit/file.txt', {
+      type: FileType.File,
+      ctime: Date.now(),
+      mtime: Date.now(),
+      content: Buffer.from('A'),
+    });
+
+    assert.deepEqual(await fs.readDirectory('/workspace'), [
+      ['implicit', FileType.Directory],
+    ]);
+  });
+
   it('rejects directory copy when a destination file blocks a source directory', async () => {
     const fs = new FakeFileSystemProvider({
       '/workspace/source/item/a.txt': 'A',

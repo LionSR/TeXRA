@@ -258,8 +258,8 @@ export class FakeFileSystemProvider implements FileSystemProvider {
       const name = directChildName(normalized, candidate);
       if (name == null) continue;
       const childPath = path.posix.join(normalized, name);
-      const childRecord = this.records.get(childPath) ?? candidateRecord;
-      entries.set(name, childRecord.type);
+      const childRecord = this.records.get(childPath);
+      entries.set(name, childRecord?.type ?? FileType.Directory);
     }
     return [...entries.entries()].sort(([left], [right]) =>
       left.localeCompare(right),
