@@ -28,6 +28,10 @@ function getConfigurationSections(packageJson) {
   return configuration;
 }
 
+function normalizeLineEndings(text) {
+  return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+}
+
 const { check } = parseArgs();
 const packageText = await readFile(packagePath, 'utf8');
 const packageJson = JSON.parse(packageText);
@@ -43,7 +47,9 @@ const nextPackageJson = {
 const nextPackageText = `${JSON.stringify(nextPackageJson, null, 2)}\n`;
 
 if (check) {
-  if (nextPackageText !== packageText) {
+  if (
+    normalizeLineEndings(nextPackageText) !== normalizeLineEndings(packageText)
+  ) {
     throw new Error(
       'package.json contributes.configuration is out of sync with TexraSettingsSchema. Run npm run sync:settings-configuration.',
     );
