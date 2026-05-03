@@ -1,6 +1,6 @@
 // Local imports
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { findToolInCommonPaths } from '@utils/system/platformPaths';
+import { BinaryResolver } from '@utils/system/binaryResolver';
 
 /**
  * Single source of truth for the core LaTeX toolchain the setup assistant
@@ -31,7 +31,7 @@ export const IMAGE_TOOLS = ['gm', 'magick'] as const;
  */
 export async function isToolPresent(name: string): Promise<boolean> {
   if (await checkToolInstalled(name, false)) return true;
-  return findToolInCommonPaths(name) !== null;
+  return BinaryResolver.resolvePath(name) !== null;
 }
 
 /**
@@ -43,7 +43,7 @@ export async function locateTool(
   name: string,
 ): Promise<{ installed: boolean; path?: string }> {
   const knownInstalled = await checkToolInstalled(name, false);
-  const resolvedPath = findToolInCommonPaths(name);
+  const resolvedPath = BinaryResolver.resolvePath(name);
   return {
     installed: knownInstalled || resolvedPath !== null,
     path: resolvedPath ?? undefined,
