@@ -1,0 +1,78 @@
+// Standard library imports
+import { strict as assert } from 'assert';
+
+// Local imports - common
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+
+// Local imports - controllers
+import { MainViewStartupController } from '../../controllers/mainView/MainViewStartupController';
+
+describe('MainViewStartupController', () => {
+  it('uses config to choose the orchestrator banner message', () => {
+    const controller = new MainViewStartupController({
+      getConfig: (_key, defaultValue) => defaultValue,
+      loadOptions: async () => ({ modelOptions: [], agentOptions: {} }),
+      getAuthStatus: async () => ({ authenticated: false }),
+    });
+
+    assert.deepEqual(controller.getOrchestratorBannerMessage(), {
+      command: MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER,
+    });
+  });
+
+  it('hides the orchestrator banner when disabled', () => {
+    const controller = new MainViewStartupController({
+      getConfig: <T>() => false as T,
+      loadOptions: async () => ({ modelOptions: [], agentOptions: {} }),
+      getAuthStatus: async () => ({ authenticated: false }),
+    });
+
+    assert.deepEqual(controller.getOrchestratorBannerMessage(), {
+      command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
+    });
+  });
+
+  it('loads options and shows the login banner for signed-out users', async () => {
+    const controller = new MainViewStartupController({
+      getConfig: (_key, defaultValue) => defaultValue,
+      loadOptions: async () => ({
+        modelOptions: [{ value: 'gemini', label: 'Gemini' }],
+        agentOptions: {
+          workflow: [{ value: 'correct', label: 'Correct' }],
+          toolUse: [{ value: 'orchestrator', label: 'Orchestrator' }],
+        },
+      }),
+      getAuthStatus: async () => ({ authenticated: false }),
+    });
+
+    assert.deepEqual(await controller.getOptionsAndLoginMessages(), [
+      {
+        command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+        optionsData: [{ value: 'gemini', label: 'Gemini' }],
+      },
+      {
+        command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+        optionsData: {
+          workflow: [{ value: 'correct', label: 'Correct' }],
+          toolUse: [{ value: 'orchestrator', label: 'Orchestrator' }],
+        },
+      },
+      { command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER },
+    ]);
+  });
+
+  it('hides the login banner for signed-in users', async () => {
+    const controller = new MainViewStartupController({
+      getConfig: (_key, defaultValue) => defaultValue,
+      loadOptions: async () => ({ modelOptions: [], agentOptions: {} }),
+      getAuthStatus: async () => ({ authenticated: true }),
+    });
+
+    const messages = await controller.getOptionsAndLoginMessages();
+
+    assert.equal(
+      messages.at(-1)?.command,
+      MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+    );
+  });
+});
