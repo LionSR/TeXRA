@@ -18,7 +18,7 @@
  */
 
 import { z } from 'zod';
-import { UserTierSchema, type UserTier } from '../config';
+import { UserTierSchema, type UserTier } from '../sharedConfig';
 
 // Re-export for convenience
 export { UserTierSchema, type UserTier };
