@@ -610,6 +610,10 @@ function getNestedValue(source: unknown, path: TexraSettingPath): unknown {
   return value;
 }
 
+function cloneSettingValue(value: unknown): unknown {
+  return value === undefined ? undefined : structuredClone(value);
+}
+
 export function flattenTexraSettings(settings?: unknown): FlatTexraSettings {
   const parsed =
     settings === undefined
@@ -618,13 +622,13 @@ export function flattenTexraSettings(settings?: unknown): FlatTexraSettings {
   return Object.fromEntries(
     TEXRA_SETTING_PATHS.map((path) => [
       `texra.${path}` satisfies TexraSettingKey,
-      getNestedValue(parsed, path),
+      cloneSettingValue(getNestedValue(parsed, path)),
     ]),
   ) as FlatTexraSettings;
 }
 
 export function getTexraSettingDefault(path: TexraSettingPath): unknown {
-  return getNestedValue(parsedDefaultTexraSettings, path);
+  return cloneSettingValue(getNestedValue(parsedDefaultTexraSettings, path));
 }
 
 function getNestedJsonSchema(path: TexraSettingPath): JsonSchemaObject {
