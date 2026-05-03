@@ -70,18 +70,18 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-sub-tab:hover {
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       .agents-sub-tab:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }
 
       .agents-sub-tab.active {
-        color: var(--vscode-foreground);
-        border-bottom-color: var(--vscode-focusBorder);
+        color: var(--texra-foreground);
+        border-bottom-color: var(--texra-focusBorder);
         font-weight: var(--font-weight-medium);
       }
 
@@ -99,8 +99,8 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-create-btn {
-        color: var(--vscode-foreground);
-        border-color: var(--vscode-focusBorder);
+        color: var(--texra-foreground);
+        border-color: var(--texra-focusBorder);
         font-weight: var(--font-weight-medium);
       }
 
@@ -113,7 +113,7 @@ export class AgentsTab extends LitElement {
         margin-bottom: var(--spacing-medium);
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
-        background: var(--vscode-sideBar-background, rgba(128, 128, 128, 0.04));
+        background: var(--texra-sideBar-background, rgba(128, 128, 128, 0.04));
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
       }
@@ -129,8 +129,8 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-dir-path {
-        font-family: var(--vscode-editor-font-family, monospace);
-        color: var(--vscode-foreground);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
+        color: var(--texra-foreground);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -141,8 +141,8 @@ export class AgentsTab extends LitElement {
         flex-shrink: 0;
         padding: 0 var(--spacing-small);
         font-size: var(--font-size-xs);
-        color: var(--vscode-badge-foreground);
-        background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
+        color: var(--texra-badge-foreground);
+        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
         border-radius: var(--border-radius);
       }
 
@@ -167,11 +167,11 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-dir-icon-btn:hover {
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       .agents-dir-icon-btn:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }

@@ -83,7 +83,7 @@ export class TodoList extends LitElement {
       }
 
       .todo-item--in-progress .todo-item__icon {
-        color: var(--vscode-progressBar-background);
+        color: var(--texra-progressBar-background);
       }
 
       .todo-item--completed {

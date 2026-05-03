@@ -152,14 +152,14 @@ export class InstructionPanel extends LitElement {
         align-items: flex-start;
         margin-top: var(--spacing-small);
         padding: var(--spacing-tiny) var(--spacing-small);
-        border-left: 2px solid var(--vscode-textLink-foreground);
-        color: var(--vscode-descriptionForeground);
+        border-left: 2px solid var(--texra-textLink-foreground);
+        color: var(--texra-descriptionForeground);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-relaxed);
       }
 
       .session-hint-lede {
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         font-weight: 600;
         letter-spacing: 0.01em;
         white-space: nowrap;
@@ -170,7 +170,7 @@ export class InstructionPanel extends LitElement {
       }
 
       .session-hint-time {
-        color: var(--vscode-descriptionForeground);
+        color: var(--texra-descriptionForeground);
         opacity: 0.85;
       }
 
@@ -182,7 +182,7 @@ export class InstructionPanel extends LitElement {
       vscode-textarea#instruction {
         width: 100%;
         margin: var(--spacing-medium) 0;
-        font-family: var(--vscode-editor-font-family);
+        font-family: var(--texra-editor-font-family);
         font-size: var(--font-size);
       }
 
@@ -305,7 +305,7 @@ export class InstructionPanel extends LitElement {
       }
 
       .recording {
-        color: var(--vscode-errorForeground);
+        color: var(--texra-errorForeground);
         animation: pulse 1s infinite;
       }
 

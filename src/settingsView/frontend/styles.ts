@@ -11,7 +11,7 @@ const settingsHeaderStyles: CSSResult = css`
     align-items: center;
     justify-content: space-between;
     padding: var(--spacing-medium) var(--spacing-large);
-    background: var(--vscode-sideBar-background);
+    background: var(--texra-sideBar-background);
     border-bottom: var(--border-thin) solid var(--color-border);
     margin-bottom: var(--spacing-medium);
   }
@@ -35,7 +35,7 @@ const settingsHeaderStyles: CSSResult = css`
 
   .settings-header-email {
     font-weight: var(--font-weight-medium);
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
   }
 
   .settings-header-tier {
@@ -55,17 +55,14 @@ const settingsHeaderStyles: CSSResult = css`
 
   .settings-header-auth-button {
     min-height: var(--height-control);
-    color: var(--vscode-foreground);
-    background: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
+    color: var(--texra-foreground);
+    background: var(--texra-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
     border-color: var(--color-border);
   }
 
   .settings-header-auth-button:hover {
-    border-color: var(--vscode-focusBorder);
-    background: var(
-      --vscode-toolbar-activeBackground,
-      rgba(99, 102, 103, 0.31)
-    );
+    border-color: var(--texra-focusBorder);
+    background: var(--texra-toolbar-activeBackground, rgba(99, 102, 103, 0.31));
   }
 `;
 
