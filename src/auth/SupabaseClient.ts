@@ -50,11 +50,21 @@ export class SupabaseClient {
   }
 
   /**
-   * Mark VS Code auth provider as successfully registered.
+   * Mark the host auth provider as successfully registered.
    * Called after the host registers its authentication provider.
    */
-  static setVSCodeProviderRegistered(): void {
+  static setHostAuthProviderRegistered(): void {
     this.authProviderRegistered = true;
+  }
+
+  /** Reset singleton state between unit tests. */
+  static resetForTests(): void {
+    this.instance = null;
+    this.config = null;
+    this.authProvider = null;
+    this.authProviderRegistered = false;
+    this.initError = null;
+    this.tokenExpiresAt = null;
   }
 
   /**
@@ -165,7 +175,15 @@ export class SupabaseClient {
       return null;
     }
 
-    return this.authProvider.getSessionTokens();
+    try {
+      return await this.authProvider.getSessionTokens();
+    } catch (error) {
+      logger.error(
+        'SupabaseClient',
+        `Error getting session tokens: ${toErrorMessage(error)}`,
+      );
+      return null;
+    }
   }
 
   /**
