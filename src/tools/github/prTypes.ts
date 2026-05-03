@@ -48,6 +48,17 @@ export interface GhReview {
   submitted_at: string | null;
 }
 
+export interface GhCheckRunOutput {
+  title?: string | null;
+  summary?: string | null;
+  /**
+   * GitHub returns this as a number on the check-runs list endpoint, but it
+   * can be 0 (or absent on partial responses). Treat undefined / null as 0.
+   */
+  annotations_count?: number | null;
+  annotations_url?: string | null;
+}
+
 export interface GhCheckRun {
   id: number;
   name: string;
@@ -55,6 +66,33 @@ export interface GhCheckRun {
   conclusion: string | null; // success, failure, cancelled, timed_out, ...
   html_url: string;
   completed_at: string | null;
+  /**
+   * Per-run output block. Surfaced for `annotations_count` so the poller can
+   * decide whether to fetch the (separate, paginated) annotations endpoint
+   * — saves an API call per tick on the common case of zero annotations.
+   */
+  output?: GhCheckRunOutput | null;
+}
+
+/**
+ * Subset of `GET /repos/{o}/{r}/check-runs/{id}/annotations` we consume.
+ * Annotations are GitHub's mechanism for pinning a `notice` / `warning` /
+ * `failure` to a specific file path and line range — the same data that
+ * renders as inline check-warning bubbles on the PR diff view (e.g. lint
+ * suggestions, type errors, custom workflow hints).
+ */
+export interface GhCheckAnnotation {
+  path: string;
+  start_line: number;
+  end_line: number;
+  start_column?: number | null;
+  end_column?: number | null;
+  /** notice | warning | failure (per GitHub); tolerate unexpected values. */
+  annotation_level: string | null;
+  title?: string | null;
+  message: string;
+  raw_details?: string | null;
+  blob_href?: string;
 }
 
 export interface GhPullRequest {
