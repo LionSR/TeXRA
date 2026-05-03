@@ -821,20 +821,30 @@ export class PRPollingSource extends PollingSourceBase<
     runs: ReadonlyArray<GhCheckRun>,
   ): void {
     const currentKeys = new Set<string>();
-    // Dedupe against pending by full `checkKey` (id + completed_at), not by
-    // id alone: a fast rerun produces a new completed_at while the prior
-    // entry may still be queued, and both completions carry distinct
-    // annotation sets we want to emit.
-    const pendingKeys = new Set(
-      state.pendingAnnotationRuns.map((r) => this.checkKey(r)),
-    );
+    // Enforce at most one queue entry per check id. The annotations endpoint
+    // always returns the current state for a given id (there's no historical
+    // form), so queueing both A:T1 and A:T2 would produce two identical API
+    // calls and two events with mismatched headline `annotations_count`.
+    // Instead: on a rerun (new `completed_at` for an already-pending id),
+    // REPLACE the queued entry's run reference so the headline metadata
+    // matches what the fetch will actually return. `lastAnnotationKeys`
+    // still keys by full `checkKey`, so a rerun's new key always re-enters
+    // this loop rather than being silently skipped.
+    const pendingIndexById = new Map<number, number>();
+    for (let i = 0; i < state.pendingAnnotationRuns.length; i += 1) {
+      pendingIndexById.set(state.pendingAnnotationRuns[i].id, i);
+    }
     for (const run of runs) {
       if (run.status !== 'completed') continue;
       if ((run.output?.annotations_count ?? 0) <= 0) continue;
       const key = this.checkKey(run);
       currentKeys.add(key);
       if (state.lastAnnotationKeys.has(key)) continue;
-      if (pendingKeys.has(key)) continue;
+      const existingIdx = pendingIndexById.get(run.id);
+      if (existingIdx !== undefined) {
+        state.pendingAnnotationRuns[existingIdx] = run;
+        continue;
+      }
       state.pendingAnnotationRuns.push(run);
     }
     state.lastAnnotationKeys = currentKeys;
@@ -868,17 +878,18 @@ export class PRPollingSource extends PollingSourceBase<
       candidates.map((run) => this.fetchAnnotations(pr.owner, pr.repo, run.id)),
     );
 
-    // Categorize by `checkKey` (id + completed_at), not id alone — a fast
-    // rerun can leave the queue holding two distinct completion attempts
-    // with the same id, and they need to be drop/rotated independently.
-    const dropKeys = new Set<string>();
-    const rotateKeys = new Set<string>();
+    // Dedupe by `id` here: enqueue enforces at most one queue entry per
+    // check id (replacing on rerun), so id is sufficient to identify the
+    // entry to drop or rotate. A rerun arriving DURING this drain wouldn't
+    // observe the queue mid-mutation (ticks don't overlap, see
+    // PollingSourceBase.tickInFlight).
+    const dropIds = new Set<number>();
+    const rotateIds = new Set<number>();
     for (let i = 0; i < settled.length; i += 1) {
       const run = candidates[i];
-      const key = this.checkKey(run);
       const result = settled[i];
       if (result.status === 'fulfilled') {
-        dropKeys.add(key);
+        dropIds.add(run.id);
         if (result.value.length > 0) {
           this.emit(
             state,
@@ -897,29 +908,28 @@ export class PRPollingSource extends PollingSourceBase<
         this.logger.warn(
           `Annotations for check ${run.id} unavailable (HTTP ${err.status}); dropping.`,
         );
-        dropKeys.add(key);
+        dropIds.add(run.id);
         continue;
       }
       if (err instanceof GitHubAuthError) {
         this.logger.warn(
           `Annotations for check ${run.id} forbidden (${err.message}); dropping.`,
         );
-        dropKeys.add(key);
+        dropIds.add(run.id);
         continue;
       }
-      rotateKeys.add(key);
+      rotateIds.add(run.id);
       this.logger.warn(
         `Annotation fetch for check ${run.id} failed; rotating to back of queue: ${String(err)}`,
       );
     }
 
     const rotated = state.pendingAnnotationRuns.filter((p) =>
-      rotateKeys.has(this.checkKey(p)),
+      rotateIds.has(p.id),
     );
-    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter((p) => {
-      const k = this.checkKey(p);
-      return !dropKeys.has(k) && !rotateKeys.has(k);
-    });
+    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
+      (p) => !dropIds.has(p.id) && !rotateIds.has(p.id),
+    );
     state.pendingAnnotationRuns.push(...rotated);
   }
 
