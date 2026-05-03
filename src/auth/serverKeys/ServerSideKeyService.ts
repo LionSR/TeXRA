@@ -15,13 +15,16 @@
  */
 
 import { EventEmitter } from 'events';
-import * as logger from '@logger/logUtils';
 import {
   SERVER_SIDE_CACHE_TTL_MS,
   ULTRA_TIER,
   FREE_TIER,
   type UserTier,
-} from '../config';
+} from '../sharedConfig';
+import {
+  NOOP_AUTH_SERVICE_LOGGER,
+  type AuthServiceLogger,
+} from '../serviceLogger';
 import type { StateStore } from '@platform/interfaces/state';
 import type { TierService } from '../tier/TierService';
 import type { ServerSideProvider } from './types';
@@ -68,10 +71,13 @@ export type ServerSideKeyState = StateStore;
 export interface ServerSideKeyServiceInit {
   state?: ServerSideKeyState;
   subscriptions?: ServerSideKeyDisposable[];
+  logger?: AuthServiceLogger;
 }
 
 class NodeEventEmitter<T> implements ServerSideKeyDisposable {
   private readonly emitter = new EventEmitter();
+
+  constructor(private readonly logger: AuthServiceLogger) {}
 
   readonly event: ServerSideKeyEvent<T> = (listener, thisArgs, disposables) => {
     const boundListener =
@@ -90,7 +96,7 @@ class NodeEventEmitter<T> implements ServerSideKeyDisposable {
         listener(event);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error(CHANNEL, `Event listener failed: ${message}`);
+        this.logger.error(CHANNEL, `Event listener failed: ${message}`);
       }
     }
   }
@@ -122,18 +128,23 @@ export class ServerSideKeyService {
   // Settings
   private useIncludedModelAccess = true;
   private globalState: ServerSideKeyState | null = null;
-  private readonly _onDidChangeModelAccess = new NodeEventEmitter<boolean>();
-  private readonly _onCacheCleared = new NodeEventEmitter<void>();
+  private readonly _onDidChangeModelAccess: NodeEventEmitter<boolean>;
+  private readonly _onCacheCleared: NodeEventEmitter<void>;
   private readonly _tierServiceClearSubscription: ServerSideKeyDisposable;
 
-  readonly onDidChangeModelAccess = this._onDidChangeModelAccess.event;
-  readonly onCacheCleared = this._onCacheCleared.event;
+  readonly onDidChangeModelAccess: ServerSideKeyEvent<boolean>;
+  readonly onCacheCleared: ServerSideKeyEvent<void>;
 
   constructor(
     private readonly baseUrl: string,
     private readonly authProvider: AuthProvider,
     private readonly tierService: TierService,
+    private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
   ) {
+    this._onDidChangeModelAccess = new NodeEventEmitter<boolean>(this.logger);
+    this._onCacheCleared = new NodeEventEmitter<void>(this.logger);
+    this.onDidChangeModelAccess = this._onDidChangeModelAccess.event;
+    this.onCacheCleared = this._onCacheCleared.event;
     this._tierServiceClearSubscription = this._onCacheCleared.event(() => {
       this.tierService.clearCache();
     });
@@ -262,13 +273,13 @@ export class ServerSideKeyService {
       ]);
 
       if (this.tierService.isAccessExpired()) {
-        logger.info(CHANNEL, 'User access has expired');
+        this.logger.info(CHANNEL, 'User access has expired');
         this.accessResult = false;
         return false;
       }
 
       if (!this.hasFullAccess() && tierConfig === null) {
-        logger.info(
+        this.logger.info(
           CHANNEL,
           'Tier config unavailable for non-Ultra user, denying access',
         );
