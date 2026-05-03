@@ -39,7 +39,7 @@ import {
   checkToolInstalled,
   detectPackageManager,
 } from '@utils/system/toolUtils';
-import { findToolInCommonPaths } from '@utils/system/platformPaths';
+import { BinaryResolver } from '@utils/system/binaryResolver';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
@@ -324,14 +324,15 @@ export class LatexSettingsHandlers {
         texcountInstalled: texcountOk,
         imageProcessingInstalled: gsOk && (gmOk || magickOk),
         platform,
-        pdflatexPath: findToolInCommonPaths('pdflatex'),
-        latexmkPath: findToolInCommonPaths('latexmk'),
-        latexdiffPath: findToolInCommonPaths('latexdiff'),
-        latexindentPath: findToolInCommonPaths('latexindent'),
-        texcountPath: findToolInCommonPaths('texcount'),
-        ghostscriptPath: findToolInCommonPaths('gs'),
+        pdflatexPath: BinaryResolver.resolvePath('pdflatex'),
+        latexmkPath: BinaryResolver.resolvePath('latexmk'),
+        latexdiffPath: BinaryResolver.resolvePath('latexdiff'),
+        latexindentPath: BinaryResolver.resolvePath('latexindent'),
+        texcountPath: BinaryResolver.resolvePath('texcount'),
+        ghostscriptPath: BinaryResolver.resolvePath('gs'),
         graphicsmagickPath:
-          findToolInCommonPaths('gm') ?? findToolInCommonPaths('magick'),
+          BinaryResolver.resolvePath('gm') ??
+          BinaryResolver.resolvePath('magick'),
         packageManager: detectPackageManager(),
       };
     } catch (err) {
