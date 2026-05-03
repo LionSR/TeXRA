@@ -4,6 +4,7 @@ import { strict as assert } from 'assert';
 // Local imports - auth
 import {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+  fetchWithTimeout,
   parseStoredSupabaseSession,
   SupabaseSessionCoordinator,
   toStorableSupabaseSession,
@@ -230,6 +231,28 @@ describe('SupabaseSession', () => {
       assert.ok(result.session.expiresAt > Date.now());
     });
 
+    it('falls back to default callback expiry when expires_in is invalid', async () => {
+      const { coordinator } = createCoordinator();
+      const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
+
+      const result = await coordinator.createSessionFromCallback({
+        path: '/auth-callback',
+        fragment: new URLSearchParams({
+          access_token: 'access-token',
+          refresh_token: 'refresh-token',
+          expires_in: 'not-a-number',
+        }).toString(),
+      });
+
+      assert.equal(result.success, true);
+      if (!result.success) return;
+      assert.ok(result.session.expiresAt >= earliestExpiry);
+      assert.ok(
+        result.session.expiresAt <=
+          Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+      );
+    });
+
     it('refreshes custom sessions through the injected fetch boundary', async () => {
       const initialSession: SupabaseSession = {
         id: 'user-id',
@@ -273,6 +296,49 @@ describe('SupabaseSession', () => {
         expiresAt: 789_000,
         useCustomRefresh: true,
       });
+    });
+
+    it('does not return expired session tokens when refresh fails', async () => {
+      const initialSession: SupabaseSession = {
+        id: 'user-id',
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        account: {
+          id: 'user-id',
+          label: 'user@example.com',
+        },
+        expiresAt: Date.now() - 1_000,
+        useCustomRefresh: true,
+      };
+      const { coordinator } = createCoordinator({
+        initialSession,
+        fetch: async () =>
+          new Response(JSON.stringify({ error: 'invalid refresh token' }), {
+            status: 401,
+          }),
+      });
+
+      assert.equal(await coordinator.getSessionTokens(), null);
+    });
+
+    it('preserves upstream abort signals when adding a timeout', async () => {
+      const upstream = new AbortController();
+      let fetchSignal: AbortSignal | undefined;
+
+      await fetchWithTimeout(
+        'https://example.com',
+        { signal: upstream.signal },
+        30_000,
+        'timeout',
+        async (_url, init) => {
+          fetchSignal = init?.signal ?? undefined;
+          upstream.abort();
+          assert.equal(fetchSignal?.aborted, true);
+          return new Response(null, { status: 204 });
+        },
+      );
+
+      assert.ok(fetchSignal);
     });
   });
 });
