@@ -73,6 +73,7 @@ import {
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
 
+import { ProgressStreamLifecycleController } from '../controllers/progressView/ProgressStreamLifecycleController';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
 // Type helper for extracting specific message types
@@ -91,6 +92,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
   private readonly recordingManager: RecordingManager;
+  private readonly streamLifecycleController: ProgressStreamLifecycleController;
   private readonly modelOutputBackups = new Map<
     StreamTabId,
     Map<string, { content: string; streamId: StreamTabId }>
@@ -122,6 +124,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
 
     this.handlerRegistry = this.createHandlerRegistry();
+    this.streamLifecycleController = this.createStreamLifecycleController();
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
       void this.handleDeleteStream({
@@ -168,11 +171,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) =>
         this.handleDeleteStream(data),
       [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
-      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: async (data) => {
-        // Clear pending retry requests so the UI panel is dismissed alongside the stop
-        retryCoordinator.clearRequest(data.stream);
-        await vscode.commands.executeCommand('texra.stopAgent', data.stream);
-      },
+      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (data) =>
+        this.streamLifecycleController.stopStream(data.stream),
       [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: async (data) =>
         vscode.commands.executeCommand('texra.compactResponse', data.stream),
 
@@ -351,6 +351,53 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.getActiveView()?.webview.postMessage(message);
   }
 
+  private createStreamLifecycleController(): ProgressStreamLifecycleController {
+    return new ProgressStreamLifecycleController({
+      state: {
+        getActiveStream: () => this.provider.state.activeStream,
+        setActiveStream: (stream) => {
+          this.provider.state.activeStream = stream;
+        },
+        hasStream: (stream) => this.provider.state.streamLogs.has(stream),
+        hasTaskState: (stream) =>
+          Boolean(this.provider.state.meta.getTaskState(stream)),
+        getStreamIds: () => this.provider.state.streamLogs.keys(),
+        pickValidActiveStream: (streams) =>
+          this.provider.state.pickValidActiveStream(streams),
+        clearStream: (stream) => this.provider.state.clearStream(stream),
+        clearAll: () => this.provider.state.clearAll(),
+      },
+      isStreamInFlight: (stream) =>
+        isInFlightStatus(StreamStatusService.get(stream)),
+      getVisibleStreamIds: () =>
+        buildStreamInfos(
+          this.provider.state,
+          this.provider.state.agentCategoryFilter,
+        ).map((stream) => stream.name),
+      stopStream: async (stream) => {
+        await vscode.commands.executeCommand('texra.stopAgent', stream);
+      },
+      clearRetryRequest: (stream) => retryCoordinator.clearRequest(stream),
+      releaseFollowUpQueue: (stream) => ToolUseFollowUpQueue.release(stream),
+      cleanupApprovalsForStream: (stream) => cleanupApprovalsForStream(stream),
+      cleanupAllApprovals: () => cleanupAllApprovals(),
+      clearModelOutputBackups: (stream) => {
+        if (stream) {
+          this.modelOutputBackups.delete(stream);
+        } else {
+          this.modelOutputBackups.clear();
+        }
+      },
+      clearWebviewStream: (stream) =>
+        this.provider.webviewBridge.clearStream(stream),
+      clearAllWebviewStreams: () => this.provider.webviewBridge.clearAll(),
+      deleteWebviewStream: (stream) =>
+        this.provider.webviewUpdater.deleteStream(stream),
+      syncFullView: (options) => this.provider.syncFullView(options),
+      setActiveStream: (stream) => this.provider.setActiveStream(stream),
+    });
+  }
+
   // ============================================================
   // Stream management handlers
   // ============================================================
@@ -358,54 +405,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleDeleteStream(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.DELETE_STREAM>,
   ): Promise<void> {
-    const streamId = data.stream;
-    const hasStream =
-      this.provider.state.streamLogs.has(streamId) ||
-      Boolean(this.provider.state.meta.getTaskState(streamId));
-
-    if (!hasStream) {
-      return;
-    }
-
-    // Stop the agent if it is still running so the process does not leak.
-    // Skip for already-finished streams to avoid spurious STOPPED status
-    // transitions and child interrupts on naturally completed work.
-    if (isInFlightStatus(StreamStatusService.get(streamId))) {
-      await vscode.commands.executeCommand('texra.stopAgent', streamId);
-    }
-
-    // Clear pending approvals, retry requests, queued follow-ups, and YOLO state
-    cleanupApprovalsForStream(streamId);
-    retryCoordinator.clearRequest(streamId);
-    ToolUseFollowUpQueue.release(streamId);
-    this.modelOutputBackups.delete(streamId);
-    this.provider.webviewBridge.clearStream(streamId);
-
-    // Handle active stream rotation if the deleted stream was active
-    const wasActive = this.provider.state.activeStream === streamId;
-    await this.provider.state.clearStream(streamId);
-
-    if (wasActive) {
-      // Pick next active from remaining streams, respecting the current filter
-      const filtered = buildStreamInfos(
-        this.provider.state,
-        this.provider.state.agentCategoryFilter,
-      );
-      this.provider.state.activeStream =
-        this.provider.state.pickValidActiveStream(filtered.map((s) => s.name));
-    }
-
-    // Lightweight sync for the currently active progress target.
-    this.provider.webviewUpdater.deleteStream(streamId);
-
-    // Sync replacement active stream in the active progress target.
-    if (wasActive && this.provider.state.activeStream) {
-      await this.provider.setActiveStream(this.provider.state.activeStream);
-    }
+    await this.streamLifecycleController.deleteStream(data.stream);
   }
 
   private async handleDeleteAll(): Promise<void> {
-    // Show confirmation dialog
     const confirmation = await vscode.window.showWarningMessage(
       'Are you sure you want to delete all streams? This action cannot be undone.',
       { modal: true },
@@ -413,30 +416,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       'Cancel',
     );
 
-    if (confirmation !== 'Delete All') {
-      return;
-    }
-
-    // Stop all running agents before clearing coordinator state
-    await Promise.allSettled(
-      this.provider.state.streamLogs
-        .keys()
-        .map((streamId) =>
-          vscode.commands.executeCommand<void>('texra.stopAgent', streamId),
-        ),
-    );
-
-    // Clear approvals, retry requests, queued follow-ups, and YOLO state
-    cleanupAllApprovals();
-    for (const streamId of this.provider.state.streamLogs.keys()) {
-      retryCoordinator.clearRequest(streamId);
-      ToolUseFollowUpQueue.release(streamId);
-    }
-    this.modelOutputBackups.clear();
-    this.provider.webviewBridge.clearAll();
-    await this.provider.state.clearAll();
-    // Force rebuild since we deleted all streams
-    this.provider.syncFullView({ forceRebuild: true });
+    if (confirmation !== 'Delete All') return;
+    await this.streamLifecycleController.deleteAllStreams();
   }
 
   // ============================================================
