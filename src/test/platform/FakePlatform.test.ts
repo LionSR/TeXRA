@@ -196,4 +196,40 @@ describe('FakePlatform', () => {
 
     assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
   });
+
+  it('rejects directory copy when a destination file blocks a source directory', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/item/a.txt': 'A',
+      '/workspace/dest/item': 'existing file',
+    });
+
+    await assert.rejects(
+      () =>
+        fs.copy('/workspace/source', '/workspace/dest', { overwrite: true }),
+      /Path is a file/,
+    );
+
+    assert.equal(fs.getText('/workspace/source/item/a.txt'), 'A');
+    assert.equal(fs.getText('/workspace/dest/item'), 'existing file');
+    assert.equal(fs.exists('/workspace/dest/item/a.txt'), false);
+  });
+
+  it('rejects directory copy when a destination directory blocks a source file', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/item': 'source file',
+      '/workspace/dest/item/existing.txt': 'existing nested file',
+    });
+
+    await assert.rejects(
+      () =>
+        fs.copy('/workspace/source', '/workspace/dest', { overwrite: true }),
+      /Path is a directory/,
+    );
+
+    assert.equal(fs.getText('/workspace/source/item'), 'source file');
+    assert.equal(
+      fs.getText('/workspace/dest/item/existing.txt'),
+      'existing nested file',
+    );
+  });
 });
