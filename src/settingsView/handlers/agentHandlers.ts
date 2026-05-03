@@ -496,6 +496,7 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
   ): Promise<void> {
     try {
+      await loadAgents();
       const result = await this.catalogController.applyPreset(data.presetId);
       if (!result.ok) {
         await vscode.window.showErrorMessage(`Unknown team: ${data.presetId}`);
