@@ -23,7 +23,14 @@ A "no issues found" review on this repo is almost always wrong. CLAUDE.md and AG
 
 ## Output format
 
-Write the rendered review in calm, declarative prose. No emojis (🔴 / 🟡 / ℹ️ / ⚠️ / etc.), no ALL-CAPS shouting, no alarmist labels like "BLOCKER" or "CRITICAL". State the issue, cite `path:line`, propose the fix.
+Default to calm, declarative prose. State the issue, cite `path:line`, propose the fix.
+
+Emoji use:
+- Headers and "categories I checked" prose: none. Don't decorate routine review structure.
+- Clean reviews: none. A no-issues report shouldn't look like an emergency.
+- Genuine Blocker findings (real security, platform-decoupling, or build-breaking issues): a single 🔴 prefix on that finding's line is fine. Use sparingly — one per real Blocker.
+- Suggestions and Notes: plain bullets, no emoji.
+- Don't use ALL-CAPS or words like "BLOCKER" / "CRITICAL" as decoration; prose plus the GitHub review status carries the urgency.
 
 ```
 ## Findings
