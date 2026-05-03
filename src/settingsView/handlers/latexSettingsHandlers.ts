@@ -11,14 +11,8 @@ import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
 import { workspaceSM } from '@common/state';
 import {
-  LATEX_FIELD_TO_KEY,
-  type LatexConfigField,
-} from '@shared/constants/latex';
-import {
-  LatexConfigValuesSchema,
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
-  type LatexConfigValues,
   type LatexSettingsStatus,
 } from '@shared/schemas/settingsViewMessages';
 import {
@@ -36,6 +30,7 @@ import {
   detectPackageManager,
 } from '@utils/system/toolUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
+import { LatexConfigPersistenceController } from '../../controllers/settingsView/LatexConfigPersistenceController';
 import { LatexRecommendedSettingsController } from '../../controllers/settingsView/LatexRecommendedSettingsController';
 import { LatexToolingController } from '../../controllers/settingsView/LatexToolingController';
 
@@ -83,6 +78,9 @@ export class LatexSettingsHandlers {
       );
     },
   });
+
+  private readonly configPersistenceController =
+    new LatexConfigPersistenceController();
 
   /** Cached LaTeX settings to avoid redundant tool detection on repeat opens. */
   private latexSettingsCache: {
@@ -159,17 +157,12 @@ export class LatexSettingsHandlers {
    * and the migration helper.
    */
   async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
-    const values: Partial<Record<LatexConfigField, unknown>> = {};
-    for (const [field, key] of Object.entries(LATEX_FIELD_TO_KEY) as [
-      LatexConfigField,
-      Parameters<typeof workspaceSM.get>[0],
-    ][]) {
-      const stored = workspaceSM.get(key);
-      if (stored !== undefined) values[field] = stored;
-    }
+    const values = this.configPersistenceController.buildConfigValues((key) =>
+      workspaceSM.get(key),
+    );
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values: values as LatexConfigValues,
+      values,
     });
   }
 
@@ -185,22 +178,20 @@ export class LatexSettingsHandlers {
   async handleSetLatexConfigValue(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_LATEX_CONFIG_VALUE>,
   ): Promise<void> {
-    const key = LATEX_FIELD_TO_KEY[data.field];
-    // Validate value against the per-field schema in LatexConfigValuesSchema.
-    // Both schemas mark the property optional, so undefined/null both parse to
-    // undefined and clear the key.
-    const fieldSchema = LatexConfigValuesSchema.shape[data.field];
-    const parsed = fieldSchema.safeParse(data.value ?? undefined);
-    if (!parsed.success) {
+    const plan = this.configPersistenceController.planUpdate({
+      field: data.field,
+      value: data.value,
+    });
+    if (!plan.ok) {
       await showLoggedErrorMessage(
         this.ctx.channel,
         `Invalid value for ${data.field}`,
-        parsed.error,
+        plan.error,
       );
       return;
     }
     try {
-      await workspaceSM.update(key, parsed.data);
+      await workspaceSM.update(plan.update.key, plan.update.value);
       await this.ctx.withActiveWebview((w) => this.sendLatexConfigValues(w));
     } catch (error) {
       await showLoggedErrorMessage(
