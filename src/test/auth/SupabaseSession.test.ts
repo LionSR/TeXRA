@@ -22,11 +22,16 @@ import type {
 function createMemoryStorage(initial?: SupabaseSession): {
   storage: SupabaseSessionStorage;
   read: () => SupabaseSession | null;
+  getReadCount: () => number;
 } {
   let value = initial ? JSON.stringify(initial) : undefined;
+  let readCount = 0;
   return {
     storage: {
-      get: async () => value,
+      get: async () => {
+        readCount += 1;
+        return value;
+      },
       store: async (sessionData) => {
         value = sessionData;
       },
@@ -35,6 +40,7 @@ function createMemoryStorage(initial?: SupabaseSession): {
       },
     },
     read: () => parseStoredSupabaseSession(value),
+    getReadCount: () => readCount,
   };
 }
 
@@ -69,8 +75,11 @@ function createCoordinator(options?: {
 }): {
   coordinator: SupabaseSessionCoordinator;
   read: () => SupabaseSession | null;
+  getReadCount: () => number;
 } {
-  const { storage, read } = createMemoryStorage(options?.initialSession);
+  const { storage, read, getReadCount } = createMemoryStorage(
+    options?.initialSession,
+  );
   return {
     coordinator: new SupabaseSessionCoordinator({
       storage,
@@ -84,6 +93,7 @@ function createCoordinator(options?: {
       onTokenExpiryChanged: options?.onTokenExpiryChanged,
     }),
     read,
+    getReadCount,
   };
 }
 
@@ -238,7 +248,7 @@ describe('SupabaseSession', () => {
   describe('SupabaseSessionCoordinator', () => {
     it('stores session data and exposes session tokens', async () => {
       const expiries: Array<number | null> = [];
-      const { coordinator, read } = createCoordinator({
+      const { coordinator, read, getReadCount } = createCoordinator({
         onTokenExpiryChanged: (expiresAt) => expiries.push(expiresAt),
       });
       const session: SupabaseSession = {
@@ -259,6 +269,7 @@ describe('SupabaseSession', () => {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
+      assert.equal(getReadCount(), 1);
       assert.deepEqual(expiries, [session.expiresAt]);
     });
 
@@ -351,6 +362,43 @@ describe('SupabaseSession', () => {
         expiresAt: 789_000,
         useCustomRefresh: true,
       });
+    });
+
+    it('returns refreshed session tokens without reloading storage', async () => {
+      const initialSession: SupabaseSession = {
+        id: 'user-id',
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        account: {
+          id: 'user-id',
+          label: 'user@example.com',
+        },
+        expiresAt: Date.now() - 1_000,
+        useCustomRefresh: true,
+      };
+      const { coordinator, getReadCount } = createCoordinator({
+        initialSession,
+        fetch: async () =>
+          new Response(
+            JSON.stringify({
+              access_token: 'new-access',
+              refresh_token: 'new-refresh',
+              expires_at: 789,
+              token_type: 'bearer',
+              user: {
+                id: 'user-id',
+                email: 'new@example.com',
+              },
+            }),
+            { status: 200 },
+          ),
+      });
+
+      assert.deepEqual(await coordinator.getSessionTokens(), {
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+      });
+      assert.equal(getReadCount(), 1);
     });
 
     it('does not return expired session tokens when refresh fails', async () => {
