@@ -7,8 +7,6 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
@@ -21,7 +19,6 @@ import {
   COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
@@ -30,7 +27,6 @@ import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nat
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { TaskState } from '@logger/TaskState';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 import type { AgentProposal } from '@shared/schemas/prompts';
 import {
@@ -40,8 +36,6 @@ import {
 } from '@shared/schemas/progressView';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import {
-  cleanupAllApprovals,
-  cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
   toggleToolEditApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
@@ -70,6 +64,7 @@ import {
   type ProgressFollowUpPlan,
 } from '../controllers/progressView/ProgressFollowUpController';
 import { ProgressWorkflowActionsController } from '../controllers/progressView/ProgressWorkflowActionsController';
+import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
 // Type helper for extracting specific message types
@@ -365,34 +360,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         clearStream: (stream) => this.provider.state.clearStream(stream),
         clearAll: () => this.provider.state.clearAll(),
       },
-      isStreamInFlight: (stream) =>
-        isInFlightStatus(StreamStatusService.get(stream)),
-      getVisibleStreamIds: () =>
-        buildStreamInfos(
-          this.provider.state,
-          this.provider.state.agentCategoryFilter,
-        ).map((stream) => stream.name),
-      stopStream: async (stream) => {
-        await vscode.commands.executeCommand('texra.stopAgent', stream);
-      },
-      clearRetryRequest: (stream) => retryCoordinator.clearRequest(stream),
-      releaseFollowUpQueue: (stream) => ToolUseFollowUpQueue.release(stream),
-      cleanupApprovalsForStream: (stream) => cleanupApprovalsForStream(stream),
-      cleanupAllApprovals: () => cleanupAllApprovals(),
-      clearModelOutputBackups: (stream) => {
-        if (stream) {
-          this.modelOutputBackups.delete(stream);
-        } else {
-          this.modelOutputBackups.clear();
-        }
-      },
-      clearWebviewStream: (stream) =>
-        this.provider.webviewBridge.clearStream(stream),
-      clearAllWebviewStreams: () => this.provider.webviewBridge.clearAll(),
-      deleteWebviewStream: (stream) =>
-        this.provider.webviewUpdater.deleteStream(stream),
-      syncFullView: (options) => this.provider.syncFullView(options),
-      setActiveStream: (stream) => this.provider.setActiveStream(stream),
+      host: new ProgressStreamLifecycleHost(
+        this.provider,
+        this.modelOutputBackups,
+      ),
     });
   }
 
