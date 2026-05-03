@@ -280,19 +280,28 @@ jobs:
 
             ---
 
-            **Verdict rules:**
-            - If ANY 🔴 or 🟡 issues are found, submit the review as **REQUEST_CHANGES**.
-              Do NOT approve while these issues remain unresolved.
-            - Only **APPROVE** when all 🔴 and 🟡 issues have been addressed.
-            - ℹ️ advisory items alone do not block approval.
-            - Do NOT label issues as "Nit" or "non-blocking" if they fall under a 🟡 or 🔴
-              category. Use clear language: "This must be fixed before merge" or
-              "Requires changes".
+            **Verdict rules (internal — drive your `REQUEST_CHANGES` vs `APPROVE` decision,
+            not visible to readers):**
+            - If any Blocker or Requires-changes issue is found, submit the review as
+              `REQUEST_CHANGES`.
+            - Submit `APPROVE` only when no Blocker or Requires-changes issues remain.
+            - Notes (advisory) alone do not block approval.
+            - Do not relabel a Requires-changes or Blocker issue as a "nit" or "non-blocking"
+              to avoid blocking — keep the verdict honest.
             - Cite `path:line` for every finding. Open the file before flagging — speculative
               findings are worse than none.
             - Prefer 3 grounded findings over 10 generic ones. A "no issues found" review on
               this repo is almost always wrong; if the diff genuinely is clean, say what you
               checked and why each category was a no-op.
+
+            **Rendering style for the posted comment (this is what the author sees):**
+            Write in calm, declarative prose. Do not use emojis (🔴 / 🟡 / ℹ️ / ✅ / ❌ / ⚠️
+            / 🚨 / etc.), color codes, ALL-CAPS shouting, or alarmist words like "BLOCKER" /
+            "CRITICAL" / "MUST FIX NOW" in the rendered comment. The GitHub review status
+            (REQUEST_CHANGES vs APPROVE) already communicates urgency; the comment body
+            should communicate substance. State the issue, cite the file and line, propose
+            the fix. Group findings by severity tier with the plain headers shown in the
+            template below.
 
             For each issue found, post an inline comment on the relevant line using the GitHub
             inline comment MCP tool. At the end, post a single PR-level summary comment
@@ -300,16 +309,23 @@ jobs:
 
             ```
             ## Findings
-            ### Critical (🔴)
+
+            ### Issues to address before merge
             - `path/file.ts:42` — <one-line summary>. <why / fix>.
-            ### Should fix (🟡)
+
+            ### Suggestions
             - ...
-            ### Advisory (ℹ️)
+
+            ### Notes
             - ...
 
             ## Verified
             - <files you actually opened, with line ranges>
             ```
+
+            Use only the headers that have content — omit empty sections rather than
+            writing "(none)". If the diff is clean, say so in one sentence above
+            `## Verified` instead of producing empty headers.
 
             ---
 
