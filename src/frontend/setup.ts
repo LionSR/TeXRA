@@ -1,9 +1,12 @@
 import * as path from 'path';
 
-import fsExtra from 'fs-extra';
-import { glob } from 'glob';
 import * as vscode from 'vscode';
 
+import {
+  BundledAgentDirectorySync,
+  GlobalStorageAgentDirectoryStorage,
+  PathAgentDirectoryBundleSource,
+} from '@agent/index/AgentDirectorySync';
 import { toErrorMessage } from '@common/errors';
 import {
   GlobalStateKey,
@@ -27,7 +30,6 @@ import {
   type LatexConfigField,
 } from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
-import { GlobalStorageFS } from '@utils/files';
 import { isConfigExplicitlySet, updateConfig } from '@utils/config';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
@@ -37,17 +39,6 @@ import { extendEnvPath } from '@utils/system/platformPaths';
  * Increment this when changing which settings are auto-configured.
  */
 const LATEX_CONFIG_VERSION = 2;
-
-/**
- * Legacy agent files that should be deleted from GlobalStorage.
- * These agents have been removed or renamed and should not exist locally.
- */
-const LEGACY_AGENT_FILES = [
-  'agents/generic.yaml',
-  'agents/generic_multiple.yaml',
-  'agents/write/paper2cover.yaml',
-  'agents/write/write_slide.yaml',
-];
 
 /**
  * Seed the disabled-tool list for first-time users only.
@@ -89,92 +80,31 @@ export async function initializeToolDefaults(): Promise<void> {
 export async function copyDefaultAgents(
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  await deleteLegacyAgentFiles();
-
   const currentVersion = vscode.extensions.getExtension(context.extension.id)
     ?.packageJSON.version;
-  const lastKnownVersion = globalSM.get<string>(
-    GlobalStateKey.LAST_KNOWN_VERSION,
-  );
-
-  if (
-    currentVersion === lastKnownVersion &&
-    !(await hasMissingBundledAgentFiles(context))
-  ) {
-    return;
-  }
+  const sync = new BundledAgentDirectorySync({
+    bundleSource: new PathAgentDirectoryBundleSource(
+      path.join(context.extensionPath, 'resources'),
+    ),
+    storage: new GlobalStorageAgentDirectoryStorage(),
+    versionStore: {
+      get: () => globalSM.get<string>(GlobalStateKey.LAST_KNOWN_VERSION),
+      update: (version) =>
+        globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, version),
+    },
+    logger: {
+      info: (message) => logger.info('extension', message),
+      warn: (message) => logger.warn('extension', message),
+    },
+  });
 
   try {
-    await GlobalStorageFS.ensureDir('agents');
-    await GlobalStorageFS.ensureDir('tool_use_agents');
-
-    const resourcesBase = path.join(context.extensionPath, 'resources');
-    await fsExtra.copy(
-      path.join(resourcesBase, 'agents'),
-      GlobalStorageFS.fullPath('agents'),
-      { overwrite: true },
-    );
-    await fsExtra.copy(
-      path.join(resourcesBase, 'tool_use_agents'),
-      GlobalStorageFS.fullPath('tool_use_agents'),
-      { overwrite: true },
-    );
-
-    await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
+    await sync.reconcile(currentVersion);
   } catch (err) {
     logger.error(
       'extension',
       `Error copying default agents: ${toErrorMessage(err)}`,
     );
-  }
-}
-
-async function hasMissingBundledAgentFiles(
-  context: vscode.ExtensionContext,
-): Promise<boolean> {
-  const resourcesBase = path.join(context.extensionPath, 'resources');
-  const bundledRoots = ['agents', 'tool_use_agents'] as const;
-
-  for (const root of bundledRoots) {
-    const bundledFiles = await glob('**/*.yaml', {
-      cwd: path.join(resourcesBase, root),
-      nodir: true,
-    });
-
-    for (const relativePath of bundledFiles) {
-      const storagePath = path.join(root, relativePath);
-      if (await GlobalStorageFS.exists(storagePath)) {
-        continue;
-      }
-
-      logger.info(
-        'extension',
-        `Bundled agent missing from global storage, re-syncing defaults: ${storagePath}`,
-      );
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Deletes legacy agent files that have moved to remote-only
- */
-async function deleteLegacyAgentFiles(): Promise<void> {
-  for (const legacyFile of LEGACY_AGENT_FILES) {
-    if (!(await GlobalStorageFS.exists(legacyFile))) {
-      continue;
-    }
-    try {
-      await GlobalStorageFS.delete(legacyFile);
-      logger.info('extension', `Deleted legacy agent file: ${legacyFile}`);
-    } catch (err) {
-      logger.warn(
-        'extension',
-        `Failed to delete legacy agent file ${legacyFile}: ${toErrorMessage(err)}`,
-      );
-    }
   }
 }
 
