@@ -256,21 +256,17 @@ describe('FakePlatform', () => {
     assert.equal(fs.exists('/workspace/missing'), false);
   });
 
-  it('rejects directory copy when destination parent is missing', async () => {
+  it('creates missing destination parents when copying directories', async () => {
     const fs = new FakeFileSystemProvider({
       '/workspace/source/a.txt': 'A',
     });
 
-    await assert.rejects(
-      () =>
-        fs.copy('/workspace/source', '/workspace/missing/dest', {
-          overwrite: true,
-        }),
-      /Parent directory not found/,
-    );
+    await fs.copy('/workspace/source', '/workspace/missing/dest', {
+      overwrite: true,
+    });
 
     assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
-    assert.equal(fs.exists('/workspace/missing'), false);
+    assert.equal(fs.getText('/workspace/missing/dest/a.txt'), 'A');
   });
 
   it('rejects directory copy onto itself with overwrite', async () => {
