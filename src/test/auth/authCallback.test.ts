@@ -41,18 +41,17 @@ describe('authCallback', () => {
     });
   });
 
-  it('does not fall back to query tokens when fragment tokens are empty', () => {
-    assert.deepEqual(
-      parseAuthCallbackTokens({
-        path: '/auth-callback',
-        fragment: 'access_token=&refresh_token=fragment-refresh',
-        query: 'access_token=query-access&refresh_token=query-refresh',
-      }),
-      {
-        success: false,
-        error: 'Missing tokens in callback',
-      },
-    );
+  it('preserves empty fragment params instead of falling back to query', () => {
+    const result = parseAuthCallbackTokens({
+      path: '/auth-callback',
+      query: 'access_token=query-access&refresh_token=query-refresh',
+      fragment: 'access_token=&refresh_token=fragment-refresh',
+    });
+
+    assert.deepEqual(result, {
+      success: false,
+      error: 'Missing tokens in callback',
+    });
   });
 
   it('extracts tokens from query params when no fragment tokens exist', () => {
