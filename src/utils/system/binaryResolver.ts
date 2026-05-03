@@ -4,19 +4,42 @@ import * as path from 'path';
 // Local imports
 import { IS_WINDOWS, findToolInCommonPaths } from './platformPaths';
 
+const WINDOWS_EXTENSIONLESS_PERL_TOOLS = new Set([
+  'latexdiff',
+  'latexdiff-vc',
+  'latexindent',
+  'latexmk',
+]);
+
 export interface ResolvedBinaryCommand {
   command: string;
   args: string[];
+  resolvedPath: string;
+}
+
+export interface BinaryResolverOptions {
+  findTool(toolName: string): string | null;
+  isWindows: boolean;
+}
+
+export interface BinaryCommandOptions {
   resolvedPath?: string;
 }
 
-class BinaryResolverService {
+export class BinaryResolverService {
+  constructor(
+    private readonly options: BinaryResolverOptions = {
+      findTool: findToolInCommonPaths,
+      isWindows: IS_WINDOWS,
+    },
+  ) {}
+
   /**
    * Resolve a tool name to an executable path using TeXRA's platform-specific
    * search locations. Returns null when the tool is not currently discoverable.
    */
-  resolvePath(toolName: string): string | null {
-    return findToolInCommonPaths(toolName);
+  findPath(toolName: string): string | null {
+    return this.options.findTool(toolName);
   }
 
   /**
@@ -24,20 +47,24 @@ class BinaryResolverService {
    * be `.pl` files, or extensionless scripts on Windows, so route them through
    * Perl when needed.
    */
-  resolveCommand(toolName: string, args: string[] = []): ResolvedBinaryCommand {
-    const resolvedPath = this.resolvePath(toolName);
-    if (!resolvedPath) {
-      return { command: toolName, args };
-    }
+  resolveOptionalCommand(
+    toolName: string,
+    args: string[] = [],
+    commandOptions: BinaryCommandOptions = {},
+  ): ResolvedBinaryCommand | null {
+    const resolvedPath = commandOptions.resolvedPath ?? this.findPath(toolName);
+    if (!resolvedPath) return null;
+    return this.toCommand(toolName, resolvedPath, args);
+  }
 
-    if (this.needsPerlLauncher(resolvedPath)) {
-      return {
-        command: 'perl',
-        args: [resolvedPath, ...args],
-        resolvedPath,
-      };
+  private toCommand(
+    toolName: string,
+    resolvedPath: string,
+    args: string[],
+  ): ResolvedBinaryCommand {
+    if (this.needsPerlLauncher(toolName, resolvedPath)) {
+      return { command: 'perl', args: [resolvedPath, ...args], resolvedPath };
     }
-
     return {
       command: resolvedPath,
       args,
@@ -45,11 +72,17 @@ class BinaryResolverService {
     };
   }
 
-  private needsPerlLauncher(resolvedPath: string): boolean {
+  private needsPerlLauncher(toolName: string, resolvedPath: string): boolean {
     return (
       resolvedPath.toLowerCase().endsWith('.pl') ||
-      (IS_WINDOWS && path.extname(resolvedPath) === '')
+      (this.options.isWindows &&
+        path.extname(resolvedPath) === '' &&
+        this.isKnownPerlScript(toolName))
     );
+  }
+
+  private isKnownPerlScript(toolName: string): boolean {
+    return WINDOWS_EXTENSIONLESS_PERL_TOOLS.has(toolName);
   }
 }
 
