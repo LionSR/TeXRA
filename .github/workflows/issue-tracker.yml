@@ -20,7 +20,7 @@ jobs:
     # Skip: closed-but-not-completed issues, closed-but-not-merged PRs
     # Skip automated review summaries: the Claude action cannot exchange their
     # OIDC token for a repo-writing app token, and Playbook C has no useful
-    # tracking action for those comment-only bot reviews.
+    # tracking action for bot-submitted review events.
     if: |
       (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
       (github.event_name == 'pull_request' &&
@@ -47,12 +47,13 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           should_run=true
 
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+          if [[ "$EVENT_NAME" == "pull_request" && "$EVENT_ACTION" == "opened" ]]; then
             tracker_workflow_changes="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- .github/workflows/issue-tracker.yml)"
             if [[ -n "$tracker_workflow_changes" ]]; then
               should_run=false
