@@ -450,9 +450,12 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     this.assertWritableTarget(normalizedDest, options?.overwrite);
 
     if (sourceRecord.type === FileType.File) {
-      this.writeFileSync(normalizedDest, sourceRecord.content, {
-        overwrite: options?.overwrite,
-      });
+      const existing = this.records.get(normalizedDest);
+      if (existing?.type === FileType.Directory) {
+        throw fakeFsError('EISDIR', `Path is a directory: ${dest}`);
+      }
+      this.assertParentDirectoryExists(normalizedDest);
+      this.records.set(normalizedDest, cloneRecord(sourceRecord));
       this.records.delete(normalizedSource);
       return;
     }
