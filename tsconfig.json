@@ -17,6 +17,8 @@
       "@webview/*": ["src/webview/*"],
       "@agent/*": ["src/agent/*"],
       "@frontend/*": ["src/frontend/*"],
+      "@hosts": ["src/hosts"],
+      "@hosts/*": ["src/hosts/*"],
       "@utils/*": ["src/utils/*"],
       "@logger/*": ["src/logger/*"],
       "@latex": ["src/latex"],
