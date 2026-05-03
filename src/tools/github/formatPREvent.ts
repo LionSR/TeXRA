@@ -144,6 +144,32 @@ export function formatCIPassed(
   );
 }
 
+/**
+ * Emitted once per head SHA the first time we observe non-empty check-runs
+ * after that SHA appeared (i.e., GitHub Actions / other CI providers picked
+ * up the new commit and registered work). Lists the unique check / workflow
+ * names so the agent can see what was triggered without tailing logs.
+ *
+ * Deduped via a per-SHA `ciStartedSha` marker so a push always produces at
+ * most one "started" event for that SHA, regardless of how many ticks elapse
+ * before all jobs register.
+ */
+export function formatCIStarted(
+  slug: string,
+  prNumber: number,
+  sha: string,
+  runs: GhCheckRun[],
+): string {
+  const uniqueNames = [...new Set(runs.map((r) => r.name))].sort();
+  const list = uniqueNames.map((n) => `- ${n}`).join('\n');
+  return wrap(
+    sections(
+      `CI triggered on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}): ${runs.length} check${runs.length === 1 ? '' : 's'} registered across ${uniqueNames.length} workflow${uniqueNames.length === 1 ? '' : 's'}.`,
+      list,
+    ),
+  );
+}
+
 export function formatCIComplete(
   slug: string,
   prNumber: number,

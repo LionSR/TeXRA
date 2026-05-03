@@ -19,6 +19,7 @@ import {
   formatCheckFailureSummary,
   formatCIComplete,
   formatCIPassed,
+  formatCIStarted,
   formatIssueComment,
   formatMergeConflictDetected,
   formatMergeConflictResolved,
@@ -58,6 +59,7 @@ function createInitialState(pr: PRKey): SubscriptionState {
     seenReviewCommentIds: new Set(),
     seenReviewIds: new Set(),
     lastFailedCheckKeys: new Set(),
+    ciStartedSha: undefined,
     ciCompleteSha: undefined,
     ciPassedSha: undefined,
     headSha: undefined,
@@ -110,6 +112,14 @@ interface SubscriptionState extends BasePollSubscriptionState {
   seenReviewCommentIds: Set<number>;
   seenReviewIds: Set<number>;
   lastFailedCheckKeys: Set<string>;
+  /**
+   * Head SHA for which the one-shot "CI started" event has been emitted —
+   * fires the first tick we observe non-empty check-runs at this SHA, so
+   * agents see what GitHub Actions / other CI providers picked up the push.
+   * On seeding (subscribe-time existing runs) this is set to suppress
+   * a spurious replay event.
+   */
+  ciStartedSha: string | undefined;
   /** Head SHA for which the one-shot "CI complete" event has been emitted. */
   ciCompleteSha: string | undefined;
   /** Head SHA for which the one-shot "CI passed" event has been emitted. */
@@ -216,6 +226,7 @@ export class PRPollingSource extends PollingSourceBase<
       // Letting it linger would cost one wasted If-None-Match per page on
       // the first post-push tick before the cache naturally refreshes.
       if (state.headSha !== newHead) {
+        state.ciStartedSha = undefined;
         state.ciCompleteSha = undefined;
         state.ciPassedSha = undefined;
         state.checkRunsCache = undefined;
@@ -338,6 +349,12 @@ export class PRPollingSource extends PollingSourceBase<
             state.lastFailedCheckKeys.add(this.checkKey(r));
           }
         }
+        // Seed "started" so pre-existing runs at subscribe time don't replay
+        // as a "CI triggered" event on the next tick. Only surface starts
+        // that happen after we begin watching.
+        if (state.headSha && runs.length > 0) {
+          state.ciStartedSha = state.headSha;
+        }
         // Seed so pre-existing terminal CI doesn't fire on the next tick —
         // we only surface transitions that happen after subscribe. Gate on
         // runs.length > 0: an empty array is ambiguous (no CI configured vs.
@@ -421,6 +438,24 @@ export class PRPollingSource extends PollingSourceBase<
       // ETag/page caching is owned by `fetchAllCheckRuns` via
       // `state.checkRunsCache`; nothing to record on `state.etags` here.
       const runs = checksRes.data.check_runs;
+
+      // Fire "CI triggered" the first tick we observe non-empty runs at this
+      // head SHA (deduped per SHA). This complements the terminal "complete"
+      // / "passed" events: the agent now sees what GitHub Actions / other CI
+      // workflows picked up the push as soon as they register, without
+      // needing to wait for them to finish.
+      if (
+        state.headSha &&
+        runs.length > 0 &&
+        state.ciStartedSha !== state.headSha
+      ) {
+        state.ciStartedSha = state.headSha;
+        this.emit(
+          state,
+          formatCIStarted(state.slug, pr.pullNumber, state.headSha, runs),
+        );
+      }
+
       const newFailures: GhCheckRun[] = [];
       const currentFailureKeys = new Set<string>();
       for (const r of runs) {
