@@ -98,6 +98,36 @@ describe('FakePlatform', () => {
     assert.equal(changes, 1);
   });
 
+  it('updates existing config aliases without duplicating keys', async () => {
+    const platform = createFakePlatform();
+
+    await platform.config.update('texra.files.exclude', ['dist']);
+    await platform.config.update('files.exclude', ['node_modules']);
+
+    assert.deepEqual(platform.config.get('texra.files.exclude', []), [
+      'node_modules',
+    ]);
+
+    await platform.config.update('files.exclude', undefined);
+
+    assert.deepEqual(platform.config.get('files.exclude', []), []);
+    assert.equal(platform.config.isExplicitlySet('texra.files.exclude'), false);
+  });
+
+  it('does not notify texra watchers for unprefixed config changes', async () => {
+    const platform = createFakePlatform();
+    let changes = 0;
+
+    platform.config.watch('texra.files', () => {
+      changes += 1;
+    });
+
+    await platform.config.update('files.exclude', ['node_modules']);
+    await platform.config.update('texra.files.include', ['src']);
+
+    assert.equal(changes, 1);
+  });
+
   it('records log entries and supports custom overrides', () => {
     const log = new RecordingLogBackend();
     const fs = new FakeFileSystemProvider();
