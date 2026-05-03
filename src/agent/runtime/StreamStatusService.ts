@@ -1,8 +1,11 @@
 import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
+import {
   isActiveStatus,
   isInFlightStatus,
 } from '@common/constants/streamStatus';
-import { bus } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
   type StreamTabId,
@@ -10,9 +13,17 @@ import {
 } from '@shared/schemas';
 
 const statusMemory = new Map<StreamTabId, StreamStatus>();
+const statusListeners = new Set<(change: StreamStatusChange) => void>();
+
+export interface StreamStatusChange {
+  streamId: StreamTabId;
+  status: StreamStatus;
+  previousStatus: StreamStatus;
+}
 
 interface SetOptions {
   emit?: boolean;
+  runtimeHost?: AgentRuntimeHost;
 }
 
 export const StreamStatusService = {
@@ -20,17 +31,17 @@ export const StreamStatusService = {
     return statusMemory.get(stream);
   },
 
-  tryAcquire(stream: StreamTabId): boolean {
+  tryAcquire(stream: StreamTabId, options: SetOptions = {}): boolean {
     if (isInFlightStatus(statusMemory.get(stream))) {
       return false;
     }
-    this.set(stream, STREAM_STATUS.INITIALIZING);
+    this.set(stream, STREAM_STATUS.INITIALIZING, options);
     return true;
   },
 
-  releaseIfInitializing(stream: StreamTabId): void {
+  releaseIfInitializing(stream: StreamTabId, options: SetOptions = {}): void {
     if (statusMemory.get(stream) === STREAM_STATUS.INITIALIZING) {
-      this.clear(stream);
+      this.clear(stream, options);
     }
   },
 
@@ -50,16 +61,23 @@ export const StreamStatusService = {
     }
 
     if (emit) {
-      bus.emit('updateStreamStatus', {
+      const change: StreamStatusChange = {
         streamId: stream,
         status,
         previousStatus,
-      });
+      };
+      (options.runtimeHost ?? getAgentRuntimeHost()).emit(
+        'updateStreamStatus',
+        change,
+      );
+      for (const listener of statusListeners) {
+        listener(change);
+      }
     }
   },
 
-  clear(stream: StreamTabId): void {
-    this.set(stream, STREAM_STATUS.READY);
+  clear(stream: StreamTabId, options: SetOptions = {}): void {
+    this.set(stream, STREAM_STATUS.READY, options);
   },
 
   /** Reset every stream to READY. Used by ProgressViewState.clearAll(). */
@@ -88,5 +106,12 @@ export const StreamStatusService = {
   shouldPreserveOnCompletion(stream: StreamTabId): boolean {
     const status = statusMemory.get(stream);
     return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.STOPPED;
+  },
+
+  onDidChange(listener: (change: StreamStatusChange) => void): () => void {
+    statusListeners.add(listener);
+    return () => {
+      statusListeners.delete(listener);
+    };
   },
 };

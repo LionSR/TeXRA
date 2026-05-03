@@ -7,7 +7,11 @@
 
 import * as fs from 'fs';
 
-import { bus } from '@eventBus/ProgressEventBus';
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 import {
   type ExecutionHandle,
@@ -39,17 +43,22 @@ const persistentListeners = new Map<
 // Notify waiters and refresh UI badges when stream status changes (e.g. RUNNING → WAITING).
 // Without this, waitForExecutionChange only resolves on progress/kill/untrack,
 // and the background tasks panel would show stale running/waiting badges.
-bus.on('updateStreamStatus', ({ streamId }) => {
+StreamStatusService.onDidChange(({ streamId }) => {
   for (const [executionId, handle] of registry) {
     if (
       handle instanceof AgentExecutionHandle &&
       handle.childStreamId === streamId
     ) {
+      const runtimeHost = runtimeHostFor(handle);
       notifyWaiters(executionId);
       // Re-emit badge update so the parent's background tasks panel
       // reflects the new status (e.g. running → waiting).
       if (handle.parentStreamId !== handle.childStreamId) {
-        emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
+        emitActiveSubagentsUpdate(
+          handle.parentStreamId,
+          registry.values(),
+          runtimeHost,
+        );
       }
       break;
     }
@@ -63,13 +72,18 @@ bus.on('updateStreamStatus', ({ streamId }) => {
 /** Register an execution handle. */
 export function trackExecution(handle: ExecutionHandle): void {
   registry.set(handle.executionId, handle);
+  const runtimeHost = runtimeHostFor(handle);
 
   // Emit subagent UI update and parent linkage only for actual subagents
   // (where parentStreamId differs from childStreamId)
   if (handle instanceof AgentExecutionHandle) {
     if (handle.parentStreamId !== handle.childStreamId) {
-      emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
-      bus.emit('setParentStream', {
+      emitActiveSubagentsUpdate(
+        handle.parentStreamId,
+        registry.values(),
+        runtimeHost,
+      );
+      runtimeHost.emit('setParentStream', {
         childStreamId: handle.childStreamId,
         parentStreamId: handle.parentStreamId,
       });
@@ -78,7 +92,11 @@ export function trackExecution(handle: ExecutionHandle): void {
 
   // Emit process badge update for background bash processes
   if (handle instanceof ProcessExecutionHandle) {
-    emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
+    emitActiveProcessesUpdate(
+      handle.parentStreamId,
+      registry.values(),
+      runtimeHost,
+    );
     reconcileOutputPoller();
   }
 }
@@ -88,13 +106,18 @@ export function untrackExecution(executionId: string): void {
   const handle = registry.get(executionId);
   registry.delete(executionId);
   notifyWaiters(executionId);
+  const runtimeHost = runtimeHostFor(handle);
 
   // Emit subagent UI update on removal (only for actual subagents)
   if (
     handle instanceof AgentExecutionHandle &&
     handle.parentStreamId !== handle.childStreamId
   ) {
-    emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
+    emitActiveSubagentsUpdate(
+      handle.parentStreamId,
+      registry.values(),
+      runtimeHost,
+    );
   }
 
   // Emit process badge update on removal and flush final output.
@@ -103,7 +126,11 @@ export function untrackExecution(executionId: string): void {
   if (handle instanceof ProcessExecutionHandle) {
     const finalize = (): void => {
       outputOffsets.delete(executionId);
-      emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
+      emitActiveProcessesUpdate(
+        handle.parentStreamId,
+        registry.values(),
+        runtimeHost,
+      );
       reconcileOutputPoller();
     };
     if (handle.outputPaths) {
@@ -112,6 +139,7 @@ export function untrackExecution(executionId: string): void {
         handle.parentStreamId,
         handle.outputPaths.stdout,
         handle.outputPaths.stderr,
+        runtimeHost,
       ).finally(finalize);
     } else {
       finalize();
@@ -262,7 +290,11 @@ export function detachActiveChildren(parentStreamId: StreamTabId): void {
       handle.terminate();
     }
   }
-  emitActiveSubagentsUpdate(parentStreamId, registry.values());
+  emitActiveSubagentsUpdate(
+    parentStreamId,
+    registry.values(),
+    runtimeHostForParent(parentStreamId),
+  );
 }
 
 /** Get active subagent and process children for a parent stream. */
@@ -348,6 +380,7 @@ async function pollProcessOutputs(): Promise<void> {
         handle.parentStreamId,
         handle.outputPaths.stdout,
         handle.outputPaths.stderr,
+        runtimeHostFor(handle),
       ),
     );
   }
@@ -419,6 +452,7 @@ async function readIncremental(
   parentStreamId: StreamTabId,
   stdoutPath: string,
   stderrPath: string,
+  runtimeHost: AgentRuntimeHost,
 ): Promise<void> {
   // If another read is in flight, wait for it then read again —
   // the final flush must not be skipped or it loses tail output.
@@ -447,7 +481,7 @@ async function readIncremental(
         stderr: err.newOffset,
       });
 
-      bus.emit('updateProcessOutput', {
+      runtimeHost.emit('updateProcessOutput', {
         parentStreamId,
         executionId,
         stdout: out.text,
@@ -472,6 +506,25 @@ async function readIncremental(
 // ============================================================================
 // Internal helpers
 // ============================================================================
+
+function runtimeHostFor(handle: ExecutionHandle | undefined): AgentRuntimeHost {
+  return handle?.runtimeHost ?? getAgentRuntimeHost();
+}
+
+function runtimeHostForParent(parentStreamId: StreamTabId): AgentRuntimeHost {
+  for (const handle of registry.values()) {
+    if (handle.parentStreamId === parentStreamId) {
+      return runtimeHostFor(handle);
+    }
+    if (
+      handle instanceof AgentExecutionHandle &&
+      handle.childStreamId === parentStreamId
+    ) {
+      return runtimeHostFor(handle);
+    }
+  }
+  return getAgentRuntimeHost();
+}
 
 function addChangeCallback(executionId: string, cb: () => void): void {
   let callbacks = changeCallbacks.get(executionId);
