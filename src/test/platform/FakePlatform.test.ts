@@ -216,6 +216,19 @@ describe('FakePlatform', () => {
     );
   });
 
+  it('rejects deleting the filesystem root', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/a.txt': 'A',
+    });
+
+    await assert.rejects(
+      () => fs.delete('/', { recursive: true }),
+      /Cannot delete filesystem root/,
+    );
+
+    assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
+  });
+
   it('rejects directory copy when a destination file blocks a source directory', async () => {
     const fs = new FakeFileSystemProvider({
       '/workspace/source/item/a.txt': 'A',
