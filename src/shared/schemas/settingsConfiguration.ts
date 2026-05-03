@@ -557,6 +557,46 @@ export const TEXRA_SETTING_KEYS = TEXRA_SETTING_PATHS.map(
   (path) => `texra.${path}` as TexraSettingKey,
 );
 
+export interface TexraPackageConfigurationProperty {
+  type?: string;
+  items?: unknown;
+  additionalProperties?: unknown;
+  default?: unknown;
+  enum?: unknown[];
+  minimum?: number;
+  maximum?: number;
+  [key: string]: unknown;
+}
+
+export interface TexraPackageConfigurationSection {
+  title?: string;
+  properties?: Record<string, TexraPackageConfigurationProperty>;
+  [key: string]: unknown;
+}
+
+type JsonSchemaObject = {
+  type?: string;
+  properties?: Record<string, JsonSchemaObject>;
+  items?: unknown;
+  additionalProperties?: unknown;
+  enum?: unknown[];
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+};
+
+const GENERATED_PACKAGE_SCHEMA_FIELDS = [
+  'type',
+  'items',
+  'additionalProperties',
+  'default',
+  'enum',
+  'minimum',
+  'maximum',
+] as const;
+
+let texraSettingsJsonSchema: JsonSchemaObject | undefined;
+
 function getNestedValue(source: unknown, path: TexraSettingPath): unknown {
   let value = source;
   for (const segment of path.split('.')) {
@@ -582,4 +622,83 @@ export function flattenTexraSettings(
 
 export function getTexraSettingDefault(path: TexraSettingPath): unknown {
   return getNestedValue(TexraSettingsSchema.parse({}), path);
+}
+
+function getNestedJsonSchema(path: TexraSettingPath): JsonSchemaObject {
+  texraSettingsJsonSchema ??= z.toJSONSchema(
+    TexraSettingsSchema,
+  ) as JsonSchemaObject;
+  let schema = texraSettingsJsonSchema;
+  for (const segment of path.split('.')) {
+    const next = schema.properties?.[segment];
+    if (!next) {
+      throw new Error(`Missing JSON schema node for setting ${path}`);
+    }
+    schema = next;
+  }
+  return schema;
+}
+
+function pickPackageSchemaFields(
+  schema: JsonSchemaObject,
+): TexraPackageConfigurationProperty {
+  const property: Record<string, unknown> = {};
+  for (const field of GENERATED_PACKAGE_SCHEMA_FIELDS) {
+    const value = schema[field];
+    if (value !== undefined) {
+      property[field] = value;
+    }
+  }
+  return property as TexraPackageConfigurationProperty;
+}
+
+function buildTexraPackageConfigurationProperty(
+  key: TexraSettingKey,
+  existing: TexraPackageConfigurationProperty = {},
+): TexraPackageConfigurationProperty {
+  const path = key.replace(/^texra\./, '') as TexraSettingPath;
+  const generated = pickPackageSchemaFields(getNestedJsonSchema(path));
+  if (generated.type !== 'null') {
+    generated.default = getTexraSettingDefault(path);
+  }
+  return { ...existing, ...generated };
+}
+
+export function buildTexraPackageConfiguration(
+  sections: TexraPackageConfigurationSection[],
+): TexraPackageConfigurationSection[] {
+  const seenKeys = new Set<string>();
+  const generatedSections = sections.map((section) => {
+    const properties = section.properties;
+    if (!properties) {
+      return section;
+    }
+
+    const generatedProperties = Object.fromEntries(
+      Object.entries(properties).map(([key, property]) => {
+        if (!TEXRA_SETTING_KEYS.includes(key as TexraSettingKey)) {
+          return [key, property];
+        }
+        seenKeys.add(key);
+        return [
+          key,
+          buildTexraPackageConfigurationProperty(
+            key as TexraSettingKey,
+            property,
+          ),
+        ];
+      }),
+    );
+
+    return { ...section, properties: generatedProperties };
+  });
+
+  const missingKeys = TEXRA_SETTING_KEYS.filter((key) => !seenKeys.has(key));
+  if (missingKeys.length > 0) {
+    throw new Error(
+      `Package configuration is missing setting keys: ${missingKeys.join(', ')}`,
+    );
+  }
+
+  return generatedSections;
 }
