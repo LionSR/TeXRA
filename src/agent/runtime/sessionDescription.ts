@@ -10,9 +10,9 @@
 import { getAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import * as logger from '@agent/core/logger';
-import { bus } from '@eventBus/ProgressEventBus';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -67,6 +67,7 @@ export async function generateSessionDescription(
   executionId: ExecutionId,
   streamId: StreamTabId,
   config: AgentConfig,
+  runtimeHost: AgentRuntimeHost,
 ): Promise<void> {
   try {
     const instruction = config.instruction?.trim();
@@ -105,7 +106,10 @@ export async function generateSessionDescription(
       const description = cleanSessionDescription(text);
       if (!description) return;
       await writeSessionDescription(executionId, description);
-      bus.emit('updateStreamDescription', { streamId, description });
+      runtimeHost.emit('updateStreamDescription', {
+        streamId,
+        description,
+      });
       logger.info(CHANNEL, `Generated session description for ${executionId}`);
     }
   } catch (err) {

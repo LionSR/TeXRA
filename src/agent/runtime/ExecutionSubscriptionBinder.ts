@@ -16,9 +16,12 @@ import {
   getHandle,
   type ExecutionHandle,
 } from '@agent/runtime/executionRegistry';
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId } from '@shared/schemas';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
@@ -90,10 +93,14 @@ function snapshot(handle: ExecutionHandle): SnapshotState {
   };
 }
 
-function send(streamId: StreamTabId, text: string): void {
+function send(
+  streamId: StreamTabId,
+  text: string,
+  runtimeHost: AgentRuntimeHost,
+): void {
   void sendFollowUp(streamId, wrapAndSanitizeTag(TAG, text)).then((result) => {
     if (result.status === 'sent' || result.status === 'queued') {
-      bus.emit('updateQueuedFollowUps', { streamId });
+      runtimeHost.emit('updateQueuedFollowUps', { streamId });
     }
   });
 }
@@ -126,6 +133,7 @@ export function bindExecutionSubscription(
 
   const agentName = handle.agentName;
   const category = handle.category;
+  const subscriberRuntimeHost = getAgentRuntimeHost();
   let last: SnapshotState | null = snapshot(handle);
 
   let removeListener: (() => void) | null = null;
@@ -144,6 +152,7 @@ export function bindExecutionSubscription(
       send(
         streamId,
         `${executionId} (${agentName}, ${category}) finished. Last known status: ${previous}. Use executions { path: '/executions/${executionId}/report' } for the result.`,
+        subscriberRuntimeHost,
       );
       dispose();
       return;
@@ -166,7 +175,7 @@ export function bindExecutionSubscription(
       `${executionId} (${agentName}, ${category}) ${transition}${elapsed}`,
     ];
     if (current.round) lines.push(current.round);
-    send(streamId, lines.join('\n'));
+    send(streamId, lines.join('\n'), subscriberRuntimeHost);
     last = current;
   });
 
@@ -177,6 +186,7 @@ export function bindExecutionSubscription(
     send(
       streamId,
       `${executionId} (${agentName}, ${category}) finished. Last known status: ${last?.status ?? 'unknown'}. Use executions { path: '/executions/${executionId}/report' } for the result.`,
+      subscriberRuntimeHost,
     );
     dispose();
     return;
