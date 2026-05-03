@@ -18,6 +18,7 @@ import {
   wrapWebhookEvent as wrap,
 } from './formatUtils';
 import type {
+  GhCheckAnnotation,
   GhCheckRun,
   GhIssueComment,
   GhReview,
@@ -25,6 +26,9 @@ import type {
 } from './prTypes';
 
 const MAX_BODY = 500;
+// A single linter run can emit hundreds; show the first N + overflow hint.
+const MAX_ANNOTATIONS_PER_RUN = 20;
+const MAX_ANNOTATION_MESSAGE = 300;
 
 const truncate = (s: string | null | undefined): string =>
   truncateBody(s, MAX_BODY);
@@ -62,6 +66,30 @@ const reviewCommentPrefix = (c: GhReviewComment): string =>
 
 const checkRunBlock = (run: GhCheckRun): string =>
   `Check: ${run.name}\nConclusion: ${run.conclusion}\nDetails: ${run.html_url}`;
+
+const annotationLocation = (a: GhCheckAnnotation): string => {
+  if (a.end_line > a.start_line) {
+    return `${a.path}:${a.start_line}-${a.end_line}`;
+  }
+  // Per GitHub: start_column / end_column are only meaningful when
+  // start_line === end_line. Include them so multiple annotations on
+  // different columns of the same line stay distinguishable.
+  if (a.start_column != null) {
+    const colRange =
+      a.end_column != null && a.end_column !== a.start_column
+        ? `${a.start_column}-${a.end_column}`
+        : `${a.start_column}`;
+    return `${a.path}:${a.start_line}:${colRange}`;
+  }
+  return `${a.path}:${a.start_line}`;
+};
+
+const annotationBlock = (a: GhCheckAnnotation): string => {
+  const level = (a.annotation_level ?? 'notice').toUpperCase();
+  const title = a.title ? `${a.title}: ` : '';
+  const message = truncateBody(a.message, MAX_ANNOTATION_MESSAGE);
+  return `[${level}] ${annotationLocation(a)}\n${title}${message}`;
+};
 
 export function formatIssueComment(
   slug: string,
@@ -129,6 +157,33 @@ export function formatCheckFailureSummary(
       `${runs.length} CI checks failed on the PR. Investigate the failures and determine what action (if any) is needed.`,
       `PR: ${prRef(slug, prNumber)}`,
       runs.map(checkRunBlock).join('\n\n'),
+    ),
+  );
+}
+
+/**
+ * Emitted separately from `formatCheckFailure` because annotations also
+ * appear on *passing* checks — many workflows surface non-blocking lint /
+ * suggestion advisories against specific lines without failing the build.
+ */
+export function formatCheckAnnotations(
+  slug: string,
+  prNumber: number,
+  run: GhCheckRun,
+  annotations: ReadonlyArray<GhCheckAnnotation>,
+): string {
+  const total = run.output?.annotations_count ?? annotations.length;
+  const shown = annotations.slice(0, MAX_ANNOTATIONS_PER_RUN);
+  const remaining = total - shown.length;
+  const overflow =
+    remaining > 0
+      ? `…and ${remaining} more annotation(s). See ${run.html_url} for the full list.`
+      : run.html_url;
+  return wrap(
+    sections(
+      `Check "${run.name}" reported ${total} inline annotation(s) on ${prRef(slug, prNumber)}. Each annotation is tagged with its level ([NOTICE], [WARNING], or [FAILURE]); investigate and determine what action (if any) is needed.`,
+      shown.map(annotationBlock).join('\n\n'),
+      overflow,
     ),
   );
 }
