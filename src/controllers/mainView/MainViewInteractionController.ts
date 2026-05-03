@@ -1,5 +1,6 @@
 // Local imports - common
-import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { COMMON_COMMANDS } from '@common/webview/commonCommands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 
 // Local imports - schemas
 import type { MainViewInboundMessage, MainViewMessage } from '@shared/schemas';
