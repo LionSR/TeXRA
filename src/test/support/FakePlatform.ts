@@ -135,8 +135,9 @@ export class FakeConfigProvider implements ConfigProvider {
   }
 
   set(key: string, value: unknown): void {
-    this.values.set(key, value);
-    this.targets.set(key, 'workspace');
+    const storageKey = this.storageKeyForWrite(key);
+    this.values.set(storageKey, value);
+    this.targets.set(storageKey, 'workspace');
     this.notifyWatchers(key);
   }
 
@@ -145,12 +146,13 @@ export class FakeConfigProvider implements ConfigProvider {
     value: T,
     target: ConfigTarget = 'workspace',
   ): Promise<void> {
+    const storageKey = this.storageKeyForWrite(key);
     if (value === undefined) {
-      this.values.delete(key);
-      this.targets.delete(key);
+      this.values.delete(storageKey);
+      this.targets.delete(storageKey);
     } else {
-      this.values.set(key, value);
-      this.targets.set(key, target);
+      this.values.set(storageKey, value);
+      this.targets.set(storageKey, target);
     }
     this.notifyWatchers(key);
   }
@@ -199,6 +201,8 @@ export class FakeConfigProvider implements ConfigProvider {
     changedKey: string,
   ): boolean {
     if (watchedKey instanceof RegExp) {
+      // Match VscodeConfigProvider: VS Code does not expose changed keys for
+      // regex watchers, so regex subscriptions conservatively refresh.
       return true;
     }
     if (typeof watchedKey === 'string') {
@@ -211,6 +215,10 @@ export class FakeConfigProvider implements ConfigProvider {
     return this.configKeys(key).find((candidate) => this.values.has(candidate));
   }
 
+  private storageKeyForWrite(key: string): string {
+    return this.resolveExistingKey(key) ?? key;
+  }
+
   private configKeys(key: string): string[] {
     return key.startsWith('texra.') ? [key] : [key, `texra.${key}`];
   }
@@ -220,9 +228,7 @@ export class FakeConfigProvider implements ConfigProvider {
     changedKey: string,
   ): boolean {
     return this.configKeys(watchedKey).some((watchedCandidate) =>
-      this.configKeys(changedKey).some((changedCandidate) =>
-        this.isSameOrNestedKey(watchedCandidate, changedCandidate),
-      ),
+      this.isSameOrNestedKey(watchedCandidate, changedKey),
     );
   }
 
