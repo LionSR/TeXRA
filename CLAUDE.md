@@ -4,7 +4,7 @@ Guidance for Claude Code when working with this repository. For detailed coding 
 
 ## Code review
 
-For `/review` or any code review on this repo, load [skills/code-review/SKILL.md](./skills/code-review/SKILL.md) first — generic passes miss the repo-specific rules below. Always include a `Verified` section listing what you opened.
+For `/review` or any code review on this repo, load [.claude/skills/code-review/SKILL.md](./.claude/skills/code-review/SKILL.md) first — generic passes miss the repo-specific rules below. Always include a `Verified` section listing what you opened.
 
 ## Project Overview
 
