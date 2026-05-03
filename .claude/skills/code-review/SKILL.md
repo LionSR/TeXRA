@@ -23,17 +23,29 @@ A "no issues found" review on this repo is almost always wrong. CLAUDE.md and AG
 
 ## Output format
 
+Default to calm, declarative prose. State the issue, cite `path:line`, propose the fix.
+
+Emoji use:
+- Headers and "categories I checked" prose: none. Don't decorate routine review structure.
+- Clean reviews: none. A no-issues report shouldn't look like an emergency.
+- Genuine Blocker findings (real security, platform-decoupling, or build-breaking issues): a single 🔴 prefix on that finding's line is fine. Use sparingly — one per real Blocker.
+- Suggestions and Notes: plain bullets, no emoji.
+- Don't use ALL-CAPS or words like "BLOCKER" / "CRITICAL" as decoration; prose plus the GitHub review status carries the urgency.
+
 ```
 ## Findings
-### Critical
+
+### Issues to address before merge
 - `path/file.ts:42` — <one-line summary>. <why / fix>.
-### Should fix
+
+### Suggestions
 - ...
-### Nits / questions
+
+### Notes
 - ...
 
 ## Verified
 - <what you actually opened, e.g. "Read src/tools/foo.ts:1-120; confirmed no `vscode` import">
 ```
 
-The `Verified` section is mandatory. Prefer 3 grounded findings over 10 generic ones.
+Omit empty sections — don't write "(none)". If the diff is clean, say so in one sentence above `## Verified`. The `Verified` section is mandatory. Prefer 3 grounded findings over 10 generic ones.
