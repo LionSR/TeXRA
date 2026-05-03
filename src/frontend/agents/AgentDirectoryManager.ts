@@ -6,15 +6,18 @@ import * as vscode from 'vscode';
 import { minimatch } from 'minimatch';
 
 // Local imports
+import {
+  AgentDirectoryService,
+  GlobalStorageAgentDirectoryStorage,
+} from '@agent/index';
 import type { AgentSource } from '@agent/index';
-import { showLoggedMessageWithDocs, toErrorMessage } from '@common/errors';
+import { showLoggedMessageWithDocs } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import * as logger from '@logger/logUtils';
-import { GlobalStorageFS, AbsoluteFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
-const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
 
 type AgentDirectoryEventType = 'create' | 'change' | 'delete';
 
@@ -38,6 +41,7 @@ interface AgentDirectoryWatcherSubscription {
 
 export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
+  private directoryService: AgentDirectoryService | undefined;
   private watcherDisposables: vscode.FileSystemWatcher[] = [];
   private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
   private watcherDirectories: Array<{
@@ -48,30 +52,41 @@ export class AgentDirectoryManager {
 
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
+    this.directoryService = new AgentDirectoryService({
+      storage: new GlobalStorageAgentDirectoryStorage(),
+      customDirectoryStore: {
+        get: () => globalSM?.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
+      },
+      absoluteDirectories: {
+        exists: (target) => AbsoluteFS.exists(target),
+        ensureDir: (target) => AbsoluteFS.ensureDir(target),
+      },
+      issueReporter: {
+        report: (message, docsId) =>
+          showLoggedMessageWithDocs(CHANNEL, message, docsId),
+      },
+      logger: {
+        debug: (message) => logger.debug(CHANNEL, message),
+        error: (message) => logger.error(CHANNEL, message),
+      },
+    });
   }
 
-  private ensureInitialized(): void {
-    if (!this.context) {
+  private getDirectoryService(): AgentDirectoryService {
+    if (!this.context || !this.directoryService) {
       throw new Error(
         'Agent directories not initialized. Call agentDirectories.initialize(context) first.',
       );
     }
-  }
-
-  private async ensureBuiltInDir(dirName: string): Promise<string> {
-    this.ensureInitialized();
-    await GlobalStorageFS.ensureDir(dirName);
-    const basePath = GlobalStorageFS.fullPath(dirName);
-    logger.debug(CHANNEL, `Using built-in ${dirName} directory: ${basePath}`);
-    return basePath;
+    return this.directoryService;
   }
 
   async builtIn(): Promise<string> {
-    return this.ensureBuiltInDir('agents');
+    return this.getDirectoryService().builtIn();
   }
 
   async builtInToolUse(): Promise<string> {
-    return this.ensureBuiltInDir('tool_use_agents');
+    return this.getDirectoryService().builtInToolUse();
   }
 
   /**
@@ -79,16 +94,7 @@ export class AgentDirectoryManager {
    * Returns undefined for Remote sources (which have no local directory).
    */
   async getDirectory(source: AgentSource): Promise<string | undefined> {
-    switch (source) {
-      case 'custom':
-        return this.custom();
-      case 'builtInWorkflow':
-        return this.builtIn();
-      case 'builtInToolUse':
-        return this.builtInToolUse();
-      case 'remote':
-        return undefined;
-    }
+    return this.getDirectoryService().getDirectory(source);
   }
 
   /**
@@ -98,100 +104,11 @@ export class AgentDirectoryManager {
   async getAllLocal(): Promise<
     Array<{ directory: string; source: AgentSource }>
   > {
-    const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
-      this.custom(),
-      this.builtIn(),
-      this.builtInToolUse(),
-    ]);
-
-    return [
-      { directory: customDir, source: 'custom' },
-      { directory: builtInDir, source: 'builtInWorkflow' },
-      { directory: builtInToolUseDir, source: 'builtInToolUse' },
-    ];
-  }
-
-  private async ensureDefaultCustomDir(): Promise<string> {
-    this.ensureInitialized();
-
-    try {
-      await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_AGENTS_DIR_NAME);
-    } catch (error) {
-      const message = toErrorMessage(error);
-      logger.error(
-        CHANNEL,
-        `Failed to create default custom agents directory: ${message}`,
-      );
-      throw new Error(
-        'Unable to create custom agents directory. Please check permissions.',
-      );
-    }
-
-    const defaultPath = GlobalStorageFS.fullPath(
-      DEFAULT_CUSTOM_AGENTS_DIR_NAME,
-    );
-    logger.debug(
-      CHANNEL,
-      `Using default custom agents directory: ${defaultPath}`,
-    );
-    return defaultPath;
-  }
-
-  private async resolveConfiguredCustomDir(
-    configuredPath: string,
-  ): Promise<string | undefined> {
-    if (!configuredPath) {
-      return undefined;
-    }
-
-    if (!path.isAbsolute(configuredPath)) {
-      logger.error(
-        CHANNEL,
-        `Custom agents directory must be an absolute path: ${configuredPath}`,
-      );
-      await showLoggedMessageWithDocs(
-        CHANNEL,
-        'Custom agents directory must be an absolute path',
-        'custom-agents',
-      );
-      return undefined;
-    }
-
-    const parentDir = path.dirname(configuredPath);
-    const parentExists = await AbsoluteFS.exists(parentDir);
-    if (!parentExists) {
-      logger.error(
-        CHANNEL,
-        `Parent directory does not exist for custom agents directory: ${parentDir}`,
-      );
-      await showLoggedMessageWithDocs(
-        CHANNEL,
-        'Parent directory for custom agents directory does not exist',
-        'custom-agents',
-      );
-      return undefined;
-    }
-
-    await AbsoluteFS.ensureDir(configuredPath);
-    logger.debug(
-      CHANNEL,
-      `Using custom agents directory from setting: ${configuredPath}`,
-    );
-    return configuredPath;
+    return this.getDirectoryService().getAllLocal();
   }
 
   async custom(): Promise<string> {
-    this.ensureInitialized();
-    const configuredPath = (
-      globalSM?.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '') ?? ''
-    ).trim();
-
-    const resolvedPath = await this.resolveConfiguredCustomDir(configuredPath);
-    if (resolvedPath) {
-      return resolvedPath;
-    }
-
-    return this.ensureDefaultCustomDir();
+    return this.getDirectoryService().custom();
   }
 
   async promptCustom(): Promise<string | undefined> {
@@ -217,7 +134,7 @@ export class AgentDirectoryManager {
   watchAgentDirectories(
     options: AgentDirectoryWatcherOptions,
   ): vscode.Disposable {
-    this.ensureInitialized();
+    this.getDirectoryService();
     const pattern = options.pattern ?? '**/*';
     const subscription: AgentDirectoryWatcherSubscription = {
       pattern,
