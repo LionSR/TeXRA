@@ -38,6 +38,9 @@ jobs:
       - name: Type check
         run: pnpm run typecheck
 
+      - name: Type check workspace packages
+        run: pnpm run workspace:typecheck
+
       - name: Lint
         run: pnpm run lint
 
@@ -46,3 +49,6 @@ jobs:
 
       - name: Compile
         run: pnpm run compile
+
+      - name: Build workspace packages
+        run: pnpm run workspace:build
