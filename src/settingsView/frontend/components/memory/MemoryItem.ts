@@ -34,10 +34,10 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-path {
-        font-family: var(--vscode-editor-font-family), monospace;
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size);
         font-weight: var(--font-weight-medium);
-        color: var(--vscode-textLink-foreground);
+        color: var(--texra-textLink-foreground);
         word-break: break-all;
       }
 
@@ -56,7 +56,7 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-item.pinned {
-        border-left: 3px solid var(--vscode-textLink-foreground);
+        border-left: 3px solid var(--texra-textLink-foreground);
         padding-left: calc(var(--spacing-medium) - 3px);
       }
     `,

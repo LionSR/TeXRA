@@ -80,8 +80,8 @@ export class UserMessage extends LitElement {
       .user-message {
         padding: var(--spacing-small);
         max-width: 85%;
-        background-color: var(--vscode-editor-selectionBackground);
-        border: var(--border-thin) solid var(--vscode-panel-border);
+        background-color: var(--texra-editor-selectionBackground);
+        border: var(--border-thin) solid var(--texra-panel-border);
         border-radius: var(--border-radius);
       }
 
@@ -91,7 +91,7 @@ export class UserMessage extends LitElement {
         gap: var(--spacing-tiny);
         margin-bottom: var(--spacing-tiny);
         font-size: var(--font-size-xs);
-        color: var(--vscode-descriptionForeground);
+        color: var(--texra-descriptionForeground);
       }
 
       .user-message-header-left {
@@ -119,7 +119,7 @@ export class UserMessage extends LitElement {
       }
 
       .user-message-content {
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         white-space: pre-wrap;
         word-wrap: break-word;
         line-height: var(--line-height-relaxed);
@@ -131,18 +131,18 @@ export class UserMessage extends LitElement {
         overflow: auto;
         padding: var(--spacing-small);
         background: var(
-          --vscode-textCodeBlock-background,
-          var(--vscode-editor-background)
+          --texra-textCodeBlock-background,
+          var(--texra-editor-background)
         );
         border-radius: var(--border-radius-small);
         font-family: var(
-          --vscode-editor-font-family,
+          --texra-editor-font-family,
           ui-monospace,
           SFMono-Regular,
           Consolas,
           monospace
         );
-        font-size: var(--vscode-editor-font-size, var(--font-size-sm));
+        font-size: var(--texra-editor-font-size, var(--font-size-sm));
         line-height: 1.35;
       }
 
