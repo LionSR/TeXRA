@@ -33,6 +33,7 @@ import { getNewestTimestamp, trimSet } from './formatUtils';
 import {
   type ConditionalResponse,
   ghGet,
+  GitHubAuthError,
   GitHubPermanentError,
 } from './githubClient';
 import {
@@ -841,16 +842,19 @@ export class PRPollingSource extends PollingSourceBase<
   /**
    * Drain up to `MAX_ANNOTATION_FETCHES_PER_TICK` queued runs by hitting the
    * annotations endpoint. Errors are isolated per-fetch — annotations are
-   * best-effort, so a single bad check (e.g. 404 on a deleted run) must not
-   * propagate to `handleFailure` and detach the whole PR subscription.
+   * best-effort, so a single bad check (e.g. 404 on a deleted run, or a
+   * permission-scoped token) must not propagate to `handleFailure` and
+   * detach the whole PR subscription.
    *
    * - Success: emit, remove from queue.
-   * - `GitHubPermanentError` (404/410/422): log + remove from queue. Retrying
-   *   won't help and we don't want a poisoned entry blocking the budget.
-   * - Anything else (network blip, timeout, transient auth/rate-limit):
-   *   leave in queue for the next tick. Real auth/rate-limit failures will
-   *   surface from the main poll path's fetches and trigger the global
-   *   handling there.
+   * - `GitHubPermanentError` (404/410/422): log + drop. Retrying won't help.
+   * - `GitHubAuthError` (401/403): log + drop. Almost always a permission-
+   *   scoped token (the main poll's other ghGet calls succeeded, else we
+   *   wouldn't be here). If the token is genuinely bad, the main poll path
+   *   will detach the subscription via its own ghGet failure.
+   * - Anything else (network, timeout, rate-limit): rotate to the BACK of
+   *   the queue. Without rotation, a persistently-failing head entry would
+   *   starve every other queued run forever.
    */
   private async drainAnnotationQueue(state: SubscriptionState): Promise<void> {
     if (state.pendingAnnotationRuns.length === 0) return;
@@ -863,12 +867,13 @@ export class PRPollingSource extends PollingSourceBase<
       candidates.map((run) => this.fetchAnnotations(pr.owner, pr.repo, run.id)),
     );
 
-    const completedIds = new Set<number>();
+    const dropIds = new Set<number>();
+    const rotateIds = new Set<number>();
     for (let i = 0; i < settled.length; i += 1) {
       const run = candidates[i];
       const result = settled[i];
       if (result.status === 'fulfilled') {
-        completedIds.add(run.id);
+        dropIds.add(run.id);
         if (result.value.length > 0) {
           this.emit(
             state,
@@ -885,18 +890,31 @@ export class PRPollingSource extends PollingSourceBase<
       const err = result.reason;
       if (err instanceof GitHubPermanentError) {
         this.logger.warn(
-          `Annotations for check ${run.id} unavailable (HTTP ${err.status}); skipping.`,
+          `Annotations for check ${run.id} unavailable (HTTP ${err.status}); dropping.`,
         );
-        completedIds.add(run.id);
+        dropIds.add(run.id);
         continue;
       }
+      if (err instanceof GitHubAuthError) {
+        this.logger.warn(
+          `Annotations for check ${run.id} forbidden (${err.message}); dropping.`,
+        );
+        dropIds.add(run.id);
+        continue;
+      }
+      rotateIds.add(run.id);
       this.logger.warn(
-        `Annotation fetch for check ${run.id} failed; will retry next tick: ${String(err)}`,
+        `Annotation fetch for check ${run.id} failed; rotating to back of queue: ${String(err)}`,
       );
     }
-    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
-      (p) => !completedIds.has(p.id),
+
+    const rotated = state.pendingAnnotationRuns.filter((p) =>
+      rotateIds.has(p.id),
     );
+    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
+      (p) => !dropIds.has(p.id) && !rotateIds.has(p.id),
+    );
+    state.pendingAnnotationRuns.push(...rotated);
   }
 
   private async fetchAnnotations(
