@@ -42,7 +42,7 @@ export class LatexDiffsSection extends LitElement {
       .latexdiffs-section[data-expanded='true'] {
         background-color: var(--background-color);
         border: var(--border-thin) solid
-          var(--vscode-widget-border, var(--dropdown-border));
+          var(--texra-widget-border, var(--dropdown-border));
         border-radius: var(--border-radius);
         padding: var(--spacing-medium);
         overflow: visible;
@@ -61,7 +61,7 @@ export class LatexDiffsSection extends LitElement {
 
       .latexdiffs-section[data-expanded='true'] .optional-label,
       .latexdiffs-section[data-expanded='true'] .toggle-icon {
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       #latexdiffsContent {

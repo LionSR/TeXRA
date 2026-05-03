@@ -3,7 +3,7 @@ import { css, type CSSResult } from 'lit';
 
 export const profileViewStyles: CSSResult = css`
   h2 {
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
     margin-top: var(--spacing-xlarge);
     margin-bottom: var(--spacing-medium);
     font-size: var(--font-size-lg);
@@ -35,12 +35,12 @@ export const profileViewStyles: CSSResult = css`
 
   .label {
     font-weight: var(--font-weight-bold);
-    color: var(--vscode-textPreformat-foreground);
+    color: var(--texra-textPreformat-foreground);
     min-width: 80px;
   }
 
   .value {
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
   }
 
   .tier-badge {
@@ -50,33 +50,33 @@ export const profileViewStyles: CSSResult = css`
 
   .profile-notice {
     margin: var(--spacing-small) 0 var(--spacing-medium);
-    color: var(--vscode-descriptionForeground, var(--color-text-secondary));
+    color: var(--texra-descriptionForeground, var(--color-text-secondary));
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
     max-width: 640px;
   }
 
   .profile-notice code {
-    font-family: var(--vscode-editor-font-family, monospace);
+    font-family: var(--texra-editor-font-family, monospace), monospace;
     font-size: 0.95em;
     padding: 0 var(--spacing-tiny);
     border-radius: var(--border-radius-small);
-    background: var(--vscode-textBlockQuote-background);
+    background: var(--texra-textBlockQuote-background);
   }
 
   .tier-badge.free {
-    background: var(--vscode-inputValidation-warningBackground);
-    color: var(--vscode-inputValidation-warningForeground);
+    background: var(--texra-inputValidation-warningBackground);
+    color: var(--texra-inputValidation-warningForeground);
   }
 
   .tier-badge.max {
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--texra-badge-background);
+    color: var(--texra-badge-foreground);
   }
 
   .tier-badge.ultra {
-    background: var(--vscode-textLink-activeForeground);
-    color: var(--vscode-button-foreground);
+    background: var(--texra-textLink-activeForeground);
+    color: var(--texra-button-foreground);
   }
 
   .not-authenticated {
@@ -111,15 +111,15 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-keys-table th {
-    background: var(--vscode-editor-background);
+    background: var(--texra-editor-background);
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
     position: sticky;
     top: 0;
   }
 
   .provider-keys-table tbody tr:hover {
-    background: var(--vscode-list-hoverBackground);
+    background: var(--texra-list-hoverBackground);
   }
 
   /* Profile-specific badge modifiers (base category styles from @shared/styles) */
@@ -132,13 +132,13 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .badge.visibility-badge.public {
-    background: var(--vscode-testing-iconPassed);
-    color: var(--vscode-button-foreground);
+    background: var(--texra-testing-iconPassed);
+    color: var(--texra-button-foreground);
   }
 
   .badge.visibility-badge.custom {
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--texra-badge-background);
+    color: var(--texra-badge-foreground);
   }
 
   .select-btn {
@@ -171,7 +171,7 @@ export const profileViewStyles: CSSResult = css`
     align-items: flex-start;
     gap: var(--spacing-medium);
     padding: var(--spacing-medium);
-    background: var(--vscode-input-background);
+    background: var(--texra-input-background);
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
     cursor: pointer;
@@ -179,17 +179,17 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .api-access-option:hover {
-    border-color: var(--vscode-focusBorder);
+    border-color: var(--texra-focusBorder);
   }
 
   .api-access-option:has(input:checked) {
-    border-color: var(--vscode-focusBorder);
-    background: var(--vscode-list-hoverBackground);
+    border-color: var(--texra-focusBorder);
+    background: var(--texra-list-hoverBackground);
   }
 
   .api-access-option input[type='radio'] {
     margin-top: var(--spacing-tiny);
-    accent-color: var(--vscode-focusBorder);
+    accent-color: var(--texra-focusBorder);
   }
 
   .api-access-support {
@@ -205,16 +205,16 @@ export const profileViewStyles: CSSResult = css`
   .api-access-support-icon {
     flex-shrink: 0;
     margin-top: 2px;
-    color: var(--vscode-charts-red, var(--vscode-errorForeground));
+    color: var(--texra-charts-red, var(--texra-errorForeground));
   }
 
   .api-access-support a {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
     text-decoration: none;
   }
 
   .api-access-support a:hover {
-    color: var(--vscode-textLink-activeForeground);
+    color: var(--texra-textLink-activeForeground);
     text-decoration: underline;
   }
 
@@ -226,7 +226,7 @@ export const profileViewStyles: CSSResult = css`
 
   .option-title {
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
   }
 
   .option-description {
@@ -268,17 +268,17 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .key-status-badge.set {
-    background: var(--vscode-testing-iconPassed);
-    color: var(--vscode-button-foreground);
+    background: var(--texra-testing-iconPassed);
+    color: var(--texra-button-foreground);
   }
 
   .key-status-badge.env {
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--texra-badge-background);
+    color: var(--texra-badge-foreground);
   }
 
   .key-status-badge.not-set {
-    background: var(--vscode-input-background);
+    background: var(--texra-input-background);
     color: var(--color-text-secondary);
     border: var(--border-thin) solid var(--color-border);
   }
@@ -296,7 +296,7 @@ export const profileViewStyles: CSSResult = css`
     gap: var(--spacing-medium);
     margin-bottom: var(--spacing-medium);
     padding: var(--spacing-medium);
-    background: var(--vscode-input-background);
+    background: var(--texra-input-background);
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
   }
@@ -326,11 +326,11 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-expand-btn:hover {
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
   }
 
   .provider-expand-btn:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -356,7 +356,7 @@ export const profileViewStyles: CSSResult = css`
     flex-direction: column;
     gap: var(--spacing-medium);
     padding: var(--spacing-medium);
-    background: var(--vscode-textBlockQuote-background);
+    background: var(--texra-textBlockQuote-background);
     border-radius: var(--border-radius);
   }
 
@@ -368,7 +368,7 @@ export const profileViewStyles: CSSResult = css`
 
   .provider-setting label {
     font-size: var(--font-size-sm);
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
     min-width: 120px;
   }
 
@@ -392,8 +392,8 @@ export const profileViewStyles: CSSResult = css`
 
   .provider-setting-warning {
     color: var(
-      --vscode-inputValidation-warningForeground,
-      var(--vscode-editorWarning-foreground)
+      --texra-inputValidation-warningForeground,
+      var(--texra-editorWarning-foreground)
     );
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
@@ -406,7 +406,7 @@ export const profileViewStyles: CSSResult = css`
     padding: 0;
     font: inherit;
     font-size: var(--font-size-sm);
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
     cursor: pointer;
     text-decoration: none;
     margin-left: var(--spacing-small);
@@ -448,7 +448,7 @@ export const profileViewStyles: CSSResult = css`
 
   .helper-model-row label {
     font-weight: var(--font-weight-medium);
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
     white-space: nowrap;
   }
 
@@ -469,9 +469,9 @@ export const profileViewStyles: CSSResult = css`
     align-items: center;
     width: 100%;
     padding: var(--spacing-medium);
-    background: var(--vscode-editor-background);
+    background: var(--texra-editor-background);
     border: none;
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
     cursor: pointer;
     font-size: var(--font-size-sm);
     font-family: inherit;
@@ -479,11 +479,11 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-group-header:hover {
-    background: var(--vscode-list-hoverBackground);
+    background: var(--texra-list-hoverBackground);
   }
 
   .provider-group-header:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -527,7 +527,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .model-row:hover {
-    background: var(--vscode-list-hoverBackground);
+    background: var(--texra-list-hoverBackground);
   }
 
   .model-row vscode-checkbox {
@@ -550,7 +550,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .model-name {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     white-space: nowrap;
   }
 
@@ -590,19 +590,19 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .deprecated-toggle:hover {
-    color: var(--vscode-foreground);
-    background: var(--vscode-list-hoverBackground);
+    color: var(--texra-foreground);
+    background: var(--texra-list-hoverBackground);
   }
 
   .deprecated-toggle:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
 
   .deprecated-models {
     border-top: var(--border-thin) solid var(--color-border);
-    background: var(--vscode-textBlockQuote-background);
+    background: var(--texra-textBlockQuote-background);
   }
 
   /* Unavailable model rows (not in relay allowlist) */
@@ -623,8 +623,8 @@ export const profileViewStyles: CSSResult = css`
 
   .model-row-icon--warning {
     --_icon-color: var(
-      --vscode-list-warningForeground,
-      var(--vscode-editorWarning-foreground)
+      --texra-list-warningForeground,
+      var(--texra-editorWarning-foreground)
     );
   }
 `;

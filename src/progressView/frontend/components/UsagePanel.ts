@@ -22,9 +22,9 @@ const COMPACTION_THRESHOLD = 75;
 
 /** Solid fill color based on context utilization. */
 function fillColor(percent: number): string {
-  if (percent <= 65) return 'var(--vscode-testing-iconPassed, #73c991)';
-  if (percent <= 80) return 'var(--vscode-editorWarning-foreground, #cca700)';
-  return 'var(--vscode-testing-iconFailed, #f48771)';
+  if (percent <= 65) return 'var(--texra-testing-iconPassed, #73c991)';
+  if (percent <= 80) return 'var(--texra-editorWarning-foreground, #cca700)';
+  return 'var(--texra-testing-iconFailed, #f48771)';
 }
 
 @customElement('usage-panel')
@@ -43,7 +43,7 @@ export class UsagePanel extends LitElement {
 
       .usage-summary-footer {
         border-top: var(--border-thin) solid var(--color-border);
-        background-color: var(--vscode-sideBarSectionHeader-background);
+        background-color: var(--texra-sideBarSectionHeader-background);
         padding: var(--spacing-small) var(--spacing-medium);
         display: flex;
         justify-content: space-between;
@@ -77,7 +77,7 @@ export class UsagePanel extends LitElement {
         position: relative;
         width: 80px;
         height: 6px;
-        background: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.3));
+        background: var(--texra-editorWidget-border, rgba(128, 128, 128, 0.3));
         border-radius: var(--border-radius);
         overflow: hidden;
       }
@@ -95,7 +95,7 @@ export class UsagePanel extends LitElement {
         top: 0;
         bottom: 0;
         width: var(--border-thin);
-        background: var(--vscode-foreground);
+        background: var(--texra-foreground);
         opacity: var(--opacity-separator);
       }
 
@@ -109,7 +109,7 @@ export class UsagePanel extends LitElement {
       }
 
       :is(.run-summary__value, .context-state__value) {
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
     `,
   ];
