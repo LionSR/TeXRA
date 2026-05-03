@@ -5,6 +5,7 @@ import { toErrorMessage } from './errorMessage';
 import type { z } from 'zod';
 
 export { toErrorMessage } from './errorMessage';
+export { isDiskFullError, isFileNotFoundError } from './errorPredicates';
 
 /** Valid documentation identifiers for error messages. */
 export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
@@ -46,26 +47,6 @@ export async function parseWithErrorDisplay<T>(
     return null;
   }
   return result.data;
-}
-
-/** Check if an error represents a file-not-found condition (ENOENT or VS Code FileNotFound). */
-export function isFileNotFoundError(err: unknown): boolean {
-  const code = (err as { code?: string })?.code;
-  return code === 'ENOENT' || code === 'FileNotFound';
-}
-
-/** Check if an error represents a "no space left on device" condition (ENOSPC). */
-export function isDiskFullError(err: unknown): boolean {
-  // Walk the cause chain — filesystem errors are sometimes wrapped by
-  // higher-level abstractions that lose the original .code property.
-  for (
-    let current: unknown = err;
-    current != null && typeof current === 'object';
-    current = (current as { cause?: unknown }).cause
-  ) {
-    if ((current as { code?: string }).code === 'ENOSPC') return true;
-  }
-  return false;
 }
 
 /** Log a formatted error message and return it. */
