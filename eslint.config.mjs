@@ -57,6 +57,28 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'src/extension.ts'),
 ]);
 
+const VSCODE_FREE_ZONE_DIRS = [
+  'src/agent',
+  'src/model',
+  'src/latex',
+  'src/tools',
+  'src/shared',
+  'src/replacement',
+  'src/eventBus',
+  'src/webview/frontend',
+  'src/progressView/frontend',
+  'src/settingsView/frontend',
+].map((dir) => path.join(__dirname, dir));
+
+function isUnderDir(filename, dir) {
+  const relativePath = path.relative(dir, filename);
+  return (
+    relativePath !== '' &&
+    !relativePath.startsWith('..') &&
+    !path.isAbsolute(relativePath)
+  );
+}
+
 const localRules = {
   rules: {
     'no-platform-init-outside-composition-root': {
@@ -98,6 +120,72 @@ const localRules = {
               node,
               messageId: 'forbidden',
             });
+          },
+        };
+      },
+    },
+    'no-vscode-import-in-free-zones': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description:
+            'Disallow direct VS Code imports in platform-independent source zones.',
+        },
+        messages: {
+          forbiddenVscodeImport:
+            'VS Code-free zones must not import "vscode"; route host access through platform or host adapters.',
+        },
+        schema: [],
+      },
+      create(context) {
+        const filename = context.filename;
+        if (!VSCODE_FREE_ZONE_DIRS.some((dir) => isUnderDir(filename, dir))) {
+          return {};
+        }
+
+        function reportIfVscodeSource(node) {
+          if (node.source?.value === 'vscode') {
+            context.report({
+              node: node.source,
+              messageId: 'forbiddenVscodeImport',
+            });
+          }
+        }
+
+        return {
+          ImportDeclaration: reportIfVscodeSource,
+          ExportAllDeclaration: reportIfVscodeSource,
+          ExportNamedDeclaration: reportIfVscodeSource,
+          TSImportEqualsDeclaration(node) {
+            const expression = node.moduleReference?.expression;
+            if (expression?.value === 'vscode') {
+              context.report({
+                node: expression,
+                messageId: 'forbiddenVscodeImport',
+              });
+            }
+          },
+          CallExpression(node) {
+            if (
+              node.callee.type === 'Identifier' &&
+              node.callee.name === 'require' &&
+              node.arguments.length === 1 &&
+              node.arguments[0]?.type === 'Literal' &&
+              node.arguments[0].value === 'vscode'
+            ) {
+              context.report({
+                node: node.arguments[0],
+                messageId: 'forbiddenVscodeImport',
+              });
+            }
+          },
+          ImportExpression(node) {
+            if (node.source?.value === 'vscode') {
+              context.report({
+                node: node.source,
+                messageId: 'forbiddenVscodeImport',
+              });
+            }
           },
         };
       },
@@ -211,6 +299,7 @@ export default tseslint.config(
 
       // Keep useful rules, adjust if needed
       '@typescript-eslint/no-unused-vars': 'off',
+      'local/no-vscode-import-in-free-zones': 'error',
       'prefer-const': 'error',
     },
   },
