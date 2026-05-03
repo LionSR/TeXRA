@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from './errorMessage';
 import type { z } from 'zod';
+
+export { toErrorMessage } from './errorMessage';
 
 /** Valid documentation identifiers for error messages. */
 export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
@@ -15,14 +18,6 @@ export function formatError(prefix: string, err: unknown): string {
     return `${prefix}: ${detail.substring(0, MAX_ERROR_LENGTH)}...`;
   }
   return `${prefix}: ${detail}`;
-}
-
-/** Normalize any thrown value into a user-friendly error message string. */
-export function toErrorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return String(err);
 }
 
 /** Format a Zod validation error into a human-readable string. */
