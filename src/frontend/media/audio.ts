@@ -11,11 +11,9 @@ import { AbsoluteFS, StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
 import { THREE_DAYS_MS } from '@utils/config';
 import { getConfig } from '@utils/config/configUtils';
+import { BinaryResolver } from '@utils/system/binaryResolver';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import {
-  extendEnvPath,
-  findToolInCommonPaths,
-} from '@utils/system/platformPaths';
+import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'AudioUtils';
 logger.initialize(CHANNEL);
@@ -38,7 +36,7 @@ function resolveSoxPath(): string | null {
   if (configuredPath && AbsoluteFS.existsSync(configuredPath)) {
     return configuredPath;
   }
-  return findToolInCommonPaths('sox');
+  return BinaryResolver.resolvePath('sox');
 }
 
 /** Start recording audio from the microphone. */
