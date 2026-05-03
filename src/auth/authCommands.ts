@@ -22,7 +22,7 @@ async function getExistingSession(): Promise<
   vscode.AuthenticationSession | undefined
 > {
   // Skip VS Code auth API if auth system not ready to avoid timeout
-  if (!SupabaseClient.isReady()) {
+  if (!(await SupabaseClient.isReady())) {
     return undefined;
   }
   return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], {
@@ -71,7 +71,7 @@ function getSignInOptions(): SignInOption[] {
 export async function signIn(): Promise<void> {
   try {
     // Check if auth system is ready - if not, provide clear error with reason
-    if (!SupabaseClient.isReady()) {
+    if (!(await SupabaseClient.isReady())) {
       const initError = SupabaseClient.getInitError();
       const reason = initError
         ? initError.message
