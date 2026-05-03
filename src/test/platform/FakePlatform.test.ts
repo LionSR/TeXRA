@@ -170,6 +170,27 @@ describe('FakePlatform', () => {
     assert.equal(stat.type, FileType.Directory);
   });
 
+  it('preserves file timestamps when renaming files', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/docs/a.txt': 'A',
+    });
+    const records = (
+      fs as unknown as {
+        records: Map<string, { type: number; ctime: number; mtime: number }>;
+      }
+    ).records;
+    const sourceRecord = records.get('/workspace/docs/a.txt');
+    assert.ok(sourceRecord);
+    sourceRecord.ctime = 1;
+    sourceRecord.mtime = 2;
+
+    await fs.rename('/workspace/docs/a.txt', '/workspace/docs/b.txt');
+
+    const renamed = await fs.stat('/workspace/docs/b.txt');
+    assert.equal(renamed.ctime, 1);
+    assert.equal(renamed.mtime, 2);
+  });
+
   it('matches real writeFile parent directory semantics', async () => {
     const fs = new FakeFileSystemProvider();
 
