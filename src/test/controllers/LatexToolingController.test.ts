@@ -48,7 +48,7 @@ function createController(
   const paths = options?.paths ?? {};
   const deps: LatexToolingControllerDeps = {
     checkToolInstalled: async (tool) => installedTools[tool],
-    resolvePath: (tool) => paths[tool] ?? null,
+    findPath: (tool) => paths[tool] ?? null,
     detectPackageManager: () => options?.packageManager ?? null,
     getPlatform: () => options?.platform ?? 'linux',
     isLatexWorkshopInstalled: () => options?.extensionInstalled ?? false,
@@ -129,7 +129,7 @@ describe('LatexToolingController', () => {
       checkToolInstalled: async () => {
         throw new Error('probe failed');
       },
-      resolvePath: () => null,
+      findPath: () => null,
       detectPackageManager: () => 'apt',
       getPlatform: () => 'win32',
       isLatexWorkshopInstalled: () => true,
