@@ -13,12 +13,12 @@
  * - free tier: Budget models only (under $1/M input)
  */
 
-import * as vscode from 'vscode';
-import { SUPABASE_CUSTOM_DOMAIN } from '../config';
+import { SUPABASE_CUSTOM_DOMAIN } from '../sharedConfig';
 import { getTierService } from '../tier';
 import {
   ServerSideKeyService,
   type AuthProvider,
+  type ServerSideKeyServiceInit,
 } from './ServerSideKeyService';
 
 // Types
@@ -57,20 +57,18 @@ export function setServerSideKeyService(service: ServerSideKeyService): void {
  * Initialize the server-side key access module.
  * Call this during extension activation.
  *
- * @param context - VS Code extension context
+ * @param options - Host-provided state and subscriptions
  * @param authProvider - Provider for authentication state checks
  */
 export function initializeServerSideKeyAccess(
-  context: vscode.ExtensionContext,
+  options: ServerSideKeyServiceInit,
   authProvider: AuthProvider,
 ): void {
   _instance = new ServerSideKeyService(
     `https://${SUPABASE_CUSTOM_DOMAIN}`,
     authProvider,
-    getTierService(),
+    getTierService(options.logger),
+    options.logger,
   );
-  _instance.initialize({
-    state: context.globalState,
-    subscriptions: context.subscriptions,
-  });
+  _instance.initialize(options);
 }
