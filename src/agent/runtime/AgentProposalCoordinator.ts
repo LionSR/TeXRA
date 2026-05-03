@@ -16,7 +16,7 @@ import {
   BasePromiseCoordinator,
   type CoordinatorConfig,
 } from './BasePromiseCoordinator';
-import type { ProgressSink } from './ProgressSink';
+import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 // ============================================================================
 // Types
@@ -69,10 +69,10 @@ export class AgentProposalCoordinator extends BasePromiseCoordinator<
     const { proposalId, proposal, timeoutMs } = options;
 
     // Request host to show progress view so user sees the proposal
-    this.progressSink.emit('requestEnsureProgressView', {});
+    this.runtimeHost.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    this.progressSink.emit('setActiveStream', { streamId });
+    this.runtimeHost.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       proposalId,
@@ -87,9 +87,9 @@ export class AgentProposalCoordinator extends BasePromiseCoordinator<
 // ============================================================================
 
 export function createAgentProposalCoordinator(
-  progressSink: ProgressSink,
+  runtimeHost: AgentRuntimeHost,
 ): AgentProposalCoordinator {
-  return new AgentProposalCoordinator(progressSink);
+  return new AgentProposalCoordinator(runtimeHost);
 }
 
 /** Singleton coordinator instance. */
