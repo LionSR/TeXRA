@@ -3,6 +3,7 @@ import { strict as assert } from 'assert';
 
 // Local imports - auth
 import {
+  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   parseAuthCallbackTokens,
   parseStoredSupabaseSession,
   toStorableSupabaseSession,
@@ -83,6 +84,25 @@ describe('SupabaseSession', () => {
       assert.equal(
         toStorableSupabaseSession(nativeSession).account.label,
         'user-id',
+      );
+    });
+
+    it('uses the default expiry when native sessions omit expires_at', () => {
+      const nativeSession = {
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+        user: {
+          id: 'user-id',
+          email: 'user@example.com',
+        },
+      } as unknown as SupabaseNativeSession;
+      const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
+
+      const session = toStorableSupabaseSession(nativeSession);
+
+      assert.ok(session.expiresAt >= earliestExpiry);
+      assert.ok(
+        session.expiresAt <= Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
       );
     });
   });
