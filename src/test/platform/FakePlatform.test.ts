@@ -191,6 +191,32 @@ describe('FakePlatform', () => {
     assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
   });
 
+  it('copies directories into existing destination directories', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/a.txt': 'A',
+      '/workspace/dest/existing.txt': 'existing',
+    });
+
+    await fs.copy('/workspace/source', '/workspace/dest');
+
+    assert.equal(fs.getText('/workspace/dest/a.txt'), 'A');
+    assert.equal(fs.getText('/workspace/dest/existing.txt'), 'existing');
+  });
+
+  it('rejects directory copy when a destination file already exists', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/a.txt': 'A',
+      '/workspace/dest/a.txt': 'existing',
+    });
+
+    await assert.rejects(
+      () => fs.copy('/workspace/source', '/workspace/dest'),
+      /Target already exists/,
+    );
+
+    assert.equal(fs.getText('/workspace/dest/a.txt'), 'existing');
+  });
+
   it('rejects file copy onto itself with overwrite', async () => {
     const fs = new FakeFileSystemProvider({
       '/workspace/source/a.txt': 'A',
