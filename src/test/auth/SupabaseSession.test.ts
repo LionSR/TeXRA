@@ -67,6 +67,17 @@ function createClient(overrides?: Partial<Client['auth']>): Client {
   } as unknown as Client;
 }
 
+function createDeferred(): {
+  promise: Promise<void>;
+  resolve: () => void;
+} {
+  let resolve!: () => void;
+  const promise = new Promise<void>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
 function createCoordinator(options?: {
   initialSession?: SupabaseSession;
   client?: Client;
@@ -273,6 +284,25 @@ describe('SupabaseSession', () => {
       assert.deepEqual(expiries, [session.expiresAt]);
     });
 
+    it('reads storage once when ensuring a cached fresh token', async () => {
+      const initialSession: SupabaseSession = {
+        id: 'user-id',
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        account: {
+          id: 'user-id',
+          label: 'user@example.com',
+        },
+        expiresAt: Date.now() + 120_000,
+      };
+      const { coordinator, getReadCount } = createCoordinator({
+        initialSession,
+      });
+
+      assert.equal(await coordinator.ensureFreshToken(), 'access-token');
+      assert.equal(getReadCount(), 1);
+    });
+
     it('creates a session from host-neutral callback URI parts', async () => {
       const { coordinator } = createCoordinator();
 
@@ -331,7 +361,7 @@ describe('SupabaseSession', () => {
         expiresAt: Date.now() - 1_000,
         useCustomRefresh: true,
       };
-      const { coordinator, read } = createCoordinator({
+      const { coordinator, read, getReadCount } = createCoordinator({
         initialSession,
         fetch: async () =>
           new Response(
@@ -350,6 +380,7 @@ describe('SupabaseSession', () => {
       });
 
       assert.equal(await coordinator.ensureFreshToken(), 'new-access');
+      assert.equal(getReadCount(), 1);
 
       assert.deepEqual(read(), {
         id: 'user-id',
@@ -362,6 +393,28 @@ describe('SupabaseSession', () => {
         expiresAt: 789_000,
         useCustomRefresh: true,
       });
+    });
+
+    it('force-refreshes native sessions without reloading storage', async () => {
+      const initialSession: SupabaseSession = {
+        id: 'user-id',
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        account: {
+          id: 'user-id',
+          label: 'user@example.com',
+        },
+        expiresAt: Date.now() + 120_000,
+      };
+      const { coordinator, getReadCount } = createCoordinator({
+        initialSession,
+      });
+
+      assert.equal(
+        await coordinator.ensureFreshToken(true),
+        'refreshed-access',
+      );
+      assert.equal(getReadCount(), 1);
     });
 
     it('returns refreshed session tokens without reloading storage', async () => {
@@ -399,6 +452,175 @@ describe('SupabaseSession', () => {
         refreshToken: 'new-refresh',
       });
       assert.equal(getReadCount(), 1);
+    });
+
+    it('returns native refreshed session tokens without reloading storage', async () => {
+      const initialSession: SupabaseSession = {
+        id: 'user-id',
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        account: {
+          id: 'user-id',
+          label: 'user@example.com',
+        },
+        expiresAt: Date.now() - 1_000,
+      };
+      const { coordinator, getReadCount } = createCoordinator({
+        initialSession,
+      });
+
+      assert.deepEqual(await coordinator.getSessionTokens(), {
+        accessToken: 'refreshed-access',
+        refreshToken: 'refreshed-refresh',
+      });
+      assert.equal(getReadCount(), 1);
+    });
+
+    it('does not return tokens cleared while loading the session', async () => {
+      const initialSession: SupabaseSession = {
+        id: 'user-id',
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        account: {
+          id: 'user-id',
+          label: 'user@example.com',
+        },
+        expiresAt: Date.now() + 120_000,
+      };
+      let value: string | undefined = JSON.stringify(initialSession);
+      let readCount = 0;
+      let clearDuringFirstRead = true;
+      const coordinatorRef: { current?: SupabaseSessionCoordinator } = {};
+      const storage: SupabaseSessionStorage = {
+        get: async () => {
+          readCount += 1;
+          const snapshot = value;
+          if (clearDuringFirstRead) {
+            clearDuringFirstRead = false;
+            await coordinatorRef.current?.clearSession();
+          }
+          return snapshot;
+        },
+        store: async (sessionData) => {
+          value = sessionData;
+        },
+        delete: async () => {
+          value = undefined;
+        },
+      };
+      const coordinator = new SupabaseSessionCoordinator({
+        storage,
+        getClient: () => createClient(),
+        whenReady: async () => {},
+        tokenRefreshThresholdMs: 60_000,
+        defaultSessionExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+        githubTokenRefreshUrl:
+          'https://example.supabase.co/functions/v1/refresh',
+        edgeFunctionTimeoutMs: 30_000,
+      });
+      coordinatorRef.current = coordinator;
+
+      assert.equal(await coordinator.getSessionTokens(), null);
+      assert.equal(readCount, 2);
+    });
+
+    it('does not return tokens when a clear is still pending after load', async () => {
+      const initialSession: SupabaseSession = {
+        id: 'user-id',
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        account: {
+          id: 'user-id',
+          label: 'user@example.com',
+        },
+        expiresAt: Date.now() + 120_000,
+      };
+      let value: string | undefined = JSON.stringify(initialSession);
+      let readCount = 0;
+      let clearDuringFirstRead = true;
+      const deleteStarted = createDeferred();
+      const allowDelete = createDeferred();
+      const coordinatorRef: { current?: SupabaseSessionCoordinator } = {};
+      const storage: SupabaseSessionStorage = {
+        get: async () => {
+          readCount += 1;
+          const snapshot = value;
+          if (clearDuringFirstRead) {
+            clearDuringFirstRead = false;
+            void coordinatorRef.current?.clearSession();
+          }
+          return snapshot;
+        },
+        store: async (sessionData) => {
+          value = sessionData;
+        },
+        delete: async () => {
+          deleteStarted.resolve();
+          await allowDelete.promise;
+          value = undefined;
+        },
+      };
+      const coordinator = new SupabaseSessionCoordinator({
+        storage,
+        getClient: () => createClient(),
+        whenReady: async () => {},
+        tokenRefreshThresholdMs: 60_000,
+        defaultSessionExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+        githubTokenRefreshUrl:
+          'https://example.supabase.co/functions/v1/refresh',
+        edgeFunctionTimeoutMs: 30_000,
+      });
+      coordinatorRef.current = coordinator;
+
+      const tokensPromise = coordinator.getSessionTokens();
+      await deleteStarted.promise;
+      allowDelete.resolve();
+
+      assert.equal(await tokensPromise, null);
+      assert.equal(readCount, 2);
+    });
+
+    it('does not resurrect a cleared session when refresh finishes later', async () => {
+      const initialSession: SupabaseSession = {
+        id: 'user-id',
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        account: {
+          id: 'user-id',
+          label: 'user@example.com',
+        },
+        expiresAt: Date.now() - 1_000,
+        useCustomRefresh: true,
+      };
+      const refreshStarted = createDeferred();
+      const allowRefresh = createDeferred();
+      const { coordinator, read } = createCoordinator({
+        initialSession,
+        fetch: async () => {
+          refreshStarted.resolve();
+          await allowRefresh.promise;
+          return new Response(
+            JSON.stringify({
+              access_token: 'new-access',
+              refresh_token: 'new-refresh',
+              expires_at: 123,
+              token_type: 'bearer',
+              user: {
+                id: 'user-id',
+                email: 'user@example.com',
+              },
+            }),
+          );
+        },
+      });
+
+      const tokenPromise = coordinator.ensureFreshToken();
+      await refreshStarted.promise;
+      await coordinator.clearSession();
+      allowRefresh.resolve();
+
+      assert.equal(await tokenPromise, null);
+      assert.equal(read(), null);
     });
 
     it('does not return expired session tokens when refresh fails', async () => {
