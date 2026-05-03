@@ -5,7 +5,7 @@ import * as path from 'path';
 import type { AgentCategory } from '@shared/schemas/agent';
 
 export interface SettingsAgentFileEntry {
-  path?: string;
+  path: string;
   multiplePath?: string;
 }
 
@@ -56,15 +56,10 @@ export class SettingsAgentFileController {
     customDir: string;
     sourceDir?: string;
   }): SettingsAgentCustomizeResult {
-    const sourcePath = input.entry.path;
-    if (!sourcePath) {
-      return { ok: false, reason: 'targetEscapesCustomDir' };
-    }
-
     const targetPath = this.resolveCustomTargetPath({
       customDir: input.customDir,
       sourceDir: input.sourceDir,
-      sourcePath,
+      sourcePath: input.entry.path,
     });
 
     if (!this.isInside(input.customDir, targetPath)) {
@@ -90,8 +85,7 @@ export class SettingsAgentFileController {
     entry: SettingsAgentFileEntry;
     customDir: string;
   }): SettingsAgentDeleteResult {
-    const sourcePath = input.entry.path;
-    if (!sourcePath || !this.isInside(input.customDir, sourcePath)) {
+    if (!this.isInside(input.customDir, input.entry.path)) {
       return { ok: false, reason: 'fileOutsideCustomDir' };
     }
 
@@ -104,7 +98,7 @@ export class SettingsAgentFileController {
     return {
       ok: true,
       plan: {
-        path: sourcePath,
+        path: input.entry.path,
         ...(multiplePath ? { multiplePath } : {}),
       },
     };
