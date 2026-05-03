@@ -8,7 +8,6 @@ on:
       - 'resources/agents/**'
       - 'resources/tool_use_agents/**'
       - 'package.json'
-      - 'package-lock.json'
       - 'tsconfig*.json'
       - 'eslint.config.mjs'
       - '.prettierrc'
@@ -57,7 +56,7 @@ jobs:
             **Step 0 — Load the local code-review skill before doing anything else:**
             1. Read `skills/code-review/SKILL.md` (workflow + output format).
             2. Read `skills/code-review/references/review-checklist.md` (greps + concrete fixes).
-            3. Skim `CLAUDE.md` and `AGENTS.md` for the design rules cited below — do not re-derive them.
+            3. Consult `CLAUDE.md` and `AGENTS.md` only for the specific sections cited inline below — do not skim end-to-end.
             The `Verified` section at the end of your review is mandatory and must list the
             files you actually opened (path + line ranges).
 
@@ -304,5 +303,5 @@ jobs:
           # or https://code.claude.com/docs/en/cli-reference for available options
           claude_args: |
             --model claude-opus-4-7
-            --allowedTools "Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*),Bash(git diff:*),Bash(git log:*),Bash(grep:*),mcp__github_inline_comment__create_inline_comment,mcp__github__*"
+            --allowedTools "Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*),Bash(git diff:*),Bash(git log:*),mcp__github_inline_comment__create_inline_comment,mcp__github__*"
             --append-system-prompt "This is TeXRA, a VS Code extension (TypeScript, Zod v4, PocketFlow) for LLM-assisted LaTeX research. The repo encodes many narrow conventions in CLAUDE.md, AGENTS.md, and skills/code-review/. Review with those rules as the source of truth — generic JS/TS heuristics will produce false positives and miss real findings. Never recommend adding new abstractions, factories, wrappers, or 'for future flexibility' hooks; only flag existing violations and propose deletion or inlining. Trust the type system and existing schemas; do not suggest extra runtime validation at internal boundaries. Cite path:line for every finding and include a Verified section listing files actually opened."
