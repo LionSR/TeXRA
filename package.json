@@ -3,7 +3,11 @@
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
   "version": "0.37.8",
+  "packageManager": "pnpm@10.33.2",
   "publisher": "texra-ai",
+  "workspaces": [
+    "packages/*"
+  ],
   "engines": {
     "vscode": "^1.105.0"
   },
@@ -1513,6 +1517,8 @@
     "test": "vscode-test",
     "test:kernel": "vitest run --config vitest.config.mjs",
     "test:kernel:watch": "vitest --config vitest.config.mjs",
+    "workspace:build": "corepack pnpm --recursive --if-present build",
+    "desktop:build": "corepack pnpm --filter @texra/desktop build",
     "build": "npm run compile && vsce package --out releases/texra-$npm_package_version.vsix",
     "format": "prettier --write .",
     "esbuild:ext": "node esbuild.config.mjs",
