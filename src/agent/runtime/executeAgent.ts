@@ -173,7 +173,7 @@ async function assembleAgentLaunchContext(
   input: AgentLaunchInput,
   executionId: ExecutionId,
   runtimeHost: AgentRuntimeHost,
-  preliminaryStreamId: StreamTabId | undefined,
+  onReserved: (streamId: StreamTabId) => void,
   onActivated: (streamId: StreamTabId) => void,
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
@@ -227,8 +227,12 @@ async function assembleAgentLaunchContext(
 
   const streamId =
     input.streamTabIdOverride ??
-    preliminaryStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
+
+  if (!input.streamTabIdOverride) {
+    acquireStreamOrThrow(streamId, runtimeHost, input.taskType);
+    onReserved(streamId);
+  }
 
   const agentLogger = new AgentLogger(streamId, true);
   const usageReporter = new AgentUsageReporter(
@@ -534,8 +538,8 @@ function buildFallbackNotification(config: AgentConfig) {
  * Saga-style compensation for a failed stream activation.
  *
  *  - Pre-activation failure (no `activatedStreamId`): the UI tab was never
- *    registered. Release the preliminary lock if we held it; the caller
- *    won't ever see a stream.
+ *    registered. Release the reserved lock if we held it; the caller won't
+ *    ever see a stream.
  *
  *  - Post-activation failure (`activatedStreamId` set): the UI tab is
  *    visible. Surface the failure on it and transition to ERROR so the
@@ -543,14 +547,14 @@ function buildFallbackNotification(config: AgentConfig) {
  */
 function compensateFailedActivation(args: {
   configPayload: AgentConfigPayload;
-  preliminaryStreamId?: StreamTabId;
+  reservedStreamId?: StreamTabId;
   activatedStreamId?: StreamTabId;
   runtimeHost: AgentRuntimeHost;
   err: unknown;
 }): void {
   const {
     configPayload,
-    preliminaryStreamId,
+    reservedStreamId,
     activatedStreamId,
     runtimeHost,
     err,
@@ -568,16 +572,16 @@ function compensateFailedActivation(args: {
     return;
   }
 
-  if (preliminaryStreamId) {
-    StreamStatusService.releaseIfInitializing(preliminaryStreamId, {
+  if (reservedStreamId) {
+    StreamStatusService.releaseIfInitializing(reservedStreamId, {
       runtimeHost,
     });
   }
 }
 
 /**
- * Resolves agent context and acquires the preliminary stream lock before the
- * UI is activated.
+ * Resolves agent context and reserves the final stream id before the UI is
+ * activated.
  *
  * Treats the `setActiveStream` emission as a transactional commit point:
  * resolution failures before that point release the lock silently; failures
@@ -589,27 +593,23 @@ async function buildAgentLaunchContext(
   const { configPayload } = input;
   const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
   const executionId = input.executionId ?? generateExecutionId();
-
-  let preliminaryStreamId: StreamTabId | undefined;
-  if (!input.streamTabIdOverride) {
-    if (!configPayload.agent || !configPayload.model) {
-      throw new Error('Missing required fields: model and/or agent');
-    }
-    preliminaryStreamId = getStreamTabId(
-      configPayload.agent,
-      configPayload.model,
-      { executionId },
-    );
-    acquireStreamOrThrow(preliminaryStreamId, runtimeHost, input.taskType);
+  if (
+    !input.streamTabIdOverride &&
+    (!configPayload.agent || !configPayload.model)
+  ) {
+    throw new Error('Missing required fields: model and/or agent');
   }
 
+  let reservedStreamId: StreamTabId | undefined;
   let activatedStreamId: StreamTabId | undefined;
   try {
     return await assembleAgentLaunchContext(
       input,
       executionId,
       runtimeHost,
-      preliminaryStreamId,
+      (streamId) => {
+        reservedStreamId = streamId;
+      },
       (streamId) => {
         activatedStreamId = streamId;
       },
@@ -617,7 +617,7 @@ async function buildAgentLaunchContext(
   } catch (err) {
     compensateFailedActivation({
       configPayload,
-      preliminaryStreamId,
+      reservedStreamId,
       activatedStreamId,
       runtimeHost,
       err,
