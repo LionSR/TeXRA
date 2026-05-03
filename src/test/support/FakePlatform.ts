@@ -282,9 +282,9 @@ export class FakeFileSystemProvider implements FileSystemProvider {
           : `Cannot copy a file onto itself: ${source} -> ${dest}`,
       );
     }
-    this.assertWritableTarget(normalizedDest, options?.overwrite);
 
     if (sourceRecord.type === FileType.File) {
+      this.assertWritableTarget(normalizedDest, options?.overwrite);
       this.writeFileSync(normalizedDest, sourceRecord.content, {
         overwrite: options?.overwrite,
       });
@@ -292,9 +292,15 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     }
 
     this.assertNotSelfDescendant(normalizedSource, normalizedDest, 'copy');
+    this.assertDirectoryCopyRootTarget(normalizedDest);
     this.assertParentDirectoryExists(normalizedDest);
     const children = this.childPaths(normalizedSource);
-    this.assertDirectoryCopyTargets(normalizedSource, normalizedDest, children);
+    this.assertDirectoryCopyTargets(
+      normalizedSource,
+      normalizedDest,
+      children,
+      options?.overwrite,
+    );
     this.createDirectorySync(normalizedDest);
     for (const child of children) {
       const relative = path.posix.relative(normalizedSource, child);
@@ -479,17 +485,31 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     }
   }
 
+  private assertDirectoryCopyRootTarget(dest: string): void {
+    const destRecord = this.records.get(dest);
+    if (destRecord?.type === FileType.File) {
+      throw fakeFsError('ENOTDIR', `Path is a file: ${dest}`);
+    }
+  }
+
   private assertDirectoryCopyTargets(
     source: string,
     dest: string,
     children: string[],
+    overwrite?: boolean,
   ): void {
     for (const child of children) {
       const relative = path.posix.relative(source, child);
       const childDest = path.posix.join(dest, relative);
       const sourceRecord = this.requireRecord(child);
       const destRecord = this.records.get(childDest);
-      if (!destRecord || destRecord.type === sourceRecord.type) {
+      if (!destRecord) {
+        continue;
+      }
+      if (destRecord.type === sourceRecord.type) {
+        if (sourceRecord.type === FileType.File && !overwrite) {
+          throw fakeFsError('EEXIST', `Target already exists: ${childDest}`);
+        }
         continue;
       }
       if (destRecord.type === FileType.Directory) {
