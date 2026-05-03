@@ -271,13 +271,13 @@ export async function checkToolInstalled(
         return true;
       }
 
-      const fallback = BinaryResolver.resolveCommand(cmd, args);
+      const fallback = BinaryResolver.resolveOptionalCommand(cmd, args);
       logger.debug(
         CHANNEL,
-        `Fallback search for '${cmd}': ${fallback.resolvedPath || 'not found'}`,
+        `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
       );
 
-      if (fallback.resolvedPath) {
+      if (fallback) {
         logger.debug(
           CHANNEL,
           `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
