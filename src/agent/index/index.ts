@@ -6,6 +6,31 @@
 export { AgentSource } from '@agent/core/AgentDataclass';
 
 export {
+  DEFAULT_CUSTOM_AGENTS_DIR_NAME,
+  AgentDirectoryService,
+  type AbsoluteDirectoryAccess,
+  type AgentDirectoryDocsId,
+  type AgentDirectoryIssueReporter,
+  type AgentDirectoryPathStorage,
+  type AgentDirectoryServiceLogger,
+  type AgentDirectoryServiceOptions,
+  type CustomAgentDirectoryStore,
+} from './AgentDirectoryService';
+
+export {
+  BUNDLED_AGENT_DIRECTORY_NAMES,
+  BundledAgentDirectorySync,
+  GlobalStorageAgentDirectoryStorage,
+  PathAgentDirectoryBundleSource,
+  type AgentDirectoryBundleSource,
+  type AgentDirectoryStorage,
+  type AgentDirectorySyncLogger,
+  type AgentDirectoryVersionStore,
+  type BundledAgentDirectoryName,
+  type BundledAgentDirectorySyncOptions,
+} from './AgentDirectorySync';
+
+export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
