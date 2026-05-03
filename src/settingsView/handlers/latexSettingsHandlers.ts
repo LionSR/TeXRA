@@ -40,33 +40,12 @@ import {
   detectPackageManager,
 } from '@utils/system/toolUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
+import { LatexRecommendedSettingsController } from '../../controllers/settingsView/LatexRecommendedSettingsController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
 /** How long cached LaTeX settings remain valid (ms). */
 const LATEX_SETTINGS_CACHE_TTL = 60_000;
-
-/** Recommended LaTeX-related VS Code settings and their target values. */
-const LATEX_RECOMMENDED_SETTINGS: {
-  key: string;
-  value: unknown;
-  field: 'outDir' | 'autoRevealExclude';
-  /** Object keys from older TeXRA versions to migrate (remove on apply, clean on reset). */
-  legacyKeys?: string[];
-}[] = [
-  {
-    key: 'latex-workshop.latex.outDir',
-    value: '%DIR%/build/',
-    field: 'outDir',
-  },
-  {
-    key: 'explorer.autoRevealExclude',
-    value: { '**/build/': true },
-    field: 'autoRevealExclude',
-    // Old setup.ts wrote { 'build/': true } — migrate to **/build/
-    legacyKeys: ['build/'],
-  },
-];
 
 /** Allowlist of commands that may be executed via the Run in Terminal button. */
 const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
@@ -82,6 +61,16 @@ const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
  * Manages LaTeX tool detection, recommended settings, and installation.
  */
 export class LatexSettingsHandlers {
+  private readonly recommendedSettingsController =
+    new LatexRecommendedSettingsController({
+      config: {
+        getConfig: (key) => getConfig<unknown>(key),
+        getGlobalValue: (key) =>
+          inspectConfig<Record<string, unknown>>(key)?.globalValue,
+        isExplicitlySet: (key) => isConfigExplicitlySet(key),
+      },
+    });
+
   /** Cached LaTeX settings to avoid redundant tool detection on repeat opens. */
   private latexSettingsCache: {
     settings: LatexSettingsStatus;
@@ -112,40 +101,14 @@ export class LatexSettingsHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS>,
   ): Promise<void> {
     try {
-      const targets = data.field
-        ? LATEX_RECOMMENDED_SETTINGS.filter((s) => s.field === data.field)
-        : LATEX_RECOMMENDED_SETTINGS;
-
-      for (const { key, value, legacyKeys } of targets) {
-        let resolvedValue: unknown = data.reset ? undefined : value;
-
-        if (typeof value === 'object' && value !== null) {
-          const recommended = value as Record<string, unknown>;
-          // Read only the user's explicit global entries — not VS Code defaults —
-          // so we don't leak built-in defaults into settings.json.
-          const inspection = inspectConfig<Record<string, unknown>>(key);
-          const globalObj = inspection?.globalValue ?? {};
-          const remaining = { ...globalObj };
-
-          // Always clean up legacy keys from older TeXRA versions.
-          for (const k of legacyKeys ?? []) {
-            delete remaining[k];
-          }
-
-          if (data.reset) {
-            // Remove the recommended keys, keep the user's other entries.
-            for (const k of Object.keys(recommended)) {
-              delete remaining[k];
-            }
-            resolvedValue =
-              Object.keys(remaining).length > 0 ? remaining : undefined;
-          } else {
-            // Merge recommended keys into existing config.
-            resolvedValue = { ...remaining, ...recommended };
-          }
-        }
-
-        await updateConfig(key, resolvedValue, {
+      for (const {
+        key,
+        value,
+      } of this.recommendedSettingsController.buildUpdates({
+        field: data.field,
+        reset: data.reset ?? false,
+      })) {
+        await updateConfig(key, value, {
           target: 'global',
           prefix: false,
         });
@@ -256,34 +219,6 @@ export class LatexSettingsHandlers {
 
   // ── Private helpers ──
 
-  /**
-   * Check whether a recommended LaTeX setting's value is active.
-   * For string values: exact match.
-   * For object values: recommended keys are a subset of the current config.
-   */
-  private isRecommendedValueSet(
-    field: 'outDir' | 'autoRevealExclude',
-  ): boolean {
-    const setting = LATEX_RECOMMENDED_SETTINGS.find((s) => s.field === field);
-    if (!setting) return false;
-    if (!isConfigExplicitlySet(setting.key)) return false;
-
-    const current = getConfig<unknown>(setting.key);
-    if (typeof setting.value === 'object' && setting.value !== null) {
-      // For object values, check that every recommended key is present
-      if (typeof current !== 'object' || current === null) return false;
-      const cur = current as Record<string, unknown>;
-      const rec = setting.value as Record<string, unknown>;
-      // Also treat legacy keys as "set" so existing users see the check mark
-      // (they'll get migrated to the new key on next Apply).
-      return (
-        Object.entries(rec).every(([k, v]) => cur[k] === v) ||
-        (setting.legacyKeys?.some((k) => cur[k] !== undefined) ?? false)
-      );
-    }
-    return current === setting.value;
-  }
-
   /** Run all tool checks and build the LaTeX settings status object.
    *  Returns defaults on failure so the webview spinner always dismisses. */
   private async detectLatexSettings(): Promise<LatexSettingsStatus> {
@@ -313,8 +248,12 @@ export class LatexSettingsHandlers {
       const platform = normalizePlatform(process.platform);
 
       return {
-        outDir: this.isRecommendedValueSet('outDir'),
-        autoRevealExclude: this.isRecommendedValueSet('autoRevealExclude'),
+        outDir:
+          this.recommendedSettingsController.isRecommendedValueSet('outDir'),
+        autoRevealExclude:
+          this.recommendedSettingsController.isRecommendedValueSet(
+            'autoRevealExclude',
+          ),
         texDistributionInstalled: pdflatexOk || latexmkOk,
         latexWorkshopInstalled: Boolean(
           vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID),
