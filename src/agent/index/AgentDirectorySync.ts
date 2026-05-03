@@ -6,7 +6,7 @@ import fsExtra from 'fs-extra';
 import { glob } from 'glob';
 
 // Local imports
-import { GlobalStorageFS } from '@utils/files';
+import { GlobalStorageFS } from '@utils/files/storageFS';
 
 export const BUNDLED_AGENT_DIRECTORY_NAMES = [
   'agents',

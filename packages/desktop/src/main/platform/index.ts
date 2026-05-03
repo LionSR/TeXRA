@@ -1,0 +1,55 @@
+import { join } from 'node:path';
+
+import { app } from 'electron';
+
+import { consoleLog } from '@platform/defaults/consoleLog';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { initPlatform } from '@platform/platform';
+
+import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
+import { ElectronConfigProvider } from './electronConfig.js';
+import { ElectronSecrets } from './electronSecrets.js';
+import { ElectronStateStore } from './electronState.js';
+import { ElectronStorageProvider } from './electronStorage.js';
+import { JsonStore } from './jsonStore.js';
+import { repairLaunchPath } from './pathFix.js';
+import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
+
+export async function initializeElectronPlatform(
+  mainDirname: string,
+): Promise<void> {
+  const userDataPath = app.getPath('userData');
+  const workspacePath = resolveWorkspacePath();
+  const storage = new ElectronStorageProvider(userDataPath, workspacePath);
+  const globalStateStore = await JsonStore.open(
+    join(userDataPath, 'state', 'global.json'),
+  );
+  const workspaceStateStore = await JsonStore.open(
+    join(storage.getStoragePath(), 'state.json'),
+  );
+  const globalConfigStore = await JsonStore.open(
+    join(userDataPath, 'config', 'global.json'),
+  );
+  const workspaceConfigStore = await JsonStore.open(
+    join(storage.getStoragePath(), 'config.json'),
+  );
+  const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
+
+  repairLaunchPath();
+  initPlatform({
+    config: new ElectronConfigProvider(globalConfigStore, workspaceConfigStore),
+    globalState: new ElectronStateStore(globalStateStore),
+    workspaceState: new ElectronStateStore(workspaceStateStore),
+    log: consoleLog,
+    fs: nodeFilesystem,
+    workspace: createNodeWorkspace(() => workspacePath),
+    storage,
+    secrets: new ElectronSecrets(secretsStore),
+  });
+
+  await bootstrapElectronAgentDirectories(
+    resolveResourcesPath(mainDirname),
+    app.getVersion(),
+  );
+}
