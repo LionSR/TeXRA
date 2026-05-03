@@ -28,19 +28,10 @@ import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import {
-  isWorkflowTaskState,
-  type TaskState,
-  type WorkflowTaskState,
-} from '@logger/TaskState';
+import type { TaskState } from '@logger/TaskState';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
-import type {
-  CompileFailure,
-  OutputFileInfo,
-  StorageKey,
-  StreamTabId,
-} from '@shared/schemas';
+import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 import type { AgentProposal } from '@shared/schemas/prompts';
 import {
   dispatchProgressViewInbound,
@@ -74,6 +65,10 @@ import {
 } from '@utils/text/textEnhancementUtils';
 
 import { ProgressStreamLifecycleController } from '../controllers/progressView/ProgressStreamLifecycleController';
+import {
+  ProgressFollowUpController,
+  type ProgressFollowUpPlan,
+} from '../controllers/progressView/ProgressFollowUpController';
 import { ProgressWorkflowActionsController } from '../controllers/progressView/ProgressWorkflowActionsController';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
@@ -95,6 +90,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly recordingManager: RecordingManager;
   private readonly streamLifecycleController: ProgressStreamLifecycleController;
   private readonly workflowActionsController: ProgressWorkflowActionsController;
+  private readonly followUpController: ProgressFollowUpController;
   private readonly modelOutputBackups = new Map<
     StreamTabId,
     Map<string, { content: string; streamId: StreamTabId }>
@@ -128,6 +124,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.handlerRegistry = this.createHandlerRegistry();
     this.streamLifecycleController = this.createStreamLifecycleController();
     this.workflowActionsController = this.createWorkflowActionsController();
+    this.followUpController = this.createFollowUpController();
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
       void this.handleDeleteStream({
@@ -420,6 +417,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       runFileOperation: async (operation, request) => {
         await vscode.commands.executeCommand(`texra.${operation}`, request);
+      },
+    });
+  }
+
+  private createFollowUpController(): ProgressFollowUpController {
+    return new ProgressFollowUpController({
+      getAgentCategory: (agent) => getAgent(agent, true)?.category,
+      workspace: {
+        locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
+        exists: (relativePath) => WorkspaceFS.exists(relativePath),
       },
     });
   }
@@ -1017,260 +1024,62 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     executeImmediately: boolean,
   ): Promise<void> {
     const taskState = this.provider.state.meta.getTaskState(data.stream);
-    if (!taskState || !isWorkflowTaskState(taskState)) {
-      await vscode.window.showWarningMessage(
-        'No workflow state found for this stream. Cannot set up a follow-up.',
-      );
-      return;
-    }
-
     const outputFiles = [
       ...this.provider.state.outputFiles.getFiles(data.stream).values(),
     ].flat();
-    if (outputFiles.length === 0) {
-      await vscode.window.showInformationMessage(
-        'No workflow output files are available for a follow-up yet.',
-      );
-      return;
-    }
-
-    const agentEntry = getAgent(data.agent, true);
-    if (!agentEntry || agentEntry.category !== AgentCategory.ToolUse) {
-      await vscode.window.showWarningMessage(
-        'Select a tool-use agent before starting a follow-up.',
-      );
-      return;
-    }
-
     const { modelOptions } = await loadOptions();
-    const selectedModel = modelOptions.find(
-      (option) => option.value === data.model,
-    );
-    if (!selectedModel || selectedModel.disabled) {
-      await vscode.window.showWarningMessage(
-        'Select an available model before starting a follow-up.',
-      );
-      return;
-    }
 
-    const agentConfig = AgentConfigSchema.parse({
-      ...taskState.agentConfig,
-      agent: data.agent,
-      model: data.model,
-      agentCategory: AgentCategory.ToolUse,
-      instruction: this.buildWorkflowToolUseFollowupInstruction(
-        data.stream,
+    await this.applyFollowUpPlan(
+      this.followUpController.planToolUseFollowUp({
+        streamId: data.stream,
+        taskState,
         outputFiles,
-        data.initialQuestion,
-      ),
-      outputFiles: [],
-      useMultipleOutputs: false,
-      editedFile: null,
-      editedFiles: [],
-    }) as AgentConfig & { agentCategory: AgentCategory.ToolUse };
-
-    const followupTaskState: TaskState = { agentConfig };
-    await vscode.commands.executeCommand(
-      'texra.restoreState',
-      followupTaskState,
-      executeImmediately,
+        agent: data.agent,
+        model: data.model,
+        initialQuestion: data.initialQuestion,
+        executeImmediately,
+        modelOptions,
+        executionId: this.provider.state.meta.getExecutionId(data.stream),
+      }),
     );
-  }
-
-  private buildWorkflowToolUseFollowupInstruction(
-    streamId: StreamTabId,
-    outputFiles: OutputFileInfo[],
-    initialQuestion: string | undefined,
-  ): string {
-    const executionId = this.provider.state.meta.getExecutionId(streamId);
-    const executionHint = executionId ? `Execution: ${executionId}` : undefined;
-    const userQuestion = initialQuestion?.trim();
-    const outputLines = outputFiles.map((output) => {
-      const outputPath = this.formatOutputReferencePath(output, executionId);
-      const source = output.source ? ` (source: ${output.source})` : '';
-      return `- r${output.round}: ${outputPath}${source}`;
-    });
-
-    return [
-      'Continue from the completed workflow run. The workflow wrote generated files to task-run storage, so use the output paths below as read-only context unless a path is explicitly in the workspace.',
-      executionHint,
-      'Workflow outputs:',
-      ...outputLines,
-      userQuestion ? `User follow-up request: ${userQuestion}` : undefined,
-    ]
-      .filter(Boolean)
-      .join('\n');
-  }
-
-  private formatOutputReferencePath(
-    output: OutputFileInfo,
-    executionId: string | undefined,
-  ): string {
-    const location = output.location;
-    switch (location.kind) {
-      case 'runStorage':
-        return `/executions/${executionId ?? location.executionId}/files/${location.relativePath}`;
-      case 'workspace':
-        return location.relativePath;
-      case 'external':
-        return location.absolutePath;
-    }
   }
 
   private async handleRunCompileFixer(streamId: StreamTabId): Promise<void> {
     const taskState = this.provider.state.meta.getTaskState(streamId);
-    if (!taskState || !isWorkflowTaskState(taskState)) {
-      await vscode.window.showWarningMessage(
-        'No workflow state found for this stream. Cannot run latexFixer.',
-      );
-      return;
-    }
-
     const compileFailures = [
       ...this.provider.state.outputFiles.getCompileFailures(streamId).values(),
     ].flat();
-    if (compileFailures.length === 0) {
-      await vscode.window.showInformationMessage(
-        'No compile failures are recorded for this stream.',
-      );
-      return;
-    }
-
-    const model = await this.resolveWorkflowModel(taskState);
-    if (!model) {
-      await vscode.window.showWarningMessage(
-        'No model is available to launch latexFixer.',
-      );
-      return;
-    }
-
-    const editableFiles = await this.resolveCompileFixerInputFiles(
-      taskState.agentConfig,
-      compileFailures,
-      this.provider.state.outputFiles.getFiles(streamId),
-    );
-    if (editableFiles.length === 0) {
-      await vscode.window.showWarningMessage(
-        'No editable workspace source file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
-      );
-      return;
-    }
-
-    await this.executeValidated({
-      config: this.buildCompileFixerConfig(
-        taskState.agentConfig,
-        model,
-        editableFiles,
-        this.buildCompileFixerQuestion(
-          streamId,
-          compileFailures,
-          editableFiles,
-        ),
-      ),
-    });
-  }
-
-  private async resolveWorkflowModel(
-    taskState: WorkflowTaskState,
-  ): Promise<string | null> {
     const { modelOptions } = await loadOptions();
-    const workflowModel = taskState.agentConfig.model;
-    const workflowOption = modelOptions.find(
-      (option) => option.value === workflowModel,
+
+    await this.applyFollowUpPlan(
+      await this.followUpController.planCompileFixer({
+        streamId,
+        taskState,
+        compileFailures,
+        runOutputs: this.provider.state.outputFiles.getFiles(streamId),
+        modelOptions,
+        executionId: this.provider.state.meta.getExecutionId(streamId),
+      }),
     );
-    if (workflowOption && !workflowOption.disabled) {
-      return workflowModel;
-    }
-    return modelOptions.find((option) => !option.disabled)?.value ?? null;
   }
 
-  private buildCompileFixerQuestion(
-    streamId: StreamTabId,
-    compileFailures: CompileFailure[],
-    editableFiles: string[],
-  ): string {
-    const executionId = this.provider.state.meta.getExecutionId(streamId);
-    const executionHint = executionId ? `Execution: ${executionId}` : undefined;
-    const editableHint =
-      editableFiles.length > 0
-        ? `Editable workspace target${editableFiles.length === 1 ? '' : 's'}: ${editableFiles.join(', ')}`
-        : undefined;
-    const failureLines = compileFailures.map((failure) => {
-      const outputPath =
-        executionId && failure.output.kind === 'runStorage'
-          ? `/executions/${executionId}/files/${failure.output.relativePath}`
-          : failure.output.kind === 'external'
-            ? failure.output.absolutePath
-            : failure.output.relativePath;
-      const logPath = executionId
-        ? `/executions/${executionId}/files/${failure.logRelativePath}`
-        : failure.log.absolutePath;
-      return `- r${failure.round} ${failure.displayName}: output ${outputPath}; compile log ${logPath}`;
-    });
-
-    return [
-      'The workflow compile check failed. Diagnose and fix the generated LaTeX output using the compile log context below.',
-      executionHint,
-      editableHint,
-      ...failureLines,
-      'Use read_file/edit_file on the editable workspace target files. Use /executions paths only to inspect the generated output and logs.',
-      'If the failure is caused by a missing external dependency rather than editable LaTeX, report that clearly instead of inventing the missing file.',
-    ]
-      .filter(Boolean)
-      .join('\n');
-  }
-
-  private buildCompileFixerConfig(
-    originalConfig: AgentConfig,
-    model: string,
-    editableFiles: string[],
-    instruction: string,
-  ): AgentConfig {
-    const [inputFile = '', ...inputFiles] = editableFiles;
-    return {
-      ...originalConfig,
-      agent: 'latexFixer',
-      model,
-      instruction,
-      agentCategory: AgentCategory.ToolUse,
-      inputFile,
-      inputFiles,
-      outputFiles: [],
-      useMultipleOutputs: false,
-      editedFile: null,
-      editedFiles: [],
-    };
-  }
-
-  private async resolveCompileFixerInputFiles(
-    originalConfig: AgentConfig,
-    compileFailures: CompileFailure[],
-    runOutputs: Map<number, OutputFileInfo[]>,
-  ): Promise<string[]> {
-    const outputByPath = new Map<string, OutputFileInfo>();
-    for (const output of [...runOutputs.values()].flat()) {
-      outputByPath.set(output.location.absolutePath, output);
+  private async applyFollowUpPlan(plan: ProgressFollowUpPlan): Promise<void> {
+    switch (plan.kind) {
+      case 'warning':
+        await vscode.window.showWarningMessage(plan.message);
+        return;
+      case 'info':
+        await vscode.window.showInformationMessage(plan.message);
+        return;
+      case 'restoreState':
+        await vscode.commands.executeCommand(
+          'texra.restoreState',
+          plan.taskState,
+          plan.executeImmediately,
+        );
+        return;
+      case 'execute':
+        await this.executeValidated(plan.request);
     }
-
-    const sourceCandidates = compileFailures
-      .map((failure) => outputByPath.get(failure.output.absolutePath)?.source)
-      .filter((source): source is string => !!source);
-    const fallbackCandidates = [
-      originalConfig.inputFile,
-      ...originalConfig.inputFiles,
-    ].filter(Boolean);
-
-    const preferred = [...sourceCandidates, ...fallbackCandidates];
-    const targets: string[] = [];
-    const seen = new Set<string>();
-    for (const candidate of preferred) {
-      const location = WorkspaceFS.locatePath(candidate);
-      if (location.kind === 'external') continue;
-      if (seen.has(location.relativePath)) continue;
-      if (!(await WorkspaceFS.exists(location.relativePath))) continue;
-      seen.add(location.relativePath);
-      targets.push(location.relativePath);
-    }
-    return targets;
   }
 }
