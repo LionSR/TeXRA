@@ -7,7 +7,12 @@ import {
   type FileStat,
   type FileSystemProvider,
 } from '@platform/interfaces/filesystem';
-import type { ConfigProvider } from '@platform/interfaces/config';
+import type {
+  ConfigInspection,
+  ConfigProvider,
+  ConfigTarget,
+} from '@platform/interfaces/config';
+import type { Disposable } from '@platform/interfaces/disposable';
 import type { LogBackend, LogUtilsOptions } from '@platform/interfaces/log';
 import type { StateStore } from '@platform/interfaces/state';
 import type { StorageProvider } from '@platform/interfaces/storage';
@@ -107,9 +112,17 @@ function cloneRecord(record: FakeFileRecord): FakeFileRecord {
 export class FakeConfigProvider implements ConfigProvider {
   private readonly values = new Map<string, unknown>();
 
+  private readonly targets = new Map<string, ConfigTarget>();
+
+  private readonly watchers = new Set<{
+    key: string | readonly string[] | RegExp;
+    listener: () => void;
+  }>();
+
   constructor(values: Record<string, unknown> = {}) {
     for (const [key, value] of Object.entries(values)) {
       this.values.set(key, value);
+      this.targets.set(key, 'workspace');
     }
   }
 
@@ -122,6 +135,74 @@ export class FakeConfigProvider implements ConfigProvider {
 
   set(key: string, value: unknown): void {
     this.values.set(key, value);
+    this.targets.set(key, 'workspace');
+    this.notifyWatchers(key);
+  }
+
+  async update<T>(
+    key: string,
+    value: T,
+    target: ConfigTarget = 'workspace',
+  ): Promise<void> {
+    if (value === undefined) {
+      this.values.delete(key);
+      this.targets.delete(key);
+    } else {
+      this.values.set(key, value);
+      this.targets.set(key, target);
+    }
+    this.notifyWatchers(key);
+  }
+
+  inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
+    if (!this.values.has(key)) {
+      return undefined;
+    }
+    const value = this.values.get(key) as T;
+    const target = this.targets.get(key) ?? 'workspace';
+    return {
+      globalValue: target === 'global' ? value : undefined,
+      workspaceValue: target === 'workspace' ? value : undefined,
+      effectiveValue: value,
+    };
+  }
+
+  isExplicitlySet(key: string): boolean {
+    return this.values.has(key);
+  }
+
+  watch(
+    key: string | readonly string[] | RegExp,
+    listener: () => void,
+  ): Disposable {
+    const watcher = { key, listener };
+    this.watchers.add(watcher);
+    return {
+      dispose: () => {
+        this.watchers.delete(watcher);
+      },
+    };
+  }
+
+  private notifyWatchers(changedKey: string): void {
+    for (const watcher of this.watchers) {
+      if (this.matchesWatchedKey(watcher.key, changedKey)) {
+        watcher.listener();
+      }
+    }
+  }
+
+  private matchesWatchedKey(
+    watchedKey: string | readonly string[] | RegExp,
+    changedKey: string,
+  ): boolean {
+    if (watchedKey instanceof RegExp) {
+      return watchedKey.test(changedKey);
+    }
+    if (typeof watchedKey === 'string') {
+      return watchedKey === changedKey;
+    }
+    return watchedKey.includes(changedKey);
   }
 }
 
@@ -525,6 +606,11 @@ export class FakeFileSystemProvider implements FileSystemProvider {
 }
 
 export class FakeWorkspaceProvider implements WorkspaceProvider {
+  private readonly watchers = new Set<{
+    globPattern: string;
+    listener: () => void;
+  }>();
+
   constructor(private readonly workspacePath: string | undefined) {}
 
   getWorkspacePath(): string | undefined {
@@ -542,6 +628,16 @@ export class FakeWorkspaceProvider implements WorkspaceProvider {
       return filePath;
     }
     return relative.replaceAll('\\', '/');
+  }
+
+  watch(globPattern: string, listener: () => void): Disposable {
+    const watcher = { globPattern, listener };
+    this.watchers.add(watcher);
+    return {
+      dispose: () => {
+        this.watchers.delete(watcher);
+      },
+    };
   }
 }
 
