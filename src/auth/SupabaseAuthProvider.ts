@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
-import { z } from 'zod';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
-import { parseAuthCallbackTokens } from './core/authCallback';
 import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
@@ -20,32 +18,13 @@ import {
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
 import {
-  parseStoredSupabaseSession,
-  toStorableSupabaseSession,
+  fetchWithTimeout,
+  parseTokenExchangeResponse,
+  SupabaseSessionCoordinator,
+  toStorableGitHubTokenExchangeSession,
   type SupabaseSession,
 } from './SupabaseSession';
-import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 import type { SupabaseUriHandler } from './UriHandler';
-
-/** Response schema for GitHub token exchange Edge Function. */
-const GitHubTokenExchangeSchema = z.object({
-  access_token: z.string(),
-  refresh_token: z.string(),
-  expires_at: z.number().optional(),
-  expires_in: z.number().optional(),
-  token_type: z.string(),
-  user: z.object({
-    id: z.string(),
-    email: z.string().nullish(),
-    user_metadata: z
-      .object({
-        avatar_url: z.string().optional(),
-        user_name: z.string().optional(),
-      })
-      .optional(),
-  }),
-});
-type GitHubTokenExchangeResponse = z.infer<typeof GitHubTokenExchangeSchema>;
 
 /** Timeout for Edge Function requests (30 seconds) */
 const EDGE_FUNCTION_TIMEOUT_MS = 30000;
@@ -60,29 +39,6 @@ const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
   ghs_: 'server-to-server token',
 };
 
-function parseStoredProviderSession(
-  sessionData: string | undefined,
-): SupabaseSession | null {
-  return parseStoredSupabaseSession(sessionData, {
-    logSource: 'SupabaseAuthProvider',
-    warn: logger.warn,
-  });
-}
-
-/** Result of parsing auth callback URI */
-interface CallbackParseResult {
-  success: true;
-  session: SupabaseSession;
-}
-
-interface CallbackParseError {
-  success: false;
-  error: string;
-  isAuthError?: boolean;
-}
-
-type CallbackResult = CallbackParseResult | CallbackParseError;
-
 /**
  * Type guard to check if a string is a valid OAuth provider.
  */
@@ -96,9 +52,7 @@ function isOAuthProvider(value: string | undefined): value is OAuthProvider {
  * Authentication provider for Supabase integration.
  * Manages user sessions for remote agent access.
  */
-export class SupabaseAuthProvider
-  implements vscode.AuthenticationProvider, AuthTokenProvider
-{
+export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private static instance: SupabaseAuthProvider | null = null;
 
   private _onDidChangeSessions =
@@ -107,7 +61,7 @@ export class SupabaseAuthProvider
 
   private uriHandler: SupabaseUriHandler | null = null;
   private uriHandlerSubscription: vscode.Disposable | null = null;
-  private refreshPromise: Promise<SupabaseSession | null> | null = null;
+  private readonly sessionCoordinator: SupabaseSessionCoordinator;
   /** Flag to prevent race conditions between OAuth and magic link handlers */
   private isProcessingCallback = false;
 
@@ -117,19 +71,37 @@ export class SupabaseAuthProvider
       SUPABASE_CONFIG.publicKey,
       context,
     );
+    this.sessionCoordinator = new SupabaseSessionCoordinator({
+      storage: {
+        get: () => Promise.resolve(context.secrets.get(SUPABASE_SESSION_KEY)),
+        store: (sessionData) =>
+          Promise.resolve(
+            context.secrets.store(SUPABASE_SESSION_KEY, sessionData),
+          ),
+        delete: () =>
+          Promise.resolve(context.secrets.delete(SUPABASE_SESSION_KEY)),
+      },
+      getClient: () => SupabaseClient.getClient(),
+      whenReady: async () => {
+        if (!this.uriHandler) {
+          throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
+        }
+      },
+      tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
+      defaultSessionExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
+      githubTokenRefreshUrl: GITHUB_TOKEN_REFRESH_URL,
+      edgeFunctionTimeoutMs: EDGE_FUNCTION_TIMEOUT_MS,
+      log: logger,
+      onTokenExpiryChanged: (expiresAt) =>
+        SupabaseClient.setTokenExpiry(expiresAt),
+    });
     SupabaseAuthProvider.instance = this;
-    SupabaseClient.setAuthProvider(this);
+    SupabaseClient.setAuthProvider(this.sessionCoordinator);
   }
 
   /** Get singleton instance for sign out operations. */
   static getInstance(): SupabaseAuthProvider | null {
     return this.instance;
-  }
-
-  async whenReady(): Promise<void> {
-    if (!this.uriHandler) {
-      throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
-    }
   }
 
   /**
@@ -140,12 +112,7 @@ export class SupabaseAuthProvider
     session: SupabaseSession,
     notify = false,
   ): Promise<void> {
-    await this.context.secrets.store(
-      SUPABASE_SESSION_KEY,
-      JSON.stringify(session),
-    );
-    // Keep in-memory expiry cache in sync for fast pre-invocation checks.
-    SupabaseClient.setTokenExpiry(session.expiresAt);
+    await this.sessionCoordinator.storeSession(session);
     if (notify) {
       getServerSideKeyService().clearAllCaches();
       this._onDidChangeSessions.fire({
@@ -153,85 +120,6 @@ export class SupabaseAuthProvider
         removed: [],
         changed: [],
       });
-    }
-  }
-
-  /**
-   * Ensure the access token is fresh, refreshing proactively if near expiry.
-   * Called by SupabaseClient.getAccessToken() to avoid token expiration during
-   * long-running operations (e.g., GPT-5 background mode).
-   *
-   * @returns Fresh access token, or null if no session or refresh failed
-   */
-  async ensureFreshToken(forceRefresh?: boolean): Promise<string | null> {
-    try {
-      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      const session = parseStoredProviderSession(sessionData);
-      if (!session) {
-        return null;
-      }
-
-      const timeUntilExpiry = session.expiresAt - Date.now();
-
-      // Refresh proactively if token expires within threshold,
-      // or immediately if the caller knows the current token is invalid (relay 401).
-      if (forceRefresh || timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_MS) {
-        logger.info(
-          'SupabaseAuthProvider',
-          `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
-        );
-        const refreshed = await this.refreshSession(session);
-        if (refreshed) {
-          return refreshed.accessToken;
-        }
-        // If token is already expired or caller explicitly requested refresh
-        // (e.g., relay rejected the current token), return null so the caller
-        // doesn't get back the same token the server already rejected.
-        if (forceRefresh || timeUntilExpiry <= 0) {
-          logger.warn(
-            'SupabaseAuthProvider',
-            forceRefresh
-              ? 'Force refresh requested but refresh failed, returning null'
-              : 'Token expired and refresh failed, returning null',
-          );
-          return null;
-        }
-        // Token still valid but refresh failed - return existing token
-      }
-
-      return session.accessToken;
-    } catch (error) {
-      logger.error(
-        'SupabaseAuthProvider',
-        `Error ensuring fresh token: ${toErrorMessage(error)}`,
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Get access and refresh tokens from secure storage.
-   * Ensures tokens are fresh before returning.
-   */
-  async getSessionTokens(): Promise<SessionTokens | null> {
-    await this.ensureFreshToken();
-
-    try {
-      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      const session = parseStoredProviderSession(sessionData);
-      if (!session) {
-        return null;
-      }
-      return {
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-      };
-    } catch (error) {
-      logger.error(
-        'SupabaseAuthProvider',
-        `Error getting session tokens: ${toErrorMessage(error)}`,
-      );
-      return null;
     }
   }
 
@@ -274,14 +162,16 @@ export class SupabaseAuthProvider
 
     try {
       // Check if we already have a session (after claiming the lock)
-      const existingSession = parseStoredProviderSession(
-        await this.context.secrets.get(SUPABASE_SESSION_KEY),
-      );
+      const existingSession = await this.sessionCoordinator.loadSession();
       if (existingSession) {
         return;
       }
 
-      const result = await this.parseCallbackAndCreateSession(uri);
+      const result = await this.sessionCoordinator.createSessionFromCallback({
+        path: uri.path,
+        query: uri.query,
+        fragment: uri.fragment,
+      });
 
       if (!result.success) {
         if (result.isAuthError) {
@@ -319,63 +209,12 @@ export class SupabaseAuthProvider
     }
   }
 
-  /**
-   * Parse auth callback URI and create a session.
-   * Shared logic for both OAuth and magic link flows.
-   *
-   * Tokens are typically in the fragment (implicit flow), but we also
-   * check query params as fallback for PKCE flow or web environments.
-   */
-  private async parseCallbackAndCreateSession(
-    uri: vscode.Uri,
-  ): Promise<CallbackResult> {
-    const parsedCallback = parseAuthCallbackTokens({
-      path: uri.path,
-      query: uri.query,
-      fragment: uri.fragment,
-    });
-
-    if (!parsedCallback.success) return parsedCallback;
-
-    const { accessToken, refreshToken, expiresIn } = parsedCallback.tokens;
-
-    // Verify user with Supabase
-    const supabase = SupabaseClient.getClient();
-    const { data, error: userError } = await supabase.auth.getUser(accessToken);
-
-    if (userError || !data.user) {
-      return {
-        success: false,
-        error: userError?.message || 'User verification failed',
-        isAuthError: true,
-      };
-    }
-
-    const expiresAt = expiresIn
-      ? Date.now() + parseInt(expiresIn) * 1000
-      : Date.now() + DEFAULT_SESSION_EXPIRY_MS;
-
-    const session: SupabaseSession = {
-      id: data.user.id,
-      accessToken,
-      refreshToken,
-      account: {
-        id: data.user.id,
-        label: data.user.email || data.user.id,
-      },
-      expiresAt,
-    };
-
-    return { success: true, session };
-  }
-
   /** Get sessions from secure storage. */
   async getSessions(
     _scopes?: readonly string[],
     _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
-    const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-    const session = parseStoredProviderSession(sessionData);
+    const session = await this.sessionCoordinator.loadSession();
     if (!session) {
       return [];
     }
@@ -386,7 +225,7 @@ export class SupabaseAuthProvider
 
     try {
       if (Date.now() >= session.expiresAt) {
-        const refreshed = await this.refreshSession(session);
+        const refreshed = await this.sessionCoordinator.refreshSession(session);
         if (!refreshed) {
           await this.handleInvalidSession(session.id, 'expired');
           return [];
@@ -544,7 +383,7 @@ export class SupabaseAuthProvider
       );
 
       // Exchange GitHub token for Supabase session via Edge Function
-      const response = await this.fetchWithTimeout(
+      const response = await fetchWithTimeout(
         GITHUB_TOKEN_EXCHANGE_URL,
         {
           method: 'POST',
@@ -572,25 +411,12 @@ export class SupabaseAuthProvider
         throw new Error(errorMsg);
       }
 
-      const data = await this.parseTokenExchangeResponse(response);
-
-      // Create session in same format as Supabase OAuth
-      // Note: expires_at from Edge Function is in seconds, convert to milliseconds
-      const session: SupabaseSession = {
-        id: data.user.id,
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        account: {
-          id: data.user.id,
-          label: data.user.email || githubSession.account.label,
-        },
-        expiresAt: data.expires_at
-          ? data.expires_at * 1000
-          : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
-        // Use custom refresh since our tokens are stored in sessions table,
-        // not Supabase's internal auth tables
-        useCustomRefresh: true,
-      };
+      const data = await parseTokenExchangeResponse(response, logger);
+      const session = toStorableGitHubTokenExchangeSession(
+        data,
+        githubSession.account.label,
+        DEFAULT_SESSION_EXPIRY_MS,
+      );
 
       await this.storeSession(session, true);
       void vscode.window.showInformationMessage(
@@ -607,41 +433,6 @@ export class SupabaseAuthProvider
       void vscode.window.showErrorMessage(`Authentication failed: ${message}`);
       throw error;
     }
-  }
-
-  private async fetchWithTimeout(
-    url: string,
-    options: RequestInit,
-    timeoutMs: number,
-    timeoutMessage: string,
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await fetch(url, { ...options, signal: controller.signal });
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(timeoutMessage);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  private async parseTokenExchangeResponse(
-    response: Response,
-  ): Promise<GitHubTokenExchangeResponse> {
-    const rawData = await response.json();
-    const parsed = GitHubTokenExchangeSchema.safeParse(rawData);
-    if (!parsed.success) {
-      logger.error(
-        'SupabaseAuthProvider',
-        `Token exchange response validation failed: ${parsed.error.message}`,
-      );
-      throw new Error('Invalid response format from authentication server');
-    }
-    return parsed.data;
   }
 
   /**
@@ -712,8 +503,7 @@ export class SupabaseAuthProvider
   async removeSession(sessionId: string): Promise<void> {
     try {
       await SupabaseClient.getClient().auth.signOut();
-      await this.context.secrets.delete(SUPABASE_SESSION_KEY);
-      SupabaseClient.setTokenExpiry(null);
+      await this.sessionCoordinator.clearSession();
       // Clear server-side key cache when session is removed (handles automatic invalidation)
       getServerSideKeyService().clearAllCaches();
       this._onDidChangeSessions.fire({
@@ -766,7 +556,12 @@ export class SupabaseAuthProvider
           cleanupListeners();
 
           try {
-            const result = await this.parseCallbackAndCreateSession(uri);
+            const result =
+              await this.sessionCoordinator.createSessionFromCallback({
+                path: uri.path,
+                query: uri.query,
+                fragment: uri.fragment,
+              });
 
             if (!result.success) {
               if (result.error === 'Missing tokens in callback') {
@@ -806,95 +601,6 @@ export class SupabaseAuthProvider
         resolve(null);
       });
     });
-  }
-
-  /**
-   * Refresh session with concurrency protection.
-   * Routes to custom endpoint for GitHub auth sessions, otherwise uses Supabase native refresh.
-   */
-  private async refreshSession(
-    session: SupabaseSession,
-  ): Promise<SupabaseSession | null> {
-    if (this.refreshPromise) {
-      return this.refreshPromise;
-    }
-
-    this.refreshPromise = (
-      session.useCustomRefresh
-        ? this.refreshViaCustomEndpoint(session)
-        : this.refreshViaSupabase(session)
-    )
-      .catch((error) => {
-        logger.error(
-          'SupabaseAuthProvider',
-          `Error refreshing session: ${toErrorMessage(error)}`,
-        );
-        return null;
-      })
-      .finally(() => {
-        this.refreshPromise = null;
-      });
-
-    return this.refreshPromise;
-  }
-
-  private async refreshViaSupabase(
-    session: SupabaseSession,
-  ): Promise<SupabaseSession | null> {
-    const { data, error } =
-      await SupabaseClient.getClient().auth.refreshSession({
-        refresh_token: session.refreshToken,
-      });
-
-    if (error || !data.session) {
-      return null;
-    }
-
-    const refreshed = toStorableSupabaseSession(data.session);
-    await this.storeSession(refreshed);
-    return refreshed;
-  }
-
-  private async refreshViaCustomEndpoint(
-    session: SupabaseSession,
-  ): Promise<SupabaseSession | null> {
-    const response = await this.fetchWithTimeout(
-      GITHUB_TOKEN_REFRESH_URL,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: session.refreshToken }),
-      },
-      EDGE_FUNCTION_TIMEOUT_MS,
-      'Token refresh timeout',
-    );
-
-    if (!response.ok) {
-      logger.warn(
-        'SupabaseAuthProvider',
-        `Token refresh failed: ${response.status}`,
-      );
-      return null;
-    }
-
-    const data = await this.parseTokenExchangeResponse(response);
-    const refreshed: SupabaseSession = {
-      id: data.user.id,
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      account: {
-        id: data.user.id,
-        label: data.user.email || session.account.label,
-      },
-      expiresAt: data.expires_at
-        ? data.expires_at * 1000
-        : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
-      useCustomRefresh: true,
-    };
-
-    await this.storeSession(refreshed);
-    logger.info('SupabaseAuthProvider', 'Token refreshed via custom endpoint');
-    return refreshed;
   }
 
   private toVSCodeSession(
