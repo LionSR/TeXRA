@@ -18,8 +18,6 @@ import {
   AgentExecutionHandle,
   ProcessExecutionHandle,
   collectChildSummary,
-  emitActiveSubagentsUpdate,
-  emitActiveProcessesUpdate,
   interruptActiveChildren as interruptChildren,
 } from './ExecutionHandle';
 
@@ -54,11 +52,7 @@ StreamStatusService.onDidChange(({ streamId }) => {
       // Re-emit badge update so the parent's background tasks panel
       // reflects the new status (e.g. running → waiting).
       if (handle.parentStreamId !== handle.childStreamId) {
-        emitActiveSubagentsUpdate(
-          handle.parentStreamId,
-          registry.values(),
-          runtimeHost,
-        );
+        emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
       }
       break;
     }
@@ -78,11 +72,7 @@ export function trackExecution(handle: ExecutionHandle): void {
   // (where parentStreamId differs from childStreamId)
   if (handle instanceof AgentExecutionHandle) {
     if (handle.parentStreamId !== handle.childStreamId) {
-      emitActiveSubagentsUpdate(
-        handle.parentStreamId,
-        registry.values(),
-        runtimeHost,
-      );
+      emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
       runtimeHost.emit('setParentStream', {
         childStreamId: handle.childStreamId,
         parentStreamId: handle.parentStreamId,
@@ -92,11 +82,7 @@ export function trackExecution(handle: ExecutionHandle): void {
 
   // Emit process badge update for background bash processes
   if (handle instanceof ProcessExecutionHandle) {
-    emitActiveProcessesUpdate(
-      handle.parentStreamId,
-      registry.values(),
-      runtimeHost,
-    );
+    emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
     reconcileOutputPoller();
   }
 }
@@ -113,11 +99,7 @@ export function untrackExecution(executionId: string): void {
     handle instanceof AgentExecutionHandle &&
     handle.parentStreamId !== handle.childStreamId
   ) {
-    emitActiveSubagentsUpdate(
-      handle.parentStreamId,
-      registry.values(),
-      runtimeHost,
-    );
+    emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
   }
 
   // Emit process badge update on removal and flush final output.
@@ -126,11 +108,7 @@ export function untrackExecution(executionId: string): void {
   if (handle instanceof ProcessExecutionHandle) {
     const finalize = (): void => {
       outputOffsets.delete(executionId);
-      emitActiveProcessesUpdate(
-        handle.parentStreamId,
-        registry.values(),
-        runtimeHost,
-      );
+      emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
       reconcileOutputPoller();
     };
     if (handle.outputPaths) {
@@ -290,11 +268,7 @@ export function detachActiveChildren(parentStreamId: StreamTabId): void {
       handle.terminate();
     }
   }
-  emitActiveSubagentsUpdate(
-    parentStreamId,
-    registry.values(),
-    runtimeHostForParent(parentStreamId),
-  );
+  emitActiveSubagentsUpdate(parentStreamId);
 }
 
 /** Get active subagent and process children for a parent stream. */
@@ -314,6 +288,38 @@ export function getActiveChildren(parentStreamId: StreamTabId): {
       ProcessExecutionHandle,
     ),
   };
+}
+
+/** Emit the current active subagent list for a parent to the progress UI. */
+function emitActiveSubagentsUpdate(
+  parentStreamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost = runtimeHostForParent(parentStreamId),
+): void {
+  const children = collectChildSummary(
+    parentStreamId,
+    registry.values(),
+    AgentExecutionHandle,
+  );
+  runtimeHost.emit('updateActiveSubagents', {
+    parentStreamId,
+    children,
+  });
+}
+
+/** Emit the current active processes list for a parent to the progress UI. */
+function emitActiveProcessesUpdate(
+  parentStreamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost = runtimeHostForParent(parentStreamId),
+): void {
+  const processes = collectChildSummary(
+    parentStreamId,
+    registry.values(),
+    ProcessExecutionHandle,
+  );
+  runtimeHost.emit('updateActiveProcesses', {
+    parentStreamId,
+    processes,
+  });
 }
 
 // ============================================================================
