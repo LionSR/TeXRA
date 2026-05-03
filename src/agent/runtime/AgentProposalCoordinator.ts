@@ -11,13 +11,12 @@
  * 3. On resolution → emits 'resolveAgentProposal' to dismiss UI
  */
 
-// Local imports
-import { bus } from '@eventBus/ProgressEventBus';
 import type { AgentProposal } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
   type CoordinatorConfig,
 } from './BasePromiseCoordinator';
+import type { ProgressSink } from './ProgressSink';
 
 // ============================================================================
 // Types
@@ -48,7 +47,7 @@ interface ProposalShowPayload extends Record<string, unknown> {
 // ============================================================================
 
 /** Manages pending agent proposals (workflow and tool-use). */
-class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
+export class AgentProposalCoordinator extends BasePromiseCoordinator<
   ProposalResult,
   ProposalShowPayload
 > {
@@ -70,10 +69,10 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
     const { proposalId, proposal, timeoutMs } = options;
 
     // Request host to show progress view so user sees the proposal
-    bus.emit('requestEnsureProgressView', {});
+    this.progressSink.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    bus.emit('setActiveStream', { streamId });
+    this.progressSink.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       proposalId,
@@ -87,5 +86,11 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
 // Singleton Export
 // ============================================================================
 
+export function createAgentProposalCoordinator(
+  progressSink: ProgressSink,
+): AgentProposalCoordinator {
+  return new AgentProposalCoordinator(progressSink);
+}
+
 /** Singleton coordinator instance. */
-export const proposalCoordinator = new AgentProposalCoordinatorImpl();
+export const proposalCoordinator = new AgentProposalCoordinator();
