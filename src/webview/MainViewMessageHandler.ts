@@ -24,6 +24,7 @@ import { DiffManager } from './managers/DiffManager';
 import { ExecutionManager } from './managers/ExecutionManager';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
+import { MainViewStartupController } from '../controllers/mainView/MainViewStartupController';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
@@ -31,6 +32,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly executionManager: ExecutionManager;
   private readonly diffManager: DiffManager;
   private readonly instructionManager: InstructionManager;
+  private readonly startupController: MainViewStartupController;
 
   constructor(context: vscode.ExtensionContext) {
     super('MainView', { trackActiveView: true });
@@ -45,6 +47,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.executionManager = new ExecutionManager();
     this.diffManager = new DiffManager();
     this.instructionManager = new InstructionManager(context);
+    this.startupController = new MainViewStartupController({
+      getConfig,
+      loadOptions,
+      getAuthStatus,
+    });
   }
 
   public override async handleMessage(
@@ -397,39 +404,16 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       return;
     }
     await super.handleWebviewReady(undefined, webviewView);
-    const showOrchestratorBanner = getConfig<boolean>(
-      'ui.showOrchestratorBanner',
-      true,
+    webviewView.webview.postMessage(
+      this.startupController.getOrchestratorBannerMessage(),
     );
-    webviewView.webview.postMessage({
-      command: showOrchestratorBanner
-        ? MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER
-        : MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
-    });
 
     try {
-      const [{ modelOptions, agentOptions }, authStatus] = await Promise.all([
-        loadOptions(),
-        getAuthStatus(),
-      ]);
-
-      webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsData: modelOptions,
-      });
-      webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-        optionsData: agentOptions,
-      });
-
-      const showLoginBanner =
-        !authStatus.authenticated &&
-        getConfig<boolean>('ui.showLoginBanner', true);
-      webviewView.webview.postMessage({
-        command: showLoginBanner
-          ? MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-      });
+      const messages =
+        await this.startupController.getOptionsAndLoginMessages();
+      for (const message of messages) {
+        webviewView.webview.postMessage(message);
+      }
     } catch (error) {
       this.logger.error(
         this.channel,
