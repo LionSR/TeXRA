@@ -13,9 +13,12 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
-import { toErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
-import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../config';
+import { toErrorMessage } from '@common/errors/errorMessage';
+import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../sharedConfig';
+import {
+  NOOP_AUTH_SERVICE_LOGGER,
+  type AuthServiceLogger,
+} from '../serviceLogger';
 import {
   TierModelConfigSchema,
   UserAccessStatusSchema,
@@ -41,7 +44,10 @@ export class TierService {
    * Create a new TierService.
    * @param baseUrl - The base URL for the relay server (e.g., "https://remote.texra.ai")
    */
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
+  ) {}
 
   /**
    * Clear the tier config cache.
@@ -88,13 +94,13 @@ export class TierService {
 
       if (!response.ok) {
         if (response.status === 404) {
-          logger.info(
+          this.logger.info(
             CHANNEL,
             'Tier-config endpoint not available, using defaults',
           );
           return null;
         }
-        logger.error(
+        this.logger.error(
           CHANNEL,
           `Failed to fetch tier config: ${response.status}`,
         );
@@ -114,7 +120,7 @@ export class TierService {
       const parsed = TierModelConfigSchema.safeParse(data);
 
       if (!parsed.success) {
-        logger.error(
+        this.logger.error(
           CHANNEL,
           `Invalid tier config response: ${parsed.error.message}`,
         );
@@ -123,7 +129,7 @@ export class TierService {
 
       return parsed.data;
     } catch (error) {
-      logger.error(
+      this.logger.error(
         CHANNEL,
         `Error fetching tier config: ${toErrorMessage(error)}`,
       );
