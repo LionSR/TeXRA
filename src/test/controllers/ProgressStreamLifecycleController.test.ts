@@ -34,6 +34,23 @@ describe('ProgressStreamLifecycleController', () => {
     assert.deepEqual(recorder.calls.get('deleteWebview'), ['stream-b']);
   });
 
+  it('deletes active finished streams and activates the next visible stream', async () => {
+    const { controller, recorder, streams, activeStream } =
+      createProgressStreamLifecycleHarness({
+        activeStream: 'stream-a',
+        visibleStreams: ['stream-b'],
+      });
+
+    await controller.deleteStream('stream-a');
+
+    assert.deepEqual(streams(), ['stream-b']);
+    assert.equal(activeStream(), 'stream-b');
+    assert.deepEqual(recorder.calls.get('stop'), undefined);
+    assert.deepEqual(recorder.calls.get('cleanupApprovals'), ['stream-a']);
+    assert.deepEqual(recorder.calls.get('setActiveStream'), ['stream-b']);
+    assert.deepEqual(recorder.calls.get('deleteWebview'), ['stream-a']);
+  });
+
   it('stops running streams and activates the next visible stream', async () => {
     const { controller, recorder, streams, activeStream } =
       createProgressStreamLifecycleHarness({
@@ -48,6 +65,16 @@ describe('ProgressStreamLifecycleController', () => {
     assert.equal(activeStream(), 'stream-b');
     assert.deepEqual(recorder.calls.get('stop'), ['stream-a']);
     assert.deepEqual(recorder.calls.get('setActiveStream'), ['stream-b']);
+  });
+
+  it('clears retry UI when stopping a stream without deleting it', async () => {
+    const { controller, recorder } = createProgressStreamLifecycleHarness();
+
+    await controller.stopStream('stream-a');
+
+    assert.deepEqual(recorder.calls.get('clearRetry'), ['stream-a']);
+    assert.deepEqual(recorder.calls.get('stop'), ['stream-a']);
+    assert.deepEqual(recorder.calls.get('cleanupApprovals'), undefined);
   });
 
   it('clears all stream lifecycle state', async () => {
