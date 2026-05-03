@@ -91,7 +91,7 @@ import type {
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
 
-interface ResolvedAgentBase extends AgentCore {
+interface AgentLaunchContext extends AgentCore {
   runtimeHost: AgentRuntimeHost;
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
@@ -155,28 +155,28 @@ async function beginRunStage(
   return agentLogger.stage(label);
 }
 
-interface ResolveAgentOptions {
+interface AgentLaunchInput {
+  configPayload: AgentConfigPayload;
+  executionId?: ExecutionId;
   runtimeHost?: AgentRuntimeHost;
   streamTabIdOverride?: StreamTabId;
+  taskType?: string;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
   onBeforeActivation?: (streamId: StreamTabId) => void;
-  /**
-   * Fires immediately after setActiveStream is emitted. Marks the activation
-   * boundary: any subsequent failure should surface on this stream (the UI
-   * tab is now visible) rather than be dropped silently.
-   */
-  onActivated?: (streamId: StreamTabId) => void;
   /** When true, reject if configPayload.agentCategory doesn't match the YAML-defined category. */
   enforceCategory?: boolean;
+  /** Skip the `requestShowError` toast -- for callers that show their own UI. */
+  suppressErrorNotification?: boolean;
 }
-async function resolveAgentBase(
-  configPayload: AgentConfigPayload,
-  providedExecutionId?: ExecutionId,
-  options?: ResolveAgentOptions,
-): Promise<ResolvedAgentBase> {
-  const runtimeHost = options?.runtimeHost ?? getAgentRuntimeHost();
-  const executionId: ExecutionId = providedExecutionId ?? generateExecutionId();
 
+async function assembleAgentLaunchContext(
+  input: AgentLaunchInput,
+  executionId: ExecutionId,
+  runtimeHost: AgentRuntimeHost,
+  reservedStreamId: StreamTabId | undefined,
+  onActivated: (streamId: StreamTabId) => void,
+): Promise<AgentLaunchContext> {
+  const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
@@ -198,7 +198,7 @@ async function resolveAgentBase(
   // because many code paths pass pre-parsed configs where agentCategory was
   // prefaulted to Workflow by the schema (not explicitly chosen by the caller).
   if (
-    options?.enforceCategory &&
+    input.enforceCategory &&
     configPayload.agentCategory &&
     configPayload.agentCategory !== setting.agentCategory
   ) {
@@ -226,7 +226,8 @@ async function resolveAgentBase(
   const modelHandler = createModelHandler(MODEL_CONFIGS[fullConfig.model]);
 
   const streamId =
-    options?.streamTabIdOverride ??
+    input.streamTabIdOverride ??
+    reservedStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
   const agentLogger = new AgentLogger(streamId, true);
@@ -239,7 +240,7 @@ async function resolveAgentBase(
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
 
-  options?.onBeforeActivation?.(streamId);
+  input.onBeforeActivation?.(streamId);
 
   runtimeHost.emit('setActiveStream', {
     streamId,
@@ -247,12 +248,12 @@ async function resolveAgentBase(
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: useMultipleOutputs,
   });
-  options?.onActivated?.(streamId);
+  onActivated(streamId);
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
   const initialInstruction =
-    config.instruction?.trim() && !options?.streamTabIdOverride
+    config.instruction?.trim() && !input.streamTabIdOverride
       ? config.instruction.trim()
       : undefined;
 
@@ -409,7 +410,7 @@ function createRoundProgressCallback(
 }
 
 async function runFlowWithLifecycle(
-  ctx: ResolvedAgentBase,
+  ctx: AgentLaunchContext,
   streamId: StreamTabId,
   agentName: string,
   runner: () => Promise<AgentFlowResult>,
@@ -533,26 +534,24 @@ function buildFallbackNotification(config: AgentConfig) {
  * Saga-style compensation for a failed stream activation.
  *
  *  - Pre-activation failure (no `activatedStreamId`): the UI tab was never
- *    registered. Release the preliminary lock if we held it; the caller
- *    won't ever see a stream.
+ *    registered. Release the reserved lock if we held it; the caller won't
+ *    ever see a stream.
  *
  *  - Post-activation failure (`activatedStreamId` set): the UI tab is
  *    visible. Surface the failure on it and transition to ERROR so the
- *    tab doesn't hang in INITIALIZING. Release the preliminary lock only
- *    when the activation switched to a different id (rare: when
- *    `useMultipleOutputs` flips during resolution).
+ *    tab doesn't hang in INITIALIZING.
  */
 function compensateFailedActivation(args: {
-  preliminaryStreamId?: StreamTabId;
-  activatedStreamId?: StreamTabId;
   configPayload: AgentConfigPayload;
+  reservedStreamId?: StreamTabId;
+  activatedStreamId?: StreamTabId;
   runtimeHost: AgentRuntimeHost;
   err: unknown;
 }): void {
   const {
-    preliminaryStreamId,
-    activatedStreamId,
     configPayload,
+    reservedStreamId,
+    activatedStreamId,
     runtimeHost,
     err,
   } = args;
@@ -566,73 +565,64 @@ function compensateFailedActivation(args: {
     StreamStatusService.set(activatedStreamId, STREAM_STATUS.ERROR, {
       runtimeHost,
     });
+    return;
   }
 
-  if (preliminaryStreamId && preliminaryStreamId !== activatedStreamId) {
-    StreamStatusService.releaseIfInitializing(preliminaryStreamId, {
+  if (reservedStreamId) {
+    StreamStatusService.releaseIfInitializing(reservedStreamId, {
       runtimeHost,
     });
   }
 }
 
 /**
- * Resolves agent context and acquires stream lock, handling the preliminary→final
- * stream ID correction that occurs when useMultipleOutputs changes during resolution.
+ * Resolves agent context and reserves the final stream id before the UI is
+ * activated.
  *
  * Treats the `setActiveStream` emission as a transactional commit point:
  * resolution failures before that point release the lock silently; failures
  * after surface on the visible tab via {@link compensateFailedActivation}.
  */
-async function resolveAndAcquireStream(
-  configPayload: AgentConfigPayload,
-  executionId?: ExecutionId,
-  options?: {
-    runtimeHost?: AgentRuntimeHost;
-    streamTabIdOverride?: StreamTabId;
-    taskType?: string;
-    onBeforeActivation?: (streamId: StreamTabId) => void;
-    enforceCategory?: boolean;
-    /** Skip the `requestShowError` toast — for callers that show their own UI. */
-    suppressErrorNotification?: boolean;
-  },
-): Promise<ResolvedAgentBase> {
-  const runtimeHost = options?.runtimeHost ?? getAgentRuntimeHost();
-  let preliminaryStreamId: StreamTabId | undefined;
-  let resolvedExecutionId = executionId;
+async function buildAgentLaunchContext(
+  input: AgentLaunchInput,
+): Promise<AgentLaunchContext> {
+  const { configPayload } = input;
+  const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
+  const executionId = input.executionId ?? generateExecutionId();
+  if (
+    !input.streamTabIdOverride &&
+    (!configPayload.agent || !configPayload.model)
+  ) {
+    throw new Error('Missing required fields: model and/or agent');
+  }
 
-  if (!options?.streamTabIdOverride) {
-    if (!configPayload.agent || !configPayload.model) {
-      throw new Error('Missing required fields: model and/or agent');
-    }
-    resolvedExecutionId = executionId ?? generateExecutionId();
-    preliminaryStreamId = getStreamTabId(
-      configPayload.agent,
-      configPayload.model,
-      { executionId: resolvedExecutionId },
-    );
-    acquireStreamOrThrow(preliminaryStreamId, runtimeHost, options?.taskType);
+  const reservedStreamId = input.streamTabIdOverride
+    ? undefined
+    : getStreamTabId(configPayload.agent, configPayload.model, { executionId });
+  if (reservedStreamId) {
+    acquireStreamOrThrow(reservedStreamId, runtimeHost, input.taskType);
   }
 
   let activatedStreamId: StreamTabId | undefined;
   try {
-    return await resolveAgentBase(configPayload, resolvedExecutionId, {
+    return await assembleAgentLaunchContext(
+      input,
+      executionId,
       runtimeHost,
-      streamTabIdOverride: options?.streamTabIdOverride,
-      onBeforeActivation: options?.onBeforeActivation,
-      onActivated: (streamId) => {
+      reservedStreamId,
+      (streamId) => {
         activatedStreamId = streamId;
       },
-      enforceCategory: options?.enforceCategory,
-    });
+    );
   } catch (err) {
     compensateFailedActivation({
-      preliminaryStreamId,
-      activatedStreamId,
       configPayload,
+      reservedStreamId,
+      activatedStreamId,
       runtimeHost,
       err,
     });
-    if (!options?.suppressErrorNotification && !(err instanceof ZodError)) {
+    if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
       runtimeHost.emit('requestShowError', {
         message: toErrorMessage(err),
       });
@@ -687,7 +677,9 @@ export async function executeAgent(
   options?: ExecuteAgentOptions,
 ): Promise<AgentFlowResult> {
   return runWithAgentRuntimeHost(options?.runtimeHost, async () => {
-    const ctx = await resolveAndAcquireStream(configPayload, executionId, {
+    const ctx = await buildAgentLaunchContext({
+      configPayload,
+      executionId,
       onBeforeActivation: options?.onStreamResolved,
       enforceCategory: options?.enforceCategory,
       suppressErrorNotification: options?.isSubagent,
@@ -842,7 +834,8 @@ export async function executeMergeAgent(
       inputFile,
       editedFile,
     };
-    const ctx = await resolveAndAcquireStream(configPayload, undefined, {
+    const ctx = await buildAgentLaunchContext({
+      configPayload,
       taskType: 'Merge task',
     });
     const { streamId, executionId } = ctx;
@@ -895,16 +888,14 @@ export async function resumeToolUseFromSnapshot(
 ): Promise<void> {
   const host = runtimeHost ?? getAgentRuntimeHost();
   return runWithAgentRuntimeHost(host, async () => {
-    const ctx = await resolveAndAcquireStream(
-      snapshot.agentConfig,
-      snapshot.executionId,
-      {
-        streamTabIdOverride: snapshot.streamId,
-        // resumeCommand surfaces its own warning toast on failure; skip the
-        // bus-level error to avoid double-notifying.
-        suppressErrorNotification: true,
-      },
-    );
+    const ctx = await buildAgentLaunchContext({
+      configPayload: snapshot.agentConfig,
+      executionId: snapshot.executionId,
+      streamTabIdOverride: snapshot.streamId,
+      // resumeCommand surfaces its own warning toast on failure; skip the
+      // bus-level error to avoid double-notifying.
+      suppressErrorNotification: true,
+    });
     // Recover delegation depth from the persisted parent-execution chain
     // so resumed subagents remain gated by the nested-delegation policy
     // instead of silently promoting to root.
