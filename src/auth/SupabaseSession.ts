@@ -142,6 +142,9 @@ export async function fetchWithTimeout(
     return await fetchImpl(url, { ...options, signal });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
+      if (options.signal?.aborted && !controller.signal.aborted) {
+        throw error;
+      }
       throw new Error(timeoutMessage);
     }
     throw error;
