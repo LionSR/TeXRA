@@ -307,11 +307,11 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   ): Promise<void> {
     const normalizedSource = normalizePath(source);
     const normalizedDest = normalizePath(dest);
+    const sourceRecord = this.requireRecord(normalizedSource);
     if (normalizedSource === normalizedDest) {
       return;
     }
 
-    const sourceRecord = this.requireRecord(normalizedSource);
     this.assertWritableTarget(normalizedDest, options?.overwrite);
 
     if (sourceRecord.type === FileType.File) {
