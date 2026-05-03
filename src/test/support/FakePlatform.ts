@@ -420,7 +420,6 @@ export class FakeFileSystemProvider implements FileSystemProvider {
 
     this.assertNotSelfDescendant(normalizedSource, normalizedDest, 'copy');
     this.assertDirectoryCopyRootTarget(normalizedDest);
-    this.assertParentDirectoryExists(normalizedDest);
     this.createDirectorySync(normalizedDest);
     for (const child of this.childPaths(normalizedSource)) {
       const relative = path.posix.relative(normalizedSource, child);
