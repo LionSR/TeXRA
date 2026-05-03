@@ -12,6 +12,7 @@ import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 // Local imports - controllers
 import {
   ProgressStreamLifecycleController,
+  type ProgressStreamLifecycleHost,
   type ProgressStreamLifecycleState,
 } from '../../controllers/progressView/ProgressStreamLifecycleController';
 import {
@@ -72,29 +73,42 @@ export function createProgressStreamLifecycleHarness(
       activeStream = '';
     },
   };
+  const host: ProgressStreamLifecycleHost = {
+    getVisibleStreamIds: () =>
+      options.visibleStreams ?? streams.filter((stream) => stream !== 'hidden'),
+    isStreamInFlight: (stream) => inFlightStreams.has(stream),
+    stopStream: async (stream, stopOptions = {}) => {
+      if (stopOptions.clearRetryRequest === true) {
+        recorder.record('clearRetry', stream);
+      }
+      recorder.record('stop', stream);
+    },
+    cleanupDeletedStream: (stream) => {
+      recorder.record('cleanupApprovals', stream);
+      recorder.record('clearRetry', stream);
+      recorder.record('releaseFollowUp', stream);
+      recorder.record('clearBackups', stream);
+      recorder.record('clearWebview', stream);
+    },
+    cleanupDeletedStreams: (streams) => {
+      recorder.record('cleanupAllApprovals', 'all');
+      for (const stream of streams) {
+        recorder.record('clearRetry', stream);
+        recorder.record('releaseFollowUp', stream);
+      }
+      recorder.record('clearBackups', 'all');
+      recorder.record('clearAllWebview', 'all');
+    },
+    deleteRenderedStream: (stream) => recorder.record('deleteWebview', stream),
+    rebuildRenderedStreams: (options) => syncCalls.push(options),
+    activateStream: async (stream) =>
+      recorder.record('setActiveStream', stream),
+  };
 
   return {
     controller: new ProgressStreamLifecycleController({
       state,
-      isStreamInFlight: (stream) => inFlightStreams.has(stream),
-      getVisibleStreamIds: () =>
-        options.visibleStreams ??
-        streams.filter((stream) => stream !== 'hidden'),
-      stopStream: async (stream) => recorder.record('stop', stream),
-      clearRetryRequest: (stream) => recorder.record('clearRetry', stream),
-      releaseFollowUpQueue: (stream) =>
-        recorder.record('releaseFollowUp', stream),
-      cleanupApprovalsForStream: (stream) =>
-        recorder.record('cleanupApprovals', stream),
-      cleanupAllApprovals: () => recorder.record('cleanupAllApprovals', 'all'),
-      clearModelOutputBackups: (stream) =>
-        recorder.record('clearBackups', stream ?? 'all'),
-      clearWebviewStream: (stream) => recorder.record('clearWebview', stream),
-      clearAllWebviewStreams: () => recorder.record('clearAllWebview', 'all'),
-      deleteWebviewStream: (stream) => recorder.record('deleteWebview', stream),
-      syncFullView: (options) => syncCalls.push(options),
-      setActiveStream: async (stream) =>
-        recorder.record('setActiveStream', stream),
+      host,
     }),
     recorder,
     syncCalls,
