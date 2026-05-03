@@ -6,16 +6,15 @@ import type {
   ModelOptionData,
 } from '@shared/schemas';
 
+// Local imports - controllers
+import type { MainViewAuthStatus } from './MainViewTypes';
+
 export interface MainViewStartupOptions {
   modelOptions: ModelOptionData[];
   agentOptions: {
     workflow?: AgentOptionData[];
     toolUse?: AgentOptionData[];
   };
-}
-
-export interface MainViewAuthStatus {
-  authenticated: boolean;
 }
 
 export interface MainViewStartupControllerDeps {
