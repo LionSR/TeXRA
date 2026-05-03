@@ -14,7 +14,7 @@
  * - free tier: Budget models only (under $1/M input)
  */
 
-import * as vscode from 'vscode';
+import { EventEmitter } from 'events';
 import * as logger from '@logger/logUtils';
 import {
   SERVER_SIDE_CACHE_TTL_MS,
@@ -22,6 +22,7 @@ import {
   FREE_TIER,
   type UserTier,
 } from '../config';
+import type { StateStore } from '@platform/interfaces/state';
 import type { TierService } from '../tier/TierService';
 import type { ServerSideProvider } from './types';
 
@@ -41,6 +42,8 @@ const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
 /** Global state key for the "use included model access" preference. */
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 
+const SERVICE_EVENT = 'event';
+
 /**
  * Interface for authentication provider that can check auth state and get user tier.
  */
@@ -48,6 +51,53 @@ export interface AuthProvider {
   isAuthenticated(): Promise<boolean>;
   getUserTier(): Promise<UserTier>;
   getAccessToken(): Promise<string | null>;
+}
+
+export interface ServerSideKeyDisposable {
+  dispose(): void;
+}
+
+export type ServerSideKeyEvent<T> = (
+  listener: (event: T) => unknown,
+  thisArgs?: unknown,
+  disposables?: ServerSideKeyDisposable[],
+) => ServerSideKeyDisposable;
+
+export type ServerSideKeyState = StateStore;
+
+export interface ServerSideKeyServiceInit {
+  state?: ServerSideKeyState;
+  subscriptions?: ServerSideKeyDisposable[];
+}
+
+class NodeEventEmitter<T> implements ServerSideKeyDisposable {
+  private readonly emitter = new EventEmitter();
+
+  readonly event: ServerSideKeyEvent<T> = (listener, thisArgs, disposables) => {
+    const boundListener =
+      thisArgs === undefined ? listener : listener.bind(thisArgs);
+    this.emitter.on(SERVICE_EVENT, boundListener);
+    const disposable = {
+      dispose: () => this.emitter.off(SERVICE_EVENT, boundListener),
+    };
+    disposables?.push(disposable);
+    return disposable;
+  };
+
+  fire(event: T): void {
+    for (const listener of this.emitter.listeners(SERVICE_EVENT)) {
+      try {
+        listener(event);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(CHANNEL, `Event listener failed: ${message}`);
+      }
+    }
+  }
+
+  dispose(): void {
+    this.emitter.removeAllListeners();
+  }
 }
 
 /**
@@ -71,10 +121,10 @@ export class ServerSideKeyService {
 
   // Settings
   private useIncludedModelAccess = true;
-  private globalState: vscode.Memento | null = null;
-  private readonly _onDidChangeModelAccess = new vscode.EventEmitter<boolean>();
-  private readonly _onCacheCleared = new vscode.EventEmitter<void>();
-  private readonly _tierServiceClearSubscription: vscode.Disposable;
+  private globalState: ServerSideKeyState | null = null;
+  private readonly _onDidChangeModelAccess = new NodeEventEmitter<boolean>();
+  private readonly _onCacheCleared = new NodeEventEmitter<void>();
+  private readonly _tierServiceClearSubscription: ServerSideKeyDisposable;
 
   readonly onDidChangeModelAccess = this._onDidChangeModelAccess.event;
   readonly onCacheCleared = this._onCacheCleared.event;
@@ -90,18 +140,18 @@ export class ServerSideKeyService {
   }
 
   /**
-   * Initialize the service with VS Code extension context.
-   * This enables settings persistence.
+   * Initialize the service with host-provided state and subscriptions.
+   * This enables settings persistence without coupling the service to VS Code.
    */
-  initialize(context: vscode.ExtensionContext): void {
-    context.subscriptions.push(this._onDidChangeModelAccess);
-    context.subscriptions.push(this._onCacheCleared);
-    context.subscriptions.push(this._tierServiceClearSubscription);
-    this.globalState = context.globalState;
-    this.useIncludedModelAccess = this.globalState.get<boolean>(
-      USE_INCLUDED_ACCESS_KEY,
-      true,
+  initialize(options: ServerSideKeyServiceInit): void {
+    options.subscriptions?.push(
+      this._onDidChangeModelAccess,
+      this._onCacheCleared,
+      this._tierServiceClearSubscription,
     );
+    this.globalState = options.state ?? null;
+    this.useIncludedModelAccess =
+      this.globalState?.get<boolean>(USE_INCLUDED_ACCESS_KEY, true) ?? true;
   }
 
   dispose(): void {
@@ -152,7 +202,7 @@ export class ServerSideKeyService {
     this.accessTimestamp = 0;
     this.accessFetchPromise = null;
     this.userTier = null;
-    this._onCacheCleared.fire();
+    this._onCacheCleared.fire(undefined);
   }
 
   isProviderOnServer(provider: string): boolean {
