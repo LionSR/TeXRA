@@ -26,11 +26,7 @@ import type {
 } from './prTypes';
 
 const MAX_BODY = 500;
-/**
- * A single CI check can emit hundreds of annotations (think: a linter on a
- * large diff). Show the first N inline so the agent gets the gist; for the
- * rest, include a count and a link out to the full list.
- */
+// A single linter run can emit hundreds; show the first N + overflow hint.
 const MAX_ANNOTATIONS_PER_RUN = 20;
 const MAX_ANNOTATION_MESSAGE = 300;
 
@@ -154,11 +150,9 @@ export function formatCheckFailureSummary(
 }
 
 /**
- * Inline check annotations (warnings / notices / failures pinned to specific
- * file lines, like the bubbles GitHub renders on the PR diff view). Emitted
- * separately from `formatCheckFailure` because annotations also appear on
- * *passing* checks — many workflows surface non-blocking lint / suggestion
- * advisories against specific lines without failing the build.
+ * Emitted separately from `formatCheckFailure` because annotations also
+ * appear on *passing* checks — many workflows surface non-blocking lint /
+ * suggestion advisories against specific lines without failing the build.
  */
 export function formatCheckAnnotations(
   slug: string,
