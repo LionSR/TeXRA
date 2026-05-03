@@ -169,48 +169,14 @@ interface AgentLaunchInput {
   suppressErrorNotification?: boolean;
 }
 
-interface AgentLaunchPlan extends Omit<
-  AgentLaunchInput,
-  'executionId' | 'runtimeHost'
-> {
-  executionId: ExecutionId;
-  runtimeHost: AgentRuntimeHost;
-  preliminaryStreamId?: StreamTabId;
-}
-
-function createAgentLaunchPlan(input: AgentLaunchInput): AgentLaunchPlan {
-  const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
-  const executionId = input.executionId ?? generateExecutionId();
-  const preliminaryStreamId = input.streamTabIdOverride
-    ? undefined
-    : getPreliminaryStreamId(input.configPayload, executionId);
-
-  return {
-    ...input,
-    executionId,
-    runtimeHost,
-    preliminaryStreamId,
-  };
-}
-
-function getPreliminaryStreamId(
-  configPayload: AgentConfigPayload,
+async function assembleAgentLaunchContext(
+  input: AgentLaunchInput,
   executionId: ExecutionId,
-): StreamTabId {
-  if (!configPayload.agent || !configPayload.model) {
-    throw new Error('Missing required fields: model and/or agent');
-  }
-
-  return getStreamTabId(configPayload.agent, configPayload.model, {
-    executionId,
-  });
-}
-
-async function createAgentLaunchContext(
-  launch: AgentLaunchPlan,
+  runtimeHost: AgentRuntimeHost,
+  preliminaryStreamId: StreamTabId | undefined,
   onActivated: (streamId: StreamTabId) => void,
 ): Promise<AgentLaunchContext> {
-  const { configPayload, executionId, runtimeHost } = launch;
+  const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
@@ -232,7 +198,7 @@ async function createAgentLaunchContext(
   // because many code paths pass pre-parsed configs where agentCategory was
   // prefaulted to Workflow by the schema (not explicitly chosen by the caller).
   if (
-    launch.enforceCategory &&
+    input.enforceCategory &&
     configPayload.agentCategory &&
     configPayload.agentCategory !== setting.agentCategory
   ) {
@@ -260,7 +226,8 @@ async function createAgentLaunchContext(
   const modelHandler = createModelHandler(MODEL_CONFIGS[fullConfig.model]);
 
   const streamId =
-    launch.streamTabIdOverride ??
+    input.streamTabIdOverride ??
+    preliminaryStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
   const agentLogger = new AgentLogger(streamId, true);
@@ -273,7 +240,7 @@ async function createAgentLaunchContext(
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
 
-  launch.onBeforeActivation?.(streamId);
+  input.onBeforeActivation?.(streamId);
 
   runtimeHost.emit('setActiveStream', {
     streamId,
@@ -286,7 +253,7 @@ async function createAgentLaunchContext(
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
   const initialInstruction =
-    config.instruction?.trim() && !launch.streamTabIdOverride
+    config.instruction?.trim() && !input.streamTabIdOverride
       ? config.instruction.trim()
       : undefined;
 
@@ -572,18 +539,22 @@ function buildFallbackNotification(config: AgentConfig) {
  *
  *  - Post-activation failure (`activatedStreamId` set): the UI tab is
  *    visible. Surface the failure on it and transition to ERROR so the
- *    tab doesn't hang in INITIALIZING. Release the preliminary lock only
- *    when the activation id differs from the reserved id. They should match
- *    for normal launches; the mismatch guard keeps future stream-id changes
- *    from leaking an initializing lock.
+ *    tab doesn't hang in INITIALIZING.
  */
 function compensateFailedActivation(args: {
-  launch: AgentLaunchPlan;
+  configPayload: AgentConfigPayload;
+  preliminaryStreamId?: StreamTabId;
   activatedStreamId?: StreamTabId;
+  runtimeHost: AgentRuntimeHost;
   err: unknown;
 }): void {
-  const { launch, activatedStreamId, err } = args;
-  const { configPayload, preliminaryStreamId, runtimeHost } = launch;
+  const {
+    configPayload,
+    preliminaryStreamId,
+    activatedStreamId,
+    runtimeHost,
+    err,
+  } = args;
 
   if (activatedStreamId) {
     new AgentLogger(activatedStreamId, true).logError(
@@ -594,9 +565,10 @@ function compensateFailedActivation(args: {
     StreamStatusService.set(activatedStreamId, STREAM_STATUS.ERROR, {
       runtimeHost,
     });
+    return;
   }
 
-  if (preliminaryStreamId && preliminaryStreamId !== activatedStreamId) {
+  if (preliminaryStreamId) {
     StreamStatusService.releaseIfInitializing(preliminaryStreamId, {
       runtimeHost,
     });
@@ -614,29 +586,44 @@ function compensateFailedActivation(args: {
 async function buildAgentLaunchContext(
   input: AgentLaunchInput,
 ): Promise<AgentLaunchContext> {
-  const launch = createAgentLaunchPlan(input);
+  const { configPayload } = input;
+  const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
+  const executionId = input.executionId ?? generateExecutionId();
 
-  if (launch.preliminaryStreamId) {
-    acquireStreamOrThrow(
-      launch.preliminaryStreamId,
-      launch.runtimeHost,
-      launch.taskType,
+  let preliminaryStreamId: StreamTabId | undefined;
+  if (!input.streamTabIdOverride) {
+    if (!configPayload.agent || !configPayload.model) {
+      throw new Error('Missing required fields: model and/or agent');
+    }
+    preliminaryStreamId = getStreamTabId(
+      configPayload.agent,
+      configPayload.model,
+      { executionId },
     );
+    acquireStreamOrThrow(preliminaryStreamId, runtimeHost, input.taskType);
   }
 
   let activatedStreamId: StreamTabId | undefined;
   try {
-    return await createAgentLaunchContext(launch, (streamId) => {
-      activatedStreamId = streamId;
-    });
+    return await assembleAgentLaunchContext(
+      input,
+      executionId,
+      runtimeHost,
+      preliminaryStreamId,
+      (streamId) => {
+        activatedStreamId = streamId;
+      },
+    );
   } catch (err) {
     compensateFailedActivation({
-      launch,
+      configPayload,
+      preliminaryStreamId,
       activatedStreamId,
+      runtimeHost,
       err,
     });
-    if (!launch.suppressErrorNotification && !(err instanceof ZodError)) {
-      launch.runtimeHost.emit('requestShowError', {
+    if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
+      runtimeHost.emit('requestShowError', {
         message: toErrorMessage(err),
       });
     }
