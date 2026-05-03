@@ -207,7 +207,7 @@ export async function activate(context: vscode.ExtensionContext) {
       const uriHandler = new SupabaseUriHandler();
       context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
       authProvider.setUriHandler(uriHandler);
-      SupabaseClient.setVSCodeProviderRegistered();
+      SupabaseClient.setHostAuthProviderRegistered();
 
       logger.info('extension', 'Supabase authentication provider registered');
 
