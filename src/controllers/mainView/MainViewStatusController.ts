@@ -1,9 +1,8 @@
 // Local imports - common
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 
-export interface MainViewAuthStatus {
-  authenticated: boolean;
-}
+// Local imports - controllers
+import type { MainViewAuthStatus } from './MainViewTypes';
 
 type MainViewStatusMessage =
   | { command: typeof MAIN_VIEW_COMMANDS.THEME_SET; theme: 'dark' | 'light' }
