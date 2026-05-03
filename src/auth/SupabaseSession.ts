@@ -282,69 +282,18 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * @returns Fresh access token, or null if no session or refresh failed.
    */
   async ensureFreshToken(forceRefresh?: boolean): Promise<string | null> {
-    try {
-      const session = await this.loadSession();
-      if (!session) {
-        return null;
-      }
-
-      const timeUntilExpiry = session.expiresAt - Date.now();
-
-      if (
-        forceRefresh ||
-        timeUntilExpiry < this.options.tokenRefreshThresholdMs
-      ) {
-        this.options.log?.info?.(
-          'SupabaseSession',
-          `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
-        );
-        const refreshed = await this.refreshSession(session);
-        if (refreshed) {
-          return refreshed.accessToken;
-        }
-        if (forceRefresh || timeUntilExpiry <= 0) {
-          this.options.log?.warn?.(
-            'SupabaseSession',
-            forceRefresh
-              ? 'Force refresh requested but refresh failed, returning null'
-              : 'Token expired and refresh failed, returning null',
-          );
-          return null;
-        }
-      }
-
-      return session.accessToken;
-    } catch (error) {
-      this.options.log?.error?.(
-        'SupabaseSession',
-        `Error ensuring fresh token: ${toErrorMessage(error)}`,
-      );
-      return null;
-    }
+    const session = await this.getFreshSession(forceRefresh);
+    return session?.accessToken ?? null;
   }
 
   /** Get access and refresh tokens from secure storage. */
   async getSessionTokens(): Promise<SessionTokens | null> {
-    if (!(await this.ensureFreshToken())) {
-      return null;
-    }
-
-    try {
-      const session = await this.loadSession();
-      if (!session) {
-        return null;
-      }
-      return {
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-      };
-    } catch (error) {
-      this.options.log?.error?.(
-        'SupabaseSession',
-        `Error getting session tokens: ${toErrorMessage(error)}`,
-      );
-      return null;
-    }
+    const session = await this.getFreshSession();
+    if (!session) return null;
+    return {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    };
   }
 
   /**
@@ -433,6 +382,50 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     const refreshed = toStorableSupabaseSession(data.session);
     await this.storeSession(refreshed);
     return refreshed;
+  }
+
+  private async getFreshSession(
+    forceRefresh?: boolean,
+  ): Promise<SupabaseSession | null> {
+    try {
+      const session = await this.loadSession();
+      if (!session) {
+        return null;
+      }
+
+      const timeUntilExpiry = session.expiresAt - Date.now();
+
+      if (
+        forceRefresh ||
+        timeUntilExpiry < this.options.tokenRefreshThresholdMs
+      ) {
+        this.options.log?.info?.(
+          'SupabaseSession',
+          `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
+        );
+        const refreshed = await this.refreshSession(session);
+        if (refreshed) {
+          return refreshed;
+        }
+        if (forceRefresh || timeUntilExpiry <= 0) {
+          this.options.log?.warn?.(
+            'SupabaseSession',
+            forceRefresh
+              ? 'Force refresh requested but refresh failed, returning null'
+              : 'Token expired and refresh failed, returning null',
+          );
+          return null;
+        }
+      }
+
+      return session;
+    } catch (error) {
+      this.options.log?.error?.(
+        'SupabaseSession',
+        `Error loading fresh session: ${toErrorMessage(error)}`,
+      );
+      return null;
+    }
   }
 
   private getCallbackExpiry(expiresIn: string | null): number {
