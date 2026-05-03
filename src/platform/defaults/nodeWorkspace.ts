@@ -152,53 +152,59 @@ function createRecursiveFallbackWatcher(
   };
 }
 
-export const nodeWorkspace: WorkspaceProvider = {
-  getWorkspacePath(): string | undefined {
-    return process.cwd();
-  },
+export function createNodeWorkspace(
+  getRoot: () => string | undefined = () => process.cwd(),
+): WorkspaceProvider {
+  return {
+    getWorkspacePath(): string | undefined {
+      return getRoot();
+    },
 
-  asRelativePath(filePath: string): string {
-    const root = this.getWorkspacePath();
-    if (!root) return filePath;
-    const relative = path.relative(root, filePath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      return filePath;
-    }
-    return normalizeRelativePath(relative);
-  },
+    asRelativePath(filePath: string): string {
+      const root = this.getWorkspacePath();
+      if (!root) return filePath;
+      const relative = path.relative(root, filePath);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        return filePath;
+      }
+      return normalizeRelativePath(relative);
+    },
 
-  watch(globPattern: string, listener: () => void): { dispose(): void } {
-    const root = this.getWorkspacePath();
-    if (!root) {
-      return { dispose: () => {} };
-    }
+    watch(globPattern: string, listener: () => void): { dispose(): void } {
+      const root = this.getWorkspacePath();
+      if (!root) {
+        return { dispose: () => {} };
+      }
 
-    try {
-      let disposed = false;
-      const watcher = fs.watch(
-        root,
-        { recursive: true },
-        (_event, filename) => {
-          if (disposed) return;
+      try {
+        let disposed = false;
+        const watcher = fs.watch(
+          root,
+          { recursive: true },
+          (_event, filename) => {
+            if (disposed) return;
 
-          const absolutePath =
-            filename == null ? null : path.join(root, filename.toString());
-          const relativePath =
-            absolutePath == null ? null : path.relative(root, absolutePath);
-          if (shouldNotify(globPattern, relativePath)) {
-            listener();
-          }
-        },
-      );
-      watcher.on('error', () => closeWatcher(watcher));
-      return {
-        dispose: () => {
-          disposed = true;
-          closeWatcher(watcher);
-        },
-      };
-    } catch {
-      return createRecursiveFallbackWatcher(root, globPattern, listener);
-    }
-  },
-};
+            const absolutePath =
+              filename == null ? null : path.join(root, filename.toString());
+            const relativePath =
+              absolutePath == null ? null : path.relative(root, absolutePath);
+            if (shouldNotify(globPattern, relativePath)) {
+              listener();
+            }
+          },
+        );
+        watcher.on('error', () => closeWatcher(watcher));
+        return {
+          dispose: () => {
+            disposed = true;
+            closeWatcher(watcher);
+          },
+        };
+      } catch {
+        return createRecursiveFallbackWatcher(root, globPattern, listener);
+      }
+    },
+  };
+}
+
+export const nodeWorkspace: WorkspaceProvider = createNodeWorkspace();
