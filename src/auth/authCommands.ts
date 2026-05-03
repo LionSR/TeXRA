@@ -20,9 +20,15 @@ function isVSCodeGitHubEnabled(): boolean {
 
 async function getExistingSession(): Promise<
   vscode.AuthenticationSession | undefined
-> {
+>;
+async function getExistingSession(
+  authReady: boolean,
+): Promise<vscode.AuthenticationSession | undefined>;
+async function getExistingSession(
+  authReady?: boolean,
+): Promise<vscode.AuthenticationSession | undefined> {
   // Skip VS Code auth API if auth system not ready to avoid timeout
-  if (!SupabaseClient.isReady()) {
+  if (!(authReady ?? (await SupabaseClient.isReady()))) {
     return undefined;
   }
   return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], {
@@ -71,7 +77,8 @@ function getSignInOptions(): SignInOption[] {
 export async function signIn(): Promise<void> {
   try {
     // Check if auth system is ready - if not, provide clear error with reason
-    if (!SupabaseClient.isReady()) {
+    const authReady = await SupabaseClient.isReady();
+    if (!authReady) {
       const initError = SupabaseClient.getInitError();
       const reason = initError
         ? initError.message
@@ -82,7 +89,7 @@ export async function signIn(): Promise<void> {
       return;
     }
 
-    const existing = await getExistingSession();
+    const existing = await getExistingSession(authReady);
     if (existing) {
       const user = await SupabaseClient.getUser();
       void vscode.window.showInformationMessage(
