@@ -4,10 +4,10 @@ on:
   issues:
     types: [closed]
   pull_request:
-    # `labeled` is intentionally omitted — Playbook C does nothing for label
-    # events, and auto-label.yml fires labeled events on every push, which
-    # otherwise cascades into duplicate, costly track runs.
-    types: [closed, opened, review_requested]
+    # `labeled` and `review_requested` are intentionally omitted — Playbook C
+    # does nothing for those events, and automation can otherwise cascade into
+    # duplicate, costly track runs.
+    types: [closed, opened]
   pull_request_review:
     types: [submitted]
 
@@ -23,7 +23,9 @@ jobs:
     # tracking action for those comment-only bot reviews.
     if: |
       (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
-      (github.event_name == 'pull_request' && (github.event.action != 'closed' || github.event.pull_request.merged == true)) ||
+      (github.event_name == 'pull_request' &&
+       (github.event.action == 'opened' ||
+        (github.event.action == 'closed' && github.event.pull_request.merged == true))) ||
       (github.event_name == 'pull_request_review' &&
        github.event.review.user.type != 'Bot' &&
        !endsWith(github.event.review.user.login, '[bot]') &&
@@ -40,8 +42,30 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Gate tracker agent
+        id: tracker-gate
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          should_run=true
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            tracker_workflow_changes="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- .github/workflows/issue-tracker.yml)"
+            if [[ -n "$tracker_workflow_changes" ]]; then
+              should_run=false
+              echo "Skipping tracker agent because this PR changes issue-tracker.yml."
+              echo "The Claude action requires workflow content to match the default branch before token exchange."
+            fi
+          fi
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code
         id: claude
+        if: steps.tracker-gate.outputs.should_run == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
