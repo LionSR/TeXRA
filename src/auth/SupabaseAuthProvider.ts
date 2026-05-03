@@ -49,6 +49,8 @@ type GitHubTokenExchangeResponse = z.infer<typeof GitHubTokenExchangeSchema>;
 
 /** Timeout for Edge Function requests (30 seconds) */
 const EDGE_FUNCTION_TIMEOUT_MS = 30000;
+const AUTH_URI_HANDLER_NOT_INITIALIZED =
+  'OAuth handler not initialized. Restart the extension.';
 
 /** GitHub token type prefixes for diagnostic logging. */
 const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
@@ -122,6 +124,12 @@ export class SupabaseAuthProvider
   /** Get singleton instance for sign out operations. */
   static getInstance(): SupabaseAuthProvider | null {
     return this.instance;
+  }
+
+  async whenReady(): Promise<void> {
+    if (!this.uriHandler) {
+      throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
+    }
   }
 
   /**
@@ -737,7 +745,7 @@ export class SupabaseAuthProvider
     cancellationToken: vscode.CancellationToken,
   ): Promise<SupabaseSession | null> {
     if (!this.uriHandler) {
-      throw new Error('OAuth handler not initialized. Restart the extension.');
+      throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
     }
 
     return new Promise((resolve, reject) => {
