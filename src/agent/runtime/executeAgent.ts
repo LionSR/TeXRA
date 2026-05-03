@@ -573,8 +573,9 @@ function buildFallbackNotification(config: AgentConfig) {
  *  - Post-activation failure (`activatedStreamId` set): the UI tab is
  *    visible. Surface the failure on it and transition to ERROR so the
  *    tab doesn't hang in INITIALIZING. Release the preliminary lock only
- *    when the activation switched to a different id (rare: when
- *    `useMultipleOutputs` flips during resolution).
+ *    when the activation id differs from the reserved id. They should match
+ *    for normal launches; the mismatch guard keeps future stream-id changes
+ *    from leaking an initializing lock.
  */
 function compensateFailedActivation(args: {
   launch: AgentLaunchPlan;
@@ -603,8 +604,8 @@ function compensateFailedActivation(args: {
 }
 
 /**
- * Resolves agent context and acquires stream lock, handling the preliminary→final
- * stream ID correction that occurs when useMultipleOutputs changes during resolution.
+ * Resolves agent context and acquires the preliminary stream lock before the
+ * UI is activated.
  *
  * Treats the `setActiveStream` emission as a transactional commit point:
  * resolution failures before that point release the lock silently; failures
