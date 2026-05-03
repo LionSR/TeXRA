@@ -821,19 +821,20 @@ export class PRPollingSource extends PollingSourceBase<
     runs: ReadonlyArray<GhCheckRun>,
   ): void {
     const currentKeys = new Set<string>();
-    const pendingIds = new Set(state.pendingAnnotationRuns.map((r) => r.id));
+    // Dedupe against pending by full `checkKey` (id + completed_at), not by
+    // id alone: a fast rerun produces a new completed_at while the prior
+    // entry may still be queued, and both completions carry distinct
+    // annotation sets we want to emit.
+    const pendingKeys = new Set(
+      state.pendingAnnotationRuns.map((r) => this.checkKey(r)),
+    );
     for (const run of runs) {
       if (run.status !== 'completed') continue;
       if ((run.output?.annotations_count ?? 0) <= 0) continue;
       const key = this.checkKey(run);
       currentKeys.add(key);
       if (state.lastAnnotationKeys.has(key)) continue;
-      // Run id alone catches the rerun-mid-pending case: same check, same
-      // pending entry, but `completed_at` (and therefore the key) changed.
-      // We skip enqueuing a duplicate; the queued entry will be fetched and
-      // re-emit when its annotations land — annotation_level is what users
-      // care about, not the precise completed_at the queue holds.
-      if (pendingIds.has(run.id)) continue;
+      if (pendingKeys.has(key)) continue;
       state.pendingAnnotationRuns.push(run);
     }
     state.lastAnnotationKeys = currentKeys;
@@ -867,13 +868,17 @@ export class PRPollingSource extends PollingSourceBase<
       candidates.map((run) => this.fetchAnnotations(pr.owner, pr.repo, run.id)),
     );
 
-    const dropIds = new Set<number>();
-    const rotateIds = new Set<number>();
+    // Categorize by `checkKey` (id + completed_at), not id alone — a fast
+    // rerun can leave the queue holding two distinct completion attempts
+    // with the same id, and they need to be drop/rotated independently.
+    const dropKeys = new Set<string>();
+    const rotateKeys = new Set<string>();
     for (let i = 0; i < settled.length; i += 1) {
       const run = candidates[i];
+      const key = this.checkKey(run);
       const result = settled[i];
       if (result.status === 'fulfilled') {
-        dropIds.add(run.id);
+        dropKeys.add(key);
         if (result.value.length > 0) {
           this.emit(
             state,
@@ -892,28 +897,29 @@ export class PRPollingSource extends PollingSourceBase<
         this.logger.warn(
           `Annotations for check ${run.id} unavailable (HTTP ${err.status}); dropping.`,
         );
-        dropIds.add(run.id);
+        dropKeys.add(key);
         continue;
       }
       if (err instanceof GitHubAuthError) {
         this.logger.warn(
           `Annotations for check ${run.id} forbidden (${err.message}); dropping.`,
         );
-        dropIds.add(run.id);
+        dropKeys.add(key);
         continue;
       }
-      rotateIds.add(run.id);
+      rotateKeys.add(key);
       this.logger.warn(
         `Annotation fetch for check ${run.id} failed; rotating to back of queue: ${String(err)}`,
       );
     }
 
     const rotated = state.pendingAnnotationRuns.filter((p) =>
-      rotateIds.has(p.id),
+      rotateKeys.has(this.checkKey(p)),
     );
-    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
-      (p) => !dropIds.has(p.id) && !rotateIds.has(p.id),
-    );
+    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter((p) => {
+      const k = this.checkKey(p);
+      return !dropKeys.has(k) && !rotateKeys.has(k);
+    });
     state.pendingAnnotationRuns.push(...rotated);
   }
 
