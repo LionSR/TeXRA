@@ -38,6 +38,7 @@ import {
   SettingsAgentCatalogController,
   type SettingsAgentCatalogState,
 } from '../../controllers/settingsView/SettingsAgentCatalogController';
+import { SettingsAgentDirectoryController } from '../../controllers/settingsView/SettingsAgentDirectoryController';
 import { SettingsAgentFileController } from '../../controllers/settingsView/SettingsAgentFileController';
 import { SettingsAgentVisibilityController } from '../../controllers/settingsView/SettingsAgentVisibilityController';
 
@@ -48,6 +49,7 @@ import type { SettingsHandlerContext } from './SettingsHandlerContext';
  */
 export class AgentHandlers {
   private readonly catalogController: SettingsAgentCatalogController;
+  private readonly directoryController: SettingsAgentDirectoryController;
   private readonly fileController = new SettingsAgentFileController();
   private readonly visibilityController: SettingsAgentVisibilityController;
 
@@ -90,6 +92,18 @@ export class AgentHandlers {
     this.catalogController = new SettingsAgentCatalogController({
       state: agentCatalogState,
     });
+    this.directoryController = new SettingsAgentDirectoryController({
+      state: {
+        getConfiguredCustomDir: () =>
+          globalSM.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
+        setConfiguredCustomDir: async (customDir) => {
+          await globalSM.update(GlobalStateKey.CUSTOM_AGENT_DIR, customDir);
+        },
+        getCustomDir: () => agentDirectories.custom(),
+        getSourceDir: (source) => agentDirectories.getDirectory(source),
+        getAgent: (source, name) => getAgent(createKey(source, name)) ?? null,
+      },
+    });
     this.visibilityController = new SettingsAgentVisibilityController({
       state: {
         getEnabledAgentKeys: agentCatalogState.getEnabledAgentKeys,
@@ -121,25 +135,26 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
   ): Promise<void> {
     try {
-      const key = createKey(data.agentSource, data.agentName);
-      const entry = getAgent(key);
-      if (!entry) {
+      const result = this.directoryController.planOpenAgentYaml({
+        source: data.agentSource,
+        name: data.agentName,
+        variant: data.variant,
+      });
+      if (!result.ok && result.reason === 'missingAgent') {
         await vscode.window.showErrorMessage(
           `Agent "${data.agentName}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`,
         );
         return;
       }
 
-      const agentPath =
-        data.variant === 'multiple' ? entry.multiplePath : entry.path;
-      if (!agentPath) {
+      if (!result.ok) {
         await vscode.window.showErrorMessage(
           `No configuration file found for agent "${data.agentName}". The agent definition may be incomplete — try re-creating it from the Agents tab.`,
         );
         return;
       }
 
-      const doc = await vscode.workspace.openTextDocument(agentPath);
+      const doc = await vscode.workspace.openTextDocument(result.path);
       await vscode.window.showTextDocument(doc, { preview: false });
     } catch (error) {
       await showLoggedErrorMessage(
@@ -193,8 +208,10 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_FOLDER>,
   ): Promise<void> {
     try {
-      const folderPath = await agentDirectories.getDirectory(data.folderType);
-      if (!folderPath) {
+      const result = await this.directoryController.planOpenAgentFolder(
+        data.folderType,
+      );
+      if (!result.ok) {
         await vscode.window.showErrorMessage(
           `No local directory for agent source: ${data.folderType}`,
         );
@@ -202,7 +219,7 @@ export class AgentHandlers {
       }
       await vscode.commands.executeCommand(
         'revealFileInOS',
-        vscode.Uri.file(folderPath),
+        vscode.Uri.file(result.path),
       );
     } catch (error) {
       await showLoggedErrorMessage(
@@ -217,9 +234,11 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.REVEAL_AGENT_FILE>,
   ): Promise<void> {
     try {
-      const key = createKey(data.agentSource, data.agentName);
-      const entry = getAgent(key);
-      if (!entry?.path) {
+      const result = this.directoryController.planRevealAgentFile({
+        source: data.agentSource,
+        name: data.agentName,
+      });
+      if (!result.ok) {
         await vscode.window.showErrorMessage(
           `Agent not found or has no file: ${data.agentName}`,
         );
@@ -227,7 +246,7 @@ export class AgentHandlers {
       }
       await vscode.commands.executeCommand(
         'revealFileInOS',
-        vscode.Uri.file(entry.path),
+        vscode.Uri.file(result.path),
       );
     } catch (error) {
       await showLoggedErrorMessage(
@@ -444,15 +463,11 @@ export class AgentHandlers {
   // ── Custom agent directory handlers ──
 
   async sendCustomAgentDir(webview: vscode.Webview): Promise<void> {
-    const configuredPath = globalSM
-      .get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '')
-      .trim();
-    const isDefault = configuredPath === '';
-    const resolvedPath = await agentDirectories.custom();
+    const status = await this.directoryController.getCustomDirStatus();
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-      path: resolvedPath,
-      isDefault,
+      path: status.path,
+      isDefault: status.isDefault,
     });
   }
 
@@ -472,7 +487,7 @@ export class AgentHandlers {
 
   async handleResetCustomAgentDir(): Promise<void> {
     try {
-      await globalSM.update(GlobalStateKey.CUSTOM_AGENT_DIR, '');
+      await this.directoryController.resetCustomDir();
       await this.refreshAgentDirUI();
     } catch (error) {
       await showLoggedErrorMessage(
