@@ -1,5 +1,8 @@
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { bus } from '@eventBus/ProgressEventBus';
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 
 import type {
   ExtendedTokenUsageStats,
@@ -13,6 +16,7 @@ export class AgentUsageReporter {
     private readonly logger: AgentLogger,
     private readonly streamId: StreamTabId,
     private readonly agentCategory: AgentCategory = AgentCategory.Workflow,
+    private readonly runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
   ) {}
 
   report(
@@ -20,7 +24,7 @@ export class AgentUsageReporter {
     storageKey: StorageKey,
     groupId?: string,
   ): void {
-    bus.emit('updateStreamUsage', {
+    this.runtimeHost.emit('updateStreamUsage', {
       streamId: this.streamId,
       storageKey,
       usage: stats,
