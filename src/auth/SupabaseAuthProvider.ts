@@ -124,6 +124,12 @@ export class SupabaseAuthProvider
     return this.instance;
   }
 
+  async whenReady(): Promise<void> {
+    if (!this.uriHandler) {
+      throw new Error('Authentication URI handler not initialized');
+    }
+  }
+
   /**
    * Store session with optional notification.
    * @param notify - If true, fires session change event and clears caches (for new logins)
