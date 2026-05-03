@@ -21,6 +21,7 @@ import {
   fetchWithTimeout,
   parseTokenExchangeResponse,
   SupabaseSessionCoordinator,
+  toStorableGitHubTokenExchangeSession,
   type SupabaseSession,
 } from './SupabaseSession';
 import type { SupabaseUriHandler } from './UriHandler';
@@ -411,24 +412,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
 
       const data = await parseTokenExchangeResponse(response, logger);
-
-      // Create session in same format as Supabase OAuth
-      // Note: expires_at from Edge Function is in seconds, convert to milliseconds
-      const session: SupabaseSession = {
-        id: data.user.id,
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        account: {
-          id: data.user.id,
-          label: data.user.email || githubSession.account.label,
-        },
-        expiresAt: data.expires_at
-          ? data.expires_at * 1000
-          : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
-        // Use custom refresh since our tokens are stored in sessions table,
-        // not Supabase's internal auth tables
-        useCustomRefresh: true,
-      };
+      const session = toStorableGitHubTokenExchangeSession(
+        data,
+        githubSession.account.label,
+        DEFAULT_SESSION_EXPIRY_MS,
+      );
 
       await this.storeSession(session, true);
       void vscode.window.showInformationMessage(
