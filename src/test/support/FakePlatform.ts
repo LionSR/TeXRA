@@ -217,6 +217,9 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     options?: { recursive?: boolean },
   ): Promise<void> {
     const normalized = normalizePath(target);
+    if (normalized === '/') {
+      throw fakeFsError('EPERM', 'Cannot delete filesystem root');
+    }
     const record = this.records.get(normalized);
     if (!record) {
       return;
