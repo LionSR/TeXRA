@@ -16,9 +16,9 @@ export const warningBannerStyles: CSSResult = css`
     border-radius: var(--border-radius);
     padding: var(--spacing-small) var(--spacing-medium);
     margin-bottom: var(--spacing-large);
-    background-color: var(--vscode-inputValidation-warningBackground);
-    color: var(--vscode-inputValidation-warningForeground);
-    border: var(--border-thin) solid var(--vscode-inputValidation-warningBorder);
+    background-color: var(--texra-inputValidation-warningBackground);
+    color: var(--texra-inputValidation-warningForeground);
+    border: var(--border-thin) solid var(--texra-inputValidation-warningBorder);
     display: flex;
     justify-content: space-between;
     align-items: center;

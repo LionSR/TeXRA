@@ -62,7 +62,7 @@ export class Pagination extends LitElement {
       }
 
       .pagination-status {
-        font-family: var(--vscode-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         letter-spacing: 0.02em;
       }
 
@@ -80,7 +80,7 @@ export class Pagination extends LitElement {
         height: var(--height-control);
         padding: 0 var(--spacing-small);
         font-size: var(--font-size-xs);
-        font-family: var(--vscode-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         color: var(--color-text-secondary);
         background: none;
         border: var(--border-thin) solid var(--color-border);
@@ -92,13 +92,13 @@ export class Pagination extends LitElement {
       }
 
       .page-btn:hover:not(:disabled) {
-        color: var(--vscode-foreground);
-        border-color: var(--vscode-focusBorder);
+        color: var(--texra-foreground);
+        border-color: var(--texra-focusBorder);
       }
 
       .page-btn:active:not(:disabled) {
         background: var(
-          --vscode-toolbar-activeBackground,
+          --texra-toolbar-activeBackground,
           rgba(99, 102, 103, 0.31)
         );
       }
@@ -109,7 +109,7 @@ export class Pagination extends LitElement {
       }
 
       .page-btn:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: 1px;
       }
     `,

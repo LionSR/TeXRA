@@ -34,14 +34,14 @@ export class ToolCard extends LitElement {
         padding: var(--spacing-medium) var(--spacing-large);
         margin-bottom: var(--spacing-medium);
         background: var(
-          --vscode-editor-background,
-          var(--vscode-sideBar-background)
+          --texra-editor-background,
+          var(--texra-sideBar-background)
         );
         transition: border-color var(--transition-fast);
       }
 
       .tool-card:hover {
-        border-color: var(--vscode-focusBorder);
+        border-color: var(--texra-focusBorder);
       }
 
       .tool-header {
@@ -64,7 +64,7 @@ export class ToolCard extends LitElement {
       .tool-name {
         font-weight: var(--font-weight-medium);
         font-size: var(--font-size);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         white-space: nowrap;
       }
 
@@ -80,26 +80,26 @@ export class ToolCard extends LitElement {
       }
 
       .tool-badge--available {
-        color: var(--vscode-testing-iconPassed, #73c991);
+        color: var(--texra-testing-iconPassed, #73c991);
         background: color-mix(
           in srgb,
-          var(--vscode-testing-iconPassed, #73c991) 12%,
+          var(--texra-testing-iconPassed, #73c991) 12%,
           transparent
         );
       }
 
       .tool-badge--not-found {
-        color: var(--vscode-testing-iconFailed, #f48771);
+        color: var(--texra-testing-iconFailed, #f48771);
         background: color-mix(
           in srgb,
-          var(--vscode-testing-iconFailed, #f48771) 12%,
+          var(--texra-testing-iconFailed, #f48771) 12%,
           transparent
         );
       }
 
       .tool-badge--unknown {
-        color: var(--vscode-badge-foreground);
-        background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
+        color: var(--texra-badge-foreground);
+        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
       }
 
       .tool-description {
@@ -117,11 +117,11 @@ export class ToolCard extends LitElement {
       }
 
       .tool-id-tag {
-        font-family: var(--vscode-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-xs);
         padding: var(--border-thin) var(--border-radius-large);
-        background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
-        color: var(--vscode-badge-foreground);
+        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
+        color: var(--texra-badge-foreground);
         border-radius: var(--border-radius);
       }
 
@@ -132,7 +132,7 @@ export class ToolCard extends LitElement {
         padding: var(--spacing-tiny) 0;
         font-size: var(--font-size-sm);
         font-family: inherit;
-        color: var(--vscode-textLink-foreground, #3794ff);
+        color: var(--texra-textLink-foreground, #3794ff);
         background: none;
         border: none;
         cursor: pointer;
@@ -144,7 +144,7 @@ export class ToolCard extends LitElement {
       }
 
       .tool-guide-toggle:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }
@@ -153,12 +153,12 @@ export class ToolCard extends LitElement {
         margin-top: var(--spacing-small);
         padding: var(--spacing-medium);
         background: var(
-          --vscode-textCodeBlock-background,
+          --texra-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
         );
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         line-height: var(--line-height-relaxed);
         white-space: pre-wrap;
       }
@@ -176,8 +176,8 @@ export class ToolCard extends LitElement {
         padding: var(--spacing-tiny) var(--spacing-medium);
         font-size: var(--font-size-sm);
         font-family: inherit;
-        color: var(--vscode-button-foreground, #fff);
-        background: var(--vscode-button-background, #0e639c);
+        color: var(--texra-button-foreground, #fff);
+        background: var(--texra-button-background, #0e639c);
         border: none;
         border-radius: var(--border-radius);
         cursor: pointer;
@@ -187,25 +187,25 @@ export class ToolCard extends LitElement {
       }
 
       .tool-action-btn:hover {
-        background: var(--vscode-button-hoverBackground, #1177bb);
+        background: var(--texra-button-hoverBackground, #1177bb);
       }
 
       .tool-action-btn:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: 1px;
       }
 
       .tool-action-btn--secondary {
-        color: var(--vscode-button-secondaryForeground, #ccc);
+        color: var(--texra-button-secondaryForeground, #ccc);
         background: var(
-          --vscode-button-secondaryBackground,
+          --texra-button-secondaryBackground,
           rgba(128, 128, 128, 0.2)
         );
       }
 
       .tool-action-btn--secondary:hover {
         background: var(
-          --vscode-button-secondaryHoverBackground,
+          --texra-button-secondaryHoverBackground,
           rgba(128, 128, 128, 0.3)
         );
       }
@@ -219,10 +219,10 @@ export class ToolCard extends LitElement {
         border-radius: var(--border-radius);
         white-space: nowrap;
         font-weight: var(--font-weight-medium);
-        color: var(--vscode-charts-blue, #3794ff);
+        color: var(--texra-charts-blue, #3794ff);
         background: color-mix(
           in srgb,
-          var(--vscode-charts-blue, #3794ff) 12%,
+          var(--texra-charts-blue, #3794ff) 12%,
           transparent
         );
       }
