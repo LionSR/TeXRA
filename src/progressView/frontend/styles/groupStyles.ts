@@ -20,27 +20,27 @@ export const groupStyles = css`
   }
 
   .log-group-header:hover {
-    background-color: var(--vscode-list-hoverBackground);
+    background-color: var(--texra-list-hoverBackground);
   }
 
   .log-group-header {
     &.is-running {
-      border-left-color: var(--vscode-statusBarItem-warningBackground);
+      border-left-color: var(--texra-statusBarItem-warningBackground);
     }
 
     &.is-error {
-      border-left-color: var(--vscode-errorForeground);
+      border-left-color: var(--texra-errorForeground);
     }
 
     &.is-stopped {
-      border-left-color: var(--vscode-testing-iconPassed);
+      border-left-color: var(--texra-testing-iconPassed);
     }
   }
 
   .log-group-content {
     padding-left: var(--spacing-small);
     border-left: var(--border-thin) dashed
-      var(--vscode-editorGroupHeader-tabsBorder);
+      var(--texra-editorGroupHeader-tabsBorder);
   }
 
   .log-run {

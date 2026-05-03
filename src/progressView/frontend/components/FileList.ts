@@ -57,7 +57,7 @@ export class FileList extends LitElement {
 
       .files-container {
         padding: 0;
-        font-size: var(--vscode-editor-font-size);
+        font-size: var(--texra-editor-font-size);
         overflow-y: auto;
         max-height: var(--height-large);
         flex-shrink: 0;
@@ -133,13 +133,13 @@ export class FileList extends LitElement {
       }
 
       .added {
-        color: var(--vscode-charts-green, green);
+        color: var(--texra-charts-green, green);
         margin-left: var(--spacing-small);
         font-size: var(--font-size-sm);
       }
 
       .removed {
-        color: var(--vscode-charts-red, red);
+        color: var(--texra-charts-red, red);
         margin-left: var(--spacing-small);
         font-size: var(--font-size-sm);
       }
@@ -177,7 +177,7 @@ export class FileList extends LitElement {
 
       .compile-warning {
         flex-shrink: 0;
-        color: var(--vscode-editorWarning-foreground, orange);
+        color: var(--texra-editorWarning-foreground, orange);
       }
 
       .compile-actions {

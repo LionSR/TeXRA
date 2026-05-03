@@ -88,7 +88,7 @@ export class AgentSelectionPanel extends LitElement {
         color: var(--color-text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        background: var(--vscode-editor-background);
+        background: var(--texra-editor-background);
         border-bottom: var(--border-thin) solid var(--color-border);
         position: sticky;
         top: 0;
@@ -110,28 +110,28 @@ export class AgentSelectionPanel extends LitElement {
         padding: var(--spacing-small) var(--spacing-medium);
         cursor: pointer;
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         border-left: var(--border-medium) solid transparent;
         transition: background var(--transition-fast);
         outline: none;
       }
 
       .agent-list-item:hover {
-        background: var(--vscode-list-hoverBackground);
+        background: var(--texra-list-hoverBackground);
       }
 
       .agent-list-item:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: -1px;
       }
 
       .agent-list-item.selected {
-        background: var(--vscode-list-activeSelectionBackground);
+        background: var(--texra-list-activeSelectionBackground);
         color: var(
-          --vscode-list-activeSelectionForeground,
-          var(--vscode-foreground)
+          --texra-list-activeSelectionForeground,
+          var(--texra-foreground)
         );
-        border-left-color: var(--vscode-focusBorder);
+        border-left-color: var(--texra-focusBorder);
       }
 
       .agent-list-item.selected .agent-list-item-name,
@@ -144,7 +144,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-list-item-checkbox {
-        accent-color: var(--vscode-focusBorder);
+        accent-color: var(--texra-focusBorder);
         cursor: pointer;
         flex-shrink: 0;
       }
@@ -155,7 +155,7 @@ export class AgentSelectionPanel extends LitElement {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-family: var(--vscode-editor-font-family);
+        font-family: var(--texra-editor-font-family);
       }
 
       .agent-list-item-badges {
@@ -193,12 +193,12 @@ export class AgentSelectionPanel extends LitElement {
       .agent-detail-name {
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-semibold);
-        font-family: var(--vscode-editor-font-family);
-        color: var(--vscode-foreground);
+        font-family: var(--texra-editor-font-family);
+        color: var(--texra-foreground);
       }
 
       .agent-detail-description {
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         line-height: var(--line-height-relaxed);
         margin-bottom: var(--spacing-large);
       }
@@ -218,7 +218,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-detail-meta-value {
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       .agent-detail-tools {
@@ -231,8 +231,8 @@ export class AgentSelectionPanel extends LitElement {
         display: inline-block;
         padding: var(--border-thin) var(--spacing-small);
         font-size: var(--font-size-xs);
-        font-family: var(--vscode-editor-font-family);
-        background: var(--vscode-textBlockQuote-background);
+        font-family: var(--texra-editor-font-family);
+        background: var(--texra-textBlockQuote-background);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
         color: var(--color-text-secondary);
@@ -251,8 +251,8 @@ export class AgentSelectionPanel extends LitElement {
         padding: var(--spacing-small) var(--spacing-medium);
         font-size: var(--font-size-sm);
         font-family: inherit;
-        color: var(--vscode-foreground);
-        background: var(--vscode-input-background);
+        color: var(--texra-foreground);
+        background: var(--texra-input-background);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
         cursor: pointer;
@@ -262,12 +262,12 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-action-btn:hover {
-        background: var(--vscode-list-hoverBackground);
-        border-color: var(--vscode-focusBorder);
+        background: var(--texra-list-hoverBackground);
+        border-color: var(--texra-focusBorder);
       }
 
       .agent-action-btn:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: 1px;
       }
 
@@ -279,13 +279,13 @@ export class AgentSelectionPanel extends LitElement {
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         border-top: var(--border-thin) solid var(--color-border);
-        background: var(--vscode-editor-background);
+        background: var(--texra-editor-background);
       }
 
       .agent-count-link {
         font-size: var(--font-size-xs);
         font-family: inherit;
-        color: var(--vscode-textLink-foreground);
+        color: var(--texra-textLink-foreground);
         background: none;
         border: none;
         cursor: pointer;
@@ -298,7 +298,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-count-link:focus-visible {
-        outline: var(--border-thin) solid var(--vscode-focusBorder);
+        outline: var(--border-thin) solid var(--texra-focusBorder);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }
@@ -314,13 +314,13 @@ export class AgentSelectionPanel extends LitElement {
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-medium);
         border-radius: var(--border-radius);
-        background: var(--vscode-badge-background, rgba(128, 128, 128, 0.15));
-        color: var(--vscode-badge-foreground);
+        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
+        color: var(--texra-badge-foreground);
       }
 
       .agent-detail-path {
         font-size: var(--font-size-xs);
-        font-family: var(--vscode-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         color: var(--color-text-secondary);
         margin-bottom: var(--spacing-large);
         overflow: hidden;
@@ -329,27 +329,27 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-action-btn--danger {
-        color: var(--vscode-errorForeground, #f44);
-        border-color: var(--vscode-errorForeground, #f44);
+        color: var(--texra-errorForeground, #f44);
+        border-color: var(--texra-errorForeground, #f44);
       }
 
       .agent-action-btn--danger:hover {
         background: var(
-          --vscode-inputValidation-errorBackground,
+          --texra-inputValidation-errorBackground,
           rgba(255, 0, 0, 0.1)
         );
-        border-color: var(--vscode-errorForeground, #f44);
+        border-color: var(--texra-errorForeground, #f44);
       }
 
       .agent-action-btn--primary {
-        color: var(--vscode-button-foreground, #fff);
-        background: var(--vscode-button-background);
-        border-color: var(--vscode-button-background);
+        color: var(--texra-button-foreground, #fff);
+        background: var(--texra-button-background);
+        border-color: var(--texra-button-background);
       }
 
       .agent-action-btn--primary:hover {
-        background: var(--vscode-button-hoverBackground);
-        border-color: var(--vscode-button-hoverBackground);
+        background: var(--texra-button-hoverBackground);
+        border-color: var(--texra-button-hoverBackground);
       }
 
       .agent-delete-confirm {
@@ -358,13 +358,13 @@ export class AgentSelectionPanel extends LitElement {
         gap: var(--spacing-medium);
         padding: var(--spacing-small) var(--spacing-medium);
         background: var(
-          --vscode-inputValidation-errorBackground,
+          --texra-inputValidation-errorBackground,
           rgba(255, 0, 0, 0.05)
         );
-        border: var(--border-thin) solid var(--vscode-errorForeground, #f44);
+        border: var(--border-thin) solid var(--texra-errorForeground, #f44);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       .agent-delete-confirm-text {

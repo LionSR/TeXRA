@@ -133,14 +133,14 @@ export const toggleStyles = css`
   }
 
   .toggle-icon:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
 
   .file-select[data-expanded='true'] .optional-label,
   .file-select[data-expanded='true'] .toggle-icon {
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
   }
 `;
 
@@ -162,7 +162,7 @@ export const multiFilesStyles = css`
   .multiple-files-list {
     background-color: var(--background-color);
     border: var(--border-thin) solid
-      var(--vscode-widget-border, var(--dropdown-border));
+      var(--texra-widget-border, var(--dropdown-border));
     border-radius: var(--border-radius);
     padding: var(--spacing-small);
     font-size: var(--font-size);
@@ -180,7 +180,7 @@ export const multiFilesStyles = css`
   }
 
   .file-item:hover {
-    background-color: var(--vscode-list-hoverBackground);
+    background-color: var(--texra-list-hoverBackground);
   }
 
   .file-name {
@@ -191,7 +191,7 @@ export const multiFilesStyles = css`
   }
 
   .remove-button {
-    color: var(--vscode-icon-foreground, var(--vscode-foreground));
+    color: var(--texra-icon-foreground, var(--texra-foreground));
     cursor: pointer;
     flex-shrink: 0;
     opacity: var(--opacity-subtle);
@@ -209,7 +209,7 @@ export const multiFilesStyles = css`
 
   .remove-button:focus-visible {
     opacity: var(--opacity-full);
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -235,7 +235,7 @@ export const dropdownStyles = css`
 
   .dropdown-container vscode-toolbar-button.has-options::part(control) {
     box-shadow: inset 0 0 0 1px
-      var(--vscode-inputValidation-infoBorder, var(--vscode-focusBorder));
+      var(--texra-inputValidation-infoBorder, var(--texra-focusBorder));
   }
 
   .dropdown-container .dropdown-menu {
@@ -245,9 +245,9 @@ export const dropdownStyles = css`
     right: auto;
     z-index: 100;
     display: block;
-    background-color: var(--vscode-menu-background);
-    color: var(--vscode-menu-foreground);
-    border: var(--border-thin) solid var(--vscode-menu-border);
+    background-color: var(--texra-menu-background);
+    color: var(--texra-menu-foreground);
+    border: var(--border-thin) solid var(--texra-menu-border);
     border-radius: var(--border-radius);
     min-width: 160px;
   }
@@ -276,7 +276,7 @@ export const dropdownStyles = css`
   }
 
   .dropdown-container .dropdown-menu vscode-checkbox:hover {
-    background: var(--vscode-list-hoverBackground);
+    background: var(--texra-list-hoverBackground);
   }
 `;
 

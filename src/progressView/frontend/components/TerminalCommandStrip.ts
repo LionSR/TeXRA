@@ -18,20 +18,20 @@ export class TerminalCommandStrip extends LitElement {
       padding: 6px 10px;
       margin: 0 0 8px 0;
       background: var(
-        --vscode-terminal-background,
-        var(--vscode-editor-background, transparent)
+        --texra-terminal-background,
+        var(--texra-editor-background, transparent)
       );
-      color: var(--vscode-terminal-foreground, var(--vscode-foreground));
-      border: 1px solid var(--vscode-panel-border, transparent);
+      color: var(--texra-terminal-foreground, var(--texra-foreground));
+      border: 1px solid var(--texra-panel-border, transparent);
       border-radius: 3px;
       font-family: var(
-        --vscode-editor-font-family,
+        --texra-editor-font-family,
         ui-monospace,
         SFMono-Regular,
         Consolas,
         monospace
       );
-      font-size: var(--vscode-editor-font-size, 12px);
+      font-size: var(--texra-editor-font-size, 12px);
       max-height: min(32vh, 320px);
       overflow: auto;
       white-space: pre;
@@ -44,7 +44,7 @@ export class TerminalCommandStrip extends LitElement {
     }
 
     .prompt {
-      color: var(--vscode-terminal-ansiGreen, var(--color-success, #0a0));
+      color: var(--texra-terminal-ansiGreen, var(--color-success, #0a0));
       font-weight: 600;
       user-select: none;
     }
