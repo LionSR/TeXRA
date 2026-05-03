@@ -23,7 +23,6 @@ import {
   SupabaseSessionCoordinator,
   type SupabaseSession,
 } from './SupabaseSession';
-import type { SessionTokens } from './TokenProvider';
 import type { SupabaseUriHandler } from './UriHandler';
 
 /** Timeout for Edge Function requests (30 seconds) */
@@ -104,10 +103,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return this.instance;
   }
 
-  async whenReady(): Promise<void> {
-    await this.sessionCoordinator.whenReady();
-  }
-
   /**
    * Store session with optional notification.
    * @param notify - If true, fires session change event and clears caches (for new logins)
@@ -125,25 +120,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         changed: [],
       });
     }
-  }
-
-  /**
-   * Ensure the access token is fresh, refreshing proactively if near expiry.
-   * Called by SupabaseClient.getAccessToken() to avoid token expiration during
-   * long-running operations (e.g., GPT-5 background mode).
-   *
-   * @returns Fresh access token, or null if no session or refresh failed
-   */
-  async ensureFreshToken(forceRefresh?: boolean): Promise<string | null> {
-    return this.sessionCoordinator.ensureFreshToken(forceRefresh);
-  }
-
-  /**
-   * Get access and refresh tokens from secure storage.
-   * Ensures tokens are fresh before returning.
-   */
-  async getSessionTokens(): Promise<SessionTokens | null> {
-    return this.sessionCoordinator.getSessionTokens();
   }
 
   /**
