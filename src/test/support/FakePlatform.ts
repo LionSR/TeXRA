@@ -109,6 +109,23 @@ function cloneRecord(record: FakeFileRecord): FakeFileRecord {
   return { ...record };
 }
 
+function copyRecord(record: FakeFileRecord): FakeFileRecord {
+  const timestamp = now();
+  if (record.type === FileType.File) {
+    return {
+      type: FileType.File,
+      ctime: timestamp,
+      mtime: timestamp,
+      content: cloneBytes(record.content),
+    };
+  }
+  return {
+    type: FileType.Directory,
+    ctime: timestamp,
+    mtime: timestamp,
+  };
+}
+
 export class FakeConfigProvider implements ConfigProvider {
   private readonly values = new Map<string, unknown>();
 
@@ -135,9 +152,8 @@ export class FakeConfigProvider implements ConfigProvider {
   }
 
   set(key: string, value: unknown): void {
-    const storageKey = this.storageKeyForWrite(key);
-    this.values.set(storageKey, value);
-    this.targets.set(storageKey, 'workspace');
+    this.values.set(key, value);
+    this.targets.set(key, 'workspace');
     this.notifyWatchers(key);
   }
 
@@ -146,13 +162,12 @@ export class FakeConfigProvider implements ConfigProvider {
     value: T,
     target: ConfigTarget = 'workspace',
   ): Promise<void> {
-    const storageKey = this.storageKeyForWrite(key);
     if (value === undefined) {
-      this.values.delete(storageKey);
-      this.targets.delete(storageKey);
+      this.values.delete(key);
+      this.targets.delete(key);
     } else {
-      this.values.set(storageKey, value);
-      this.targets.set(storageKey, target);
+      this.values.set(key, value);
+      this.targets.set(key, target);
     }
     this.notifyWatchers(key);
   }
@@ -213,10 +228,6 @@ export class FakeConfigProvider implements ConfigProvider {
 
   private resolveExistingKey(key: string): string | undefined {
     return this.configKeys(key).find((candidate) => this.values.has(candidate));
-  }
-
-  private storageKeyForWrite(key: string): string {
-    return this.resolveExistingKey(key) ?? key;
   }
 
   private configKeys(key: string): string[] {
@@ -370,7 +381,7 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     }
 
     const entries = new Map<string, number>();
-    for (const [candidate, candidateRecord] of this.records) {
+    for (const candidate of this.records.keys()) {
       const name = directChildName(normalized, candidate);
       if (name == null) continue;
       const childPath = path.posix.join(normalized, name);
@@ -420,7 +431,7 @@ export class FakeFileSystemProvider implements FileSystemProvider {
         childRecord,
         options?.overwrite,
       );
-      this.records.set(childDest, cloneRecord(childRecord));
+      this.records.set(childDest, copyRecord(childRecord));
     }
   }
 

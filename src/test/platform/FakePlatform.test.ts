@@ -98,20 +98,21 @@ describe('FakePlatform', () => {
     assert.equal(changes, 1);
   });
 
-  it('updates existing config aliases without duplicating keys', async () => {
+  it('writes config aliases to the exact caller key', async () => {
     const platform = createFakePlatform();
 
     await platform.config.update('texra.files.exclude', ['dist']);
     await platform.config.update('files.exclude', ['node_modules']);
 
-    assert.deepEqual(platform.config.get('texra.files.exclude', []), [
+    assert.deepEqual(platform.config.get('files.exclude', []), [
       'node_modules',
     ]);
+    assert.deepEqual(platform.config.get('texra.files.exclude', []), ['dist']);
 
     await platform.config.update('files.exclude', undefined);
 
-    assert.deepEqual(platform.config.get('files.exclude', []), []);
-    assert.equal(platform.config.isExplicitlySet('texra.files.exclude'), false);
+    assert.deepEqual(platform.config.get('files.exclude', []), ['dist']);
+    assert.equal(platform.config.isExplicitlySet('texra.files.exclude'), true);
   });
 
   it('does not notify texra watchers for unprefixed config changes', async () => {
@@ -277,6 +278,31 @@ describe('FakePlatform', () => {
 
     assert.equal(fs.getText('/workspace/dest/a.txt'), 'A');
     assert.equal(fs.getText('/workspace/dest/existing.txt'), 'existing');
+  });
+
+  it('assigns fresh timestamps when copying directory children', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/a.txt': 'A',
+      '/workspace/source/nested/b.txt': 'B',
+    });
+    const records = (
+      fs as unknown as {
+        records: Map<string, { type: number; ctime: number; mtime: number }>;
+      }
+    ).records;
+    for (const record of records.values()) {
+      record.ctime = 1;
+      record.mtime = 1;
+    }
+
+    await fs.copy('/workspace/source', '/workspace/dest');
+
+    assert.equal((await fs.stat('/workspace/dest/a.txt')).mtime > 1, true);
+    assert.equal((await fs.stat('/workspace/dest/nested')).mtime > 1, true);
+    assert.equal(
+      (await fs.stat('/workspace/dest/nested/b.txt')).mtime > 1,
+      true,
+    );
   });
 
   it('rejects directory copy when a destination file already exists', async () => {
