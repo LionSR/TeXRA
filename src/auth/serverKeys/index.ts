@@ -69,5 +69,8 @@ export function initializeServerSideKeyAccess(
     authProvider,
     getTierService(),
   );
-  _instance.initialize(context);
+  _instance.initialize({
+    state: context.globalState,
+    subscriptions: context.subscriptions,
+  });
 }
