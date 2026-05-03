@@ -6,7 +6,6 @@
  *
  * Similar to how GitHub Copilot works - users sign in to the official service.
  */
-import * as vscode from 'vscode';
 import { z } from 'zod';
 import {
   SUPABASE_CONFIG,
@@ -190,6 +189,8 @@ export interface ExternalAuthCallbackInfo {
  * and passed through the OAuth flow for the callback routing to work.
  */
 export async function getExternalAuthCallbackInfo(): Promise<ExternalAuthCallbackInfo> {
+  // Keep this lazy so Electron bundles can import auth config without resolving VS Code APIs.
+  const vscode = await import('vscode');
   const baseCallbackUri = vscode.Uri.parse(
     getAuthCallbackUri(vscode.env.uriScheme),
   );
