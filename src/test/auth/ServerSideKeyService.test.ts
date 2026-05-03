@@ -3,6 +3,7 @@ import { strict as assert } from 'assert';
 
 // Local imports - auth
 import { FREE_TIER, type UserTier } from '@auth/config';
+import type { AuthServiceLogger } from '@auth/serviceLogger';
 import {
   ServerSideKeyService,
   type AuthProvider,
@@ -91,11 +92,15 @@ function createAuthProvider(): AuthProvider {
   };
 }
 
-function createService(tierService: TierService): ServerSideKeyService {
+function createService(
+  tierService: TierService,
+  logger?: AuthServiceLogger,
+): ServerSideKeyService {
   return new ServerSideKeyService(
     'https://example.test',
     createAuthProvider(),
     tierService,
+    logger,
   );
 }
 
@@ -151,7 +156,17 @@ describe('ServerSideKeyService', () => {
   it('continues dispatching when one listener throws', async () => {
     const tier = createTierService();
     const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: false });
-    const service = createService(tier.service);
+    const errors: Array<{ channel: string; message: string }> = [];
+    const logger: AuthServiceLogger = {
+      info(channel, message) {
+        void channel;
+        void message;
+      },
+      error(channel, message) {
+        errors.push({ channel, message });
+      },
+    };
+    const service = createService(tier.service, logger);
     const changes: boolean[] = [];
 
     service.initialize({ state });
@@ -166,5 +181,11 @@ describe('ServerSideKeyService', () => {
 
     assert.deepEqual(changes, [true]);
     assert.equal(state.get(USE_INCLUDED_ACCESS_KEY, false), true);
+    assert.deepEqual(errors, [
+      {
+        channel: 'ServerSideKeyService',
+        message: 'Event listener failed: listener failed',
+      },
+    ]);
   });
 });
