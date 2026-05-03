@@ -281,13 +281,25 @@ jobs:
               checked and why each category was a no-op.
 
             **Rendering style for the posted comment (this is what the author sees):**
-            Write in calm, declarative prose. Do not use emojis (🔴 / 🟡 / ℹ️ / ✅ / ❌ / ⚠️
-            / 🚨 / etc.), color codes, ALL-CAPS shouting, or alarmist words like "BLOCKER" /
-            "CRITICAL" / "MUST FIX NOW" in the rendered comment. The GitHub review status
-            (REQUEST_CHANGES vs APPROVE) already communicates urgency; the comment body
-            should communicate substance. State the issue, cite the file and line, propose
-            the fix. Group findings by severity tier with the plain headers shown in the
-            template below.
+            Default to calm, declarative prose. The GitHub review status
+            (REQUEST_CHANGES vs APPROVE) communicates urgency; the comment body
+            communicates substance — state the issue, cite the file and line, propose
+            the fix.
+
+            Emoji and emphasis usage:
+            - Section headers and category discussion: plain text, no emojis. Don't
+              decorate "I checked these categories" with traffic lights.
+            - Clean diff or "no issues found" summaries: no emojis, no exclamation marks.
+              A clean review shouldn't look like an emergency.
+            - Genuine Blocker findings (real platform-decoupling violations, security
+              issues, build-breaking changes): a single 🔴 prefix on the finding line is
+              fine to draw attention. Use sparingly — one per real Blocker, not on
+              every bullet.
+            - Requires-changes and Notes findings: plain bullets, no emoji.
+            - Avoid ALL-CAPS shouting and alarmist words like "BLOCKER" / "CRITICAL" /
+              "MUST FIX NOW" as decoration. If a finding is genuinely a blocker, the
+              prose ("this prevents the extension from loading on Linux") and the
+              REQUEST_CHANGES status do the work.
 
             For each issue found, post an inline comment on the relevant line using the GitHub
             inline comment MCP tool. At the end, post a single PR-level summary comment
