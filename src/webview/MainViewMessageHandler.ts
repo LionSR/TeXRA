@@ -318,11 +318,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         }
       },
       [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: (m) =>
-        this.updateConfig(this.interactionController.getDismissConfigUpdate(m)),
+        this.applyConfigUpdate(
+          this.interactionController.getDismissConfigUpdate(m),
+        ),
       [MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER]: (m) =>
-        this.updateConfig(this.interactionController.getDismissConfigUpdate(m)),
+        this.applyConfigUpdate(
+          this.interactionController.getDismissConfigUpdate(m),
+        ),
       [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: (m) =>
-        this.updateConfig(this.interactionController.getDismissConfigUpdate(m)),
+        this.applyConfigUpdate(
+          this.interactionController.getDismissConfigUpdate(m),
+        ),
 
       [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
         this.diffManager.handleRequestRecentCommits(m),
@@ -381,7 +387,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     await safeExecuteCommand(plan.command, plan.args, this.viewName);
   }
 
-  private async updateConfig(configUpdate: {
+  private async applyConfigUpdate(configUpdate: {
     key: string;
     value: boolean;
   }): Promise<void> {
