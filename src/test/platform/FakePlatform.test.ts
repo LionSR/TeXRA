@@ -42,6 +42,16 @@ describe('FakePlatform', () => {
     );
   });
 
+  it('can model a missing workspace root', () => {
+    const platform = createFakePlatform({ workspacePath: undefined });
+
+    assert.equal(platform.workspace.getWorkspacePath(), undefined);
+    assert.equal(
+      platform.workspace.asRelativePath('/outside/main.tex'),
+      '/outside/main.tex',
+    );
+  });
+
   it('records log entries and supports custom overrides', () => {
     const log = new RecordingLogBackend();
     const fs = new FakeFileSystemProvider();
