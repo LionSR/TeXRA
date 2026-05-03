@@ -7,10 +7,8 @@
  */
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { z } from 'zod';
 
 import {
-  type AgentEntry,
   createKey,
   getAgent,
   getVisibleAgents,
@@ -32,70 +30,24 @@ import {
 } from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
-  AGENT_MODE_PRESETS,
-  AgentModePresetSchema,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
-import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
-  type AgentSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
 import { AbsoluteFS } from '@utils/files';
+import {
+  SettingsAgentCatalogController,
+  type SettingsAgentCatalogState,
+} from '../../controllers/settingsView/SettingsAgentCatalogController';
 import { SettingsAgentFileController } from '../../controllers/settingsView/SettingsAgentFileController';
 import { SettingsAgentVisibilityController } from '../../controllers/settingsView/SettingsAgentVisibilityController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
-function entryToSelectionItem(
-  entry: AgentEntry,
-  enabledKeys: string[] | undefined,
-): AgentSelectionItem {
-  const key = createKey(entry.source, entry.name);
-  // undefined = never configured → all enabled; [] = explicitly empty → none enabled
-  const enabled =
-    enabledKeys === undefined ||
-    enabledKeys.includes(key) ||
-    enabledKeys.includes(entry.name);
-  return {
-    name: entry.name,
-    source: entry.source,
-    category: entry.category,
-    description: entry.description,
-    hasPath: Boolean(entry.path),
-    filePath: entry.path || undefined,
-    tools: entry.tools,
-    hasMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
-    hasMultiplePath: Boolean(entry.multiplePath),
-    enabled,
-  };
-}
-
-export function buildAgentSelectionItems(): {
-  workflow: AgentSelectionItem[];
-  toolUse: AgentSelectionItem[];
-} {
-  // No default → undefined means "never configured" (all enabled)
-  const workflowEnabled = workspaceSM.get<string[]>(
-    WorkspaceStateKey.ENABLED_AGENTS,
-  );
-  const toolUseEnabled = workspaceSM.get<string[]>(
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-  );
-
-  const workflow = getWorkflowAgents()
-    .map((e) => entryToSelectionItem(e, workflowEnabled))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const toolUse = getToolUseAgents()
-    .map((e) => entryToSelectionItem(e, toolUseEnabled))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  return { workflow, toolUse };
-}
-
 /**
  * Agent selection, directory, and team handler delegate.
  */
 export class AgentHandlers {
+  private readonly catalogController: SettingsAgentCatalogController;
   private readonly fileController = new SettingsAgentFileController();
   private readonly visibilityController: SettingsAgentVisibilityController;
 
@@ -103,27 +55,47 @@ export class AgentHandlers {
     private readonly ctx: SettingsHandlerContext,
     private readonly refreshAfterAgentMutation: () => Promise<void>,
   ) {
+    const agentCatalogState: SettingsAgentCatalogState = {
+      getEnabledAgentKeys: (category: 'workflow' | 'toolUse') =>
+        workspaceSM.get<string[]>(
+          category === 'workflow'
+            ? WorkspaceStateKey.ENABLED_AGENTS
+            : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        ),
+      setEnabledAgentKeys: async (
+        category: 'workflow' | 'toolUse',
+        enabledKeys: string[],
+      ) => {
+        await workspaceSM.update(
+          category === 'workflow'
+            ? WorkspaceStateKey.ENABLED_AGENTS
+            : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+          enabledKeys,
+        );
+      },
+      getAgents: (category: 'workflow' | 'toolUse') =>
+        category === 'workflow' ? getWorkflowAgents() : getToolUseAgents(),
+      getVisibleAgents: (category: 'workflow' | 'toolUse') =>
+        getVisibleAgents(category),
+      getCustomPresetsRaw: () =>
+        workspaceSM.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
+      setCustomPresets: async (presets) => {
+        await workspaceSM.update(
+          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+          presets,
+        );
+      },
+    };
+
+    this.catalogController = new SettingsAgentCatalogController({
+      state: agentCatalogState,
+    });
     this.visibilityController = new SettingsAgentVisibilityController({
       state: {
-        getEnabledAgentKeys: (category) =>
-          workspaceSM.get<string[]>(
-            category === 'workflow'
-              ? WorkspaceStateKey.ENABLED_AGENTS
-              : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-          ),
-        setEnabledAgentKeys: async (category, enabledKeys) => {
-          await workspaceSM.update(
-            category === 'workflow'
-              ? WorkspaceStateKey.ENABLED_AGENTS
-              : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-            enabledKeys,
-          );
-        },
+        getEnabledAgentKeys: agentCatalogState.getEnabledAgentKeys,
+        setEnabledAgentKeys: agentCatalogState.setEnabledAgentKeys,
         getAgents: (category) =>
-          (category === 'workflow'
-            ? getWorkflowAgents()
-            : getToolUseAgents()
-          ).map((entry) => ({
+          agentCatalogState.getAgents(category).map((entry) => ({
             source: entry.source,
             name: entry.name,
           })),
@@ -135,7 +107,7 @@ export class AgentHandlers {
 
   async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
     await loadAgents();
-    const { workflow, toolUse } = buildAgentSelectionItems();
+    const { workflow, toolUse } = this.catalogController.buildSelectionItems();
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       workflow,
@@ -516,7 +488,7 @@ export class AgentHandlers {
   async sendAgentModePresets(webview: vscode.Webview): Promise<void> {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      customPresets: this.getCustomPresets(),
+      customPresets: this.catalogController.getCustomPresets(),
     });
   }
 
@@ -524,35 +496,17 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
   ): Promise<void> {
     try {
-      const preset =
-        AGENT_MODE_PRESETS.find((p) => p.id === data.presetId) ??
-        this.getCustomPresets().find((p) => p.id === data.presetId);
-      if (!preset) {
+      await loadAgents();
+      const result = await this.catalogController.applyPreset(data.presetId);
+      if (!result.ok) {
         await vscode.window.showErrorMessage(`Unknown team: ${data.presetId}`);
         return;
       }
 
-      await loadAgents();
-
-      const workflowKeys = this.resolveAgentKeys(
-        'workflow',
-        new Set(preset.workflowAgents),
-      );
-      const toolUseKeys = this.resolveAgentKeys(
-        'toolUse',
-        new Set(preset.toolUseAgents),
-      );
-
-      await workspaceSM.update(WorkspaceStateKey.ENABLED_AGENTS, workflowKeys);
-      await workspaceSM.update(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-        toolUseKeys,
-      );
-
       await this.refreshAfterAgentMutation();
 
       void vscode.window.showInformationMessage(
-        `Applied "${preset.name}" team`,
+        `Applied "${result.preset.name}" team`,
       );
     } catch (error) {
       await showLoggedErrorMessage(
@@ -576,23 +530,7 @@ export class AgentHandlers {
 
       await loadAgents();
 
-      const workflowAgents = getVisibleAgents('workflow').map((e) => e.name);
-      const toolUseAgents = getVisibleAgents('toolUse').map((e) => e.name);
-
-      const preset: AgentModePreset = {
-        id: `custom-${Date.now()}`,
-        name: name.trim(),
-        description: `Custom team: ${[...toolUseAgents, ...workflowAgents].join(', ')}`,
-        icon: 'codicon-bookmark',
-        workflowAgents,
-        toolUseAgents,
-      };
-
-      const existing = this.getCustomPresets();
-      await workspaceSM.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
-        ...existing,
-        preset,
-      ]);
+      await this.catalogController.saveCurrentPreset(name);
 
       await this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w));
 
@@ -610,8 +548,7 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT_MODE_PRESET>,
   ): Promise<void> {
     try {
-      const presets = this.getCustomPresets();
-      const target = presets.find((p) => p.id === data.presetId);
+      const target = this.catalogController.getCustomPreset(data.presetId);
       if (!target) return;
 
       const confirm = await vscode.window.showWarningMessage(
@@ -621,8 +558,7 @@ export class AgentHandlers {
       );
       if (confirm !== 'Delete') return;
 
-      const updated = presets.filter((p) => p.id !== data.presetId);
-      await workspaceSM.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, updated);
+      await this.catalogController.deleteCustomPreset(data.presetId);
 
       await this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w));
     } catch (error) {
@@ -702,24 +638,5 @@ export class AgentHandlers {
       }),
       vscode.commands.executeCommand('texra.refreshAllOptions'),
     ]);
-  }
-
-  /** Read and validate custom teams from workspace state. */
-  private getCustomPresets(): AgentModePreset[] {
-    const raw = workspaceSM.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []);
-    const parsed = z.array(AgentModePresetSchema).safeParse(raw);
-    return parsed.success ? parsed.data : [];
-  }
-
-  /** Resolve agent names to source:name keys for the given category. */
-  private resolveAgentKeys(
-    category: 'workflow' | 'toolUse',
-    names: Set<string>,
-  ): string[] {
-    const entries =
-      category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
-    return entries
-      .filter((e) => names.has(e.name))
-      .map((e) => createKey(e.source, e.name));
   }
 }
