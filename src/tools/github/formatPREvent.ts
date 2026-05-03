@@ -18,6 +18,7 @@ import {
   wrapWebhookEvent as wrap,
 } from './formatUtils';
 import type {
+  GhCheckAnnotation,
   GhCheckRun,
   GhIssueComment,
   GhReview,
@@ -25,6 +26,13 @@ import type {
 } from './prTypes';
 
 const MAX_BODY = 500;
+/**
+ * A single CI check can emit hundreds of annotations (think: a linter on a
+ * large diff). Show the first N inline so the agent gets the gist; for the
+ * rest, include a count and a link out to the full list.
+ */
+const MAX_ANNOTATIONS_PER_RUN = 20;
+const MAX_ANNOTATION_MESSAGE = 300;
 
 const truncate = (s: string | null | undefined): string =>
   truncateBody(s, MAX_BODY);
@@ -62,6 +70,18 @@ const reviewCommentPrefix = (c: GhReviewComment): string =>
 
 const checkRunBlock = (run: GhCheckRun): string =>
   `Check: ${run.name}\nConclusion: ${run.conclusion}\nDetails: ${run.html_url}`;
+
+const annotationLocation = (a: GhCheckAnnotation): string =>
+  a.end_line > a.start_line
+    ? `${a.path}:${a.start_line}-${a.end_line}`
+    : `${a.path}:${a.start_line}`;
+
+const annotationBlock = (a: GhCheckAnnotation): string => {
+  const level = (a.annotation_level ?? 'notice').toUpperCase();
+  const title = a.title ? `${a.title}: ` : '';
+  const message = truncateBody(a.message, MAX_ANNOTATION_MESSAGE);
+  return `[${level}] ${annotationLocation(a)}\n${title}${message}`;
+};
 
 export function formatIssueComment(
   slug: string,
@@ -129,6 +149,35 @@ export function formatCheckFailureSummary(
       `${runs.length} CI checks failed on the PR. Investigate the failures and determine what action (if any) is needed.`,
       `PR: ${prRef(slug, prNumber)}`,
       runs.map(checkRunBlock).join('\n\n'),
+    ),
+  );
+}
+
+/**
+ * Inline check annotations (warnings / notices / failures pinned to specific
+ * file lines, like the bubbles GitHub renders on the PR diff view). Emitted
+ * separately from `formatCheckFailure` because annotations also appear on
+ * *passing* checks — many workflows surface non-blocking lint / suggestion
+ * advisories against specific lines without failing the build.
+ */
+export function formatCheckAnnotations(
+  slug: string,
+  prNumber: number,
+  run: GhCheckRun,
+  annotations: ReadonlyArray<GhCheckAnnotation>,
+): string {
+  const total = run.output?.annotations_count ?? annotations.length;
+  const shown = annotations.slice(0, MAX_ANNOTATIONS_PER_RUN);
+  const remaining = total - shown.length;
+  const overflow =
+    remaining > 0
+      ? `…and ${remaining} more annotation(s). See ${run.html_url} for the full list.`
+      : run.html_url;
+  return wrap(
+    sections(
+      `Check "${run.name}" reported ${total} inline annotation(s) on ${prRef(slug, prNumber)}. Investigate the warnings/notices and determine what action (if any) is needed.`,
+      shown.map(annotationBlock).join('\n\n'),
+      overflow,
     ),
   );
 }
