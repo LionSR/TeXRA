@@ -60,7 +60,8 @@ function createInitialState(pr: PRKey): SubscriptionState {
     seenReviewCommentIds: new Set(),
     seenReviewIds: new Set(),
     lastFailedCheckKeys: new Set(),
-    seenAnnotatedCheckKeys: new Set(),
+    lastAnnotationKeys: new Set(),
+    pendingAnnotationRuns: [],
     ciCompleteSha: undefined,
     ciPassedSha: undefined,
     headSha: undefined,
@@ -91,9 +92,11 @@ const MAX_CHECK_RUNS_PAGES = 50;
 // we'd only truncate; remaining count is sourced from `annotations_count`.
 const ANNOTATIONS_PAGE_SIZE = 20;
 // Bound the per-tick fan-out across runs (e.g. a matrix build lighting up a
-// fleet of checks). Runs we skip this tick stay eligible next tick — keys
-// are added to the seen-set only on successful fetch + emit.
-const MAX_ANNOTATION_FETCHES_PER_TICK = 5;
+// fleet of checks). Excess candidates land in `pendingAnnotationRuns` and are
+// drained on subsequent ticks (including 304 ticks where check-runs haven't
+// changed). The cap is per-PR; the PollingSourceBase rate-limit handler is
+// the process-wide safety net via GitHubRateLimitError + skipPollUntilMs.
+const MAX_ANNOTATION_FETCHES_PER_TICK = 3;
 
 export interface PRKey {
   owner: string;
@@ -120,8 +123,20 @@ interface SubscriptionState extends BasePollSubscriptionState {
   seenReviewCommentIds: Set<number>;
   seenReviewIds: Set<number>;
   lastFailedCheckKeys: Set<string>;
-  /** `${id}:${completed_at}` — re-runs change `completed_at`, re-emitting. */
-  seenAnnotatedCheckKeys: Set<string>;
+  /**
+   * `${id}:${completed_at}` for runs observed (with annotations) on the most
+   * recent 200 tick. Replaced wholesale every 200 tick (mirrors
+   * `lastFailedCheckKeys`) so it can't grow unboundedly and FIFO eviction
+   * can't mistake a still-present run for a new one.
+   */
+  lastAnnotationKeys: Set<string>;
+  /**
+   * Annotated runs awaiting an annotations-endpoint fetch. Populated by the
+   * 200 branch (newly-seen keys), drained on every tick (200 OR 304) so a
+   * burst that overflows `MAX_ANNOTATION_FETCHES_PER_TICK` isn't stranded
+   * once the check-runs cache stabilizes.
+   */
+  pendingAnnotationRuns: GhCheckRun[];
   /** Head SHA for which the one-shot "CI complete" event has been emitted. */
   ciCompleteSha: string | undefined;
   /** Head SHA for which the one-shot "CI passed" event has been emitted. */
@@ -231,6 +246,9 @@ export class PRPollingSource extends PollingSourceBase<
         state.ciCompleteSha = undefined;
         state.ciPassedSha = undefined;
         state.checkRunsCache = undefined;
+        // Old SHA's deferred annotations are no longer the user's focus; the
+        // new SHA's runs will re-enqueue from the next 200 tick.
+        state.pendingAnnotationRuns = [];
       }
       state.headSha = newHead;
 
@@ -349,13 +367,13 @@ export class PRPollingSource extends PollingSourceBase<
           if (this.isCheckFailure(r)) {
             state.lastFailedCheckKeys.add(this.checkKey(r));
           }
-          // Seed the annotated-check dedupe so pre-subscription annotations
-          // don't replay; the timestamp in the key lets re-runs re-emit.
+          // Seed annotation keys so pre-subscription annotations don't
+          // replay; the timestamp in the key lets re-runs re-emit.
           if (
             r.status === 'completed' &&
             (r.output?.annotations_count ?? 0) > 0
           ) {
-            state.seenAnnotatedCheckKeys.add(this.checkKey(r));
+            state.lastAnnotationKeys.add(this.checkKey(r));
           }
         }
         // Seed so pre-existing terminal CI doesn't fire on the next tick —
@@ -504,8 +522,15 @@ export class PRPollingSource extends PollingSourceBase<
 
       // Annotations are emitted independently of failures: they also surface
       // on passing checks (lint suggestions, custom workflow advisories).
-      await this.fetchAndEmitAnnotations(state, runs);
+      // Enqueue here, drain below — the drain runs on every tick (including
+      // 304) so excess candidates aren't stranded once check-runs settle.
+      this.enqueueAnnotationCandidates(state, runs);
     }
+
+    // Always drain pending annotation fetches, even on a 304 check-runs tick.
+    // The 200 branch enqueues; this is what unblocks the queue when the
+    // check-runs response stops changing but candidates remain unfetched.
+    await this.drainAnnotationQueue(state);
 
     // Commit the deferred check-runs cache only after successfully consuming
     // the response (including the diff branch above). See `fetchAllCheckRuns`
@@ -780,44 +805,68 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   /**
-   * Fetch and forward inline annotations for newly-completed runs. Gating on
-   * `completed` keeps the dedupe key (`${id}:${completed_at}`) stable — only
-   * completion has a settled `annotations_count`. Errors propagate to the
-   * tick wrapper for retry; keys advance only on successful emit.
+   * Replace `lastAnnotationKeys` with this tick's set and enqueue any newly-
+   * appeared annotated runs. Replace-each-tick semantics (mirroring
+   * `lastFailedCheckKeys`) keep the set bounded by the head SHA's check-run
+   * count — no FIFO eviction, no risk of an evicted-then-rediscovered run
+   * re-emitting duplicates against an unchanged check-runs response.
    */
-  private async fetchAndEmitAnnotations(
+  private enqueueAnnotationCandidates(
     state: SubscriptionState,
     runs: ReadonlyArray<GhCheckRun>,
-  ): Promise<void> {
-    const candidates: { run: GhCheckRun; key: string }[] = [];
+  ): void {
+    const currentKeys = new Set<string>();
+    const pendingIds = new Set(state.pendingAnnotationRuns.map((r) => r.id));
     for (const run of runs) {
       if (run.status !== 'completed') continue;
       if ((run.output?.annotations_count ?? 0) <= 0) continue;
       const key = this.checkKey(run);
-      if (state.seenAnnotatedCheckKeys.has(key)) continue;
-      candidates.push({ run, key });
+      currentKeys.add(key);
+      if (state.lastAnnotationKeys.has(key)) continue;
+      // Run id alone catches the rerun-mid-pending case: same check, same
+      // pending entry, but `completed_at` (and therefore the key) changed.
+      // We skip enqueuing a duplicate; the queued entry will be fetched and
+      // re-emit when its annotations land — annotation_level is what users
+      // care about, not the precise completed_at the queue holds.
+      if (pendingIds.has(run.id)) continue;
+      state.pendingAnnotationRuns.push(run);
     }
-    if (candidates.length === 0) return;
+    state.lastAnnotationKeys = currentKeys;
+  }
 
-    const toFetch = candidates.slice(0, MAX_ANNOTATION_FETCHES_PER_TICK);
-    const { pr } = state;
-    await Promise.all(
-      toFetch.map(async ({ run, key }) => {
-        const annotations = await this.fetchAnnotations(
-          pr.owner,
-          pr.repo,
-          run.id,
-        );
-        state.seenAnnotatedCheckKeys.add(key);
-        if (annotations.length > 0) {
-          this.emit(
-            state,
-            formatCheckAnnotations(state.slug, pr.pullNumber, run, annotations),
-          );
-        }
-      }),
+  /**
+   * Drain up to `MAX_ANNOTATION_FETCHES_PER_TICK` queued runs by hitting the
+   * annotations endpoint and emitting one event per non-empty result. Runs
+   * are removed from the queue only after the parallel batch resolves; on
+   * any rejection (network blip, rate limit) the entire batch stays queued
+   * for the next tick. Emits happen after the synchronous queue mutation so
+   * a listener throw can't desync the queue from `lastAnnotationKeys`.
+   */
+  private async drainAnnotationQueue(state: SubscriptionState): Promise<void> {
+    if (state.pendingAnnotationRuns.length === 0) return;
+    const candidates = state.pendingAnnotationRuns.slice(
+      0,
+      MAX_ANNOTATION_FETCHES_PER_TICK,
     );
-    trimSet(state.seenAnnotatedCheckKeys, MAX_SEEN_IDS);
+    const { pr } = state;
+    const results = await Promise.all(
+      candidates.map(async (run) => ({
+        run,
+        annotations: await this.fetchAnnotations(pr.owner, pr.repo, run.id),
+      })),
+    );
+    const fetchedIds = new Set(results.map((r) => r.run.id));
+    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
+      (p) => !fetchedIds.has(p.id),
+    );
+    for (const { run, annotations } of results) {
+      if (annotations.length > 0) {
+        this.emit(
+          state,
+          formatCheckAnnotations(state.slug, pr.pullNumber, run, annotations),
+        );
+      }
+    }
   }
 
   private async fetchAnnotations(

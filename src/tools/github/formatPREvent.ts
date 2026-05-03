@@ -67,10 +67,22 @@ const reviewCommentPrefix = (c: GhReviewComment): string =>
 const checkRunBlock = (run: GhCheckRun): string =>
   `Check: ${run.name}\nConclusion: ${run.conclusion}\nDetails: ${run.html_url}`;
 
-const annotationLocation = (a: GhCheckAnnotation): string =>
-  a.end_line > a.start_line
-    ? `${a.path}:${a.start_line}-${a.end_line}`
-    : `${a.path}:${a.start_line}`;
+const annotationLocation = (a: GhCheckAnnotation): string => {
+  if (a.end_line > a.start_line) {
+    return `${a.path}:${a.start_line}-${a.end_line}`;
+  }
+  // Per GitHub: start_column / end_column are only meaningful when
+  // start_line === end_line. Include them so multiple annotations on
+  // different columns of the same line stay distinguishable.
+  if (a.start_column != null) {
+    const colRange =
+      a.end_column != null && a.end_column !== a.start_column
+        ? `${a.start_column}-${a.end_column}`
+        : `${a.start_column}`;
+    return `${a.path}:${a.start_line}:${colRange}`;
+  }
+  return `${a.path}:${a.start_line}`;
+};
 
 const annotationBlock = (a: GhCheckAnnotation): string => {
   const level = (a.annotation_level ?? 'notice').toUpperCase();
@@ -169,7 +181,7 @@ export function formatCheckAnnotations(
       : run.html_url;
   return wrap(
     sections(
-      `Check "${run.name}" reported ${total} inline annotation(s) on ${prRef(slug, prNumber)}. Investigate the warnings/notices and determine what action (if any) is needed.`,
+      `Check "${run.name}" reported ${total} inline annotation(s) on ${prRef(slug, prNumber)}. Each annotation is tagged with its level ([NOTICE], [WARNING], or [FAILURE]); investigate and determine what action (if any) is needed.`,
       shown.map(annotationBlock).join('\n\n'),
       overflow,
     ),
