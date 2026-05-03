@@ -11,15 +11,20 @@ import {
   getExternalAuthCallbackInfo,
   AUTH_CALLBACK_TIMEOUT_MS,
   TOKEN_REFRESH_THRESHOLD_MS,
-  DEFAULT_SESSION_EXPIRY_MS,
   SUPABASE_SESSION_KEY,
   GITHUB_TOKEN_EXCHANGE_URL,
   GITHUB_TOKEN_REFRESH_URL,
+  DEFAULT_SESSION_EXPIRY_MS,
   type OAuthProvider,
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
+import {
+  parseAuthCallbackTokens,
+  parseStoredSupabaseSession,
+  toStorableSupabaseSession,
+  type SupabaseSession,
+} from './SupabaseSession';
 import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
-import type { Session as SupabaseNativeSession } from '@supabase/supabase-js';
 import type { SupabaseUriHandler } from './UriHandler';
 
 /** Response schema for GitHub token exchange Edge Function. */
@@ -42,20 +47,6 @@ const GitHubTokenExchangeSchema = z.object({
 });
 type GitHubTokenExchangeResponse = z.infer<typeof GitHubTokenExchangeSchema>;
 
-/** Schema for session data stored in VS Code SecretStorage. */
-const SupabaseSessionSchema = z.object({
-  id: z.string(),
-  accessToken: z.string(),
-  refreshToken: z.string(),
-  account: z.object({
-    id: z.string(),
-    label: z.string(),
-  }),
-  expiresAt: z.number(),
-  useCustomRefresh: z.boolean().optional(),
-});
-type SupabaseSession = z.infer<typeof SupabaseSessionSchema>;
-
 /** Timeout for Edge Function requests (30 seconds) */
 const EDGE_FUNCTION_TIMEOUT_MS = 30000;
 
@@ -66,57 +57,6 @@ const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
   ghu_: 'user-to-server token',
   ghs_: 'server-to-server token',
 };
-
-/**
- * Parse and validate stored session data.
- * Returns null if session data is missing or invalid.
- * Logs warnings for corrupted data to help diagnose auth issues.
- */
-function parseStoredSession(
-  sessionData: string | undefined,
-): SupabaseSession | null {
-  if (!sessionData) return null;
-  try {
-    const parsed = SupabaseSessionSchema.safeParse(JSON.parse(sessionData));
-    if (!parsed.success) {
-      logger.warn(
-        'SupabaseAuthProvider',
-        `Stored session has invalid schema: ${parsed.error.message}`,
-      );
-      return null;
-    }
-    return parsed.data;
-  } catch (error) {
-    logger.warn(
-      'SupabaseAuthProvider',
-      `Failed to parse stored session: ${toErrorMessage(error)}`,
-    );
-    return null;
-  }
-}
-
-/**
- * Convert Supabase's native Session to our storage format.
- * Handles the snake_case → camelCase and seconds → milliseconds conversions.
- */
-function toStorableSession(
-  nativeSession: SupabaseNativeSession,
-  options?: { useCustomRefresh?: boolean },
-): SupabaseSession {
-  return {
-    id: nativeSession.user.id,
-    accessToken: nativeSession.access_token,
-    refreshToken: nativeSession.refresh_token,
-    account: {
-      id: nativeSession.user.id,
-      label: nativeSession.user.email || nativeSession.user.id,
-    },
-    expiresAt: nativeSession.expires_at
-      ? nativeSession.expires_at * 1000
-      : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
-    useCustomRefresh: options?.useCustomRefresh,
-  };
-}
 
 /** Result of parsing auth callback URI */
 interface CallbackParseResult {
@@ -209,7 +149,10 @@ export class SupabaseAuthProvider
   async ensureFreshToken(forceRefresh?: boolean): Promise<string | null> {
     try {
       const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      const session = parseStoredSession(sessionData);
+      const session = parseStoredSupabaseSession(
+        sessionData,
+        'SupabaseAuthProvider',
+      );
       if (!session) {
         return null;
       }
@@ -261,7 +204,10 @@ export class SupabaseAuthProvider
 
     try {
       const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      const session = parseStoredSession(sessionData);
+      const session = parseStoredSupabaseSession(
+        sessionData,
+        'SupabaseAuthProvider',
+      );
       if (!session) {
         return null;
       }
@@ -317,8 +263,9 @@ export class SupabaseAuthProvider
 
     try {
       // Check if we already have a session (after claiming the lock)
-      const existingSession = parseStoredSession(
+      const existingSession = parseStoredSupabaseSession(
         await this.context.secrets.get(SUPABASE_SESSION_KEY),
+        'SupabaseAuthProvider',
       );
       if (existingSession) {
         return;
@@ -372,34 +319,14 @@ export class SupabaseAuthProvider
   private async parseCallbackAndCreateSession(
     uri: vscode.Uri,
   ): Promise<CallbackResult> {
-    // Try fragment first (implicit flow), then query params (PKCE/web fallback)
-    const fragmentParams = new URLSearchParams(uri.fragment);
-    const queryParams = new URLSearchParams(uri.query);
-
-    // Helper to get param from fragment or query
-    const getParam = (name: string): string | null =>
-      fragmentParams.get(name) || queryParams.get(name);
-
-    const accessToken = getParam('access_token');
-    const refreshToken = getParam('refresh_token');
-    const expiresIn = getParam('expires_in');
-    const error = getParam('error');
-    const errorDescription = getParam('error_description');
-
-    if (error) {
-      return {
-        success: false,
-        error: errorDescription || error,
-        isAuthError: true,
-      };
+    const parsedTokens = parseAuthCallbackTokens({
+      fragment: uri.fragment,
+      query: uri.query,
+    });
+    if (!parsedTokens.success) {
+      return parsedTokens;
     }
-
-    if (!accessToken || !refreshToken) {
-      return {
-        success: false,
-        error: 'Missing tokens in callback',
-      };
-    }
+    const { accessToken, refreshToken, expiresIn } = parsedTokens.tokens;
 
     // Verify user with Supabase
     const supabase = SupabaseClient.getClient();
@@ -437,7 +364,10 @@ export class SupabaseAuthProvider
     _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
     const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-    const session = parseStoredSession(sessionData);
+    const session = parseStoredSupabaseSession(
+      sessionData,
+      'SupabaseAuthProvider',
+    );
     if (!session) {
       return [];
     }
@@ -912,7 +842,7 @@ export class SupabaseAuthProvider
       return null;
     }
 
-    const refreshed = toStorableSession(data.session);
+    const refreshed = toStorableSupabaseSession(data.session);
     await this.storeSession(refreshed);
     return refreshed;
   }
