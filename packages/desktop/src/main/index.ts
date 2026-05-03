@@ -2,6 +2,8 @@ import { app, BrowserWindow, session } from 'electron';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { initializeElectronPlatform } from './platform/index.js';
+
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 const PRODUCTION_CSP =
@@ -49,14 +51,22 @@ function createWindow(): void {
   void window.loadFile(join(__dirname, '../renderer/index.html'));
 }
 
-app.whenReady().then(() => {
-  installContentSecurityPolicy();
-  createWindow();
+app
+  .whenReady()
+  .then(async () => {
+    await initializeElectronPlatform(__dirname);
+    installContentSecurityPolicy();
+    createWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  })
+  .catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Failed to start TeXRA desktop: ${message}`);
+    app.quit();
   });
-});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

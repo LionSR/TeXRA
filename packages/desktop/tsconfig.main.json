@@ -1,8 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
     "types": ["node", "electron"]
   },
   "include": ["src/main/**/*.ts"]
