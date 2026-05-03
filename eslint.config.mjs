@@ -63,6 +63,7 @@ const VSCODE_FREE_ZONE_DIRS = [
   'src/model',
   'src/latex',
   'src/tools',
+  'src/controllers',
   'src/shared',
   'src/replacement',
   'src/eventBus',
