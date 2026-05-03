@@ -42,6 +42,7 @@ import {
   type AgentSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
 import { AbsoluteFS } from '@utils/files';
+import { SettingsAgentVisibilityController } from '../../controllers/settingsView/SettingsAgentVisibilityController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
@@ -94,10 +95,39 @@ export function buildAgentSelectionItems(): {
  * Agent selection, directory, and team handler delegate.
  */
 export class AgentHandlers {
+  private readonly visibilityController: SettingsAgentVisibilityController;
+
   constructor(
     private readonly ctx: SettingsHandlerContext,
     private readonly refreshAfterAgentMutation: () => Promise<void>,
-  ) {}
+  ) {
+    this.visibilityController = new SettingsAgentVisibilityController({
+      state: {
+        getEnabledAgentKeys: (category) =>
+          workspaceSM.get<string[]>(
+            category === 'workflow'
+              ? WorkspaceStateKey.ENABLED_AGENTS
+              : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+          ),
+        setEnabledAgentKeys: async (category, enabledKeys) => {
+          await workspaceSM.update(
+            category === 'workflow'
+              ? WorkspaceStateKey.ENABLED_AGENTS
+              : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+            enabledKeys,
+          );
+        },
+        getAgents: (category) =>
+          (category === 'workflow'
+            ? getWorkflowAgents()
+            : getToolUseAgents()
+          ).map((entry) => ({
+            source: entry.source,
+            name: entry.name,
+          })),
+      },
+    });
+  }
 
   // ── Agent selection data ──
 
@@ -150,43 +180,12 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
   ): Promise<void> {
     try {
-      const stateKey =
-        data.category === 'workflow'
-          ? WorkspaceStateKey.ENABLED_AGENTS
-          : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
-      // No default → undefined means "never configured" (all enabled)
-      const raw = workspaceSM.get<string[]>(stateKey);
-      const current = raw ?? [];
-      const key = createKey(data.agentSource, data.agentName);
-
-      let updated: string[];
-      if (data.enabled) {
-        // Add by source:name key if not already present (check both formats)
-        if (current.includes(key) || current.includes(data.agentName)) {
-          updated = current;
-        } else {
-          updated = [...current, key];
-        }
-      } else if (raw === undefined) {
-        // Never configured (undefined) = "all enabled". To disable one agent,
-        // seed the config with all OTHER agents: undefined → [all except this one].
-        const allAgents =
-          data.category === 'workflow'
-            ? getWorkflowAgents()
-            : getToolUseAgents();
-        updated = allAgents
-          .map((e) => createKey(e.source, e.name))
-          .filter((k) => k !== key);
-      } else {
-        // Remove both name and source:name formats.
-        // An empty result means "nothing enabled" (not "all enabled").
-        updated = current.filter(
-          (entry) => entry !== key && entry !== data.agentName,
-        );
-      }
-
-      await workspaceSM.update(stateKey, updated);
-
+      await this.visibilityController.setAgentEnabled({
+        category: data.category,
+        source: data.agentSource,
+        name: data.agentName,
+        enabled: data.enabled,
+      });
       await this.refreshAfterAgentMutation();
     } catch (error) {
       await showLoggedErrorMessage(
@@ -201,44 +200,11 @@ export class AgentHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_ALL_AGENTS_ENABLED>,
   ): Promise<void> {
     try {
-      const stateKey =
-        data.category === 'workflow'
-          ? WorkspaceStateKey.ENABLED_AGENTS
-          : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
-
-      const allAgents =
-        data.category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
-
-      const sourceAgents = allAgents.filter((e) => e.source === data.source);
-      const targetKeys = new Set<string>();
-      // Legacy entries may use plain agent names without source prefix
-      const targetLegacyNames = new Set<string>();
-      for (const e of sourceAgents) {
-        targetKeys.add(createKey(e.source, e.name));
-        targetLegacyNames.add(e.name);
-      }
-
-      // Resolve current state: undefined means "all enabled" (never configured)
-      const raw = workspaceSM.get<string[]>(stateKey);
-      const current = raw ?? allAgents.map((e) => createKey(e.source, e.name));
-
-      let updated: string[];
-      if (data.enabled) {
-        // Add all keys from the target source (deduplicated)
-        const currentSet = new Set(current);
-        updated = [
-          ...current,
-          ...[...targetKeys].filter((k) => !currentSet.has(k)),
-        ];
-      } else {
-        // Remove both source:name and legacy plain-name entries for this source
-        updated = current.filter(
-          (k) => !targetKeys.has(k) && !targetLegacyNames.has(k),
-        );
-      }
-
-      await workspaceSM.update(stateKey, updated);
-
+      await this.visibilityController.setAllAgentsEnabled({
+        category: data.category,
+        source: data.source,
+        enabled: data.enabled,
+      });
       await this.refreshAfterAgentMutation();
     } catch (error) {
       await showLoggedErrorMessage(
