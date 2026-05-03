@@ -42,6 +42,7 @@ import {
   type AgentSelectionItem,
 } from '@shared/schemas/settingsViewMessages';
 import { AbsoluteFS } from '@utils/files';
+import { SettingsAgentFileController } from '../../controllers/settingsView/SettingsAgentFileController';
 import { SettingsAgentVisibilityController } from '../../controllers/settingsView/SettingsAgentVisibilityController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
@@ -95,6 +96,7 @@ export function buildAgentSelectionItems(): {
  * Agent selection, directory, and team handler delegate.
  */
 export class AgentHandlers {
+  private readonly fileController = new SettingsAgentFileController();
   private readonly visibilityController: SettingsAgentVisibilityController;
 
   constructor(
@@ -348,22 +350,21 @@ export class AgentHandlers {
       }
 
       const customDir = await agentDirectories.custom();
-      const normalizedCustomDir = path.resolve(customDir);
       const sourceDir = await agentDirectories.getDirectory(data.agentSource);
-      const relativePath = sourceDir
-        ? path.relative(sourceDir, entry.path)
-        : path.basename(entry.path);
-      const targetPath = path.join(customDir, relativePath);
 
-      // Guard: only write files under the custom agent directory
-      if (
-        !path.resolve(targetPath).startsWith(normalizedCustomDir + path.sep)
-      ) {
+      const result = this.fileController.planCustomizeAgent({
+        entry,
+        customDir,
+        sourceDir,
+      });
+      if (!result.ok) {
         await vscode.window.showErrorMessage(
           `Refusing to copy: target path escapes the custom agents directory.`,
         );
         return;
       }
+
+      const { targetPath, multipleCopy } = result.plan;
 
       await AbsoluteFS.ensureDir(path.dirname(targetPath));
 
@@ -380,25 +381,18 @@ export class AgentHandlers {
 
       await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
 
-      // Also copy the _multiple variant if it stays inside the custom directory
-      if (entry.multiplePath) {
-        const multipleRelative = sourceDir
-          ? path.relative(sourceDir, entry.multiplePath)
-          : path.basename(entry.multiplePath);
-        const multipleTarget = path.join(customDir, multipleRelative);
-        if (
-          path
-            .resolve(multipleTarget)
-            .startsWith(normalizedCustomDir + path.sep)
-        ) {
-          await AbsoluteFS.ensureDir(path.dirname(multipleTarget));
-          try {
-            await AbsoluteFS.copy(entry.multiplePath, multipleTarget, {
+      if (multipleCopy) {
+        await AbsoluteFS.ensureDir(path.dirname(multipleCopy.targetPath));
+        try {
+          await AbsoluteFS.copy(
+            multipleCopy.sourcePath,
+            multipleCopy.targetPath,
+            {
               overwrite: true,
-            });
-          } catch {
-            // _multiple variant may not exist on disk even if registered
-          }
+            },
+          );
+        } catch {
+          // _multiple variant may not exist on disk even if registered
         }
       }
 
@@ -434,30 +428,29 @@ export class AgentHandlers {
         return;
       }
 
-      // Guard: only delete files under the custom agent directory
       const customDir = await agentDirectories.custom();
-      const normalizedPath = path.resolve(entry.path);
-      const normalizedCustomDir = path.resolve(customDir);
-      if (!normalizedPath.startsWith(normalizedCustomDir + path.sep)) {
+      const result = this.fileController.planDeleteCustomAgent({
+        entry,
+        customDir,
+      });
+      if (!result.ok) {
         await vscode.window.showErrorMessage(
           `Refusing to delete: file is not inside the custom agents directory.`,
         );
         return;
       }
 
-      await AbsoluteFS.delete(entry.path, { recursive: false });
+      await AbsoluteFS.delete(result.plan.path, { recursive: false });
 
-      // Also delete the _multiple variant if it is inside the custom directory
-      if (entry.multiplePath) {
-        const normalizedMultiple = path.resolve(entry.multiplePath);
-        if (normalizedMultiple.startsWith(normalizedCustomDir + path.sep)) {
-          try {
-            await AbsoluteFS.delete(entry.multiplePath, { recursive: false });
-          } catch (err) {
-            // Only ignore FileNotFound; surface other errors
-            if (!isFileNotFoundError(err)) {
-              throw err;
-            }
+      if (result.plan.multiplePath) {
+        try {
+          await AbsoluteFS.delete(result.plan.multiplePath, {
+            recursive: false,
+          });
+        } catch (err) {
+          // Only ignore FileNotFound; surface other errors
+          if (!isFileNotFoundError(err)) {
+            throw err;
           }
         }
       }
@@ -651,49 +644,39 @@ export class AgentHandlers {
       const name = await vscode.window.showInputBox({
         prompt: `Enter a name for the new ${categoryLabel} agent (without .yaml extension)`,
         placeHolder: 'my_agent',
-        validateInput: (value) => {
-          if (!value) return 'Name cannot be empty';
-          if (value.includes('/') || value.includes('\\'))
-            return 'Name cannot contain path separators';
-          if (value.includes(' ')) return 'Use underscores instead of spaces';
-          if (/[:#\[\]{}|>&*!%@`]/.test(value))
-            return 'Name cannot contain YAML-special characters';
-          return null;
-        },
+        validateInput: (value) =>
+          this.fileController.validateTemplateName(value),
       });
       if (!name) return;
 
       const customDir = await agentDirectories.custom();
       await AbsoluteFS.ensureDir(customDir);
 
-      const fileName = name.endsWith('.yaml') ? name : `${name}.yaml`;
-      const filePath = path.join(customDir, fileName);
+      const templatePlan = this.fileController.planTemplateAgent({
+        category,
+        name,
+        customDir,
+      });
 
-      if (await AbsoluteFS.exists(filePath)) {
+      if (await AbsoluteFS.exists(templatePlan.filePath)) {
         await vscode.window.showWarningMessage(
-          `A file named "${fileName}" already exists in the custom agents folder.`,
+          `A file named "${templatePlan.fileName}" already exists in the custom agents folder.`,
         );
         return;
       }
 
-      const baseName = name.replace(/\.yaml$/, '');
-      const defaultDescription =
-        category === 'toolUse'
-          ? `${baseName} — interactive tool-use agent`
-          : `${baseName} — workflow agent`;
-
       const template = await renderAgentTemplateFromBundle(
         this.ctx.extensionContext,
-        category === 'toolUse' ? 'toolUse' : 'workflowSingle',
+        templatePlan.templateKind,
         {
-          agentName: baseName,
-          description: defaultDescription,
+          agentName: templatePlan.baseName,
+          description: templatePlan.description,
         },
       );
 
-      await AbsoluteFS.write(filePath, template);
+      await AbsoluteFS.write(templatePlan.filePath, template);
       const doc = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(filePath),
+        vscode.Uri.file(templatePlan.filePath),
       );
       await vscode.window.showTextDocument(doc);
     } catch (error) {
