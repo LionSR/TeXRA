@@ -294,18 +294,17 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     this.assertNotSelfDescendant(normalizedSource, normalizedDest, 'copy');
     this.assertDirectoryCopyRootTarget(normalizedDest);
     this.assertParentDirectoryExists(normalizedDest);
-    const children = this.childPaths(normalizedSource);
-    this.assertDirectoryCopyTargets(
-      normalizedSource,
-      normalizedDest,
-      children,
-      options?.overwrite,
-    );
     this.createDirectorySync(normalizedDest);
-    for (const child of children) {
+    for (const child of this.childPaths(normalizedSource)) {
       const relative = path.posix.relative(normalizedSource, child);
       const childDest = path.posix.join(normalizedDest, relative);
-      this.records.set(childDest, cloneRecord(this.requireRecord(child)));
+      const childRecord = this.requireRecord(child);
+      this.assertDirectoryCopyChildTarget(
+        childDest,
+        childRecord,
+        options?.overwrite,
+      );
+      this.records.set(childDest, cloneRecord(childRecord));
     }
   }
 
@@ -492,31 +491,25 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     }
   }
 
-  private assertDirectoryCopyTargets(
-    source: string,
+  private assertDirectoryCopyChildTarget(
     dest: string,
-    children: string[],
+    sourceRecord: FakeFileRecord,
     overwrite?: boolean,
   ): void {
-    for (const child of children) {
-      const relative = path.posix.relative(source, child);
-      const childDest = path.posix.join(dest, relative);
-      const sourceRecord = this.requireRecord(child);
-      const destRecord = this.records.get(childDest);
-      if (!destRecord) {
-        continue;
-      }
-      if (destRecord.type === sourceRecord.type) {
-        if (sourceRecord.type === FileType.File && !overwrite) {
-          throw fakeFsError('EEXIST', `Target already exists: ${childDest}`);
-        }
-        continue;
-      }
-      if (destRecord.type === FileType.Directory) {
-        throw fakeFsError('EISDIR', `Path is a directory: ${childDest}`);
-      }
-      throw fakeFsError('ENOTDIR', `Path is a file: ${childDest}`);
+    const destRecord = this.records.get(dest);
+    if (!destRecord) {
+      return;
     }
+    if (destRecord.type === sourceRecord.type) {
+      if (sourceRecord.type === FileType.File && !overwrite) {
+        throw fakeFsError('EEXIST', `Target already exists: ${dest}`);
+      }
+      return;
+    }
+    if (destRecord.type === FileType.Directory) {
+      throw fakeFsError('EISDIR', `Path is a directory: ${dest}`);
+    }
+    throw fakeFsError('ENOTDIR', `Path is a file: ${dest}`);
   }
 
   private assertParentDirectoryExists(target: string): void {
