@@ -1538,6 +1538,8 @@
     "build:safe": "npm run typecheck && npm run build:fast",
     "sync:settings-configuration": "npm run compile-tests && node scripts/sync-settings-configuration.mjs",
     "check:settings-configuration": "npm run compile-tests && node scripts/sync-settings-configuration.mjs --check",
+    "sync:extension-package-invariants": "node scripts/verify-extension-package-invariants.mjs --update",
+    "check:extension-package-invariants": "node scripts/verify-extension-package-invariants.mjs",
     "sync:remote-agents": "node scripts/sync-remote-agents.mjs -o docs/supabase/SYNC_REFERENCE_AGENTS.sql",
     "check:remote-agents": "node scripts/sync-remote-agents.mjs --check"
   },
