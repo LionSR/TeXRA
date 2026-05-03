@@ -56,7 +56,7 @@ export class LatexSettingsHandlers {
 
   private readonly toolingController = new LatexToolingController({
     checkToolInstalled: (tool) => checkToolInstalled(tool, false),
-    resolvePath: (tool) => BinaryResolver.resolvePath(tool),
+    findPath: (tool) => BinaryResolver.findPath(tool),
     detectPackageManager,
     getPlatform: () => normalizePlatform(process.platform),
     isLatexWorkshopInstalled: () =>
