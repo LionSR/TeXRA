@@ -346,7 +346,7 @@ async function mergeNewModelsIfCustomized(
 
 /** Default options for global settings that should only be set if not already configured */
 const GLOBAL_IF_UNSET = {
-  target: vscode.ConfigurationTarget.Global,
+  target: 'global',
   prefix: false,
   ifUnset: true,
 } as const;
