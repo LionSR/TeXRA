@@ -52,6 +52,29 @@ describe('FakePlatform', () => {
     );
   });
 
+  it('supports fake config updates and watchers', async () => {
+    const platform = createFakePlatform({
+      config: { enabled: true },
+    });
+    let changes = 0;
+    const subscription = platform.config.watch('enabled', () => {
+      changes += 1;
+    });
+
+    await platform.config.update('enabled', false, 'global');
+    subscription.dispose();
+    await platform.config.update('enabled', true, 'global');
+
+    assert.equal(platform.config.get('enabled', true), true);
+    assert.equal(platform.config.isExplicitlySet('enabled'), true);
+    assert.deepEqual(platform.config.inspect('enabled'), {
+      globalValue: true,
+      workspaceValue: undefined,
+      effectiveValue: true,
+    });
+    assert.equal(changes, 1);
+  });
+
   it('records log entries and supports custom overrides', () => {
     const log = new RecordingLogBackend();
     const fs = new FakeFileSystemProvider();
