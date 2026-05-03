@@ -20,14 +20,10 @@ import {
   type SettingsMessageFor,
   type LatexConfigValues,
   type LatexSettingsStatus,
-  DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
-  DEPENDENCY_INSTALL_COMMANDS,
-  HOMEBREW_INSTALL_COMMAND,
-  SCOOP_INSTALL_COMMAND,
 } from '@shared/constants/latex';
 import {
   getConfig,
@@ -41,20 +37,12 @@ import {
 } from '@utils/system/toolUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 import { LatexRecommendedSettingsController } from '../../controllers/settingsView/LatexRecommendedSettingsController';
+import { LatexToolingController } from '../../controllers/settingsView/LatexToolingController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
 /** How long cached LaTeX settings remain valid (ms). */
 const LATEX_SETTINGS_CACHE_TTL = 60_000;
-
-/** Allowlist of commands that may be executed via the Run in Terminal button. */
-const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
-  HOMEBREW_INSTALL_COMMAND,
-  SCOOP_INSTALL_COMMAND,
-  ...Object.values(DEPENDENCY_INSTALL_COMMANDS).flatMap((platforms) =>
-    Object.values(platforms).flatMap((cmds) => cmds.map((cmd) => cmd.command)),
-  ),
-]);
 
 /**
  * LaTeX settings handler delegate.
@@ -71,6 +59,31 @@ export class LatexSettingsHandlers {
       },
     });
 
+  private readonly toolingController = new LatexToolingController({
+    checkToolInstalled: (tool) => checkToolInstalled(tool, false),
+    resolvePath: (tool) => BinaryResolver.resolvePath(tool),
+    detectPackageManager,
+    getPlatform: () => normalizePlatform(process.platform),
+    isLatexWorkshopInstalled: () =>
+      Boolean(vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID)),
+    getRecommendedStatus: () => ({
+      outDir:
+        this.recommendedSettingsController.isRecommendedValueSet('outDir'),
+      autoRevealExclude:
+        this.recommendedSettingsController.isRecommendedValueSet(
+          'autoRevealExclude',
+        ),
+    }),
+    onDetectionError: (error) => {
+      this.ctx.logger.error(
+        this.ctx.channel,
+        `LaTeX settings detection failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    },
+  });
+
   /** Cached LaTeX settings to avoid redundant tool detection on repeat opens. */
   private latexSettingsCache: {
     settings: LatexSettingsStatus;
@@ -86,7 +99,7 @@ export class LatexSettingsHandlers {
       now - this.latexSettingsCache.timestamp >= LATEX_SETTINGS_CACHE_TTL
     ) {
       this.latexSettingsCache = {
-        settings: await this.detectLatexSettings(),
+        settings: await this.toolingController.detectStatus(),
         timestamp: now,
       };
     }
@@ -201,7 +214,7 @@ export class LatexSettingsHandlers {
   async handleRunInstallCommand(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
   ): Promise<void> {
-    if (!ALLOWED_INSTALL_COMMANDS.has(data.installCommand)) {
+    if (!this.toolingController.isAllowedInstallCommand(data.installCommand)) {
       this.ctx.logger.warn(
         this.ctx.channel,
         `Rejected unknown install command: ${data.installCommand}`,
@@ -215,75 +228,6 @@ export class LatexSettingsHandlers {
     });
     terminal.show();
     terminal.sendText(data.installCommand);
-  }
-
-  // ── Private helpers ──
-
-  /** Run all tool checks and build the LaTeX settings status object.
-   *  Returns defaults on failure so the webview spinner always dismisses. */
-  private async detectLatexSettings(): Promise<LatexSettingsStatus> {
-    try {
-      const [
-        pdflatexOk,
-        latexmkOk,
-        latexdiffOk,
-        latexindentOk,
-        perlOk,
-        texcountOk,
-        gsOk,
-        gmOk,
-        magickOk,
-      ] = await Promise.all([
-        checkToolInstalled('pdflatex', false),
-        checkToolInstalled('latexmk', false),
-        checkToolInstalled('latexdiff', false),
-        checkToolInstalled('latexindent', false),
-        checkToolInstalled('perl', false),
-        checkToolInstalled('texcount', false),
-        checkToolInstalled('gs', false),
-        checkToolInstalled('gm', false),
-        checkToolInstalled('magick', false),
-      ]);
-
-      const platform = normalizePlatform(process.platform);
-
-      return {
-        outDir:
-          this.recommendedSettingsController.isRecommendedValueSet('outDir'),
-        autoRevealExclude:
-          this.recommendedSettingsController.isRecommendedValueSet(
-            'autoRevealExclude',
-          ),
-        texDistributionInstalled: pdflatexOk || latexmkOk,
-        latexWorkshopInstalled: Boolean(
-          vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID),
-        ),
-        latexdiffInstalled: latexdiffOk,
-        latexindentInstalled: latexindentOk && perlOk,
-        texcountInstalled: texcountOk,
-        imageProcessingInstalled: gsOk && (gmOk || magickOk),
-        platform,
-        pdflatexPath: BinaryResolver.resolvePath('pdflatex'),
-        latexmkPath: BinaryResolver.resolvePath('latexmk'),
-        latexdiffPath: BinaryResolver.resolvePath('latexdiff'),
-        latexindentPath: BinaryResolver.resolvePath('latexindent'),
-        texcountPath: BinaryResolver.resolvePath('texcount'),
-        ghostscriptPath: BinaryResolver.resolvePath('gs'),
-        graphicsmagickPath:
-          BinaryResolver.resolvePath('gm') ??
-          BinaryResolver.resolvePath('magick'),
-        packageManager: detectPackageManager(),
-      };
-    } catch (err) {
-      this.ctx.logger.error(
-        this.ctx.channel,
-        `LaTeX settings detection failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return {
-        ...DEFAULT_LATEX_SETTINGS_STATUS,
-        platform: normalizePlatform(process.platform),
-      };
-    }
   }
 
   /** Install a VS Code extension and optionally refresh the given view data. */
