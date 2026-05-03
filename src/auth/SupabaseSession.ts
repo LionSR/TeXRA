@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import type { Session as SupabaseNativeSession } from '@supabase/supabase-js';
 
 export const DEFAULT_SUPABASE_SESSION_EXPIRY_MS = 60 * 60 * 1000;
@@ -67,7 +68,7 @@ export function parseStoredSupabaseSession(
   } catch (error) {
     options?.warn?.(
       logSource,
-      `Failed to parse stored session: ${formatUnknownError(error)}`,
+      `Failed to parse stored session: ${toErrorMessage(error)}`,
     );
     return null;
   }
@@ -94,10 +95,6 @@ export function toStorableSupabaseSession(
       : Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
     useCustomRefresh: options?.useCustomRefresh,
   };
-}
-
-function formatUnknownError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /**
