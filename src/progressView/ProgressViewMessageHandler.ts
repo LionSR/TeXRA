@@ -74,6 +74,7 @@ import {
 } from '@utils/text/textEnhancementUtils';
 
 import { ProgressStreamLifecycleController } from '../controllers/progressView/ProgressStreamLifecycleController';
+import { ProgressWorkflowActionsController } from '../controllers/progressView/ProgressWorkflowActionsController';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
 // Type helper for extracting specific message types
@@ -93,6 +94,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 > {
   private readonly recordingManager: RecordingManager;
   private readonly streamLifecycleController: ProgressStreamLifecycleController;
+  private readonly workflowActionsController: ProgressWorkflowActionsController;
   private readonly modelOutputBackups = new Map<
     StreamTabId,
     Map<string, { content: string; streamId: StreamTabId }>
@@ -125,6 +127,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     this.handlerRegistry = this.createHandlerRegistry();
     this.streamLifecycleController = this.createStreamLifecycleController();
+    this.workflowActionsController = this.createWorkflowActionsController();
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
       void this.handleDeleteStream({
@@ -177,18 +180,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         vscode.commands.executeCommand('texra.compactResponse', data.stream),
 
       // Actions
-      [PROGRESS_VIEW_COMMANDS.RESUME]: (data) => this.handleResume(data),
-      [PROGRESS_VIEW_COMMANDS.RUN_NEW]: (data) => this.handleRunNew(data),
+      [PROGRESS_VIEW_COMMANDS.RESUME]: (data) =>
+        this.workflowActionsController.resume(data.stream),
+      [PROGRESS_VIEW_COMMANDS.RUN_NEW]: (data) =>
+        this.workflowActionsController.runNew(data.stream),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: (data) =>
-        this.handleDiffStream(data),
+        this.workflowActionsController.diffStream(data.stream),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: (data) =>
-        this.withToolbarTaskState(data.stream, (ts) =>
-          this.handleFileOperation(data.stream, ts, 'texra.pack'),
-        ),
+        this.workflowActionsController.runFileOperation(data.stream, 'pack'),
       [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: (data) =>
-        this.withToolbarTaskState(data.stream, (ts) =>
-          this.handleFileOperation(data.stream, ts, 'texra.clean'),
-        ),
+        this.workflowActionsController.runFileOperation(data.stream, 'clean'),
       [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) => {
         this.provider.state.agentCategoryFilter = data.filter;
         this.provider.syncFullView();
@@ -398,6 +399,31 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
+  private createWorkflowActionsController(): ProgressWorkflowActionsController {
+    return new ProgressWorkflowActionsController({
+      state: {
+        getTaskState: (stream) => this.provider.state.meta.getTaskState(stream),
+        getExecutionId: (stream) =>
+          this.provider.state.meta.getExecutionId(stream),
+        getOutputFiles: (stream) =>
+          this.provider.state.outputFiles.getFiles(stream),
+        getKnownWorkspaceOutputPaths: (stream) =>
+          this.provider.state.outputFiles.getKnownFilePaths(stream, {
+            workspaceOnly: true,
+          }),
+      },
+      executeAgent: async (request) => {
+        await this.executeValidated(request);
+      },
+      runDiff: async (request) => {
+        await vscode.commands.executeCommand('texra.runLatexdiff', request);
+      },
+      runFileOperation: async (operation, request) => {
+        await vscode.commands.executeCommand(`texra.${operation}`, request);
+      },
+    });
+  }
+
   // ============================================================
   // Stream management handlers
   // ============================================================
@@ -423,32 +449,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
   // Action handlers
   // ============================================================
-
-  private async handleResume(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RESUME>,
-  ): Promise<void> {
-    const taskState = this.provider.state.meta.getTaskState(data.stream);
-    if (!taskState) return;
-
-    const executionId = isWorkflowTaskState(taskState)
-      ? this.provider.state.meta.getExecutionId(data.stream)
-      : undefined;
-
-    await this.executeValidated({
-      config: taskState.agentConfig,
-      ...(executionId && { executionId }),
-    });
-  }
-
-  private async handleRunNew(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RUN_NEW>,
-  ): Promise<void> {
-    const taskState = this.provider.state.meta.getTaskState(data.stream);
-    if (!taskState) {
-      return;
-    }
-    await this.executeValidated({ config: taskState.agentConfig });
-  }
 
   private async handleRetryStreamRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
@@ -537,30 +537,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
       );
     }
-  }
-
-  private async handleDiffStream(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.DIFF_STREAM>,
-  ): Promise<void> {
-    const streamId = data.stream;
-    await this.withToolbarTaskState(streamId, async (taskState) => {
-      const executionId = this.provider.state.meta.getExecutionId(streamId);
-      const runOutputs = this.provider.state.outputFiles.getFiles(streamId);
-      const outputsByRound = runOutputs.size
-        ? Object.fromEntries(runOutputs.entries())
-        : undefined;
-
-      await vscode.commands.executeCommand('texra.runLatexdiff', {
-        agent: taskState.agentConfig.agent,
-        model: taskState.agentConfig.model,
-        inputFile: taskState.agentConfig.inputFile,
-        outputFiles: taskState.agentConfig.outputFiles,
-        outputFilesActive: taskState.activeFiles.output,
-        streamId,
-        runId: executionId,
-        outputsByRound,
-      });
-    });
   }
 
   private async handlePolishFollowUp(
@@ -989,53 +965,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
     await safeExecuteCommand('texra.execute', [validation.request]);
     return true;
-  }
-
-  private async handleFileOperation(
-    streamId: StreamTabId,
-    taskState: WorkflowTaskState,
-    command: 'texra.pack' | 'texra.clean',
-  ): Promise<void> {
-    const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
-      streamId,
-      { workspaceOnly: true },
-    );
-
-    // Collect all output files from declared config and generated paths
-    const declaredOutputs = taskState.agentConfig.outputFiles;
-    const allFiles = [...declaredOutputs, ...generatedPaths].filter(Boolean);
-    const outputFiles = [...new Set(allFiles)];
-
-    // Priority: explicit config > activeFiles flag > infer from file count
-    const useMultipleOutputs =
-      taskState.agentConfig.useMultipleOutputs ??
-      taskState.activeFiles.output ??
-      outputFiles.length > 1;
-
-    const executionId = this.provider.state.meta.getExecutionId(streamId);
-
-    await vscode.commands.executeCommand(command, {
-      streamId,
-      agent: taskState.agentConfig.agent,
-      model: taskState.agentConfig.model,
-      inputFile: taskState.agentConfig.inputFile,
-      outputFiles: useMultipleOutputs ? outputFiles : [],
-      useMultipleOutputs,
-      ...(executionId && { executionId }),
-      skipProgressViewClear: true,
-    });
-  }
-
-  private async withToolbarTaskState(
-    streamId: StreamTabId,
-    action: (taskState: WorkflowTaskState) => Promise<void>,
-  ): Promise<void> {
-    const taskState = this.provider.state.meta.getTaskState(streamId);
-    if (!taskState || !isWorkflowTaskState(taskState)) {
-      return;
-    }
-
-    await action(taskState);
   }
 
   private async executeWithBaseFile(
