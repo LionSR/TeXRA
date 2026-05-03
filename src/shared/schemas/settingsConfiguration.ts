@@ -689,6 +689,11 @@ export function buildTexraPackageConfiguration(
     const generatedProperties = Object.fromEntries(
       Object.entries(properties).map(([key, property]) => {
         if (!TEXRA_SETTING_KEY_SET.has(key as TexraSettingKey)) {
+          if (key.startsWith('texra.')) {
+            throw new Error(
+              `Package configuration contains unknown setting key: ${key}`,
+            );
+          }
           return [key, property];
         }
         seenKeys.add(key);
