@@ -556,6 +556,7 @@ export type FlatTexraSettings = Record<TexraSettingKey, unknown>;
 export const TEXRA_SETTING_KEYS = TEXRA_SETTING_PATHS.map(
   (path) => `texra.${path}` as TexraSettingKey,
 );
+const TEXRA_SETTING_KEY_SET = new Set<TexraSettingKey>(TEXRA_SETTING_KEYS);
 
 export interface TexraPackageConfigurationProperty {
   type?: string;
@@ -596,6 +597,7 @@ const GENERATED_PACKAGE_SCHEMA_FIELDS = [
 ] as const;
 
 let texraSettingsJsonSchema: JsonSchemaObject | undefined;
+const parsedDefaultTexraSettings = TexraSettingsSchema.parse({});
 
 function getNestedValue(source: unknown, path: TexraSettingPath): unknown {
   let value = source;
@@ -608,10 +610,11 @@ function getNestedValue(source: unknown, path: TexraSettingPath): unknown {
   return value;
 }
 
-export function flattenTexraSettings(
-  settings: TexraSettings = TexraSettingsSchema.parse({}),
-): FlatTexraSettings {
-  const parsed = TexraSettingsSchema.parse(settings);
+export function flattenTexraSettings(settings?: unknown): FlatTexraSettings {
+  const parsed =
+    settings === undefined
+      ? parsedDefaultTexraSettings
+      : TexraSettingsSchema.parse(settings);
   return Object.fromEntries(
     TEXRA_SETTING_PATHS.map((path) => [
       `texra.${path}` satisfies TexraSettingKey,
@@ -621,7 +624,7 @@ export function flattenTexraSettings(
 }
 
 export function getTexraSettingDefault(path: TexraSettingPath): unknown {
-  return getNestedValue(TexraSettingsSchema.parse({}), path);
+  return getNestedValue(parsedDefaultTexraSettings, path);
 }
 
 function getNestedJsonSchema(path: TexraSettingPath): JsonSchemaObject {
@@ -676,7 +679,7 @@ export function buildTexraPackageConfiguration(
 
     const generatedProperties = Object.fromEntries(
       Object.entries(properties).map(([key, property]) => {
-        if (!TEXRA_SETTING_KEYS.includes(key as TexraSettingKey)) {
+        if (!TEXRA_SETTING_KEY_SET.has(key as TexraSettingKey)) {
           return [key, property];
         }
         seenKeys.add(key);
