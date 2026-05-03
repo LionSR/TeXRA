@@ -6,6 +6,7 @@ import { strict as assert } from 'assert';
 import {
   buildTexraPackageConfiguration,
   flattenTexraSettings,
+  getTexraSettingDefault,
   TEXRA_SETTING_KEYS,
   TexraSettingsSchema,
 } from '@shared/schemas/settingsConfiguration';
@@ -81,6 +82,65 @@ describe('TexraSettingsSchema', () => {
         assert.equal(defaults[key as keyof typeof defaults], null, key);
       }
     }
+  });
+
+  it('returns isolated flattened setting defaults', () => {
+    const defaults = flattenTexraSettings();
+    const mediaExtensions = defaults[
+      'texra.files.included.mediaExtensions'
+    ] as string[];
+    mediaExtensions.push('.mutated');
+    const customReplacements = defaults[
+      'texra.latex.customReplacements'
+    ] as Record<string, string>;
+    customReplacements.mutated = 'value';
+
+    const nextDefaults = flattenTexraSettings();
+
+    assert.equal(
+      (
+        nextDefaults['texra.files.included.mediaExtensions'] as string[]
+      ).includes('.mutated'),
+      false,
+    );
+    assert.equal(
+      Object.hasOwn(
+        nextDefaults['texra.latex.customReplacements'] as Record<
+          string,
+          string
+        >,
+        'mutated',
+      ),
+      false,
+    );
+  });
+
+  it('returns isolated individual setting defaults', () => {
+    const mediaExtensions = getTexraSettingDefault(
+      'files.included.mediaExtensions',
+    ) as string[];
+    mediaExtensions.push('.mutated');
+    const customReplacements = getTexraSettingDefault(
+      'latex.customReplacements',
+    ) as Record<string, string>;
+    customReplacements.mutated = 'value';
+
+    assert.equal(
+      (
+        getTexraSettingDefault('files.included.mediaExtensions') as string[]
+      ).includes('.mutated'),
+      false,
+    );
+    assert.equal(
+      Object.hasOwn(
+        getTexraSettingDefault('latex.customReplacements') as Record<
+          string,
+          string
+        >,
+        'mutated',
+      ),
+      false,
+    );
   });
 
   it('regenerates package.json contributions from schema metadata', () => {
