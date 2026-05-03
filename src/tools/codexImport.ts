@@ -8,9 +8,10 @@
  * 2. `findCodexBinaryPath()` — locate the native Codex CLI binary. The SDK
  *    bundles its own `findCodexPath()` but it resolves `@openai/codex`
  *    relative to the SDK itself (inside the VSIX). Since we don't ship the
- *    130 MB platform binaries in the VSIX, we probe local node_modules,
- *    the global npm prefix, and PATH (in that priority order), then return
- *    the path for `codexPathOverride`. Results are cached for the session.
+ *    130 MB platform binaries in the VSIX, we probe Electron's unpacked app
+ *    resources, local node_modules, the global npm prefix, and PATH (in that
+ *    priority order), then return the path for `codexPathOverride`. Results
+ *    are cached for the session.
  */
 
 import { execSync } from 'child_process';
@@ -19,6 +20,11 @@ import * as path from 'path';
 import { existsSync } from 'fs';
 
 type CodexConstructor = new (options?: any) => any;
+type PlatformInfo = { pkg: string; triple: string };
+type ElectronProcess = NodeJS.Process & {
+  defaultApp?: boolean;
+  resourcesPath?: string;
+};
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -68,7 +74,7 @@ export async function importCodexClass(): Promise<CodexConstructor> {
 // ---------------------------------------------------------------------------
 
 /** Platform key → npm package name and target triple for the native binary. */
-const PLATFORM_INFO: Record<string, { pkg: string; triple: string }> = {
+const PLATFORM_INFO: Record<string, PlatformInfo> = {
   'linux-x64': {
     pkg: '@openai/codex-linux-x64',
     triple: 'x86_64-unknown-linux-musl',
@@ -119,8 +125,20 @@ function findCodexBinaryPathUncached(): string | undefined {
 
   const binaryName = process.platform === 'win32' ? 'codex.exe' : 'codex';
 
-  // Strategy 1: resolve from local project's node_modules
-  // Highest priority — matches the SDK version in package.json.
+  // Strategy 1: packaged Electron app.asar.unpacked resources
+  // Highest priority when present — packaged apps cannot execute binaries
+  // from inside app.asar.
+  {
+    const resourcesPath = getPackagedElectronResourcesPath();
+    const result =
+      resourcesPath == null
+        ? undefined
+        : findCodexBinaryInElectronResources(resourcesPath);
+    if (result) return result;
+  }
+
+  // Strategy 2: resolve from local project's node_modules
+  // Preferred in VS Code extension development — matches package.json.
   {
     const result = resolveCodexBinary(
       path.join(__dirname, '..'),
@@ -130,7 +148,7 @@ function findCodexBinaryPathUncached(): string | undefined {
     if (result) return result;
   }
 
-  // Strategy 2: resolve from global npm prefix
+  // Strategy 3: resolve from global npm prefix
   // Preferred over PATH because the npm-installed binary matches the SDK.
   try {
     const prefix = execSync('npm prefix -g', {
@@ -151,7 +169,7 @@ function findCodexBinaryPathUncached(): string | undefined {
     // npm prefix -g failed
   }
 
-  // Strategy 3: PATH lookup (Homebrew, manual install, etc.)
+  // Strategy 4: PATH lookup (Homebrew, manual install, etc.)
   // Fallback — may find an older version that doesn't match the SDK.
   try {
     const whichCmd =
@@ -179,6 +197,42 @@ function findCodexBinaryPathUncached(): string | undefined {
 }
 
 /**
+ * Locate Codex inside an Electron packaged app's unpacked resources directory.
+ *
+ * `resourcesPath` should be Electron's `process.resourcesPath`; the expected
+ * binary location is:
+ *
+ *   resources/app.asar.unpacked/node_modules/@openai/<platform-package>/...
+ */
+export function findCodexBinaryInElectronResources(
+  resourcesPath: string,
+): string | undefined {
+  const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
+  if (!info) return undefined;
+
+  const binaryName = process.platform === 'win32' ? 'codex.exe' : 'codex';
+  const platformPkgDir = path.join(
+    resourcesPath,
+    'app.asar.unpacked',
+    'node_modules',
+    ...info.pkg.split('/'),
+  );
+
+  return resolveCodexBinaryFromPlatformPackage(
+    platformPkgDir,
+    info,
+    binaryName,
+  );
+}
+
+function getPackagedElectronResourcesPath(): string | undefined {
+  const electronProcess = process as ElectronProcess;
+  if (electronProcess.versions.electron == null) return undefined;
+  if (electronProcess.defaultApp === true) return undefined;
+  return electronProcess.resourcesPath;
+}
+
+/**
  * Resolve the native Codex binary from a directory that contains (or nests)
  * the platform-specific package.  Returns the binary path if found, or
  * `undefined`.
@@ -188,22 +242,35 @@ function findCodexBinaryPathUncached(): string | undefined {
  */
 function resolveCodexBinary(
   baseDir: string,
-  platformInfo: (typeof PLATFORM_INFO)[string],
+  platformInfo: PlatformInfo,
   binaryName: string,
 ): string | undefined {
   try {
     const req = createRequire(path.join(baseDir, 'package.json'));
     const platformPkgJson = req.resolve(`${platformInfo.pkg}/package.json`);
-    const binary = path.join(
+    const binary = resolveCodexBinaryFromPlatformPackage(
       path.dirname(platformPkgJson),
-      'vendor',
-      platformInfo.triple,
-      'codex',
+      platformInfo,
       binaryName,
     );
-    if (existsSync(binary)) return binary;
+    if (binary) return binary;
   } catch {
     // Platform package not resolvable
   }
   return undefined;
+}
+
+function resolveCodexBinaryFromPlatformPackage(
+  platformPkgDir: string,
+  platformInfo: PlatformInfo,
+  binaryName: string,
+): string | undefined {
+  const binary = path.join(
+    platformPkgDir,
+    'vendor',
+    platformInfo.triple,
+    'codex',
+    binaryName,
+  );
+  return existsSync(binary) ? binary : undefined;
 }
