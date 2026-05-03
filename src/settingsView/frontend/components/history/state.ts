@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Local imports - shared state
-import { vscode } from '@shared/vscode';
+import { hostBridge } from '@shared/hostBridge';
 import { PersistedState, createWebviewStorage } from '@shared/state';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 
@@ -15,7 +15,7 @@ type HistoryViewPersistedState = z.infer<typeof HistoryViewStateSchema>;
 
 export class HistoryViewState {
   private readonly state = new PersistedState<HistoryViewPersistedState>(
-    createWebviewStorage(vscode),
+    createWebviewStorage(hostBridge),
     'historyView',
     HistoryViewStateSchema,
   );
