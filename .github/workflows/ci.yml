@@ -44,6 +44,9 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
+      - name: Check extension package invariants
+        run: pnpm run check:extension-package-invariants
+
       - name: Kernel tests
         run: pnpm run test:kernel
 
