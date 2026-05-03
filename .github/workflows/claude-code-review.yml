@@ -3,10 +3,24 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - 'src/**'
+      - 'resources/agents/**'
+      - 'resources/tool_use_agents/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'eslint.config.mjs'
+      - '.prettierrc'
+      - '.github/workflows/**'
+      - 'CLAUDE.md'
+      - 'AGENTS.md'
+      - 'CHANGELOG.md'
+      - 'skills/**'
 
 concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   claude-review:
@@ -32,9 +46,263 @@ jobs:
           allowed_bots: 'claude[bot],chatgpt-codex-connector[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
+          prompt: |
+            Review this TeXRA pull request: ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+            Trigger event: ${{ github.event.action }}
+
+            TeXRA is a VS Code extension (TypeScript, ES2022, Zod v4, PocketFlow) that uses LLMs to
+            assist with LaTeX research workflows. It has many narrow, repo-specific conventions —
+            generic JS/TS review passes will miss most of them.
+
+            **Step 0 — Load the local code-review skill before doing anything else:**
+            1. Read `skills/code-review/SKILL.md` (workflow + output format).
+            2. Read `skills/code-review/references/review-checklist.md` (greps + concrete fixes).
+            3. Skim `CLAUDE.md` and `AGENTS.md` for the design rules cited below — do not re-derive them.
+            The `Verified` section at the end of your review is mandatory and must list the
+            files you actually opened (path + line ranges).
+
+            **Step 1 — Get the diff:**
+            Use `gh pr diff ${{ github.event.pull_request.number }}` and group changed files into
+            VS Code-free zones (`src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/shared/`,
+            `src/replacement/`, `src/eventBus/`, any webview `frontend/`) vs. VS Code-allowed zones
+            (`src/extension.ts`, `src/commands/`, `src/frontend/`, `src/common/webview/`,
+            `src/common/state/`, `src/auth/`, `src/platform/`, `src/utils/config/`).
+
+            ---
+
+            **Severity levels:**
+            - 🔴 **Blocker** — must be fixed before merge. Request changes if any are found.
+            - 🟡 **Requires changes** — must be addressed before approval. These are NOT nits.
+              Do NOT approve while issues in this category remain unresolved.
+            - ℹ️ **Advisory** — flag for awareness, acceptable with justification.
+
+            ---
+
+            **Review categories (severity is fixed — do not downgrade):**
+
+            1. 🔴 **Platform decoupling** (CLAUDE.md → "Separation of Concerns: VS Code Coupling").
+               Any `import ... from 'vscode'` inside a VS Code-free zone is a blocker. Also flag:
+               direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets` /
+               `vscode.window.show*Message` in agnostic code (use `platform().config|fs|secrets`,
+               return error results); `instanceof vscode.FileSystemError` (use `isFileNotFoundError`);
+               `vscode.FileType.File|Directory` (use `isFile()` / `isDirectory()` from
+               `@common/files/fsEntryType`); raw `process.env`, `os.homedir()`, `fs/promises`,
+               `child_process.exec` in agnostic zones (use platform interfaces or `executeCommand`
+               from `@utils/system/execUtils`); `initPlatform()` called outside `src/extension.ts`.
+
+            2. 🔴 **Security & exec hygiene**. String-interpolated shell commands or
+               `child_process.exec` calls (use `executeCommand` with arg arrays). Path joins of
+               user/LLM-derived strings without `WorkspaceFS` / `RelativeFS` canonicalization
+               (path-traversal). Workspace contents are LLM-influenced — treat as untrusted.
+               Bypassing pre-commit / signing hooks (`--no-verify`, `--no-gpg-sign`).
+
+            3. 🔴 **Build & toolchain hygiene**. Any addition of `npm test` invocations anywhere
+               (scripts, CI, docs) — must not exist; downloads VS Code test env. Type-sensitive
+               diffs that landed without `npm run typecheck` / `compile:safe` (fast builds skip
+               type checking). Removed CI steps. Hard-coded secrets or tokens.
+
+            4. 🟡 **Zod v4 schema correctness** (CLAUDE.md → "Schema and Type Guidelines",
+               AGENTS.md → "Zod v4 Schema Patterns"). Tool input schemas using `.optional()`
+               instead of `.nullish()` (breaks DeepSeek/Kimi structured output) — also flag
+               `=== undefined` checks at the use sites (must be `== null`). Verbose old-style
+               types: `.string().int()`, `.string().uuid()`, `.string().datetime()`,
+               `.nativeEnum`, `.passthrough()` → `.int()`, `.uuid()`, `.iso.datetime()`,
+               `.enum()`, `.looseObject()`. Manual `safeParse` + ternary fallbacks → `.catch()`.
+               `z.custom<T>()` without an explanatory comment. Wrong default semantics:
+               `.prefault` (normalize input pre-validation), `.default` (post-validation
+               fallback), `.catch` (recover from throw) — confusing them silently corrupts state.
+               Persisted-state shape changes that don't tolerate the legacy form via
+               `z.union([NewSchema, LegacyConfigSchema.transform(...)])`. Provider-handler
+               `switch` over a discriminated union with no `assertNever` / `satisfies never`
+               default branch.
+
+            5. 🟡 **PocketFlow & agent runtime** (AGENTS.md → "PocketFlow architecture",
+               `docs/pocketflow/`). String literals `'continue' | 'finalize' | 'complete' |
+               'default'` instead of `FlowTransition.*` from `@agent/core/flows/FlowTransitions`.
+               Mutable values passed to `flow.setServices()` (services must be immutable;
+               mutable state belongs in the shared store). Init/finalize logic appearing inside
+               flows or nodes (agents own lifecycle; nodes throw, `agent.run()` catches). State
+               mutations in `exec` instead of `post`. Ad-hoc retry loops instead of `maxRetries`
+               / `retryDelay` getters. Plain `console.log` or untagged `logger.info` inside
+               agent flows (must wrap with `AgentLogger` from `@logger`). Log payloads built
+               by string interpolation instead of structured `data` arguments. Commands
+               invoking flow factories directly instead of `executeAgent`
+               (`src/agent/runtime/executeAgent.ts`).
+
+            6. 🟡 **Configuration, storage, files**. Inline config string literals scattered
+               across modules instead of typed accessors (`platform().config` in agnostic code;
+               `getConfig` / `watchConfig` from `@utils/config` in VS Code-allowed code). New
+               settings keys not registered in `package.json` `contributes.configuration`.
+               Manual workspace path joining instead of `WorkspaceFS.getPath()` and
+               `@utils/files` helpers. Pasted-image paths handled manually instead of via
+               `pastedImageUtils`. Long-running writers without retention
+               (`RelativeFS.cleanupOldFiles` or equivalent).
+
+            7. 🟡 **Webview / render-time** (CLAUDE.md → "Render-Time Workarounds").
+               `Date.now()` or synthetic IDs generated inside render functions / Lit components
+               (timestamp + ID creation belongs at the producer). Lit components mutating shared
+               state directly instead of dispatching events to managers (`StreamTabs`,
+               `LogList`, `OutputFilesManager`, `WebviewUpdater`, `UsageStatsManager`). Direct
+               DOM manipulation alongside Lit components. New webview providers/handlers not
+               extending `BaseViewContentProvider` / `BaseViewMessageHandler` from
+               `src/common/webview/`. String literals for webview commands (use constants in
+               `src/common/webview/commands.ts`). New shared module path referenced without
+               updating `localResourceRoots` (401 at runtime).
+
+            8. 🟡 **Error handling & logging**. Ad-hoc `vscode.window.showErrorMessage` in
+               business logic instead of `logErrorMessage` / `showLoggedErrorMessage` /
+               `showLoggedMessageWithDocs` from `@common/errors/errorHandlingUtils`. Swallowed
+               errors (`catch {}` / `catch (_) {}`) without an explanatory comment.
+               `instanceof Error` narrowing where the standard helpers above apply. Multiple
+               error paths instead of the single shared one (AGENTS.md "One error path").
+
+            9. 🟡 **Design philosophy** (CLAUDE.md "Doing tasks", "Flattening Abstraction
+               Layers", "Discouraged Factory Patterns"; AGENTS.md "Pragmatic implementations",
+               "Design and refactoring"). Flag and require removal of:
+               - Speculative scaffolding: features, error handling, fallbacks, validation, or
+                 feature flags introduced for hypothetical future requirements rather than the
+                 task at hand. Internal call sites should trust their inputs; validate only at
+                 true system boundaries.
+               - Two-layer factories called from exactly one place (`createX` → `buildX` where
+                 `buildX` is only called by `createX`) — inline.
+               - Trivial identity factories (`function f(x) { return { ...x } }`) — use the
+                 object literal directly.
+               - Wrapper functions that only forward to a single callee with no added logic
+                 (`Node.exec → wrapperFn → coreFn → flow.run`) — nodes and call sites should
+                 invoke the underlying flow / function directly. Empty re-export shim files
+                 left after a rename should be deleted, not stubbed.
+               - Shallow pass-through modules — apply the Ousterhout deep-module test: does
+                 the module hide enough behind its interface to justify its existence?
+               - Duplicate sources of truth: hand-written TypeScript types beside a Zod
+                 schema for the same data, or consumers re-deriving schema information
+                 instead of using `z.infer<typeof Schema>`. The schema is the single source
+                 of truth; types and validators flow from it.
+               - Backward-compatibility hacks: renamed `_unused` placeholder vars,
+                 `// removed` comments, re-export shims for code that's actually deleted,
+                 conditional handling for "old vs. new" formats scattered through consumers
+                 (normalize once at the entry point via `z.union` + `.transform`).
+               - Information leakage: the same data shape decoded / re-encoded in multiple
+                 places, or one module reaching into another's internals.
+
+               When suggesting fixes in this category, **never recommend adding** a new
+               abstraction, helper, factory, or "for future flexibility" hook. Only flag
+               existing violations and propose deletion or inlining.
+
+            10. 🟡 **Style, naming, and import hygiene**. PascalCase for service singletons
+                (`StreamStatusService`, `ModelRegistry`); camelCase for command/function
+                namespaces (`agentCommands`, `latexCommands`); UPPER_SNAKE_CASE for true
+                constants (`MAX_ERROR_LENGTH`). Long relative imports (`../../../../`) where
+                a path alias (`@agent`, `@common`, `@utils`, `@platform`, …) exists. Imports
+                not grouped with descriptive prefix comments. Helpers placed in `src/utils/`
+                that are actually specific to one side (belong under `frontend/` or
+                `common/`). View-specific managers not under each view's `managers/` folder.
+                Webview naming not following `[Domain]View[Component]`.
+
+            11. 🟡 **Concurrency & resources**. Shared mutable state held across `await`
+                (race risk — capture locals before `await`). Webview `dispose` paths that
+                don't unregister listeners or FS watchers (leak). Long-running model handlers
+                / tool calls without `signal.aborted` checks between awaits.
+
+            12. ℹ️ **Comments**. WHAT-comments on well-named code (delete). Process tags
+                (`// added for issue #123`, `// per Codex review`, `// TODO from PR #45`) —
+                belong in PR description, not the code (delete). Multi-paragraph docstrings
+                on private helpers (one short line max). Commenting WHY belongs only when
+                non-obvious — hidden constraint, subtle invariant, workaround for a specific
+                bug, behavior that would surprise a reader.
+
+            13. ℹ️ **Documentation drift**. CHANGELOG.md not updated for user-visible changes
+                (Features / Bug Fixes / rarely Breaking Changes). New public APIs without
+                JSDoc. Module-level doc comments missing for new top-level files. Mathematical
+                or domain-specific docstrings that explain TS syntax instead of meaning.
+
+            ---
+
+            **Verdict rules:**
+            - If ANY 🔴 or 🟡 issues are found, submit the review as **REQUEST_CHANGES**.
+              Do NOT approve while these issues remain unresolved.
+            - Only **APPROVE** when all 🔴 and 🟡 issues have been addressed.
+            - ℹ️ advisory items alone do not block approval.
+            - Do NOT label issues as "Nit" or "non-blocking" if they fall under a 🟡 or 🔴
+              category. Use clear language: "This must be fixed before merge" or
+              "Requires changes".
+            - Cite `path:line` for every finding. Open the file before flagging — speculative
+              findings are worse than none.
+            - Prefer 3 grounded findings over 10 generic ones. A "no issues found" review on
+              this repo is almost always wrong; if the diff genuinely is clean, say what you
+              checked and why each category was a no-op.
+
+            For each issue found, post an inline comment on the relevant line using the GitHub
+            inline comment MCP tool. At the end, post a single PR-level summary comment
+            following the output format from `skills/code-review/SKILL.md`:
+
+            ```
+            ## Findings
+            ### Critical (🔴)
+            - `path/file.ts:42` — <one-line summary>. <why / fix>.
+            ### Should fix (🟡)
+            - ...
+            ### Advisory (ℹ️)
+            - ...
+
+            ## Verified
+            - <files you actually opened, with line ranges>
+            ```
+
+            ---
+
+            **Reading existing feedback (before posting anything new):**
+            1. Read inline review threads via `mcp__github__pull_request_read` (get_review_comments).
+            2. Read PR conversation comments via `mcp__github__issue_read` (get_comments) — bots and
+               humans often post feedback at the PR level, not as inline review comments. Equally
+               important.
+
+            Use this context to:
+            - Avoid re-raising issues that have already been discussed, acknowledged, or fixed.
+            - Understand any ongoing decisions made in earlier threads.
+
+            **Resolving previous bot review comments (synchronize events only):**
+            When triggered by `synchronize` (new push to the PR):
+            1. Fetch all review threads with their GraphQL node IDs — `get_review_comments` does
+               NOT return thread IDs, so use GraphQL.
+            2. For each unresolved thread whose author login starts with `claude`,
+               `copilot-pull-request-reviewer`, or `chatgpt-codex-connector` (GitHub may append
+               `[bot]` — match the base name as a prefix), check whether the new commits address
+               the issue. Do NOT resolve threads from `cursor` / Bugbot — that bot manages its own
+               resolution.
+            3. If a previous comment has been addressed, resolve it via
+               `mcp__github__resolve_review_thread` with the GraphQL thread `id`.
+            4. If still relevant, leave it unresolved.
+            5. Never resolve threads from human reviewers.
+
+            **Fetch thread IDs via GraphQL:**
+
+            ```bash
+            gh api graphql -f query='
+            {
+              repository(owner: "${{ github.repository_owner }}", name: "${{ github.event.repository.name }}") {
+                pullRequest(number: ${{ github.event.pull_request.number }}) {
+                  reviewThreads(first: 100) {
+                    nodes {
+                      id
+                      isResolved
+                      isOutdated
+                      comments(first: 1) {
+                        nodes { author { login } body }
+                      }
+                    }
+                    pageInfo { hasNextPage endCursor }
+                  }
+                }
+              }
+            }'
+            ```
+
+            Returns thread objects with `id` like `"PRRT_kwDO..."`. Paginate via `endCursor` if
+            `hasNextPage` is true.
+
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
           claude_args: |
             --model claude-opus-4-7
-            --allowedTools "Read" "Glob" "Grep" "mcp__github_inline_comment__create_inline_comment" "mcp__github__*" "Bash(gh pr diff:*)" "Bash(gh pr view:*)"
+            --allowedTools "Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*),Bash(git diff:*),Bash(git log:*),Bash(grep:*),mcp__github_inline_comment__create_inline_comment,mcp__github__*"
+            --append-system-prompt "This is TeXRA, a VS Code extension (TypeScript, Zod v4, PocketFlow) for LLM-assisted LaTeX research. The repo encodes many narrow conventions in CLAUDE.md, AGENTS.md, and skills/code-review/. Review with those rules as the source of truth — generic JS/TS heuristics will produce false positives and miss real findings. Never recommend adding new abstractions, factories, wrappers, or 'for future flexibility' hooks; only flag existing violations and propose deletion or inlining. Trust the type system and existing schemas; do not suggest extra runtime validation at internal boundaries. Cite path:line for every finding and include a Verified section listing files actually opened."
