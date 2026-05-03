@@ -4,6 +4,7 @@ import { strict as assert } from 'assert';
 
 // Local imports - schemas
 import {
+  buildTexraPackageConfiguration,
   flattenTexraSettings,
   TEXRA_SETTING_KEYS,
   TexraSettingsSchema,
@@ -12,10 +13,12 @@ import {
 interface PackageConfigurationProperty {
   default?: unknown;
   type?: string;
+  [key: string]: unknown;
 }
 
 interface PackageConfigurationSection {
   properties?: Record<string, PackageConfigurationProperty>;
+  [key: string]: unknown;
 }
 
 interface PackageJson {
@@ -75,6 +78,17 @@ describe('TexraSettingsSchema', () => {
         assert.equal(defaults[key as keyof typeof defaults], null, key);
       }
     }
+  });
+
+  it('regenerates package.json contributions from schema metadata', () => {
+    const configuration = packageJson.contributes?.configuration;
+    const sections = Array.isArray(configuration)
+      ? configuration
+      : configuration == null
+        ? []
+        : [configuration];
+
+    assert.deepEqual(buildTexraPackageConfiguration(sections), sections);
   });
 
   it('enforces package numeric ranges and setting enums', () => {
