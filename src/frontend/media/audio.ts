@@ -11,7 +11,10 @@ import { AbsoluteFS, StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
 import { THREE_DAYS_MS } from '@utils/config';
 import { getConfig } from '@utils/config/configUtils';
-import { BinaryResolver } from '@utils/system/binaryResolver';
+import {
+  BinaryResolver,
+  type ResolvedBinaryCommand,
+} from '@utils/system/binaryResolver';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
@@ -30,13 +33,15 @@ function resetRecordingState(): void {
   activeRecordingPath = null;
 }
 
-/** Resolve the sox executable path from config or auto-detection. */
-function resolveSoxPath(): string | null {
+/** Resolve the sox executable command from config or auto-detection. */
+function resolveSoxCommand(): ResolvedBinaryCommand | null {
   const configuredPath = getConfig<string>('texra.audio.soxPath', '');
   if (configuredPath && AbsoluteFS.existsSync(configuredPath)) {
-    return configuredPath;
+    return BinaryResolver.resolveOptionalCommand('sox', [], {
+      resolvedPath: configuredPath,
+    });
   }
-  return BinaryResolver.resolvePath('sox');
+  return BinaryResolver.resolveOptionalCommand('sox');
 }
 
 /** Start recording audio from the microphone. */
@@ -48,16 +53,19 @@ export async function startRecording(
       return { success: false, error: 'Recording already in progress' };
     }
 
-    const soxPath = resolveSoxPath();
+    const soxCommand = resolveSoxCommand();
     if (!(await checkToolInstalled('sox', false))) {
-      if (!soxPath) {
+      if (!soxCommand) {
         return {
           success: false,
           error:
             'Sox is required for audio recording. Please install it first.',
         };
       }
-      logger.warn(CHANNEL, `Sox check failed but found at: ${soxPath}`);
+      logger.warn(
+        CHANNEL,
+        `Sox check failed but found at: ${soxCommand.resolvedPath}`,
+      );
     }
 
     await StorageFS.ensureDir(RECORDINGS_DIR);
@@ -82,13 +90,17 @@ export async function startRecording(
 
     logger.info(
       CHANNEL,
-      `Starting audio recording with sox: ${soxPath} ${soxArgs.join(' ')}`,
+      `Starting audio recording with sox: ${soxCommand?.resolvedPath ?? 'sox'} ${soxArgs.join(' ')}`,
     );
 
-    const subprocess = execa(soxPath || 'sox', soxArgs, {
-      env: { ...process.env, PATH: extendEnvPath() },
-      reject: false,
-    });
+    const subprocess = execa(
+      soxCommand?.command ?? 'sox',
+      [...(soxCommand?.args ?? []), ...soxArgs],
+      {
+        env: { ...process.env, PATH: extendEnvPath() },
+        reject: false,
+      },
+    );
 
     activeRecordingProcess = subprocess;
     activeRecordingPath = absPath;
