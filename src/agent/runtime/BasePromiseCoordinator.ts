@@ -19,7 +19,7 @@
 
 // Local imports
 import {
-  defaultProgressSink,
+  getDefaultProgressSink,
   type ProgressSink,
 } from '@agent/runtime/ProgressSink';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -65,9 +65,11 @@ export abstract class BasePromiseCoordinator<
   TResult extends BaseResult,
   TShowPayload extends Record<string, unknown>,
 > {
-  constructor(
-    protected readonly progressSink: ProgressSink = defaultProgressSink,
-  ) {}
+  constructor(private readonly configuredProgressSink?: ProgressSink) {}
+
+  protected get progressSink(): ProgressSink {
+    return this.configuredProgressSink ?? getDefaultProgressSink();
+  }
 
   /** Single source of truth for all pending requests */
   protected readonly requests = new Map<string, RequestState<TResult>>();
