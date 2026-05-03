@@ -134,16 +134,53 @@ export async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const { signal, cleanup } = combineAbortSignals(
+    options.signal ?? undefined,
+    controller.signal,
+  );
   try {
-    return await fetchImpl(url, { ...options, signal: controller.signal });
+    return await fetchImpl(url, { ...options, signal });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(timeoutMessage);
     }
     throw error;
   } finally {
+    cleanup();
     clearTimeout(timeoutId);
   }
+}
+
+function combineAbortSignals(
+  upstreamSignal: AbortSignal | undefined,
+  timeoutSignal: AbortSignal,
+): { signal: AbortSignal; cleanup: () => void } {
+  if (!upstreamSignal) {
+    return { signal: timeoutSignal, cleanup: () => {} };
+  }
+
+  if (typeof AbortSignal.any === 'function') {
+    return {
+      signal: AbortSignal.any([upstreamSignal, timeoutSignal]),
+      cleanup: () => {},
+    };
+  }
+
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  upstreamSignal.addEventListener('abort', abort, { once: true });
+  timeoutSignal.addEventListener('abort', abort, { once: true });
+  if (upstreamSignal.aborted || timeoutSignal.aborted) {
+    controller.abort();
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      upstreamSignal.removeEventListener('abort', abort);
+      timeoutSignal.removeEventListener('abort', abort);
+    },
+  };
 }
 
 export async function parseTokenExchangeResponse(
@@ -264,7 +301,9 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
 
   /** Get access and refresh tokens from secure storage. */
   async getSessionTokens(): Promise<SessionTokens | null> {
-    await this.ensureFreshToken();
+    if (!(await this.ensureFreshToken())) {
+      return null;
+    }
 
     try {
       const session = await this.loadSession();
@@ -308,9 +347,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       };
     }
 
-    const expiresAt = expiresIn
-      ? Date.now() + Number.parseInt(expiresIn, 10) * 1000
-      : Date.now() + this.options.defaultSessionExpiryMs;
+    const expiresAt = this.getCallbackExpiry(expiresIn);
 
     return {
       success: true,
@@ -372,6 +409,23 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     const refreshed = toStorableSupabaseSession(data.session);
     await this.storeSession(refreshed);
     return refreshed;
+  }
+
+  private getCallbackExpiry(expiresIn: string | null): number {
+    if (!expiresIn) {
+      return Date.now() + this.options.defaultSessionExpiryMs;
+    }
+
+    const expiresInSeconds = Number(expiresIn);
+    if (!Number.isFinite(expiresInSeconds) || expiresInSeconds <= 0) {
+      this.options.log?.warn?.(
+        'SupabaseSession',
+        `Invalid expires_in callback value: ${expiresIn}`,
+      );
+      return Date.now() + this.options.defaultSessionExpiryMs;
+    }
+
+    return Date.now() + expiresInSeconds * 1000;
   }
 
   private async refreshViaCustomEndpoint(
