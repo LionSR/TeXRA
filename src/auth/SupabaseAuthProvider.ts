@@ -18,6 +18,7 @@ import {
   type OAuthProvider,
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
+import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 import type { Session as SupabaseNativeSession } from '@supabase/supabase-js';
 import type { SupabaseUriHandler } from './UriHandler';
 
@@ -144,7 +145,9 @@ function isOAuthProvider(value: string | undefined): value is OAuthProvider {
  * Authentication provider for Supabase integration.
  * Manages user sessions for remote agent access.
  */
-export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
+export class SupabaseAuthProvider
+  implements vscode.AuthenticationProvider, AuthTokenProvider
+{
   private static instance: SupabaseAuthProvider | null = null;
 
   private _onDidChangeSessions =
@@ -244,6 +247,32 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       logger.error(
         'SupabaseAuthProvider',
         `Error ensuring fresh token: ${toErrorMessage(error)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Get access and refresh tokens from secure storage.
+   * Ensures tokens are fresh before returning.
+   */
+  async getSessionTokens(): Promise<SessionTokens | null> {
+    await this.ensureFreshToken();
+
+    try {
+      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
+      const session = parseStoredSession(sessionData);
+      if (!session) {
+        return null;
+      }
+      return {
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      };
+    } catch (error) {
+      logger.error(
+        'SupabaseAuthProvider',
+        `Error getting session tokens: ${toErrorMessage(error)}`,
       );
       return null;
     }
