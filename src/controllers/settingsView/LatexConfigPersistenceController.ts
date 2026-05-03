@@ -34,8 +34,13 @@ export type LatexConfigPersistenceUpdatePlan =
 /** Plans storage-backed LaTeX config reads and writes without host side effects. */
 export class LatexConfigPersistenceController {
   getEntries(): LatexConfigPersistenceEntry[] {
-    return Object.entries(LATEX_FIELD_TO_KEY).map(([field, key]) => ({
-      field: field as LatexConfigField,
+    return (
+      Object.entries(LATEX_FIELD_TO_KEY) as [
+        LatexConfigField,
+        WorkspaceStateKey,
+      ][]
+    ).map(([field, key]) => ({
+      field,
       key,
     }));
   }
@@ -47,7 +52,10 @@ export class LatexConfigPersistenceController {
 
     for (const { field, key } of this.getEntries()) {
       const stored = readStoredValue(key);
-      if (stored !== undefined) values[field] = stored;
+      if (stored === undefined) continue;
+
+      const parsed = LatexConfigValuesSchema.shape[field].safeParse(stored);
+      if (parsed.success) values[field] = parsed.data;
     }
 
     return values as LatexConfigValues;

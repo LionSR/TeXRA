@@ -27,6 +27,24 @@ describe('LatexConfigPersistenceController', () => {
     );
   });
 
+  it('drops invalid stored values from the webview config projection', () => {
+    const controller = new LatexConfigPersistenceController();
+    const storedValues: Partial<Record<WorkspaceStateKey, unknown>> = {
+      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: false,
+      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 1000,
+      [WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS]: 25000,
+      [WorkspaceStateKey.LATEXDIFF_MATH_MARKUP]: 'invalid',
+    };
+
+    assert.deepEqual(
+      controller.buildConfigValues((key) => storedValues[key]),
+      {
+        workflowAutoCompile: false,
+        latexdiffTimeoutMs: 25000,
+      },
+    );
+  });
+
   it('plans validated field updates using workspace storage keys', () => {
     const controller = new LatexConfigPersistenceController();
 
