@@ -6,13 +6,13 @@ const TOOLTIP_SHOW_DELAY_MS = 500;
 const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   position: 'fixed',
   padding: 'var(--spacing-small, 4px) var(--spacing-medium, 8px)',
-  fontSize: 'var(--vscode-font-size, 13px)',
-  fontFamily: 'var(--vscode-font-family)',
-  color: 'var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground))',
+  fontSize: 'var(--texra-font-size, 13px)',
+  fontFamily: 'var(--texra-font-family, system-ui), system-ui',
+  color: 'var(--texra-editorHoverWidget-foreground, var(--texra-foreground))',
   background:
-    'var(--vscode-editorHoverWidget-background, var(--vscode-editor-background))',
+    'var(--texra-editorHoverWidget-background, var(--texra-editor-background))',
   border:
-    '1px solid var(--vscode-editorHoverWidget-border, var(--vscode-contrastBorder, transparent))',
+    '1px solid var(--texra-editorHoverWidget-border, var(--texra-contrastBorder, transparent))',
   borderRadius: 'var(--border-radius, 3px)',
   whiteSpace: 'nowrap',
   pointerEvents: 'none',

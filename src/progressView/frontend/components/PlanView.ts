@@ -124,11 +124,11 @@ export class PlanView extends LitElement {
 
       .plan-step__file {
         font-size: var(--font-size-sm);
-        color: var(--vscode-textLink-foreground);
-        background: var(--vscode-badge-background);
+        color: var(--texra-textLink-foreground);
+        background: var(--texra-badge-background);
         padding: var(--border-thin) var(--spacing-medium);
         border-radius: var(--border-radius);
-        font-family: var(--vscode-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
       }
 
       /* Status-specific styles */
@@ -141,11 +141,11 @@ export class PlanView extends LitElement {
       }
 
       .plan-step--in-progress .plan-step__icon {
-        color: var(--vscode-progressBar-background);
+        color: var(--texra-progressBar-background);
       }
 
       .plan-step--in-progress .plan-step__title {
-        color: var(--vscode-progressBar-background);
+        color: var(--texra-progressBar-background);
       }
 
       .plan-step--completed {
