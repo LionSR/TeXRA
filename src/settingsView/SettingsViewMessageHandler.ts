@@ -59,6 +59,7 @@ import {
   applyGitAuthorConfig,
   readGitAuthorSettings,
 } from '@frontend/git/gitAuthorSetup';
+import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { compileLatex2Pdf } from '@latex/texTools';
 import {
   DEFAULT_MODELS,
@@ -126,10 +127,10 @@ import {
   MAX_PINNED_MEMORIES,
 } from '@tools/memory/constants';
 import {
-  parseFrontmatter,
   buildFile,
-  setPinnedMeta,
   countPinnedMemories,
+  parseFrontmatter,
+  setPinnedMeta,
 } from '@tools/memory/memoryMeta';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
@@ -147,6 +148,10 @@ import {
 } from '@utils/config/providerConfig';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
+import {
+  SettingsMemoryController,
+  type SettingsMemoryMessage,
+} from '../controllers/settingsView/SettingsMemoryController';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
@@ -350,6 +355,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Domain-specific handler delegates
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
+  private readonly memoryController: SettingsMemoryController;
 
   constructor(context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
@@ -361,6 +367,20 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
 
+    this.memoryController = new SettingsMemoryController({
+      prompt: new VscodePromptHost(),
+      loadMemoryItems,
+      isMemoryEnabled: () =>
+        globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true,
+      setMemoryEnabled: setToolUseMemoryEnabled,
+      resolveStoragePath: resolveMemoryStoragePath,
+      storage: StorageFS,
+      maxPinnedMemories: MAX_PINNED_MEMORIES,
+      parseMemoryFile: parseFrontmatter,
+      buildMemoryFile: buildFile,
+      setPinnedMeta,
+      countPinnedMemories,
+    });
     this.agentHandlers = new AgentHandlers(ctx, () =>
       this.refreshAfterAgentMutation(),
     );
@@ -756,20 +776,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendMemoryData(webview: vscode.Webview): Promise<void> {
-    const items = await loadMemoryItems();
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
-      items,
-    });
+    await webview.postMessage(
+      await this.memoryController.getMemoryDataMessage(),
+    );
   }
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    const enabled =
-      globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true;
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled,
-    });
+    await webview.postMessage(this.memoryController.getMemoryEnabledMessage());
   }
 
   public async sendHistoryData(webview: vscode.Webview): Promise<void> {
@@ -1197,26 +1210,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleDeleteMemory(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
-    const confirm = await vscode.window.showWarningMessage(
-      `Delete "${data.displayPath}"?`,
-      { modal: true },
-      'Delete',
-    );
-
-    if (confirm !== 'Delete') {
-      return;
-    }
-
     try {
-      const resolvedPath = resolveMemoryStoragePath(data.storagePath);
-      await StorageFS.delete(resolvedPath, { recursive: true });
+      await this.postSettingsMemoryMessage(
+        await this.memoryController.deleteMemory(data),
+      );
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
         'Failed to delete memory',
         error,
       );
-    } finally {
       await this.withActiveWebview((w) => this.sendMemoryData(w));
     }
   }
@@ -1224,8 +1227,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetMemoryEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
   ): Promise<void> {
-    await setToolUseMemoryEnabled(data.enabled);
-    await this.withActiveWebview((w) => this.sendMemoryEnabled(w));
+    await this.postSettingsMemoryMessage(
+      await this.memoryController.setMemoryEnabled(data.enabled),
+    );
   }
 
   private async handlePinMemory(
@@ -1240,36 +1244,25 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.setMemoryPinned(data.storagePath, false);
   }
 
-  /** Shared implementation for pin/unpin with limit enforcement. */
+  private async postSettingsMemoryMessage(
+    message: SettingsMemoryMessage | null,
+  ): Promise<void> {
+    if (!message) return;
+    await this.withActiveWebview(async (webview) => {
+      await webview.postMessage(message);
+    });
+  }
+
   private async setMemoryPinned(
     storagePath: string,
     pinned: boolean,
   ): Promise<void> {
     try {
-      const resolvedPath = resolveMemoryStoragePath(storagePath);
-      const raw = await StorageFS.read(resolvedPath);
-      const { meta, content } = parseFrontmatter(raw);
-
-      const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
-      if (alreadyInState) {
-        // Already in desired state — still refresh to sync potentially stale UI
-        await this.withActiveWebview((w) => this.sendMemoryData(w));
-        return;
-      }
-
-      if (pinned) {
-        const pinnedCount = await countPinnedMemories(MAX_PINNED_MEMORIES);
-        if (pinnedCount >= MAX_PINNED_MEMORIES) {
-          void vscode.window.showWarningMessage(
-            `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
-          );
-          return;
-        }
-      }
-
-      const updatedMeta = setPinnedMeta(meta, pinned);
-      await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
-      await this.withActiveWebview((w) => this.sendMemoryData(w));
+      await this.postSettingsMemoryMessage(
+        pinned
+          ? await this.memoryController.pinMemory(storagePath)
+          : await this.memoryController.unpinMemory(storagePath),
+      );
     } catch (error) {
       const action = pinned ? 'pin' : 'unpin';
       await showLoggedErrorMessage(
