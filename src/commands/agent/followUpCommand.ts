@@ -117,10 +117,10 @@ async function handleFollowUpResult(
 
   switch (result.status) {
     case 'sent':
-      runtimeHost.emit('updateQueuedFollowUps', { streamId });
+      runtimeHost.updateQueuedFollowUps({ streamId });
       break;
     case 'queued':
-      runtimeHost.emit('updateQueuedFollowUps', { streamId });
+      runtimeHost.updateQueuedFollowUps({ streamId });
       if (result.reason === 'waiting' || result.reason === 'children_running') {
         const resumed = await tryAutoResume(streamId);
         // tryAutoResume also returns false when the stream is already
@@ -133,7 +133,7 @@ async function handleFollowUpResult(
             // too, but that's the lesser evil — leaving the queue open would
             // leak late child deliveries into the next run on this stream.
             ToolUseFollowUpQueue.release(streamId);
-            runtimeHost.emit('updateQueuedFollowUps', { streamId });
+            runtimeHost.updateQueuedFollowUps({ streamId });
             await vscode.window.showWarningMessage(
               'Message dropped — no session available to receive it. Start a new agent task to continue.',
             );

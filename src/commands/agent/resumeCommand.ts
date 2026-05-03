@@ -49,7 +49,7 @@ async function resumeFromSnapshot(
   let queuedFollowUps: string[] = [];
   try {
     queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
-    runtimeHost.emit('updateQueuedFollowUps', {
+    runtimeHost.updateQueuedFollowUps({
       streamId,
     });
 

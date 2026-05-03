@@ -766,7 +766,7 @@ export async function executeAgent(
                 options?.onProgress?.(update);
               },
               onFollowUpConsumed: () => {
-                ctx.runtimeHost.emit('updateQueuedFollowUps', {
+                ctx.runtimeHost.updateQueuedFollowUps({
                   streamId: ctx.streamId,
                 });
                 options?.onFollowUpConsumed?.();
@@ -933,7 +933,7 @@ export async function resumeToolUseFromSnapshot(
             // /memories protocol) that the fresh run had included.
             isSubagent: (ctx.delegationDepth ?? 0) > 0,
             onFollowUpConsumed: () =>
-              ctx.runtimeHost.emit('updateQueuedFollowUps', {
+              ctx.runtimeHost.updateQueuedFollowUps({
                 streamId: ctx.streamId,
               }),
           },
