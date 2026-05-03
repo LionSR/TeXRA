@@ -17,8 +17,9 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
-import { SUPABASE_CUSTOM_DOMAIN } from '../config';
+import { SUPABASE_CUSTOM_DOMAIN } from '../sharedConfig';
 import { TierService } from './TierService';
+import type { AuthServiceLogger } from '../serviceLogger';
 
 // Service class (internal use only)
 export { TierService };
@@ -32,9 +33,9 @@ let _instance: TierService | null = null;
 /**
  * Get the singleton TierService instance.
  */
-export function getTierService(): TierService {
+export function getTierService(logger?: AuthServiceLogger): TierService {
   if (!_instance) {
-    _instance = new TierService(`https://${SUPABASE_CUSTOM_DOMAIN}`);
+    _instance = new TierService(`https://${SUPABASE_CUSTOM_DOMAIN}`, logger);
   }
   return _instance;
 }
