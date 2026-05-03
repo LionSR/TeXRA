@@ -664,7 +664,16 @@ function buildTexraPackageConfigurationProperty(
   if (generated.type !== 'null') {
     generated.default = getTexraSettingDefault(path);
   }
-  return { ...existing, ...generated };
+  const property: Record<string, unknown> = { ...existing };
+  for (const field of GENERATED_PACKAGE_SCHEMA_FIELDS) {
+    const value = generated[field];
+    if (value === undefined) {
+      delete property[field];
+    } else {
+      property[field] = value;
+    }
+  }
+  return property as TexraPackageConfigurationProperty;
 }
 
 export function buildTexraPackageConfiguration(
