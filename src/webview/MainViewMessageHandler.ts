@@ -29,6 +29,7 @@ import {
   type MainViewCommandPlan,
 } from '../controllers/mainView/MainViewInteractionController';
 import { MainViewStartupController } from '../controllers/mainView/MainViewStartupController';
+import { MainViewStatusController } from '../controllers/mainView/MainViewStatusController';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
@@ -38,6 +39,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly instructionManager: InstructionManager;
   private readonly interactionController: MainViewInteractionController;
   private readonly startupController: MainViewStartupController;
+  private readonly statusController = new MainViewStatusController();
 
   constructor(context: vscode.ExtensionContext) {
     super('MainView', { trackActiveView: true });
@@ -305,10 +307,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         try {
           await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
           const authStatus = await getAuthStatus();
-          if (authStatus.authenticated) {
-            this.postToActiveView({
-              command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-            });
+          const message =
+            this.statusController.getPostSignInMessage(authStatus);
+          if (message) {
+            this.postToActiveView(message);
           }
         } catch (error) {
           this.logger.debug(
@@ -366,18 +368,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private handleThemeRequest(): void {
     const isDarkTheme =
       vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
-    this.postToActiveView({
-      command: MAIN_VIEW_COMMANDS.THEME_SET,
-      theme: isDarkTheme ? 'dark' : 'light',
-    });
+    this.postToActiveView(this.statusController.getThemeMessage(isDarkTheme));
   }
 
   private handleDebugModeRequest(): void {
     const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
-    this.postToActiveView({
-      command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
-      debugMode,
-    });
+    this.postToActiveView(this.statusController.getDebugModeMessage(debugMode));
   }
 
   private async runCommandPlan(
