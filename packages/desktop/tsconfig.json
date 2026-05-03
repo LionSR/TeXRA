@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "module": "esnext",
     "moduleResolution": "bundler",
     "target": "ES2022",
@@ -7,7 +8,26 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": "../..",
+    "paths": {
+      "@agent/*": ["src/agent/*"],
+      "@auth/*": ["src/auth/*"],
+      "@common/*": ["src/common/*"],
+      "@eventBus/*": ["src/eventBus/*"],
+      "@latex": ["src/latex"],
+      "@latex/*": ["src/latex/*"],
+      "@logger/*": ["src/logger/*"],
+      "@model": ["src/model"],
+      "@model/*": ["src/model/*"],
+      "@platform": ["src/platform"],
+      "@platform/*": ["src/platform/*"],
+      "@replacement/*": ["src/replacement/*"],
+      "@shared/*": ["src/shared/*"],
+      "@tools/*": ["src/tools/*"],
+      "@types/*": ["src/types/*"],
+      "@utils/*": ["src/utils/*"]
+    }
   },
   "include": ["vite.config.ts"]
 }
