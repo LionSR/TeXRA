@@ -7,6 +7,7 @@ import {
   fetchWithTimeout,
   parseStoredSupabaseSession,
   SupabaseSessionCoordinator,
+  toStorableGitHubTokenExchangeSession,
   toStorableSupabaseSession,
   type SupabaseSession,
   type SupabaseSessionStorage,
@@ -173,6 +174,60 @@ describe('SupabaseSession', () => {
 
       const session = toStorableSupabaseSession(nativeSession);
 
+      assert.ok(session.expiresAt >= earliestExpiry);
+      assert.ok(
+        session.expiresAt <= Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+      );
+    });
+  });
+
+  describe('toStorableGitHubTokenExchangeSession', () => {
+    it('converts GitHub token exchange responses into the stored shape', () => {
+      const session = toStorableGitHubTokenExchangeSession(
+        {
+          access_token: 'access-token',
+          refresh_token: 'refresh-token',
+          expires_at: 123,
+          token_type: 'bearer',
+          user: {
+            id: 'user-id',
+            email: 'user@example.com',
+          },
+        },
+        'fallback@example.com',
+        DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+      );
+
+      assert.deepEqual(session, {
+        id: 'user-id',
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        account: {
+          id: 'user-id',
+          label: 'user@example.com',
+        },
+        expiresAt: 123_000,
+        useCustomRefresh: true,
+      });
+    });
+
+    it('falls back to the supplied label and default expiry', () => {
+      const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
+      const session = toStorableGitHubTokenExchangeSession(
+        {
+          access_token: 'access-token',
+          refresh_token: 'refresh-token',
+          token_type: 'bearer',
+          user: {
+            id: 'user-id',
+            email: null,
+          },
+        },
+        'fallback@example.com',
+        DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+      );
+
+      assert.equal(session.account.label, 'fallback@example.com');
       assert.ok(session.expiresAt >= earliestExpiry);
       assert.ok(
         session.expiresAt <= Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,

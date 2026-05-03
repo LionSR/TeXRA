@@ -225,6 +225,27 @@ export function toStorableSupabaseSession(
   };
 }
 
+/** Convert Edge Function token responses into the stored custom-refresh shape. */
+export function toStorableGitHubTokenExchangeSession(
+  data: GitHubTokenExchangeResponse,
+  fallbackLabel: string,
+  defaultSessionExpiryMs: number,
+): SupabaseSession {
+  return {
+    id: data.user.id,
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    account: {
+      id: data.user.id,
+      label: data.user.email || fallbackLabel,
+    },
+    expiresAt: data.expires_at
+      ? data.expires_at * 1000
+      : Date.now() + defaultSessionExpiryMs,
+    useCustomRefresh: true,
+  };
+}
+
 /**
  * Host-neutral coordinator for Supabase session storage, token freshness,
  * OAuth callback conversion, and refresh. Host wrappers own UI and registration.
@@ -455,19 +476,11 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     const data = await parseTokenExchangeResponse(response, this.options.log);
-    const refreshed: SupabaseSession = {
-      id: data.user.id,
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      account: {
-        id: data.user.id,
-        label: data.user.email || session.account.label,
-      },
-      expiresAt: data.expires_at
-        ? data.expires_at * 1000
-        : Date.now() + this.options.defaultSessionExpiryMs,
-      useCustomRefresh: true,
-    };
+    const refreshed = toStorableGitHubTokenExchangeSession(
+      data,
+      session.account.label,
+      this.options.defaultSessionExpiryMs,
+    );
 
     await this.storeSession(refreshed);
     this.options.log?.info?.(
