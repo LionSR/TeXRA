@@ -144,6 +144,7 @@ const extensionConfig = {
       '@webview': path.resolve(__dirname, 'src/webview'),
       '@agent': path.resolve(__dirname, 'src/agent'),
       '@frontend': path.resolve(__dirname, 'src/frontend'),
+      '@hosts': path.resolve(__dirname, 'src/hosts'),
       '@utils': path.resolve(__dirname, 'src/utils'),
       '@logger': path.resolve(__dirname, 'src/logger'),
       '@latex': path.resolve(__dirname, 'src/latex'),
