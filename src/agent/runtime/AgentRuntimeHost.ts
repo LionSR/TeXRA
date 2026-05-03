@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+
 import {
   getDefaultProgressSink,
   setDefaultProgressSink,
@@ -9,14 +11,39 @@ import {
 export interface AgentRuntimeHost {
   progressSink: ProgressSink;
   emit: ProgressSink['emit'];
+  updateStreamStatus: (
+    payload: ProgressEventPayloads['updateStreamStatus'],
+  ) => void;
+  updateQueuedFollowUps: (
+    payload: ProgressEventPayloads['updateQueuedFollowUps'],
+  ) => void;
+  updateActiveSubagents: (
+    payload: ProgressEventPayloads['updateActiveSubagents'],
+  ) => void;
+  updateActiveProcesses: (
+    payload: ProgressEventPayloads['updateActiveProcesses'],
+  ) => void;
+  updateProcessOutput: (
+    payload: ProgressEventPayloads['updateProcessOutput'],
+  ) => void;
+  setParentStream: (payload: ProgressEventPayloads['setParentStream']) => void;
 }
 
 export function createAgentRuntimeHost(
   progressSink: ProgressSink,
 ): AgentRuntimeHost {
+  const emit: ProgressSink['emit'] = (event, payload) =>
+    progressSink.emit(event, payload);
+
   return {
     progressSink,
-    emit: (event, payload) => progressSink.emit(event, payload),
+    emit,
+    updateStreamStatus: (payload) => emit('updateStreamStatus', payload),
+    updateQueuedFollowUps: (payload) => emit('updateQueuedFollowUps', payload),
+    updateActiveSubagents: (payload) => emit('updateActiveSubagents', payload),
+    updateActiveProcesses: (payload) => emit('updateActiveProcesses', payload),
+    updateProcessOutput: (payload) => emit('updateProcessOutput', payload),
+    setParentStream: (payload) => emit('setParentStream', payload),
   };
 }
 

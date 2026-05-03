@@ -83,7 +83,7 @@ export function trackExecution(handle: ExecutionHandle): void {
         registry.values(),
         runtimeHost,
       );
-      runtimeHost.emit('setParentStream', {
+      runtimeHost.setParentStream({
         childStreamId: handle.childStreamId,
         parentStreamId: handle.parentStreamId,
       });
@@ -481,7 +481,7 @@ async function readIncremental(
         stderr: err.newOffset,
       });
 
-      runtimeHost.emit('updateProcessOutput', {
+      runtimeHost.updateProcessOutput({
         parentStreamId,
         executionId,
         stdout: out.text,

@@ -66,10 +66,7 @@ export const StreamStatusService = {
         status,
         previousStatus,
       };
-      (options.runtimeHost ?? getAgentRuntimeHost()).emit(
-        'updateStreamStatus',
-        change,
-      );
+      (options.runtimeHost ?? getAgentRuntimeHost()).updateStreamStatus(change);
       for (const listener of statusListeners) {
         listener(change);
       }

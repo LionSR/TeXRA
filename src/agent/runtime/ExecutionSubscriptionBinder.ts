@@ -100,7 +100,7 @@ function send(
 ): void {
   void sendFollowUp(streamId, wrapAndSanitizeTag(TAG, text)).then((result) => {
     if (result.status === 'sent' || result.status === 'queued') {
-      runtimeHost.emit('updateQueuedFollowUps', { streamId });
+      runtimeHost.updateQueuedFollowUps({ streamId });
     }
   });
 }

@@ -263,7 +263,7 @@ export function emitActiveSubagentsUpdate(
     handles,
     AgentExecutionHandle,
   );
-  runtimeHost.emit('updateActiveSubagents', {
+  runtimeHost.updateActiveSubagents({
     parentStreamId,
     children,
   });
@@ -280,7 +280,7 @@ export function emitActiveProcessesUpdate(
     handles,
     ProcessExecutionHandle,
   );
-  runtimeHost.emit('updateActiveProcesses', {
+  runtimeHost.updateActiveProcesses({
     parentStreamId,
     processes,
   });
