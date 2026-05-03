@@ -5,6 +5,14 @@ import { strict as assert } from 'assert';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
 
+function createDeferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe('SupabaseClient', () => {
   afterEach(() => {
     SupabaseClient.resetForTests();
@@ -43,8 +51,9 @@ describe('SupabaseClient', () => {
   });
 
   it('waits for token provider readiness', async () => {
+    const readiness = createDeferred();
     const provider: AuthTokenProvider = {
-      whenReady: async () => {},
+      whenReady: () => readiness.promise,
       ensureFreshToken: async () => 'access-token',
       getSessionTokens: async () => null,
     };
@@ -52,7 +61,18 @@ describe('SupabaseClient', () => {
     SupabaseClient.initialize('https://example.supabase.co', 'public-key');
     SupabaseClient.setAuthProvider(provider);
 
-    assert.equal(await SupabaseClient.isReady(), true);
+    let settled = false;
+    const readyPromise = SupabaseClient.isReady().then((ready) => {
+      settled = true;
+      return ready;
+    });
+    await Promise.resolve();
+
+    assert.equal(settled, false);
+
+    readiness.resolve();
+
+    assert.equal(await readyPromise, true);
   });
 
   it('reports not ready when token provider readiness fails', async () => {
@@ -68,5 +88,9 @@ describe('SupabaseClient', () => {
     SupabaseClient.setAuthProvider(provider);
 
     assert.equal(await SupabaseClient.isReady(), false);
+    assert.equal(
+      SupabaseClient.getInitError()?.message,
+      'host auth unavailable',
+    );
   });
 });
