@@ -146,7 +146,7 @@ export class LatexSettingsHandlers {
         }
 
         await updateConfig(key, resolvedValue, {
-          target: vscode.ConfigurationTarget.Global,
+          target: 'global',
           prefix: false,
         });
       }
