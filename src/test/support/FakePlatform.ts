@@ -127,10 +127,11 @@ export class FakeConfigProvider implements ConfigProvider {
   }
 
   get<T>(key: string, defaultValue?: T): T {
-    if (!this.values.has(key)) {
+    const resolvedKey = this.resolveExistingKey(key);
+    if (resolvedKey === undefined) {
       return defaultValue as T;
     }
-    return this.values.get(key) as T;
+    return this.values.get(resolvedKey) as T;
   }
 
   set(key: string, value: unknown): void {
@@ -155,11 +156,12 @@ export class FakeConfigProvider implements ConfigProvider {
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
-    if (!this.values.has(key)) {
+    const resolvedKey = this.resolveExistingKey(key);
+    if (resolvedKey === undefined) {
       return undefined;
     }
-    const value = this.values.get(key) as T;
-    const target = this.targets.get(key) ?? 'workspace';
+    const value = this.values.get(resolvedKey) as T;
+    const target = this.targets.get(resolvedKey) ?? 'workspace';
     return {
       globalValue: target === 'global' ? value : undefined,
       workspaceValue: target === 'workspace' ? value : undefined,
@@ -168,7 +170,7 @@ export class FakeConfigProvider implements ConfigProvider {
   }
 
   isExplicitlySet(key: string): boolean {
-    return this.values.has(key);
+    return this.resolveExistingKey(key) !== undefined;
   }
 
   watch(
@@ -197,12 +199,39 @@ export class FakeConfigProvider implements ConfigProvider {
     changedKey: string,
   ): boolean {
     if (watchedKey instanceof RegExp) {
-      return watchedKey.test(changedKey);
+      return true;
     }
     if (typeof watchedKey === 'string') {
-      return watchedKey === changedKey;
+      return this.affectsConfiguration(watchedKey, changedKey);
     }
-    return watchedKey.includes(changedKey);
+    return watchedKey.some((key) => this.affectsConfiguration(key, changedKey));
+  }
+
+  private resolveExistingKey(key: string): string | undefined {
+    return this.configKeys(key).find((candidate) => this.values.has(candidate));
+  }
+
+  private configKeys(key: string): string[] {
+    return key.startsWith('texra.') ? [key] : [key, `texra.${key}`];
+  }
+
+  private affectsConfiguration(
+    watchedKey: string,
+    changedKey: string,
+  ): boolean {
+    return this.configKeys(watchedKey).some((watchedCandidate) =>
+      this.configKeys(changedKey).some((changedCandidate) =>
+        this.isSameOrNestedKey(watchedCandidate, changedCandidate),
+      ),
+    );
+  }
+
+  private isSameOrNestedKey(first: string, second: string): boolean {
+    return (
+      first === second ||
+      first.startsWith(`${second}.`) ||
+      second.startsWith(`${first}.`)
+    );
   }
 }
 
