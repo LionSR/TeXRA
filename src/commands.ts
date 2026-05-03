@@ -107,14 +107,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
 export { linterCommands, arXivCommands } from '@commands/latex';
 export { runExecuteCommand, agentCreatorCommands } from '@commands/agent';
 export {
-  commandCatalog,
-  commandCatalogById,
-  commandKeybindings,
-  type CommandCatalogEntry,
-  type CommandId,
-  type CommandKeybinding,
-} from '@commands/catalog';
-export {
   xmlCommands,
   yamlCommands,
   helpCommands,
