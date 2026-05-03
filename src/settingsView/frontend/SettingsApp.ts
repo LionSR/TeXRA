@@ -10,7 +10,7 @@ import { customElement, query } from 'lit/decorators.js';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
-import { postMessage } from '@shared/vscode';
+import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared signals
 import { SignalWatcher, signal } from '@shared/signals';
