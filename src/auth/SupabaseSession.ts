@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
-import { DEFAULT_SESSION_EXPIRY_MS } from './config';
 import type { Session as SupabaseNativeSession } from '@supabase/supabase-js';
+
+export const DEFAULT_SUPABASE_SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
 export const SupabaseSessionSchema = z.object({
   id: z.string(),
@@ -39,6 +38,11 @@ export type AuthCallbackTokenResult =
       isAuthError?: boolean;
     };
 
+export interface SupabaseSessionParseOptions {
+  logSource?: string;
+  warn?: (source: string, message: string) => void;
+}
+
 /**
  * Parse and validate stored session data.
  * Returns null if session data is missing or invalid.
@@ -46,13 +50,14 @@ export type AuthCallbackTokenResult =
  */
 export function parseStoredSupabaseSession(
   sessionData: string | undefined,
-  logSource = 'SupabaseSession',
+  options?: SupabaseSessionParseOptions,
 ): SupabaseSession | null {
   if (!sessionData) return null;
+  const logSource = options?.logSource ?? 'SupabaseSession';
   try {
     const parsed = SupabaseSessionSchema.safeParse(JSON.parse(sessionData));
     if (!parsed.success) {
-      logger.warn(
+      options?.warn?.(
         logSource,
         `Stored session has invalid schema: ${parsed.error.message}`,
       );
@@ -60,9 +65,9 @@ export function parseStoredSupabaseSession(
     }
     return parsed.data;
   } catch (error) {
-    logger.warn(
+    options?.warn?.(
       logSource,
-      `Failed to parse stored session: ${toErrorMessage(error)}`,
+      `Failed to parse stored session: ${formatUnknownError(error)}`,
     );
     return null;
   }
@@ -86,9 +91,13 @@ export function toStorableSupabaseSession(
     },
     expiresAt: nativeSession.expires_at
       ? nativeSession.expires_at * 1000
-      : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
+      : Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
     useCustomRefresh: options?.useCustomRefresh,
   };
+}
+
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
