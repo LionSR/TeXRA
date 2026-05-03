@@ -38,8 +38,8 @@ export const logEntryStyles = css`
     gap: var(--spacing-small);
     padding: var(--spacing-small) var(--spacing-medium);
     margin: var(--spacing-small) 0;
-    background: var(--vscode-inputValidation-warningBackground);
-    border: var(--border-thin) solid var(--vscode-inputValidation-warningBorder);
+    background: var(--texra-inputValidation-warningBackground);
+    border: var(--border-thin) solid var(--texra-inputValidation-warningBorder);
     border-radius: var(--border-radius);
     color: var(--color-warning);
     font-style: italic;
@@ -82,7 +82,7 @@ export const logEntryStyles = css`
   .xml-link-container {
     margin-top: var(--spacing-small);
     padding-top: var(--spacing-small);
-    border-top: var(--border-thin) solid var(--vscode-widget-border);
+    border-top: var(--border-thin) solid var(--texra-widget-border);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -131,7 +131,7 @@ export const logEntryStyles = css`
   }
 
   :is(.file-link, .web-search-link):focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -191,7 +191,7 @@ export const logEntryStyles = css`
   .banner-details:focus-within .banner-content-copy,
   .banner-content-copy:focus-visible {
     opacity: var(--opacity-full);
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
   }
 
   .banner-content-copy.copy-success {
@@ -209,11 +209,11 @@ export const logEntryStyles = css`
   }
 
   .level-debug {
-    color: var(--vscode-debugTokenExpression-name, #4b9ef9);
+    color: var(--texra-debugTokenExpression-name, #4b9ef9);
   }
 
   .level-info {
-    color: var(--vscode-notificationsInfoIcon-foreground, #75beff);
+    color: var(--texra-notificationsInfoIcon-foreground, #75beff);
   }
 
   .level-warn,
@@ -227,11 +227,11 @@ export const logEntryStyles = css`
   }
 
   .message-debug {
-    color: var(--vscode-textPreformat-foreground, #a9b7c6);
+    color: var(--texra-textPreformat-foreground, #a9b7c6);
   }
 
   .message-info {
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
   }
 
   .banner-summary {
@@ -264,8 +264,8 @@ export const logEntryStyles = css`
     font-weight: var(--font-weight-semibold);
     padding: var(--spacing-tiny) var(--spacing-small);
     border-radius: var(--border-radius);
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--texra-badge-background);
+    color: var(--texra-badge-foreground);
     margin-right: var(--spacing-small);
   }
 
@@ -274,18 +274,18 @@ export const logEntryStyles = css`
      so their stdout/stderr reads like a terminal instead of a logger. */
   :host([terminal]) .log-container {
     font-family: var(
-      --vscode-editor-font-family,
+      --texra-editor-font-family,
       ui-monospace,
       SFMono-Regular,
       Consolas,
       monospace
     );
-    font-size: var(--vscode-editor-font-size, var(--font-size));
+    font-size: var(--texra-editor-font-size, var(--font-size));
     background-color: var(
-      --vscode-terminal-background,
-      var(--vscode-editor-background, transparent)
+      --texra-terminal-background,
+      var(--texra-editor-background, transparent)
     );
-    color: var(--vscode-terminal-foreground, var(--vscode-foreground));
+    color: var(--texra-terminal-foreground, var(--texra-foreground));
   }
 
   :host([terminal]) .log-line {
@@ -307,11 +307,11 @@ export const logEntryStyles = css`
   }
 
   :host([terminal]) .message-warn {
-    color: var(--vscode-terminal-ansiYellow, var(--color-warning));
+    color: var(--texra-terminal-ansiYellow, var(--color-warning));
   }
 
   :host([terminal]) .message-error {
-    color: var(--vscode-terminal-ansiRed, var(--color-error));
+    color: var(--texra-terminal-ansiRed, var(--color-error));
   }
 
   /* Pre-formatted text nodes for terminal-mode streams.

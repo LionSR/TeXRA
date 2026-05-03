@@ -33,10 +33,9 @@ export class LoginBanner extends LitElement {
       }
 
       .login-banner {
-        background: var(--vscode-inputValidation-infoBackground);
-        color: var(--vscode-inputValidation-infoForeground);
-        border: var(--border-thin) solid
-          var(--vscode-inputValidation-infoBorder);
+        background: var(--texra-inputValidation-infoBackground);
+        color: var(--texra-inputValidation-infoForeground);
+        border: var(--border-thin) solid var(--texra-inputValidation-infoBorder);
         border-radius: var(--border-radius);
         padding: var(--spacing-medium);
         margin-bottom: var(--spacing-large);
@@ -55,7 +54,7 @@ export class LoginBanner extends LitElement {
 
       .login-banner-icon {
         font-size: 1.5em;
-        color: var(--vscode-button-background);
+        color: var(--texra-button-background);
         display: flex;
         align-items: center;
       }

@@ -180,7 +180,7 @@ export class LaTeXTab extends LitElement {
         gap: var(--spacing-small);
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-medium);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       .latex-description {
@@ -195,7 +195,7 @@ export class LaTeXTab extends LitElement {
         margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
-        background: var(--vscode-editor-background);
+        background: var(--texra-editor-background);
       }
 
       .dependency-row {
@@ -210,11 +210,11 @@ export class LaTeXTab extends LitElement {
       }
 
       .dependency-icon.installed {
-        color: var(--vscode-testing-iconPassed, #73c991);
+        color: var(--texra-testing-iconPassed, #73c991);
       }
 
       .dependency-icon.missing {
-        color: var(--vscode-testing-iconFailed, #f48771);
+        color: var(--texra-testing-iconFailed, #f48771);
       }
 
       .dependency-info {
@@ -224,7 +224,7 @@ export class LaTeXTab extends LitElement {
 
       .dependency-name {
         font-weight: var(--font-weight-medium);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
       }
 
       .dependency-description {
@@ -241,7 +241,7 @@ export class LaTeXTab extends LitElement {
         margin-top: var(--spacing-small);
         font-size: var(--font-size-sm);
         font-family: inherit;
-        color: var(--vscode-textLink-foreground, #3794ff);
+        color: var(--texra-textLink-foreground, #3794ff);
         background: none;
         border: none;
         cursor: pointer;
@@ -256,19 +256,19 @@ export class LaTeXTab extends LitElement {
         margin-top: var(--spacing-small);
         padding: var(--spacing-medium);
         background: var(
-          --vscode-textCodeBlock-background,
+          --texra-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
         );
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         line-height: var(--line-height-relaxed);
         white-space: pre-wrap;
       }
 
       .dependency-path {
         margin-top: 4px;
-        font-family: var(--vscode-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
       }
@@ -284,21 +284,21 @@ export class LaTeXTab extends LitElement {
         min-width: 0;
         padding: var(--spacing-small) var(--spacing-medium);
         background: var(
-          --vscode-textCodeBlock-background,
+          --texra-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
         );
         border-radius: var(--border-radius-small);
-        font-family: var(--vscode-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .copy-success {
-        color: var(--vscode-testing-iconPassed, #73c991) !important;
-        border-color: var(--vscode-testing-iconPassed, #73c991) !important;
+        color: var(--texra-testing-iconPassed, #73c991) !important;
+        border-color: var(--texra-testing-iconPassed, #73c991) !important;
       }
 
       .prerequisite-hint {
@@ -308,15 +308,15 @@ export class LaTeXTab extends LitElement {
         padding: var(--spacing-medium);
         margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid
-          var(--vscode-editorInfo-foreground, #3794ff);
+          var(--texra-editorInfo-foreground, #3794ff);
         border-radius: var(--border-radius);
-        background: var(--vscode-editor-background);
+        background: var(--texra-editor-background);
       }
 
       .prerequisite-hint .hint-icon {
         flex-shrink: 0;
         font-size: var(--font-size-lg);
-        color: var(--vscode-editorInfo-foreground, #3794ff);
+        color: var(--texra-editorInfo-foreground, #3794ff);
       }
 
       .prerequisite-hint .hint-body {
@@ -326,7 +326,7 @@ export class LaTeXTab extends LitElement {
 
       .prerequisite-hint .hint-title {
         font-weight: var(--font-weight-medium);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         margin-bottom: var(--spacing-tiny);
       }
 
@@ -365,7 +365,7 @@ export class LaTeXTab extends LitElement {
         margin-bottom: var(--spacing-medium);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
-        background: var(--vscode-editor-background);
+        background: var(--texra-editor-background);
       }
 
       .setting-status-icon {
@@ -375,11 +375,11 @@ export class LaTeXTab extends LitElement {
       }
 
       .setting-status-icon.is-set {
-        color: var(--vscode-testing-iconPassed, #73c991);
+        color: var(--texra-testing-iconPassed, #73c991);
       }
 
       .setting-status-icon.not-set {
-        color: var(--vscode-testing-iconFailed, #f48771);
+        color: var(--texra-testing-iconFailed, #f48771);
       }
 
       .setting-info {
@@ -389,21 +389,21 @@ export class LaTeXTab extends LitElement {
 
       .setting-name {
         font-weight: var(--font-weight-medium);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         margin-bottom: 2px;
       }
 
       .setting-config-key {
-        font-family: var(--vscode-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         margin-bottom: var(--spacing-small);
       }
 
       .setting-value {
-        font-family: var(--vscode-editor-font-family, monospace);
+        font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
-        color: var(--vscode-textLink-foreground);
+        color: var(--texra-textLink-foreground);
       }
 
       .setting-description {
@@ -422,13 +422,13 @@ export class LaTeXTab extends LitElement {
       }
 
       .setting-badge.is-set {
-        background: var(--vscode-testing-iconPassed, #73c991);
-        color: var(--vscode-editor-background);
+        background: var(--texra-testing-iconPassed, #73c991);
+        color: var(--texra-editor-background);
       }
 
       .setting-badge.not-set {
-        background: var(--vscode-badge-background);
-        color: var(--vscode-badge-foreground);
+        background: var(--texra-badge-background);
+        color: var(--texra-badge-foreground);
       }
     `,
   ];

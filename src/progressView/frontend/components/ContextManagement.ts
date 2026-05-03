@@ -50,7 +50,7 @@ export class ContextManagement extends LitElement {
       summary,
       .context-icon,
       .context-title {
-        color: var(--accent-color, var(--vscode-foreground));
+        color: var(--accent-color, var(--texra-foreground));
       }
 
       .context-icon {
@@ -98,9 +98,9 @@ export class ContextManagement extends LitElement {
         padding: var(--spacing-small);
         white-space: pre-wrap;
         word-break: break-word;
-        border: var(--border-thin) solid var(--vscode-widget-border);
+        border: var(--border-thin) solid var(--texra-widget-border);
         border-radius: var(--border-radius-small);
-        background: var(--vscode-editorWidget-background);
+        background: var(--texra-editorWidget-background);
       }
     `,
   ];
@@ -112,7 +112,7 @@ export class ContextManagement extends LitElement {
   @property({ attribute: false }) config: ActionConfig = {
     icon: 'codicon-history',
     label: 'Context Management',
-    color: 'var(--vscode-foreground)',
+    color: 'var(--texra-foreground)',
   };
 
   /** Statistics items to display */

@@ -122,7 +122,7 @@ export class StreamTab extends LitElement {
 
       .tab-container.status-waiting,
       .tab-container.status-resuming {
-        border-left-color: var(--vscode-textLink-foreground);
+        border-left-color: var(--texra-textLink-foreground);
       }
 
       .tab-container.status-stopped,
@@ -138,7 +138,7 @@ export class StreamTab extends LitElement {
       @keyframes pulse-border {
         0%,
         100% {
-          border-left-color: var(--vscode-charts-orange, #d18616);
+          border-left-color: var(--texra-charts-orange, #d18616);
         }
         50% {
           border-left-color: transparent;
@@ -158,7 +158,7 @@ export class StreamTab extends LitElement {
         cursor: pointer;
         border: none;
         background: none;
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         text-align: left;
         font-family: var(--font-family);
         min-width: 0;
@@ -181,7 +181,7 @@ export class StreamTab extends LitElement {
 
       .tab-description {
         font-size: var(--font-size-sm);
-        color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+        color: var(--texra-descriptionForeground, var(--texra-foreground));
         opacity: 0.8;
         white-space: nowrap;
         overflow: hidden;
@@ -202,7 +202,7 @@ export class StreamTab extends LitElement {
         align-items: center;
         gap: var(--spacing-small);
         font-size: var(--font-size-sm);
-        color: var(--vscode-foreground);
+        color: var(--texra-foreground);
         opacity: var(--opacity-subtle);
         width: 100%;
       }
@@ -224,14 +224,14 @@ export class StreamTab extends LitElement {
         min-width: var(--height-control);
         height: var(--height-control);
         margin: 0;
-        color: var(--vscode-icon-foreground, var(--vscode-foreground));
+        color: var(--texra-icon-foreground, var(--texra-foreground));
         transition:
           color var(--transition-fast),
           background-color var(--transition-fast);
       }
 
       .tab-container:hover {
-        background-color: var(--vscode-list-hoverBackground);
+        background-color: var(--texra-list-hoverBackground);
       }
 
       /*
@@ -241,10 +241,10 @@ export class StreamTab extends LitElement {
        * color even when intermediate elements define their own.
        */
       .tab-container.is-active {
-        background-color: var(--vscode-list-activeSelectionBackground);
+        background-color: var(--texra-list-activeSelectionBackground);
         color: var(
-          --vscode-list-activeSelectionForeground,
-          var(--vscode-foreground)
+          --texra-list-activeSelectionForeground,
+          var(--texra-foreground)
         );
       }
 
@@ -256,8 +256,8 @@ export class StreamTab extends LitElement {
       .tab-container.is-active .tab-delete,
       .tab-container.is-active .tab-expand {
         color: var(
-          --vscode-list-activeSelectionForeground,
-          var(--vscode-foreground)
+          --texra-list-activeSelectionForeground,
+          var(--texra-foreground)
         );
       }
 
@@ -270,7 +270,7 @@ export class StreamTab extends LitElement {
       .tab-container.is-active .tab-delete:focus-within,
       .tab-container.is-active .tab-delete:hover *,
       .tab-container.is-active .tab-delete:focus-within * {
-        color: var(--vscode-errorForeground);
+        color: var(--texra-errorForeground);
       }
 
       /* Drop the dim-by-default opacity so the flipped foreground renders
@@ -305,19 +305,19 @@ export class StreamTab extends LitElement {
         border-radius: var(--border-radius-small);
         background-color: color-mix(
           in srgb,
-          var(--vscode-icon-foreground, var(--vscode-foreground)) 10%,
+          var(--texra-icon-foreground, var(--texra-foreground)) 10%,
           transparent
         );
       }
 
       .tab-delete:hover::part(control),
       .tab-delete:focus-within::part(control) {
-        background-color: var(--vscode-toolbar-hoverBackground);
+        background-color: var(--texra-toolbar-hoverBackground);
       }
 
       .tab-delete:hover,
       .tab-delete:focus-within {
-        color: var(--vscode-errorForeground);
+        color: var(--texra-errorForeground);
       }
 
       /* Expand/collapse chevron for parent tabs with children */
@@ -331,14 +331,14 @@ export class StreamTab extends LitElement {
         border: none;
         background: none;
         cursor: pointer;
-        color: var(--vscode-icon-foreground, var(--vscode-foreground));
+        color: var(--texra-icon-foreground, var(--texra-foreground));
         opacity: 0.6;
         padding: 0;
       }
 
       .tab-expand:hover {
         opacity: 1;
-        background-color: var(--vscode-toolbar-hoverBackground);
+        background-color: var(--texra-toolbar-hoverBackground);
       }
 
       .tab-expand .codicon {
