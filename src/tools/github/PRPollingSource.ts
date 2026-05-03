@@ -30,7 +30,7 @@ import {
   isPassingConclusion,
 } from './formatPREvent';
 import { getNewestTimestamp, trimSet } from './formatUtils';
-import { type ConditionalResponse, ghGet } from './githubClient';
+import { type ConditionalResponse, ghGet, GitHubPermanentError } from './githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
@@ -836,11 +836,17 @@ export class PRPollingSource extends PollingSourceBase<
 
   /**
    * Drain up to `MAX_ANNOTATION_FETCHES_PER_TICK` queued runs by hitting the
-   * annotations endpoint and emitting one event per non-empty result. Runs
-   * are removed from the queue only after the parallel batch resolves; on
-   * any rejection (network blip, rate limit) the entire batch stays queued
-   * for the next tick. Emits happen after the synchronous queue mutation so
-   * a listener throw can't desync the queue from `lastAnnotationKeys`.
+   * annotations endpoint. Errors are isolated per-fetch — annotations are
+   * best-effort, so a single bad check (e.g. 404 on a deleted run) must not
+   * propagate to `handleFailure` and detach the whole PR subscription.
+   *
+   * - Success: emit, remove from queue.
+   * - `GitHubPermanentError` (404/410/422): log + remove from queue. Retrying
+   *   won't help and we don't want a poisoned entry blocking the budget.
+   * - Anything else (network blip, timeout, transient auth/rate-limit):
+   *   leave in queue for the next tick. Real auth/rate-limit failures will
+   *   surface from the main poll path's fetches and trigger the global
+   *   handling there.
    */
   private async drainAnnotationQueue(state: SubscriptionState): Promise<void> {
     if (state.pendingAnnotationRuns.length === 0) return;
@@ -849,24 +855,44 @@ export class PRPollingSource extends PollingSourceBase<
       MAX_ANNOTATION_FETCHES_PER_TICK,
     );
     const { pr } = state;
-    const results = await Promise.all(
-      candidates.map(async (run) => ({
-        run,
-        annotations: await this.fetchAnnotations(pr.owner, pr.repo, run.id),
-      })),
+    const settled = await Promise.allSettled(
+      candidates.map((run) => this.fetchAnnotations(pr.owner, pr.repo, run.id)),
     );
-    const fetchedIds = new Set(results.map((r) => r.run.id));
-    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
-      (p) => !fetchedIds.has(p.id),
-    );
-    for (const { run, annotations } of results) {
-      if (annotations.length > 0) {
-        this.emit(
-          state,
-          formatCheckAnnotations(state.slug, pr.pullNumber, run, annotations),
-        );
+
+    const completedIds = new Set<number>();
+    for (let i = 0; i < settled.length; i += 1) {
+      const run = candidates[i];
+      const result = settled[i];
+      if (result.status === 'fulfilled') {
+        completedIds.add(run.id);
+        if (result.value.length > 0) {
+          this.emit(
+            state,
+            formatCheckAnnotations(
+              state.slug,
+              pr.pullNumber,
+              run,
+              result.value,
+            ),
+          );
+        }
+        continue;
       }
+      const err = result.reason;
+      if (err instanceof GitHubPermanentError) {
+        this.logger.warn(
+          `Annotations for check ${run.id} unavailable (HTTP ${err.status}); skipping.`,
+        );
+        completedIds.add(run.id);
+        continue;
+      }
+      this.logger.warn(
+        `Annotation fetch for check ${run.id} failed; will retry next tick: ${String(err)}`,
+      );
     }
+    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
+      (p) => !completedIds.has(p.id),
+    );
   }
 
   private async fetchAnnotations(
