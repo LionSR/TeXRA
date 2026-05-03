@@ -251,37 +251,3 @@ export function collectChildSummary(
   }
   return result;
 }
-
-/** Emit the current active subagent list for a parent to the progress UI. */
-export function emitActiveSubagentsUpdate(
-  parentStreamId: StreamTabId,
-  handles: Iterable<ExecutionHandle>,
-  runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
-): void {
-  const children = collectChildSummary(
-    parentStreamId,
-    handles,
-    AgentExecutionHandle,
-  );
-  runtimeHost.emit('updateActiveSubagents', {
-    parentStreamId,
-    children,
-  });
-}
-
-/** Emit the current active processes list for a parent to the progress UI. */
-export function emitActiveProcessesUpdate(
-  parentStreamId: StreamTabId,
-  handles: Iterable<ExecutionHandle>,
-  runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
-): void {
-  const processes = collectChildSummary(
-    parentStreamId,
-    handles,
-    ProcessExecutionHandle,
-  );
-  runtimeHost.emit('updateActiveProcesses', {
-    parentStreamId,
-    processes,
-  });
-}
