@@ -30,20 +30,23 @@ interface PackageJson {
 const packageRequire = createRequire(`${process.cwd()}/package.json`);
 const packageJson = packageRequire('./package.json') as PackageJson;
 
+function getPackageConfigurationSections(): PackageConfigurationSection[] {
+  const configuration = packageJson.contributes?.configuration;
+  if (!Array.isArray(configuration)) {
+    assert.fail('package.json contributes.configuration must be an array');
+  }
+  return configuration;
+}
+
 function getPackageConfigurationProperties(): Record<
   string,
   PackageConfigurationProperty
 > {
-  const configuration = packageJson.contributes?.configuration;
-  const sections = Array.isArray(configuration)
-    ? configuration
-    : configuration == null
-      ? []
-      : [configuration];
-
   return Object.assign(
     {},
-    ...sections.map((section) => section.properties ?? {}),
+    ...getPackageConfigurationSections().map(
+      (section) => section.properties ?? {},
+    ),
   );
 }
 
@@ -81,12 +84,7 @@ describe('TexraSettingsSchema', () => {
   });
 
   it('regenerates package.json contributions from schema metadata', () => {
-    const configuration = packageJson.contributes?.configuration;
-    const sections = Array.isArray(configuration)
-      ? configuration
-      : configuration == null
-        ? []
-        : [configuration];
+    const sections = getPackageConfigurationSections();
 
     assert.deepEqual(buildTexraPackageConfiguration(sections), sections);
   });
