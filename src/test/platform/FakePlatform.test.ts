@@ -207,6 +207,15 @@ describe('FakePlatform', () => {
     assert.equal(fs.getText('/workspace/source/a.txt'), 'A');
   });
 
+  it('rejects same-path rename when the source is missing', async () => {
+    const fs = new FakeFileSystemProvider();
+
+    await assert.rejects(
+      () => fs.rename('/workspace/missing.txt', '/workspace/missing.txt'),
+      /File not found/,
+    );
+  });
+
   it('rejects directory copy when a destination file blocks a source directory', async () => {
     const fs = new FakeFileSystemProvider({
       '/workspace/source/item/a.txt': 'A',
