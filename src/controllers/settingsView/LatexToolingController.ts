@@ -33,7 +33,7 @@ export type LatexRecommendedStatus = Pick<
 
 export interface LatexToolingControllerDeps {
   checkToolInstalled(tool: LatexProbeTool): Promise<boolean>;
-  resolvePath(tool: LatexPathTool): string | null;
+  findPath(tool: LatexPathTool): string | null;
   detectPackageManager(): LatexSettingsStatus['packageManager'];
   getPlatform(): Platform;
   isLatexWorkshopInstalled(): boolean;
@@ -70,14 +70,14 @@ export class LatexToolingController {
         imageProcessingInstalled:
           installed.gs && (installed.gm || installed.magick),
         platform: this.deps.getPlatform(),
-        pdflatexPath: this.deps.resolvePath('pdflatex'),
-        latexmkPath: this.deps.resolvePath('latexmk'),
-        latexdiffPath: this.deps.resolvePath('latexdiff'),
-        latexindentPath: this.deps.resolvePath('latexindent'),
-        texcountPath: this.deps.resolvePath('texcount'),
-        ghostscriptPath: this.deps.resolvePath('gs'),
+        pdflatexPath: this.deps.findPath('pdflatex'),
+        latexmkPath: this.deps.findPath('latexmk'),
+        latexdiffPath: this.deps.findPath('latexdiff'),
+        latexindentPath: this.deps.findPath('latexindent'),
+        texcountPath: this.deps.findPath('texcount'),
+        ghostscriptPath: this.deps.findPath('gs'),
         graphicsmagickPath:
-          this.deps.resolvePath('gm') ?? this.deps.resolvePath('magick'),
+          this.deps.findPath('gm') ?? this.deps.findPath('magick'),
         packageManager: this.deps.detectPackageManager(),
       };
     } catch (error) {
