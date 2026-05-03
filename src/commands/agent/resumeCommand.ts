@@ -4,11 +4,11 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
 import { logErrorMessage } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
 import { STREAM_STATUS } from '@shared/schemas';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 
@@ -41,23 +41,32 @@ async function resumeFromSnapshot(
   }
 
   ToolUseFollowUpQueue.acquire(streamId);
-  StreamStatusService.set(streamId, STREAM_STATUS.RESUMING);
+  const runtimeHost = getAgentRuntimeHost();
+  StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
+    runtimeHost,
+  });
 
   let queuedFollowUps: string[] = [];
   try {
     queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
-    bus.emit('updateQueuedFollowUps', { streamId });
-
-    await resumeToolUseFromSnapshot(snapshot, (session) => {
-      const allFollowUps =
-        followUp !== undefined
-          ? [followUp, ...queuedFollowUps]
-          : queuedFollowUps;
-
-      for (const text of allFollowUps) {
-        session.appendFollowUp(text);
-      }
+    runtimeHost.emit('updateQueuedFollowUps', {
+      streamId,
     });
+
+    await resumeToolUseFromSnapshot(
+      snapshot,
+      (session) => {
+        const allFollowUps =
+          followUp !== undefined
+            ? [followUp, ...queuedFollowUps]
+            : queuedFollowUps;
+
+        for (const text of allFollowUps) {
+          session.appendFollowUp(text);
+        }
+      },
+      runtimeHost,
+    );
 
     return { success: true };
   } catch (error) {
@@ -83,7 +92,9 @@ async function resumeFromSnapshot(
   } finally {
     const status = StreamStatusService.get(streamId);
     if (status === STREAM_STATUS.RESUMING) {
-      StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+      StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+        runtimeHost,
+      });
     }
   }
 }
