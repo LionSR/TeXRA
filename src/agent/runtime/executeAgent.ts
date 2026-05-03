@@ -173,7 +173,7 @@ async function assembleAgentLaunchContext(
   input: AgentLaunchInput,
   executionId: ExecutionId,
   runtimeHost: AgentRuntimeHost,
-  onReserved: (streamId: StreamTabId) => void,
+  reservedStreamId: StreamTabId | undefined,
   onActivated: (streamId: StreamTabId) => void,
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
@@ -227,12 +227,8 @@ async function assembleAgentLaunchContext(
 
   const streamId =
     input.streamTabIdOverride ??
+    reservedStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
-
-  if (!input.streamTabIdOverride) {
-    acquireStreamOrThrow(streamId, runtimeHost, input.taskType);
-    onReserved(streamId);
-  }
 
   const agentLogger = new AgentLogger(streamId, true);
   const usageReporter = new AgentUsageReporter(
@@ -600,16 +596,20 @@ async function buildAgentLaunchContext(
     throw new Error('Missing required fields: model and/or agent');
   }
 
-  let reservedStreamId: StreamTabId | undefined;
+  const reservedStreamId = input.streamTabIdOverride
+    ? undefined
+    : getStreamTabId(configPayload.agent, configPayload.model, { executionId });
+  if (reservedStreamId) {
+    acquireStreamOrThrow(reservedStreamId, runtimeHost, input.taskType);
+  }
+
   let activatedStreamId: StreamTabId | undefined;
   try {
     return await assembleAgentLaunchContext(
       input,
       executionId,
       runtimeHost,
-      (streamId) => {
-        reservedStreamId = streamId;
-      },
+      reservedStreamId,
       (streamId) => {
         activatedStreamId = streamId;
       },
