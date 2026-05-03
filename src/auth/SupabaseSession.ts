@@ -17,28 +17,6 @@ export const SupabaseSessionSchema = z.object({
 });
 export type SupabaseSession = z.infer<typeof SupabaseSessionSchema>;
 
-export interface AuthCallbackParts {
-  fragment: string;
-  query: string;
-}
-
-export interface AuthCallbackTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: string | null;
-}
-
-export type AuthCallbackTokenResult =
-  | {
-      success: true;
-      tokens: AuthCallbackTokens;
-    }
-  | {
-      success: false;
-      error: string;
-      isAuthError?: boolean;
-    };
-
 export interface SupabaseSessionParseOptions {
   logSource?: string;
   warn?: (source: string, message: string) => void;
@@ -94,49 +72,5 @@ export function toStorableSupabaseSession(
       ? nativeSession.expires_at * 1000
       : Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
     useCustomRefresh: options?.useCustomRefresh,
-  };
-}
-
-/**
- * Parse auth callback tokens from host-provided URI parts.
- * Tokens usually arrive in the fragment, with query params as a fallback for
- * PKCE and web environments.
- */
-export function parseAuthCallbackTokens(
-  parts: AuthCallbackParts,
-): AuthCallbackTokenResult {
-  const fragmentParams = new URLSearchParams(parts.fragment);
-  const queryParams = new URLSearchParams(parts.query);
-  const getParam = (name: string): string | null =>
-    fragmentParams.get(name) ?? queryParams.get(name);
-
-  const accessToken = getParam('access_token');
-  const refreshToken = getParam('refresh_token');
-  const expiresIn = getParam('expires_in');
-  const error = getParam('error');
-  const errorDescription = getParam('error_description');
-
-  if (error) {
-    return {
-      success: false,
-      error: errorDescription || error,
-      isAuthError: true,
-    };
-  }
-
-  if (!accessToken || !refreshToken) {
-    return {
-      success: false,
-      error: 'Missing tokens in callback',
-    };
-  }
-
-  return {
-    success: true,
-    tokens: {
-      accessToken,
-      refreshToken,
-      expiresIn,
-    },
   };
 }

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isAuthCallbackPath } from './core/authCallback';
 
 /**
  * URI handler for OAuth callbacks.
@@ -19,11 +20,7 @@ export class SupabaseUriHandler implements vscode.UriHandler {
   handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
     // Check if this is an auth callback (both desktop and web/Codespaces paths)
     // In Codespaces, the state param may be URL-encoded into the path (e.g., /extension-auth-callback?state=xxx)
-    const basePath = uri.path.split('?')[0];
-    if (
-      basePath === '/auth-callback' ||
-      basePath === '/extension-auth-callback'
-    ) {
+    if (isAuthCallbackPath(uri.path)) {
       // Fire event so the auth provider can handle it
       this._onDidReceiveCallback.fire(uri);
     }
