@@ -290,8 +290,10 @@ export class FakeFileSystemProvider implements FileSystemProvider {
 
     this.assertNotSelfDescendant(normalizedSource, normalizedDest, 'copy');
     this.assertParentDirectoryExists(normalizedDest);
+    const children = this.childPaths(normalizedSource);
+    this.assertDirectoryCopyTargets(normalizedSource, normalizedDest, children);
     this.createDirectorySync(normalizedDest);
-    for (const child of this.childPaths(normalizedSource)) {
+    for (const child of children) {
       const relative = path.posix.relative(normalizedSource, child);
       const childDest = path.posix.join(normalizedDest, relative);
       this.records.set(childDest, cloneRecord(this.requireRecord(child)));
@@ -471,6 +473,26 @@ export class FakeFileSystemProvider implements FileSystemProvider {
       this.childPaths(dest).length > 0
     ) {
       throw fakeFsError('ENOTEMPTY', `Directory is not empty: ${dest}`);
+    }
+  }
+
+  private assertDirectoryCopyTargets(
+    source: string,
+    dest: string,
+    children: string[],
+  ): void {
+    for (const child of children) {
+      const relative = path.posix.relative(source, child);
+      const childDest = path.posix.join(dest, relative);
+      const sourceRecord = this.requireRecord(child);
+      const destRecord = this.records.get(childDest);
+      if (!destRecord || destRecord.type === sourceRecord.type) {
+        continue;
+      }
+      if (destRecord.type === FileType.Directory) {
+        throw fakeFsError('EISDIR', `Path is a directory: ${childDest}`);
+      }
+      throw fakeFsError('ENOTDIR', `Path is a file: ${childDest}`);
     }
   }
 
