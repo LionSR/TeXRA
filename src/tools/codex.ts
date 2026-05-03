@@ -200,6 +200,18 @@ class CodexFollowUpSession implements IInterruptible {
   }
 }
 
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError';
+}
+
+function isCleanCodexInterruption(
+  err: unknown,
+  signal: AbortSignal,
+  session: CodexFollowUpSession,
+): boolean {
+  return signal.aborted || session.isInterrupted() || isAbortError(err);
+}
+
 // ============================================================================
 // Result formatting
 // ============================================================================
@@ -429,6 +441,7 @@ function startCodexLoop(params: {
           );
           logTurnSummary(logger, Date.now() - startedAt, turn.usage);
         } catch (caught) {
+          if (isCleanCodexInterruption(caught, signal, session)) break;
           err = caught;
           logger.error(toErrorMessage(caught));
         } finally {
