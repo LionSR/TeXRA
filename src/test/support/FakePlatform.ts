@@ -509,13 +509,16 @@ export class FakeFileSystemProvider implements FileSystemProvider {
 }
 
 export class FakeWorkspaceProvider implements WorkspaceProvider {
-  constructor(private readonly workspacePath = '/workspace') {}
+  constructor(private readonly workspacePath: string | undefined) {}
 
   getWorkspacePath(): string | undefined {
     return this.workspacePath;
   }
 
   asRelativePath(filePath: string): string {
+    if (!this.workspacePath) {
+      return filePath;
+    }
     const workspacePath = normalizePath(this.workspacePath);
     const normalized = normalizePath(filePath);
     const relative = path.posix.relative(workspacePath, normalized);
@@ -569,7 +572,7 @@ export interface FakePlatformOptions {
   workspaceState?: Record<string, unknown>;
   files?: Record<string, string | Uint8Array>;
   secrets?: Record<string, string>;
-  workspacePath?: string;
+  workspacePath?: string | undefined;
   storagePath?: string;
   globalStoragePath?: string;
 }
@@ -578,13 +581,17 @@ export function createFakePlatform(
   options: FakePlatformOptions = {},
   overrides: Partial<Platform> = {},
 ): Platform {
+  const workspacePath = Object.hasOwn(options, 'workspacePath')
+    ? options.workspacePath
+    : '/workspace';
+
   return {
     config: new FakeConfigProvider(options.config),
     globalState: new FakeStateStore(options.globalState),
     workspaceState: new FakeStateStore(options.workspaceState),
     log: new RecordingLogBackend(),
     fs: new FakeFileSystemProvider(options.files),
-    workspace: new FakeWorkspaceProvider(options.workspacePath),
+    workspace: new FakeWorkspaceProvider(workspacePath),
     storage: new FakeStorageProvider(
       options.storagePath,
       options.globalStoragePath,
