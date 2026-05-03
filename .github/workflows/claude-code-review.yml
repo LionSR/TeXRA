@@ -15,7 +15,8 @@ on:
       - 'CLAUDE.md'
       - 'AGENTS.md'
       - 'CHANGELOG.md'
-      - 'skills/**'
+      - 'docs/**'
+      - '.claude/**'
 
 concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
@@ -54,8 +55,8 @@ jobs:
             generic JS/TS review passes will miss most of them.
 
             **Step 0 — Load the local code-review skill before doing anything else:**
-            1. Read `skills/code-review/SKILL.md` (workflow + output format).
-            2. Read `skills/code-review/references/review-checklist.md` (greps + concrete fixes).
+            1. Read `.claude/skills/code-review/SKILL.md` (workflow + output format).
+            2. Read `.claude/skills/code-review/references/review-checklist.md` (greps + concrete fixes).
             3. Consult `CLAUDE.md` and `AGENTS.md` only for the specific sections cited inline below — do not skim end-to-end.
             The `Verified` section at the end of your review is mandatory and must list the
             files you actually opened (path + line ranges).
@@ -182,12 +183,75 @@ jobs:
                  (normalize once at the entry point via `z.union` + `.transform`).
                - Information leakage: the same data shape decoded / re-encoded in multiple
                  places, or one module reaching into another's internals.
+               - Overlapping responsibilities: multiple methods, classes, or modules doing
+                 substantially the same job with slight variations (e.g. three "save state"
+                 methods that differ only in serialization format; two helpers that both
+                 normalize a path differently). Flag the duplication AND propose the
+                 minimal consolidated design.
 
-               When suggesting fixes in this category, **never recommend adding** a new
-               abstraction, helper, factory, or "for future flexibility" hook. Only flag
-               existing violations and propose deletion or inlining.
+               **Distinguish two directions of advice — they're not contradictory:**
+               - **Speculative scaffolding** (forbidden): adding new abstractions, helpers,
+                 factories, wrappers, or "for future flexibility" hooks for hypothetical
+                 future requirements that the current diff doesn't need. Only flag existing
+                 violations; never recommend adding a new layer.
+               - **Consolidating existing duplication** (encouraged): when the diff (or the
+                 surrounding code it touches) has multiple methods with overlapping
+                 responsibilities, propose collapsing them into the smallest universal set
+                 of operations using an established, industry-tested pattern. Cite the
+                 pattern by name and explain the separation of concerns it enforces. Useful
+                 references for this codebase:
+                 - **Strategy** for swappable algorithms behind one call site (model
+                   handlers, agent reasoning strategies).
+                 - **Discriminated union + exhaustive `switch` with `assertNever`** for
+                   typed dispatch over closed variant sets (provider handlers, message
+                   types) — already the repo's preferred pattern.
+                 - **Single source of truth via Zod schema + `z.infer`** to remove parallel
+                   type definitions.
+                 - **Composition root / dependency injection** at the host entry point
+                   (`platform()`) instead of scattered service lookups.
+                 - **Façade** to hide a multi-step subsystem (PocketFlow flow factories
+                   like `executeAgent`) behind one entry point — but only when the façade
+                   actually deepens the module per Ousterhout, not just renames calls.
+                 - **Adapter** at true system boundaries (filesystem, model APIs) to keep
+                   internal types stable while external SDKs change.
+                 - **Observer / event bus** when one producer fans out to many independent
+                   consumers — but never as a workaround for a missing direct call.
+                 The bar for proposing a pattern: it must remove more code than it adds,
+                 deepen the surviving module, and resolve a concrete duplication present
+                 in the diff. If those conditions don't hold, don't propose it.
 
-            10. 🟡 **Style, naming, and import hygiene**. PascalCase for service singletons
+            10. 🟡 **Spaghetti code & round trips**. Tangled control flow that obscures data
+                flow at a glance, or work done two ways when one suffices:
+                - Deep nesting (3+ levels of `if`/`else`, `try`/`catch`, `for`/`while`) that
+                  should be flattened with early returns or guard clauses.
+                - Long ternary chains (`a ? x : b ? y : c ? z : ...`) — convert to lookup
+                  table, switch, or if/else-if cascade.
+                - Prop / parameter drilling: data threaded through 4+ functions just to reach
+                  its consumer. Promote to shared state, dependency injection, or push the
+                  consumer closer to the producer.
+                - Round-trip serialization: `JSON.stringify` → `JSON.parse` of the same data,
+                  or read file → parse → mutate one field → reserialize → write where an
+                  in-memory transform would do.
+                - Round-trip type erasure: passing a typed object as `unknown` / `any`,
+                  re-validating with the same schema, then narrowing again — keep the type
+                  through the call chain.
+                - Repeated work in hot paths: same file read multiple times in one flow,
+                  same API call duplicated, computed value recomputed inside a loop instead
+                  of cached above it.
+                - N+1 patterns: looping over an array with a per-item async lookup when a
+                  batch fetch exists.
+                - Multi-pass loops over the same collection that could be fused (`.filter`
+                  then `.map` then `.find` — collapse into one walk).
+                - Sequential `await` on independent operations that should run via
+                  `Promise.all`.
+                - Cross-module ping-pong: A calls B, B calls back into A for state — push
+                  the data once instead of inverting the dependency.
+                - Effect / event handlers that fire only to dispatch a direct call the
+                  producer could have made itself (related to "Render-Time Workarounds").
+                - State changes that fan out to listeners with no change-detection guard,
+                  so downstream consumers re-render on no-op updates.
+
+            11. 🟡 **Style, naming, and import hygiene**. PascalCase for service singletons
                 (`StreamStatusService`, `ModelRegistry`); camelCase for command/function
                 namespaces (`agentCommands`, `latexCommands`); UPPER_SNAKE_CASE for true
                 constants (`MAX_ERROR_LENGTH`). Long relative imports (`../../../../`) where
@@ -197,19 +261,19 @@ jobs:
                 `common/`). View-specific managers not under each view's `managers/` folder.
                 Webview naming not following `[Domain]View[Component]`.
 
-            11. 🟡 **Concurrency & resources**. Shared mutable state held across `await`
+            12. 🟡 **Concurrency & resources**. Shared mutable state held across `await`
                 (race risk — capture locals before `await`). Webview `dispose` paths that
                 don't unregister listeners or FS watchers (leak). Long-running model handlers
                 / tool calls without `signal.aborted` checks between awaits.
 
-            12. ℹ️ **Comments**. WHAT-comments on well-named code (delete). Process tags
+            13. ℹ️ **Comments**. WHAT-comments on well-named code (delete). Process tags
                 (`// added for issue #123`, `// per Codex review`, `// TODO from PR #45`) —
                 belong in PR description, not the code (delete). Multi-paragraph docstrings
                 on private helpers (one short line max). Commenting WHY belongs only when
                 non-obvious — hidden constraint, subtle invariant, workaround for a specific
                 bug, behavior that would surprise a reader.
 
-            13. ℹ️ **Documentation drift**. CHANGELOG.md not updated for user-visible changes
+            14. ℹ️ **Documentation drift**. CHANGELOG.md not updated for user-visible changes
                 (Features / Bug Fixes / rarely Breaking Changes). New public APIs without
                 JSDoc. Module-level doc comments missing for new top-level files. Mathematical
                 or domain-specific docstrings that explain TS syntax instead of meaning.
@@ -232,7 +296,7 @@ jobs:
 
             For each issue found, post an inline comment on the relevant line using the GitHub
             inline comment MCP tool. At the end, post a single PR-level summary comment
-            following the output format from `skills/code-review/SKILL.md`:
+            following the output format from `.claude/skills/code-review/SKILL.md`:
 
             ```
             ## Findings
@@ -303,5 +367,5 @@ jobs:
           # or https://code.claude.com/docs/en/cli-reference for available options
           claude_args: |
             --model claude-opus-4-7
-            --allowedTools "Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*),Bash(git diff:*),Bash(git log:*),mcp__github_inline_comment__create_inline_comment,mcp__github__*"
-            --append-system-prompt "This is TeXRA, a VS Code extension (TypeScript, Zod v4, PocketFlow) for LLM-assisted LaTeX research. The repo encodes many narrow conventions in CLAUDE.md, AGENTS.md, and skills/code-review/. Review with those rules as the source of truth — generic JS/TS heuristics will produce false positives and miss real findings. Never recommend adding new abstractions, factories, wrappers, or 'for future flexibility' hooks; only flag existing violations and propose deletion or inlining. Trust the type system and existing schemas; do not suggest extra runtime validation at internal boundaries. Cite path:line for every finding and include a Verified section listing files actually opened."
+            --allowedTools "Read" "Glob" "Grep" "Bash(gh pr diff:*)" "Bash(gh pr view:*)" "Bash(gh pr comment:*)" "Bash(gh api graphql:*)" "Bash(git diff:*)" "Bash(git log:*)" "mcp__github_inline_comment__create_inline_comment" "mcp__github__*"
+            --append-system-prompt "This is TeXRA, a VS Code extension (TypeScript, Zod v4, PocketFlow) for LLM-assisted LaTeX research. The repo encodes many narrow conventions in CLAUDE.md, AGENTS.md, and .claude/skills/code-review/. Review with those rules as the source of truth — generic JS/TS heuristics will produce false positives and miss real findings. Never recommend adding new abstractions, factories, wrappers, or 'for future flexibility' hooks; only flag existing violations and propose deletion or inlining. Trust the type system and existing schemas; do not suggest extra runtime validation at internal boundaries. Cite path:line for every finding and include a Verified section listing files actually opened."
