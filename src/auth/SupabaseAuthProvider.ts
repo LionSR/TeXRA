@@ -58,6 +58,15 @@ const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
   ghs_: 'server-to-server token',
 };
 
+function parseStoredProviderSession(
+  sessionData: string | undefined,
+): SupabaseSession | null {
+  return parseStoredSupabaseSession(sessionData, {
+    logSource: 'SupabaseAuthProvider',
+    warn: logger.warn,
+  });
+}
+
 /** Result of parsing auth callback URI */
 interface CallbackParseResult {
   success: true;
@@ -149,10 +158,7 @@ export class SupabaseAuthProvider
   async ensureFreshToken(forceRefresh?: boolean): Promise<string | null> {
     try {
       const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      const session = parseStoredSupabaseSession(
-        sessionData,
-        'SupabaseAuthProvider',
-      );
+      const session = parseStoredProviderSession(sessionData);
       if (!session) {
         return null;
       }
@@ -204,10 +210,7 @@ export class SupabaseAuthProvider
 
     try {
       const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      const session = parseStoredSupabaseSession(
-        sessionData,
-        'SupabaseAuthProvider',
-      );
+      const session = parseStoredProviderSession(sessionData);
       if (!session) {
         return null;
       }
@@ -263,9 +266,8 @@ export class SupabaseAuthProvider
 
     try {
       // Check if we already have a session (after claiming the lock)
-      const existingSession = parseStoredSupabaseSession(
+      const existingSession = parseStoredProviderSession(
         await this.context.secrets.get(SUPABASE_SESSION_KEY),
-        'SupabaseAuthProvider',
       );
       if (existingSession) {
         return;
@@ -364,10 +366,7 @@ export class SupabaseAuthProvider
     _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
     const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-    const session = parseStoredSupabaseSession(
-      sessionData,
-      'SupabaseAuthProvider',
-    );
+    const session = parseStoredProviderSession(sessionData);
     if (!session) {
       return [];
     }
