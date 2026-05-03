@@ -75,6 +75,29 @@ describe('FakePlatform', () => {
     assert.equal(changes, 1);
   });
 
+  it('mirrors texra config aliases and nested watcher matching', async () => {
+    const platform = createFakePlatform();
+    let changes = 0;
+    const subscription = platform.config.watch('files', () => {
+      changes += 1;
+    });
+
+    await platform.config.update('texra.files.exclude', ['node_modules']);
+    subscription.dispose();
+    await platform.config.update('texra.files.include', ['src']);
+
+    assert.deepEqual(platform.config.get('files.exclude', []), [
+      'node_modules',
+    ]);
+    assert.equal(platform.config.isExplicitlySet('files.exclude'), true);
+    assert.deepEqual(platform.config.inspect('files.exclude'), {
+      globalValue: undefined,
+      workspaceValue: ['node_modules'],
+      effectiveValue: ['node_modules'],
+    });
+    assert.equal(changes, 1);
+  });
+
   it('records log entries and supports custom overrides', () => {
     const log = new RecordingLogBackend();
     const fs = new FakeFileSystemProvider();
