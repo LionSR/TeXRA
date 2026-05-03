@@ -316,6 +316,10 @@ importers:
         version: 6.0.3
 
   packages/desktop:
+    dependencies:
+      fix-path:
+        specifier: ^5.0.0
+        version: 5.0.0
     devDependencies:
       '@texra/core':
         specifier: workspace:*
@@ -6902,6 +6906,96 @@ packages:
         integrity: sha512-IynmDyxsEsb9RKzO3J9+4SxXnl2FTFSzNBaKKaMV6tsSk0rw9gYw9gs+JFCq/qk2LCZ78KDwyj+Z289TijSkUw==,
       }
 
+  default-shell@2.2.0:
+    resolution:
+      {
+        integrity: sha512-sPpMZcVhRQ0nEMDtuMJ+RtCxt7iHPAMBU+I4tAlo5dU1sjRpNax0crj6nR3qKpvVnckaQ9U38enXcwW9nZJeCw==,
+      }
+    engines: { node: ^12.20.0 || ^14.13.1 || >=16.0.0 }
+
+  execa@5.1.1:
+    resolution:
+      {
+        integrity: sha512-8uSpZZocAZRBAPIEINJj3Lo9HyGitllczc27Eh5YYojjMFMn8yHMDMaUHE2Jqfq05D/wucwI4JGURyXt1vchyg==,
+      }
+    engines: { node: '>=10' }
+
+  fix-path@5.0.0:
+    resolution:
+      {
+        integrity: sha512-erEWGGCN7RIu1bXTCfNVpVBdm0f5mwcbeja+4QXiEZzIQukP401sbpu8gd3Ny1vS34YNeswyMO0TdT2tP5OlHA==,
+      }
+    engines: { node: '>=20' }
+
+  get-stream@6.0.1:
+    resolution:
+      {
+        integrity: sha512-ts6Wi+2j3jQjqi70w5AlN8DFnkSwC+MqmxEzdEALB2qXZYV3X/b1CTfgPLGJNMeAWxdPfU8FO1ms3NUfaHCPYg==,
+      }
+    engines: { node: '>=10' }
+
+  human-signals@2.1.0:
+    resolution:
+      {
+        integrity: sha512-B4FFZ6q/T2jhhksgkbEW3HBvWIfDW85snkQgawt07S7J5QXTk6BkNV+0yAeZrM5QpMAdYlocGoljn0sJ/WQkFw==,
+      }
+    engines: { node: '>=10.17.0' }
+
+  is-stream@2.0.1:
+    resolution:
+      {
+        integrity: sha512-hFoiJiTl63nn+kstHGBtewWSKnQLpyb155KHheA1l39uvtO9nWIop1p3udqPcUd/xbF1VLMO4n7OI6p7RbngDg==,
+      }
+    engines: { node: '>=8' }
+
+  mimic-fn@2.1.0:
+    resolution:
+      {
+        integrity: sha512-OqbOk5oEQeAZ8WXWydlu9HJjz9WVdEIvamMCcXmuqUYjTknH/sqsWvhQ3vgwKFRR1HpjvNBKQ37nbJgYzGqGcg==,
+      }
+    engines: { node: '>=6' }
+
+  npm-run-path@4.0.1:
+    resolution:
+      {
+        integrity: sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw==,
+      }
+    engines: { node: '>=8' }
+
+  onetime@5.1.2:
+    resolution:
+      {
+        integrity: sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg==,
+      }
+    engines: { node: '>=6' }
+
+  shell-env@4.0.3:
+    resolution:
+      {
+        integrity: sha512-Ioe5h+hCDZ7pKL5+JGzbtPvZ5ESMHePZ8nLxohlDL+twmlcmutttMhRkrQOed8DeLT8mkYBgbwZfohe8pqaA3g==,
+      }
+    engines: { node: ^12.20.0 || ^14.13.1 || >=16.0.0 }
+
+  shell-path@3.1.0:
+    resolution:
+      {
+        integrity: sha512-s/9q9PEtcRmDTz69+cJ3yYBAe9yGrL7e46gm2bU4pQ9N48ecPK9QrGFnLwYgb4smOHskx4PL7wCNMktW2AoD+g==,
+      }
+    engines: { node: ^12.20.0 || ^14.13.1 || >=16.0.0 }
+
+  signal-exit@3.0.7:
+    resolution:
+      {
+        integrity: sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ==,
+      }
+
+  strip-final-newline@2.0.0:
+    resolution:
+      {
+        integrity: sha512-BrpvfNAE3dcvq7ll3xVumzjKjZQ5tI1sEUIKr3Uoks0XUl45St3FlatVqef9prk4jRDzhW6WZg+3bk93y6pLjA==,
+      }
+    engines: { node: '>=6' }
+
 snapshots:
   '@anthropic-ai/sdk@0.92.0(zod@4.4.2)':
     dependencies:
@@ -10909,3 +11003,52 @@ snapshots:
   zod@3.25.12: {}
 
   zod@4.4.2: {}
+
+  default-shell@2.2.0: {}
+
+  execa@5.1.1:
+    dependencies:
+      cross-spawn: 7.0.6
+      get-stream: 6.0.1
+      human-signals: 2.1.0
+      is-stream: 2.0.1
+      merge-stream: 2.0.0
+      npm-run-path: 4.0.1
+      onetime: 5.1.2
+      signal-exit: 3.0.7
+      strip-final-newline: 2.0.0
+
+  fix-path@5.0.0:
+    dependencies:
+      shell-path: 3.1.0
+      strip-ansi: 7.2.0
+
+  get-stream@6.0.1: {}
+
+  human-signals@2.1.0: {}
+
+  is-stream@2.0.1: {}
+
+  mimic-fn@2.1.0: {}
+
+  npm-run-path@4.0.1:
+    dependencies:
+      path-key: 3.1.1
+
+  onetime@5.1.2:
+    dependencies:
+      mimic-fn: 2.1.0
+
+  shell-env@4.0.3:
+    dependencies:
+      default-shell: 2.2.0
+      execa: 5.1.1
+      strip-ansi: 7.2.0
+
+  shell-path@3.1.0:
+    dependencies:
+      shell-env: 4.0.3
+
+  signal-exit@3.0.7: {}
+
+  strip-final-newline@2.0.0: {}
