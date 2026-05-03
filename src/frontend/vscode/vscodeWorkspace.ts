@@ -15,4 +15,28 @@ export class VscodeWorkspace implements WorkspaceProvider {
   asRelativePath(filePath: string): string {
     return vscode.workspace.asRelativePath(filePath, false);
   }
+
+  watch(globPattern: string, listener: () => void): vscode.Disposable {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    const pattern =
+      workspaceFolders?.length === 1
+        ? new vscode.RelativePattern(workspaceFolders[0], globPattern)
+        : globPattern;
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      pattern,
+      false,
+      false,
+      false,
+    );
+    const subscriptions = [
+      watcher.onDidCreate(listener),
+      watcher.onDidChange(listener),
+      watcher.onDidDelete(listener),
+    ];
+
+    return new vscode.Disposable(() => {
+      subscriptions.forEach((subscription) => subscription.dispose());
+      watcher.dispose();
+    });
+  }
 }
