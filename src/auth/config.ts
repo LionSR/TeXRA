@@ -268,7 +268,7 @@ export const SERVER_SIDE_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TOKEN_REFRESH_THRESHOLD_MS = 30 * 60 * 1000;
 
 /** Default session expiry time (1 hour). */
-export const DEFAULT_SESSION_EXPIRY_MS = 60 * 60 * 1000;
+export { DEFAULT_SUPABASE_SESSION_EXPIRY_MS as DEFAULT_SESSION_EXPIRY_MS } from './SupabaseSession';
 
 /** Storage key for Supabase session in VS Code SecretStorage. */
 export const SUPABASE_SESSION_KEY = 'texra.supabase.session';
