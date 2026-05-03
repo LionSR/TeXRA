@@ -12,7 +12,7 @@ When updating CHANGELOG.md:
 
 ## Development workflow
 
-1. **Install dependencies**: run `npm install` if needed.
+1. **Install dependencies**: run `corepack pnpm install` if needed.
 2. **Run checks before committing**:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast` (recommended) or `npm run compile`.
