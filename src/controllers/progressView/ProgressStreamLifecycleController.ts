@@ -14,28 +14,28 @@ export interface ProgressStreamLifecycleState {
 
 export interface ProgressStreamLifecycleControllerDeps {
   state: ProgressStreamLifecycleState;
-  isStreamInFlight(stream: StreamTabId): boolean;
+  host: ProgressStreamLifecycleHost;
+}
+
+export interface ProgressStreamLifecycleHost {
   getVisibleStreamIds(): StreamTabId[];
-  stopStream(stream: StreamTabId): Promise<void>;
-  clearRetryRequest(stream: StreamTabId): void;
-  releaseFollowUpQueue(stream: StreamTabId): void;
-  cleanupApprovalsForStream(stream: StreamTabId): void;
-  cleanupAllApprovals(): void;
-  clearModelOutputBackups(stream?: StreamTabId): void;
-  clearWebviewStream(stream: StreamTabId): void;
-  clearAllWebviewStreams(): void;
-  deleteWebviewStream(stream: StreamTabId): void;
-  syncFullView(options: { forceRebuild: boolean }): void;
-  setActiveStream(stream: StreamTabId): Promise<void>;
+  isStreamInFlight(stream: StreamTabId): boolean;
+  stopStream(
+    stream: StreamTabId,
+    options?: { clearRetryRequest?: boolean },
+  ): Promise<void>;
+  cleanupDeletedStream(stream: StreamTabId): void;
+  cleanupDeletedStreams(streams: StreamTabId[]): void;
+  deleteRenderedStream(stream: StreamTabId): void;
+  rebuildRenderedStreams(options: { forceRebuild: boolean }): void;
+  activateStream(stream: StreamTabId): Promise<void>;
 }
 
 export class ProgressStreamLifecycleController {
   constructor(private readonly deps: ProgressStreamLifecycleControllerDeps) {}
 
   async stopStream(stream: StreamTabId): Promise<void> {
-    // Clear pending retry requests so the UI panel is dismissed with the stop.
-    this.deps.clearRetryRequest(stream);
-    await this.deps.stopStream(stream);
+    await this.deps.host.stopStream(stream, { clearRetryRequest: true });
   }
 
   async deleteStream(stream: StreamTabId): Promise<void> {
@@ -43,32 +43,30 @@ export class ProgressStreamLifecycleController {
       this.deps.state.hasStream(stream) || this.deps.state.hasTaskState(stream);
     if (!hasStream) return;
 
-    if (this.deps.isStreamInFlight(stream)) {
+    if (this.deps.host.isStreamInFlight(stream)) {
       // Finished streams should not get synthetic STOPPED transitions or child
       // interrupts after they completed naturally.
-      await this.deps.stopStream(stream);
+      await this.deps.host.stopStream(stream);
     }
 
-    this.deps.cleanupApprovalsForStream(stream);
-    this.deps.clearRetryRequest(stream);
-    this.deps.releaseFollowUpQueue(stream);
-    this.deps.clearModelOutputBackups(stream);
-    this.deps.clearWebviewStream(stream);
+    this.deps.host.cleanupDeletedStream(stream);
 
     const wasActive = this.deps.state.getActiveStream() === stream;
     await this.deps.state.clearStream(stream);
 
     if (wasActive) {
       this.deps.state.setActiveStream(
-        this.deps.state.pickValidActiveStream(this.deps.getVisibleStreamIds()),
+        this.deps.state.pickValidActiveStream(
+          this.deps.host.getVisibleStreamIds(),
+        ),
       );
     }
 
-    this.deps.deleteWebviewStream(stream);
+    this.deps.host.deleteRenderedStream(stream);
 
     const nextActive = this.deps.state.getActiveStream();
     if (wasActive && nextActive) {
-      await this.deps.setActiveStream(nextActive);
+      await this.deps.host.activateStream(nextActive);
     }
   }
 
@@ -76,17 +74,11 @@ export class ProgressStreamLifecycleController {
     const streamIds = this.deps.state.getStreamIds();
 
     await Promise.allSettled(
-      streamIds.map((stream) => this.deps.stopStream(stream)),
+      streamIds.map((stream) => this.deps.host.stopStream(stream)),
     );
 
-    this.deps.cleanupAllApprovals();
-    for (const stream of streamIds) {
-      this.deps.clearRetryRequest(stream);
-      this.deps.releaseFollowUpQueue(stream);
-    }
-    this.deps.clearModelOutputBackups();
-    this.deps.clearAllWebviewStreams();
+    this.deps.host.cleanupDeletedStreams(streamIds);
     await this.deps.state.clearAll();
-    this.deps.syncFullView({ forceRebuild: true });
+    this.deps.host.rebuildRenderedStreams({ forceRebuild: true });
   }
 }
