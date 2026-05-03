@@ -30,7 +30,11 @@ import {
   isPassingConclusion,
 } from './formatPREvent';
 import { getNewestTimestamp, trimSet } from './formatUtils';
-import { type ConditionalResponse, ghGet, GitHubPermanentError } from './githubClient';
+import {
+  type ConditionalResponse,
+  ghGet,
+  GitHubPermanentError,
+} from './githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
