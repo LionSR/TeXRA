@@ -31,7 +31,7 @@ export const IMAGE_TOOLS = ['gm', 'magick'] as const;
  */
 export async function isToolPresent(name: string): Promise<boolean> {
   if (await checkToolInstalled(name, false)) return true;
-  return BinaryResolver.resolvePath(name) !== null;
+  return BinaryResolver.findPath(name) !== null;
 }
 
 /**
@@ -43,7 +43,7 @@ export async function locateTool(
   name: string,
 ): Promise<{ installed: boolean; path?: string }> {
   const knownInstalled = await checkToolInstalled(name, false);
-  const resolvedPath = BinaryResolver.resolvePath(name);
+  const resolvedPath = BinaryResolver.findPath(name);
   return {
     installed: knownInstalled || resolvedPath !== null,
     path: resolvedPath ?? undefined,
