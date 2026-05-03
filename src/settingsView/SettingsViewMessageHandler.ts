@@ -59,6 +59,7 @@ import {
   applyGitAuthorConfig,
   readGitAuthorSettings,
 } from '@frontend/git/gitAuthorSetup';
+import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { compileLatex2Pdf } from '@latex/texTools';
 import {
@@ -152,6 +153,7 @@ import {
   SettingsMemoryController,
   type SettingsMemoryMessage,
 } from '../controllers/settingsView/SettingsMemoryController';
+import { SettingsProfileKeyController } from '../controllers/settingsView/SettingsProfileKeyController';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
@@ -356,6 +358,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
   private readonly memoryController: SettingsMemoryController;
+  private readonly profileKeyController: SettingsProfileKeyController;
 
   constructor(context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
@@ -380,6 +383,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       buildMemoryFile: buildFile,
       setPinnedMeta,
       countPinnedMemories,
+    });
+    this.profileKeyController = new SettingsProfileKeyController({
+      prompt: new VscodePromptHost(),
+      externalOpener: new VscodeExternalOpener(),
+      getProviderDisplayName: (provider) =>
+        PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+      getProviderKeyUrl: (provider) =>
+        getProviderKeyUrl(provider, PROVIDER_URLS[provider]),
+      getApiKeySecretName: (provider) =>
+        SecretManager.getApiKeySecretName(provider as ApiProvider),
+      setSecret: (key, value) => SecretManager.set(key, value),
+      deleteSecret: (key) => SecretManager.delete(key),
+      refreshAfterKeyChange: () => this.refreshAfterKeyChange(),
     });
     this.agentHandlers = new AgentHandlers(ctx, () =>
       this.refreshAfterAgentMutation(),
@@ -1517,33 +1533,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetProviderKey(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_KEY>,
   ): Promise<void> {
-    const provider = data.provider as ApiProvider;
-    const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
-
-    const apiKey = await vscode.window.showInputBox({
-      prompt: `Enter ${displayName} API key`,
-      password: true,
-      placeHolder: '************************************',
-    });
-
-    if (!apiKey) {
-      return;
-    }
-
+    const provider = data.provider;
     try {
-      await SecretManager.set(
-        SecretManager.getApiKeySecretName(provider),
-        apiKey,
-      );
-      void vscode.window.showInformationMessage(
-        `${displayName} API key has been set`,
-      );
-      // refreshAfterKeyChange now includes sendProfileData, no separate finally needed.
-      await this.refreshAfterKeyChange();
+      await this.profileKeyController.setProviderKey(provider);
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to set ${displayName} API key`,
+        `Failed to set ${this.profileKeyController.getProviderDisplayName(provider)} API key`,
         error,
       );
       // On error, still refresh settings view to reflect current key state.
@@ -1554,20 +1550,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleRemoveProviderKey(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.REMOVE_PROVIDER_KEY>,
   ): Promise<void> {
-    const provider = data.provider as ApiProvider;
-    const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
-
+    const provider = data.provider;
     try {
-      await SecretManager.delete(SecretManager.getApiKeySecretName(provider));
-      void vscode.window.showInformationMessage(
-        `${displayName} API key has been removed`,
-      );
-      // refreshAfterKeyChange now includes sendProfileData, no separate finally needed.
-      await this.refreshAfterKeyChange();
+      await this.profileKeyController.removeProviderKey(provider);
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to remove ${displayName} API key`,
+        `Failed to remove ${this.profileKeyController.getProviderDisplayName(provider)} API key`,
         error,
       );
       // On error, still refresh settings view to reflect current key state.
@@ -1603,11 +1592,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleOpenProviderKeyUrl(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PROVIDER_KEY_URL>,
   ): Promise<void> {
-    const provider = data.provider as ApiProvider;
-    const url = getProviderKeyUrl(provider, PROVIDER_URLS[provider]);
-    if (url) {
-      await vscode.env.openExternal(vscode.Uri.parse(url));
-    }
+    await this.profileKeyController.openProviderKeyUrl(data.provider);
   }
 
   private async handleSetProviderStreaming(
