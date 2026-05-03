@@ -271,6 +271,14 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     const normalizedSource = normalizePath(source);
     const normalizedDest = normalizePath(dest);
     const sourceRecord = this.requireRecord(normalizedSource);
+    if (normalizedSource === normalizedDest) {
+      throw fakeFsError(
+        'EINVAL',
+        sourceRecord.type === FileType.Directory
+          ? `Cannot copy a directory onto itself: ${source} -> ${dest}`
+          : `Cannot copy a file onto itself: ${source} -> ${dest}`,
+      );
+    }
     this.assertWritableTarget(normalizedDest, options?.overwrite);
 
     if (sourceRecord.type === FileType.File) {
@@ -281,12 +289,7 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     }
 
     this.assertNotSelfDescendant(normalizedSource, normalizedDest, 'copy');
-    if (normalizedSource === normalizedDest) {
-      throw fakeFsError(
-        'EINVAL',
-        `Cannot copy a directory onto itself: ${source} -> ${dest}`,
-      );
-    }
+    this.assertParentDirectoryExists(normalizedDest);
     this.createDirectorySync(normalizedDest);
     for (const child of this.childPaths(normalizedSource)) {
       const relative = path.posix.relative(normalizedSource, child);
