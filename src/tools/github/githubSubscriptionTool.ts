@@ -170,7 +170,7 @@ async function execSubscribe(
         ? `Subscribed to ${slug}`
         : `Already subscribed to ${slug}`,
       output: created
-        ? `Subscribed to ${slug}. New comments, reviews, line comments, failed CI checks, inline check annotations (warnings / notices pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on PR close/merge.`
+        ? `Subscribed to ${slug}. New comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on PR close/merge.`
         : `Already subscribed to ${slug}. Activity continues until command="unsubscribe" or the PR closes.`,
     };
   }
@@ -207,7 +207,7 @@ async function execSubscribe(
           : `Subscribed to ${prSlug}`
         : `Already subscribed to ${prSlug}`,
       output: created
-        ? `${prSlug} is a PR. New comments, reviews, line comments, failed CI checks, inline check annotations (warnings / notices pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on close/merge.`
+        ? `${prSlug} is a PR. New comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on close/merge.`
         : `Already subscribed to ${prSlug}.`,
     };
   }
@@ -450,7 +450,7 @@ export class GitHubSubscriptionTool extends defineTool({
     'Manage GitHub activity subscriptions for the current agent stream.',
     'Path mirrors GitHub\'s REST URL shape and encodes the hierarchy: "owner/repo" addresses the whole repo (coarse, orchestrator-friendly); "owner/repo/pulls/N" addresses a specific pull request and "owner/repo/issues/N" addresses a specific issue (nuanced, worker-friendly).',
     'Commands:',
-    '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a holistic merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once — typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (warnings / notices pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened — the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
+    '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a holistic merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once — typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened — the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
     '- unsubscribe: stop watching the path.',
     '- list: list active subscriptions on this stream.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',
