@@ -261,6 +261,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - `src/model/` (model registry, capabilities, pricing)
 - `src/latex/` (LaTeX processing, formatting, diff)
 - `src/tools/` (tool implementations — use `@common/files/fsEntryType` instead of `vscode.FileType`)
+- `src/controllers/` (host-neutral orchestration behind injected ports)
 - `src/shared/` (IPC schemas, message types)
 - `src/replacement/` (text cleanup rules)
 - `src/eventBus/` (progress event system)
