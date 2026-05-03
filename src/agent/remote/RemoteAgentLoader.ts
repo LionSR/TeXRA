@@ -20,7 +20,7 @@ import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
 import * as logger from '@agent/core/logger';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { resolveToolDefinitions } from '@tools/registry';
 
 import {
