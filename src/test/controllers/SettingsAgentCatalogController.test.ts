@@ -56,9 +56,7 @@ function createController(options?: {
   customPresets: AgentModePreset[];
 } {
   const enabled = { ...(options?.enabled ?? {}) };
-  let customPresets: AgentModePreset[] = Array.isArray(options?.customPresets)
-    ? (options.customPresets as AgentModePreset[])
-    : [];
+  let customPresetsRaw: unknown = options?.customPresets ?? [];
   return {
     controller: new SettingsAgentCatalogController({
       now: () => options?.now ?? 123,
@@ -70,15 +68,17 @@ function createController(options?: {
         getAgents: (category) => AGENTS[category],
         getVisibleAgents: (category) =>
           options?.visible?.[category] ?? AGENTS[category],
-        getCustomPresetsRaw: () => options?.customPresets ?? customPresets,
+        getCustomPresetsRaw: () => customPresetsRaw,
         setCustomPresets: async (presets) => {
-          customPresets = presets;
+          customPresetsRaw = presets;
         },
       },
     }),
     enabled,
     get customPresets() {
-      return customPresets;
+      return Array.isArray(customPresetsRaw)
+        ? (customPresetsRaw as AgentModePreset[])
+        : [];
     },
   };
 }
