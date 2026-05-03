@@ -34,5 +34,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Kernel tests
+        run: npm run test:kernel
+
       - name: Compile
         run: npm run compile
