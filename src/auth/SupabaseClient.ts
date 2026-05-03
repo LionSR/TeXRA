@@ -3,21 +3,15 @@ import {
   SupabaseClient as Client,
   User,
 } from '@supabase/supabase-js';
-import * as vscode from 'vscode';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import {
   type UserAuthContext,
   type UserTier,
   UserAuthContextSchema,
-  SUPABASE_SESSION_KEY,
   TOKEN_REFRESH_THRESHOLD_MS,
 } from './config';
-
-/** Interface for auth provider to avoid circular imports. */
-interface AuthTokenProvider {
-  ensureFreshToken(forceRefresh?: boolean): Promise<string | null>;
-}
+import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -26,14 +20,13 @@ interface AuthTokenProvider {
 export class SupabaseClient {
   private static instance: Client | null = null;
   private static config: { url: string; publicKey: string } | null = null;
-  private static context: vscode.ExtensionContext | null = null;
   private static authProvider: AuthTokenProvider | null = null;
 
   /**
-   * Whether VS Code's auth provider registration succeeded.
+   * Whether the host auth provider registration succeeded.
    * This is separate from authProvider being set (which happens in constructor).
    */
-  private static vscodeProviderRegistered = false;
+  private static authProviderRegistered = false;
 
   /**
    * Error that occurred during initialization, if any.
@@ -57,11 +50,21 @@ export class SupabaseClient {
   }
 
   /**
-   * Mark VS Code auth provider as successfully registered.
-   * Called after vscode.authentication.registerAuthenticationProvider() succeeds.
+   * Mark the host auth provider as successfully registered.
+   * Called after the host registers its authentication provider.
    */
-  static setVSCodeProviderRegistered(): void {
-    this.vscodeProviderRegistered = true;
+  static setHostAuthProviderRegistered(): void {
+    this.authProviderRegistered = true;
+  }
+
+  /** Reset singleton state between unit tests. */
+  static resetForTests(): void {
+    this.instance = null;
+    this.config = null;
+    this.authProvider = null;
+    this.authProviderRegistered = false;
+    this.initError = null;
+    this.tokenExpiresAt = null;
   }
 
   /**
@@ -106,7 +109,7 @@ export class SupabaseClient {
     return (
       this.instance !== null &&
       this.authProvider !== null &&
-      this.vscodeProviderRegistered &&
+      this.authProviderRegistered &&
       this.initError === null
     );
   }
@@ -114,20 +117,13 @@ export class SupabaseClient {
   /**
    * Initialize the Supabase client with project credentials.
    */
-  static initialize(
-    url: string,
-    publicKey: string,
-    context?: vscode.ExtensionContext,
-  ): void {
+  static initialize(url: string, publicKey: string, _context?: unknown): void {
     if (!url || !publicKey) {
       throw new Error(
         'Supabase credentials missing. Check extension configuration.',
       );
     }
     this.config = { url, publicKey };
-    if (context) {
-      this.context = context;
-    }
     this.instance = createClient(url, publicKey, {
       auth: {
         persistSession: false, // VS Code manages session storage
@@ -174,35 +170,13 @@ export class SupabaseClient {
    * Get access and refresh tokens from secure storage.
    * Ensures tokens are fresh before returning.
    */
-  static async getSessionTokens(): Promise<{
-    accessToken: string;
-    refreshToken: string;
-  } | null> {
-    // Ensure token is fresh before reading from storage
-    if (this.authProvider) {
-      await this.authProvider.ensureFreshToken();
-    }
-
-    if (!this.context) {
-      logger.warn('SupabaseClient', 'Extension context not set');
-      const accessToken = await this.getAccessToken();
-      if (!accessToken) {
-        return null;
-      }
-      return { accessToken, refreshToken: '' };
+  static async getSessionTokens(): Promise<SessionTokens | null> {
+    if (!this.authProvider) {
+      return null;
     }
 
     try {
-      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      if (!sessionData) {
-        return null;
-      }
-
-      const { accessToken, refreshToken } = JSON.parse(sessionData) as {
-        accessToken: string;
-        refreshToken: string;
-      };
-      return { accessToken, refreshToken };
+      return await this.authProvider.getSessionTokens();
     } catch (error) {
       logger.error(
         'SupabaseClient',
