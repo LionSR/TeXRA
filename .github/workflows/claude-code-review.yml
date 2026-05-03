@@ -3,20 +3,6 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-    paths:
-      - 'src/**'
-      - 'resources/agents/**'
-      - 'resources/tool_use_agents/**'
-      - 'package.json'
-      - 'tsconfig*.json'
-      - 'eslint.config.mjs'
-      - '.prettierrc'
-      - '.github/workflows/**'
-      - 'CLAUDE.md'
-      - 'AGENTS.md'
-      - 'CHANGELOG.md'
-      - 'docs/**'
-      - '.claude/**'
 
 concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
