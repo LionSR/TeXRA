@@ -95,6 +95,11 @@ export type SupabaseCallbackResult =
   | SupabaseCallbackParseResult
   | SupabaseCallbackParseError;
 
+interface StableSessionSnapshot {
+  session: SupabaseSession | null;
+  version: number;
+}
+
 /**
  * Parse and validate stored session data.
  * Returns null if session data is missing or invalid.
@@ -252,6 +257,11 @@ export function toStorableGitHubTokenExchangeSession(
  */
 export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private refreshPromise: Promise<SupabaseSession | null> | null = null;
+  private sessionMutationVersion = 0;
+  private lastStoredSession: SupabaseSession | null = null;
+  private lastStoredSessionVersion = 0;
+  private pendingSessionMutations = 0;
+  private sessionMutationTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {}
 
@@ -267,12 +277,14 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   async storeSession(session: SupabaseSession): Promise<void> {
-    await this.options.storage.store(JSON.stringify(session));
+    await this.runSessionMutation(session, () =>
+      this.options.storage.store(JSON.stringify(session)),
+    );
     this.options.onTokenExpiryChanged?.(session.expiresAt);
   }
 
   async clearSession(): Promise<void> {
-    await this.options.storage.delete();
+    await this.runSessionMutation(null, () => this.options.storage.delete());
     this.options.onTokenExpiryChanged?.(null);
   }
 
@@ -344,6 +356,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    */
   async refreshSession(
     session: SupabaseSession,
+    expectedVersion = this.sessionMutationVersion,
   ): Promise<SupabaseSession | null> {
     if (this.refreshPromise) {
       return this.refreshPromise;
@@ -354,6 +367,11 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
         ? this.refreshViaCustomEndpoint(session)
         : this.refreshViaSupabase(session)
     )
+      .then((refreshed) =>
+        refreshed
+          ? this.storeRefreshIfCurrent(refreshed, expectedVersion)
+          : null,
+      )
       .catch((error) => {
         this.options.log?.error?.(
           'SupabaseSession',
@@ -380,7 +398,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     const refreshed = toStorableSupabaseSession(data.session);
-    await this.storeSession(refreshed);
     return refreshed;
   }
 
@@ -388,7 +405,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     forceRefresh?: boolean,
   ): Promise<SupabaseSession | null> {
     try {
-      const session = await this.loadSession();
+      const { session, version } = await this.loadStableSessionSnapshot();
       if (!session) {
         return null;
       }
@@ -403,10 +420,8 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
           'SupabaseSession',
           `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
         );
-        const refreshed = await this.refreshSession(session);
-        if (refreshed) {
-          return refreshed;
-        }
+        const refreshed = await this.refreshSession(session, version);
+        if (refreshed) return refreshed;
         if (forceRefresh || timeUntilExpiry <= 0) {
           this.options.log?.warn?.(
             'SupabaseSession',
@@ -426,6 +441,80 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       );
       return null;
     }
+  }
+
+  private async loadStableSession(): Promise<SupabaseSession | null> {
+    return (await this.loadStableSessionSnapshot()).session;
+  }
+
+  private async loadStableSessionSnapshot(): Promise<StableSessionSnapshot> {
+    let versionBeforeLoad = this.sessionMutationVersion;
+    for (;;) {
+      const pendingBeforeLoad = this.pendingSessionMutations;
+      const session = await this.loadSession();
+      if (
+        versionBeforeLoad === this.sessionMutationVersion &&
+        pendingBeforeLoad === 0 &&
+        this.pendingSessionMutations === 0
+      ) {
+        return { session, version: versionBeforeLoad };
+      }
+      await this.sessionMutationTail;
+      versionBeforeLoad = this.sessionMutationVersion;
+    }
+  }
+
+  private async runSessionMutation(
+    session: SupabaseSession | null,
+    operation: () => Promise<void>,
+  ): Promise<void> {
+    this.sessionMutationVersion += 1;
+    this.pendingSessionMutations += 1;
+    const mutationVersion = this.sessionMutationVersion;
+    const previousMutation = this.sessionMutationTail;
+    const run = previousMutation
+      .then(operation)
+      .then(() => {
+        this.lastStoredSession = session;
+        this.lastStoredSessionVersion = mutationVersion;
+      })
+      .finally(() => {
+        this.pendingSessionMutations -= 1;
+      });
+    this.sessionMutationTail = run.catch(() => {});
+    await run;
+  }
+
+  private async storeRefreshIfCurrent(
+    refreshed: SupabaseSession,
+    expectedVersion: number,
+  ): Promise<SupabaseSession | null> {
+    if (
+      this.sessionMutationVersion !== expectedVersion ||
+      this.pendingSessionMutations > 0
+    ) {
+      return this.loadStableSession();
+    }
+
+    await this.storeSession(refreshed);
+    if (refreshed.useCustomRefresh) {
+      this.options.log?.info?.(
+        'SupabaseSession',
+        'Token refreshed via custom endpoint',
+      );
+    }
+    return this.isCurrentStoredSession(refreshed)
+      ? refreshed
+      : this.loadStableSession();
+  }
+
+  private isCurrentStoredSession(session: SupabaseSession): boolean {
+    return (
+      this.lastStoredSessionVersion === this.sessionMutationVersion &&
+      this.lastStoredSession?.accessToken === session.accessToken &&
+      this.lastStoredSession.refreshToken === session.refreshToken &&
+      this.lastStoredSession.id === session.id
+    );
   }
 
   private getCallbackExpiry(expiresIn: string | null): number {
@@ -475,11 +564,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       this.options.defaultSessionExpiryMs,
     );
 
-    await this.storeSession(refreshed);
-    this.options.log?.info?.(
-      'SupabaseSession',
-      'Token refreshed via custom endpoint',
-    );
     return refreshed;
   }
 }
