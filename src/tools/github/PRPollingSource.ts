@@ -812,12 +812,7 @@ export class PRPollingSource extends PollingSourceBase<
         if (annotations.length > 0) {
           this.emit(
             state,
-            formatCheckAnnotations(
-              state.slug,
-              pr.pullNumber,
-              run,
-              annotations,
-            ),
+            formatCheckAnnotations(state.slug, pr.pullNumber, run, annotations),
           );
         }
       }),
