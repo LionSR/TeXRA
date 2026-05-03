@@ -217,6 +217,22 @@ describe('FakePlatform', () => {
     assert.equal(fs.getText('/workspace/dest/a.txt'), 'existing');
   });
 
+  it('keeps earlier directory copy writes when a later child fails', async () => {
+    const fs = new FakeFileSystemProvider({
+      '/workspace/source/a.txt': 'A',
+      '/workspace/source/z.txt': 'Z',
+      '/workspace/dest/z.txt': 'existing',
+    });
+
+    await assert.rejects(
+      () => fs.copy('/workspace/source', '/workspace/dest'),
+      /Target already exists/,
+    );
+
+    assert.equal(fs.getText('/workspace/dest/a.txt'), 'A');
+    assert.equal(fs.getText('/workspace/dest/z.txt'), 'existing');
+  });
+
   it('rejects file copy onto itself with overwrite', async () => {
     const fs = new FakeFileSystemProvider({
       '/workspace/source/a.txt': 'A',
