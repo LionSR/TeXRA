@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
+import { parseAuthCallbackTokens } from './core/authCallback';
 import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
@@ -19,7 +20,6 @@ import {
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
 import {
-  parseAuthCallbackTokens,
   parseStoredSupabaseSession,
   toStorableSupabaseSession,
   type SupabaseSession,
@@ -321,14 +321,15 @@ export class SupabaseAuthProvider
   private async parseCallbackAndCreateSession(
     uri: vscode.Uri,
   ): Promise<CallbackResult> {
-    const parsedTokens = parseAuthCallbackTokens({
-      fragment: uri.fragment,
+    const parsedCallback = parseAuthCallbackTokens({
+      path: uri.path,
       query: uri.query,
+      fragment: uri.fragment,
     });
-    if (!parsedTokens.success) {
-      return parsedTokens;
-    }
-    const { accessToken, refreshToken, expiresIn } = parsedTokens.tokens;
+
+    if (!parsedCallback.success) return parsedCallback;
+
+    const { accessToken, refreshToken, expiresIn } = parsedCallback.tokens;
 
     // Verify user with Supabase
     const supabase = SupabaseClient.getClient();
