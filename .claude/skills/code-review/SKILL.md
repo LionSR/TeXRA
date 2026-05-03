@@ -23,17 +23,22 @@ A "no issues found" review on this repo is almost always wrong. CLAUDE.md and AG
 
 ## Output format
 
+Write the rendered review in calm, declarative prose. No emojis (🔴 / 🟡 / ℹ️ / ⚠️ / etc.), no ALL-CAPS shouting, no alarmist labels like "BLOCKER" or "CRITICAL". State the issue, cite `path:line`, propose the fix.
+
 ```
 ## Findings
-### Critical
+
+### Issues to address before merge
 - `path/file.ts:42` — <one-line summary>. <why / fix>.
-### Should fix
+
+### Suggestions
 - ...
-### Nits / questions
+
+### Notes
 - ...
 
 ## Verified
 - <what you actually opened, e.g. "Read src/tools/foo.ts:1-120; confirmed no `vscode` import">
 ```
 
-The `Verified` section is mandatory. Prefer 3 grounded findings over 10 generic ones.
+Omit empty sections — don't write "(none)". If the diff is clean, say so in one sentence above `## Verified`. The `Verified` section is mandatory. Prefer 3 grounded findings over 10 generic ones.
