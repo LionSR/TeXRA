@@ -23,12 +23,6 @@ export class SupabaseClient {
   private static authProvider: AuthTokenProvider | null = null;
 
   /**
-   * Whether the host auth provider registration succeeded.
-   * This is separate from authProvider being set (which happens in constructor).
-   */
-  private static authProviderRegistered = false;
-
-  /**
    * Error that occurred during initialization, if any.
    * Used to provide meaningful error messages to users.
    */
@@ -49,20 +43,11 @@ export class SupabaseClient {
     this.authProvider = provider;
   }
 
-  /**
-   * Mark the host auth provider as successfully registered.
-   * Called after the host registers its authentication provider.
-   */
-  static setHostAuthProviderRegistered(): void {
-    this.authProviderRegistered = true;
-  }
-
   /** Reset singleton state between unit tests. */
   static resetForTests(): void {
     this.instance = null;
     this.config = null;
     this.authProvider = null;
-    this.authProviderRegistered = false;
     this.initError = null;
     this.tokenExpiresAt = null;
   }
@@ -105,13 +90,24 @@ export class SupabaseClient {
   /**
    * Check if auth system is fully initialized and ready for use.
    */
-  static isReady(): boolean {
-    return (
-      this.instance !== null &&
-      this.authProvider !== null &&
-      this.authProviderRegistered &&
-      this.initError === null
-    );
+  static async isReady(): Promise<boolean> {
+    if (this.instance === null || this.authProvider === null) {
+      return false;
+    }
+    if (this.initError !== null) {
+      return false;
+    }
+
+    try {
+      await this.authProvider.whenReady();
+      return true;
+    } catch (error) {
+      logger.error(
+        'SupabaseClient',
+        `Auth provider not ready: ${toErrorMessage(error)}`,
+      );
+      return false;
+    }
   }
 
   /**
