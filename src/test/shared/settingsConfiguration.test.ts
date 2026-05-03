@@ -114,6 +114,29 @@ describe('TexraSettingsSchema', () => {
     assert.equal(Object.hasOwn(regeneratedProperty ?? {}, 'enum'), false);
   });
 
+  it('rejects unknown texra package configuration keys', () => {
+    const sections = getPackageConfigurationSections();
+    const sectionWithUnknownTexraKey = {
+      ...sections[0],
+      properties: {
+        ...sections[0].properties,
+        'texra.removed.setting': {
+          type: 'boolean',
+          default: false,
+        },
+      },
+    };
+
+    assert.throws(
+      () =>
+        buildTexraPackageConfiguration([
+          sectionWithUnknownTexraKey,
+          ...sections.slice(1),
+        ]),
+      /unknown setting key: texra\.removed\.setting/,
+    );
+  });
+
   it('enforces package numeric ranges and setting enums', () => {
     assert.throws(() =>
       TexraSettingsSchema.parse({ model: { compactionThresholdPercent: 101 } }),
