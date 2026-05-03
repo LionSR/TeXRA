@@ -18,14 +18,15 @@ concurrency:
 jobs:
   track:
     # Skip: closed-but-not-completed issues, closed-but-not-merged PRs
-    # Skip Copilot review summaries: the Claude action cannot exchange their
+    # Skip automated review summaries: the Claude action cannot exchange their
     # OIDC token for a repo-writing app token, and Playbook C has no useful
-    # tracking action for those comment-only automated reviews.
+    # tracking action for those comment-only bot reviews.
     if: |
       (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
       (github.event_name == 'pull_request' && (github.event.action != 'closed' || github.event.pull_request.merged == true)) ||
       (github.event_name == 'pull_request_review' &&
-       github.event.review.user.login != 'copilot-pull-request-reviewer[bot]' &&
+       github.event.review.user.type != 'Bot' &&
+       !endsWith(github.event.review.user.login, '[bot]') &&
        github.actor != 'Copilot')
     runs-on: ubuntu-latest
     permissions:
