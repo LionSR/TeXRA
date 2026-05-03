@@ -14,7 +14,7 @@ TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assista
 
 ```bash
 # Install dependencies
-npm install
+corepack pnpm install
 
 # Development build (recommended - uses esbuild + Vite, much faster)
 npm run compile:fast
