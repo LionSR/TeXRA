@@ -2,7 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports - common
-import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { COMMON_COMMANDS } from '@common/webview/commonCommands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 
 // Local imports - controllers
 import { MainViewInteractionController } from '../../controllers/mainView/MainViewInteractionController';
@@ -31,6 +32,13 @@ describe('MainViewInteractionController', () => {
     assert.deepEqual(
       controller.getSwitchViewCommand({
         command: COMMON_COMMANDS.SWITCH_VIEW,
+        view: 'main',
+      }),
+      { command: 'texra.showMainView', args: [] },
+    );
+    assert.deepEqual(
+      controller.getSwitchViewCommand({
+        command: COMMON_COMMANDS.SWITCH_VIEW,
         view: 'progress',
         openInEditor: true,
       }),
@@ -42,6 +50,32 @@ describe('MainViewInteractionController', () => {
         view: 'progress',
       }),
       { command: 'texra.showProgressView', args: [{ inPlace: true }] },
+    );
+  });
+
+  it('plans settings entry points', () => {
+    const controller = createController();
+
+    assert.deepEqual(
+      controller.getOpenSettingsCommand('@ext:texra.extension'),
+      {
+        command: 'workbench.action.openSettings',
+        args: ['@ext:texra.extension'],
+      },
+    );
+    assert.deepEqual(
+      controller.getOpenAgentSettingsCommand({
+        command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+        sessionType: 'toolUse',
+      }),
+      { command: 'texra.showAgents', args: ['toolUse'] },
+    );
+    assert.deepEqual(
+      controller.getOpenAgentSettingsCommand({
+        command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+        sessionType: 'workflow',
+      }),
+      { command: 'texra.showAgents', args: [undefined] },
     );
   });
 
@@ -89,6 +123,10 @@ describe('MainViewInteractionController', () => {
         provider: 'missing',
       }),
       undefined,
+    );
+    assert.equal(
+      controller.getApiKeyGuideUrl(),
+      'https://texra.ai/guide/installation#setting-up-api-keys',
     );
   });
 
