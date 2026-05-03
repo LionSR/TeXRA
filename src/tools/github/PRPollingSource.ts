@@ -15,6 +15,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 import { shouldDropBotEvent } from './botFilter';
 import {
+  formatCheckAnnotations,
   formatCheckFailure,
   formatCheckFailureSummary,
   formatCIComplete,
@@ -41,6 +42,7 @@ import {
 } from './prSubscriptionConstants';
 import {
   isDefiniteMergeableState,
+  type GhCheckAnnotation,
   type GhCheckRun,
   type GhIssueComment,
   type GhPullRequest,
@@ -58,6 +60,7 @@ function createInitialState(pr: PRKey): SubscriptionState {
     seenReviewCommentIds: new Set(),
     seenReviewIds: new Set(),
     lastFailedCheckKeys: new Set(),
+    seenAnnotatedCheckKeys: new Set(),
     ciCompleteSha: undefined,
     ciPassedSha: undefined,
     headSha: undefined,
@@ -84,6 +87,16 @@ const CHECK_RUNS_PAGE_SIZE = 100;
 // Without a cap a malformed/runaway `total_count` could fan out into
 // hundreds of GETs per tick.
 const MAX_CHECK_RUNS_PAGES = 50;
+// GitHub caps the per-check-run annotations endpoint at 100 per page; the
+// poller fetches a single page per affected run to bound API cost. Runs
+// with more annotations are reported via the in-message overflow hint
+// pointing at the run's html_url.
+const ANNOTATIONS_PAGE_SIZE = 50;
+// Bound how many annotation fetches we issue in one tick. A push that lights
+// up a fleet of matrix checks could otherwise produce a fan-out of GETs per
+// tick; the rest get picked up on subsequent ticks (we only mark a check key
+// as seen on successful fetch + emit, so deferred runs aren't lost).
+const MAX_ANNOTATION_FETCHES_PER_TICK = 5;
 
 export interface PRKey {
   owner: string;
@@ -110,6 +123,13 @@ interface SubscriptionState extends BasePollSubscriptionState {
   seenReviewCommentIds: Set<number>;
   seenReviewIds: Set<number>;
   lastFailedCheckKeys: Set<string>;
+  /**
+   * `${id}:${completed_at}` for completed check runs whose inline annotations
+   * we've already fetched and forwarded. The completion timestamp is part of
+   * the key so a re-run (which yields a new `completed_at` for the same id)
+   * re-emits its annotations.
+   */
+  seenAnnotatedCheckKeys: Set<string>;
   /** Head SHA for which the one-shot "CI complete" event has been emitted. */
   ciCompleteSha: string | undefined;
   /** Head SHA for which the one-shot "CI passed" event has been emitted. */
@@ -337,6 +357,12 @@ export class PRPollingSource extends PollingSourceBase<
           if (this.isCheckFailure(r)) {
             state.lastFailedCheckKeys.add(this.checkKey(r));
           }
+          // Seed the annotated-check dedupe set so existing annotations on
+          // pre-subscription completed runs don't replay. Mirrors how
+          // comments/reviews are seeded silently on the first tick.
+          if (this.hasAnnotations(r)) {
+            state.seenAnnotatedCheckKeys.add(this.checkKey(r));
+          }
         }
         // Seed so pre-existing terminal CI doesn't fire on the next tick —
         // we only surface transitions that happen after subscribe. Gate on
@@ -481,6 +507,12 @@ export class PRPollingSource extends PollingSourceBase<
           );
         }
       }
+
+      // Forward inline check annotations (warnings / notices / failures
+      // pinned to specific file lines). Decoupled from the failure path
+      // because annotations also appear on *passing* checks — lint
+      // suggestions, blueprint advisories, custom workflow hints.
+      await this.fetchAndEmitAnnotations(state, runs);
     }
 
     // Commit the deferred check-runs cache only after successfully consuming
@@ -753,6 +785,73 @@ export class PRPollingSource extends PollingSourceBase<
 
   private checkKey(r: GhCheckRun): string {
     return `${r.id}:${r.completed_at ?? ''}`;
+  }
+
+  /**
+   * Only completed runs with a positive `annotations_count` are candidates.
+   * In-progress runs may report partial counts that change on completion;
+   * gating on `completed` keeps the dedupe key (which carries `completed_at`)
+   * stable so we don't double-emit for the same run.
+   */
+  private hasAnnotations(r: GhCheckRun): boolean {
+    if (r.status !== 'completed') return false;
+    const count = r.output?.annotations_count;
+    return typeof count === 'number' && count > 0;
+  }
+
+  /**
+   * For each newly-completed run with annotations, fetch the annotations
+   * endpoint (one page) and forward them as a `<github-webhook-activity>`
+   * event. Errors here propagate to the tick wrapper so transient failures
+   * are retried — the dedupe key is added only on successful emit, so a
+   * failed fetch isn't silently lost.
+   */
+  private async fetchAndEmitAnnotations(
+    state: SubscriptionState,
+    runs: ReadonlyArray<GhCheckRun>,
+  ): Promise<void> {
+    const candidates: GhCheckRun[] = [];
+    for (const r of runs) {
+      if (!this.hasAnnotations(r)) continue;
+      if (state.seenAnnotatedCheckKeys.has(this.checkKey(r))) continue;
+      candidates.push(r);
+    }
+    if (candidates.length === 0) return;
+
+    const toFetch = candidates.slice(0, MAX_ANNOTATION_FETCHES_PER_TICK);
+    const { pr } = state;
+    await Promise.all(
+      toFetch.map(async (run) => {
+        const annotations = await this.fetchAnnotations(
+          pr.owner,
+          pr.repo,
+          run.id,
+        );
+        state.seenAnnotatedCheckKeys.add(this.checkKey(run));
+        if (annotations.length > 0) {
+          this.emit(
+            state,
+            formatCheckAnnotations(
+              state.slug,
+              pr.pullNumber,
+              run,
+              annotations,
+            ),
+          );
+        }
+      }),
+    );
+    trimSet(state.seenAnnotatedCheckKeys, MAX_SEEN_IDS);
+  }
+
+  private async fetchAnnotations(
+    owner: string,
+    repo: string,
+    checkRunId: number,
+  ): Promise<GhCheckAnnotation[]> {
+    const path = `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations?per_page=${ANNOTATIONS_PAGE_SIZE}`;
+    const res = await ghGet<GhCheckAnnotation[]>(path);
+    return res.status === 200 ? res.data : [];
   }
 }
 
