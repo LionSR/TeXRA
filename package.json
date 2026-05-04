@@ -21,6 +21,7 @@
     "workspace:typecheck": "corepack pnpm --recursive --if-present typecheck",
     "workspace:build": "corepack pnpm --recursive --if-present build",
     "desktop:build": "corepack pnpm --filter @texra/desktop build",
+    "build:initial": "corepack pnpm run workspace:build && corepack pnpm run build:fast && corepack pnpm run check:initial-build-artifacts",
     "build": "corepack pnpm --filter texra build:fast",
     "format": "prettier --write .",
     "esbuild:ext": "corepack pnpm --filter texra esbuild:ext",
@@ -42,6 +43,7 @@
     "sync:extension-package-invariants": "node scripts/verify-extension-package-invariants.mjs --update",
     "check:extension-package-invariants": "node scripts/verify-extension-package-invariants.mjs",
     "check:vsix-contents": "node scripts/verify-vsix-contents.mjs",
+    "check:initial-build-artifacts": "corepack pnpm run check:vsix-contents && node scripts/verify-desktop-build-artifacts.mjs",
     "sync:remote-agents": "node scripts/sync-remote-agents.mjs -o docs/supabase/SYNC_REFERENCE_AGENTS.sql",
     "check:remote-agents": "node scripts/sync-remote-agents.mjs --check"
   },
