@@ -1,7 +1,4 @@
-import {
-  installDesktopHostBridge,
-  type DesktopHostBridge,
-} from './hostBridge.js';
+import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
 import {
   isDesktopCommandMessage,
