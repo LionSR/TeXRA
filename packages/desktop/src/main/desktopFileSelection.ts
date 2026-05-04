@@ -66,16 +66,8 @@ const SET_COMMAND_BY_FILE_TYPE = {
   base: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
 } as const;
 
-function normalizeRelative(filePath: string): string {
-  return normalizeFilePath(filePath);
-}
-
-function readConfig<T>(key: string, fallback: T): T {
-  return getConfig<T>(key, fallback);
-}
-
 function getListSettings() {
-  return loadFileListSettings(readConfig);
+  return loadFileListSettings(getConfig);
 }
 
 async function listFiles(
@@ -89,7 +81,7 @@ async function listFiles(
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
       const absolutePath = join(directory, entry.name);
-      const relativePath = normalizeRelative(relative(root, absolutePath));
+      const relativePath = normalizeFilePath(relative(root, absolutePath));
       if (entry.isDirectory()) {
         if (shouldVisitDirectory(relativePath, filters)) {
           await visit(absolutePath);
@@ -115,11 +107,7 @@ function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const relativePath = relative(workspacePath, absolutePath);
   return relativePath.startsWith('..') || isAbsolute(relativePath)
     ? normalizeFilePath(absolutePath)
-    : normalizeRelative(relativePath);
-}
-
-function outputExtensionsFor(fileType: ListableFileType): string[] {
-  return getConfiguredFilterExtensions(fileType);
+    : normalizeFilePath(relativePath);
 }
 
 export function createDesktopFileSelection(
@@ -201,7 +189,7 @@ export function createDesktopFileSelection(
       filters: [
         {
           name: `${fileType} files`,
-          extensions: outputExtensionsFor(fileType),
+          extensions: getConfiguredFilterExtensions(fileType),
         },
       ],
     });
