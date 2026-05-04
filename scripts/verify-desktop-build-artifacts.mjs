@@ -53,6 +53,11 @@ const requiredFiles = [
 const failures = [];
 const desktopSharedSourceDirs = getDesktopSharedSourceDirs(rootDir);
 const desktopVscodeFreeSourceDirs = getDesktopVscodeFreeSourceDirs(rootDir);
+const desktopSharedSourceDirSet = new Set(desktopSharedSourceDirs);
+const desktopVscodeFreeSourceDirSet = new Set(desktopVscodeFreeSourceDirs);
+const desktopSourceBoundaryDirs = [
+  ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
+];
 
 for (const filePath of requiredFiles) {
   if (!fileExists(filePath)) {
@@ -79,31 +84,31 @@ if (
   );
 }
 
-for (const dir of desktopSharedSourceDirs) {
+for (const dir of desktopSourceBoundaryDirs) {
   if (!fs.existsSync(dir)) continue;
   for (const filePath of collectFiles(dir)) {
     if (!/\.[cm]?tsx?$/.test(filePath)) continue;
-    if (!vscodeBackedStateImportPattern.test(fs.readFileSync(filePath, 'utf8')))
-      continue;
-    failures.push(
-      `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
-        filePath,
-      )}`,
-    );
-  }
-}
-
-for (const dir of desktopVscodeFreeSourceDirs) {
-  if (!fs.existsSync(dir)) continue;
-  for (const filePath of collectFiles(dir)) {
-    if (!/\.[cm]?tsx?$/.test(filePath)) continue;
-    if (!vscodeRuntimeImportPattern.test(fs.readFileSync(filePath, 'utf8')))
-      continue;
-    failures.push(
-      `Desktop-shared source imports the VS Code runtime module: ${relative(
-        filePath,
-      )}`,
-    );
+    const source = fs.readFileSync(filePath, 'utf8');
+    if (
+      desktopSharedSourceDirSet.has(dir) &&
+      vscodeBackedStateImportPattern.test(source)
+    ) {
+      failures.push(
+        `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
+          filePath,
+        )}`,
+      );
+    }
+    if (
+      desktopVscodeFreeSourceDirSet.has(dir) &&
+      vscodeRuntimeImportPattern.test(source)
+    ) {
+      failures.push(
+        `Desktop-shared source imports the VS Code runtime module: ${relative(
+          filePath,
+        )}`,
+      );
+    }
   }
 }
 
