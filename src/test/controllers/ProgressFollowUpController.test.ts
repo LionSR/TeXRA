@@ -12,6 +12,7 @@ import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 // Local imports - test support
 import {
   createOutputFile,
+  type OutputFileHarnessOptions,
   createWorkflowTaskState,
 } from '../support/ProgressControllerHarnesses';
 
@@ -23,18 +24,25 @@ const followUpWorkflowDefaults: Partial<AgentConfig> = {
   outputFiles: ['answer.tex'],
 };
 
-const runStorageOutputDefaults: Partial<OutputFileInfo> = {
+const runStorageOutputDefaults = {
   source: 'main.tex',
-  location: {
-    kind: 'runStorage',
-    absolutePath: '/tmp/exec/answer.tex',
-    relativePath: 'answer.tex',
-    executionId: 'exec-old',
-  },
+  location: { kind: 'runStorage' },
   round: 2,
+} satisfies OutputFileHarnessOptions;
+
+type RunStorageOutputOverrides = Omit<
+  OutputFileHarnessOptions,
+  'location'
+> & {
+  location?: Omit<
+    Extract<OutputFileInfo['location'], { kind: 'runStorage' }>,
+    'kind'
+  >;
 };
 
-function createFollowUpWorkflowTaskState(overrides: Partial<AgentConfig> = {}) {
+function createFollowUpWorkflowTaskState(
+  overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
+) {
   return createWorkflowTaskState({
     ...followUpWorkflowDefaults,
     ...overrides,
@@ -42,11 +50,15 @@ function createFollowUpWorkflowTaskState(overrides: Partial<AgentConfig> = {}) {
 }
 
 function createRunStorageOutputFile(
-  overrides: Partial<OutputFileInfo> = {},
+  overrides: RunStorageOutputOverrides = {},
 ): OutputFileInfo {
   return createOutputFile({
     ...runStorageOutputDefaults,
     ...overrides,
+    location: {
+      ...runStorageOutputDefaults.location,
+      ...overrides.location,
+    },
   });
 }
 
