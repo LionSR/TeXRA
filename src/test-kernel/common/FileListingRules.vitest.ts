@@ -46,12 +46,12 @@ describe('shared file-listing rules', () => {
     expect(passesFileFilters('sections/scratch-notes.tex', filters)).toBe(
       false,
     );
-    expect(passesFileFilters('templates/main.tex', filters)).toBe(false);
+    expect(passesFileFilters('templates/main.tex', filters)).toBe(true);
     expect(
       passesFileFilters('templates/main.tex', filters, {
-        keywordScope: 'fileName',
+        keywordScope: 'path',
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(passesFileFilters('.cache/main.tex', filters)).toBe(false);
   });
 

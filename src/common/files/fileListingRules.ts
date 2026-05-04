@@ -244,7 +244,7 @@ export function passesFileFilters(
   }
   if (filters.excludeExt.some((ext) => lowerPath.endsWith(ext))) return false;
   const keywordTarget =
-    options.keywordScope === 'fileName' ? fileNameLower : lowerPath;
+    options.keywordScope === 'path' ? lowerPath : fileNameLower;
   if (filters.excludeKeywords.some((kw) => keywordTarget.includes(kw))) {
     return false;
   }

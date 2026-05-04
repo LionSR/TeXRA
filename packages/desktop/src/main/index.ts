@@ -46,6 +46,7 @@ function createWindow(): void {
       sandbox: true,
     },
   });
+  const reportAsyncError = (error: unknown) => console.error(error);
   installDesktopMainViewIpc(window, {
     getCustomAgentDirectory: () => getAgentDirectories().custom(),
     openPath: async (filePath) => {
@@ -66,7 +67,9 @@ function createWindow(): void {
         });
         return result.canceled ? undefined : result.filePaths[0];
       },
+      onError: reportAsyncError,
     }),
+    onAsyncError: reportAsyncError,
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
