@@ -54,7 +54,9 @@ jobs:
             (`packages/extension/src/extension.ts`, `packages/extension/src/commands/`,
             `packages/extension/src/frontend/`, `src/common/webview/`, `src/common/state/`,
             `src/auth/`, `src/platform/`, `src/utils/config/`) vs. PRD/design-doc zones
-            (`prds/**`, `docs/prd/**`).
+            (`prds/**`, `docs/prd/**`, `docs/**`, `*.md`). For PRD/design-doc-only diffs, make the
+            PRD itself the reviewed product: fact-check claims against the current tree and avoid
+            filling the review with code categories that do not apply.
 
             ---
 
@@ -286,6 +288,9 @@ jobs:
             - Prefer 3 grounded findings over 10 generic ones. A "no issues found" review on
               this repo is almost always wrong; if the diff genuinely is clean, say what you
               checked and why each category was a no-op.
+            - For PRD/design-doc diffs, factual drift, impossible sequencing, stale file paths,
+              or acceptance criteria contradicted by current repository state are
+              `Requires changes`, not advisory documentation nits.
 
             **Rendering style for the posted comment (this is what the author sees):**
             Default to calm, declarative prose. The GitHub review status
