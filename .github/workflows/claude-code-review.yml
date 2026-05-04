@@ -51,8 +51,10 @@ jobs:
             Use `gh pr diff ${{ github.event.pull_request.number }}` and group changed files into
             VS Code-free zones (`src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/shared/`,
             `src/replacement/`, `src/eventBus/`, any webview `frontend/`) vs. VS Code-allowed zones
-            (`src/extension.ts`, `src/commands/`, `src/frontend/`, `src/common/webview/`,
-            `src/common/state/`, `src/auth/`, `src/platform/`, `src/utils/config/`).
+            (`packages/extension/src/extension.ts`, `packages/extension/src/commands/`,
+            `packages/extension/src/frontend/`, `src/common/webview/`, `src/common/state/`,
+            `src/auth/`, `src/platform/`, `src/utils/config/`) vs. PRD/design-doc zones
+            (`prds/**`, `docs/prd/**`).
 
             ---
 
@@ -74,7 +76,8 @@ jobs:
                `vscode.FileType.File|Directory` (use `isFile()` / `isDirectory()` from
                `@common/files/fsEntryType`); raw `process.env`, `os.homedir()`, `fs/promises`,
                `child_process.exec` in agnostic zones (use platform interfaces or `executeCommand`
-               from `@utils/system/execUtils`); `initPlatform()` called outside `src/extension.ts`.
+               from `@utils/system/execUtils`); `initPlatform()` called outside
+               `packages/extension/src/extension.ts`.
 
             2. 🔴 **Security & exec hygiene**. String-interpolated shell commands or
                `child_process.exec` calls (use `executeCommand` with arg arrays). Path joins of
@@ -263,6 +266,10 @@ jobs:
                 (Features / Bug Fixes / rarely Breaking Changes). New public APIs without
                 JSDoc. Module-level doc comments missing for new top-level files. Mathematical
                 or domain-specific docstrings that explain TS syntax instead of meaning.
+                Changed PRDs under `prds/**` or `docs/prd/**` must be reviewed against the
+                implementation plan they describe: flag stale acceptance criteria, missing
+                dependency/ordering updates, claims contradicted by current code, and checklist
+                items marked done without matching artifacts in the diff.
 
             ---
 
