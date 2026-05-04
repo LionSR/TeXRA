@@ -1,4 +1,5 @@
 // Standard library imports
+import * as fs from 'fs/promises';
 import * as path from 'path';
 
 // Third-party imports
@@ -44,11 +45,13 @@ export class AgentDirectoryManager {
   private directoryService: AgentDirectoryService | undefined;
   private watcherDisposables: vscode.Disposable[] = [];
   private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
+  private externalWatcherDirectoryPaths = new Set<string>();
   private watcherDirectories: Array<{
     directory: string;
     source: AgentSource;
   }> | null = null;
   private watcherSetupPromise: Promise<void> | null = null;
+  private watcherRebuildRequested = false;
 
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
@@ -184,17 +187,19 @@ export class AgentDirectoryManager {
   }
 
   private async ensureAgentWatchers(): Promise<void> {
-    // Wait for any in-progress setup to complete
     if (this.watcherSetupPromise) {
       await this.watcherSetupPromise;
-      return; // After waiting, watchers are set up - no need to rebuild
+      if (this.watcherRebuildRequested) {
+        await this.ensureAgentWatchers();
+      }
+      return;
     }
 
-    // Set promise immediately to prevent concurrent callers from proceeding
     let resolveSetup: () => void;
     this.watcherSetupPromise = new Promise((resolve) => {
       resolveSetup = resolve;
     });
+    this.watcherRebuildRequested = false;
 
     try {
       const directories = await this.getAllLocal();
@@ -210,6 +215,10 @@ export class AgentDirectoryManager {
       resolveSetup!();
       this.watcherSetupPromise = null;
     }
+
+    if (this.watcherRebuildRequested) {
+      await this.ensureAgentWatchers();
+    }
   }
 
   private async buildAgentWatchers(
@@ -218,6 +227,7 @@ export class AgentDirectoryManager {
     // Dispose old watchers
     this.watcherDisposables.forEach((watcher) => watcher.dispose());
     this.watcherDisposables = [];
+    this.externalWatcherDirectoryPaths.clear();
     this.watcherDirectories = directories;
 
     const watchedDirectories: string[] = [];
@@ -259,7 +269,10 @@ export class AgentDirectoryManager {
     entry: { directory: string; source: AgentSource },
     directoryUri: vscode.Uri,
     pattern: string,
-    onCreateOrDelete?: () => void,
+    onCreateOrDelete?: (
+      type: 'create' | 'delete',
+      uri: vscode.Uri,
+    ) => void | Promise<void>,
   ): void {
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(directoryUri, pattern),
@@ -271,12 +284,12 @@ export class AgentDirectoryManager {
 
     watcher.onDidCreate((uri) => {
       this.dispatchAgentEvent(entry, 'create', uri);
-      onCreateOrDelete?.();
+      void onCreateOrDelete?.('create', uri);
     });
     watcher.onDidChange((uri) => this.dispatchAgentEvent(entry, 'change', uri));
     watcher.onDidDelete((uri) => {
       this.dispatchAgentEvent(entry, 'delete', uri);
-      onCreateOrDelete?.();
+      void onCreateOrDelete?.('delete', uri);
     });
   }
 
@@ -287,36 +300,94 @@ export class AgentDirectoryManager {
     const directories = await this.collectDirectoryUris(directoryUri);
 
     for (const dirUri of directories) {
-      this.watchDirectoryTree(entry, dirUri, '*', () => {
-        this.watcherDirectories = null;
-        void this.ensureAgentWatchers();
-      });
+      this.externalWatcherDirectoryPaths.add(
+        this.normalizeFsPath(dirUri.fsPath),
+      );
+      this.watchDirectoryTree(entry, dirUri, '*', (type, uri) =>
+        this.handleExternalDirectoryTreeChange(type, uri),
+      );
     }
   }
 
   private async collectDirectoryUris(root: vscode.Uri): Promise<vscode.Uri[]> {
-    const directories: vscode.Uri[] = [root];
+    const directories: vscode.Uri[] = [];
+    const pending: vscode.Uri[] = [root];
+    const visitedRealPaths = new Set<string>();
 
-    for (let i = 0; i < directories.length; i++) {
+    for (let i = 0; i < pending.length; i++) {
+      const uri = pending[i];
+      const realPath = await this.realDirectoryPath(uri);
+      if (visitedRealPaths.has(realPath)) {
+        continue;
+      }
+
+      visitedRealPaths.add(realPath);
+      directories.push(uri);
+
       let entries: [string, vscode.FileType][];
       try {
-        entries = await vscode.workspace.fs.readDirectory(directories[i]);
+        entries = await vscode.workspace.fs.readDirectory(uri);
       } catch (error) {
         logger.debug(
           CHANNEL,
-          `Unable to scan agent directory ${directories[i].fsPath}: ${error instanceof Error ? error.message : String(error)}`,
+          `Unable to scan agent directory ${uri.fsPath}: ${error instanceof Error ? error.message : String(error)}`,
         );
         continue;
       }
 
       for (const [name, type] of entries) {
-        if (type === vscode.FileType.Directory) {
-          directories.push(vscode.Uri.joinPath(directories[i], name));
+        if ((type & vscode.FileType.Directory) !== 0) {
+          pending.push(vscode.Uri.joinPath(uri, name));
         }
       }
     }
 
     return directories;
+  }
+
+  private async handleExternalDirectoryTreeChange(
+    type: 'create' | 'delete',
+    uri: vscode.Uri,
+  ): Promise<void> {
+    if (type === 'create') {
+      if (await this.isDirectoryUri(uri)) {
+        this.requestAgentWatcherRebuild();
+      }
+      return;
+    }
+
+    if (
+      this.externalWatcherDirectoryPaths.has(this.normalizeFsPath(uri.fsPath))
+    ) {
+      this.requestAgentWatcherRebuild();
+    }
+  }
+
+  private requestAgentWatcherRebuild(): void {
+    this.watcherDirectories = null;
+    this.watcherRebuildRequested = true;
+    void this.ensureAgentWatchers();
+  }
+
+  private async isDirectoryUri(uri: vscode.Uri): Promise<boolean> {
+    try {
+      const stat = await vscode.workspace.fs.stat(uri);
+      return (stat.type & vscode.FileType.Directory) !== 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private async realDirectoryPath(uri: vscode.Uri): Promise<string> {
+    try {
+      return this.normalizeFsPath(await fs.realpath(uri.fsPath));
+    } catch {
+      return this.normalizeFsPath(uri.fsPath);
+    }
+  }
+
+  private normalizeFsPath(fsPath: string): string {
+    return path.resolve(fsPath);
   }
 
   private dispatchAgentEvent(
@@ -350,8 +421,10 @@ export class AgentDirectoryManager {
   private disposeAgentWatchers(): void {
     this.watcherDisposables.forEach((watcher) => watcher.dispose());
     this.watcherDisposables = [];
+    this.externalWatcherDirectoryPaths.clear();
     this.watcherDirectories = null;
     this.watcherSetupPromise = null;
+    this.watcherRebuildRequested = false;
   }
 }
 
