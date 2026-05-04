@@ -14,7 +14,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/test-kernel/**/*.vitest.ts'],
+    include: ['src/test-kernel/**/*.vitest.{ts,mts}'],
     passWithNoTests: false,
   },
 });

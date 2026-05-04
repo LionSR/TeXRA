@@ -2,8 +2,7 @@ import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 
 // Shared aliases keep desktop renderer imports aligned with extension webviews.
-// @ts-expect-error - .mjs import works at runtime via Vite's ESM handling
-import { aliases } from '../extension/scripts/aliases.mjs';
+import { aliases } from '../../scripts/aliases.mjs';
 
 export default defineConfig({
   base: './',
