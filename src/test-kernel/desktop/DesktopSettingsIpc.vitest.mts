@@ -36,7 +36,11 @@ class MemoryStateStore implements StateStore {
   }
 
   async update(key: string, value: unknown): Promise<void> {
-    this.values.set(key, value);
+    if (value === undefined) {
+      this.values.delete(key);
+    } else {
+      this.values.set(key, value);
+    }
   }
 }
 
@@ -267,6 +271,9 @@ describe('desktop settings IPC', () => {
     expect(workspaceState.values.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
       undefined,
     );
+    expect(workspaceState.values.has(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
+      false,
+    );
     expect(posted.at(-1)).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
       values: {},
@@ -295,6 +302,9 @@ describe('desktop settings IPC', () => {
     await Promise.resolve();
 
     expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      message: 'Invalid LaTeX config value for latexdiffTimeoutMs',
+    });
     expect(
       workspaceState.values.has(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS),
     ).toBe(false);

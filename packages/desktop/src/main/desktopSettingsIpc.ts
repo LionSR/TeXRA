@@ -82,7 +82,11 @@ export function createDesktopSettingsIpc(
   }): Promise<void> {
     const plan = latexConfigPersistenceController.planUpdate(input);
     if (!plan.ok) {
-      onError(plan.error);
+      onError(
+        new Error(`Invalid LaTeX config value for ${input.field}`, {
+          cause: plan.error,
+        }),
+      );
       return;
     }
 
