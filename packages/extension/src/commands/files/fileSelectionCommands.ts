@@ -147,7 +147,7 @@ const selectInputFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Files',
   filters: () => ({
-    'Text files': getFilterExtensions('input', ['.txt', '.tex', '.md']),
+    'Text files': getFilterExtensions('input'),
   }),
 });
 
