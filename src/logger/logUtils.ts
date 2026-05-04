@@ -5,18 +5,20 @@ import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
 
 import { getColorForLevel } from './utils';
-import type * as vscode from 'vscode';
 import type { LogUtilsOptions } from './logOptions';
 
 const contextStorage = new AsyncLocalStorage<Map<string, string[]>>();
 
 interface LogSink {
   appendLine(message: string): void;
+  dispose?(): void;
 }
+
+type OutputChannelFactory = (name: string) => LogSink;
 
 const channels = new Map<string, LogSink>();
 let mainOutputChannel: LogSink | null = null;
-let vscodeApi: typeof vscode | null | undefined;
+let outputChannelFactory: OutputChannelFactory | null = null;
 
 function getKey(channel: string, isAgent: boolean): string {
   return `${channel}::${isAgent ? 'agent' : 'shared'}`;
@@ -29,20 +31,6 @@ function getTimestamp(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
 }
 
-function loadVscodeApi(): typeof vscode | null {
-  if (vscodeApi !== undefined) return vscodeApi;
-  try {
-    const requireFn = Function(
-      'return typeof require === "function" ? require : undefined',
-    )() as NodeRequire | undefined;
-    vscodeApi = requireFn?.('vscode') as typeof vscode | undefined;
-    vscodeApi ??= null;
-  } catch {
-    vscodeApi = null;
-  }
-  return vscodeApi;
-}
-
 function createConsoleSink(channel: string): LogSink {
   return {
     appendLine(message: string) {
@@ -52,11 +40,8 @@ function createConsoleSink(channel: string): LogSink {
 }
 
 function createOutputChannel(channel: string, isAgent: boolean): LogSink {
-  const api = loadVscodeApi();
-  if (!api) return createConsoleSink(isAgent ? `TeXRA ${channel}` : 'TeXRA');
-  return isAgent
-    ? api.window.createOutputChannel(`TeXRA ${channel}`)
-    : api.window.createOutputChannel('TeXRA');
+  const name = isAgent ? `TeXRA ${channel}` : 'TeXRA';
+  return outputChannelFactory?.(name) ?? createConsoleSink(name);
 }
 
 function ensureChannel(channel: string, isAgent: boolean): LogSink {
@@ -118,6 +103,21 @@ function logWithGroup(
 
 export function initialize(channel: string, isAgent = false): void {
   ensureChannel(channel, isAgent);
+}
+
+export function setOutputChannelFactory(
+  factory: OutputChannelFactory | null,
+): void {
+  const sinks = new Set<LogSink>(channels.values());
+  if (mainOutputChannel) {
+    sinks.add(mainOutputChannel);
+  }
+  for (const sink of sinks) {
+    sink.dispose?.();
+  }
+  outputChannelFactory = factory;
+  channels.clear();
+  mainOutputChannel = null;
 }
 
 export function getActiveGroupId(

@@ -177,9 +177,27 @@ export interface ExternalAuthCallbackInfo {
   fullUrl: string;
 }
 
+export type ExternalAuthCallbackResolver =
+  () => Promise<ExternalAuthCallbackInfo>;
+
+let externalAuthCallbackResolver: ExternalAuthCallbackResolver | null = null;
+
+/**
+ * Register the host-specific OAuth callback adapter.
+ *
+ * VS Code must route web auth redirects through env.asExternalUri(), but shared
+ * auth config also loads in Electron. Keeping the adapter host-owned prevents
+ * Electron bundles from carrying a runtime dependency on the VS Code module.
+ */
+export function setExternalAuthCallbackResolver(
+  resolver: ExternalAuthCallbackResolver | null,
+): void {
+  externalAuthCallbackResolver = resolver;
+}
+
 /**
  * Get the external auth callback URI with parsed components.
- * Uses vscode.env.asExternalUri() to handle different environments:
+ * Uses the host-provided adapter to handle different environments:
  * - Desktop VS Code: returns vscode://texra-ai.texra/auth-callback
  * - Cursor: returns cursor://texra-ai.texra/auth-callback
  * - Codespaces: returns https://*.github.dev/extension-auth-callback
@@ -189,16 +207,11 @@ export interface ExternalAuthCallbackInfo {
  * and passed through the OAuth flow for the callback routing to work.
  */
 export async function getExternalAuthCallbackInfo(): Promise<ExternalAuthCallbackInfo> {
-  // Keep this lazy so Electron bundles can import auth config without resolving VS Code APIs.
-  const vscode = await import('vscode');
-  const baseCallbackUri = vscode.Uri.parse(
-    getAuthCallbackUri(vscode.env.uriScheme),
-  );
-  const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
-  const vscodeState = new URLSearchParams(externalUri.query).get('state');
-  const baseUrl = `${externalUri.scheme}://${externalUri.authority}${externalUri.path}`;
-
-  return { baseUrl, vscodeState, fullUrl: externalUri.toString() };
+  if (!externalAuthCallbackResolver) {
+    const baseUrl = getAuthCallbackUri('vscode');
+    return { baseUrl, vscodeState: null, fullUrl: baseUrl };
+  }
+  return externalAuthCallbackResolver();
 }
 
 /**

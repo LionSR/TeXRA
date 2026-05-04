@@ -7,7 +7,8 @@
  * @shared/constants/providers.
  */
 
-import { globalSM, GlobalStateKey } from '@common/state/stateManager';
+import { tryGlobalState } from '@platform/platform';
+import { GlobalStateKey } from '@common/state/stateKeys';
 import { getConfig } from '@utils/config';
 
 /**
@@ -94,7 +95,7 @@ function entry(provider: string): ProviderEntry | undefined {
 }
 
 function read<T>(key: GlobalStateKey, defaultValue: T): T {
-  return globalSM?.get(key, defaultValue) ?? defaultValue;
+  return tryGlobalState()?.get(key, defaultValue) ?? defaultValue;
 }
 
 function regionSet(provider: string): boolean | undefined {
@@ -111,7 +112,7 @@ export function getGlobalStreaming(): boolean {
 }
 
 export async function setGlobalStreaming(enabled: boolean): Promise<void> {
-  await globalSM?.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
+  await tryGlobalState()?.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
 }
 
 export function getProviderStreaming(provider: string): boolean {
@@ -125,7 +126,7 @@ export async function setProviderStreaming(
   enabled: boolean,
 ): Promise<void> {
   const key = entry(provider)?.streaming;
-  if (key) await globalSM?.update(key, enabled);
+  if (key) await tryGlobalState()?.update(key, enabled);
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +143,7 @@ export async function setProviderEndpoint(
   endpoint: string,
 ): Promise<void> {
   const key = entry(provider)?.endpoint;
-  if (key) await globalSM?.update(key, endpoint);
+  if (key) await tryGlobalState()?.update(key, endpoint);
 }
 
 export function supportsCustomEndpoint(provider: string): boolean {
@@ -210,7 +211,7 @@ export function getWebSocketEnabled(): boolean {
  */
 export function getUseOpenRouter(): boolean {
   return (
-    globalSM?.get(GlobalStateKey.USE_OPENROUTER, false) ??
+    tryGlobalState()?.get(GlobalStateKey.USE_OPENROUTER, false) ??
     getConfig<boolean>('texra.model.useOpenRouter', false)
   );
 }
