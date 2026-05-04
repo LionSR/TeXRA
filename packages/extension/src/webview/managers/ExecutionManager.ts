@@ -1,35 +1,13 @@
 import * as vscode from 'vscode';
 
-import type { AgentConfigInput } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { validateExecutionRequest } from '@agent/core/executionRequests';
+import {
+  prepareMainViewExecutionRequest,
+  type MainViewExecuteMessage,
+} from '@controllers/mainView/MainViewExecutionController';
 import * as logger from '@logger/logUtils';
-import {
-  DEFAULT_TOOL_CONFIG,
-  ToolConfigSchema,
-} from '@shared/schemas/toolConfig';
-import {
-  getPastedImageFullPath,
-  isPastedImage,
-} from '@utils/files/pastedImageUtils';
-import type { z } from 'zod';
 
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
-
-/**
- * Message shape from webview for agent execution.
- * Extends AgentConfigInput with UI-specific fields.
- * ToolConfig fields are sent flat from the UI form.
- */
-type ExecuteMessage = AgentConfigInput & {
-  /** UI toggle indicating tool-use vs workflow agent */
-  isToolUseAgent?: boolean;
-  /** UI toggle for multiple outputs mode */
-  outputFilesActive?: boolean;
-  /** Media files may contain nulls from UI (filtered during processing) */
-  mediaFiles?: (string | null)[];
-} & z.input<typeof ToolConfigSchema>;
 
 /** Message shape for command-based operations. */
 interface CommandMessage {
@@ -43,70 +21,32 @@ interface CommandMessage {
 }
 
 export class ExecutionManager {
-  async handleExecute(message: ExecuteMessage): Promise<void> {
-    // IMPORTANT: Validate required fields before schema parsing.
-    // AgentConfigSchema uses .prefault() for agent/model (see AgentConfig.ts:96-97),
-    // which would silently provide defaults instead of failing on missing values.
-    if (!message.agent || !message.model) {
-      vscode.window.showErrorMessage(
-        'Agent and model selection required. Please select both before running.',
-      );
-      return;
-    }
-
-    const isToolUse = Boolean(message.isToolUseAgent);
-
-    // Tool-use agents don't need input file validation
-    if (!isToolUse && !message.inputFile) {
-      const openDocs = 'File Management Guide';
-      const choice = await vscode.window.showErrorMessage(
-        'Please select an input file.',
-        openDocs,
-      );
-      if (choice === openDocs) {
-        void vscode.commands.executeCommand('texra.openDoc', 'file-management');
+  async handleExecute(message: MainViewExecuteMessage): Promise<void> {
+    const preparation = prepareMainViewExecutionRequest(message);
+    if (!preparation.valid) {
+      if (preparation.docsCommand) {
+        const openDocs = 'File Management Guide';
+        const choice = await vscode.window.showErrorMessage(
+          preparation.message,
+          openDocs,
+        );
+        if (choice === openDocs) {
+          void vscode.commands.executeCommand(
+            'texra.openDoc',
+            preparation.docsCommand,
+          );
+        }
+      } else {
+        vscode.window.showErrorMessage(preparation.message);
       }
-      return;
-    }
-
-    const mapMedia = (f: string | null): string | null =>
-      f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
-
-    const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
-    const toolConfig = isToolUse
-      ? DEFAULT_TOOL_CONFIG
-      : ToolConfigSchema.parse(message);
-
-    const request = {
-      config: {
-        ...message,
-        agentCategory: isToolUse
-          ? AgentCategory.ToolUse
-          : AgentCategory.Workflow,
-        outputFiles,
-        useMultipleOutputs:
-          !isToolUse &&
-          (Boolean(message.outputFilesActive) || outputFiles.length > 1),
-        toolConfig,
-        mediaFile: mapMedia(message.mediaFile ?? null),
-        mediaFiles: (message.mediaFiles ?? [])
-          .map(mapMedia)
-          .filter((f: string | null): f is string => f !== null),
-        editedFile: null,
-      },
-    };
-
-    const validation = validateExecutionRequest(request);
-    if (!validation.valid) {
-      vscode.window.showErrorMessage(validation.message);
       logger.error(
         CHANNEL,
-        `AgentConfig validation failed: ${validation.message}`,
+        `AgentConfig validation failed: ${preparation.message}`,
       );
       return;
     }
 
-    await vscode.commands.executeCommand('texra.execute', validation.request);
+    await vscode.commands.executeCommand('texra.execute', preparation.request);
   }
 
   handleFileOperation(message: CommandMessage): void {
