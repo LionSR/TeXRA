@@ -71,6 +71,18 @@ register({
       path.join(extensionOutDir, 'commands/*'),
       path.join(extensionSrcDir, 'commands/*'),
     ],
+    '@resources/*': [
+      path.join(__dirname, '..', '..', 'packages', 'extension', 'resources/*'),
+      path.join(
+        __dirname,
+        '..',
+        '..',
+        '..',
+        'packages',
+        'extension',
+        'resources/*',
+      ),
+    ],
     '@model': ['model', path.join(srcDir, 'model')],
     '@model/*': ['model/*', path.join(srcDir, 'model/*')],
     '@housekeeping': ['housekeeping', path.join(srcDir, 'housekeeping')],
@@ -91,6 +103,8 @@ register({
     '@auth/*': ['auth/*', path.join(srcDir, 'auth/*')],
     '@platform': ['platform', path.join(srcDir, 'platform')],
     '@platform/*': ['platform/*', path.join(srcDir, 'platform/*')],
+    '@controllers/*': ['controllers/*', path.join(srcDir, 'controllers/*')],
+    '@test/*': ['test/*', path.join(srcDir, 'test/*')],
   },
 });
 

@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - controllers
-import { LatexRecommendedSettingsController } from '../../controllers/settingsView/LatexRecommendedSettingsController';
+import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
 
 function createController(options?: {
   config?: Record<string, unknown>;

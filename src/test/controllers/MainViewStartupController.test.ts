@@ -2,10 +2,10 @@
 import { strict as assert } from 'assert';
 
 // Local imports - common
+import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 
 // Local imports - controllers
-import { MainViewStartupController } from '../../controllers/mainView/MainViewStartupController';
 
 describe('MainViewStartupController', () => {
   it('uses config to choose the orchestrator banner message', () => {
