@@ -34,4 +34,14 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('window.addEventListener');
     expect(rendererMain).toContain('document.body.dataset.desktopRoute');
   });
+
+  it('provides persistent shell controls for returning between routes', () => {
+    const rendererMain = readRendererMain();
+
+    expect(rendererMain).toContain('data-route-button="main"');
+    expect(rendererMain).toContain('data-route-button="progress"');
+    expect(rendererMain).toContain('data-route-button="settings"');
+    expect(rendererMain).toContain("button.addEventListener('click'");
+    expect(rendererMain).toContain("button.setAttribute('aria-pressed'");
+  });
 });
