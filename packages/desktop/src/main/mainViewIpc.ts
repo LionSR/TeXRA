@@ -23,6 +23,7 @@ import {
 } from './hostBridge.js';
 import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
+import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 
 type DesktopTheme = 'dark' | 'light' | 'high-contrast';
 
@@ -32,6 +33,7 @@ export interface DesktopMainViewIpcOptions {
   getCustomAgentDirectory?: () => Promise<string>;
   openPath?: (filePath: string) => Promise<void>;
   fileSelection?: DesktopFileSelection;
+  settings?: DesktopSettingsIpc;
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
@@ -159,6 +161,7 @@ export function installDesktopMainViewIpc(
   function handleRendererMessage(message: unknown) {
     if (!isMessageWithCommand(message)) return;
     if (options.fileSelection?.handleMessage(message)) return;
+    if (options.settings?.handleMessage(message)) return;
 
     switch (message.command) {
       case MAIN_VIEW_COMMANDS.WEBVIEW_READY:
