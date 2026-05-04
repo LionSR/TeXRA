@@ -11,6 +11,7 @@ const contextStorage = new AsyncLocalStorage<Map<string, string[]>>();
 
 interface LogSink {
   appendLine(message: string): void;
+  dispose?(): void;
 }
 
 type OutputChannelFactory = (name: string) => LogSink;
@@ -107,6 +108,13 @@ export function initialize(channel: string, isAgent = false): void {
 export function setOutputChannelFactory(
   factory: OutputChannelFactory | null,
 ): void {
+  const sinks = new Set<LogSink>(channels.values());
+  if (mainOutputChannel) {
+    sinks.add(mainOutputChannel);
+  }
+  for (const sink of sinks) {
+    sink.dispose?.();
+  }
   outputChannelFactory = factory;
   channels.clear();
   mainOutputChannel = null;

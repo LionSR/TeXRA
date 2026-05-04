@@ -48,7 +48,7 @@ const failures = [];
 const vscodeRuntimeImportPattern =
   /\b(?:import\s*\(\s*['"]vscode['"]\s*\)|import\s+[^;]*\s+from\s+['"]vscode['"]|(?:__require|require|requireFn)(?:\?\.)?\(\s*['"]vscode['"]\s*\))/;
 const vscodeBackedStateImportPattern =
-  /^\s*import\s+[^;]*\bfrom\s+['"]@common\/state(?:\/stateManager)?['"]/m;
+  /^\s*(?:(?:import(?:\s+type)?(?:\s+[^;]*?\s+from)?)|(?:export(?:\s+type)?\s+[^;]*?\s+from))\s+['"]@common\/state(?:\/stateManager)?['"]/m;
 const desktopSharedSourceDirs = [
   path.join(rootDir, 'packages', 'desktop', 'src'),
   path.join(rootDir, 'src', 'agent', 'implementations', 'flows', 'tooluse'),
