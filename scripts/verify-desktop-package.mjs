@@ -1,6 +1,7 @@
 import { access, readdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, join, relative } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -58,7 +59,7 @@ async function findPackagedApp() {
       });
     }
   }
-  throw new Error(`No packaged Electron app found under ${packageRoot}`);
+  return null;
 }
 
 function normalizeAsarPath(path) {
@@ -101,25 +102,41 @@ function createDirectoryAppReader(appRoot) {
   };
 }
 
-async function assertExists(app, path, label) {
+async function checkExists(app, path, label, failures) {
   if (await app.exists(path)) return;
-  throw new Error(`Missing ${label}: ${path}`);
+  failures.push(`Missing ${label}: ${path}`);
 }
 
 function dependencyPackageJsonPath(name) {
   return join('node_modules', name, 'package.json');
 }
 
-async function assertRuntimeDependencies(app, appPackageJson) {
+async function checkRuntimeDependencies(app, appPackageJson, failures) {
   const sourcePackageJson = await readJson(desktopPackageJsonPath);
   const sourceDependencies = sourcePackageJson.dependencies ?? {};
   const packagedDependencies = appPackageJson.dependencies ?? {};
-  const mismatched = Object.keys(sourceDependencies).filter(
-    (name) => packagedDependencies[name] !== sourceDependencies[name],
-  );
-  if (mismatched.length > 0) {
-    throw new Error(
-      `Packaged app is missing declared runtime dependencies: ${mismatched.join(
+
+  const missingDeclarations = [];
+  const versionMismatches = [];
+  for (const [name, version] of Object.entries(sourceDependencies)) {
+    if (!Object.hasOwn(packagedDependencies, name)) {
+      missingDeclarations.push(name);
+    } else if (packagedDependencies[name] !== version) {
+      versionMismatches.push(
+        `${name} (expected ${version}, got ${packagedDependencies[name]})`,
+      );
+    }
+  }
+  if (missingDeclarations.length > 0) {
+    failures.push(
+      `Packaged app package.json is missing runtime dependency declarations: ${missingDeclarations.join(
+        ', ',
+      )}`,
+    );
+  }
+  if (versionMismatches.length > 0) {
+    failures.push(
+      `Packaged app package.json has runtime dependency version mismatches: ${versionMismatches.join(
         ', ',
       )}`,
     );
@@ -132,7 +149,7 @@ async function assertRuntimeDependencies(app, appPackageJson) {
     }
   }
   if (missingPackages.length > 0) {
-    throw new Error(
+    failures.push(
       `Packaged app is missing runtime dependency packages: ${missingPackages.join(
         ', ',
       )}`,
@@ -141,25 +158,37 @@ async function assertRuntimeDependencies(app, appPackageJson) {
 }
 
 const app = await findPackagedApp();
-const appPackageJson = await app.readJson('package.json');
+const failures = [];
 
-if (appPackageJson.main !== './dist/main/index.js') {
-  throw new Error(
-    `Packaged app main must be ./dist/main/index.js, got ${appPackageJson.main}`,
-  );
+if (!app) {
+  failures.push(`No packaged Electron app found under ${packageRoot}`);
+} else {
+  const appPackageJson = await app.readJson('package.json');
+
+  if (appPackageJson.main !== './dist/main/index.js') {
+    failures.push(
+      `Packaged app main must be ./dist/main/index.js, got ${appPackageJson.main}`,
+    );
+  }
+
+  await checkRuntimeDependencies(app, appPackageJson, failures);
+  await checkExists(app, 'dist/main/index.js', 'main bundle', failures);
+  await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);
+  await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
+
+  const assets = await app.listDir('dist/renderer/assets');
+  if (!assets.some((asset) => asset.endsWith('.js'))) {
+    failures.push('No renderer JavaScript asset found');
+  }
+  if (!assets.some((asset) => asset.endsWith('.css'))) {
+    failures.push('No renderer CSS asset found');
+  }
 }
 
-await assertRuntimeDependencies(app, appPackageJson);
-await assertExists(app, 'dist/main/index.js', 'main bundle');
-await assertExists(app, 'dist/preload/index.cjs', 'preload bundle');
-await assertExists(app, 'dist/renderer/index.html', 'renderer HTML');
-
-const assets = await app.listDir('dist/renderer/assets');
-if (!assets.some((asset) => asset.endsWith('.js'))) {
-  throw new Error('No renderer JavaScript asset found');
-}
-if (!assets.some((asset) => asset.endsWith('.css'))) {
-  throw new Error('No renderer CSS asset found');
+if (failures.length > 0) {
+  console.error('Desktop package check failed:');
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
 }
 
 console.log(
