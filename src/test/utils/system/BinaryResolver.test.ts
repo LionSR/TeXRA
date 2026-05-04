@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - utils
-import { BinaryResolverService } from '../../../utils/system/binaryResolver';
+import { BinaryResolverService } from '@utils/system/binaryResolver';
 
 function createResolver(
   paths: Record<string, string | null>,

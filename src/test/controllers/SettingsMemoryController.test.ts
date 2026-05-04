@@ -2,17 +2,17 @@
 import { strict as assert } from 'assert';
 
 // Local imports - common
+import {
+  SettingsMemoryController,
+  type SettingsMemoryMeta,
+  type SettingsMemoryStorage,
+} from '@controllers/settingsView/SettingsMemoryController';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 
 // Local imports - test support
 import { createFakeUIHosts } from '../support/FakeHosts';
 
 // Local imports - controllers
-import {
-  SettingsMemoryController,
-  type SettingsMemoryMeta,
-  type SettingsMemoryStorage,
-} from '../../controllers/settingsView/SettingsMemoryController';
 
 function buildMemoryFile(content: string, meta: SettingsMemoryMeta | null) {
   if (!meta) return content;

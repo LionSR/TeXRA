@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - controllers
-import { SettingsAgentFileController } from '../../controllers/settingsView/SettingsAgentFileController';
+import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 
 const controller = new SettingsAgentFileController();
 const ROOT = path.join(path.sep, 'repo');

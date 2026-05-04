@@ -51,9 +51,8 @@ jobs:
             Use `gh pr diff ${{ github.event.pull_request.number }}` and group changed files into
             VS Code-free zones (`src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/shared/`,
             `src/replacement/`, `src/eventBus/`, any webview `frontend/`) vs. VS Code-allowed zones
-            (`packages/extension/src/extension.ts`, `packages/extension/src/commands/`,
-            `packages/extension/src/frontend/`, `src/common/webview/`, `src/common/state/`,
-            `src/auth/`, `src/platform/`, `src/utils/config/`).
+            (`src/extension.ts`, `src/commands/`, `src/frontend/`, `src/common/webview/`,
+            `src/common/state/`, `src/auth/`, `src/platform/`, `src/utils/config/`).
 
             ---
 
@@ -75,8 +74,7 @@ jobs:
                `vscode.FileType.File|Directory` (use `isFile()` / `isDirectory()` from
                `@common/files/fsEntryType`); raw `process.env`, `os.homedir()`, `fs/promises`,
                `child_process.exec` in agnostic zones (use platform interfaces or `executeCommand`
-               from `@utils/system/execUtils`); `initPlatform()` called outside
-               `packages/extension/src/extension.ts`.
+               from `@utils/system/execUtils`); `initPlatform()` called outside `src/extension.ts`.
 
             2. 🔴 **Security & exec hygiene**. String-interpolated shell commands or
                `child_process.exec` calls (use `executeCommand` with arg arrays). Path joins of
