@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - core
-import { showLoggedErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,

@@ -14,8 +14,11 @@ import {
   type FileSelectionResponseCommand,
   type MultiFileCategory,
 } from '@common/files';
-import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import {
+  showLoggedErrorMessage,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import { getFileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';

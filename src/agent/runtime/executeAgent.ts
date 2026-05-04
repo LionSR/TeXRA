@@ -41,11 +41,8 @@ import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPoli
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { isDiskFullError, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
-import {
-  isDiskFullError,
-  toErrorMessage,
-} from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import {
   AgentLogger,

@@ -28,13 +28,16 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
 import { renderAgentTemplateFromBundle } from '@commands/agent/agentTemplateRenderer';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
-import { isFileNotFoundError, showLoggedErrorMessage } from '@common/errors';
 import {
   WorkspaceStateKey,
   GlobalStateKey,
   workspaceSM,
   globalSM,
 } from '@common/state';
+import {
+  isFileNotFoundError,
+  showLoggedErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
   SETTINGS_VIEW_CMD,

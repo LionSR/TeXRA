@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { FileOpResult } from '@agent/types';
-import { parseWithErrorDisplay } from '@common/errors';
+import { parseWithErrorDisplay } from '@common/errors/errorHandlingUtils';
 import {
   runPack,
   runPackSingle,
