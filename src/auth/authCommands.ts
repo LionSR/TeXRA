@@ -74,7 +74,15 @@ function getSignInOptions(): SignInOption[] {
   });
 }
 
-export async function signIn(): Promise<void> {
+/**
+ * Run the interactive sign-in flow.
+ *
+ * Returns `true` when the user is authenticated by the time this resolves
+ * (already signed in, or completed an OAuth flow). Returns `false` when
+ * the user cancelled, hit an error, or chose email sign-in (which
+ * completes asynchronously after the user clicks the OTP link).
+ */
+export async function signIn(): Promise<boolean> {
   try {
     // Check if auth system is ready - if not, provide clear error with reason
     const authReady = await SupabaseClient.isReady();
@@ -86,7 +94,7 @@ export async function signIn(): Promise<void> {
       void vscode.window.showErrorMessage(
         `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
       );
-      return;
+      return false;
     }
 
     const existing = await getExistingSession(authReady);
@@ -95,18 +103,18 @@ export async function signIn(): Promise<void> {
       void vscode.window.showInformationMessage(
         `Already signed in as ${user?.email || 'unknown user'}`,
       );
-      return;
+      return true;
     }
 
     const selected = await vscode.window.showQuickPick(getSignInOptions(), {
       placeHolder: 'Choose a sign-in method',
       title: 'TeXRA Sign In',
     });
-    if (!selected) return;
+    if (!selected) return false;
 
     if (selected.method === 'email') {
       await signInWithEmail();
-      return;
+      return false;
     }
 
     const session = await vscode.authentication.getSession(
@@ -121,11 +129,14 @@ export async function signIn(): Promise<void> {
       void vscode.window.showInformationMessage(
         `Signed in as ${user?.email || 'unknown user'} (${tier} tier)`,
       );
+      return true;
     }
+    return false;
   } catch (error) {
     void vscode.window.showErrorMessage(
       `Sign in failed: ${toErrorMessage(error)}`,
     );
+    return false;
   }
 }
 

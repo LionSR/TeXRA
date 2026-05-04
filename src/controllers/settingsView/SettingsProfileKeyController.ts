@@ -16,12 +16,8 @@ export interface SettingsProfileKeyControllerDeps {
 export class SettingsProfileKeyController {
   constructor(private readonly deps: SettingsProfileKeyControllerDeps) {}
 
-  getProviderDisplayName(provider: string): string {
-    return this.deps.getProviderDisplayName(provider);
-  }
-
   async setProviderKey(provider: string): Promise<void> {
-    const displayName = this.getProviderDisplayName(provider);
+    const displayName = this.deps.getProviderDisplayName(provider);
     const apiKey = await this.deps.prompt.input({
       prompt: `Enter ${displayName} API key`,
       password: true,
@@ -36,7 +32,7 @@ export class SettingsProfileKeyController {
   }
 
   async removeProviderKey(provider: string): Promise<void> {
-    const displayName = this.getProviderDisplayName(provider);
+    const displayName = this.deps.getProviderDisplayName(provider);
     await this.deps.deleteSecret(this.deps.getApiKeySecretName(provider));
     void this.deps.prompt.info(`${displayName} API key has been removed`);
     await this.deps.refreshAfterKeyChange();
