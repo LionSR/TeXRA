@@ -1,6 +1,6 @@
+import { JsonStore } from './jsonStore.js';
 import type { StateStore } from '@platform/interfaces/state';
 
-import { JsonStore } from './jsonStore.js';
 
 export class ElectronStateStore implements StateStore {
   constructor(private readonly store: JsonStore) {}

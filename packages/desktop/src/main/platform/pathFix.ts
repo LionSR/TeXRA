@@ -1,5 +1,5 @@
-import fixPath from 'fix-path';
 import { delimiter } from 'node:path';
+import fixPath from 'fix-path';
 
 const MACOS_PATH_ENTRIES = [
   '/Library/TeX/texbin',
@@ -11,7 +11,13 @@ const MACOS_PATH_ENTRIES = [
   '/sbin',
 ] as const;
 
-function prependMissingPathEntries(
+interface LaunchPathRepairOptions {
+  env?: Pick<NodeJS.ProcessEnv, 'PATH'>;
+  fixPath?: () => void;
+  platform?: NodeJS.Platform;
+}
+
+export function prependMissingPathEntries(
   pathValue: string | undefined,
   entries: readonly string[],
 ): string {
@@ -23,12 +29,17 @@ function prependMissingPathEntries(
 }
 
 export function repairLaunchPath(): string {
-  if (process.platform === 'darwin') {
-    fixPath();
-    process.env.PATH = prependMissingPathEntries(
-      process.env.PATH,
-      MACOS_PATH_ENTRIES,
-    );
+  return repairLaunchPathWithOptions();
+}
+
+export function repairLaunchPathWithOptions(
+  options: LaunchPathRepairOptions = {},
+): string {
+  const env = options.env ?? process.env;
+  const platform = options.platform ?? process.platform;
+  if (platform === 'darwin') {
+    (options.fixPath ?? fixPath)();
+    env.PATH = prependMissingPathEntries(env.PATH, MACOS_PATH_ENTRIES);
   }
-  return process.env.PATH ?? '';
+  return env.PATH ?? '';
 }

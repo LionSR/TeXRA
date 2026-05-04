@@ -1,8 +1,8 @@
 import { safeStorage } from 'electron';
 
+import { JsonStore } from './jsonStore.js';
 import type { PlatformSecrets } from '@platform/secrets';
 
-import { JsonStore } from './jsonStore.js';
 
 type StoredSecret = { encrypted: true; value: string };
 
