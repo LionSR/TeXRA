@@ -186,6 +186,6 @@ describe('desktop Electron host bridge', () => {
       rendererListener,
     );
     closedListeners[0]?.();
-    expect(ipcMain.off).toHaveBeenCalledTimes(2);
+    expect(ipcMain.off).toHaveBeenCalledTimes(1);
   });
 });
