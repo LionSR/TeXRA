@@ -1,6 +1,8 @@
 {
   "name": "@texra/desktop",
   "version": "0.37.8",
+  "description": "TeXRA standalone desktop application",
+  "author": "TeXRA contributors",
   "private": true,
   "type": "module",
   "main": "./dist/main/index.js",
@@ -10,11 +12,13 @@
     "build:main": "esbuild src/main/index.ts --bundle --platform=node --format=esm --outfile=dist/main/index.js --external:electron --external:vscode --external:fsevents",
     "build:preload": "esbuild src/preload/index.ts --bundle --platform=node --format=cjs --outfile=dist/preload/index.cjs --external:electron",
     "build:renderer": "vite build --config vite.config.ts",
-    "build": "corepack pnpm run typecheck && corepack pnpm run build:main && corepack pnpm run build:preload && corepack pnpm run build:renderer"
+    "build": "corepack pnpm run typecheck && corepack pnpm run build:main && corepack pnpm run build:preload && corepack pnpm run build:renderer",
+    "package:dir": "corepack enable && electron-builder --dir --config electron-builder.yml"
   },
   "devDependencies": {
     "@texra/core": "workspace:*",
     "electron": "^41.5.0",
+    "electron-builder": "^26.8.1",
     "esbuild": "^0.28.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.10"
