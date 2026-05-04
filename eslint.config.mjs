@@ -359,6 +359,7 @@ export default tseslint.config(
   {
     files: [
       'src/**/*.ts',
+      'src/**/*.mts',
       'packages/extension/src/**/*.ts',
       'packages/desktop/src/**/*.ts',
     ],
@@ -367,6 +368,7 @@ export default tseslint.config(
       parserOptions: {
         project: [
           './tsconfig.json',
+          './tsconfig.test-kernel.json',
           './packages/desktop/tsconfig.main.json',
           './packages/desktop/tsconfig.preload.json',
           './packages/desktop/tsconfig.renderer.json',

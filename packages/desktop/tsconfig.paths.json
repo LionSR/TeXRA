@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@/*": ["packages/extension/src/*", "src/*"],
+      "~/*": ["packages/extension/src/*", "src/*"],
+      "@shared/*": ["src/shared/*"],
+      "@common/*": ["src/common/*"],
+      "@webview/*": ["packages/extension/src/webview/*"],
+      "@agent/*": ["src/agent/*"],
+      "@frontend/*": ["packages/extension/src/frontend/*"],
+      "@hosts": ["src/hosts"],
+      "@hosts/*": ["src/hosts/*"],
+      "@utils/*": ["src/utils/*"],
+      "@logger/*": ["src/logger/*"],
+      "@latex": ["src/latex"],
+      "@latex/*": ["src/latex/*"],
+      "@commands/*": ["packages/extension/src/commands/*"],
+      "@resources/*": ["packages/extension/resources/*"],
+      "@model": ["src/model"],
+      "@model/*": ["src/model/*"],
+      "@housekeeping": ["src/housekeeping"],
+      "@housekeeping/*": ["src/housekeeping/*"],
+      "@progressView/*": ["packages/extension/src/progressView/*"],
+      "@settingsView/*": ["packages/extension/src/settingsView/*"],
+      "@replacement/*": ["src/replacement/*"],
+      "@tools/*": ["src/tools/*"],
+      "@types/*": ["src/types/*"],
+      "@eventBus/*": ["src/eventBus/*"],
+      "@auth/*": ["src/auth/*"],
+      "@platform": ["src/platform"],
+      "@platform/*": ["src/platform/*"],
+      "@openrouter/sdk": ["node_modules/@openrouter/sdk/esm/index.d.ts"],
+      "@openrouter/sdk/models": [
+        "node_modules/@openrouter/sdk/esm/models/index.d.ts"
+      ],
+      "@controllers/*": ["src/controllers/*"],
+      "@test/*": ["src/test/*"]
+    }
+  }
+}
