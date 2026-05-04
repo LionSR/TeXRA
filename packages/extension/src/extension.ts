@@ -334,7 +334,7 @@ export async function activate(context: vscode.ExtensionContext) {
             `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
           );
         }
-        return vscode.workspace.getConfiguration().get(key);
+        return vscode.workspace.getConfiguration(undefined, null).get(key);
       },
       update: async (key, value, target) => {
         if (!key.startsWith('texra.')) {
@@ -346,7 +346,9 @@ export async function activate(context: vscode.ExtensionContext) {
           target === 'workspace'
             ? vscode.ConfigurationTarget.Workspace
             : vscode.ConfigurationTarget.Global;
-        await vscode.workspace.getConfiguration().update(key, value, scope);
+        await vscode.workspace
+          .getConfiguration(undefined, null)
+          .update(key, value, scope);
       },
     },
     terminal: {
