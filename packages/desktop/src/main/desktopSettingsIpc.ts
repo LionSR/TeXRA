@@ -7,6 +7,10 @@ import {
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
 import type { StateStore } from '@platform/interfaces/state';
+import type {
+  DesktopCommandMessage,
+  DesktopMessageHandler,
+} from './desktopIpcTypes.js';
 
 export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
@@ -14,11 +18,7 @@ export interface DesktopSettingsIpcOptions {
   onError?: (error: unknown) => void;
 }
 
-export interface DesktopSettingsIpc {
-  handleMessage(
-    message: { command: string } & Record<string, unknown>,
-  ): boolean;
-}
+export type DesktopSettingsIpc = DesktopMessageHandler;
 
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
@@ -66,7 +66,7 @@ export function createDesktopSettingsIpc(
   applyCurrentGitAuthorSettings();
 
   return {
-    handleMessage(message) {
+    handleMessage(message: DesktopCommandMessage) {
       const result = SettingsViewInboundMessageSchema.safeParse(message);
       if (!result.success) return false;
 
