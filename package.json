@@ -14,7 +14,7 @@
     "compile-tests": "tsc -p tsconfig.json --outDir out",
     "watch-tests": "tsc -p tsconfig.json -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint src packages/extension/src",
+    "lint": "eslint src packages/extension/src packages/desktop/src",
     "test": "vscode-test",
     "test:kernel": "vitest run --config vitest.config.mjs",
     "test:kernel:watch": "vitest --config vitest.config.mjs",
