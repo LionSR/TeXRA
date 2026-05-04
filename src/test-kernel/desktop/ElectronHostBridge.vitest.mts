@@ -1,6 +1,6 @@
 // Node imports
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -45,10 +45,12 @@ interface MainHostBridgeModule {
   };
 }
 
+const TEST_DIR = fileURLToPath(new URL('.', import.meta.url));
+
 async function loadHostBridgeModule(): Promise<HostBridgeModule> {
   const modulePath = resolve(
-    process.cwd(),
-    'packages/desktop/src/preload/hostBridge.ts',
+    TEST_DIR,
+    '../../../packages/desktop/src/preload/hostBridge.ts',
   );
   return import(pathToFileURL(modulePath).href) as Promise<HostBridgeModule>;
 }
@@ -66,8 +68,8 @@ async function loadMainHostBridgeModule(ipcMain: {
   vi.resetModules();
   vi.doMock('electron', () => ({ ipcMain }));
   const modulePath = resolve(
-    process.cwd(),
-    'packages/desktop/src/main/hostBridge.ts',
+    TEST_DIR,
+    '../../../packages/desktop/src/main/hostBridge.ts',
   );
   return import(
     pathToFileURL(modulePath).href
