@@ -33,7 +33,7 @@ import {
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { getHelperModelName } from '@agent/runtime/helperModel';
-import { LEVEL_TO_EFFORT } from '@agent/runtime/ModelFactory';
+import { LEVEL_TO_EFFORT } from '@agent/runtime/reasoningEffort';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';

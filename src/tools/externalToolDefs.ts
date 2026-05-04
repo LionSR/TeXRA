@@ -11,9 +11,6 @@
  *   - {@link @settingsView/utils/toolDashboardData} — reads everything for the UI
  */
 
-// Third-party imports
-import axios from 'axios';
-
 // Local imports
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
@@ -29,6 +26,7 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 import { isWSL } from '@utils/system/wslDetect';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
+const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 
 /**
  * Pluggable check for VS Code extension availability.
@@ -94,16 +92,25 @@ export interface ExternalToolDef {
 // Zotero probe helpers
 // ============================================================
 
+async function fetchLocalhost(
+  url: string,
+  timeoutMs = ZOTERO_PROBE_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Probe the Zotero connector endpoint (responds if Zotero is running). */
 async function probeZoteroConnector(port: number): Promise<boolean> {
   try {
-    await axios.get(`http://127.0.0.1:${port}/connector/ping`, {
-      timeout: 2000,
-    });
+    await fetchLocalhost(`http://127.0.0.1:${port}/connector/ping`);
     return true;
-  } catch (error: unknown) {
-    // Any HTTP response means Zotero is running
-    if (axios.isAxiosError(error) && error.response) return true;
+  } catch {
     return false;
   }
 }
@@ -111,15 +118,11 @@ async function probeZoteroConnector(port: number): Promise<boolean> {
 /** Probe the Better BibTeX JSON-RPC endpoint. */
 async function probeZoteroBbt(port: number): Promise<boolean> {
   try {
-    await axios.get(`http://127.0.0.1:${port}/better-bibtex/json-rpc`, {
-      timeout: 2000,
-    });
-    return true;
-  } catch (error: unknown) {
-    // 405 = server running but expects POST — BBT is available
-    if (axios.isAxiosError(error) && error.response?.status === 405) {
-      return true;
-    }
+    const response = await fetchLocalhost(
+      `http://127.0.0.1:${port}/better-bibtex/json-rpc`,
+    );
+    return response.ok || response.status === 405;
+  } catch {
     return false;
   }
 }
