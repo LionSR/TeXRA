@@ -1,11 +1,10 @@
+import { JsonStore } from './jsonStore.js';
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
 } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
-
-import { JsonStore } from './jsonStore.js';
 
 type ConfigWatcher = {
   key: string | readonly string[] | RegExp;
