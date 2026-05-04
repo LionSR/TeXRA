@@ -1,13 +1,12 @@
-// Node imports
-import { resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview command constants
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+
+// Local imports - desktop test paths
+import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 interface MainViewIpcModule {
   installDesktopMainViewIpc(
@@ -34,8 +33,6 @@ interface HostBridgeModule {
   ELECTRON_WEBVIEW_PUSH_CHANNEL: string;
 }
 
-const TEST_DIR = fileURLToPath(new URL('.', import.meta.url));
-
 async function loadDesktopMainViewIpcModule(electron: {
   ipcMain: {
     on(
@@ -56,17 +53,13 @@ async function loadDesktopMainViewIpcModule(electron: {
 }): Promise<MainViewIpcModule & HostBridgeModule> {
   vi.resetModules();
   vi.doMock('electron', () => electron);
-  const mainViewIpcPath = resolve(
-    TEST_DIR,
-    '../../../packages/desktop/src/main/mainViewIpc.ts',
-  );
-  const hostBridgePath = resolve(
-    TEST_DIR,
-    '../../../packages/desktop/src/preload/hostBridge.ts',
-  );
   const [mainViewIpc, hostBridge] = await Promise.all([
-    import(pathToFileURL(mainViewIpcPath).href) as Promise<MainViewIpcModule>,
-    import(pathToFileURL(hostBridgePath).href) as Promise<HostBridgeModule>,
+    import(
+      moduleFileUrl(desktopSourcePath('main', 'mainViewIpc.ts'))
+    ) as Promise<MainViewIpcModule>,
+    import(
+      moduleFileUrl(desktopSourcePath('preload', 'hostBridge.ts'))
+    ) as Promise<HostBridgeModule>,
   ]);
   return { ...mainViewIpc, ...hostBridge };
 }

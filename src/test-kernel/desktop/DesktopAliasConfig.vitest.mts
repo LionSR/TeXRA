@@ -1,10 +1,11 @@
 // Node imports
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
+
+// Local imports - desktop test paths
+import { repoPath } from './desktopTestPaths.mjs';
 
 interface TsconfigJson {
   extends?: string;
@@ -13,17 +14,14 @@ interface TsconfigJson {
   };
 }
 
-const TEST_DIR = fileURLToPath(new URL('.', import.meta.url));
-const ROOT_DIR = resolve(TEST_DIR, '../../..');
-
 function readTsconfig(relativePath: string): TsconfigJson {
   return JSON.parse(
-    readFileSync(resolve(ROOT_DIR, relativePath), 'utf8'),
+    readFileSync(repoPath(relativePath), 'utf8'),
   ) as TsconfigJson;
 }
 
 function readText(relativePath: string): string {
-  return readFileSync(resolve(ROOT_DIR, relativePath), 'utf8');
+  return readFileSync(repoPath(relativePath), 'utf8');
 }
 
 describe('desktop alias configuration', () => {
