@@ -1,4 +1,5 @@
 {
+  "extends": "./tsconfig.paths.json",
   "compilerOptions": {
     "ignoreDeprecations": "6.0",
     "module": "esnext",
@@ -10,32 +11,7 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "types": ["node"],
-    "baseUrl": "../..",
-    "paths": {
-      "@agent/*": ["src/agent/*"],
-      "@auth/*": ["src/auth/*"],
-      "@common/*": ["src/common/*"],
-      "@eventBus/*": ["src/eventBus/*"],
-      "@frontend/*": ["packages/extension/src/frontend/*"],
-      "@housekeeping": ["src/housekeeping"],
-      "@housekeeping/*": ["src/housekeeping/*"],
-      "@latex": ["src/latex"],
-      "@latex/*": ["src/latex/*"],
-      "@logger/*": ["src/logger/*"],
-      "@model": ["src/model"],
-      "@model/*": ["src/model/*"],
-      "@platform": ["src/platform"],
-      "@platform/*": ["src/platform/*"],
-      "@replacement/*": ["src/replacement/*"],
-      "@shared/*": ["src/shared/*"],
-      "@progressView/*": ["packages/extension/src/progressView/*"],
-      "@settingsView/*": ["packages/extension/src/settingsView/*"],
-      "@tools/*": ["src/tools/*"],
-      "@types/*": ["src/types/*"],
-      "@utils/*": ["src/utils/*"],
-      "@webview/*": ["packages/extension/src/webview/*"]
-    }
+    "types": ["node"]
   },
   "include": ["vite.config.ts"]
 }
