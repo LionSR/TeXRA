@@ -4,62 +4,50 @@ import { strict as assert } from 'assert';
 // Local imports - agent
 import { ProgressFollowUpController } from '@controllers/progressView/ProgressFollowUpController';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-
-// Local imports - logger
-import type { WorkflowTaskState } from '@logger/TaskState';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 
 // Local imports - shared
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
+// Local imports - test support
+import {
+  createOutputFile,
+  createWorkflowTaskState,
+} from '../support/ProgressControllerHarnesses';
+
 // Local imports - controllers
 
-function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
-  return AgentConfigSchema.parse({
-    agent: 'correct',
-    model: 'gemini31p',
-    inputFile: 'main.tex',
-    inputFiles: [],
-    outputFiles: ['answer.tex'],
-    agentCategory: AgentCategory.Workflow,
+const followUpWorkflowDefaults: Partial<AgentConfig> = {
+  inputFile: 'main.tex',
+  inputFiles: [],
+  outputFiles: ['answer.tex'],
+};
+
+const runStorageOutputDefaults: Partial<OutputFileInfo> = {
+  source: 'main.tex',
+  location: {
+    kind: 'runStorage',
+    absolutePath: '/tmp/exec/answer.tex',
+    relativePath: 'answer.tex',
+    executionId: 'exec-old',
+  },
+  round: 2,
+};
+
+function createFollowUpWorkflowTaskState(overrides: Partial<AgentConfig> = {}) {
+  return createWorkflowTaskState({
+    ...followUpWorkflowDefaults,
     ...overrides,
   });
 }
 
-function createWorkflowTaskState(
-  overrides: Partial<AgentConfig> = {},
-): WorkflowTaskState {
-  return {
-    agentConfig: createAgentConfig({
-      agentCategory: AgentCategory.Workflow,
-      ...overrides,
-    }) as AgentConfig & { agentCategory: AgentCategory.Workflow },
-    activeFiles: {
-      input: true,
-      reference: false,
-      auxiliary: false,
-      media: false,
-      output: true,
-    },
-  };
-}
-
-function createOutputFile(
+function createRunStorageOutputFile(
   overrides: Partial<OutputFileInfo> = {},
 ): OutputFileInfo {
-  return {
-    source: 'main.tex',
-    location: {
-      kind: 'runStorage',
-      absolutePath: '/tmp/exec/answer.tex',
-      relativePath: 'answer.tex',
-      executionId: 'exec-old',
-    },
-    round: 2,
-    lineage: null,
-    diff: null,
+  return createOutputFile({
+    ...runStorageOutputDefaults,
     ...overrides,
-  };
+  });
 }
 
 function createCompileFailure(
@@ -106,8 +94,8 @@ describe('ProgressFollowUpController', () => {
     const controller = createController();
     const plan = controller.planToolUseFollowUp({
       streamId: 'stream-a',
-      taskState: createWorkflowTaskState(),
-      outputFiles: [createOutputFile()],
+      taskState: createFollowUpWorkflowTaskState(),
+      outputFiles: [createRunStorageOutputFile()],
       agent: 'tool-agent',
       model: 'gemini31p',
       initialQuestion: ' Please inspect the proof. ',
@@ -139,8 +127,8 @@ describe('ProgressFollowUpController', () => {
   it('rejects follow-up setup when the selected model is disabled', () => {
     const plan = createController().planToolUseFollowUp({
       streamId: 'stream-a',
-      taskState: createWorkflowTaskState(),
-      outputFiles: [createOutputFile()],
+      taskState: createFollowUpWorkflowTaskState(),
+      outputFiles: [createRunStorageOutputFile()],
       agent: 'tool-agent',
       model: 'gemini31p',
       executeImmediately: false,
@@ -155,10 +143,10 @@ describe('ProgressFollowUpController', () => {
 
   it('plans latexFixer with source files from compile failures before fallbacks', async () => {
     const controller = createController(new Set(['source.tex', 'main.tex']));
-    const output = createOutputFile({ source: 'source.tex' });
+    const output = createRunStorageOutputFile({ source: 'source.tex' });
     const plan = await controller.planCompileFixer({
       streamId: 'stream-a',
-      taskState: createWorkflowTaskState({
+      taskState: createFollowUpWorkflowTaskState({
         inputFile: 'main.tex',
         inputFiles: ['source.tex'],
       }),
@@ -188,10 +176,12 @@ describe('ProgressFollowUpController', () => {
   it('warns when compile failures have no editable workspace source', async () => {
     const plan = await createController(new Set()).planCompileFixer({
       streamId: 'stream-a',
-      taskState: createWorkflowTaskState({ inputFile: '/external/main.tex' }),
+      taskState: createFollowUpWorkflowTaskState({
+        inputFile: '/external/main.tex',
+      }),
       compileFailures: [createCompileFailure()],
       runOutputs: new Map([
-        [2, [createOutputFile({ source: '/external/main.tex' })]],
+        [2, [createRunStorageOutputFile({ source: '/external/main.tex' })]],
       ]),
       modelOptions: [{ value: 'gemini31p' }],
       executionId: 'exec-123',

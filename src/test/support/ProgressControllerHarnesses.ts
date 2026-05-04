@@ -152,19 +152,19 @@ export function createWorkflowTaskState(
 }
 
 export function createOutputFile(
-  absolutePath: string,
-  relativePath = absolutePath,
+  overrides: Partial<OutputFileInfo> = {},
 ): OutputFileInfo {
   return {
     source: 'input.tex',
     location: {
       kind: 'workspace',
-      absolutePath,
-      relativePath,
+      absolutePath: '/workspace/generated.tex',
+      relativePath: 'generated.tex',
     },
     round: 1,
     lineage: null,
     diff: null,
+    ...overrides,
   };
 }
 
