@@ -9,6 +9,13 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 import {
+  SettingsAgentCatalogController,
+  type SettingsAgentCatalogState,
+} from '@controllers/settingsView/SettingsAgentCatalogController';
+import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
+import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
+import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
+import {
   createKey,
   getAgent,
   getVisibleAgents,
@@ -34,13 +41,6 @@ import {
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
 import { AbsoluteFS } from '@utils/files';
-import {
-  SettingsAgentCatalogController,
-  type SettingsAgentCatalogState,
-} from '../../controllers/settingsView/SettingsAgentCatalogController';
-import { SettingsAgentDirectoryController } from '../../controllers/settingsView/SettingsAgentDirectoryController';
-import { SettingsAgentFileController } from '../../controllers/settingsView/SettingsAgentFileController';
-import { SettingsAgentVisibilityController } from '../../controllers/settingsView/SettingsAgentVisibilityController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 

@@ -3,19 +3,19 @@ import { strict as assert } from 'assert';
 
 // Local imports - shared constants
 import {
-  HOMEBREW_INSTALL_COMMAND,
-  type Platform,
-} from '../../shared/constants/latex';
-
-// Local imports - shared schemas
-import { DEFAULT_LATEX_SETTINGS_STATUS } from '../../shared/schemas/settingsViewMessages';
-
-// Local imports - controllers
-import {
   LatexToolingController,
   type LatexPathTool,
   type LatexToolingControllerDeps,
-} from '../../controllers/settingsView/LatexToolingController';
+} from '@controllers/settingsView/LatexToolingController';
+import {
+  HOMEBREW_INSTALL_COMMAND,
+  type Platform,
+} from '@shared/constants/latex';
+
+// Local imports - shared schemas
+import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/schemas/settingsViewMessages';
+
+// Local imports - controllers
 
 const INSTALLED_TOOLS = {
   pdflatex: false,
