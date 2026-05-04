@@ -3,8 +3,7 @@ import { resolve } from 'path';
 import { mkdirSync, writeFileSync, existsSync } from 'fs';
 
 // Shared path aliases from tsconfig.json (single source of truth)
-// @ts-expect-error - .mjs import works at runtime via Vite's ESM handling
-import { aliases } from './scripts/aliases.mjs';
+import { aliases } from '../../scripts/aliases.mjs';
 
 const webviews = ['progressView', 'settingsView', 'webview'] as const;
 

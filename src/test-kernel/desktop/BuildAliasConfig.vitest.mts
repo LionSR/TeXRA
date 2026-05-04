@@ -24,7 +24,7 @@ function readText(relativePath: string): string {
   return readFileSync(repoPath(relativePath), 'utf8');
 }
 
-describe('desktop alias configuration', () => {
+describe('build alias configuration', () => {
   it('uses the root alias table for desktop typecheck and bundling', () => {
     const rootPaths = readTsconfig('tsconfig.json').compilerOptions?.paths;
     const desktopPaths = readTsconfig('packages/desktop/tsconfig.paths.json')
@@ -36,5 +36,21 @@ describe('desktop alias configuration', () => {
     expect(desktopPaths).toEqual(rootPaths);
     expect(viteConfig).toContain("from '../../scripts/aliases.mjs'");
     expect(viteConfig).not.toContain('../extension/scripts/aliases.mjs');
+  });
+
+  it('uses the root alias table for extension bundling', () => {
+    const extensionViteConfig = readText('packages/extension/vite.config.ts');
+    const extensionEsbuildConfig = readText(
+      'packages/extension/esbuild.config.mjs',
+    );
+
+    for (const config of [extensionViteConfig, extensionEsbuildConfig]) {
+      expect(config).toContain("from '../../scripts/aliases.mjs'");
+      expect(config).not.toContain("from './scripts/aliases.mjs'");
+    }
+
+    expect(extensionViteConfig).not.toContain(
+      '.mjs import works at runtime via Vite',
+    );
   });
 });

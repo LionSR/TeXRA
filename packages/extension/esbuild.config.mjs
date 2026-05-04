@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 // Shared path aliases from tsconfig.json (single source of truth)
-import { aliases } from './scripts/aliases.mjs';
+import { aliases } from '../../scripts/aliases.mjs';
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
