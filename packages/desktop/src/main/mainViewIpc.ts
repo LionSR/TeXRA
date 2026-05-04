@@ -21,6 +21,7 @@ import {
   installDesktopHostBridge,
   type DesktopHostBridge,
 } from './hostBridge.js';
+import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
 
 type DesktopTheme = 'dark' | 'light' | 'high-contrast';
 
@@ -29,6 +30,7 @@ export interface DesktopMainViewIpcOptions {
   getTheme?: () => DesktopTheme;
   getCustomAgentDirectory?: () => Promise<string>;
   openPath?: (filePath: string) => Promise<void>;
+  executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -142,6 +144,12 @@ export function installDesktopMainViewIpc(
     }
     void openCustomAgentDirectory().catch(reportAsyncError);
   }
+  function handleExecute(message: unknown) {
+    if (!options.executeAgent) return;
+    void options
+      .executeAgent(message as MainViewExecuteMessage)
+      .catch(reportAsyncError);
+  }
   function postInitialState() {
     postTheme();
     postDebugMode();
@@ -176,6 +184,9 @@ export function installDesktopMainViewIpc(
         break;
       case MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY:
         handleOpenAgentDirectory(message);
+        break;
+      case MAIN_VIEW_COMMANDS.EXECUTE:
+        handleExecute(message);
         break;
     }
   }
