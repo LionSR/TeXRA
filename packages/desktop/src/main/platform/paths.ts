@@ -1,9 +1,9 @@
-import { existsSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { app } from 'electron';
 
-import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/AgentDirectorySync';
+import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirectories';
 
 interface WorkspacePathOptions {
   env?: Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>;
@@ -12,7 +12,7 @@ interface WorkspacePathOptions {
 interface ResourcesPathOptions {
   appPath?: string;
   env?: Pick<NodeJS.ProcessEnv, 'TEXRA_RESOURCES_PATH'>;
-  exists?: (path: string) => boolean;
+  isDirectory?: (path: string) => boolean;
   resourcesPath?: string;
 }
 
@@ -40,9 +40,9 @@ export function resolveResourcesPath(
     join(mainDirname, '../../../../resources'),
   ].filter((candidate): candidate is string => Boolean(candidate));
 
-  const exists = options.exists ?? existsSync;
+  const isDirectory = options.isDirectory ?? isExistingDirectory;
   const found = candidates.find((candidate) =>
-    hasRequiredResourceDirectories(candidate, exists),
+    hasRequiredResourceDirectories(candidate, isDirectory),
   );
   if (!found) {
     throw new Error(
@@ -54,12 +54,20 @@ export function resolveResourcesPath(
 
 function hasRequiredResourceDirectories(
   candidate: string,
-  exists: (path: string) => boolean,
+  isDirectory: (path: string) => boolean,
 ): boolean {
   return (
-    exists(candidate) &&
+    isDirectory(candidate) &&
     BUNDLED_AGENT_DIRECTORY_NAMES.every((directoryName) =>
-      exists(join(candidate, directoryName)),
+      isDirectory(join(candidate, directoryName)),
     )
   );
+}
+
+function isExistingDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
 }

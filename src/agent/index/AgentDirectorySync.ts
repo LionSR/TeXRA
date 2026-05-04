@@ -8,13 +8,16 @@ import { glob } from 'glob';
 // Local imports
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
-export const BUNDLED_AGENT_DIRECTORY_NAMES = [
-  'agents',
-  'tool_use_agents',
-] as const;
+// Local imports - agent index
+import {
+  BUNDLED_AGENT_DIRECTORY_NAMES,
+  type BundledAgentDirectoryName,
+} from './BundledAgentDirectories';
 
-export type BundledAgentDirectoryName =
-  (typeof BUNDLED_AGENT_DIRECTORY_NAMES)[number];
+export {
+  BUNDLED_AGENT_DIRECTORY_NAMES,
+  type BundledAgentDirectoryName,
+} from './BundledAgentDirectories';
 
 const LEGACY_AGENT_FILES = [
   'agents/generic.yaml',

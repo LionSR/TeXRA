@@ -1,5 +1,12 @@
 // Node imports
-import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 
@@ -23,6 +30,7 @@ interface PathsModule {
     options?: {
       appPath?: string;
       env?: { TEXRA_RESOURCES_PATH?: string };
+      isDirectory?: (path: string) => boolean;
       resourcesPath?: string;
     },
   ): string;
@@ -168,19 +176,29 @@ describe('desktop composition root and launch environment', () => {
     ).toBe(monorepoResources);
   });
 
-  it('does not accept resource directories missing bundled agent sources', async () => {
+  it('requires bundled agent sources to be directories', async () => {
     const { resolveResourcesPath } =
       await loadDesktopPlatformModule<PathsModule>('paths.ts');
     const root = await makeTempDir();
     const incompleteResources = join(root, 'configured-resources');
+    const fileBackedResources = join(root, 'file-backed-resources');
     const monorepoResources = join(root, 'packages', 'extension', 'resources');
     const mainDirname = join(root, 'packages', 'desktop', 'dist', 'main');
 
     await Promise.all([
       mkdir(join(incompleteResources, 'agents'), { recursive: true }),
+      mkdir(join(fileBackedResources, 'agents'), { recursive: true }),
       createResourceTree(monorepoResources),
     ]);
+    await writeFile(join(fileBackedResources, 'tool_use_agents'), '');
 
+    expect(
+      resolveResourcesPath(mainDirname, {
+        appPath: join(root, 'missing-app'),
+        env: { TEXRA_RESOURCES_PATH: fileBackedResources },
+        resourcesPath: join(root, 'missing-electron-resources'),
+      }),
+    ).toBe(monorepoResources);
     expect(
       resolveResourcesPath(mainDirname, {
         appPath: join(root, 'missing-app'),
@@ -208,6 +226,7 @@ describe('desktop composition root and launch environment', () => {
         join(root, 'app', 'resources'),
         join(root, 'electron-resources', 'resources'),
         join(root, 'packages', 'extension', 'resources'),
+        join(root, 'resources'),
       ].join(', '),
     );
   });
@@ -253,5 +272,20 @@ describe('desktop composition root and launch environment', () => {
         platform: 'linux',
       }),
     ).toBe('/custom/bin');
+  });
+
+  it('does not call the process-level PATH fixer for injected environments', async () => {
+    const { repairLaunchPathWithOptions } =
+      await loadDesktopPlatformModule<PathFixModule>('pathFix.ts');
+    const processPath = process.env.PATH;
+    const env = { PATH: '/custom/bin' };
+
+    expect(
+      repairLaunchPathWithOptions({
+        env,
+        platform: 'darwin',
+      }),
+    ).toContain('/custom/bin');
+    expect(process.env.PATH).toBe(processPath);
   });
 });

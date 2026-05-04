@@ -38,7 +38,11 @@ export function repairLaunchPathWithOptions(
   const env = options.env ?? process.env;
   const platform = options.platform ?? process.platform;
   if (platform === 'darwin') {
-    (options.fixPath ?? fixPath)();
+    if (options.fixPath != null) {
+      options.fixPath();
+    } else if (env === process.env) {
+      fixPath();
+    }
     env.PATH = prependMissingPathEntries(env.PATH, MACOS_PATH_ENTRIES);
   }
   return env.PATH ?? '';
