@@ -55,3 +55,19 @@ jobs:
 
       - name: Build initial extension and desktop artifacts
         run: pnpm run build:initial
+
+      - name: Upload extension VSIX artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-extension-vsix
+          path: releases/*.vsix
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload desktop build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-dist-${{ runner.os }}
+          path: packages/desktop/dist/
+          if-no-files-found: error
+          retention-days: 14
