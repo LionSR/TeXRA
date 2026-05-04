@@ -6,7 +6,6 @@ import type {
 } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
 
-
 type ConfigWatcher = {
   key: string | readonly string[] | RegExp;
   listener: () => void;

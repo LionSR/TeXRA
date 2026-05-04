@@ -3,7 +3,6 @@ import { safeStorage } from 'electron';
 import { JsonStore } from './jsonStore.js';
 import type { PlatformSecrets } from '@platform/secrets';
 
-
 type StoredSecret = { encrypted: true; value: string };
 
 function isStoredSecret(value: unknown): value is StoredSecret {
