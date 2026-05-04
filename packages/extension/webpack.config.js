@@ -49,7 +49,6 @@ const webviewExternals = {
   // Shared modules
   '@shared/BaseWebviewApp': 'WebviewCommons',
   '@shared/hostBridge': 'WebviewCommons',
-  '@shared/vscode': 'WebviewCommons',
   '@shared/schemas': 'WebviewCommons',
   '@shared/schemas/index': 'WebviewCommons',
   '@shared/schemas/commonViewMessages': 'WebviewCommons',
