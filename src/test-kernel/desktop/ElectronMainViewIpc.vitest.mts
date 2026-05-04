@@ -1,0 +1,191 @@
+// Node imports
+import { resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// Third-party imports
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Local imports - webview command constants
+import { COMMON_COMMANDS } from '@common/webview/commonCommands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+
+interface MainViewIpcModule {
+  installDesktopMainViewIpc(
+    window: {
+      isDestroyed(): boolean;
+      once(event: 'closed', listener: () => void): void;
+      webContents: {
+        isDestroyed(): boolean;
+        send(channel: string, message: unknown): void;
+      };
+    },
+    options?: {
+      debugMode?: boolean;
+      getTheme?: () => 'dark' | 'light' | 'high-contrast';
+    },
+  ): {
+    postToRenderer(message: unknown): void;
+    dispose(): void;
+  };
+}
+
+interface HostBridgeModule {
+  ELECTRON_WEBVIEW_MESSAGE_CHANNEL: string;
+  ELECTRON_WEBVIEW_PUSH_CHANNEL: string;
+}
+
+const TEST_DIR = fileURLToPath(new URL('.', import.meta.url));
+
+async function loadDesktopMainViewIpcModule(electron: {
+  ipcMain: {
+    on(
+      channel: string,
+      listener: (event: { sender: unknown }, message: unknown) => void,
+    ): void;
+    off(
+      channel: string,
+      listener: (event: { sender: unknown }, message: unknown) => void,
+    ): void;
+  };
+  nativeTheme: {
+    shouldUseDarkColors: boolean;
+    shouldUseHighContrastColors: boolean;
+    on(event: 'updated', listener: () => void): void;
+    off(event: 'updated', listener: () => void): void;
+  };
+}): Promise<MainViewIpcModule & HostBridgeModule> {
+  vi.resetModules();
+  vi.doMock('electron', () => electron);
+  const mainViewIpcPath = resolve(
+    TEST_DIR,
+    '../../../packages/desktop/src/main/mainViewIpc.ts',
+  );
+  const hostBridgePath = resolve(
+    TEST_DIR,
+    '../../../packages/desktop/src/preload/hostBridge.ts',
+  );
+  const [mainViewIpc, hostBridge] = await Promise.all([
+    import(pathToFileURL(mainViewIpcPath).href) as Promise<MainViewIpcModule>,
+    import(pathToFileURL(hostBridgePath).href) as Promise<HostBridgeModule>,
+  ]);
+  return { ...mainViewIpc, ...hostBridge };
+}
+
+describe('desktop main-view IPC', () => {
+  afterEach(() => {
+    vi.doUnmock('electron');
+  });
+
+  it('pushes theme and debug state over the fixed host bridge channel', async () => {
+    let rendererListener:
+      | ((event: { sender: unknown }, message: unknown) => void)
+      | undefined;
+    let themeListener: (() => void) | undefined;
+    const ipcMain = {
+      on: vi.fn((channel, listener) => {
+        rendererListener = listener;
+      }),
+      off: vi.fn(),
+    };
+    const nativeTheme = {
+      shouldUseDarkColors: true,
+      shouldUseHighContrastColors: false,
+      on: vi.fn((_event: 'updated', listener: () => void) => {
+        themeListener = listener;
+      }),
+      off: vi.fn(),
+    };
+    const {
+      ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
+      ELECTRON_WEBVIEW_PUSH_CHANNEL,
+      installDesktopMainViewIpc,
+    } = await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
+    const sends: Array<{ channel: string; message: unknown }> = [];
+    const webContents = {
+      isDestroyed: () => false,
+      send: vi.fn((channel, message) => sends.push({ channel, message })),
+    };
+    const closedListeners: Array<() => void> = [];
+    const window = {
+      isDestroyed: () => false,
+      once: vi.fn((_event: 'closed', listener: () => void) => {
+        closedListeners.push(listener);
+      }),
+      webContents,
+    };
+
+    const ipc = installDesktopMainViewIpc(window, { debugMode: true });
+
+    expect(ipcMain.on).toHaveBeenCalledWith(
+      ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
+      rendererListener,
+    );
+    rendererListener?.(
+      { sender: {} },
+      { command: MAIN_VIEW_COMMANDS.GET_THEME },
+    );
+    expect(sends).toEqual([]);
+
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
+    );
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: COMMON_COMMANDS.THEME_SET, theme: 'dark' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: true },
+      },
+    ]);
+
+    sends.length = 0;
+    nativeTheme.shouldUseDarkColors = false;
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.GET_THEME },
+    );
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: COMMON_COMMANDS.THEME_SET, theme: 'light' },
+      },
+    ]);
+
+    sends.length = 0;
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.GET_DEBUG_MODE },
+    );
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: true },
+      },
+    ]);
+
+    nativeTheme.shouldUseHighContrastColors = true;
+    themeListener?.();
+    expect(sends.at(-1)).toEqual({
+      channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+      message: {
+        command: COMMON_COMMANDS.THEME_SET,
+        theme: 'high-contrast',
+      },
+    });
+
+    ipc.postToRenderer({ command: 'customPush' });
+    expect(sends.at(-1)).toEqual({
+      channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+      message: { command: 'customPush' },
+    });
+
+    ipc.dispose();
+    expect(nativeTheme.off).toHaveBeenCalledWith('updated', themeListener);
+    expect(ipcMain.off).toHaveBeenCalledTimes(1);
+    closedListeners.forEach((listener) => listener());
+    expect(ipcMain.off).toHaveBeenCalledTimes(1);
+  });
+});

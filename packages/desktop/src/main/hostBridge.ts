@@ -18,13 +18,18 @@ export function installDesktopHostBridge(
   window: BrowserWindow,
   options: DesktopHostBridgeOptions = {},
 ): DesktopHostBridge {
+  let disposed = false;
   const listener = (event: IpcMainEvent, message: unknown) => {
     if (event.sender !== window.webContents) return;
     options.onRendererMessage?.(message, window);
   };
   ipcMain.on(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, listener);
 
-  const dispose = () => ipcMain.off(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, listener);
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    ipcMain.off(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, listener);
+  };
   window.once('closed', dispose);
   return {
     postToRenderer: (message) => {
