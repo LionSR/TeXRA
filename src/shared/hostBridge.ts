@@ -1,15 +1,6 @@
-import {
-  HOST_BRIDGE_API_KEY,
-  LEGACY_HOST_BRIDGE_API_KEY,
-  type HostBridgeApi,
-} from './hostBridgeTypes';
+import { HOST_BRIDGE_API_KEY, type HostBridgeApi } from './hostBridgeTypes';
 
-export {
-  HOST_BRIDGE_API_KEY,
-  LEGACY_HOST_BRIDGE_API_KEY,
-  type HostBridgeApi,
-  type VSCodeApi,
-} from './hostBridgeTypes';
+export { HOST_BRIDGE_API_KEY, type HostBridgeApi } from './hostBridgeTypes';
 
 declare const acquireVsCodeApi: (() => HostBridgeApi) | undefined;
 
@@ -22,15 +13,9 @@ const fallbackApi: HostBridgeApi = {
 function resolveHostBridgeApi(): HostBridgeApi {
   const globalScope = globalThis as typeof globalThis & {
     [HOST_BRIDGE_API_KEY]?: HostBridgeApi;
-    [LEGACY_HOST_BRIDGE_API_KEY]?: HostBridgeApi;
   };
 
   if (globalScope[HOST_BRIDGE_API_KEY]) {
-    return globalScope[HOST_BRIDGE_API_KEY] as HostBridgeApi;
-  }
-
-  if (globalScope[LEGACY_HOST_BRIDGE_API_KEY]) {
-    globalScope[HOST_BRIDGE_API_KEY] = globalScope[LEGACY_HOST_BRIDGE_API_KEY];
     return globalScope[HOST_BRIDGE_API_KEY] as HostBridgeApi;
   }
 
@@ -45,9 +30,6 @@ function resolveHostBridgeApi(): HostBridgeApi {
 
 /** Host bridge API instance (falls back to no-op in non-webview contexts). */
 export const hostBridge: HostBridgeApi = resolveHostBridgeApi();
-
-/** @deprecated Use `hostBridge` from `@shared/hostBridge`. */
-export const vscode: HostBridgeApi = hostBridge;
 
 /**
  * Post a command payload to the active webview host.

@@ -1,11 +1,6 @@
-import { createAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ProgressSink } from '@agent/runtime/ProgressSink';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { bus } from '@eventBus/ProgressEventBus';
 
-const extensionProgressSink: ProgressSink = {
+export const extensionAgentRuntimeHost: AgentRuntimeHost = {
   emit: (event, payload) => bus.emit(event, payload),
 };
-
-export const extensionAgentRuntimeHost = createAgentRuntimeHost(
-  extensionProgressSink,
-);

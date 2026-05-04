@@ -16,7 +16,6 @@ import {
   BasePromiseCoordinator,
   type CoordinatorConfig,
 } from './BasePromiseCoordinator';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 // ============================================================================
 // Types
@@ -85,12 +84,6 @@ export class AgentProposalCoordinator extends BasePromiseCoordinator<
 // ============================================================================
 // Singleton Export
 // ============================================================================
-
-export function createAgentProposalCoordinator(
-  runtimeHost: AgentRuntimeHost,
-): AgentProposalCoordinator {
-  return new AgentProposalCoordinator(runtimeHost);
-}
 
 /** Singleton coordinator instance. */
 export const proposalCoordinator = new AgentProposalCoordinator();

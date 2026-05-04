@@ -4,11 +4,7 @@ import {
   prepareMainViewExecutionRequest,
   type MainViewExecuteMessage,
 } from '@controllers/mainView/MainViewExecutionController';
-import {
-  createAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import type { ProgressSink } from '@agent/runtime/ProgressSink';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
@@ -76,10 +72,9 @@ export class DesktopProgressBridge {
     this.unsubscribe = this.streamLogs.onChange((streamId) =>
       this.flushLogs(streamId),
     );
-    const progressSink: ProgressSink = {
+    this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
     };
-    this.runtimeHost = createAgentRuntimeHost(progressSink);
   }
 
   dispose(): void {

@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { ModelHandlerOpenAI } from '@agent/modelHandlers';
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, StorageFS } from '@utils/files';
