@@ -9,7 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       ...aliases,
-      electron: `${rootDir}/src/test-kernel/desktop/electronTestStub.ts`,
+      electron: `${rootDir}/src/test-kernel/desktop/electronTestStub.mts`,
     },
   },
   test: {
