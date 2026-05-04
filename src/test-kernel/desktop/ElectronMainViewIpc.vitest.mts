@@ -162,6 +162,22 @@ describe('desktop main-view IPC', () => {
     });
 
     sends.length = 0;
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS },
+    );
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+          commits: [],
+          isGitRepo: false,
+        },
+      },
+    ]);
+
+    sends.length = 0;
     nativeTheme.shouldUseDarkColors = false;
     rendererListener?.(
       { sender: webContents },

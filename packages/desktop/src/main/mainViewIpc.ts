@@ -180,6 +180,13 @@ export function installDesktopMainViewIpc(
       case MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY:
         handleOpenAgentDirectory(message);
         break;
+      case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
+        bridge.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+          commits: [],
+          isGitRepo: false,
+        });
+        break;
     }
   }
 

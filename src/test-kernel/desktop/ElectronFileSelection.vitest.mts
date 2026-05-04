@@ -152,6 +152,49 @@ describe('desktop file selection', () => {
     );
   });
 
+  it('preserves the current base-file selection when requested', async () => {
+    const { createDesktopFileSelection } = await loadDesktopFileSelection();
+    const messages: unknown[] = [];
+    const files = createDesktopFileSelection({
+      postToRenderer: (message) => messages.push(message),
+      getWorkspacePath: () => workspacePath,
+    });
+
+    expect(
+      files.handleMessage({
+        command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
+        preserveBaseFile: true,
+      }),
+    ).toBe(true);
+
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({
+        command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
+        files: [
+          'main.tex',
+          'notes.md',
+          'sections/main_edited.tex',
+          'sections/main_r1.tex',
+        ],
+        preserveBaseFile: true,
+      }),
+    );
+  });
+
+  it('leaves recent-commit requests for the main IPC router', async () => {
+    const { createDesktopFileSelection } = await loadDesktopFileSelection();
+    const files = createDesktopFileSelection({
+      postToRenderer: vi.fn(),
+      getWorkspacePath: () => workspacePath,
+    });
+
+    expect(
+      files.handleMessage({
+        command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
+      }),
+    ).toBe(false);
+  });
+
   it('reports asynchronous file-listing errors without rejecting from handleMessage', async () => {
     const { createDesktopFileSelection } = await loadDesktopFileSelection();
     const onError = vi.fn();

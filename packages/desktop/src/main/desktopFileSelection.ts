@@ -1,36 +1,22 @@
 import { readdir } from 'node:fs/promises';
-import {
-  basename,
-  extname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-} from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { getWorkspaceProvider } from '@agent/core/workspace';
+import {
+  getEditedFileListConfig,
+  getFileListConfig,
+  getFilterExtensions as getConfiguredFilterExtensions,
+  loadFileListSettings,
+  matchesEditedFile,
+  passesFileFilters,
+  prepareFileFilters,
+  shouldVisitDirectory,
+  type FileListConfig,
+  type ListableFileType,
+} from '@common/files/fileListingRules';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
-import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
 import { normalizeFilePath } from '@shared/utils/path';
 import { getConfig } from '@utils/config/configUtils';
-
-type ExtensionCategory =
-  | 'input'
-  | 'reference'
-  | 'auxiliary'
-  | 'media'
-  | 'audio'
-  | 'edited';
-
-type ListableFileType = Exclude<ExtensionCategory, 'audio'>;
-
-interface FileListConfig {
-  extensions: string[];
-  ignoredExtensions: string[];
-  ignoredDirs: string[];
-  ignoredKeywords: string[];
-  ignoredFiles: string[];
-}
 
 export interface DesktopFileSelectionDialogOptions {
   title: string;
@@ -80,174 +66,23 @@ const SET_COMMAND_BY_FILE_TYPE = {
   base: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
 } as const;
 
-const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
-  input: 'texra.files.included.inputExtensions',
-  reference: 'texra.files.included.referenceExtensions',
-  auxiliary: 'texra.files.included.auxiliaryExtensions',
-  media: 'texra.files.included.mediaExtensions',
-  audio: 'texra.files.included.audioExtensions',
-  edited: 'texra.files.included.editedExtensions',
-};
-
 function normalizeRelative(filePath: string): string {
   return normalizeFilePath(filePath);
 }
 
-function cleanList(values: readonly string[]): string[] {
-  return values.map((value) => value.toLowerCase());
+function readConfig<T>(key: string, fallback: T): T {
+  return getConfig<T>(key, fallback);
 }
 
-function normalizeListConfig(config: FileListConfig): FileListConfig {
-  return {
-    extensions: cleanList(config.extensions),
-    ignoredExtensions: cleanList(config.ignoredExtensions),
-    ignoredDirs: cleanList(config.ignoredDirs),
-    ignoredKeywords: cleanList(config.ignoredKeywords),
-    ignoredFiles: cleanList(config.ignoredFiles),
-  };
-}
-
-function configuredList(key: string, fallback: string[]): string[] {
-  return getConfig<string[]>(key, fallback);
-}
-
-function extensionDefaults(category: ExtensionCategory): string[] {
-  const { included } = DEFAULT_TEXRA_SETTINGS.files;
-  switch (category) {
-    case 'input':
-      return included.inputExtensions;
-    case 'reference':
-      return included.referenceExtensions;
-    case 'auxiliary':
-      return included.auxiliaryExtensions;
-    case 'media':
-      return included.mediaExtensions;
-    case 'edited':
-      return included.editedExtensions;
-    case 'audio':
-      return [];
-  }
-}
-
-function getConfiguredExtensions(category: ExtensionCategory): string[] {
-  return getConfig<string[]>(
-    INCLUDED_EXTENSION_KEYS[category],
-    extensionDefaults(category),
-  );
-}
-
-function getListConfig(fileType: ListableFileType): FileListConfig | null {
-  if (fileType === 'edited') return null;
-
-  const ignored = DEFAULT_TEXRA_SETTINGS.files.ignored;
-  const ignoredFileExtensions = configuredList(
-    'texra.files.ignored.fileExtensions',
-    ignored.fileExtensions,
-  );
-  const ignoredDirectories = configuredList(
-    'texra.files.ignored.directories',
-    ignored.directories,
-  );
-  const ignoredKeywords = configuredList(
-    'texra.files.ignored.keywords',
-    ignored.keywords,
-  );
-  const ignoredInputFiles = configuredList(
-    'texra.files.ignored.inputFiles',
-    ignored.inputFiles,
-  );
-  const ignoredInputDirectories = configuredList(
-    'texra.files.ignored.inputDirectories',
-    ignored.inputDirectories,
-  );
-  const ignoredAuxKeywords = configuredList(
-    'texra.files.ignored.auxiliaryKeywords',
-    ignored.auxiliaryKeywords,
-  );
-  const ignoredMediaDirs = configuredList(
-    'texra.files.ignored.mediaDirectories',
-    ignored.mediaDirectories,
-  );
-
-  switch (fileType) {
-    case 'input':
-      return {
-        extensions: getConfiguredExtensions('input'),
-        ignoredExtensions: ignoredFileExtensions,
-        ignoredDirs: [...ignoredDirectories, ...ignoredInputDirectories],
-        ignoredKeywords,
-        ignoredFiles: ignoredInputFiles,
-      };
-    case 'reference':
-      return {
-        extensions: getConfiguredExtensions('reference'),
-        ignoredExtensions: ignoredFileExtensions,
-        ignoredDirs: ignoredDirectories,
-        ignoredKeywords,
-        ignoredFiles: ignoredInputFiles,
-      };
-    case 'auxiliary':
-      return {
-        extensions: getConfiguredExtensions('auxiliary'),
-        ignoredExtensions: ignoredFileExtensions,
-        ignoredDirs: ignoredDirectories,
-        ignoredKeywords: [...ignoredKeywords, ...ignoredAuxKeywords],
-        ignoredFiles: [],
-      };
-    case 'media':
-      return {
-        extensions: getConfiguredExtensions('media'),
-        ignoredExtensions: [],
-        ignoredDirs: ignoredMediaDirs,
-        ignoredKeywords,
-        ignoredFiles: [],
-      };
-  }
-}
-
-function containsHiddenSegment(relativePath: string): boolean {
-  return relativePath
-    .split('/')
-    .some((segment) => segment.startsWith('.') && segment.length > 1);
-}
-
-function passesFilters(relativePath: string, config: FileListConfig): boolean {
-  if (!relativePath || containsHiddenSegment(relativePath)) return false;
-  const lowerPath = relativePath.toLowerCase();
-  const fileName = basename(lowerPath);
-  const dirs = lowerPath.split('/').slice(0, -1);
-
-  if (dirs.some((segment) => config.ignoredDirs.includes(segment))) {
-    return false;
-  }
-  if (config.ignoredFiles.includes(fileName)) return false;
-  if (config.ignoredKeywords.some((kw) => lowerPath.includes(kw))) return false;
-  if (config.ignoredExtensions.some((ext) => lowerPath.endsWith(ext))) {
-    return false;
-  }
-
-  return (
-    config.extensions.length === 0 ||
-    config.extensions.some((ext) => lowerPath.endsWith(ext))
-  );
-}
-
-function shouldVisitDirectory(
-  relativePath: string,
-  config: FileListConfig,
-): boolean {
-  if (!relativePath || containsHiddenSegment(relativePath)) return false;
-  return !relativePath
-    .toLowerCase()
-    .split('/')
-    .some((segment) => config.ignoredDirs.includes(segment));
+function getListSettings() {
+  return loadFileListSettings(readConfig);
 }
 
 async function listFiles(
   root: string,
   rawConfig: FileListConfig,
 ): Promise<string[]> {
-  const config = normalizeListConfig(rawConfig);
+  const filters = prepareFileFilters(rawConfig);
   const results: string[] = [];
 
   async function visit(directory: string): Promise<void> {
@@ -256,12 +91,12 @@ async function listFiles(
       const absolutePath = join(directory, entry.name);
       const relativePath = normalizeRelative(relative(root, absolutePath));
       if (entry.isDirectory()) {
-        if (shouldVisitDirectory(relativePath, config)) {
+        if (shouldVisitDirectory(relativePath, filters)) {
           await visit(absolutePath);
         }
         continue;
       }
-      if (entry.isFile() && passesFilters(relativePath, config)) {
+      if (entry.isFile() && passesFileFilters(relativePath, filters)) {
         results.push(relativePath);
       }
     }
@@ -284,7 +119,7 @@ function toWorkspaceRelative(workspacePath: string, filePath: string): string {
 }
 
 function outputExtensionsFor(fileType: ListableFileType): string[] {
-  return getConfiguredExtensions(fileType).map((ext) => ext.replace(/^\./, ''));
+  return getConfiguredFilterExtensions(fileType);
 }
 
 export function createDesktopFileSelection(
@@ -306,28 +141,35 @@ export function createDesktopFileSelection(
   function postFileList(
     fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
     files: string[],
+    additionalPayload: Record<string, unknown> = {},
   ) {
     options.postToRenderer({
       command: SET_COMMAND_BY_FILE_TYPE[fileType],
       files,
+      ...additionalPayload,
     });
   }
 
   async function list(fileType: ListableFileType): Promise<string[]> {
     const workspacePath = getWorkspacePath();
-    const config = getListConfig(fileType);
+    const config = getFileListConfig(fileType, getListSettings());
     if (!workspacePath || !config) return [];
     return listFiles(workspacePath, config);
   }
 
   async function requestSingleFileList(
     fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
+    options: { preserveBaseFile?: boolean } = {},
   ) {
     const files =
       fileType === 'base'
         ? await list('input')
         : await list(fileType as ListableFileType);
-    postFileList(fileType, files);
+    postFileList(
+      fileType,
+      files,
+      options.preserveBaseFile ? { preserveBaseFile: true } : {},
+    );
   }
 
   async function requestAllSingleFiles() {
@@ -376,46 +218,14 @@ export function createDesktopFileSelection(
       return;
     }
     const workspacePath = getWorkspacePath();
-    const config = {
-      extensions: getConfiguredExtensions('edited'),
-      ignoredExtensions: configuredList(
-        'texra.files.ignored.fileExtensions',
-        DEFAULT_TEXRA_SETTINGS.files.ignored.fileExtensions,
-      ),
-      ignoredDirs: [
-        ...configuredList(
-          'texra.files.ignored.directories',
-          DEFAULT_TEXRA_SETTINGS.files.ignored.directories,
-        ),
-        ...configuredList(
-          'texra.files.ignored.inputDirectories',
-          DEFAULT_TEXRA_SETTINGS.files.ignored.inputDirectories,
-        ),
-      ],
-      ignoredKeywords: configuredList(
-        'texra.files.ignored.keywords',
-        DEFAULT_TEXRA_SETTINGS.files.ignored.keywords,
-      ),
-      ignoredFiles: configuredList(
-        'texra.files.ignored.inputFiles',
-        DEFAULT_TEXRA_SETTINGS.files.ignored.inputFiles,
-      ),
-    };
+    const config = getEditedFileListConfig(getListSettings());
     if (!workspacePath) {
       postFileList('edited', []);
       return;
     }
-    const baseName = basename(baseFile, extname(baseFile));
-    const baseNameWithoutRound =
-      baseName.match(/^(.+?)(?:_r\d+)?$/)?.[1] ?? baseName;
-    const files = (await listFiles(workspacePath, config)).filter((file) => {
-      const fileBase = basename(file, extname(file));
-      return (
-        fileBase !== baseName &&
-        (fileBase.startsWith(baseName) ||
-          (fileBase.startsWith(baseNameWithoutRound) && /_r\d+/.test(fileBase)))
-      );
-    });
+    const files = (await listFiles(workspacePath, config)).filter((file) =>
+      matchesEditedFile(file, baseFile),
+    );
     postFileList('edited', files);
   }
 
@@ -436,7 +246,11 @@ export function createDesktopFileSelection(
         runAsync(requestSingleFileList('media'));
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE:
-        runAsync(requestSingleFileList('base'));
+        runAsync(
+          requestSingleFileList('base', {
+            preserveBaseFile: message.preserveBaseFile === true,
+          }),
+        );
         return true;
       case MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES:
         runAsync(requestAllSingleFiles());
@@ -460,13 +274,6 @@ export function createDesktopFileSelection(
             typeof message.baseFile === 'string' ? message.baseFile : undefined,
           ),
         );
-        return true;
-      case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
-        options.postToRenderer({
-          command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-          commits: [],
-          isGitRepo: false,
-        });
         return true;
       default:
         return false;
