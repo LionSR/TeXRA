@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@anthropic-ai/sdk':
-        specifier: ^0.92.0
-        version: 0.92.0(zod@4.4.2)
+        specifier: ^0.93.0
+        version: 0.93.0(zod@4.4.2)
       '@cantoo/pdf-lib':
         specifier: ^2.6.5
         version: 2.6.5
@@ -341,8 +341,8 @@ importers:
   packages/extension:
     dependencies:
       '@anthropic-ai/sdk':
-        specifier: ^0.92.0
-        version: 0.92.0(zod@4.4.2)
+        specifier: ^0.93.0
+        version: 0.93.0(zod@4.4.2)
       '@cantoo/pdf-lib':
         specifier: ^2.6.5
         version: 2.6.5
@@ -647,8 +647,8 @@ importers:
 
 packages:
 
-  '@anthropic-ai/sdk@0.92.0':
-    resolution: {integrity: sha512-l653JFC83wCglH8H83t1xpgDurCyPyslYW1maPRdCsfuNuGbLvQjQ81sWd3Go3LWRm0jNspzAhuqAYV8r9joSw==}
+  '@anthropic-ai/sdk@0.93.0':
+    resolution: {integrity: sha512-q9vaSZQVFx6B/gPxetGYfLXSJD5v0sOmh0OpZDq7yCrTSA+Rscvrtyol7JJTW40wEpQB4U1B4JXzxQitbQ3CAA==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -5176,7 +5176,7 @@ packages:
 
 snapshots:
 
-  '@anthropic-ai/sdk@0.92.0(zod@4.4.2)':
+  '@anthropic-ai/sdk@0.93.0(zod@4.4.2)':
     dependencies:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
