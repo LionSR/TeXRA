@@ -303,9 +303,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         }),
       [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
         try {
-          await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-          const authStatus = await getAuthStatus();
-          if (authStatus.authenticated) {
+          const authenticated = await vscode.commands.executeCommand<boolean>(
+            AUTH_COMMANDS.SIGN_IN,
+          );
+          if (authenticated) {
             this.postToActiveView({
               command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
             });
