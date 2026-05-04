@@ -18,6 +18,11 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { normalizeFilePath } from '@shared/utils/path';
 import { getConfig } from '@utils/config/configUtils';
 
+import type {
+  DesktopCommandMessage,
+  DesktopMessageHandler,
+} from './desktopIpcTypes.js';
+
 export interface DesktopFileSelectionDialogOptions {
   title: string;
   defaultPath?: string;
@@ -33,11 +38,7 @@ export interface DesktopFileSelectionOptions {
   onError?: (error: unknown) => void;
 }
 
-export interface DesktopFileSelection {
-  handleMessage(
-    message: { command: string } & Record<string, unknown>,
-  ): boolean;
-}
+export type DesktopFileSelection = DesktopMessageHandler;
 
 const RESPONSE_BY_SELECT_COMMAND = {
   [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]:
@@ -217,9 +218,7 @@ export function createDesktopFileSelection(
     postFileList('edited', files);
   }
 
-  function handleMessage(
-    message: { command: string } & Record<string, unknown>,
-  ): boolean {
+  function handleMessage(message: DesktopCommandMessage): boolean {
     switch (message.command) {
       case MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE:
         runAsync(requestSingleFileList('input'));
