@@ -23,6 +23,7 @@
       "@latex": ["src/latex"],
       "@latex/*": ["src/latex/*"],
       "@commands/*": ["packages/extension/src/commands/*"],
+      "@resources/*": ["packages/extension/resources/*"],
       "@model": ["src/model"],
       "@model/*": ["src/model/*"],
       "@housekeeping": ["src/housekeeping"],
@@ -40,7 +41,8 @@
       "@openrouter/sdk/models": [
         "node_modules/@openrouter/sdk/esm/models/index.d.ts"
       ],
-      "@controllers/*": ["src/controllers/*"]
+      "@controllers/*": ["src/controllers/*"],
+      "@test/*": ["src/test/*"]
     },
     "moduleResolution": "node",
     "strict": true,
