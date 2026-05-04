@@ -36,7 +36,11 @@ class MemoryStateStore implements StateStore {
   }
 
   async update(key: string, value: unknown): Promise<void> {
-    this.values.set(key, value);
+    if (value === undefined) {
+      this.values.delete(key);
+    } else {
+      this.values.set(key, value);
+    }
   }
 }
 
@@ -91,6 +95,10 @@ describe('desktop settings IPC', () => {
         authorName: 'TeXRA Bot',
         authorEmail: 'bot@example.com',
         worktreeSupport: false,
+      },
+      {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+        values: {},
       },
     ]);
   });
@@ -183,6 +191,124 @@ describe('desktop settings IPC', () => {
       GIT_COMMITTER_NAME: 'Applied',
       GIT_COMMITTER_EMAIL: 'applied@example.com',
     });
+  });
+
+  it('serves storage-backed LaTeX config reads through workspace state', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    workspaceState.values.set(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, false);
+    workspaceState.values.set(
+      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+      30_000,
+    );
+    workspaceState.values.set(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, 5_000);
+    workspaceState.values.set(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP, 'fine');
+    workspaceState.values.set(WorkspaceStateKey.LATEX_FORMATTER, 'tex-fmt');
+    workspaceState.values.set('texra.invalidLatexValue', 'ignored');
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_LATEX_CONFIG_VALUES,
+      }),
+    ).toBe(true);
+
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+      values: {
+        workflowAutoCompile: false,
+        workflowAutoCompileTimeoutMs: 30_000,
+        latexdiffTimeoutMs: 5_000,
+        latexdiffMathMarkup: 'fine',
+        latexFormatter: 'tex-fmt',
+      },
+    });
+  });
+
+  it('round-trips LaTeX config writes through workspace state and refreshes the renderer', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
+        field: 'latexFormatter',
+        value: 'none',
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+
+    expect(workspaceState.values.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
+      'none',
+    );
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+      values: {
+        latexFormatter: 'none',
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
+        field: 'latexFormatter',
+        value: null,
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+
+    expect(workspaceState.values.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
+      undefined,
+    );
+    expect(workspaceState.values.has(WorkspaceStateKey.LATEX_FORMATTER)).toBe(
+      false,
+    );
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+      values: {},
+    });
+  });
+
+  it('reports invalid LaTeX config writes without mutating workspace state', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const posted: unknown[] = [];
+    const errors: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      postToRenderer: (message) => posted.push(message),
+      onError: (error) => errors.push(error),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
+        field: 'latexdiffTimeoutMs',
+        value: 100,
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      message: 'Invalid LaTeX config value for latexdiffTimeoutMs',
+    });
+    expect(
+      workspaceState.values.has(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS),
+    ).toBe(false);
+    expect(posted).toEqual([]);
   });
 
   it('ignores unsupported or malformed settings messages', async () => {
