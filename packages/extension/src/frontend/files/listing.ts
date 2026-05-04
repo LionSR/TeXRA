@@ -6,8 +6,6 @@ import * as vscode from 'vscode';
 
 // Local imports
 import {
-  containsExcludedDirectory,
-  containsHiddenSegment,
   passesFileFilters,
   prepareFileFilters,
   sanitizeDirectories,
@@ -124,15 +122,7 @@ export async function getFilesRecursively(
 
   return files
     .map((uri) => getRelativePathPreservingSymlinks(uri.fsPath, root))
-    .filter((relativePath) => {
-      if (!relativePath || containsHiddenSegment(relativePath)) return false;
-      if (containsExcludedDirectory(relativePath, filters.excludeDirs))
-        return false;
-
-      const fileNameLower = path.basename(relativePath).toLowerCase();
-      return (
-        !filters.excludeFiles.includes(fileNameLower) &&
-        passesFileFilters(relativePath, filters)
-      );
-    });
+    .filter((relativePath) =>
+      passesFileFilters(relativePath, filters, { keywordScope: 'fileName' }),
+    );
 }

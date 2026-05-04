@@ -159,7 +159,7 @@ export function createDesktopFileSelection(
 
   async function requestSingleFileList(
     fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
-    options: { preserveBaseFile?: boolean } = {},
+    listOptions: { preserveBaseFile?: boolean } = {},
   ) {
     const files =
       fileType === 'base'
@@ -168,7 +168,7 @@ export function createDesktopFileSelection(
     postFileList(
       fileType,
       files,
-      options.preserveBaseFile ? { preserveBaseFile: true } : {},
+      listOptions.preserveBaseFile ? { preserveBaseFile: true } : {},
     );
   }
 

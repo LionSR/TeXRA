@@ -35,6 +35,10 @@ export interface PreparedFileFilters {
   sanitizedDirs: string[];
 }
 
+export interface FileFilterOptions {
+  keywordScope?: 'path' | 'fileName';
+}
+
 type ConfigReader = (key: string, fallback: string[]) => string[];
 
 function getConfiguredIncludedExtensions(
@@ -223,6 +227,7 @@ export function containsExcludedDirectory(
 export function passesFileFilters(
   relativePath: string,
   filters: PreparedFileFilters,
+  options: FileFilterOptions = {},
 ): boolean {
   if (!relativePath || containsHiddenSegment(relativePath)) return false;
   if (containsExcludedDirectory(relativePath, filters.excludeDirs))
@@ -238,7 +243,9 @@ export function passesFileFilters(
     return false;
   }
   if (filters.excludeExt.some((ext) => lowerPath.endsWith(ext))) return false;
-  if (filters.excludeKeywords.some((kw) => lowerPath.includes(kw))) {
+  const keywordTarget =
+    options.keywordScope === 'fileName' ? fileNameLower : lowerPath;
+  if (filters.excludeKeywords.some((kw) => keywordTarget.includes(kw))) {
     return false;
   }
   return true;

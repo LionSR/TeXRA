@@ -33,7 +33,7 @@ describe('shared file-listing rules', () => {
       extensions: ['.TEX'],
       ignoredExtensions: ['.PDF'],
       ignoredDirs: ['node_modules', 'drafts/generated'],
-      ignoredKeywords: ['scratch'],
+      ignoredKeywords: ['scratch', 'template'],
       ignoredFiles: ['command.tex'],
     });
 
@@ -46,6 +46,12 @@ describe('shared file-listing rules', () => {
     expect(passesFileFilters('sections/scratch-notes.tex', filters)).toBe(
       false,
     );
+    expect(passesFileFilters('templates/main.tex', filters)).toBe(false);
+    expect(
+      passesFileFilters('templates/main.tex', filters, {
+        keywordScope: 'fileName',
+      }),
+    ).toBe(true);
     expect(passesFileFilters('.cache/main.tex', filters)).toBe(false);
   });
 
