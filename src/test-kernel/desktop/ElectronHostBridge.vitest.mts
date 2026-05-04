@@ -1,12 +1,11 @@
-// Node imports
-import { resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared host bridge
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
+
+// Local imports - desktop test paths
+import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 interface HostBridgeModule {
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL: string;
@@ -45,14 +44,10 @@ interface MainHostBridgeModule {
   };
 }
 
-const TEST_DIR = fileURLToPath(new URL('.', import.meta.url));
-
 async function loadHostBridgeModule(): Promise<HostBridgeModule> {
-  const modulePath = resolve(
-    TEST_DIR,
-    '../../../packages/desktop/src/preload/hostBridge.ts',
-  );
-  return import(pathToFileURL(modulePath).href) as Promise<HostBridgeModule>;
+  return import(
+    moduleFileUrl(desktopSourcePath('preload', 'hostBridge.ts'))
+  ) as Promise<HostBridgeModule>;
 }
 
 async function loadMainHostBridgeModule(ipcMain: {
@@ -67,12 +62,8 @@ async function loadMainHostBridgeModule(ipcMain: {
 }): Promise<MainHostBridgeModule> {
   vi.resetModules();
   vi.doMock('electron', () => ({ ipcMain }));
-  const modulePath = resolve(
-    TEST_DIR,
-    '../../../packages/desktop/src/main/hostBridge.ts',
-  );
   return import(
-    pathToFileURL(modulePath).href
+    moduleFileUrl(desktopSourcePath('main', 'hostBridge.ts'))
   ) as Promise<MainHostBridgeModule>;
 }
 
