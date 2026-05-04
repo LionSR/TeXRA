@@ -23,6 +23,7 @@ import {
   type SettingsMemoryMessage,
 } from '@controllers/settingsView/SettingsMemoryController';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import { platform } from '@platform/platform';
 import { getAgentsBySource, loadAgents } from '@agent/index';
 import {
   getExecutionStore,
@@ -73,6 +74,7 @@ import {
   formatCost,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
+import { invalidateApiKeyCache, lookupApiKeyOrigin } from '@model/apiProviders';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { buildStreamInfo } from '@progressView/streamInfoUtils';
 import type { ExecutionId } from '@shared/schemas';
@@ -222,35 +224,58 @@ function getReliabilitySettings(): NumberVscodeSetting[] {
   }));
 }
 
+type SecretStatusMap = Record<string, ProviderKeyStatus['status']>;
+
+let _secretStatusCache: SecretStatusMap | null = null;
+let _secretStatusPending: Promise<SecretStatusMap> | null = null;
+
+function invalidateProviderSecretStatusCache(): void {
+  _secretStatusCache = null;
+  _secretStatusPending = null;
+}
+
+async function loadProviderSecretStatuses(): Promise<SecretStatusMap> {
+  if (_secretStatusCache) return _secretStatusCache;
+  if (_secretStatusPending) return _secretStatusPending;
+
+  const request = (async () => {
+    const secrets = platform().secrets;
+    const entries = await Promise.all(
+      SecretManager.API_PROVIDERS.map(async (provider) => {
+        const origin = await lookupApiKeyOrigin(secrets, provider);
+        const status: ProviderKeyStatus['status'] =
+          origin === 'secret' ? 'set' : origin === 'env' ? 'env' : 'not-set';
+        return [provider, status] as const;
+      }),
+    );
+    return Object.fromEntries(entries) as SecretStatusMap;
+  })();
+
+  _secretStatusPending = request;
+  try {
+    const result = await request;
+    if (_secretStatusPending === request) _secretStatusCache = result;
+    return result;
+  } finally {
+    if (_secretStatusPending === request) _secretStatusPending = null;
+  }
+}
+
 async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
-  return Promise.all(
-    SecretManager.API_PROVIDERS.map(async (provider) => {
-      const secretValue = await SecretManager.get(
-        SecretManager.getApiKeySecretName(provider),
-      );
-      const envValue = process.env[`${provider.toUpperCase()}_API_KEY`];
-
-      const status: ProviderKeyStatus['status'] = secretValue
-        ? 'set'
-        : envValue
-          ? 'env'
-          : 'not-set';
-
-      return {
-        provider,
-        displayName: getProviderDisplayName(
-          provider,
-          PROVIDER_DISPLAY_NAMES[provider],
-        ),
-        status,
-        keyUrl: getProviderKeyUrl(provider, PROVIDER_URLS[provider]),
-        streaming: getProviderStreaming(provider),
-        customEndpoint: getProviderEndpoint(provider),
-        supportsCustomEndpoint: supportsCustomEndpoint(provider),
-        vscodeSettings: getProviderVscodeSettings(provider),
-      };
-    }),
-  );
+  const secretStatuses = await loadProviderSecretStatuses();
+  return SecretManager.API_PROVIDERS.map((provider) => ({
+    provider,
+    displayName: getProviderDisplayName(
+      provider,
+      PROVIDER_DISPLAY_NAMES[provider],
+    ),
+    status: secretStatuses[provider],
+    keyUrl: getProviderKeyUrl(provider, PROVIDER_URLS[provider]),
+    streaming: getProviderStreaming(provider),
+    customEndpoint: getProviderEndpoint(provider),
+    supportsCustomEndpoint: supportsCustomEndpoint(provider),
+    vscodeSettings: getProviderVscodeSettings(provider),
+  }));
 }
 
 const modelProvidersSet = new Set<string>(MODEL_PROVIDERS_ORDER);
@@ -1539,7 +1564,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to set ${this.profileKeyController.getProviderDisplayName(provider)} API key`,
+        `Failed to set ${PROVIDER_DISPLAY_NAMES[provider] ?? provider} API key`,
         error,
       );
       // On error, still refresh settings view to reflect current key state.
@@ -1556,7 +1581,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to remove ${this.profileKeyController.getProviderDisplayName(provider)} API key`,
+        `Failed to remove ${PROVIDER_DISPLAY_NAMES[provider] ?? provider} API key`,
         error,
       );
       // On error, still refresh settings view to reflect current key state.
@@ -1570,8 +1595,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * redundant async work when callers would otherwise call sendProfileData separately.
    */
   private async refreshAfterKeyChange(): Promise<void> {
-    // Invalidate model options cache so downstream refreshes see fresh key state.
+    // Invalidate caches so downstream refreshes see fresh key state.
     invalidateModelOptionsCache();
+    invalidateApiKeyCache();
+    invalidateProviderSecretStatusCache();
     await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
     await Promise.all([
       vscode.commands.executeCommand('texra.refreshAllOptions'),

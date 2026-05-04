@@ -40,9 +40,6 @@ type ProgressMessage = {
 
 async function createBridge(messages: unknown[]): Promise<TestableBridge> {
   vi.resetModules();
-  vi.doMock('@agent/runtime/AgentRuntimeHost', () => ({
-    createAgentRuntimeHost: vi.fn(() => ({})),
-  }));
   vi.doMock('@agent/runtime/RunStorageService', () => ({
     setRunStorageService: vi.fn(),
   }));
@@ -157,9 +154,6 @@ async function createExecution(options: {
   runValidatedExecutionRequest?: () => Promise<void>;
 }): Promise<DesktopExecution> {
   vi.resetModules();
-  vi.doMock('@agent/runtime/AgentRuntimeHost', () => ({
-    createAgentRuntimeHost: vi.fn(() => ({})),
-  }));
   vi.doMock('@agent/runtime/RunStorageService', () => ({
     setRunStorageService: vi.fn(),
   }));
@@ -219,7 +213,6 @@ function progressMessages(
 
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
-    vi.doUnmock('@agent/runtime/AgentRuntimeHost');
     vi.doUnmock('@agent/runtime/RunStorageService');
     vi.doUnmock('@agent/runtime/runExecutionRequest');
     vi.doUnmock('@common/storage');
