@@ -151,20 +151,72 @@ export function createWorkflowTaskState(
   };
 }
 
+type WorkspaceLocationOverrides = {
+  kind?: 'workspace';
+  absolutePath?: string;
+  relativePath?: string;
+};
+
+type RunStorageLocationOverrides = {
+  kind: 'runStorage';
+  absolutePath?: string;
+  relativePath?: string;
+  executionId?: string;
+};
+
+type ExternalLocationOverrides = {
+  kind: 'external';
+  absolutePath?: string;
+};
+
+type OutputFileLocationOverrides =
+  | WorkspaceLocationOverrides
+  | RunStorageLocationOverrides
+  | ExternalLocationOverrides;
+
+export type OutputFileHarnessOptions = Partial<
+  Omit<OutputFileInfo, 'location'>
+> & {
+  location?: OutputFileLocationOverrides;
+};
+
+function createOutputFileLocation(
+  overrides: OutputFileLocationOverrides = {},
+): OutputFileInfo['location'] {
+  if (overrides.kind === 'external') {
+    return {
+      kind: 'external',
+      absolutePath: overrides.absolutePath ?? '/external/generated.tex',
+    };
+  }
+
+  if (overrides.kind === 'runStorage') {
+    return {
+      kind: 'runStorage',
+      absolutePath: overrides.absolutePath ?? '/tmp/exec/answer.tex',
+      relativePath: overrides.relativePath ?? 'answer.tex',
+      executionId: overrides.executionId ?? 'exec-old',
+    };
+  }
+
+  return {
+    kind: 'workspace',
+    absolutePath: overrides.absolutePath ?? '/workspace/generated.tex',
+    relativePath: overrides.relativePath ?? 'generated.tex',
+  };
+}
+
 export function createOutputFile(
-  absolutePath: string,
-  relativePath = absolutePath,
+  overrides: OutputFileHarnessOptions = {},
 ): OutputFileInfo {
+  const { location, ...outputOverrides } = overrides;
   return {
     source: 'input.tex',
-    location: {
-      kind: 'workspace',
-      absolutePath,
-      relativePath,
-    },
+    location: createOutputFileLocation(location),
     round: 1,
     lineage: null,
     diff: null,
+    ...outputOverrides,
   };
 }
 
