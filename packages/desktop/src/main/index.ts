@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, session, shell } from 'electron';
 
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
 
@@ -44,13 +45,27 @@ function createWindow(): void {
       sandbox: true,
     },
   });
-  installDesktopMainViewIpc(window, {
+  const ipcRef: {
+    current?: ReturnType<typeof installDesktopMainViewIpc>;
+  } = {};
+  const agentExecution = createDesktopAgentExecution({
+    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    openPath: async (filePath) => {
+      const errorMessage = await shell.openPath(filePath);
+      if (errorMessage) throw new Error(errorMessage);
+    },
+    onError: (error) => console.error(error),
+  });
+  const mainViewIpc = installDesktopMainViewIpc(window, {
     getCustomAgentDirectory: () => getAgentDirectories().custom(),
     openPath: async (filePath) => {
       const errorMessage = await shell.openPath(filePath);
       if (errorMessage) throw new Error(errorMessage);
     },
+    executeAgent: (message) => agentExecution.handleExecute(message),
   });
+  ipcRef.current = mainViewIpc;
+  window.once('closed', () => agentExecution.dispose());
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
