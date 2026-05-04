@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { loadDesktopPlatformModule } from './loadDesktopPlatformModule';
+import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 
 interface JsonStore {
   get<T>(key: string, defaultValue?: T): T;
