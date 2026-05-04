@@ -12,8 +12,8 @@ import {
   GlobalStorageAgentDirectoryStorage,
 } from '@agent/index';
 import type { AgentSource } from '@agent/index';
-import { showLoggedMessageWithDocs } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
+import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { AGENT_SOURCE } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';

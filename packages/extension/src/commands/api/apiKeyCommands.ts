@@ -2,8 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { showLoggedErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
