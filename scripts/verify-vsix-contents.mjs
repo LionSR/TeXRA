@@ -49,11 +49,7 @@ function listVsixEntries(vsixPath) {
 }
 
 function readVsixEntry(vsixPath, entryPath) {
-  return execFileSync('unzip', ['-p', vsixPath, entryPath], {
-    cwd: rootDir,
-    encoding: 'buffer',
-    maxBuffer: 200 * 1024 * 1024,
-  });
+  return unzip(['-p', vsixPath, entryPath], { encoding: 'buffer' });
 }
 
 function hashBuffer(buffer) {
@@ -106,11 +102,12 @@ function verifyManifest(vsixPath, snapshot, failures) {
 }
 
 function verifyRequiredPaths(entries, snapshot, failures) {
+  const entryList = [...entries];
   for (const packagedPath of snapshot.requiredPackagedPaths) {
     const entryPrefix = `extension/${packagedPath}`;
     const exists =
       entries.has(entryPrefix) ||
-      [...entries].some((entry) => entry.startsWith(`${entryPrefix}/`));
+      entryList.some((entry) => entry.startsWith(`${entryPrefix}/`));
     assert(
       exists,
       `VSIX is missing required packaged path ${packagedPath}`,
@@ -122,6 +119,7 @@ function verifyRequiredPaths(entries, snapshot, failures) {
 function verifyResourceHashes(vsixPath, entries, failures) {
   const resourcesDir = path.join(extensionDir, 'resources');
   const sourceFiles = walkFiles(resourcesDir);
+  const sourceFileSet = new Set(sourceFiles);
 
   for (const sourceFile of sourceFiles) {
     const entryPath = `extension/resources/${sourceFile}`;
@@ -142,10 +140,32 @@ function verifyResourceHashes(vsixPath, entries, failures) {
     if (!entry.startsWith('extension/resources/')) continue;
     const sourceFile = entry.slice('extension/resources/'.length);
     assert(
-      sourceFiles.includes(sourceFile),
+      sourceFileSet.has(sourceFile),
       `VSIX contains resource without source counterpart: resources/${sourceFile}`,
       failures,
     );
+  }
+}
+
+function readSnapshot() {
+  if (!fs.existsSync(snapshotPath)) {
+    console.error(
+      'Missing scripts/extension-package-invariants.snapshot.json. Run npm run sync:extension-package-invariants first.',
+    );
+    process.exit(1);
+  }
+
+  try {
+    return readJson(snapshotPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      `Could not read scripts/extension-package-invariants.snapshot.json: ${message}`,
+    );
+    console.error(
+      'Run npm run sync:extension-package-invariants and review the snapshot diff.',
+    );
+    process.exit(1);
   }
 }
 
@@ -168,7 +188,7 @@ if (!fs.existsSync(vsixPath)) {
   process.exit(1);
 }
 
-const snapshot = readJson(snapshotPath);
+const snapshot = readSnapshot();
 const entries = listVsixEntries(vsixPath);
 const failures = [];
 
