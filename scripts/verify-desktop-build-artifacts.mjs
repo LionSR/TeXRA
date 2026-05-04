@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   getDesktopSharedSourceDirs,
+  getDesktopVscodeFreeSourceDirs,
   readJson,
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
@@ -51,6 +52,7 @@ const requiredFiles = [
 ];
 const failures = [];
 const desktopSharedSourceDirs = getDesktopSharedSourceDirs(rootDir);
+const desktopVscodeFreeSourceDirs = getDesktopVscodeFreeSourceDirs(rootDir);
 
 for (const filePath of requiredFiles) {
   if (!fileExists(filePath)) {
@@ -91,6 +93,20 @@ for (const dir of desktopSharedSourceDirs) {
   }
 }
 
+for (const dir of desktopVscodeFreeSourceDirs) {
+  if (!fs.existsSync(dir)) continue;
+  for (const filePath of collectFiles(dir)) {
+    if (!/\.[cm]?tsx?$/.test(filePath)) continue;
+    if (!vscodeRuntimeImportPattern.test(fs.readFileSync(filePath, 'utf8')))
+      continue;
+    failures.push(
+      `Desktop-shared source imports the VS Code runtime module: ${relative(
+        filePath,
+      )}`,
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error('Desktop build artifact check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
@@ -106,3 +122,4 @@ const artifactList = [
 
 console.log('Desktop build artifact check passed:');
 for (const artifact of artifactList) console.log(`- ${artifact}`);
+console.log('- desktop-shared source avoids VS Code runtime imports');

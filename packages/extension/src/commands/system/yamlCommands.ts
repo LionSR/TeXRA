@@ -9,7 +9,7 @@ import * as yaml from 'yaml';
 import { resolveAgent, getWorkflowAgents } from '@agent/index';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getAgentPath } from '@agent/runtime/executeAgent';
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import {
   getActiveEditorWithGuards,

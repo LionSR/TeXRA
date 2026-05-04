@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   getDesktopSharedSourceDirs,
+  getDesktopVscodeFreeSourceDirs,
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
@@ -18,6 +19,7 @@ const desktopRoot = join(repoRoot, 'packages', 'desktop');
 const packageRoot = join(desktopRoot, 'dist-packaged');
 const desktopPackageJsonPath = join(desktopRoot, 'package.json');
 const desktopSharedSourceDirs = getDesktopSharedSourceDirs(repoRoot);
+const desktopVscodeFreeSourceDirs = getDesktopVscodeFreeSourceDirs(repoRoot);
 
 async function exists(path) {
   try {
@@ -167,6 +169,21 @@ async function checkDesktopSourceBoundaries(failures) {
       );
     }
   }
+
+  for (const dir of desktopVscodeFreeSourceDirs) {
+    if (!(await exists(dir))) continue;
+    for (const filePath of await collectFiles(dir)) {
+      if (!/\.[cm]?tsx?$/.test(filePath)) continue;
+      if (!vscodeRuntimeImportPattern.test(await readFile(filePath, 'utf8')))
+        continue;
+      failures.push(
+        `Desktop-shared source imports the VS Code runtime module: ${relative(
+          repoRoot,
+          filePath,
+        )}`,
+      );
+    }
+  }
 }
 
 function dependencyPackageJsonPath(name) {
@@ -268,5 +285,6 @@ console.log(
     '- node_modules runtime dependency packages',
     '- no VS Code extension host runtime import',
     '- desktop-shared source uses vscode-free state keys',
+    '- desktop-shared source avoids VS Code runtime imports',
   ].join('\n'),
 );

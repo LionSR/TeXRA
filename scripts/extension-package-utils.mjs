@@ -21,8 +21,19 @@ const desktopSharedSourceDirSegments = [
   ['src', 'utils'],
 ];
 
+const desktopVscodeFreeSourceDirSegments = [
+  ...desktopSharedSourceDirSegments,
+  ['src', 'common', 'errors'],
+];
+
 export function getDesktopSharedSourceDirs(rootDir) {
   return desktopSharedSourceDirSegments.map((segments) =>
+    path.join(rootDir, ...segments),
+  );
+}
+
+export function getDesktopVscodeFreeSourceDirs(rootDir) {
+  return desktopVscodeFreeSourceDirSegments.map((segments) =>
     path.join(rootDir, ...segments),
   );
 }

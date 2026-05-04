@@ -37,7 +37,7 @@ import {
 import {
   isFileNotFoundError,
   showLoggedErrorMessage,
-} from '@common/errors/errorHandlingUtils';
+} from '@frontend/ui/errorHandlingUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
   SETTINGS_VIEW_CMD,

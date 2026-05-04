@@ -12,7 +12,7 @@ import { LatexRecommendedSettingsController } from '@controllers/settingsView/La
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { workspaceSM } from '@common/state';
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,

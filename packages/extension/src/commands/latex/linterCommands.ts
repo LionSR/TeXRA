@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import * as logger from '@logger/logUtils';
