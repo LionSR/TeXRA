@@ -19,6 +19,10 @@ export {
 
 export {
   BUNDLED_AGENT_DIRECTORY_NAMES,
+  type BundledAgentDirectoryName,
+} from './BundledAgentDirectories';
+
+export {
   BundledAgentDirectorySync,
   GlobalStorageAgentDirectoryStorage,
   PathAgentDirectoryBundleSource,
@@ -26,7 +30,6 @@ export {
   type AgentDirectoryStorage,
   type AgentDirectorySyncLogger,
   type AgentDirectoryVersionStore,
-  type BundledAgentDirectoryName,
   type BundledAgentDirectorySyncOptions,
 } from './AgentDirectorySync';
 
