@@ -4,5 +4,9 @@
     "lib": ["ES2023", "DOM"],
     "types": ["vite/client"]
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.d.ts"]
+  "include": [
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.d.ts",
+    "../../src/types/**/*.d.ts"
+  ]
 }
