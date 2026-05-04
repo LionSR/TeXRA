@@ -7,6 +7,10 @@
  */
 
 // Local imports - shared schemas
+import type {
+  ActionConfig,
+  ContextStatItem,
+} from '@progressView/frontend/components/ContextManagement';
 import {
   ContextManagementDataSchema,
   type ContextManagementData,
@@ -20,10 +24,6 @@ import { html, type FormatResult } from '../litTemplates';
 import { formatTokens } from '../timestampUtils';
 
 // Local imports - component types
-import type {
-  ActionConfig,
-  ContextStatItem,
-} from '../../components/ContextManagement';
 
 /**
  * Minimum reduced token threshold below which the "Max Tokens Reduced" event

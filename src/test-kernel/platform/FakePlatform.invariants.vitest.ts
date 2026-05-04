@@ -9,7 +9,7 @@ import {
   FakeFileSystemProvider,
   RecordingLogBackend,
   createFakePlatform,
-} from '../../test/support/FakePlatform';
+} from '@test/support/FakePlatform';
 
 function utf8(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('utf8');

@@ -6,6 +6,9 @@ const path = require('path');
 const TerserPlugin = require('terser-webpack-plugin');
 const webpack = require('webpack');
 
+const packageSrc = path.resolve(__dirname, 'src');
+const rootSrc = path.resolve(__dirname, '..', '..', 'src');
+
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
 
@@ -138,28 +141,30 @@ const extensionConfig = {
     // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
     extensions: ['.ts', '.js'],
     alias: {
-      '@': path.resolve(__dirname, 'src'),
-      '~': path.resolve(__dirname, 'src'),
-      '@common': path.resolve(__dirname, 'src/common'),
-      '@webview': path.resolve(__dirname, 'src/webview'),
-      '@agent': path.resolve(__dirname, 'src/agent'),
-      '@frontend': path.resolve(__dirname, 'src/frontend'),
-      '@hosts': path.resolve(__dirname, 'src/hosts'),
-      '@utils': path.resolve(__dirname, 'src/utils'),
-      '@logger': path.resolve(__dirname, 'src/logger'),
-      '@latex': path.resolve(__dirname, 'src/latex'),
-      '@commands': path.resolve(__dirname, 'src/commands'),
-      '@model': path.resolve(__dirname, 'src/model'),
-      '@housekeeping': path.resolve(__dirname, 'src/housekeeping'),
-      '@shared': path.resolve(__dirname, 'src/shared'),
-      '@progressView': path.resolve(__dirname, 'src/progressView'),
-      '@settingsView': path.resolve(__dirname, 'src/settingsView'),
-      '@replacement': path.resolve(__dirname, 'src/replacement'),
-      '@tools': path.resolve(__dirname, 'src/tools'),
-      '@types': path.resolve(__dirname, 'src/types'),
-      '@eventBus': path.resolve(__dirname, 'src/eventBus'),
-      '@auth': path.resolve(__dirname, 'src/auth'),
-      '@platform': path.resolve(__dirname, 'src/platform'),
+      '@': packageSrc,
+      '~': packageSrc,
+      '@common': path.resolve(rootSrc, 'common'),
+      '@webview': path.resolve(packageSrc, 'webview'),
+      '@agent': path.resolve(rootSrc, 'agent'),
+      '@frontend': path.resolve(packageSrc, 'frontend'),
+      '@hosts': path.resolve(rootSrc, 'hosts'),
+      '@utils': path.resolve(rootSrc, 'utils'),
+      '@logger': path.resolve(rootSrc, 'logger'),
+      '@latex': path.resolve(rootSrc, 'latex'),
+      '@commands': path.resolve(packageSrc, 'commands'),
+      '@resources': path.resolve(__dirname, 'resources'),
+      '@controllers': path.resolve(rootSrc, 'controllers'),
+      '@model': path.resolve(rootSrc, 'model'),
+      '@housekeeping': path.resolve(rootSrc, 'housekeeping'),
+      '@shared': path.resolve(rootSrc, 'shared'),
+      '@progressView': path.resolve(packageSrc, 'progressView'),
+      '@settingsView': path.resolve(packageSrc, 'settingsView'),
+      '@replacement': path.resolve(rootSrc, 'replacement'),
+      '@tools': path.resolve(rootSrc, 'tools'),
+      '@types': path.resolve(rootSrc, 'types'),
+      '@eventBus': path.resolve(rootSrc, 'eventBus'),
+      '@auth': path.resolve(rootSrc, 'auth'),
+      '@platform': path.resolve(rootSrc, 'platform'),
     },
     fallback: {
       fs: false,
@@ -213,7 +218,7 @@ const commonsConfig = {
   name: 'commons',
   target: 'web',
   mode: 'none',
-  entry: './src/shared/commons/index.ts',
+  entry: path.resolve(rootSrc, 'shared/commons/index.ts'),
   output: {
     path: path.resolve(__dirname, 'dist/shared'),
     filename: 'commons.js',
