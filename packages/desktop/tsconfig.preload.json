@@ -5,5 +5,5 @@
     "moduleResolution": "nodenext",
     "types": ["node", "electron"]
   },
-  "include": ["src/preload/**/*.ts"]
+  "include": ["src/preload/**/*.ts", "../../src/types/**/*.d.ts"]
 }
