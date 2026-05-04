@@ -893,7 +893,7 @@ Each phase is independently reviewable. The extension and the desktop port never
 
 ### Phase 0 — Workspace package + headless workflow runner (1.5 weeks)
 
-**Gates:** Electron PRD's Phase 0 (monorepo split) must be merged. CLI lives at `packages/cli/` from the start. The CLI's `AgentDirectoryService` adapters (path storage, dir access, issue reporter, sync storage + version store) ship as part of Phase 0 deliverables — pure CLI-internal wiring against the existing host-neutral classes.
+**Gates:** Electron PRD's Phase 0 source move must be merged far enough that `@texra/core` exposes the kernel import surface. CLI lives at `packages/cli/` from the start. The CLI's `AgentDirectoryService` adapters (path storage, dir access, issue reporter, sync storage + version store) ship as part of Phase 0 deliverables — pure CLI-internal wiring against the existing host-neutral classes.
 
 - Add `@texra/cli` package; wire pnpm workspace, tsconfig, tsup.
 - Wire `initPlatform()` from `cli/src/runtime/initPlatform.ts` with `consoleLog`, `nodeFilesystem`, `nodeWorkspace`, `nodeStorage`, `memoryState`, `EnvSecrets` (existing defaults). `ConfConfigProvider` and `KeyringSecrets` follow in Phase 2.
