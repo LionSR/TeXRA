@@ -1,4 +1,4 @@
-import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
@@ -18,6 +18,7 @@ import { getGlobalState } from '@agent/core/stateStore';
 import { getConfig } from '@agent/core/config';
 import { GlobalStateKey } from '@common/state';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
+import { LEVEL_TO_EFFORT } from './reasoningEffort';
 
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
@@ -40,17 +41,6 @@ const PROVIDER_HANDLERS: Record<
   [ModelProvider.GLM]: ModelHandlerGLM,
   [ModelProvider.OTHERS]: ModelHandlerOpenRouterNative,
   [ModelProvider.COPILOT]: null,
-};
-
-/**
- * Single source of truth: user-facing reasoning level strings → ReasoningEffort enum.
- * The reverse mapping (for the settings UI) is derived from this in SettingsViewMessageHandler.
- */
-export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
-  none: ReasoningEffort.NONE,
-  low: ReasoningEffort.LOW,
-  medium: ReasoningEffort.MEDIUM,
-  high: ReasoningEffort.HIGH,
 };
 
 /**
