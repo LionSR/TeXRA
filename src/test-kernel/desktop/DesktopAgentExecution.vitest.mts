@@ -16,10 +16,21 @@ type TestableBridge = Bridge & {
   handleProgressEvent(event: string, payload: unknown): void;
 };
 
+type DesktopExecution = {
+  handleExecute(message: unknown): Promise<void>;
+  dispose(): void;
+};
+
 interface DesktopAgentExecutionModule {
   DesktopProgressBridge: new (
     postToRenderer: (message: unknown) => void,
   ) => Bridge;
+  createDesktopAgentExecution(options: {
+    postToRenderer(message: unknown): void;
+    openPath?: (filePath: string) => Promise<void>;
+    showInformationMessage?: (message: string) => Promise<void> | void;
+    onError?: (error: unknown) => void;
+  }): DesktopExecution;
 }
 
 type ProgressMessage = {
@@ -29,6 +40,7 @@ type ProgressMessage = {
 };
 
 async function createBridge(messages: unknown[]): Promise<TestableBridge> {
+  vi.resetModules();
   vi.doMock('@agent/runtime/AgentRuntimeHost', () => ({
     createAgentRuntimeHost: vi.fn(() => ({})),
   }));
@@ -137,6 +149,61 @@ async function createBridge(messages: unknown[]): Promise<TestableBridge> {
   return new DesktopProgressBridge((message) =>
     messages.push(message),
   ) as TestableBridge;
+}
+
+async function createExecution(options: {
+  postToRenderer?: (message: unknown) => void;
+  showInformationMessage?: (message: string) => Promise<void> | void;
+  prepareMainViewExecutionRequest: (message: unknown) => unknown;
+  runValidatedExecutionRequest?: () => Promise<void>;
+}): Promise<DesktopExecution> {
+  vi.resetModules();
+  vi.doMock('@agent/runtime/AgentRuntimeHost', () => ({
+    createAgentRuntimeHost: vi.fn(() => ({})),
+  }));
+  vi.doMock('@agent/runtime/RunStorageService', () => ({
+    setRunStorageService: vi.fn(),
+  }));
+  vi.doMock('@agent/runtime/runExecutionRequest', () => ({
+    runValidatedExecutionRequest:
+      options.runValidatedExecutionRequest ?? vi.fn(async () => {}),
+  }));
+  vi.doMock('@common/storage', () => ({
+    KVStore: class {
+      async read(): Promise<undefined> {
+        return undefined;
+      }
+
+      async write(): Promise<void> {}
+
+      async delete(): Promise<void> {}
+
+      async deleteDir(): Promise<void> {}
+
+      async exists(): Promise<boolean> {
+        return false;
+      }
+
+      async listKeys(): Promise<string[]> {
+        return [];
+      }
+    },
+  }));
+  vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
+    prepareMainViewExecutionRequest: options.prepareMainViewExecutionRequest,
+  }));
+  vi.doMock('@logger/AgentLogger', () => ({
+    AgentLogger: class {
+      static setStreamLogStore(): void {}
+    },
+  }));
+  const { createDesktopAgentExecution } = (await import(
+    moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
+  )) as DesktopAgentExecutionModule;
+  return createDesktopAgentExecution({
+    postToRenderer: options.postToRenderer ?? vi.fn(),
+    showInformationMessage: options.showInformationMessage,
+  });
 }
 
 function progressMessages(
@@ -275,6 +342,32 @@ describe('DesktopProgressBridge', () => {
       ).toMatchObject({ status: STREAM_STATUS.RUNNING });
     } finally {
       bridge.dispose();
+    }
+  });
+
+  it('surfaces invalid execution requests through the host notification path', async () => {
+    const postToRenderer = vi.fn();
+    const showInformationMessage = vi.fn();
+    const runValidatedExecutionRequest = vi.fn(async () => {});
+    const execution = await createExecution({
+      postToRenderer,
+      showInformationMessage,
+      runValidatedExecutionRequest,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: false,
+        message: 'Select an input file first.',
+      })),
+    });
+
+    try {
+      await execution.handleExecute({ command: 'execute' });
+      expect(showInformationMessage).toHaveBeenCalledWith(
+        'Select an input file first.',
+      );
+      expect(postToRenderer).not.toHaveBeenCalled();
+      expect(runValidatedExecutionRequest).not.toHaveBeenCalled();
+    } finally {
+      execution.dispose();
     }
   });
 });

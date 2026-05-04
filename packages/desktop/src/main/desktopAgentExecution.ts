@@ -11,7 +11,6 @@ import {
 import type { ProgressSink } from '@agent/runtime/ProgressSink';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -34,6 +33,7 @@ import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): void;
   openPath?: (filePath: string) => Promise<void>;
+  showInformationMessage?: (message: string) => Promise<void> | void;
   onError?: (error: unknown) => void;
 }
 
@@ -443,10 +443,7 @@ export function createDesktopAgentExecution(
     async handleExecute(message) {
       const preparation = prepareMainViewExecutionRequest(message);
       if (!preparation.valid) {
-        options.postToRenderer({
-          command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-          text: preparation.message,
-        });
+        await options.showInformationMessage?.(preparation.message);
         return;
       }
 

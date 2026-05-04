@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
@@ -48,20 +48,21 @@ function createWindow(): void {
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
+  const openPath = async (filePath: string) => {
+    const errorMessage = await shell.openPath(filePath);
+    if (errorMessage) throw new Error(errorMessage);
+  };
   const agentExecution = createDesktopAgentExecution({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
-    openPath: async (filePath) => {
-      const errorMessage = await shell.openPath(filePath);
-      if (errorMessage) throw new Error(errorMessage);
+    openPath,
+    showInformationMessage: async (message) => {
+      await dialog.showMessageBox(window, { message, type: 'info' });
     },
     onError: (error) => console.error(error),
   });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     getCustomAgentDirectory: () => getAgentDirectories().custom(),
-    openPath: async (filePath) => {
-      const errorMessage = await shell.openPath(filePath);
-      if (errorMessage) throw new Error(errorMessage);
-    },
+    openPath,
     executeAgent: (message) => agentExecution.handleExecute(message),
   });
   ipcRef.current = mainViewIpc;
