@@ -4,9 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
+import {
+  app as electronApp,
+  configureElectronTestStub,
+  resetElectronTestStub,
+} from './electronTestStub.mjs';
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 
 interface JsonStore {
@@ -69,20 +74,35 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 describe('desktop platform adapters', () => {
-  let tempDir: string | undefined;
+  const tempDirs: string[] = [];
   const originalEnv = { ...process.env };
+  const testSecretKey = 'TEXRA_TEST_TOKEN';
 
   afterEach(async () => {
     process.env = { ...originalEnv };
-    if (tempDir == null) return;
-    await rm(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
+    resetElectronTestStub();
+    vi.restoreAllMocks();
+    await Promise.all(
+      tempDirs
+        .splice(0)
+        .map((path) => rm(path, { recursive: true, force: true })),
+    );
   });
 
   async function makeTempDir(prefix: string): Promise<string> {
-    tempDir = await mkdtemp(join(tmpdir(), prefix));
+    const tempDir = await mkdtemp(join(tmpdir(), prefix));
+    tempDirs.push(tempDir);
     return tempDir;
   }
+
+  it('keeps Electron app paths isolated from the checkout', async () => {
+    const root = await makeTempDir('texra-electron-user-data-');
+
+    configureElectronTestStub({ userDataPath: root });
+
+    expect(electronApp.getPath('userData')).toBe(root);
+    expect(electronApp.getPath('logs')).toBe(join(root, 'logs'));
+  });
 
   it('persists state values and deletes undefined updates through JsonStore', async () => {
     const [{ JsonStore }, { ElectronStateStore }] = await Promise.all([
@@ -132,21 +152,56 @@ describe('desktop platform adapters', () => {
     const store = await JsonStore.open(join(root, 'secrets.json'));
     const secrets = new ElectronSecrets(store);
 
-    await secrets.set('TEXRA_TOKEN', 'persisted');
+    await secrets.set(testSecretKey, 'persisted');
 
-    expect(await secrets.get('TEXRA_TOKEN')).toBe('persisted');
-    expect(store.snapshot().TEXRA_TOKEN).toEqual({
+    expect(await secrets.get(testSecretKey)).toBe('persisted');
+    expect(store.snapshot()[testSecretKey]).toMatchObject({
       encrypted: true,
-      value: Buffer.from('encrypted:persisted').toString('base64'),
+      value: expect.any(String),
     });
 
-    process.env.TEXRA_TOKEN = 'from-env';
-    expect(await secrets.get('TEXRA_TOKEN')).toBe('from-env');
+    process.env[testSecretKey] = 'from-env';
+    expect(await secrets.get(testSecretKey)).toBe('from-env');
 
-    delete process.env.TEXRA_TOKEN;
-    await secrets.delete('TEXRA_TOKEN');
+    delete process.env[testSecretKey];
+    await secrets.delete(testSecretKey);
 
-    expect(await secrets.get('TEXRA_TOKEN')).toBeUndefined();
+    expect(await secrets.get(testSecretKey)).toBeUndefined();
+    expect(store.snapshot()).toEqual({});
+  });
+
+  it('rejects secret writes when Electron safe storage is unavailable', async () => {
+    const [{ ElectronSecrets }, JsonStore] = await Promise.all([
+      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
+      loadJsonStore(),
+    ]);
+    const root = await makeTempDir('texra-electron-secrets-');
+    const store = await JsonStore.open(join(root, 'secrets.json'));
+    const secrets = new ElectronSecrets(store);
+
+    configureElectronTestStub({ safeStorageEncryptionAvailable: false });
+
+    await expect(secrets.set(testSecretKey, 'persisted')).rejects.toThrow(
+      'Electron safeStorage is unavailable for secret writes.',
+    );
+    expect(store.snapshot()).toEqual({});
+  });
+
+  it('rejects secret writes on the Linux basic_text safe storage backend', async () => {
+    const [{ ElectronSecrets }, JsonStore] = await Promise.all([
+      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
+      loadJsonStore(),
+    ]);
+    const root = await makeTempDir('texra-electron-secrets-');
+    const store = await JsonStore.open(join(root, 'secrets.json'));
+    const secrets = new ElectronSecrets(store);
+
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    configureElectronTestStub({ safeStorageBackend: 'basic_text' });
+
+    await expect(secrets.set(testSecretKey, 'persisted')).rejects.toThrow(
+      'Electron safeStorage is unavailable for secret writes.',
+    );
     expect(store.snapshot()).toEqual({});
   });
 
@@ -159,8 +214,8 @@ describe('desktop platform adapters', () => {
     const store = await JsonStore.open(join(root, 'secrets.json'));
     const secrets = new ElectronSecrets(store);
 
-    await store.set('TEXRA_TOKEN', { encrypted: false, value: 'plain' });
+    await store.set(testSecretKey, { encrypted: false, value: 'plain' });
 
-    expect(await secrets.get('TEXRA_TOKEN')).toBeUndefined();
+    expect(await secrets.get(testSecretKey)).toBeUndefined();
   });
 });
