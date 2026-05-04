@@ -5,7 +5,7 @@ import { strict as assert } from 'assert';
 import {
   SettingsAgentDirectoryController,
   type SettingsAgentDirectoryEntry,
-} from '../../controllers/settingsView/SettingsAgentDirectoryController';
+} from '@controllers/settingsView/SettingsAgentDirectoryController';
 
 const AGENTS = new Map<string, SettingsAgentDirectoryEntry>([
   [

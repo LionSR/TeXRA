@@ -7,29 +7,29 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "sourceMap": false,
-    "rootDir": "src",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "~/*": ["src/*"],
+      "@/*": ["packages/extension/src/*", "src/*"],
+      "~/*": ["packages/extension/src/*", "src/*"],
       "@shared/*": ["src/shared/*"],
       "@common/*": ["src/common/*"],
-      "@webview/*": ["src/webview/*"],
+      "@webview/*": ["packages/extension/src/webview/*"],
       "@agent/*": ["src/agent/*"],
-      "@frontend/*": ["src/frontend/*"],
+      "@frontend/*": ["packages/extension/src/frontend/*"],
       "@hosts": ["src/hosts"],
       "@hosts/*": ["src/hosts/*"],
       "@utils/*": ["src/utils/*"],
       "@logger/*": ["src/logger/*"],
       "@latex": ["src/latex"],
       "@latex/*": ["src/latex/*"],
-      "@commands/*": ["src/commands/*"],
+      "@commands/*": ["packages/extension/src/commands/*"],
+      "@resources/*": ["packages/extension/resources/*"],
       "@model": ["src/model"],
       "@model/*": ["src/model/*"],
       "@housekeeping": ["src/housekeeping"],
       "@housekeeping/*": ["src/housekeeping/*"],
-      "@progressView/*": ["src/progressView/*"],
-      "@settingsView/*": ["src/settingsView/*"],
+      "@progressView/*": ["packages/extension/src/progressView/*"],
+      "@settingsView/*": ["packages/extension/src/settingsView/*"],
       "@replacement/*": ["src/replacement/*"],
       "@tools/*": ["src/tools/*"],
       "@types/*": ["src/types/*"],
@@ -40,24 +40,29 @@
       "@openrouter/sdk": ["node_modules/@openrouter/sdk/esm/index.d.ts"],
       "@openrouter/sdk/models": [
         "node_modules/@openrouter/sdk/esm/models/index.d.ts"
-      ]
+      ],
+      "@controllers/*": ["src/controllers/*"],
+      "@test/*": ["src/test/*"]
     },
     "moduleResolution": "node",
-    "strict": true /* enable all strict type-checking options */,
+    "strict": true,
     "skipLibCheck": true,
-    "esModuleInterop": true /* Enables emit interoperability between CommonJS and ES Modules */,
+    "esModuleInterop": true,
     "types": ["node", "mocha", "vscode"]
-    /* Additional Checks */
-    // "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
-    // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
-    // "noUnusedParameters": true,  /* Report errors on unused parameters. */
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/extension/src/**/*.ts",
+    "packages/extension/src/**/*.tsx"
+  ],
   "exclude": [
     "node_modules",
     "prototypes",
     "supabase",
-    "vite.config.ts",
-    "esbuild.config.mjs"
+    "packages/desktop",
+    "packages/core",
+    "packages/extension/vite.config.ts",
+    "packages/extension/esbuild.config.mjs"
   ]
 }

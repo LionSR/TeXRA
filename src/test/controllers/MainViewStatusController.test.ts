@@ -2,10 +2,10 @@
 import { strict as assert } from 'assert';
 
 // Local imports - common
+import { MainViewStatusController } from '@controllers/mainView/MainViewStatusController';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 
 // Local imports - controllers
-import { MainViewStatusController } from '../../controllers/mainView/MainViewStatusController';
 
 describe('MainViewStatusController', () => {
   it('projects the active theme into webview messages', () => {

@@ -7,6 +7,9 @@
  */
 import * as vscode from 'vscode';
 
+import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
+import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { showLoggedErrorMessage } from '@common/errors';
 import { workspaceSM } from '@common/state';
@@ -30,9 +33,6 @@ import {
   detectPackageManager,
 } from '@utils/system/toolUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
-import { LatexConfigPersistenceController } from '../../controllers/settingsView/LatexConfigPersistenceController';
-import { LatexRecommendedSettingsController } from '../../controllers/settingsView/LatexRecommendedSettingsController';
-import { LatexToolingController } from '../../controllers/settingsView/LatexToolingController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
