@@ -104,8 +104,13 @@ function createDirectoryAppReader(appRoot) {
     readText(path) {
       return readFile(join(appRoot, path), 'utf8');
     },
-    listDir(path) {
-      return readdir(join(appRoot, path));
+    async listDir(path) {
+      try {
+        return await readdir(join(appRoot, path));
+      } catch (error) {
+        if (error?.code === 'ENOENT') return [];
+        throw error;
+      }
     },
   };
 }
