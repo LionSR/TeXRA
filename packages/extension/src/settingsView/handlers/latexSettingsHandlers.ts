@@ -11,8 +11,8 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
-import { showLoggedErrorMessage } from '@common/errors';
 import { workspaceSM } from '@common/state';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
