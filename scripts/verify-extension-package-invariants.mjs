@@ -3,6 +3,11 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import {
+  extensionManifestSnapshot,
+  readJson,
+} from './extension-package-utils.mjs';
+
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -67,27 +72,6 @@ function findExtensionPackagePath() {
     : path.join(rootDir, 'package.json');
 }
 
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-function stable(value) {
-  if (Array.isArray(value)) return value.map(stable);
-  if (!value || typeof value !== 'object') return value;
-
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, child]) => [key, stable(child)]),
-  );
-}
-
-function extensionManifestSnapshot(packageJson) {
-  return Object.fromEntries(
-    MANIFEST_KEYS.map((key) => [key, stable(packageJson[key])]),
-  );
-}
-
 function collectStringValues(value, results = []) {
   if (typeof value === 'string') {
     results.push(value);
@@ -108,7 +92,7 @@ function collectStringValues(value, results = []) {
 }
 
 function manifestAssetReferences(packageJson) {
-  const manifest = extensionManifestSnapshot(packageJson);
+  const manifest = extensionManifestSnapshot(packageJson, MANIFEST_KEYS);
   return [
     ...new Set(
       collectStringValues(manifest).filter(
@@ -142,7 +126,7 @@ function hasFiles(relativeDir) {
 function buildSnapshot() {
   const packageJson = readJson(packagePath);
   return {
-    manifest: extensionManifestSnapshot(packageJson),
+    manifest: extensionManifestSnapshot(packageJson, MANIFEST_KEYS),
     manifestAssetReferences: manifestAssetReferences(packageJson),
     requiredPackagedPaths: REQUIRED_PACKAGED_PATHS,
     requiredVscodeIgnoreLines: REQUIRED_VSCODEIGNORE_LINES,
