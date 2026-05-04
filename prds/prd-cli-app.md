@@ -311,7 +311,7 @@ What `cli/` does **not** import:
 - `extension/` — no VS Code commands, no `frontend/`, no `frontend/approval/nativeToolEditApproval.ts`, no `frontend/vscode/*`.
 - `desktop/` — no Electron, no preload, no Monaco, no `BrowserWindow`.
 - `core/webview/frontend/`, `core/progressView/frontend/`, `core/settingsView/frontend/` — these are Lit, browser-targeted; CLI bundle excludes them.
-- `core/controllers/` — `MainViewController` / `ProgressViewController` / `SettingsViewController` are webview-shaped (one method per renderer message). CLI calls `executeAgent()` directly. The narrow UI ports from §9 #18 (`PromptHost`, `ExternalOpener`) _are_ used.
+- `core/controllers/` — the per-domain controllers under `src/controllers/{mainView,progressView,settingsView}/` (e.g. `MainViewInteractionController`, `MainViewStartupController`, `ProgressFollowUpController`, `ProgressStreamLifecycleController`, `SettingsAgentCatalogController`, `SettingsMemoryController`, …) are webview-shaped (one method per renderer message). CLI calls `executeAgent()` directly. The narrow UI ports from §9 #18 (`PromptHost`, `ExternalOpener`) _are_ used.
 
 ### 7.3 Platform impls (CLI)
 
@@ -319,7 +319,7 @@ The seven wired services (six `Platform` interfaces plus `PlatformSecrets`) need
 
 | Interface                | Extension (today)                                                  | Electron (planned)                                   | CLI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ConfigProvider`         | `VscodeConfigProvider` (wraps `vscode.workspace.getConfiguration`) | `ConfConfigProvider` over `conf` (Electron PRD §6.1) | **Same `ConfConfigProvider`**, lifted to `@texra/core` so both CLI and Electron share it. Layer: defaults from Zod schema → user file (`~/.config/texra/config.yaml`) → project file (`.texra/config.yaml` discovered upward) → env (`TEXRA_*`) → flags. Inspect returns the layered view.                                                                                                                                                                                                                    |
+| `ConfigProvider`         | `VscodeConfigProvider` (wraps `vscode.workspace.getConfiguration`) | `ConfConfigProvider` over `conf` (Electron PRD §6.1) | A `ConfConfigProvider` over `conf`, intended to be the same impl Electron will use (Electron PRD §6.1). Neither host has shipped one yet; whichever lands first writes the canonical version into `@texra/core` once the kernel migration completes (§7.1). Layer: defaults from Zod schema → user file (`~/.config/texra/config.yaml`) → project file (`.texra/config.yaml` discovered upward) → env (`TEXRA_*`) → flags. Inspect returns the layered view.                                                |
 | `StateStore` (global)    | `context.globalState` (`vscode.Memento`)                           | `conf` under `app.getPath('userData')`               | `conf` under `os.homedir() + '/.texra/state.json'` for daemon-friendly mode; `memoryState` for one-shot batch (state has no purpose across one-shot invocations and avoids a write to a shared file from CI).                                                                                                                                                                                                                                                                                                 |
 | `StateStore` (workspace) | `context.workspaceState`                                           | per-project `conf` keyed by hashed cwd               | Same — `~/.texra/workspace-state/<sha256(cwd)>.json`. Skipped (memory-only) when `--ephemeral` flag passes.                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `LogBackend`             | `vscode.OutputChannel`                                             | `electron-log`                                       | `consoleLog` reused, plus a `--quiet` / `--verbose` filter wrapper. Optional `--log-file <path>` writes a copy.                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -390,7 +390,11 @@ export function listModels(opts?: {
 }): Promise<ModelSummary[]>;
 ```
 
-Internally `runAgent` builds an `AgentConfigPayload` (agent + model + file fields), calls `setDefaultAgentRuntimeHost()` if not already wired, then calls `executeAgent(payload, undefined, { runtimeHost, onProgress, onStreamResolved, … })` from core. The `ProgressSink` on `runtimeHost` forwards each kernel event to the user's `onProgress`; types come from `@shared/schemas` so consumers get the same Zod-validated union the kernel emits. Total surface: ~300 LOC of facade + re-exports.
+Internally `runAgent` builds an `AgentConfigPayload` (agent + model + file fields), constructs a per-call `AgentRuntimeHost` whose `ProgressSink` forwards each kernel event to the user's `onProgress`, then calls `executeAgent(payload, undefined, { runtimeHost, onProgress, onStreamResolved, … })`. Types come from `@shared/schemas` so consumers get the same Zod-validated union the kernel emits.
+
+**Caveat (today's runtime shape):** `executeAgent`'s `runtimeHost` is optional and falls back through `AsyncLocalStorage` to a process-global default set by `setDefaultAgentRuntimeHost()`. Two SDK callers in the same process can therefore step on each other's defaults, and approval handlers (`setToolEditApprovalHandler`, `bashApprovalController`) are also module-level singletons. The SDK as specified here is honest about that boundary: it is safe for one consumer per process at v1, and the tracking issue [#3397](https://github.com/LionSR/TeXRA/issues/3397) (kernel hardening: replace ambient globals with an explicit `RunContext`) is the prerequisite for safe re-entrant SDK use. v1 ships with the existing shape; concurrent in-process embedding waits on #3397.
+
+Total surface: ~300 LOC of facade + re-exports.
 
 ## 8. CLI surface
 
@@ -790,10 +794,13 @@ Independent build graph from extension and desktop. CLI cannot import from `exte
 
 - The published npm package contains `dist/` only. Sources stay private.
 - `package.json` `"bin": { "texra": "./dist/bin/texra.js" }` plus a shebang line; `tsup` adds it.
-- `package.json` `"exports"`:
+- `package.json` `"exports"` — the bin executable is reachable only via `"bin"` (don't conflate it with a library entry); `import '@texra/cli'` resolves to the SDK by default, and the CLI shell is intentionally not a library import target:
   ```json
   {
-    ".": "./dist/bin/texra.js",
+    ".": {
+      "types": "./dist/sdk/index.d.ts",
+      "import": "./dist/sdk/index.js"
+    },
     "./sdk": {
       "types": "./dist/sdk/index.d.ts",
       "import": "./dist/sdk/index.js"
@@ -834,9 +841,9 @@ Most of the heavy lifting (Electron PRD's §9 Tier 1) has already shipped. The C
 
 (No `AgentDirectories` pre-refactor needed — the host-neutral `AgentDirectoryService` + `BundledAgentDirectorySync` already exist in `src/agent/index/`. The CLI's bootstrap is internal CLI adapter code, listed under Phase 0 deliverables in §15, not a kernel pre-refactor.)
 
-**C1. CLI-facing approval handler interface.** _(~80 LOC.)_
+**C1. Unified-diff formatter for CLI approval rendering.** _(~80 LOC.)_
 
-The current `setToolEditApprovalHandler()` accepts a single function. The CLI installs _its own_ function, but the function reaches inside `request` to render a unified diff and prompt. We add a tiny helper in `core/tools/approval/` that exposes a `formatUnifiedDiff(left, right)` utility (re-using the existing `diff-match-patch` semantic-diff path) so the CLI's handler doesn't reimplement diff formatting. **Why now:** without it the CLI ships its own diff library, and we end up with two diff implementations going out of sync. Tiny addition; avoids drift.
+The CLI's edit-approval handler renders a textual diff before prompting. Today's repo already has `diff-match-patch` infrastructure in `src/agent/output/diffComputation.ts` (`computeOutputDiffStats`) and `src/progressView/frontend/formatters/wordDiff.ts` (`generateInlineDiff`), but neither emits a unified-diff patch — they compute stats and inline word-level diffs for the webview. C1 adds a sibling `formatUnifiedDiff(left, right): string` in `src/agent/output/diffComputation.ts` (the natural home alongside the existing diff path) so the CLI's handler doesn't ship its own diff library. **Why now:** without it the CLI either pulls in `diff` or `diff-match-patch-line-mode` separately, and we end up with two diff implementations going out of sync.
 
 **C2. `nodeStorage` honoring `XDG_DATA_HOME` / `XDG_CONFIG_HOME`.** _(~30 LOC.)_
 
