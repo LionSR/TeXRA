@@ -257,7 +257,7 @@ const modelProvidersSet = new Set<string>(MODEL_PROVIDERS_ORDER);
 
 /**
  * Reverse of LEVEL_TO_EFFORT: maps ReasoningEffort enum values → UI level strings.
- * Derived from the canonical map in ModelFactory so there's one source of truth.
+ * Derived from the canonical map in reasoningEffort.ts so there's one source of truth.
  * Efforts not in LEVEL_TO_EFFORT (e.g. XHIGH) intentionally have no entry —
  * the UI will show a plain "Default" label instead of lying about the level.
  */
