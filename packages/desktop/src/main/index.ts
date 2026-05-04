@@ -58,7 +58,6 @@ function createWindow(): void {
     showInformationMessage: async (message) => {
       await dialog.showMessageBox(window, { message, type: 'info' });
     },
-    onError: (error) => console.error(error),
   });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     getCustomAgentDirectory: () => getAgentDirectories().custom(),

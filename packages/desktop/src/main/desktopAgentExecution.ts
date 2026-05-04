@@ -34,7 +34,6 @@ export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): void;
   openPath?: (filePath: string) => Promise<void>;
   showInformationMessage?: (message: string) => Promise<void> | void;
-  onError?: (error: unknown) => void;
 }
 
 export interface DesktopAgentExecution {
@@ -447,20 +446,15 @@ export function createDesktopAgentExecution(
         return;
       }
 
-      try {
-        await runValidatedExecutionRequest(preparation.request, {
-          runtimeHost: progress.runtimeHost,
-          openWorkflowOutput: async (result) => {
-            const output = result.outputs.at(-1);
-            if (output && options.openPath) {
-              await options.openPath(output.absolutePath);
-            }
-          },
-        });
-      } catch (error) {
-        options.onError?.(error);
-        throw error;
-      }
+      await runValidatedExecutionRequest(preparation.request, {
+        runtimeHost: progress.runtimeHost,
+        openWorkflowOutput: async (result) => {
+          const output = result.outputs.at(-1);
+          if (output && options.openPath) {
+            await options.openPath(output.absolutePath);
+          }
+        },
+      });
     },
     dispose() {
       progress.dispose();

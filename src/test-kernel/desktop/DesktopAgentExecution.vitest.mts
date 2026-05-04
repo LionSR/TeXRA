@@ -29,7 +29,6 @@ interface DesktopAgentExecutionModule {
     postToRenderer(message: unknown): void;
     openPath?: (filePath: string) => Promise<void>;
     showInformationMessage?: (message: string) => Promise<void> | void;
-    onError?: (error: unknown) => void;
   }): DesktopExecution;
 }
 
@@ -366,6 +365,31 @@ describe('DesktopProgressBridge', () => {
       );
       expect(postToRenderer).not.toHaveBeenCalled();
       expect(runValidatedExecutionRequest).not.toHaveBeenCalled();
+    } finally {
+      execution.dispose();
+    }
+  });
+
+  it('lets runtime execution errors propagate to the IPC error handler', async () => {
+    const failure = new Error('execution failed');
+    const execution = await createExecution({
+      runValidatedExecutionRequest: vi.fn(async () => {
+        throw failure;
+      }),
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: true,
+        request: {
+          agentName: 'default',
+          filePath: 'main.tex',
+          prompt: 'run',
+        },
+      })),
+    });
+
+    try {
+      await expect(
+        execution.handleExecute({ command: 'execute' }),
+      ).rejects.toThrow(failure);
     } finally {
       execution.dispose();
     }
