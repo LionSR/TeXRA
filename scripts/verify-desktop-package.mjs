@@ -4,6 +4,12 @@ import { basename, join, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import {
+  getDesktopSharedSourceDirs,
+  vscodeBackedStateImportPattern,
+  vscodeRuntimeImportPattern,
+} from './extension-package-utils.mjs';
+
 const require = createRequire(import.meta.url);
 const { extractFile, listPackage } = require('@electron/asar');
 
@@ -11,23 +17,7 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopRoot = join(repoRoot, 'packages', 'desktop');
 const packageRoot = join(desktopRoot, 'dist-packaged');
 const desktopPackageJsonPath = join(desktopRoot, 'package.json');
-const vscodeRuntimeImportPattern =
-  /\b(?:import\s*\(\s*['"]vscode['"]\s*\)|import\s+[^;]*\s+from\s+['"]vscode['"]|(?:__require|require|requireFn)(?:\?\.)?\(\s*['"]vscode['"]\s*\))/;
-const vscodeBackedStateImportPattern =
-  /(?:^\s*(?:(?:import(?:\s+type)?(?:\s+[^;]*?\s+from)?)|(?:export(?:\s+type)?\s+[^;]*?\s+from))\s+['"]@common\/state(?:\/stateManager)?['"])|(?:\bimport\s*\(\s*['"]@common\/state(?:\/stateManager)?['"]\s*\))/m;
-const desktopSharedSourceDirs = [
-  join(repoRoot, 'packages', 'desktop', 'src'),
-  join(repoRoot, 'src', 'agent'),
-  join(repoRoot, 'src', 'controllers'),
-  join(repoRoot, 'src', 'eventBus'),
-  join(repoRoot, 'src', 'latex'),
-  join(repoRoot, 'src', 'logger'),
-  join(repoRoot, 'src', 'model'),
-  join(repoRoot, 'src', 'replacement'),
-  join(repoRoot, 'src', 'shared'),
-  join(repoRoot, 'src', 'tools'),
-  join(repoRoot, 'src', 'utils'),
-];
+const desktopSharedSourceDirs = getDesktopSharedSourceDirs(repoRoot);
 
 async function exists(path) {
   try {

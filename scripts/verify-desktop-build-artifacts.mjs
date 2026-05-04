@@ -3,7 +3,12 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { readJson } from './extension-package-utils.mjs';
+import {
+  getDesktopSharedSourceDirs,
+  readJson,
+  vscodeBackedStateImportPattern,
+  vscodeRuntimeImportPattern,
+} from './extension-package-utils.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -45,23 +50,7 @@ const requiredFiles = [
   path.join(desktopDir, 'dist', 'renderer', 'index.html'),
 ];
 const failures = [];
-const vscodeRuntimeImportPattern =
-  /\b(?:import\s*\(\s*['"]vscode['"]\s*\)|import\s+[^;]*\s+from\s+['"]vscode['"]|(?:__require|require|requireFn)(?:\?\.)?\(\s*['"]vscode['"]\s*\))/;
-const vscodeBackedStateImportPattern =
-  /(?:^\s*(?:(?:import(?:\s+type)?(?:\s+[^;]*?\s+from)?)|(?:export(?:\s+type)?\s+[^;]*?\s+from))\s+['"]@common\/state(?:\/stateManager)?['"])|(?:\bimport\s*\(\s*['"]@common\/state(?:\/stateManager)?['"]\s*\))/m;
-const desktopSharedSourceDirs = [
-  path.join(rootDir, 'packages', 'desktop', 'src'),
-  path.join(rootDir, 'src', 'agent'),
-  path.join(rootDir, 'src', 'controllers'),
-  path.join(rootDir, 'src', 'eventBus'),
-  path.join(rootDir, 'src', 'latex'),
-  path.join(rootDir, 'src', 'logger'),
-  path.join(rootDir, 'src', 'model'),
-  path.join(rootDir, 'src', 'replacement'),
-  path.join(rootDir, 'src', 'shared'),
-  path.join(rootDir, 'src', 'tools'),
-  path.join(rootDir, 'src', 'utils'),
-];
+const desktopSharedSourceDirs = getDesktopSharedSourceDirs(rootDir);
 
 for (const filePath of requiredFiles) {
   if (!fileExists(filePath)) {
