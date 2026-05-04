@@ -29,7 +29,9 @@ interface PackageJson {
 }
 
 const packageRequire = createRequire(`${process.cwd()}/package.json`);
-const packageJson = packageRequire('./package.json') as PackageJson;
+const packageJson = packageRequire(
+  './packages/extension/package.json',
+) as PackageJson;
 
 function getPackageConfigurationSections(): PackageConfigurationSection[] {
   const configuration = packageJson.contributes?.configuration;

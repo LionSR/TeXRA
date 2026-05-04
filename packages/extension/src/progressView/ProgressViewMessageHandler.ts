@@ -1,6 +1,12 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import { ProgressStreamLifecycleController } from '@controllers/progressView/ProgressStreamLifecycleController';
+import {
+  ProgressFollowUpController,
+  type ProgressFollowUpPlan,
+} from '@controllers/progressView/ProgressFollowUpController';
+import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
@@ -58,12 +64,6 @@ import {
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
 
-import { ProgressStreamLifecycleController } from '../controllers/progressView/ProgressStreamLifecycleController';
-import {
-  ProgressFollowUpController,
-  type ProgressFollowUpPlan,
-} from '../controllers/progressView/ProgressFollowUpController';
-import { ProgressWorkflowActionsController } from '../controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 

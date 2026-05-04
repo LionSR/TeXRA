@@ -6,7 +6,7 @@
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-import { loadAliases } from './aliasUtils.mjs';
+import { loadAliases } from '../../../scripts/aliasUtils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, '..');

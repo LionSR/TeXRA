@@ -8,11 +8,11 @@ const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const packagePath = path.join(rootDir, 'package.json');
+const packagePath = path.join(rootDir, 'packages', 'extension', 'package.json');
 const require = createRequire(import.meta.url);
 const {
   buildTexraPackageConfiguration,
-} = require('../out/shared/schemas/settingsConfiguration.js');
+} = require('../out/src/shared/schemas/settingsConfiguration.js');
 
 function parseArgs() {
   return {
@@ -51,7 +51,7 @@ if (check) {
     normalizeLineEndings(nextPackageText) !== normalizeLineEndings(packageText)
   ) {
     throw new Error(
-      'package.json contributes.configuration is out of sync with TexraSettingsSchema. Run npm run sync:settings-configuration.',
+      'packages/extension/package.json contributes.configuration is out of sync with TexraSettingsSchema. Run npm run sync:settings-configuration.',
     );
   }
   console.log('package.json settings configuration is in sync');
