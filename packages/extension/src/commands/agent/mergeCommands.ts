@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { executeMergeAgent } from '@agent/runtime/executeAgent';
 import { getHelperModelName } from '@agent/runtime/helperModel';
-import { showLoggedMessageWithDocs } from '@common/errors';
+import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'MergeCommands';
 

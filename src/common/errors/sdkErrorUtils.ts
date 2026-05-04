@@ -37,7 +37,8 @@ import {
 } from '@shared/schemas';
 import { extractErrorMessage, isObject, isString } from '@utils/core';
 
-import { isDiskFullError, toErrorMessage } from './errorHandlingUtils';
+import { toErrorMessage } from './errorMessage';
+import { isDiskFullError } from './errorPredicates';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {

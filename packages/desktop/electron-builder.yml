@@ -1,0 +1,22 @@
+appId: ai.texra.desktop
+productName: TeXRA
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+asar: true
+npmRebuild: false
+directories:
+  output: dist-packaged
+files:
+  - from: dist
+    to: dist
+    filter:
+      - '**/*'
+  - package.json
+mac:
+  target:
+    - dir
+win:
+  target:
+    - dir
+linux:
+  target:
+    - dir
