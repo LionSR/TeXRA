@@ -8,7 +8,7 @@ import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - state
-import { GlobalStateKey, globalSM } from '@common/state';
+import { GlobalStateKey } from '@common/state/stateKeys';
 
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
@@ -62,7 +62,10 @@ export const MODEL_LIST_VERSION = 15;
  * This should be used to validate model selections in proposals.
  */
 export function getVisibleModels(): string[] {
-  return globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS);
+  return platform().globalState.get<string[]>(
+    GlobalStateKey.ENABLED_MODELS,
+    DEFAULT_MODELS,
+  );
 }
 
 /**

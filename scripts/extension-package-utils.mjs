@@ -1,4 +1,31 @@
 import fs from 'node:fs';
+import path from 'node:path';
+
+export const vscodeRuntimeImportPattern =
+  /\b(?:import\s*\(\s*['"]vscode['"]\s*\)|import\s+[^;]*\s+from\s+['"]vscode['"]|(?:__require|require|requireFn)(?:\?\.)?\(\s*['"]vscode['"]\s*\))/;
+
+export const vscodeBackedStateImportPattern =
+  /(?:^\s*(?:(?:import(?:\s+type)?(?:\s+[^;]*?\s+from)?)|(?:export(?:\s+type)?\s+[^;]*?\s+from))\s+['"]@common\/state(?:\/stateManager)?['"])|(?:\bimport\s*\(\s*['"]@common\/state(?:\/stateManager)?['"]\s*\))/m;
+
+const desktopSharedSourceDirSegments = [
+  ['packages', 'desktop', 'src'],
+  ['src', 'agent'],
+  ['src', 'controllers'],
+  ['src', 'eventBus'],
+  ['src', 'latex'],
+  ['src', 'logger'],
+  ['src', 'model'],
+  ['src', 'replacement'],
+  ['src', 'shared'],
+  ['src', 'tools'],
+  ['src', 'utils'],
+];
+
+export function getDesktopSharedSourceDirs(rootDir) {
+  return desktopSharedSourceDirSegments.map((segments) =>
+    path.join(rootDir, ...segments),
+  );
+}
 
 export function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
