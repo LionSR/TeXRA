@@ -17,7 +17,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule';
 
 interface PathFixModule {
-  repairLaunchPathWithOptions(options?: {
+  repairLaunchPath(options?: {
     env?: { PATH?: string };
     fixPath?: () => void;
     platform?: NodeJS.Platform;
@@ -232,7 +232,7 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('repairs macOS launch PATH idempotently without changing non-macOS PATH', async () => {
-    const { repairLaunchPathWithOptions } =
+    const { repairLaunchPath } =
       await loadDesktopPlatformModule<PathFixModule>('pathFix.ts');
     const env = { PATH: '/custom/bin:/usr/bin' };
     let fixPathCalls = 0;
@@ -240,12 +240,12 @@ describe('desktop composition root and launch environment', () => {
       fixPathCalls += 1;
     };
 
-    const first = repairLaunchPathWithOptions({
+    const first = repairLaunchPath({
       env,
       fixPath,
       platform: 'darwin',
     });
-    const second = repairLaunchPathWithOptions({
+    const second = repairLaunchPath({
       env,
       fixPath,
       platform: 'darwin',
@@ -266,7 +266,7 @@ describe('desktop composition root and launch environment', () => {
 
     const linuxEnv = { PATH: '/custom/bin' };
     expect(
-      repairLaunchPathWithOptions({
+      repairLaunchPath({
         env: linuxEnv,
         fixPath,
         platform: 'linux',
@@ -275,13 +275,13 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('does not call the process-level PATH fixer for injected environments', async () => {
-    const { repairLaunchPathWithOptions } =
+    const { repairLaunchPath } =
       await loadDesktopPlatformModule<PathFixModule>('pathFix.ts');
     const processPath = process.env.PATH;
     const env = { PATH: '/custom/bin' };
 
     expect(
-      repairLaunchPathWithOptions({
+      repairLaunchPath({
         env,
         platform: 'darwin',
       }),

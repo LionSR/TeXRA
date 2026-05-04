@@ -17,7 +17,7 @@ interface LaunchPathRepairOptions {
   platform?: NodeJS.Platform;
 }
 
-export function prependMissingPathEntries(
+function prependMissingPathEntries(
   pathValue: string | undefined,
   entries: readonly string[],
 ): string {
@@ -28,11 +28,7 @@ export function prependMissingPathEntries(
   return parts.join(delimiter);
 }
 
-export function repairLaunchPath(): string {
-  return repairLaunchPathWithOptions();
-}
-
-export function repairLaunchPathWithOptions(
+export function repairLaunchPath(
   options: LaunchPathRepairOptions = {},
 ): string {
   const env = options.env ?? process.env;

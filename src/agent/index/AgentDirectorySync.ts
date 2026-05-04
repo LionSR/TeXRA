@@ -14,11 +14,6 @@ import {
   type BundledAgentDirectoryName,
 } from './BundledAgentDirectories';
 
-export {
-  BUNDLED_AGENT_DIRECTORY_NAMES,
-  type BundledAgentDirectoryName,
-} from './BundledAgentDirectories';
-
 const LEGACY_AGENT_FILES = [
   'agents/generic.yaml',
   'agents/generic_multiple.yaml',
