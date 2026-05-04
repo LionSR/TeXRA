@@ -90,6 +90,7 @@ body.texra-dark {
   --texra-list-activeSelectionBackground: #04395e;
   --texra-list-activeSelectionForeground: #ffffff;
   --texra-list-hoverBackground: #2a2d2e;
+  --texra-list-warningForeground: #cca700;
   --texra-menu-background: #252526;
   --texra-menu-border: #454545;
   --texra-menu-foreground: #cccccc;
@@ -106,6 +107,14 @@ body.texra-dark {
   --texra-editorWarning-background: #332a00;
   --texra-editorInfo-foreground: #75beff;
   --texra-editorInfo-background: #063b49;
+  --texra-progressBar-background: #0e70c0;
+  --texra-testing-iconPassed: #73c991;
+  --texra-testing-iconFailed: #f48771;
+  --texra-charts-blue: #3794ff;
+  --texra-charts-green: #89d185;
+  --texra-charts-orange: #d18616;
+  --texra-charts-red: #f48771;
+  --texra-charts-yellow: #cca700;
   --texra-terminal-background: #1e1e1e;
   --texra-terminal-foreground: #cccccc;
   --texra-terminal-selectionBackground: #264f78;
