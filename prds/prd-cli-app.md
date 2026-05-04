@@ -15,7 +15,7 @@ Ship TeXRA as a third host — `texra`, a stand-alone command-line tool — alon
 
 Both modes import `@texra/core` unchanged. The CLI shell is pure Node, ESM-first, with no `vscode` and no `electron` dependency. No webviews are needed. Net-new code lives in a fourth pnpm workspace at `packages/cli/`.
 
-Per a parallel scout of the runtime, every blocker the Electron PRD identified for the desktop port has *already landed* in `core/`: `AgentRuntimeHost` + `ProgressSink` (Electron PRD §9 #20), the expanded `ConfigProvider` (#1), `WorkspaceProvider.watch()` (#4), `vscode.EventEmitter` swap (#3), the `SupabaseSession` + `TokenProvider` extraction (#14), and the host-neutral controllers + UI ports (#18) are all in main. The CLI's runtime cost is therefore *not* "extract a kernel from VS Code coupling" — that work is paid for. The CLI cost is "wire the (already-clean) kernel to a Node entry point, a TTY renderer, an approval policy engine, and a small auth flow."
+Per a parallel scout of the runtime, every blocker the Electron PRD identified for the desktop port has _already landed_ in `core/`: `AgentRuntimeHost` + `ProgressSink` (Electron PRD §9 #20), the expanded `ConfigProvider` (#1), `WorkspaceProvider.watch()` (#4), `vscode.EventEmitter` swap (#3), the `SupabaseSession` + `TokenProvider` extraction (#14), and the host-neutral controllers + UI ports (#18) are all in main. The CLI's runtime cost is therefore _not_ "extract a kernel from VS Code coupling" — that work is paid for. The CLI cost is "wire the (already-clean) kernel to a Node entry point, a TTY renderer, an approval policy engine, and a small auth flow."
 
 The agent core ships with Node-friendly platform defaults already explicitly tagged "for CLI / Electron / tests" (`consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `EnvSecrets`). Of the 7 platform interfaces, **5 reuse byte-for-byte**; only `ConfigProvider` and `PlatformSecrets` need new file-backed adapters (~180 LOC combined). The CLI is fundamentally a thin Node shell over an already-headless kernel.
 
@@ -43,59 +43,59 @@ The agent core ships with Node-friendly platform defaults already explicitly tag
 
 A six-front parallel scout of the agent runtime, platform abstractions, tools, approvals, auth, and ecosystem patterns produced a sharp result: **most of the work the Electron PRD describes as pre-refactoring is already merged**. The CLI inherits that work for free.
 
-| Concern | Status today | CLI impact |
-| --- | --- | --- |
-| `AgentRuntimeHost` / `ProgressSink` boundary (Electron PRD §9 #20) | **Landed.** Agent runtime takes a `runtimeHost` constructor dep; no `ProgressEventBus` singleton import in core. | CLI plugs in its own `ProgressSink` adapter (writes to stdout / stderr / JSON stream). ~80 LOC. |
-| Expanded `ConfigProvider` (`update`/`inspect`/`isExplicitlySet`/`watch`) (§9 #1) | **Landed.** All four methods on `core/platform/interfaces/config.ts`. | CLI implements `ConfConfigProvider` against `conf` (or a layered YAML reader). ~100–120 LOC. |
-| `WorkspaceProvider.watch()` (§9 #4) | **Landed.** `nodeWorkspace` already implements `watch()` with recursive `fs.watch` + fallback. | Reused as-is. CLI batch mode never calls `watch()`; interactive mode does. |
-| `vscode.EventEmitter` → Node `EventEmitter` (§9 #3) | **Landed.** | No CLI work. |
-| `SupabaseSession` + `TokenProvider` extraction (§9 #14) | **Landed.** `SupabaseSessionCoordinator` is host-neutral; storage backend is pluggable. | CLI provides a file-backed `SupabaseSessionStorage` (`~/.texra/session.json`, chmod 600) and wires the device-code / loopback flow into the existing coordinator. ~150 LOC. |
-| Host-neutral controllers + UI ports (§9 #18) | **Landed.** `MainViewController`, `ProgressViewController`, `SettingsViewController` plus `PromptHost` / `ExternalOpener` / `DiffViewHost` / `TerminalHost` / `ClipboardHost` all live in `core/`. | CLI does **not** mount the controllers (they're webview-shaped). It calls `executeAgent()` directly. The narrow UI ports (`PromptHost` especially) are reused by approval flows. |
-| `BinaryResolver` for `pdflatex`/`pandoc`/`gm`/Codex (§9 #8) | **Landed.** `findToolInCommonPaths()` + `findCodexBinaryPath()` already check Homebrew / TeX Live / MikTeX / global npm / PATH. | Reused. The Electron-only `app.asar.unpacked` resolution branch is dead code in CLI; everything else works. |
-| Default Node platform impls | **Landed.** `consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `EnvSecrets` (`src/platform/defaults/`, ~462 LOC). All carry the comment "for CLI / Electron / tests". | 5 of 7 used as-is. Only `ConfigProvider` and `PlatformSecrets` need new file-backed adapters. |
-| `vscode`-import audit | Same 106-of-853 (12.4%) as the Electron PRD reports. None of the 106 are reachable from `executeAgent()`. | Confirmed by walking the call graph from `executeAgent.ts:674` — all transitive imports are in the agnostic zones. |
+| Concern                                                                          | Status today                                                                                                                                                                                       | CLI impact                                                                                                                                                                       |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AgentRuntimeHost` / `ProgressSink` boundary (Electron PRD §9 #20)               | **Landed.** Agent runtime takes a `runtimeHost` constructor dep; no `ProgressEventBus` singleton import in core.                                                                                   | CLI plugs in its own `ProgressSink` adapter (writes to stdout / stderr / JSON stream). ~80 LOC.                                                                                  |
+| Expanded `ConfigProvider` (`update`/`inspect`/`isExplicitlySet`/`watch`) (§9 #1) | **Landed.** All four methods on `core/platform/interfaces/config.ts`.                                                                                                                              | CLI implements `ConfConfigProvider` against `conf` (or a layered YAML reader). ~100–120 LOC.                                                                                     |
+| `WorkspaceProvider.watch()` (§9 #4)                                              | **Landed.** `nodeWorkspace` already implements `watch()` with recursive `fs.watch` + fallback.                                                                                                     | Reused as-is. CLI batch mode never calls `watch()`; interactive mode does.                                                                                                       |
+| `vscode.EventEmitter` → Node `EventEmitter` (§9 #3)                              | **Landed.**                                                                                                                                                                                        | No CLI work.                                                                                                                                                                     |
+| `SupabaseSession` + `TokenProvider` extraction (§9 #14)                          | **Landed.** `SupabaseSessionCoordinator` is host-neutral; storage backend is pluggable.                                                                                                            | CLI provides a file-backed `SupabaseSessionStorage` (`~/.texra/session.json`, chmod 600) and wires the device-code / loopback flow into the existing coordinator. ~150 LOC.      |
+| Host-neutral controllers + UI ports (§9 #18)                                     | **Landed.** `MainViewController`, `ProgressViewController`, `SettingsViewController` plus `PromptHost` / `ExternalOpener` / `DiffViewHost` / `TerminalHost` / `ClipboardHost` all live in `core/`. | CLI does **not** mount the controllers (they're webview-shaped). It calls `executeAgent()` directly. The narrow UI ports (`PromptHost` especially) are reused by approval flows. |
+| `BinaryResolver` for `pdflatex`/`pandoc`/`gm`/Codex (§9 #8)                      | **Landed.** `findToolInCommonPaths()` + `findCodexBinaryPath()` already check Homebrew / TeX Live / MikTeX / global npm / PATH.                                                                    | Reused. The Electron-only `app.asar.unpacked` resolution branch is dead code in CLI; everything else works.                                                                      |
+| Default Node platform impls                                                      | **Landed.** `consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `EnvSecrets` (`src/platform/defaults/`, ~462 LOC). All carry the comment "for CLI / Electron / tests".  | 5 of 7 used as-is. Only `ConfigProvider` and `PlatformSecrets` need new file-backed adapters.                                                                                    |
+| `vscode`-import audit                                                            | Same 106-of-853 (12.4%) as the Electron PRD reports. None of the 106 are reachable from `executeAgent()`.                                                                                          | Confirmed by walking the call graph from `executeAgent.ts:674` — all transitive imports are in the agnostic zones.                                                               |
 
 **Net runtime work for v1**: write a Node shell that calls `executeAgent()`, writes a `ProgressSink` that renders to a TTY or stdout, and adds an approval-policy layer in front of the existing approval coordinators. **No core refactor required.**
 
 ### 4.2 Coupling inventory — by tool
 
-| Tool surface | Status in CLI | What's needed |
-| --- | --- | --- |
-| File I/O (`read_file`, `write_file`, `edit_file`, `text_editor`, `glob`, `grep`, `ls`, `gitignore`) | Reused as-is. All go through `WorkspaceFS` over `getWorkspaceProvider()`. CLI registers a `nodeWorkspace` whose `getWorkspacePath()` returns `process.cwd()`. | Zero. |
-| `bash` (foreground) | Reused. `executeCommand()` from `@utils/system/execUtils` wraps `execa`; output streams through `onStdout`/`onStderr`. | Zero. CLI captures via `ProgressSink`. |
-| `bash` (background) | Reused. Background streams emit to `ProgressEventBus`; CLI consumes those events on its `ProgressSink` and prints a `[bg-stream-1] …` prefix. | Zero. |
-| `bash` approval | Currently `requestBashApproval` emits `showBashPermission` + waits via `bashApprovalController`. | CLI installs its own settle path: TTY prompt with `@clack/prompts`, or auto-decide per `--approval-policy`. ~120 LOC. |
-| `edit_file` approval | `requestToolEditApproval` calls `setToolEditApprovalHandler()` (currently `nativeToolEditApproval` in extension). | CLI registers a CLI-shaped handler that prints unified diff + prompts on TTY (or auto-decides per policy). ~200 LOC. |
-| `plan` approval | `PlanApprovalCoordinator.waitForApproval()` — already host-neutral, no `vscode` import. | CLI shell renders the plan from the show-event payload + prompts. ~80 LOC. |
-| `delegate_workflow` / `delegate_agent` | Reused — calls `executeAgent()` recursively. | Zero. CLI sees subagent progress through nested stream IDs. |
-| `external_inquiry` (human-in-loop) | Currently webview copy/paste flow. | CLI shows the question on stderr and reads the answer from stdin (or refuses with exit code if `!isTTY`). ~50 LOC. |
-| `memory` (read/write/list) | Reused — already goes through `StorageFS` over `nodeStorage` (`~/.texra/global-storage/memories/`). | Zero. |
-| `todo_write`, `update_plan`, `executions`, `accept_run_files` | Reused — pure data emission via `ProgressSink`. | Zero in core; CLI renders todos/plans in stream output. |
-| `codex` | Reused. `findCodexBinaryPath()` already falls through to `node_modules` + global npm + PATH; the Electron-only `app.asar.unpacked` branch is skipped naturally. | Zero. |
-| `github_subscription` | Reused. Token via `setGitHubTokenProvider`; CLI registers a provider that returns `process.env.GITHUB_TOKEN` (or `GH_TOKEN`). | ~10 LOC of registration. |
-| `extract_figures`, `extract_bib_entries`, `texcount` | Reused. All shell out via `BinaryResolver` + `execa`. | Zero. |
+| Tool surface                                                                                        | Status in CLI                                                                                                                                                   | What's needed                                                                                                         |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| File I/O (`read_file`, `write_file`, `edit_file`, `text_editor`, `glob`, `grep`, `ls`, `gitignore`) | Reused as-is. All go through `WorkspaceFS` over `getWorkspaceProvider()`. CLI registers a `nodeWorkspace` whose `getWorkspacePath()` returns `process.cwd()`.   | Zero.                                                                                                                 |
+| `bash` (foreground)                                                                                 | Reused. `executeCommand()` from `@utils/system/execUtils` wraps `execa`; output streams through `onStdout`/`onStderr`.                                          | Zero. CLI captures via `ProgressSink`.                                                                                |
+| `bash` (background)                                                                                 | Reused. Background streams emit to `ProgressEventBus`; CLI consumes those events on its `ProgressSink` and prints a `[bg-stream-1] …` prefix.                   | Zero.                                                                                                                 |
+| `bash` approval                                                                                     | Currently `requestBashApproval` emits `showBashPermission` + waits via `bashApprovalController`.                                                                | CLI installs its own settle path: TTY prompt with `@clack/prompts`, or auto-decide per `--approval-policy`. ~120 LOC. |
+| `edit_file` approval                                                                                | `requestToolEditApproval` calls `setToolEditApprovalHandler()` (currently `nativeToolEditApproval` in extension).                                               | CLI registers a CLI-shaped handler that prints unified diff + prompts on TTY (or auto-decides per policy). ~200 LOC.  |
+| `plan` approval                                                                                     | `PlanApprovalCoordinator.waitForApproval()` — already host-neutral, no `vscode` import.                                                                         | CLI shell renders the plan from the show-event payload + prompts. ~80 LOC.                                            |
+| `delegate_workflow` / `delegate_agent`                                                              | Reused — calls `executeAgent()` recursively.                                                                                                                    | Zero. CLI sees subagent progress through nested stream IDs.                                                           |
+| `external_inquiry` (human-in-loop)                                                                  | Currently webview copy/paste flow.                                                                                                                              | CLI shows the question on stderr and reads the answer from stdin (or refuses with exit code if `!isTTY`). ~50 LOC.    |
+| `memory` (read/write/list)                                                                          | Reused — already goes through `StorageFS` over `nodeStorage` (`~/.texra/global-storage/memories/`).                                                             | Zero.                                                                                                                 |
+| `todo_write`, `update_plan`, `executions`, `accept_run_files`                                       | Reused — pure data emission via `ProgressSink`.                                                                                                                 | Zero in core; CLI renders todos/plans in stream output.                                                               |
+| `codex`                                                                                             | Reused. `findCodexBinaryPath()` already falls through to `node_modules` + global npm + PATH; the Electron-only `app.asar.unpacked` branch is skipped naturally. | Zero.                                                                                                                 |
+| `github_subscription`                                                                               | Reused. Token via `setGitHubTokenProvider`; CLI registers a provider that returns `process.env.GITHUB_TOKEN` (or `GH_TOKEN`).                                   | ~10 LOC of registration.                                                                                              |
+| `extract_figures`, `extract_bib_entries`, `texcount`                                                | Reused. All shell out via `BinaryResolver` + `execa`.                                                                                                           | Zero.                                                                                                                 |
 
-**Verdict**: 14 of the 16 tool surfaces are zero-LOC reuse. The 2 that need work (edit approval, bash approval) need a CLI-specific *handler* — the underlying coordinators are already abstract.
+**Verdict**: 14 of the 16 tool surfaces are zero-LOC reuse. The 2 that need work (edit approval, bash approval) need a CLI-specific _handler_ — the underlying coordinators are already abstract.
 
 ### 4.3 Coupling inventory — approval and lifecycle gates
 
 The runtime has 7 user-facing gates today (Electron PRD §9 #18 inventory + scout):
 
-| Gate | Coordinator | Already host-neutral? | CLI handling |
-| --- | --- | --- | --- |
-| Edit approval | `setToolEditApprovalHandler()` in `core/`, native impl in extension | Coordinator yes; native handler is VS Code | CLI registers its own TTY/policy handler |
-| Bash approval | `bashApprovalController` + `showBashPermission` event | Coordinator yes | CLI installs settle path on event |
-| Plan approval | `PlanApprovalCoordinator` (`BasePromiseCoordinator`) | **Fully host-neutral.** | CLI listens for `showPlanApproval`, prompts, calls `resolvePlanApproval` |
-| Agent proposal (delegation) | `AgentProposalCoordinator` | **Fully host-neutral.** | Same pattern |
-| Retry request | `RetryRequestCoordinator` | **Fully host-neutral.** | Same pattern |
-| External inquiry | `awaitExternalInquiryResponse` + `showExternalInquiry` event | Coordinator yes | CLI prompts on stderr + reads stdin |
-| Proposal bypass (YOLO) | `toggleProposalBypass`, per-stream | Pure state | CLI exposes via `--yolo` / `--allow-delegation` flags |
+| Gate                        | Coordinator                                                         | Already host-neutral?                      | CLI handling                                                             |
+| --------------------------- | ------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------ |
+| Edit approval               | `setToolEditApprovalHandler()` in `core/`, native impl in extension | Coordinator yes; native handler is VS Code | CLI registers its own TTY/policy handler                                 |
+| Bash approval               | `bashApprovalController` + `showBashPermission` event               | Coordinator yes                            | CLI installs settle path on event                                        |
+| Plan approval               | `PlanApprovalCoordinator` (`BasePromiseCoordinator`)                | **Fully host-neutral.**                    | CLI listens for `showPlanApproval`, prompts, calls `resolvePlanApproval` |
+| Agent proposal (delegation) | `AgentProposalCoordinator`                                          | **Fully host-neutral.**                    | Same pattern                                                             |
+| Retry request               | `RetryRequestCoordinator`                                           | **Fully host-neutral.**                    | Same pattern                                                             |
+| External inquiry            | `awaitExternalInquiryResponse` + `showExternalInquiry` event        | Coordinator yes                            | CLI prompts on stderr + reads stdin                                      |
+| Proposal bypass (YOLO)      | `toggleProposalBypass`, per-stream                                  | Pure state                                 | CLI exposes via `--yolo` / `--allow-delegation` flags                    |
 
-The current approval *config* is binary: `texra.toolUse.requireEditApproval` and `texra.toolUse.requireBashApproval` are bool. CI usage demands richer policies — see §9.
+The current approval _config_ is binary: `texra.toolUse.requireEditApproval` and `texra.toolUse.requireBashApproval` are bool. CI usage demands richer policies — see §9.
 
 ### 4.4 What the CLI is not (and why)
 
-- **Not a TUI port of the progress webview.** The progress view's value (Lit components, virtualized log, codicons, Monaco diff anchor) is GUI-specific. The CLI streams the *same events* over a textual renderer. We don't try to recreate `<vscode-toolbar-button>` in Ink.
+- **Not a TUI port of the progress webview.** The progress view's value (Lit components, virtualized log, codicons, Monaco diff anchor) is GUI-specific. The CLI streams the _same events_ over a textual renderer. We don't try to recreate `<vscode-toolbar-button>` in Ink.
 - **Not a settings dashboard in the terminal.** Settings are read-only in the CLI (`texra config get`) plus optional writes via `texra config set` to a single canonical location. No multi-tab form. Power users edit `~/.config/texra/config.yaml` directly.
 - **Not a fork of the agent runtime.** Every behavior the CLI surfaces is the same code path the extension and Electron app run. If `polish` rewrites a paragraph differently in CLI vs extension, that's a bug in the kernel, not a CLI feature.
 - **Not a thin "shell out to extension" wrapper.** The CLI is a peer host, not a remote-control of an existing extension install. It works on machines that have never seen VS Code.
@@ -130,7 +130,7 @@ texra chat --agent devise # pick a different tool-use agent
 
 **Properties:**
 
-- TTY-only. Running this in a pipe is a usage error with a friendly hint ("did you mean `texra run …`?"); we do *not* hang the way Claude Code hangs without `-p` (issue claude-code#9026).
+- TTY-only. Running this in a pipe is a usage error with a friendly hint ("did you mean `texra run …`?"); we do _not_ hang the way Claude Code hangs without `-p` (issue claude-code#9026).
 - Ink-based TUI. Top pane: live agent stream (assistant text, tool calls, tool results), with the same in-place updates the desktop progress view shows. Middle pane: the active todo list, plan, or pending approval card. Bottom pane: input prompt with multi-line editor (Ctrl-J for newline, Enter to submit, Ctrl-C to interrupt the active run, Ctrl-D to exit).
 - Approvals render inline as modal cards (`@clack/prompts`-style for one-shot prompts, Ink-driven for streaming approval review).
 - Resume support: pick up the last tool-use session for `cwd` via `texra chat --resume` (implemented through the existing `resumeToolUseFromSnapshot()` entry point and `ToolUseSessionLifecycle` snapshots).
@@ -146,7 +146,9 @@ const result = await runAgent({
   inputFile: 'paper.tex',
   model: 'claude-opus-4-7',
   approvalPolicy: 'never',
-  onProgress: (event) => { /* … */ },
+  onProgress: (event) => {
+    /* … */
+  },
 });
 ```
 
@@ -158,13 +160,13 @@ const result = await runAgent({
 
 ### 5.4 Mode-selection table
 
-| Trigger | Mode |
-| --- | --- |
-| `process.stdout.isTTY && !process.env.CI && no `--print` flag && command takes no input file` | Interactive |
-| `--print` / `-p` flag | Headless |
-| `process.env.CI=truthy` (GitHub Actions, GitLab, CircleCI, etc.) | Headless |
-| `!process.stdout.isTTY` (piped, redirected) | Headless |
-| `import('@texra/cli/sdk')` | Programmatic |
+| Trigger                                                                                       | Mode         |
+| --------------------------------------------------------------------------------------------- | ------------ |
+| `process.stdout.isTTY && !process.env.CI && no `--print` flag && command takes no input file` | Interactive  |
+| `--print` / `-p` flag                                                                         | Headless     |
+| `process.env.CI=truthy` (GitHub Actions, GitLab, CircleCI, etc.)                              | Headless     |
+| `!process.stdout.isTTY` (piped, redirected)                                                   | Headless     |
+| `import('@texra/cli/sdk')`                                                                    | Programmatic |
 
 The table is enforced by a single `selectMode()` function in `cli/src/runtime/selectMode.ts` (~30 LOC). No deeper logic; mode is decided once at process start and threaded through.
 
@@ -172,18 +174,18 @@ The table is enforced by a single `selectMode()` function in `cli/src/runtime/se
 
 Each pick is grounded in the May 2026 ecosystem survey + the existing TeXRA codebase. One-line rationale here; deeper justification in §7.
 
-| # | Concern | Pick | Why in one line |
-| --- | --- | --- | --- |
-| 1 | Argument parser | **`commander`** (option to migrate to `citty` if command count grows past ~30) | 500M weekly downloads, zero deps, ~20ms cold start; biggest ecosystem. `citty` is the modern second-place if we want lazy subcommand loading + plugin hooks. |
-| 2 | Interactive TUI | **Ink** (React-for-CLI) | What Claude Code, Codex, Gemini CLI use; flexbox layout; live in-place updates fit the progress-view pattern naturally. |
-| 3 | Non-interactive output | **`picocolors` + `log-update` + `ora` + `cli-progress`** | Tiny, fast, no React in the headless bundle. Lazy-loaded only when `selectMode() === 'headless'`. |
-| 4 | Inline prompts | **`@clack/prompts`** | ~4 KB gzipped, opinionated styling, modern default for new CLIs. Used for one-shot approvals in non-Ink contexts. |
-| 5 | Config storage | **`conf` + Zod schemas** (same pick as Electron PRD §6.1) | Single canonical implementation across CLI + Electron; Zod validates at read/write; layered file > env > flag resolution. |
-| 6 | Token storage | **`@napi-rs/keyring`** with `chmod 0600` JSON fallback | Drop-in replacement for archived `keytar`; no `libsecret` build dep on Linux; falls back gracefully in containers. |
-| 7 | OAuth flow | **Loopback HTTP (RFC 8252) + device-code (RFC 8628), in that order** | Loopback for laptops with browsers, device-code for SSH / dev containers / CI debug shells. Both go through the existing `SupabaseSessionCoordinator`. |
-| 8 | Distribution | **npm `@texra/cli`** with platform `optionalDependencies` for any native deps; secondary `bun build --compile` artifact for users who want zero-Node | Same model as `@openai/codex`. Pure Node CLI doesn't need a self-contained binary — that's a convenience artifact, not the canonical install. |
-| 9 | GitHub Action | **`texra-ai/texra-action` (JS Action)** + minimal `texra-base-action` | Mirrors `anthropics/claude-code-action` + `claude-code-base-action` split. JS Actions are warm-cached and faster than Docker for this use case. |
-| 10 | Module system | **ESM-first**, Node 20+ minimum | Aligns with `@texra/core` (`module: esnext`) and the desktop `nodenext`. CJS-only `pkg`/SEA constraints make Node SEA a poor fit. |
+| #   | Concern                | Pick                                                                                                                                                 | Why in one line                                                                                                                                              |
+| --- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Argument parser        | **`commander`** (option to migrate to `citty` if command count grows past ~30)                                                                       | 500M weekly downloads, zero deps, ~20ms cold start; biggest ecosystem. `citty` is the modern second-place if we want lazy subcommand loading + plugin hooks. |
+| 2   | Interactive TUI        | **Ink** (React-for-CLI)                                                                                                                              | What Claude Code, Codex, Gemini CLI use; flexbox layout; live in-place updates fit the progress-view pattern naturally.                                      |
+| 3   | Non-interactive output | **`picocolors` + `log-update` + `ora` + `cli-progress`**                                                                                             | Tiny, fast, no React in the headless bundle. Lazy-loaded only when `selectMode() === 'headless'`.                                                            |
+| 4   | Inline prompts         | **`@clack/prompts`**                                                                                                                                 | ~4 KB gzipped, opinionated styling, modern default for new CLIs. Used for one-shot approvals in non-Ink contexts.                                            |
+| 5   | Config storage         | **`conf` + Zod schemas** (same pick as Electron PRD §6.1)                                                                                            | Single canonical implementation across CLI + Electron; Zod validates at read/write; layered file > env > flag resolution.                                    |
+| 6   | Token storage          | **`@napi-rs/keyring`** with `chmod 0600` JSON fallback                                                                                               | Drop-in replacement for archived `keytar`; no `libsecret` build dep on Linux; falls back gracefully in containers.                                           |
+| 7   | OAuth flow             | **Loopback HTTP (RFC 8252) + device-code (RFC 8628), in that order**                                                                                 | Loopback for laptops with browsers, device-code for SSH / dev containers / CI debug shells. Both go through the existing `SupabaseSessionCoordinator`.       |
+| 8   | Distribution           | **npm `@texra/cli`** with platform `optionalDependencies` for any native deps; secondary `bun build --compile` artifact for users who want zero-Node | Same model as `@openai/codex`. Pure Node CLI doesn't need a self-contained binary — that's a convenience artifact, not the canonical install.                |
+| 9   | GitHub Action          | **`texra-ai/texra-action` (JS Action)** + minimal `texra-base-action`                                                                                | Mirrors `anthropics/claude-code-action` + `claude-code-base-action` split. JS Actions are warm-cached and faster than Docker for this use case.              |
+| 10  | Module system          | **ESM-first**, Node 20+ minimum                                                                                                                      | Aligns with `@texra/core` (`module: esnext`) and the desktop `nodenext`. CJS-only `pkg`/SEA constraints make Node SEA a poor fit.                            |
 
 ### 6.1 Stacks explicitly rejected
 
@@ -285,43 +287,43 @@ TeXRA/
 
 What `cli/` imports from `core/` byte-for-byte:
 
-| Path under core | What it provides |
-| --- | --- |
-| `agent/` | `executeAgent`, `executeMergeAgent`, `resumeToolUseFromSnapshot`, the entire flow infrastructure, every modelHandler |
-| `agent/runtime/` | `AgentRuntimeHost`, `ProgressSink`, `InterruptManager`, `RunStorageService`, `BasePromiseCoordinator`, `PlanApprovalCoordinator`, `AgentProposalCoordinator`, `RetryRequestCoordinator` |
-| `agent/index/` | `resolveAgent`, `getAgent`, `AgentDirectoryManager`, `AgentDirectories` (post-#19) |
-| `tools/` | Every tool (~120 files) |
-| `tools/approval/` | `setToolEditApprovalHandler`, `bashApprovalController`, `streamApprovalQueue`, `awaitExternalInquiryResponse` |
-| `model/` | Registry, capabilities, pricing, llm-zoo integration |
-| `latex/` | LaTeX processing, formatting, diff, TikZ, PDF |
-| `shared/` | IPC schemas (yes — even though there's no IPC, the schemas validate event payloads) |
-| `replacement/` | Text cleanup rules |
-| `eventBus/` | Progress event schema |
-| `auth/` | `SupabaseSession`, `SupabaseClient`, `SupabaseSessionCoordinator`, `TokenProvider`, `TierService`, `ServerSideKeyService` |
-| `platform/` | All 7 interfaces; `consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `EnvSecrets` defaults |
-| `utils/` (non-vscode parts) | `BinaryResolver`, `findCodexBinaryPath`, `executeCommand`, `userVars`, `outputFileUtils`, `taskRunStorage`, etc. |
+| Path under core             | What it provides                                                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent/`                    | `executeAgent`, `executeMergeAgent`, `resumeToolUseFromSnapshot`, the entire flow infrastructure, every modelHandler                                                                    |
+| `agent/runtime/`            | `AgentRuntimeHost`, `ProgressSink`, `InterruptManager`, `RunStorageService`, `BasePromiseCoordinator`, `PlanApprovalCoordinator`, `AgentProposalCoordinator`, `RetryRequestCoordinator` |
+| `agent/index/`              | `resolveAgent`, `getAgent`, `AgentDirectoryManager`, `AgentDirectories` (post-#19)                                                                                                      |
+| `tools/`                    | Every tool (~120 files)                                                                                                                                                                 |
+| `tools/approval/`           | `setToolEditApprovalHandler`, `bashApprovalController`, `streamApprovalQueue`, `awaitExternalInquiryResponse`                                                                           |
+| `model/`                    | Registry, capabilities, pricing, llm-zoo integration                                                                                                                                    |
+| `latex/`                    | LaTeX processing, formatting, diff, TikZ, PDF                                                                                                                                           |
+| `shared/`                   | IPC schemas (yes — even though there's no IPC, the schemas validate event payloads)                                                                                                     |
+| `replacement/`              | Text cleanup rules                                                                                                                                                                      |
+| `eventBus/`                 | Progress event schema                                                                                                                                                                   |
+| `auth/`                     | `SupabaseSession`, `SupabaseClient`, `SupabaseSessionCoordinator`, `TokenProvider`, `TierService`, `ServerSideKeyService`                                                               |
+| `platform/`                 | All 7 interfaces; `consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `EnvSecrets` defaults                                                                  |
+| `utils/` (non-vscode parts) | `BinaryResolver`, `findCodexBinaryPath`, `executeCommand`, `userVars`, `outputFileUtils`, `taskRunStorage`, etc.                                                                        |
 
 What `cli/` does **not** import:
 
 - `extension/` — no VS Code commands, no `frontend/`, no `frontend/approval/nativeToolEditApproval.ts`, no `frontend/vscode/*`.
 - `desktop/` — no Electron, no preload, no Monaco, no `BrowserWindow`.
 - `core/webview/frontend/`, `core/progressView/frontend/`, `core/settingsView/frontend/` — these are Lit, browser-targeted; CLI bundle excludes them.
-- `core/controllers/` — `MainViewController` / `ProgressViewController` / `SettingsViewController` are webview-shaped (one method per renderer message). CLI calls `executeAgent()` directly. The narrow UI ports from §9 #18 (`PromptHost`, `ExternalOpener`) *are* used.
+- `core/controllers/` — `MainViewController` / `ProgressViewController` / `SettingsViewController` are webview-shaped (one method per renderer message). CLI calls `executeAgent()` directly. The narrow UI ports from §9 #18 (`PromptHost`, `ExternalOpener`) _are_ used.
 
 ### 7.3 Platform impls (CLI)
 
 Eight services (the seven `Platform` interfaces plus `PlatformSecrets`). ~250 LOC of new adapter code; the rest are existing defaults.
 
-| Interface | Extension (today) | Electron (planned) | CLI |
-| --- | --- | --- | --- |
-| `ConfigProvider` | `VscodeConfigProvider` (wraps `vscode.workspace.getConfiguration`) | `ConfConfigProvider` over `conf` (Electron PRD §6.1) | **Same `ConfConfigProvider`**, lifted to `@texra/core` so both CLI and Electron share it. Layer: defaults from Zod schema → user file (`~/.config/texra/config.yaml`) → project file (`.texra/config.yaml` discovered upward) → env (`TEXRA_*`) → flags. Inspect returns the layered view. |
-| `StateStore` (global) | `context.globalState` (`vscode.Memento`) | `conf` under `app.getPath('userData')` | `conf` under `os.homedir() + '/.texra/state.json'` for daemon-friendly mode; `memoryState` for one-shot batch (state has no purpose across one-shot invocations and avoids a write to a shared file from CI). |
-| `StateStore` (workspace) | `context.workspaceState` | per-project `conf` keyed by hashed cwd | Same — `~/.texra/workspace-state/<sha256(cwd)>.json`. Skipped (memory-only) when `--ephemeral` flag passes. |
-| `LogBackend` | `vscode.OutputChannel` | `electron-log` | `consoleLog` reused, plus a `--quiet` / `--verbose` filter wrapper. Optional `--log-file <path>` writes a copy. |
-| `FileSystemProvider` | `VscodeFileSystem` (wraps `vscode.workspace.fs`) | `nodeFilesystem` | `nodeFilesystem` — byte-for-byte reuse. |
-| `WorkspaceProvider` | `VscodeWorkspace` | `nodeWorkspace` | `nodeWorkspace` — byte-for-byte reuse. `--cwd <path>` flag overrides `process.cwd()` before init. |
-| `StorageProvider` | wraps `context.{storage,globalStorage}Uri` | `app.getPath('userData')` | `nodeStorage` (already writes to `~/.texra/{workspace,global}-storage`) — byte-for-byte reuse. XDG_DATA_HOME fallback added in pre-refactor (§9 #C2). |
-| `PlatformSecrets` | `VscodeSecrets` (wraps `context.secrets`) | `safeStorage` + `conf` | New `KeyringSecrets`: `@napi-rs/keyring` first, `~/.texra/secrets.json` (chmod 0600) fallback. **Always honor env vars first** (`OPENAI_API_KEY` etc.) — the existing `lookupApiKey` order already does this, no change. |
+| Interface                | Extension (today)                                                  | Electron (planned)                                   | CLI                                                                                                                                                                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ConfigProvider`         | `VscodeConfigProvider` (wraps `vscode.workspace.getConfiguration`) | `ConfConfigProvider` over `conf` (Electron PRD §6.1) | **Same `ConfConfigProvider`**, lifted to `@texra/core` so both CLI and Electron share it. Layer: defaults from Zod schema → user file (`~/.config/texra/config.yaml`) → project file (`.texra/config.yaml` discovered upward) → env (`TEXRA_*`) → flags. Inspect returns the layered view. |
+| `StateStore` (global)    | `context.globalState` (`vscode.Memento`)                           | `conf` under `app.getPath('userData')`               | `conf` under `os.homedir() + '/.texra/state.json'` for daemon-friendly mode; `memoryState` for one-shot batch (state has no purpose across one-shot invocations and avoids a write to a shared file from CI).                                                                              |
+| `StateStore` (workspace) | `context.workspaceState`                                           | per-project `conf` keyed by hashed cwd               | Same — `~/.texra/workspace-state/<sha256(cwd)>.json`. Skipped (memory-only) when `--ephemeral` flag passes.                                                                                                                                                                                |
+| `LogBackend`             | `vscode.OutputChannel`                                             | `electron-log`                                       | `consoleLog` reused, plus a `--quiet` / `--verbose` filter wrapper. Optional `--log-file <path>` writes a copy.                                                                                                                                                                            |
+| `FileSystemProvider`     | `VscodeFileSystem` (wraps `vscode.workspace.fs`)                   | `nodeFilesystem`                                     | `nodeFilesystem` — byte-for-byte reuse.                                                                                                                                                                                                                                                    |
+| `WorkspaceProvider`      | `VscodeWorkspace`                                                  | `nodeWorkspace`                                      | `nodeWorkspace` — byte-for-byte reuse. `--cwd <path>` flag overrides `process.cwd()` before init.                                                                                                                                                                                          |
+| `StorageProvider`        | wraps `context.{storage,globalStorage}Uri`                         | `app.getPath('userData')`                            | `nodeStorage` (already writes to `~/.texra/{workspace,global}-storage`) — byte-for-byte reuse. XDG_DATA_HOME fallback added in pre-refactor (§9 #C2).                                                                                                                                      |
+| `PlatformSecrets`        | `VscodeSecrets` (wraps `context.secrets`)                          | `safeStorage` + `conf`                               | New `KeyringSecrets`: `@napi-rs/keyring` first, `~/.texra/secrets.json` (chmod 0600) fallback. **Always honor env vars first** (`OPENAI_API_KEY` etc.) — the existing `lookupApiKey` order already does this, no change.                                                                   |
 
 `initPlatform()` is called once from `cli/src/runtime/initPlatform.ts`, before any agent code runs. Mirrors `extension.ts:147`. Lint rule from Electron PRD §9 #15 applies — no other call site.
 
@@ -334,36 +336,36 @@ Eight services (the seven `Platform` interfaces plus `PlatformSecrets`). ~250 LO
 
 ### 7.5 Replacing extension/desktop UX surfaces
 
-| Extension/desktop UX | CLI replacement |
-| --- | --- |
-| Activity-bar main view (file/agent/model picker) | `texra run` arguments + flags; `texra agents list`, `texra models list` for discovery |
-| Progress webview (streaming agent output) | Streaming text on stderr (headless) or Ink stream pane (interactive) |
-| Settings webview | `texra config get/set` + `~/.config/texra/config.yaml` (read-only by default; `set` writes user-scope) |
+| Extension/desktop UX                                                      | CLI replacement                                                                                                                                                                    |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Activity-bar main view (file/agent/model picker)                          | `texra run` arguments + flags; `texra agents list`, `texra models list` for discovery                                                                                              |
+| Progress webview (streaming agent output)                                 | Streaming text on stderr (headless) or Ink stream pane (interactive)                                                                                                               |
+| Settings webview                                                          | `texra config get/set` + `~/.config/texra/config.yaml` (read-only by default; `set` writes user-scope)                                                                             |
 | `vscode.commands.executeCommand('vscode.diff', …)` for tool-edit approval | Unified text diff via `diff` package + picocolors highlighting; `--diff-tool` flag invokes `git difftool`/`code --diff`/etc. as a launch-out for users who want a real diff viewer |
-| `dialog.showMessageBox` (Electron) | `@clack/prompts` confirm/select/multiselect |
-| Native menu / command palette | `texra --help` tree; in interactive mode, `/`-prefixed slash commands |
-| Walkthrough markdown | `texra doctor` (env check) + `texra --help <topic>`; the same markdown ships in the npm package as `manuals/` for `man`-style consumption |
-| `vscode.window.createTerminal` (for bash background streams) | Background streams print with a labeled prefix `[bg-1: cmd…]`; foreground streams stream inline |
-| `vscode.env.openExternal` | `open` (mac) / `xdg-open` (linux) / `start` (win) via the `open` npm package; in CI, link is printed to stderr instead |
-| `vscode.AuthenticationProvider` | `texra login` / `texra logout` commands; OAuth via loopback or device-code; tokens in keyring |
+| `dialog.showMessageBox` (Electron)                                        | `@clack/prompts` confirm/select/multiselect                                                                                                                                        |
+| Native menu / command palette                                             | `texra --help` tree; in interactive mode, `/`-prefixed slash commands                                                                                                              |
+| Walkthrough markdown                                                      | `texra doctor` (env check) + `texra --help <topic>`; the same markdown ships in the npm package as `manuals/` for `man`-style consumption                                          |
+| `vscode.window.createTerminal` (for bash background streams)              | Background streams print with a labeled prefix `[bg-1: cmd…]`; foreground streams stream inline                                                                                    |
+| `vscode.env.openExternal`                                                 | `open` (mac) / `xdg-open` (linux) / `start` (win) via the `open` npm package; in CI, link is printed to stderr instead                                                             |
+| `vscode.AuthenticationProvider`                                           | `texra login` / `texra logout` commands; OAuth via loopback or device-code; tokens in keyring                                                                                      |
 
 ### 7.6 SDK surface (programmatic mode)
 
-`@texra/cli/sdk` exports a small typed surface — *not* the entire `core`. The point is to give batch-job authors a stable contract that survives kernel refactors.
+`@texra/cli/sdk` exports a small typed surface — _not_ the entire `core`. The point is to give batch-job authors a stable contract that survives kernel refactors.
 
 ```ts
 export interface RunAgentOptions {
-  agent: string;                 // 'polish', 'orchestrator', etc.
-  model?: string;                // default from config
+  agent: string; // 'polish', 'orchestrator', etc.
+  model?: string; // default from config
   inputFile?: string;
   inputFiles?: string[];
-  editedFile?: string;           // for merge
+  editedFile?: string; // for merge
   outputFiles?: string[];
-  instruction?: string;          // for tool-use agents
-  rounds?: number;               // workflow only
-  workingDirectory?: string;     // defaults to cwd
+  instruction?: string; // for tool-use agents
+  rounds?: number; // workflow only
+  workingDirectory?: string; // defaults to cwd
   approvalPolicy?: ApprovalPolicy;
-  allowedTools?: string[];       // for tool-use agents
+  allowedTools?: string[]; // for tool-use agents
   disallowedTools?: string[];
   signal?: AbortSignal;
   onProgress?: (event: ProgressEvent) => void;
@@ -373,16 +375,20 @@ export interface RunAgentOptions {
 export interface RunAgentResult {
   status: 'success' | 'failed' | 'cancelled';
   outputs: OutputFileInfo[];
-  lastResponse?: string;         // tool-use agents
-  touchedFiles?: string[];       // tool-use agents
+  lastResponse?: string; // tool-use agents
+  touchedFiles?: string[]; // tool-use agents
   executionId: string;
   streamId: string;
   usage: TokenUsage;
 }
 
 export function runAgent(opts: RunAgentOptions): Promise<RunAgentResult>;
-export function listAgents(opts?: { source?: 'builtin' | 'custom' | 'remote' }): Promise<AgentSummary[]>;
-export function listModels(opts?: { provider?: string }): Promise<ModelSummary[]>;
+export function listAgents(opts?: {
+  source?: 'builtin' | 'custom' | 'remote';
+}): Promise<AgentSummary[]>;
+export function listModels(opts?: {
+  provider?: string;
+}): Promise<ModelSummary[]>;
 ```
 
 Internally `runAgent` calls `executeAgent()` from core with a `runtimeHost` whose `ProgressSink` forwards events to the user's `onProgress` callback; types are re-exported from `@shared/schemas` so users get full type safety on the event shape. Total surface: ~300 LOC of facade + types.
@@ -483,19 +489,19 @@ texra --help [<topic>]                # per-command help; lazy-loads man pages f
 
 The CLI honors a small canonical set of env vars in addition to `TEXRA_*` overrides for any config key:
 
-| Variable | Purpose |
-| --- | --- |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `XAI_API_KEY`, … | Per-provider API keys (existing extension behavior preserved). |
-| `TEXRA_API_KEY` | Reserved for the Supabase relay-tier (server-side keys) flow. |
-| `TEXRA_CONFIG_DIR` | Override `~/.config/texra/`. |
-| `TEXRA_DATA_DIR` | Override `~/.texra/` (matches XDG_DATA_HOME convention). |
-| `TEXRA_LOG_LEVEL` | `debug`/`info`/`warn`/`error`. |
-| `TEXRA_APPROVAL_POLICY` | Default policy when `--approval-policy` isn't passed. |
-| `TEXRA_MODEL` | Default model when `--model` isn't passed. |
-| `TEXRA_NO_COLOR` (and `NO_COLOR`) | Disable picocolors output. |
-| `TEXRA_NO_TELEMETRY` | Disable opt-in telemetry. |
-| `CI` | Auto-set by GitHub Actions et al. — flips default mode to headless. |
-| `GITHUB_TOKEN` / `GH_TOKEN` | Picked up by the `github_subscription` tool. |
+| Variable                                                                                        | Purpose                                                             |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `XAI_API_KEY`, … | Per-provider API keys (existing extension behavior preserved).      |
+| `TEXRA_API_KEY`                                                                                 | Reserved for the Supabase relay-tier (server-side keys) flow.       |
+| `TEXRA_CONFIG_DIR`                                                                              | Override `~/.config/texra/`.                                        |
+| `TEXRA_DATA_DIR`                                                                                | Override `~/.texra/` (matches XDG_DATA_HOME convention).            |
+| `TEXRA_LOG_LEVEL`                                                                               | `debug`/`info`/`warn`/`error`.                                      |
+| `TEXRA_APPROVAL_POLICY`                                                                         | Default policy when `--approval-policy` isn't passed.               |
+| `TEXRA_MODEL`                                                                                   | Default model when `--model` isn't passed.                          |
+| `TEXRA_NO_COLOR` (and `NO_COLOR`)                                                               | Disable picocolors output.                                          |
+| `TEXRA_NO_TELEMETRY`                                                                            | Disable opt-in telemetry.                                           |
+| `CI`                                                                                            | Auto-set by GitHub Actions et al. — flips default mode to headless. |
+| `GITHUB_TOKEN` / `GH_TOKEN`                                                                     | Picked up by the `github_subscription` tool.                        |
 
 Config resolution order: **flag > env > project file > user file > schema default**. Single canonical implementation in `ConfConfigProvider.inspect()`; `texra config inspect <key>` shows which layer wins.
 
@@ -508,22 +514,22 @@ The single most important new abstraction the CLI needs. It's also the smallest 
 The runtime today exposes 7 user-facing gates (§4.3). Their config is binary: `requireEditApproval: true|false` and `requireBashApproval: true|false`, plus `proposalBypass` per stream. That's enough for the extension (which always has a webview to ask in) but wrong for the CLI:
 
 - A CI run can't prompt. It must auto-approve, auto-deny, or fail.
-- A laptop CLI run *can* prompt — but the user wants to choose granularity ("auto-approve edits inside the project, but ask for bash; never auto-approve outside the project").
+- A laptop CLI run _can_ prompt — but the user wants to choose granularity ("auto-approve edits inside the project, but ask for bash; never auto-approve outside the project").
 - Different agents have different risk profiles. `polish` only edits. `orchestrator` runs bash. The same policy shouldn't apply to both.
 
 ### 9.2 The model
 
 The CLI ships a small `ApprovalPolicy` type (matching the Codex CLI vocabulary, with extensions):
 
-| Policy | Edit approvals | Bash approvals | Plan/proposal | External inquiry |
-| --- | --- | --- | --- | --- |
-| `never` (default in headless / CI) | Deny silently | Deny silently | Deny | Deny |
-| `ask` (default in interactive) | Prompt on TTY | Prompt on TTY | Prompt on TTY | Prompt on TTY |
-| `auto-edits` | Auto-approve in-project; prompt outside | Prompt | Auto | Prompt |
-| `auto` | Auto-approve in-project; prompt outside | Auto in-project; prompt outside | Auto | Prompt |
-| `yolo` | Auto-approve all | Auto-approve all | Auto | Auto |
+| Policy                             | Edit approvals                          | Bash approvals                  | Plan/proposal | External inquiry |
+| ---------------------------------- | --------------------------------------- | ------------------------------- | ------------- | ---------------- |
+| `never` (default in headless / CI) | Deny silently                           | Deny silently                   | Deny          | Deny             |
+| `ask` (default in interactive)     | Prompt on TTY                           | Prompt on TTY                   | Prompt on TTY | Prompt on TTY    |
+| `auto-edits`                       | Auto-approve in-project; prompt outside | Prompt                          | Auto          | Prompt           |
+| `auto`                             | Auto-approve in-project; prompt outside | Auto in-project; prompt outside | Auto          | Prompt           |
+| `yolo`                             | Auto-approve all                        | Auto-approve all                | Auto          | Auto             |
 
-"In-project" means the candidate file/cwd is inside the resolved workspace path (`nodeWorkspace.getWorkspacePath()`). Outside-project edits/bash *always* prompt under `auto-edits`/`auto`, even when the user opted for high-trust modes — this matches the Codex CLI's default of being conservative across the project boundary.
+"In-project" means the candidate file/cwd is inside the resolved workspace path (`nodeWorkspace.getWorkspacePath()`). Outside-project edits/bash _always_ prompt under `auto-edits`/`auto`, even when the user opted for high-trust modes — this matches the Codex CLI's default of being conservative across the project boundary.
 
 `--allowed-tools <list>` and `--disallowed-tools <list>` further narrow the tool set the agent sees (passed through to `resolveTools()`); they don't override the approval policy, they precede it. A tool removed by `--disallowed-tools` is not in the prompt at all.
 
@@ -543,11 +549,15 @@ setToolEditApprovalHandler(async (request) => {
   }
   // decision === 'ask' — prompt on TTY (or fail if not TTY)
   if (!process.stdin.isTTY) {
-    log.error(`Edit approval requested but stdin is not a TTY. Pass --approval-policy yolo to auto-approve.`);
+    log.error(
+      `Edit approval requested but stdin is not a TTY. Pass --approval-policy yolo to auto-approve.`,
+    );
     return { accepted: false };
   }
   printUnifiedDiff(request, process.stderr);
-  const answer = await clackConfirm({ message: `Apply edit to ${request.path}?` });
+  const answer = await clackConfirm({
+    message: `Apply edit to ${request.path}?`,
+  });
   return { accepted: answer === true, appliedContent: request.proposedContent };
 });
 ```
@@ -570,7 +580,7 @@ The session allow-list is **not persisted** between `texra` invocations. Persist
 
 ### 9.5 Why this isn't a kernel change
 
-The runtime's existing seams (`setToolEditApprovalHandler`, `bashApprovalController`, the `BasePromiseCoordinator` event pattern) already give us everything we need. The CLI policy engine sits *in front of* those seams; it doesn't change them. The extension and Electron app keep their existing prompt-driven handlers.
+The runtime's existing seams (`setToolEditApprovalHandler`, `bashApprovalController`, the `BasePromiseCoordinator` event pattern) already give us everything we need. The CLI policy engine sits _in front of_ those seams; it doesn't change them. The extension and Electron app keep their existing prompt-driven handlers.
 
 One small kernel change: per Electron PRD §9 #18 the `PromptHost` interface is already defined in `core/hosts/`. The CLI's plan-approval / proposal-approval / retry-approval handlers register a `PromptHost` adapter that calls into `@clack/prompts`. ~60 LOC; no new interfaces.
 
@@ -578,11 +588,11 @@ One small kernel change: per Electron PRD §9 #18 the `PromptHost` interface is 
 
 The CLI must work in three settings, each with a different "where does the token come from" answer:
 
-| Setting | Primary path | Fallback |
-| --- | --- | --- |
-| Laptop with browser | OAuth loopback (RFC 8252) — loopback HTTP on `127.0.0.1:<port>`, opens browser, captures redirect with PKCE | Device-code if `--no-browser` |
-| SSH session / dev container | Device-code (RFC 8628) — print URL + user code, poll token endpoint | `texra api-key set` (no Supabase auth, just personal API keys) |
-| GitHub Actions / generic CI | Env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `TEXRA_API_KEY`) | None — no interactive auth in CI |
+| Setting                     | Primary path                                                                                                | Fallback                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Laptop with browser         | OAuth loopback (RFC 8252) — loopback HTTP on `127.0.0.1:<port>`, opens browser, captures redirect with PKCE | Device-code if `--no-browser`                                  |
+| SSH session / dev container | Device-code (RFC 8628) — print URL + user code, poll token endpoint                                         | `texra api-key set` (no Supabase auth, just personal API keys) |
+| GitHub Actions / generic CI | Env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `TEXRA_API_KEY`)                                           | None — no interactive auth in CI                               |
 
 ### 10.1 Loopback flow
 
@@ -599,6 +609,7 @@ Total CLI-side code: ~150 LOC. The HTTP server is closed after the first valid c
 1. CLI calls Supabase's device-authorization endpoint (`/functions/v1/relay/auth/device-code/start`, **new edge function** — see pre-refactoring §11 #C5).
 2. Server returns `device_code`, `user_code`, `verification_uri`, `interval`, `expires_in`.
 3. CLI prints to stderr:
+
    ```
    To sign in:
      1. Open https://texra.ai/cli/login in any browser
@@ -606,6 +617,7 @@ Total CLI-side code: ~150 LOC. The HTTP server is closed after the first valid c
 
    Waiting for authorization (expires in 15 min)…
    ```
+
 4. CLI polls `/functions/v1/relay/auth/device-code/poll` every `interval` seconds with the device code; receives tokens on success, `authorization_pending` while waiting, `slow_down`/`expired_token`/`access_denied` for the documented states.
 5. Same handoff to `SupabaseSessionCoordinator` as loopback.
 
@@ -613,11 +625,11 @@ Device-code is also what `texra-action` falls back to if the workflow grants `gh
 
 ### 10.3 Token storage
 
-| Layer | Backend |
-| --- | --- |
-| Primary | `@napi-rs/keyring` — macOS Keychain, Windows Credential Manager, Linux Secret Service / KWallet |
-| Fallback | `~/.texra/secrets.json` with `chmod 0600`, owner-only readable; warns on first use that the keyring is unavailable |
-| API keys (env) | Always honored first, never overwritten; `texra login` doesn't touch env-var-sourced keys |
+| Layer          | Backend                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Primary        | `@napi-rs/keyring` — macOS Keychain, Windows Credential Manager, Linux Secret Service / KWallet                    |
+| Fallback       | `~/.texra/secrets.json` with `chmod 0600`, owner-only readable; warns on first use that the keyring is unavailable |
+| API keys (env) | Always honored first, never overwritten; `texra login` doesn't touch env-var-sourced keys                          |
 
 Same behavior the Electron PRD §6.3 uses. `getSelectedStorageBackend()` analog: detect on Linux whether `gnome-keyring`/`kwallet` is reachable; otherwise log a one-time warning and fall through to the `chmod 0600` file. The Supabase session lives in the same backend (key `texra:supabase:session`), one JSON blob.
 
@@ -727,8 +739,8 @@ A JS Action (`action.yml` with `runs.using: node20`) that:
 - uses: texra-ai/texra-action@v1
   with:
     agent: orchestrator
-    instruction: "${{ github.event.review.body }}"
-    trigger: "@texra"
+    instruction: '${{ github.event.review.body }}'
+    trigger: '@texra'
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
@@ -762,16 +774,16 @@ Smaller and simpler than the desktop build pipeline.
 
 Independent build graph from extension and desktop. CLI cannot import from `extension/` or `desktop/`; only `core/`. Enforced by ESLint flat-config rule (extension of the §9 #11 rule from the Electron PRD).
 
-| Concern | CLI build |
-| --- | --- |
-| Command | `pnpm --filter @texra/cli build` |
-| Bundler | `tsup` (esbuild-driven; produces ESM `dist/` with one chunk per command + a lazy Ink chunk) |
-| Module format | ESM (Node 20+) |
-| Output | `packages/cli/dist/bin/texra.js` (entrypoint), `dist/sdk/index.js` (SDK), `dist/render/ink/index.js` (Ink lazy chunk) |
-| Dev loop | `pnpm --filter @texra/cli dev` runs `tsup --watch` |
-| CI runner | One Linux runner for build + tests; matrix (linux/mac/windows × node 20/22) for E2E |
-| Distribution | `npm publish` to npm registry; secondary `bun build --compile` for self-contained binaries on GitHub Releases |
-| Allowed to import from | `@texra/core` only |
+| Concern                | CLI build                                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Command                | `pnpm --filter @texra/cli build`                                                                                      |
+| Bundler                | `tsup` (esbuild-driven; produces ESM `dist/` with one chunk per command + a lazy Ink chunk)                           |
+| Module format          | ESM (Node 20+)                                                                                                        |
+| Output                 | `packages/cli/dist/bin/texra.js` (entrypoint), `dist/sdk/index.js` (SDK), `dist/render/ink/index.js` (Ink lazy chunk) |
+| Dev loop               | `pnpm --filter @texra/cli dev` runs `tsup --watch`                                                                    |
+| CI runner              | One Linux runner for build + tests; matrix (linux/mac/windows × node 20/22) for E2E                                   |
+| Distribution           | `npm publish` to npm registry; secondary `bun build --compile` for self-contained binaries on GitHub Releases         |
+| Allowed to import from | `@texra/core` only                                                                                                    |
 
 ### 13.2 Bundle and shipping rules
 
@@ -781,7 +793,10 @@ Independent build graph from extension and desktop. CLI cannot import from `exte
   ```json
   {
     ".": "./dist/bin/texra.js",
-    "./sdk": { "types": "./dist/sdk/index.d.ts", "import": "./dist/sdk/index.js" }
+    "./sdk": {
+      "types": "./dist/sdk/index.d.ts",
+      "import": "./dist/sdk/index.js"
+    }
   }
   ```
 - Native deps with optional bindings (`@napi-rs/keyring`) ship via `optionalDependencies` so installs don't fail if the platform variant is missing — the file fallback kicks in.
@@ -801,14 +816,14 @@ These attach to GitHub Releases (no signing at v1 — they install via `curl …
 
 ### 13.4 Tests
 
-| Layer | Tooling | Coverage |
-| --- | --- | --- |
-| Kernel | Vitest + `FakePlatform` (existing — Electron PRD §6.7) | Same suite the desktop runs against. CLI inherits invariant-suite coverage automatically. |
-| CLI smoke | Vitest in `packages/cli/test/` | `texra agents list`, `texra config get`, exit codes, mode selection, env-var precedence |
-| CLI E2E | `execa`-driven tests that spawn the built binary against fixture projects | Headless `polish` run against a tiny `.tex` fixture; JSON output schema validation; approval-policy enforcement |
-| Auth | Mocked Supabase server | Loopback flow, device-code flow, token refresh |
-| Renderer (Ink) | `ink-testing-library` | Component-level tests of `<StreamPane />`, `<ApprovalCard />` |
-| Cross-platform E2E | GitHub Actions matrix (linux/mac/windows × node 20/22) | One end-to-end run per cell on every PR |
+| Layer              | Tooling                                                                   | Coverage                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Kernel             | Vitest + `FakePlatform` (existing — Electron PRD §6.7)                    | Same suite the desktop runs against. CLI inherits invariant-suite coverage automatically.                       |
+| CLI smoke          | Vitest in `packages/cli/test/`                                            | `texra agents list`, `texra config get`, exit codes, mode selection, env-var precedence                         |
+| CLI E2E            | `execa`-driven tests that spawn the built binary against fixture projects | Headless `polish` run against a tiny `.tex` fixture; JSON output schema validation; approval-policy enforcement |
+| Auth               | Mocked Supabase server                                                    | Loopback flow, device-code flow, token refresh                                                                  |
+| Renderer (Ink)     | `ink-testing-library`                                                     | Component-level tests of `<StreamPane />`, `<ApprovalCard />`                                                   |
+| Cross-platform E2E | GitHub Actions matrix (linux/mac/windows × node 20/22)                    | One end-to-end run per cell on every PR                                                                         |
 
 ## 14. Pre-refactorings — what's needed in `core/`
 
@@ -818,7 +833,7 @@ Most of the heavy lifting (Electron PRD's §9 Tier 1) has already shipped. The C
 
 **C1. CLI-facing approval handler interface.** _(~80 LOC.)_
 
-The current `setToolEditApprovalHandler()` accepts a single function. The CLI installs *its own* function, but the function reaches inside `request` to render a unified diff and prompt. We add a tiny helper in `core/tools/approval/` that exposes a `formatUnifiedDiff(left, right)` utility (re-using the existing `diff-match-patch` semantic-diff path) so the CLI's handler doesn't reimplement diff formatting. **Why now:** without it the CLI ships its own diff library, and we end up with two diff implementations going out of sync. Tiny addition; avoids drift.
+The current `setToolEditApprovalHandler()` accepts a single function. The CLI installs _its own_ function, but the function reaches inside `request` to render a unified diff and prompt. We add a tiny helper in `core/tools/approval/` that exposes a `formatUnifiedDiff(left, right)` utility (re-using the existing `diff-match-patch` semantic-diff path) so the CLI's handler doesn't reimplement diff formatting. **Why now:** without it the CLI ships its own diff library, and we end up with two diff implementations going out of sync. Tiny addition; avoids drift.
 
 **C2. `nodeStorage` honoring `XDG_DATA_HOME` / `XDG_CONFIG_HOME`.** _(~30 LOC.)_
 
@@ -830,7 +845,7 @@ Per Electron PRD §9 #18, `PromptHost` is already an interface in `core/hosts/`.
 
 **C4. `ApprovalPolicy` type in `core/agent/runtime/`.** _(~40 LOC.)_
 
-A small typed enum + helper that the CLI populates from flags/config and the kernel optionally consults. The kernel does *not* enforce policy itself — that's the host's job — but the type lives in core so the SDK and the CLI agree on its shape, and so future hosts (a hypothetical `texra serve` daemon) reuse it. **Why now:** cheap to land, prevents the CLI inventing a parallel type.
+A small typed enum + helper that the CLI populates from flags/config and the kernel optionally consults. The kernel does _not_ enforce policy itself — that's the host's job — but the type lives in core so the SDK and the CLI agree on its shape, and so future hosts (a hypothetical `texra serve` daemon) reuse it. **Why now:** cheap to land, prevents the CLI inventing a parallel type.
 
 **C5. Supabase device-code edge function.** _(~150 LOC of edge function + ~50 LOC of CLI client; new file in `supabase/functions/relay/auth/device-code/`.)_
 
@@ -943,28 +958,28 @@ This is dramatically smaller than the Electron port's 11.5–13 week budget for 
 
 ## 16. Risks & mitigations
 
-| Risk | Likelihood | Impact | Mitigation |
-| --- | --- | --- | --- |
-| Tool-use agents require an approval gate that's hard to express headlessly (e.g., the orchestrator produces a delegation proposal whose feedback shapes the next round) | Medium | Medium | The proposal coordinator already supports auto-bypass per stream. CLI's `--approval-policy yolo` flips this for the run; `auto` keeps proposals as approve/reject prompts but auto-decides edits/bash. Document explicitly which gates each policy auto-decides. |
-| `process.stdout.isTTY` detection is wrong in some terminals (tmux + alternate-screen, certain SSH multiplexers) | Medium | Low | Always honor `--print` / `-p` as an explicit override; print a one-line hint at startup if the detected mode disagrees with terminal type heuristics. |
-| `@napi-rs/keyring` lacks a binding for an exotic platform (e.g., FreeBSD) | Low | Low | `optionalDependencies` means the install succeeds; CLI logs a one-time warning and falls through to `chmod 0600` file storage. Documented in `texra doctor` output. |
-| Device-code flow's polling is rate-limited by Supabase | Low | Medium | Honor the `interval` server response; back off on `slow_down` per RFC 8628 §3.5. CI debug shells running `texra login` on a slow loop don't hammer the server. |
-| Custom protocol hijack (the loopback flow's listener gets an unexpected callback before the user finishes auth) | Low | Medium | The loopback server only accepts callbacks whose `state` matches the PKCE-bound state we issued. Listener auto-closes after 5-minute timeout or first valid callback. |
-| `tsup` produces ESM-only bundles; users on `require()` runtimes can't import `@texra/cli/sdk` | Low | Low | Document Node 20+ requirement in README. CommonJS users use a dynamic `import()`. |
-| Ink's React renderer crashes the CLI in headless contexts when accidentally loaded | Low | Medium | Lazy-loaded only behind `if (selectMode() === 'interactive')`. Bundler check (C7) enforces it. |
-| Cold start regresses past target as command count grows | Medium | Low | Lazy-load each subcommand module via `commander`'s `.action(async () => (await import('./run.js')).run(...))`. Bundle-size guard fails CI on regression. |
-| `--output-format json` schema drift breaks downstream consumers | Medium | High | Schema is versioned with `@shared/schemas`; major bumps imply breaking changes. Document in `docs/cli/json-schema.md`. CI E2E test pins against a captured fixture. |
-| Tool-edit approval rendering shows secrets accidentally written to the diff | Medium | Medium | Already a kernel concern; add a redaction filter in the `consoleLog` adapter that masks well-known secret patterns (API keys, JWTs) in any printed output. |
-| Subprocess `execa` calls leak `OPENAI_API_KEY` via `ps`-style enumeration | Medium | Medium | Same mitigation as Electron PRD: pass keys via stdin / file with restrictive perms where SDKs support it. Audit `execa` call sites. |
-| GitHub Actions runner caches stale `~/.texra/` between jobs | Low | Low | `texra-base-action` uses `actions/cache` keyed by `${{ runner.os }}-texra-${{ inputs.version }}`; we explicitly do NOT cache `~/.texra/secrets.json` or `~/.texra/session.json`. |
-| Cross-platform path handling diverges (especially under git Bash on Windows) | Medium | Medium | All path joins go through `node:path` via `nodeWorkspace`; integration tests run on `windows-latest` GitHub runner. |
-| Corp proxy / SSL inspection breaks model API or auto-update | Medium | Medium | Honor `HTTP_PROXY` / `HTTPS_PROXY`. `undici` (Node's default HTTP client) supports them by default; verify SDKs do too. |
-| `chmod 0600` doesn't work on Windows | Low | Medium | On Windows, set the file's ACL to owner-only via `node:fs.chmod` (which Windows interprets as a best-effort) plus a `setFileSecurity` call via a tiny native dep, or document that Windows users with shared profiles should use `@napi-rs/keyring` (Windows Credential Manager is fine). |
-| The interactive REPL doesn't render correctly under very narrow terminals (<60 cols) | Medium | Low | Ink components reflow; add a minimum-width check and degrade to a "list view" below 60 cols. |
-| `texra-action` uploaded to the Actions marketplace is supply-chain-attacked | Low | Critical | Pin commit SHAs in published workflows; sign releases with a GitHub App; use `actions/dependency-review-action` in the texra-action repo's CI. |
-| Telemetry leaks user data | Low | High | Off by default; opt-in via `texra config set telemetry.enabled true` or `--telemetry`. Even when on, send only event names and durations — never instructions, file contents, or model outputs. |
-| Self-contained `bun build` binaries diverge in behavior from npm-installed CLI | Low | Medium | E2E test matrix runs both binary and `node dist/bin/texra.js` against the same fixtures. |
-| External-inquiry tool fails on a CI run that has stdin closed | Medium | Medium | `--approval-policy never` causes the tool to refuse with a clear message; users wanting external-inquiry behavior in CI use a dedicated `--external-inquiry-handler <command>` flag (deferred to v1.1). |
+| Risk                                                                                                                                                                    | Likelihood | Impact   | Mitigation                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool-use agents require an approval gate that's hard to express headlessly (e.g., the orchestrator produces a delegation proposal whose feedback shapes the next round) | Medium     | Medium   | The proposal coordinator already supports auto-bypass per stream. CLI's `--approval-policy yolo` flips this for the run; `auto` keeps proposals as approve/reject prompts but auto-decides edits/bash. Document explicitly which gates each policy auto-decides.                          |
+| `process.stdout.isTTY` detection is wrong in some terminals (tmux + alternate-screen, certain SSH multiplexers)                                                         | Medium     | Low      | Always honor `--print` / `-p` as an explicit override; print a one-line hint at startup if the detected mode disagrees with terminal type heuristics.                                                                                                                                     |
+| `@napi-rs/keyring` lacks a binding for an exotic platform (e.g., FreeBSD)                                                                                               | Low        | Low      | `optionalDependencies` means the install succeeds; CLI logs a one-time warning and falls through to `chmod 0600` file storage. Documented in `texra doctor` output.                                                                                                                       |
+| Device-code flow's polling is rate-limited by Supabase                                                                                                                  | Low        | Medium   | Honor the `interval` server response; back off on `slow_down` per RFC 8628 §3.5. CI debug shells running `texra login` on a slow loop don't hammer the server.                                                                                                                            |
+| Custom protocol hijack (the loopback flow's listener gets an unexpected callback before the user finishes auth)                                                         | Low        | Medium   | The loopback server only accepts callbacks whose `state` matches the PKCE-bound state we issued. Listener auto-closes after 5-minute timeout or first valid callback.                                                                                                                     |
+| `tsup` produces ESM-only bundles; users on `require()` runtimes can't import `@texra/cli/sdk`                                                                           | Low        | Low      | Document Node 20+ requirement in README. CommonJS users use a dynamic `import()`.                                                                                                                                                                                                         |
+| Ink's React renderer crashes the CLI in headless contexts when accidentally loaded                                                                                      | Low        | Medium   | Lazy-loaded only behind `if (selectMode() === 'interactive')`. Bundler check (C7) enforces it.                                                                                                                                                                                            |
+| Cold start regresses past target as command count grows                                                                                                                 | Medium     | Low      | Lazy-load each subcommand module via `commander`'s `.action(async () => (await import('./run.js')).run(...))`. Bundle-size guard fails CI on regression.                                                                                                                                  |
+| `--output-format json` schema drift breaks downstream consumers                                                                                                         | Medium     | High     | Schema is versioned with `@shared/schemas`; major bumps imply breaking changes. Document in `docs/cli/json-schema.md`. CI E2E test pins against a captured fixture.                                                                                                                       |
+| Tool-edit approval rendering shows secrets accidentally written to the diff                                                                                             | Medium     | Medium   | Already a kernel concern; add a redaction filter in the `consoleLog` adapter that masks well-known secret patterns (API keys, JWTs) in any printed output.                                                                                                                                |
+| Subprocess `execa` calls leak `OPENAI_API_KEY` via `ps`-style enumeration                                                                                               | Medium     | Medium   | Same mitigation as Electron PRD: pass keys via stdin / file with restrictive perms where SDKs support it. Audit `execa` call sites.                                                                                                                                                       |
+| GitHub Actions runner caches stale `~/.texra/` between jobs                                                                                                             | Low        | Low      | `texra-base-action` uses `actions/cache` keyed by `${{ runner.os }}-texra-${{ inputs.version }}`; we explicitly do NOT cache `~/.texra/secrets.json` or `~/.texra/session.json`.                                                                                                          |
+| Cross-platform path handling diverges (especially under git Bash on Windows)                                                                                            | Medium     | Medium   | All path joins go through `node:path` via `nodeWorkspace`; integration tests run on `windows-latest` GitHub runner.                                                                                                                                                                       |
+| Corp proxy / SSL inspection breaks model API or auto-update                                                                                                             | Medium     | Medium   | Honor `HTTP_PROXY` / `HTTPS_PROXY`. `undici` (Node's default HTTP client) supports them by default; verify SDKs do too.                                                                                                                                                                   |
+| `chmod 0600` doesn't work on Windows                                                                                                                                    | Low        | Medium   | On Windows, set the file's ACL to owner-only via `node:fs.chmod` (which Windows interprets as a best-effort) plus a `setFileSecurity` call via a tiny native dep, or document that Windows users with shared profiles should use `@napi-rs/keyring` (Windows Credential Manager is fine). |
+| The interactive REPL doesn't render correctly under very narrow terminals (<60 cols)                                                                                    | Medium     | Low      | Ink components reflow; add a minimum-width check and degrade to a "list view" below 60 cols.                                                                                                                                                                                              |
+| `texra-action` uploaded to the Actions marketplace is supply-chain-attacked                                                                                             | Low        | Critical | Pin commit SHAs in published workflows; sign releases with a GitHub App; use `actions/dependency-review-action` in the texra-action repo's CI.                                                                                                                                            |
+| Telemetry leaks user data                                                                                                                                               | Low        | High     | Off by default; opt-in via `texra config set telemetry.enabled true` or `--telemetry`. Even when on, send only event names and durations — never instructions, file contents, or model outputs.                                                                                           |
+| Self-contained `bun build` binaries diverge in behavior from npm-installed CLI                                                                                          | Low        | Medium   | E2E test matrix runs both binary and `node dist/bin/texra.js` against the same fixtures.                                                                                                                                                                                                  |
+| External-inquiry tool fails on a CI run that has stdin closed                                                                                                           | Medium     | Medium   | `--approval-policy never` causes the tool to refuse with a clear message; users wanting external-inquiry behavior in CI use a dedicated `--external-inquiry-handler <command>` flag (deferred to v1.1).                                                                                   |
 
 ## 17. Success criteria
 
@@ -1007,74 +1022,74 @@ Things explicitly out of scope for v1.
 
 From the parallel scout:
 
-| Metric | Value |
-| --- | --- |
-| Total TS files in `src/` (today, pre-monorepo-split) | 853 |
-| Files importing `vscode` reachable from `executeAgent()` | **0** |
-| Platform interface LOC | ~470 |
-| Existing Node-default platform impls (`src/platform/defaults/`) | ~462 LOC across 6 files |
-| Of which CLI reuses byte-for-byte | 5 of 6 (`consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`) |
-| New CLI-side platform adapters needed | 2 (`ConfConfigProvider`, `KeyringSecrets`) at ~180 LOC combined |
-| Tool surfaces fully reused (no CLI shim) | 14 of 16 |
-| Approval gates reused (host-neutral coordinators) | 5 of 7 (plan, proposal, retry, external_inquiry, proposal_bypass) |
-| Approval gates needing CLI-specific handler | 2 (edit, bash) |
-| Pre-refactorings still required in `core/` | 6 small items (~430 LOC + a server-side edge function) |
+| Metric                                                          | Value                                                                                  |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Total TS files in `src/` (today, pre-monorepo-split)            | 853                                                                                    |
+| Files importing `vscode` reachable from `executeAgent()`        | **0**                                                                                  |
+| Platform interface LOC                                          | ~470                                                                                   |
+| Existing Node-default platform impls (`src/platform/defaults/`) | ~462 LOC across 6 files                                                                |
+| Of which CLI reuses byte-for-byte                               | 5 of 6 (`consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`) |
+| New CLI-side platform adapters needed                           | 2 (`ConfConfigProvider`, `KeyringSecrets`) at ~180 LOC combined                        |
+| Tool surfaces fully reused (no CLI shim)                        | 14 of 16                                                                               |
+| Approval gates reused (host-neutral coordinators)               | 5 of 7 (plan, proposal, retry, external_inquiry, proposal_bypass)                      |
+| Approval gates needing CLI-specific handler                     | 2 (edit, bash)                                                                         |
+| Pre-refactorings still required in `core/`                      | 6 small items (~430 LOC + a server-side edge function)                                 |
 
 ### 19.1 Effort-by-the-numbers (LOC budget)
 
 #### LOC by phase (`packages/cli/`)
 
-| Phase | Scope | New LOC | Modified LOC | Notes |
-| --- | --- | --- | --- | --- |
-| 0 | Workspace setup + headless workflow runner | 800–1,000 | ~50 | tsup config, `bin/texra.ts`, `commands/run.ts` (workflow path), `commands/agents.ts`, `commands/models.ts`, headless renderer (text + JSON + NDJSON), `nodeStorage` XDG patch |
-| 1 | Tool-use + approval engine | 600–800 | ~30 | `approval/policyEngine.ts`, `approval/editApprovalHandler.ts`, `approval/bashApprovalHandler.ts`, `approval/promptHandler.ts`, `commands/run.ts` (tool-use path), `commands/resume.ts`, `--allowed-tools` plumbing |
-| 2 | File-backed config + secrets + auth | 500–700 | ~50 | `platform/confConfig.ts`, `platform/fileSecrets.ts`, `auth/loopback.ts`, `auth/deviceCode.ts`, `auth/fileSessionStorage.ts`, `commands/login.ts`, `commands/api-key.ts`, `commands/config.ts`, `commands/whoami.ts` |
-| 3 | Interactive REPL (Ink TUI) | 600–900 | — | `render/ink/App.tsx`, `StreamPane.tsx`, `TodoList.tsx`, `ApprovalCard.tsx`, `PromptInput.tsx`, slash-command dispatch, `commands/chat.ts` |
-| 4 | `texra-action` GitHub Action | (separate repo) | — | ~800 LOC in `texra-ai/texra-action`, not counted in `cli/` budget |
-| 5 | Polish, docs, doctor | 300–400 | ~30 | `commands/doctor.ts`, man-page generator, `commands/status.ts`, telemetry wiring, package metadata |
-| **Total `cli/`** | | **~2,800–3,800** | **~160** | Within ~3,500 net-new LOC if Ink TUI lands at the lower end |
+| Phase            | Scope                                      | New LOC          | Modified LOC | Notes                                                                                                                                                                                                               |
+| ---------------- | ------------------------------------------ | ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0                | Workspace setup + headless workflow runner | 800–1,000        | ~50          | tsup config, `bin/texra.ts`, `commands/run.ts` (workflow path), `commands/agents.ts`, `commands/models.ts`, headless renderer (text + JSON + NDJSON), `nodeStorage` XDG patch                                       |
+| 1                | Tool-use + approval engine                 | 600–800          | ~30          | `approval/policyEngine.ts`, `approval/editApprovalHandler.ts`, `approval/bashApprovalHandler.ts`, `approval/promptHandler.ts`, `commands/run.ts` (tool-use path), `commands/resume.ts`, `--allowed-tools` plumbing  |
+| 2                | File-backed config + secrets + auth        | 500–700          | ~50          | `platform/confConfig.ts`, `platform/fileSecrets.ts`, `auth/loopback.ts`, `auth/deviceCode.ts`, `auth/fileSessionStorage.ts`, `commands/login.ts`, `commands/api-key.ts`, `commands/config.ts`, `commands/whoami.ts` |
+| 3                | Interactive REPL (Ink TUI)                 | 600–900          | —            | `render/ink/App.tsx`, `StreamPane.tsx`, `TodoList.tsx`, `ApprovalCard.tsx`, `PromptInput.tsx`, slash-command dispatch, `commands/chat.ts`                                                                           |
+| 4                | `texra-action` GitHub Action               | (separate repo)  | —            | ~800 LOC in `texra-ai/texra-action`, not counted in `cli/` budget                                                                                                                                                   |
+| 5                | Polish, docs, doctor                       | 300–400          | ~30          | `commands/doctor.ts`, man-page generator, `commands/status.ts`, telemetry wiring, package metadata                                                                                                                  |
+| **Total `cli/`** |                                            | **~2,800–3,800** | **~160**     | Within ~3,500 net-new LOC if Ink TUI lands at the lower end                                                                                                                                                         |
 
 #### LOC by component (`packages/cli/src/`)
 
-| Component | New LOC |
-| --- | --- |
-| `bin/texra.ts` (entrypoint) | ~30 |
-| `runtime/` (mode selection, `initPlatform`, exit codes, headless ProgressSink, JSON ProgressSink) | ~400 |
-| `commands/` (~10 commands averaging 80–150 LOC each) | ~1,100 |
-| `platform/` (`confConfig`, `fileSecrets`, `logToStream`) | ~280 |
-| `approval/` (policy engine + 4 handlers) | ~500 |
-| `auth/` (loopback + device-code + file storage) | ~450 |
-| `render/` (text/diff/plan/stream formatters) | ~350 |
-| `render/ink/` (lazy chunk: App + 5 components) | ~600 |
-| `sdk/index.ts` (public SDK + types) | ~300 |
-| **Subtotal** | **~4,010** |
+| Component                                                                                         | New LOC    |
+| ------------------------------------------------------------------------------------------------- | ---------- |
+| `bin/texra.ts` (entrypoint)                                                                       | ~30        |
+| `runtime/` (mode selection, `initPlatform`, exit codes, headless ProgressSink, JSON ProgressSink) | ~400       |
+| `commands/` (~10 commands averaging 80–150 LOC each)                                              | ~1,100     |
+| `platform/` (`confConfig`, `fileSecrets`, `logToStream`)                                          | ~280       |
+| `approval/` (policy engine + 4 handlers)                                                          | ~500       |
+| `auth/` (loopback + device-code + file storage)                                                   | ~450       |
+| `render/` (text/diff/plan/stream formatters)                                                      | ~350       |
+| `render/ink/` (lazy chunk: App + 5 components)                                                    | ~600       |
+| `sdk/index.ts` (public SDK + types)                                                               | ~300       |
+| **Subtotal**                                                                                      | **~4,010** |
 
 The discrepancy between the phase-table total and the component-table total is the same accounting nuance as the Electron PRD: the component table counts complete files; the phase table counts what actually ships in each phase, with shared utilities counted once. Net-new is in the **~2,800–3,800 LOC** band.
 
 #### LOC for `core/` and `extension/` changes
 
-| Item | Net new | Modified |
-| --- | --- | --- |
-| §14 C1 (approval helper) | ~80 | — |
-| §14 C2 (XDG paths in `nodeStorage`) | ~30 | ~10 |
-| §14 C3 (`ClackPromptHost`) | ~80 | — |
-| §14 C4 (`ApprovalPolicy` type) | ~40 | — |
-| §14 C5 (Supabase device-code edge function + CLI client) | ~200 (server) + ~50 (CLI) | — |
-| §14 C6 (`listActiveRuns()`) | ~30 | — |
-| §14 C7 (bundle-size guard CI script) | ~20 | — |
-| §14 C8 (JSON schema docs) | ~200 (markdown) | — |
-| **Subtotal core/extension/server** | **~730** | **~10** |
+| Item                                                     | Net new                   | Modified |
+| -------------------------------------------------------- | ------------------------- | -------- |
+| §14 C1 (approval helper)                                 | ~80                       | —        |
+| §14 C2 (XDG paths in `nodeStorage`)                      | ~30                       | ~10      |
+| §14 C3 (`ClackPromptHost`)                               | ~80                       | —        |
+| §14 C4 (`ApprovalPolicy` type)                           | ~40                       | —        |
+| §14 C5 (Supabase device-code edge function + CLI client) | ~200 (server) + ~50 (CLI) | —        |
+| §14 C6 (`listActiveRuns()`)                              | ~30                       | —        |
+| §14 C7 (bundle-size guard CI script)                     | ~20                       | —        |
+| §14 C8 (JSON schema docs)                                | ~200 (markdown)           | —        |
+| **Subtotal core/extension/server**                       | **~730**                  | **~10**  |
 
 #### Aggregate budget
 
-| Bucket | Net new LOC | Modified LOC | Total touched |
-| --- | --- | --- | --- |
-| `packages/cli/` | 2,800–3,800 | ~160 | ~2,960–3,960 |
-| `packages/core/` (CLI pre-refactors) | ~730 | ~10 | ~740 |
-| `texra-ai/texra-action` (separate repo) | ~800 | — | ~800 |
-| **Total v1** | **~4,330–5,330** | **~170** | **~4,500–5,500** |
+| Bucket                                  | Net new LOC      | Modified LOC | Total touched    |
+| --------------------------------------- | ---------------- | ------------ | ---------------- |
+| `packages/cli/`                         | 2,800–3,800      | ~160         | ~2,960–3,960     |
+| `packages/core/` (CLI pre-refactors)    | ~730             | ~10          | ~740             |
+| `texra-ai/texra-action` (separate repo) | ~800             | —            | ~800             |
+| **Total v1**                            | **~4,330–5,330** | **~170**     | **~4,500–5,500** |
 
-For comparison: the existing extension is ~853 source files. The agent core (reused unchanged) is ~141 files. The CLI port is **~5% of the existing source base** in net-new code, with **0 lines of kernel modification** (the §14 items are *additions* to core, not rewrites). The CLI is the smallest of the three host shells precisely because the kernel is already CLI-shaped — the bulk of "make this host-neutral" engineering was done in the §9 pre-refactorings the Electron PRD drove.
+For comparison: the existing extension is ~853 source files. The agent core (reused unchanged) is ~141 files. The CLI port is **~5% of the existing source base** in net-new code, with **0 lines of kernel modification** (the §14 items are _additions_ to core, not rewrites). The CLI is the smallest of the three host shells precisely because the kernel is already CLI-shaped — the bulk of "make this host-neutral" engineering was done in the §9 pre-refactorings the Electron PRD drove.
 
 #### What's NOT counted in this LOC budget
 
