@@ -152,6 +152,7 @@ const extensionConfig = {
       '@logger': path.resolve(rootSrc, 'logger'),
       '@latex': path.resolve(rootSrc, 'latex'),
       '@commands': path.resolve(packageSrc, 'commands'),
+      '@resources': path.resolve(__dirname, 'resources'),
       '@controllers': path.resolve(rootSrc, 'controllers'),
       '@model': path.resolve(rootSrc, 'model'),
       '@housekeeping': path.resolve(rootSrc, 'housekeeping'),

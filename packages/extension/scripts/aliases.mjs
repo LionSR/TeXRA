@@ -66,14 +66,16 @@ const tsconfig = JSON.parse(tsconfigJson);
  * output format:   { "@alias": "/absolute/path/to/src/path" }
  */
 export const aliases = Object.fromEntries(
-  Object.entries(tsconfig.compilerOptions.paths).map(([key, values]) => {
-    // Remove trailing /* from alias key
-    const aliasKey = key.replace('/*', '');
-    // Get first path value and remove trailing /*
-    const pathValue = values[0].replace('/*', '');
-    // Resolve to absolute path
-    return [aliasKey, resolve(rootDir, pathValue)];
-  }),
+  Object.entries(tsconfig.compilerOptions.paths)
+    .filter(([, values]) => !values[0].endsWith('.d.ts'))
+    .map(([key, values]) => {
+      // Remove trailing /* from alias key
+      const aliasKey = key.replace('/*', '');
+      // Get first path value and remove trailing /*
+      const pathValue = values[0].replace('/*', '');
+      // Resolve to absolute path
+      return [aliasKey, resolve(rootDir, pathValue)];
+    }),
 );
 
 /**

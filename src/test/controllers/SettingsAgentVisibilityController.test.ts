@@ -2,13 +2,13 @@
 import { strict as assert } from 'assert';
 
 // Local imports - shared
-import type { AgentCategory } from '@shared/schemas/agent';
-
-// Local imports - controllers
 import {
   SettingsAgentVisibilityController,
   type SettingsAgentVisibilityEntry,
-} from '../../controllers/settingsView/SettingsAgentVisibilityController';
+} from '@controllers/settingsView/SettingsAgentVisibilityController';
+import type { AgentCategory } from '@shared/schemas/agent';
+
+// Local imports - controllers
 
 const AGENTS: Record<AgentCategory, SettingsAgentVisibilityEntry[]> = {
   workflow: [
