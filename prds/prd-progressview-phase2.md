@@ -460,7 +460,7 @@ src/
 │ │ └── tokens.css # Design tokens
 │ ├── BaseWebviewApp.ts # Message handling base class
 │ ├── createStore.ts # Reactive store helper
-│ └── vscode.ts # VS Code API wrapper
+│ └── hostBridge.ts # Host bridge wrapper
 │
 ├── progressView/
 │ ├── frontend/ # Lit components
