@@ -22,7 +22,7 @@ import {
 } from '@test/support/FakePlatform';
 import { GlobalStateKey } from '@common/state/stateKeys';
 
-import { loadDesktopPlatformModule } from './loadDesktopPlatformModule';
+import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 
 interface JsonStore {
   get<T>(key: string, defaultValue?: T): T;

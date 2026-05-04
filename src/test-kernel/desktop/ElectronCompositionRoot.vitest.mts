@@ -14,7 +14,8 @@ import { join, relative, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { loadDesktopPlatformModule } from './loadDesktopPlatformModule';
+import { DESKTOP_SRC_DIR, REPO_ROOT, repoPath } from './desktopTestPaths.mjs';
+import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 
 interface PathFixModule {
   repairLaunchPath(options?: {
@@ -74,14 +75,13 @@ describe('desktop composition root and launch environment', () => {
   }
 
   it('keeps platform initialization in the Electron composition root', async () => {
-    const desktopMainDir = join(process.cwd(), 'packages', 'desktop', 'src');
-    const files = await walkTypeScriptFiles(desktopMainDir);
+    const files = await walkTypeScriptFiles(DESKTOP_SRC_DIR);
     const initPlatformFiles: string[] = [];
 
     for (const filePath of files) {
       const source = await readFile(filePath, 'utf8');
       if (source.includes('initPlatform(')) {
-        initPlatformFiles.push(relative(process.cwd(), filePath));
+        initPlatformFiles.push(relative(REPO_ROOT, filePath));
       }
     }
 
@@ -92,15 +92,7 @@ describe('desktop composition root and launch environment', () => {
 
   it('repairs PATH before platform services and bundled agents are initialized', async () => {
     const source = await readFile(
-      join(
-        process.cwd(),
-        'packages',
-        'desktop',
-        'src',
-        'main',
-        'platform',
-        'index.ts',
-      ),
+      repoPath('packages', 'desktop', 'src', 'main', 'platform', 'index.ts'),
       'utf8',
     );
 
