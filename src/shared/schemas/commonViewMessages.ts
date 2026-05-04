@@ -26,6 +26,7 @@ export const StateRestoreMessageSchema = z.object({
 
 export const WebviewReadyMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.WEBVIEW_READY),
+  view: z.enum(['main', 'progress', 'settings']).nullish(),
 });
 
 export const SwitchViewTargetSchema = z.enum(['main', 'progress', 'dashboard']);
