@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent
 
@@ -20,7 +20,6 @@ import {
   FakeSecrets,
   RecordingLogBackend,
 } from '@test/support/FakePlatform';
-import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { GlobalStateKey } from '@common/state/stateKeys';
 
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule';
@@ -62,6 +61,13 @@ interface ElectronAgentDirectoriesModule {
   ): Promise<void>;
 }
 
+interface AgentDirectoriesRegistryModule {
+  getAgentDirectories(): {
+    builtIn(): Promise<string>;
+    builtInToolUse(): Promise<string>;
+  };
+}
+
 async function writeText(filePath: string, content: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, content);
@@ -71,6 +77,7 @@ describe('desktop agent directory bootstrap', () => {
   let tempDir: string | undefined;
 
   afterEach(async () => {
+    vi.resetModules();
     if (tempDir == null) return;
     await rm(tempDir, { recursive: true, force: true });
     tempDir = undefined;
@@ -78,10 +85,12 @@ describe('desktop agent directory bootstrap', () => {
 
   async function createHarness(): Promise<{
     bootstrapElectronAgentDirectories: ElectronAgentDirectoriesModule['bootstrapElectronAgentDirectories'];
+    getAgentDirectories: AgentDirectoriesRegistryModule['getAgentDirectories'];
     globalStateStore: JsonStore;
     resourcesPath: string;
     storage: ElectronStorageProvider;
   }> {
+    vi.resetModules();
     tempDir = await mkdtemp(join(tmpdir(), 'texra-electron-agents-'));
     const resourcesPath = join(tempDir, 'resources');
     const userDataPath = join(tempDir, 'userData');
@@ -101,6 +110,7 @@ describe('desktop agent directory bootstrap', () => {
       { ElectronStorageProvider },
       { bootstrapElectronAgentDirectories },
       { initPlatform },
+      { getAgentDirectories },
     ] = await Promise.all([
       loadDesktopPlatformModule<JsonStoreModule>('jsonStore.ts'),
       loadDesktopPlatformModule<ElectronStateStoreModule>('electronState.ts'),
@@ -109,14 +119,15 @@ describe('desktop agent directory bootstrap', () => {
         'agentDirectories.ts',
       ),
       import('@platform/platform'),
+      import('@agent/index/agentDirectoriesRegistry'),
     ]);
+    const storage = new ElectronStorageProvider(userDataPath, workspacePath);
     const globalStateStore = await JsonStore.open(
       join(userDataPath, 'state', 'global.json'),
     );
     const workspaceStateStore = await JsonStore.open(
-      join(userDataPath, 'state', 'workspace.json'),
+      join(storage.getStoragePath(), 'state.json'),
     );
-    const storage = new ElectronStorageProvider(userDataPath, workspacePath);
 
     initPlatform({
       config: new FakeConfigProvider(),
@@ -131,6 +142,7 @@ describe('desktop agent directory bootstrap', () => {
 
     return {
       bootstrapElectronAgentDirectories,
+      getAgentDirectories,
       globalStateStore,
       resourcesPath,
       storage,
@@ -140,6 +152,7 @@ describe('desktop agent directory bootstrap', () => {
   it('copies bundled agents into fresh userData storage and registers directory access', async () => {
     const {
       bootstrapElectronAgentDirectories,
+      getAgentDirectories,
       globalStateStore,
       resourcesPath,
       storage,
