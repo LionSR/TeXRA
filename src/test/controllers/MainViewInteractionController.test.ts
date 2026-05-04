@@ -2,11 +2,11 @@
 import { strict as assert } from 'assert';
 
 // Local imports - common
+import { MainViewInteractionController } from '@controllers/mainView/MainViewInteractionController';
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 
 // Local imports - controllers
-import { MainViewInteractionController } from '../../controllers/mainView/MainViewInteractionController';
 
 function createController(options?: {
   providerUrls?: Record<string, string | undefined>;
