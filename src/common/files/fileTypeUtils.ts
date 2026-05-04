@@ -1,5 +1,6 @@
 // Internal imports
-import { getConfig } from '@utils/config';
+import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
+import { getConfig } from '@utils/config/configUtils';
 import { hasExtension } from '@utils/core/pathCore';
 
 /**
@@ -17,7 +18,7 @@ export type ExtensionCategory =
   | 'audio'
   | 'edited';
 
-const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
+export const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   input: 'texra.files.included.inputExtensions',
   reference: 'texra.files.included.referenceExtensions',
   auxiliary: 'texra.files.included.auxiliaryExtensions',
@@ -25,6 +26,29 @@ const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   audio: 'texra.files.included.audioExtensions',
   edited: 'texra.files.included.editedExtensions',
 };
+
+/**
+ * Return the built-in extension defaults for a file category.
+ */
+export function getDefaultIncludedExtensions(
+  category: ExtensionCategory,
+): string[] {
+  const { included } = DEFAULT_TEXRA_SETTINGS.files;
+  switch (category) {
+    case 'input':
+      return included.inputExtensions;
+    case 'reference':
+      return included.referenceExtensions;
+    case 'auxiliary':
+      return included.auxiliaryExtensions;
+    case 'media':
+      return included.mediaExtensions;
+    case 'edited':
+      return included.editedExtensions;
+    case 'audio':
+      return [];
+  }
+}
 
 /**
  * Retrieve included extensions for the given extension category.
