@@ -16,7 +16,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import * as logger from '@agent/core/logger';
 import { getGlobalState } from '@agent/core/stateStore';
 import { getConfig } from '@agent/core/config';
-import { GlobalStateKey } from '@common/state';
+import { GlobalStateKey } from '@common/state/stateKeys';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { LEVEL_TO_EFFORT } from './reasoningEffort';
 

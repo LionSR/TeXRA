@@ -4,6 +4,12 @@ import { basename, join, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import {
+  getDesktopSharedSourceDirs,
+  vscodeBackedStateImportPattern,
+  vscodeRuntimeImportPattern,
+} from './extension-package-utils.mjs';
+
 const require = createRequire(import.meta.url);
 const { extractFile, listPackage } = require('@electron/asar');
 
@@ -11,8 +17,7 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopRoot = join(repoRoot, 'packages', 'desktop');
 const packageRoot = join(desktopRoot, 'dist-packaged');
 const desktopPackageJsonPath = join(desktopRoot, 'package.json');
-const vscodeRuntimeImportPattern =
-  /\b(?:import\s+[^;]*\s+from\s+['"]vscode['"]|require\(['"]vscode['"]\))/;
+const desktopSharedSourceDirs = getDesktopSharedSourceDirs(repoRoot);
 
 async function exists(path) {
   try {
@@ -25,6 +30,20 @@ async function exists(path) {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
+}
+
+async function collectFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const entryPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectFiles(entryPath)));
+    } else if (entry.isFile()) {
+      files.push(entryPath);
+    }
+  }
+  return files.sort();
 }
 
 async function findPackagedApp() {
@@ -130,6 +149,26 @@ async function checkNoVscodeRuntimeImport(app, failures) {
   );
 }
 
+async function checkDesktopSourceBoundaries(failures) {
+  for (const dir of desktopSharedSourceDirs) {
+    if (!(await exists(dir))) continue;
+    for (const filePath of await collectFiles(dir)) {
+      if (!/\.[cm]?tsx?$/.test(filePath)) continue;
+      if (
+        !vscodeBackedStateImportPattern.test(await readFile(filePath, 'utf8'))
+      ) {
+        continue;
+      }
+      failures.push(
+        `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
+          repoRoot,
+          filePath,
+        )}`,
+      );
+    }
+  }
+}
+
 function dependencyPackageJsonPath(name) {
   return join('node_modules', name, 'package.json');
 }
@@ -209,6 +248,8 @@ if (!app) {
   }
 }
 
+await checkDesktopSourceBoundaries(failures);
+
 if (failures.length > 0) {
   console.error('Desktop package check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
@@ -226,5 +267,6 @@ console.log(
     '- package.json runtime dependencies',
     '- node_modules runtime dependency packages',
     '- no VS Code extension host runtime import',
+    '- desktop-shared source uses vscode-free state keys',
   ].join('\n'),
 );
