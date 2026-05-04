@@ -6,7 +6,10 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
-import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
+import {
+  showLoggedErrorMessage,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';

@@ -377,6 +377,48 @@ Shared config:
 }
 ```
 
+### Local macOS Desktop Package
+
+The monorepo now has a local unsigned package rehearsal for the Electron desktop app. It produces a
+macOS `.app` bundle from the built desktop main, preload, and renderer artifacts, then verifies the
+packaged `app.asar` contains the expected runtime files.
+
+From the repository root:
+
+```bash
+corepack pnpm install --frozen-lockfile
+npm run desktop:package:local
+npm run check:desktop-package
+```
+
+On Apple Silicon macOS, the local app bundle is written to:
+
+```text
+packages/desktop/dist-packaged/mac-arm64/TeXRA.app
+```
+
+Open it directly from Finder or from the terminal:
+
+```bash
+open packages/desktop/dist-packaged/mac-arm64/TeXRA.app
+```
+
+This build is intentionally unsigned and not notarized. macOS may block the first launch; right-click
+the app and choose Open from Finder, or remove the quarantine attribute for a local development build:
+
+```bash
+xattr -dr com.apple.quarantine packages/desktop/dist-packaged/mac-arm64/TeXRA.app
+```
+
+Use the full initial-build check when validating both shipped targets together:
+
+```bash
+npm run build:initial
+```
+
+That command builds the Electron desktop app and the VS Code extension package, then checks that the
+desktop build artifacts and `.vsix` are present.
+
 ---
 
 ## What Stays the Same

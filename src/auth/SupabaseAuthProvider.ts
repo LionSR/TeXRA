@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
 import {

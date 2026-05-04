@@ -1,8 +1,6 @@
 import * as path from 'path';
 
-import * as vscode from 'vscode';
-
-import { showLoggedMessage, toErrorMessage } from '@common/errors';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
@@ -32,10 +30,7 @@ export async function runPackLatexdiffvc(
   );
 
   if (mainFiles.length === 0 && tempFiles.length === 0) {
-    logger.warn(CHANNEL, 'No files found to process.');
-    vscode.window.showInformationMessage(
-      'No LaTeX diff files found to process',
-    );
+    logger.warn(CHANNEL, 'No LaTeX diff files found to process');
     return;
   }
 
@@ -44,7 +39,6 @@ export async function runPackLatexdiffvc(
       await WorkspaceFS.delete(file);
     }
     logger.info(CHANNEL, 'Cleanup complete.');
-    vscode.window.showInformationMessage('LaTeXdiff files cleaned');
     return;
   }
 
@@ -74,11 +68,9 @@ export async function runPackLatexdiffvc(
 
     if (dirCreated) {
       logger.info(CHANNEL, `Files packed into ${outputFolder}`);
-      vscode.window.showInformationMessage(`Files packed into ${outputFolder}`);
     }
   } catch (err) {
     logger.error(CHANNEL, `Error during packing: ${toErrorMessage(err)}`);
-    vscode.window.showErrorMessage(`Error during packing: ${err}`);
   }
 }
 
@@ -88,7 +80,7 @@ export async function runPackLatexdiffvcMultiple(
   clean: boolean = false,
 ): Promise<void> {
   if (!inputFiles || inputFiles.length === 0) {
-    await showLoggedMessage(
+    logger.error(
       CHANNEL,
       'No input files provided for multiple LaTeX diff packing',
     );

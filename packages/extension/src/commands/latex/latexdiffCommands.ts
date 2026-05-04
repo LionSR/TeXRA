@@ -13,12 +13,12 @@ import {
   midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,
 } from '@agent/output/workflowOutputLayout';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
   showLoggedMessageWithDocs,
-} from '@common/errors';
-import { workspaceSM, WorkspaceStateKey } from '@common/state';
+} from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   runPackLatexdiffvc,

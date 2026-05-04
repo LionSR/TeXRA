@@ -16,7 +16,10 @@ import {
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@commands/agent/agentTemplateRenderer';
-import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
+import {
+  showLoggedErrorMessage,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import {
   agentDirectories,
   promptToAddAgentToConfig,

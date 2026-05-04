@@ -5,7 +5,7 @@
  * and multiple output scenarios.
  */
 
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
