@@ -380,14 +380,6 @@ export class TaskRunFileService {
   }
 
   /**
-   * @deprecated Kept for one release so external callers in-flight can
-   * migrate. Identical to {@link createLocation}.
-   */
-  public createRawOutputLocation(inputPath: string): FileLocation {
-    return this.createLocation(inputPath);
-  }
-
-  /**
    * Ensure a workspace dependency is reachable from run storage via symlink.
    * Takes a FileLocation and creates a symlink in run storage if needed.
    */
