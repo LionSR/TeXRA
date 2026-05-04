@@ -54,7 +54,7 @@ A six-front parallel scout of the agent runtime, platform abstractions, tools, a
 | `SupabaseSession` + `TokenProvider` extraction (§9 #14)                          | **Landed.** `SupabaseSessionCoordinator` is host-neutral and `implements AuthTokenProvider`; storage backend is pluggable.                                                                                                                                                                                                                                                     | CLI provides a file-backed `SupabaseSessionStorage` (`~/.texra/session.json`, chmod 600) and wires the device-code / loopback flow into the existing coordinator. ~150 LOC.                                       |
 | Narrow UI ports (§9 #18)                                                         | **Landed.** `PromptHost` / `ExternalOpener` / `DiffViewHost` / `TerminalHost` / `ClipboardHost` all live in `src/hosts/`. The host-neutral _controllers_ are split per-domain under `src/controllers/{mainView,progressView,settingsView}/` (multiple controllers per domain — e.g. `MainViewInteractionController`, `MainViewStartupController`, `MainViewStatusController`). | CLI does **not** mount the controllers (they're webview-shaped, one method per renderer message). It calls `executeAgent()` directly. The narrow UI ports (`PromptHost` especially) are reused by approval flows. |
 | `BinaryResolver` for `pdflatex`/`pandoc`/`gm`/Codex (§9 #8)                      | **Landed.** `findToolInCommonPaths()` + `findCodexBinaryPath()` already check Homebrew / TeX Live / MikTeX / global npm / PATH.                                                                                                                                                                                                                                                | Reused. The Electron-only `app.asar.unpacked` resolution branch is dead code in CLI; everything else works.                                                                                                       |
-| `AgentDirectories` resource sync (§9 #19)                                        | **Partially landed.** The `AgentDirectories` interface + `setAgentDirectories()` injection point exist in `src/agent/index/agentRegistry.ts`; the bootstrap/sync logic still lives in `src/frontend/agents/AgentDirectoryManager.ts` and still imports `vscode`.                                                                                                               | CLI needs the bootstrap moved into the host-agnostic class (Electron PRD #19's full scope). Listed as a CLI pre-refactor in §14 C0.                                                                               |
+| `AgentDirectories` resource sync (§9 #19)                                        | **Landed.** The `AgentDirectories` interface + `setAgentDirectories()` injection point live in `src/agent/index/agentRegistry.ts`; host-neutral bootstrap and sync logic live in `src/agent/index/AgentDirectoryService.ts` (170 LOC) + `AgentDirectorySync.ts` (164 LOC), both `vscode`-free. The remaining VS Code-specific watcher shim is `packages/extension/src/frontend/agents/AgentDirectoryManager.ts` — extension-only.                                                                                | CLI provides its own thin adapters (`AgentDirectoryPathStorage`, `AbsoluteDirectoryAccess`, `AgentDirectoryIssueReporter`, plus `AgentDirectoryStorage` / `AgentDirectoryVersionStore` for sync) against the existing `AgentDirectoryService` + `BundledAgentDirectorySync`. Bundle source is `PathAgentDirectoryBundleSource` pointed at the packaged `resources/agents/`. ~30–50 LOC of CLI-side wiring; no kernel work.                                                                               |
 | Default Node platform impls                                                      | **Landed.** `consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `EnvSecrets` (`src/platform/defaults/`, ~462 LOC). All carry the comment "for CLI / Electron / tests".                                                                                                                                                                              | 5 of 6 used as-is; `EnvSecrets` is replaced by the CLI's keyring-backed `PlatformSecrets`.                                                                                                                        |
 | `vscode`-import audit                                                            | Same 106-of-853 (12.4%) as the Electron PRD reports. None of the 106 are reachable from `executeAgent()`.                                                                                                                                                                                                                                                                      | Confirmed by walking the call graph from `executeAgent.ts:674` — all transitive imports are in the agnostic zones.                                                                                                |
 
@@ -216,7 +216,7 @@ Each pick is grounded in the May 2026 ecosystem survey + the existing TeXRA code
 
 ### 7.1 Repo layout (proposed)
 
-Electron Phase 0 will establish a three-package pnpm workspace (`core`, `extension`, `desktop`). The CLI is the fourth peer in that target layout:
+The pnpm workspace skeleton already exists — `packages/{core,extension,desktop}` are created, but `packages/core/src/index.ts` is a stub (`export const corePackageReady = true`) and the kernel still lives at root `src/`. Electron Phase 0's remaining work is the kernel migration into `packages/core/`. The CLI is the fourth peer in the target layout once that migration completes:
 
 ```
 TeXRA/
@@ -294,7 +294,7 @@ What `cli/` imports from `core/` byte-for-byte:
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `agent/`                    | `executeAgent`, `executeMergeAgent`, `resumeToolUseFromSnapshot`, the entire flow infrastructure, every modelHandler                                                                    |
 | `agent/runtime/`            | `AgentRuntimeHost`, `ProgressSink`, `InterruptManager`, `RunStorageService`, `BasePromiseCoordinator`, `PlanApprovalCoordinator`, `AgentProposalCoordinator`, `RetryRequestCoordinator` |
-| `agent/index/`              | `resolveAgent`, `getAgent`, `AgentDirectoryManager`, `AgentDirectories` (post-#19)                                                                                                      |
+| `agent/index/`              | `resolveAgent`, `getAgent`, `AgentDirectoryService`, `BundledAgentDirectorySync`, `setAgentDirectories`                                                                                  |
 | `tools/`                    | Every tool (~120 files)                                                                                                                                                                 |
 | `tools/approval/`           | `setToolEditApprovalHandler`, `bashApprovalController`, `streamApprovalQueue`, `awaitExternalInquiryResponse`                                                                           |
 | `model/`                    | Registry, capabilities, pricing, llm-zoo integration                                                                                                                                    |
@@ -433,7 +433,7 @@ texra agents show <agent>            # print resolved YAML + inherited prompts
 texra agents path <agent>            # print absolute path of YAML
 ```
 
-Calls `resolveAgent()` / `getAgent()` / `AgentDirectoryManager.listAgents()`. Lists are output-format-aware so `texra agents list -o json | jq '.[] | select(.category=="workflow")'` works in scripts.
+Calls `resolveAgent()` / `getAgent()` / `getWorkflowAgents()` / `getToolUseAgents()` / `getAgentsBySource()` from `@agent/index/agentRegistry`. Lists are output-format-aware so `texra agents list -o json | jq '.[] | select(.category=="workflow")'` works in scripts.
 
 ```
 texra models list [--provider <name>] [--available-only] [--output-format text|json]
@@ -832,9 +832,7 @@ Most of the heavy lifting (Electron PRD's §9 Tier 1) has already shipped. The C
 
 ### Tier 1 — required for v1
 
-**C0. Finish the host-agnostic `AgentDirectories` move (Electron PRD §9 #19).** _(~150 LOC: ~80 LOC moved into `core/agents/`, ~50 LOC of VS Code wrapper, ~20 LOC of CLI wrapper.)_
-
-The `AgentDirectories` interface and `setAgentDirectories()` injection point already exist in `src/agent/index/agentRegistry.ts`. The bootstrap/sync logic (copy bundled YAMLs into per-host writable storage on version bumps) still lives in `src/frontend/agents/AgentDirectoryManager.ts` and still imports `vscode`. Without finishing the move, the CLI either ships its own bootstrap (drift) or violates the agnostic-zone rule. **Why now:** same risk shape as the Codex resolution bug — works in dev because file paths happen to resolve, fails on a fresh `~/.texra/` if bootstrap never runs.
+(No `AgentDirectories` pre-refactor needed — the host-neutral `AgentDirectoryService` + `BundledAgentDirectorySync` already exist in `src/agent/index/`. The CLI's bootstrap is internal CLI adapter code, listed under Phase 0 deliverables in §15, not a kernel pre-refactor.)
 
 **C1. CLI-facing approval handler interface.** _(~80 LOC.)_
 
@@ -881,11 +879,11 @@ Document the NDJSON event schema with examples, semver policy, and a deprecation
 - `SupabaseSession` / `SupabaseClient` extraction (§9 #14) — landed.
 - Host-neutral controllers + UI ports (§9 #18) — landed (CLI uses the UI ports, doesn't mount the controllers).
 - `BinaryResolver` extraction (§9 #8) — landed.
-- `AgentDirectories` resource sync (§9 #19) — interface landed; bootstrap still in `frontend/`. Treated as a CLI pre-refactor in §14 C0 above. Once it lands, the CLI's bundle source is `node_modules/@texra/core/dist/resources/` and user storage is `~/.texra/agents/`.
+- `AgentDirectories` resource sync (§9 #19) — fully landed (interface + host-neutral `AgentDirectoryService` + `BundledAgentDirectorySync` in `src/agent/index/`). CLI wires its own adapters; bundle source is `PathAgentDirectoryBundleSource` over the packaged `resources/agents/`, user storage at `~/.texra/agents/`.
 
 ### Suggested ordering
 
-C0 → C2 → C1 → C3 → C4 → C6 → C7 → (C5 in parallel, since it's server-side) → C8.
+C2 → C1 → C3 → C4 → C6 → C7 → (C5 in parallel, since it's server-side) → C8.
 
 If everything lands together, ~1.5 engineering weeks.
 
@@ -895,7 +893,7 @@ Each phase is independently reviewable. The extension and the desktop port never
 
 ### Phase 0 — Workspace package + headless workflow runner (1.5 weeks)
 
-**Gates:** Electron PRD's Phase 0 (monorepo split) must be merged. §14 C0 (`AgentDirectories` bootstrap moved out of `frontend/`) must be merged so a fresh `~/.texra/` populates built-in agents on first launch. CLI lives at `packages/cli/` from the start.
+**Gates:** Electron PRD's Phase 0 (monorepo split) must be merged. CLI lives at `packages/cli/` from the start. The CLI's `AgentDirectoryService` adapters (path storage, dir access, issue reporter, sync storage + version store) ship as part of Phase 0 deliverables — pure CLI-internal wiring against the existing host-neutral classes.
 
 - Add `@texra/cli` package; wire pnpm workspace, tsconfig, tsup.
 - Wire `initPlatform()` from `cli/src/runtime/initPlatform.ts` with `consoleLog`, `nodeFilesystem`, `nodeWorkspace`, `nodeStorage`, `memoryState`, `EnvSecrets` (existing defaults). `ConfConfigProvider` and `KeyringSecrets` follow in Phase 2.
@@ -1071,27 +1069,26 @@ The discrepancy between the phase-table total and the component-table total is t
 
 #### LOC for `core/` and `extension/` changes
 
-| Item                                                     | Net new                        | Modified                        |
-| -------------------------------------------------------- | ------------------------------ | ------------------------------- |
-| §14 C0 (`AgentDirectories` bootstrap move)               | ~70 (core) + ~20 (CLI wrapper) | ~50 (extension wrapper rewrite) |
-| §14 C1 (approval helper)                                 | ~80                            | —                               |
-| §14 C2 (XDG paths in `nodeStorage`)                      | ~30                            | ~10                             |
-| §14 C3 (`ClackPromptHost`)                               | ~80                            | —                               |
-| §14 C4 (`ApprovalPolicy` type)                           | ~40                            | —                               |
-| §14 C5 (Supabase device-code edge function + CLI client) | ~200 (server) + ~50 (CLI)      | —                               |
-| §14 C6 (`listActiveRuns()`)                              | ~30                            | —                               |
-| §14 C7 (bundle-size guard CI script)                     | ~20                            | —                               |
-| §14 C8 (JSON schema docs)                                | ~200 (markdown)                | —                               |
-| **Subtotal core/extension/server**                       | **~820**                       | **~60**                         |
+| Item                                                     | Net new                   | Modified |
+| -------------------------------------------------------- | ------------------------- | -------- |
+| §14 C1 (approval helper)                                 | ~80                       | —        |
+| §14 C2 (XDG paths in `nodeStorage`)                      | ~30                       | ~10      |
+| §14 C3 (`ClackPromptHost`)                               | ~80                       | —        |
+| §14 C4 (`ApprovalPolicy` type)                           | ~40                       | —        |
+| §14 C5 (Supabase device-code edge function + CLI client) | ~200 (server) + ~50 (CLI) | —        |
+| §14 C6 (`listActiveRuns()`)                              | ~30                       | —        |
+| §14 C7 (bundle-size guard CI script)                     | ~20                       | —        |
+| §14 C8 (JSON schema docs)                                | ~200 (markdown)           | —        |
+| **Subtotal core/extension/server**                       | **~730**                  | **~10**  |
 
 #### Aggregate budget
 
-| Bucket                                                   | Net new LOC      | Modified LOC | Total touched    |
-| -------------------------------------------------------- | ---------------- | ------------ | ---------------- |
-| `packages/cli/`                                          | 2,800–3,800      | ~160         | ~2,960–3,960     |
-| `packages/core/` + extension wrapper (CLI pre-refactors) | ~820             | ~60          | ~880             |
-| `texra-ai/texra-action` (separate repo)                  | ~800             | —            | ~800             |
-| **Total v1**                                             | **~4,420–5,420** | **~220**     | **~4,640–5,640** |
+| Bucket                                       | Net new LOC      | Modified LOC | Total touched    |
+| -------------------------------------------- | ---------------- | ------------ | ---------------- |
+| `packages/cli/`                              | 2,800–3,800      | ~160         | ~2,960–3,960     |
+| `packages/core/` (CLI pre-refactors)         | ~730             | ~10          | ~740             |
+| `texra-ai/texra-action` (separate repo)      | ~800             | —            | ~800             |
+| **Total v1**                                 | **~4,330–5,330** | **~170**     | **~4,500–5,500** |
 
 For comparison: the existing extension is ~853 source files. The agent core (reused unchanged) is ~141 files. The CLI port is **~5% of the existing source base** in net-new code; the §14 items are purely additive — interface additions, new defaults, and new edge functions — with no rewrites of existing kernel logic. The CLI is the smallest of the three host shells precisely because the kernel is already CLI-shaped — the bulk of "make this host-neutral" engineering was done in the §9 pre-refactorings the Electron PRD drove.
 
