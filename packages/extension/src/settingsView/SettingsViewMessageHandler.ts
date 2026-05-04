@@ -18,6 +18,11 @@ import {
 } from 'llm-zoo';
 
 // Shared schemas and dispatchers
+import {
+  SettingsMemoryController,
+  type SettingsMemoryMessage,
+} from '@controllers/settingsView/SettingsMemoryController';
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { getAgentsBySource, loadAgents } from '@agent/index';
 import {
   getExecutionStore,
@@ -149,11 +154,6 @@ import {
 } from '@utils/config/providerConfig';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
-import {
-  SettingsMemoryController,
-  type SettingsMemoryMessage,
-} from '../controllers/settingsView/SettingsMemoryController';
-import { SettingsProfileKeyController } from '../controllers/settingsView/SettingsProfileKeyController';
 import { loadMemoryItems } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
