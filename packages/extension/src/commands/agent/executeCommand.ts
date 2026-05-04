@@ -36,8 +36,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       : null;
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
 
-    const executionId =
-      (wrapped?.executionId as ExecutionId | undefined) ?? undefined;
+    const executionId = wrapped?.executionId as ExecutionId | undefined;
     await runValidatedExecutionRequest(
       { config, executionId },
       { openWorkflowOutput: openFinalOutputIfAvailable },
