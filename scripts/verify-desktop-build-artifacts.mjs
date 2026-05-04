@@ -3,15 +3,13 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { readJson } from './extension-package-utils.mjs';
+
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
 const desktopDir = path.join(rootDir, 'packages', 'desktop');
-
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
 
 function relative(filePath) {
   return path.relative(rootDir, filePath);
@@ -36,7 +34,7 @@ function collectFiles(dir) {
       files.push(entryPath);
     }
   }
-  return files;
+  return files.sort();
 }
 
 const packageJson = readJson(path.join(desktopDir, 'package.json'));

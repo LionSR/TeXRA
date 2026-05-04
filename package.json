@@ -21,7 +21,7 @@
     "workspace:typecheck": "corepack pnpm --recursive --if-present typecheck",
     "workspace:build": "corepack pnpm --recursive --if-present build",
     "desktop:build": "corepack pnpm --filter @texra/desktop build",
-    "build:initial": "corepack pnpm run workspace:build && corepack pnpm run build:fast && corepack pnpm run check:initial-build-artifacts",
+    "build:initial": "corepack pnpm run desktop:build && corepack pnpm run build:fast && corepack pnpm run check:initial-build-artifacts",
     "build": "corepack pnpm --filter texra build:fast",
     "format": "prettier --write .",
     "esbuild:ext": "corepack pnpm --filter texra esbuild:ext",
