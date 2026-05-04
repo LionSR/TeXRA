@@ -8,6 +8,7 @@ node_modules/
 
 # YAML templates with {{ }} placeholders - Prettier rewrites these as { { } }
 resources/templates/
+packages/extension/resources/templates/
 
 # Claude Code agent scratch space (worktrees contain unstaged template files)
 .claude/
