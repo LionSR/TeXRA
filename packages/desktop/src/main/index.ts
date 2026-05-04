@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, session, shell } from 'electron';
 
+import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
 
@@ -43,7 +44,13 @@ function createWindow(): void {
       sandbox: true,
     },
   });
-  installDesktopMainViewIpc(window);
+  installDesktopMainViewIpc(window, {
+    getCustomAgentDirectory: () => getAgentDirectories().custom(),
+    openPath: async (filePath) => {
+      const errorMessage = await shell.openPath(filePath);
+      if (errorMessage) throw new Error(errorMessage);
+    },
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
