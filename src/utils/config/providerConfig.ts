@@ -7,7 +7,7 @@
  * @shared/constants/providers.
  */
 
-import { tryPlatform } from '@platform/platform';
+import { tryGlobalState } from '@platform/platform';
 import { GlobalStateKey } from '@common/state/stateKeys';
 import { getConfig } from '@utils/config';
 
@@ -90,16 +90,12 @@ const PROVIDERS: Record<string, ProviderEntry> = {
   },
 };
 
-function globalState() {
-  return tryPlatform()?.globalState;
-}
-
 function entry(provider: string): ProviderEntry | undefined {
   return PROVIDERS[provider.toLowerCase()];
 }
 
 function read<T>(key: GlobalStateKey, defaultValue: T): T {
-  return globalState()?.get(key, defaultValue) ?? defaultValue;
+  return tryGlobalState()?.get(key, defaultValue) ?? defaultValue;
 }
 
 function regionSet(provider: string): boolean | undefined {
@@ -116,7 +112,7 @@ export function getGlobalStreaming(): boolean {
 }
 
 export async function setGlobalStreaming(enabled: boolean): Promise<void> {
-  await globalState()?.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
+  await tryGlobalState()?.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
 }
 
 export function getProviderStreaming(provider: string): boolean {
@@ -130,7 +126,7 @@ export async function setProviderStreaming(
   enabled: boolean,
 ): Promise<void> {
   const key = entry(provider)?.streaming;
-  if (key) await globalState()?.update(key, enabled);
+  if (key) await tryGlobalState()?.update(key, enabled);
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +143,7 @@ export async function setProviderEndpoint(
   endpoint: string,
 ): Promise<void> {
   const key = entry(provider)?.endpoint;
-  if (key) await globalState()?.update(key, endpoint);
+  if (key) await tryGlobalState()?.update(key, endpoint);
 }
 
 export function supportsCustomEndpoint(provider: string): boolean {
@@ -215,7 +211,7 @@ export function getWebSocketEnabled(): boolean {
  */
 export function getUseOpenRouter(): boolean {
   return (
-    globalState()?.get(GlobalStateKey.USE_OPENROUTER, false) ??
+    tryGlobalState()?.get(GlobalStateKey.USE_OPENROUTER, false) ??
     getConfig<boolean>('texra.model.useOpenRouter', false)
   );
 }

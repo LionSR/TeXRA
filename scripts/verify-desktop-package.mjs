@@ -14,14 +14,18 @@ const desktopPackageJsonPath = join(desktopRoot, 'package.json');
 const vscodeRuntimeImportPattern =
   /\b(?:import\s*\(\s*['"]vscode['"]\s*\)|import\s+[^;]*\s+from\s+['"]vscode['"]|(?:__require|require|requireFn)(?:\?\.)?\(\s*['"]vscode['"]\s*\))/;
 const vscodeBackedStateImportPattern =
-  /^\s*(?:(?:import(?:\s+type)?(?:\s+[^;]*?\s+from)?)|(?:export(?:\s+type)?\s+[^;]*?\s+from))\s+['"]@common\/state(?:\/stateManager)?['"]/m;
+  /(?:^\s*(?:(?:import(?:\s+type)?(?:\s+[^;]*?\s+from)?)|(?:export(?:\s+type)?\s+[^;]*?\s+from))\s+['"]@common\/state(?:\/stateManager)?['"])|(?:\bimport\s*\(\s*['"]@common\/state(?:\/stateManager)?['"]\s*\))/m;
 const desktopSharedSourceDirs = [
   join(repoRoot, 'packages', 'desktop', 'src'),
-  join(repoRoot, 'src', 'agent', 'implementations', 'flows', 'tooluse'),
-  join(repoRoot, 'src', 'agent', 'runtime'),
+  join(repoRoot, 'src', 'agent'),
+  join(repoRoot, 'src', 'controllers'),
+  join(repoRoot, 'src', 'eventBus'),
+  join(repoRoot, 'src', 'latex'),
   join(repoRoot, 'src', 'logger'),
   join(repoRoot, 'src', 'model'),
+  join(repoRoot, 'src', 'replacement'),
   join(repoRoot, 'src', 'shared'),
+  join(repoRoot, 'src', 'tools'),
   join(repoRoot, 'src', 'utils'),
 ];
 
@@ -244,7 +248,6 @@ if (!app) {
   await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);
   await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
   await checkNoVscodeRuntimeImport(app, failures);
-  await checkDesktopSourceBoundaries(failures);
 
   const assets = await app.listDir('dist/renderer/assets');
   if (!assets.some((asset) => asset.endsWith('.js'))) {
@@ -254,6 +257,8 @@ if (!app) {
     failures.push('No renderer CSS asset found');
   }
 }
+
+await checkDesktopSourceBoundaries(failures);
 
 if (failures.length > 0) {
   console.error('Desktop package check failed:');
