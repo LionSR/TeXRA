@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - webview command constants
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -21,6 +24,9 @@ interface MainViewIpcModule {
     options?: {
       debugMode?: boolean;
       getTheme?: () => 'dark' | 'light' | 'high-contrast';
+      getCustomAgentDirectory?: () => Promise<string>;
+      openPath?: (filePath: string) => Promise<void>;
+      onAsyncError?: (error: unknown) => void;
     },
   ): {
     postToRenderer(message: unknown): void;
@@ -94,6 +100,7 @@ describe('desktop main-view IPC', () => {
       installDesktopMainViewIpc,
     } = await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
     const sends: Array<{ channel: string; message: unknown }> = [];
+    const openPath = vi.fn(async (_filePath: string) => {});
     const webContents = {
       isDestroyed: () => false,
       send: vi.fn((channel, message) => sends.push({ channel, message })),
@@ -107,7 +114,11 @@ describe('desktop main-view IPC', () => {
       webContents,
     };
 
-    const ipc = installDesktopMainViewIpc(window, { debugMode: true });
+    const ipc = installDesktopMainViewIpc(window, {
+      debugMode: true,
+      getCustomAgentDirectory: async () => '/agents/custom',
+      openPath,
+    });
 
     expect(ipcMain.on).toHaveBeenCalledWith(
       ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
@@ -158,6 +169,104 @@ describe('desktop main-view IPC', () => {
         message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: true },
       },
     ]);
+
+    sends.length = 0;
+    rendererListener?.(
+      { sender: webContents },
+      { command: COMMON_COMMANDS.SWITCH_VIEW, view: 'progress' },
+    );
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'progress' },
+      },
+    ]);
+
+    sends.length = 0;
+    rendererListener?.(
+      { sender: webContents },
+      { command: COMMON_COMMANDS.SWITCH_VIEW, view: 'dashboard' },
+    );
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS },
+    );
+    rendererListener?.(
+      { sender: webContents },
+      {
+        command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+        sessionType: AGENT_CATEGORY.TOOL_USE,
+      },
+    );
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS },
+    );
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY },
+    );
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex: SETTINGS_TAB.MODELS,
+        },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          agentSubTab: AGENT_CATEGORY.TOOL_USE,
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex: SETTINGS_TAB.AGENTS,
+        },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex: SETTINGS_TAB.MULTI_AGENT,
+        },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex: SETTINGS_TAB.AGENTS,
+        },
+      },
+    ]);
+
+    sends.length = 0;
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY, customDirSet: true },
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(openPath).toHaveBeenCalledWith('/agents/custom');
+    expect(sends).toEqual([]);
 
     nativeTheme.shouldUseHighContrastColors = true;
     themeListener?.();
