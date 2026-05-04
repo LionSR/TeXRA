@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
-
 import { type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';

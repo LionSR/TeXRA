@@ -25,10 +25,7 @@ import type { z } from 'zod';
  * Message shape from the main view for agent execution.
  * ToolConfig fields are sent flat from the UI form.
  */
-export type MainViewExecuteMessage = Omit<
-  AgentConfigInput,
-  'mediaFiles'
-> & {
+export type MainViewExecuteMessage = Omit<AgentConfigInput, 'mediaFiles'> & {
   /** UI toggle indicating tool-use vs workflow agent. */
   isToolUseAgent?: boolean;
   /** UI toggle for multiple outputs mode. */
@@ -53,7 +50,8 @@ export function prepareMainViewExecutionRequest(
   if (!message.agent || !message.model) {
     return {
       valid: false,
-      message: 'Agent and model selection required. Please select both before running.',
+      message:
+        'Agent and model selection required. Please select both before running.',
     };
   }
 
@@ -82,9 +80,7 @@ export function prepareMainViewExecutionRequest(
   const validation = validateExecutionRequest({
     config: {
       ...message,
-      agentCategory: isToolUse
-        ? AgentCategory.ToolUse
-        : AgentCategory.Workflow,
+      agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
       outputFiles,
       useMultipleOutputs:
         !isToolUse &&

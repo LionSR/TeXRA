@@ -56,9 +56,7 @@ class DesktopProgressBridge {
 
   readonly runtimeHost: AgentRuntimeHost;
 
-  constructor(
-    private readonly postToRenderer: (message: unknown) => void,
-  ) {
+  constructor(private readonly postToRenderer: (message: unknown) => void) {
     AgentLogger.setStreamLogStore(this.streamLogs);
     setRunStorageService({ isViewVisible: () => true });
     this.unsubscribe = this.streamLogs.onChange((streamId) =>
@@ -143,9 +141,14 @@ class DesktopProgressBridge {
   }
 
   private syncStreams(): void {
-    const streams = this.streamLogs.keys().map((id) => this.buildStreamInfo(id));
+    const streams = this.streamLogs
+      .keys()
+      .map((id) => this.buildStreamInfo(id));
     const streamStates = Object.fromEntries(
-      streams.map((stream) => [stream.name, this.buildStreamMetadata(stream.name)]),
+      streams.map((stream) => [
+        stream.name,
+        this.buildStreamMetadata(stream.name),
+      ]),
     );
     this.send({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
@@ -207,9 +210,13 @@ class DesktopProgressBridge {
       }
       case 'setTaskState': {
         const data = payload as ProgressEventPayloads['setTaskState'];
-        this.ensureStream(data.streamId, data.taskState.agentConfig.agentCategory);
+        this.ensureStream(
+          data.streamId,
+          data.taskState.agentConfig.agentCategory,
+        );
         this.taskStates.set(data.streamId, data.taskState);
-        if (data.executionId) this.executionIds.set(data.streamId, data.executionId);
+        if (data.executionId)
+          this.executionIds.set(data.streamId, data.executionId);
         this.syncStreams();
         break;
       }
@@ -327,12 +334,14 @@ class DesktopProgressBridge {
           stream: data.parentStreamId,
           activeSubagents:
             event === 'updateActiveSubagents'
-              ? (data as ProgressEventPayloads['updateActiveSubagents']).children
+              ? (data as ProgressEventPayloads['updateActiveSubagents'])
+                  .children
               : [],
           finishedSubagentCount: 0,
           activeProcesses:
             event === 'updateActiveProcesses'
-              ? (data as ProgressEventPayloads['updateActiveProcesses']).processes
+              ? (data as ProgressEventPayloads['updateActiveProcesses'])
+                  .processes
               : [],
           finishedProcessCount: 0,
         });

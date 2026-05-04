@@ -39,7 +39,10 @@ export class ExecutionManager {
       } else {
         vscode.window.showErrorMessage(preparation.message);
       }
-      logger.error(CHANNEL, `AgentConfig validation failed: ${preparation.message}`);
+      logger.error(
+        CHANNEL,
+        `AgentConfig validation failed: ${preparation.message}`,
+      );
       return;
     }
 

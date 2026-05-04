@@ -6,10 +6,7 @@ import type { ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import type {
-  AgentFlowResult,
-  WorkflowFlowResult,
-} from './AgentFlowResult';
+import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 
 // Local imports - shared schemas
 
