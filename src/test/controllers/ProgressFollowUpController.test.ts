@@ -30,10 +30,7 @@ const runStorageOutputDefaults = {
   round: 2,
 } satisfies OutputFileHarnessOptions;
 
-type RunStorageOutputOverrides = Omit<
-  OutputFileHarnessOptions,
-  'location'
-> & {
+type RunStorageOutputOverrides = Omit<OutputFileHarnessOptions, 'location'> & {
   location?: Omit<
     Extract<OutputFileInfo['location'], { kind: 'runStorage' }>,
     'kind'
