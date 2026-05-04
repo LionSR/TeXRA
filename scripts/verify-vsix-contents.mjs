@@ -5,6 +5,11 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import {
+  extensionManifestSnapshot,
+  readJson,
+} from './extension-package-utils.mjs';
+
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -15,21 +20,6 @@ const snapshotPath = path.join(
   'scripts',
   'extension-package-invariants.snapshot.json',
 );
-
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-function stable(value) {
-  if (Array.isArray(value)) return value.map(stable);
-  if (!value || typeof value !== 'object') return value;
-
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, child]) => [key, stable(child)]),
-  );
-}
 
 function defaultVsixPath() {
   const packageJson = readJson(path.join(extensionDir, 'package.json'));
@@ -68,12 +58,6 @@ function walkFiles(dir, prefix = '') {
     }
   }
   return results.sort();
-}
-
-function extensionManifestSnapshot(packageJson, manifestKeys) {
-  return Object.fromEntries(
-    manifestKeys.map((key) => [key, stable(packageJson[key])]),
-  );
 }
 
 function assert(condition, message, failures) {
