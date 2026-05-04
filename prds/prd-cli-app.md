@@ -216,7 +216,7 @@ Each pick is grounded in the May 2026 ecosystem survey + the existing TeXRA code
 
 ### 7.1 Repo layout (proposed)
 
-The Electron PRD's Phase 0 already establishes a three-package pnpm workspace (`core`, `extension`, `desktop`). The CLI is the fourth peer:
+Electron Phase 0 will establish a three-package pnpm workspace (`core`, `extension`, `desktop`). The CLI is the fourth peer in that target layout:
 
 ```
 TeXRA/
@@ -276,7 +276,7 @@ TeXRA/
 │           │       └── TodoList.tsx
 │           └── sdk/
 │               └── index.ts            # public `runAgent()`, `loadAgents()`, `listModels()`
-└── (no src/ at root — already moved into packages/ by Electron Phase 0)
+└── (no src/ at root once Electron Phase 0 moves it into packages/)
 ```
 
 **Layout rationale:**
@@ -315,7 +315,7 @@ What `cli/` does **not** import:
 
 ### 7.3 Platform impls (CLI)
 
-The eight wired services are the seven `Platform` interfaces plus `PlatformSecrets`. ~250 LOC of new adapter code (`ConfigProvider` + `PlatformSecrets`); the other six reuse the existing `src/platform/defaults/` impls byte-for-byte.
+The seven wired services (six `Platform` interfaces plus `PlatformSecrets`) need ~250 LOC of new adapter code (`ConfConfigProvider` + `KeyringSecrets`); the other five reuse the existing `src/platform/defaults/` impls byte-for-byte.
 
 | Interface                | Extension (today)                                                  | Electron (planned)                                   | CLI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -454,12 +454,13 @@ texra whoami
 
 ```
 texra api-key set <provider>         # interactive prompt (echo-off) → keyring
-texra api-key get <provider>         # prints (with a confirmation prompt) — for debugging
+texra api-key get <provider>         # prints a masked value, e.g. sk-...last4
+texra api-key get <provider> --show  # prints the raw key after confirmation + stderr warning
 texra api-key remove <provider>
 texra api-key list                   # which providers have keys configured (no values)
 ```
 
-Provider names match the existing `apiProviders.ts` enum (`anthropic`, `openai`, `google`, `openrouter`, `xai`, `deepseek`, `mistral`, …). `set` always writes through `PlatformSecrets` (keyring → file fallback). `lookupApiKey` reads the stored secret first and falls back to the provider's env var (`ANTHROPIC_API_KEY` etc.), so a stored key shadows the env var — `texra api-key remove <provider>` is the way to "switch back to the env var."
+Provider names match the existing `apiProviders.ts` enum (`anthropic`, `openai`, `google`, `openrouter`, `xai`, `deepseek`, `mistral`, …). `set` always writes through `PlatformSecrets` (keyring → file fallback). `get` is masked by default to avoid leaking secrets into scrollback, transcripts, screen shares, or CI logs; `--show` is an explicit debugging escape hatch and prints a one-line warning to stderr before the confirmation prompt. `lookupApiKey` reads the stored secret first and falls back to the provider's env var (`ANTHROPIC_API_KEY` etc.), so a stored key shadows the env var — `texra api-key remove <provider>` is the way to "switch back to the env var."
 
 ### 8.4 Configuration
 
