@@ -1539,7 +1539,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to set ${this.profileKeyController.getProviderDisplayName(provider)} API key`,
+        `Failed to set ${PROVIDER_DISPLAY_NAMES[provider] ?? provider} API key`,
         error,
       );
       // On error, still refresh settings view to reflect current key state.
@@ -1556,7 +1556,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to remove ${this.profileKeyController.getProviderDisplayName(provider)} API key`,
+        `Failed to remove ${PROVIDER_DISPLAY_NAMES[provider] ?? provider} API key`,
         error,
       );
       // On error, still refresh settings view to reflect current key state.
