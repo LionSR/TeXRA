@@ -27,6 +27,7 @@ interface MainViewIpcModule {
       getCustomAgentDirectory?: () => Promise<string>;
       openPath?: (filePath: string) => Promise<void>;
       fileSelection?: { handleMessage(message: { command: string }): boolean };
+      settings?: { handleMessage(message: { command: string }): boolean };
       executeAgent?: (message: unknown) => Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
@@ -109,6 +110,12 @@ describe('desktop main-view IPC', () => {
           message.command === MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
       ),
     };
+    const settings = {
+      handleMessage: vi.fn(
+        (message: { command: string }) =>
+          message.command === SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
+      ),
+    };
     const executeAgent = vi.fn(async (_message: unknown) => {});
     const webContents = {
       isDestroyed: () => false,
@@ -128,6 +135,7 @@ describe('desktop main-view IPC', () => {
       getCustomAgentDirectory: async () => '/agents/custom',
       openPath,
       fileSelection,
+      settings,
       executeAgent,
     });
 
@@ -162,6 +170,14 @@ describe('desktop main-view IPC', () => {
     );
     expect(fileSelection.handleMessage).toHaveBeenCalledWith({
       command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
+    });
+
+    rendererListener?.(
+      { sender: webContents },
+      { command: SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS },
+    );
+    expect(settings.handleMessage).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
     });
 
     sends.length = 0;
