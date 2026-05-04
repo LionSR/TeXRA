@@ -55,7 +55,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const COMPOSITION_ROOT_FILES = new Set([
-  path.join(__dirname, 'src/extension.ts'),
+  path.join(__dirname, 'packages/extension/src/extension.ts'),
 ]);
 
 const VSCODE_FREE_ZONE_DIRS = [
@@ -68,9 +68,9 @@ const VSCODE_FREE_ZONE_DIRS = [
   'src/replacement',
   'src/eventBus',
   'src/hosts',
-  'src/webview/frontend',
-  'src/progressView/frontend',
-  'src/settingsView/frontend',
+  'packages/extension/src/webview/frontend',
+  'packages/extension/src/progressView/frontend',
+  'packages/extension/src/settingsView/frontend',
 ].map((dir) => path.join(__dirname, dir));
 
 function isUnderDir(filename, dir) {
@@ -207,7 +207,7 @@ export default tseslint.config(
 
   // Configuration for TypeScript files
   {
-    files: ['src/**/*.ts'],
+    files: ['src/**/*.ts', 'packages/extension/src/**/*.ts'],
     extends: [...tseslint.configs.recommended],
     languageOptions: {
       parserOptions: {
@@ -312,15 +312,15 @@ export default tseslint.config(
     files: [
       'src/historyView/modules/**/*.js',
       'src/memoryView/modules/**/*.js',
-      'src/progressView/modules/**/*.js',
-      'src/webview/modules/**/*.js',
+      'packages/extension/src/progressView/modules/**/*.js',
+      'packages/extension/src/webview/modules/**/*.js',
       'src/common/*.js',
       'src/common/modules/*.js',
       'src/common/webview/*.js',
       'src/historyView/script.js',
       'src/memoryView/script.js',
-      'src/progressView/script.js',
-      'src/webview/script.js',
+      'packages/extension/src/progressView/script.js',
+      'packages/extension/src/webview/script.js',
     ],
     // Disable TS type-checking rules for these JS files
     extends: [tseslint.configs.disableTypeChecked],

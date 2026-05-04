@@ -1,0 +1,59 @@
+{
+  "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "module": "commonjs",
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "sourceMap": false,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*", "../../src/*"],
+      "~/*": ["src/*", "../../src/*"],
+      "@shared/*": ["../../src/shared/*"],
+      "@common/*": ["../../src/common/*"],
+      "@webview/*": ["src/webview/*"],
+      "@agent/*": ["../../src/agent/*"],
+      "@frontend/*": ["src/frontend/*"],
+      "@hosts": ["../../src/hosts"],
+      "@hosts/*": ["../../src/hosts/*"],
+      "@utils/*": ["../../src/utils/*"],
+      "@logger/*": ["../../src/logger/*"],
+      "@latex": ["../../src/latex"],
+      "@latex/*": ["../../src/latex/*"],
+      "@commands/*": ["src/commands/*"],
+      "@model": ["../../src/model"],
+      "@model/*": ["../../src/model/*"],
+      "@housekeeping": ["../../src/housekeeping"],
+      "@housekeeping/*": ["../../src/housekeeping/*"],
+      "@progressView/*": ["src/progressView/*"],
+      "@settingsView/*": ["src/settingsView/*"],
+      "@replacement/*": ["../../src/replacement/*"],
+      "@tools/*": ["../../src/tools/*"],
+      "@types/*": ["../../src/types/*"],
+      "@eventBus/*": ["../../src/eventBus/*"],
+      "@auth/*": ["../../src/auth/*"],
+      "@platform": ["../../src/platform"],
+      "@platform/*": ["../../src/platform/*"],
+      "@openrouter/sdk": ["../../node_modules/@openrouter/sdk/esm/index.d.ts"],
+      "@openrouter/sdk/models": [
+        "../../node_modules/@openrouter/sdk/esm/models/index.d.ts"
+      ],
+      "@controllers/*": ["../../src/controllers/*"]
+    },
+    "moduleResolution": "node",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["node", "mocha", "vscode"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../../src/types/**/*.d.ts"],
+  "exclude": [
+    "node_modules",
+    "out",
+    "dist",
+    "vite.config.ts",
+    "esbuild.config.mjs"
+  ]
+}
