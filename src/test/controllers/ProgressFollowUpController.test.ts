@@ -2,6 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent
+import { ProgressFollowUpController } from '@controllers/progressView/ProgressFollowUpController';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 
@@ -12,7 +13,6 @@ import type { WorkflowTaskState } from '@logger/TaskState';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
 // Local imports - controllers
-import { ProgressFollowUpController } from '../../controllers/progressView/ProgressFollowUpController';
 
 function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({

@@ -18,7 +18,7 @@ import {
   isToolMessage,
 } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
-import latexPreamble from '../../../resources/templates/chatExport.tex';
+import latexPreamble from '@resources/templates/chatExport.tex';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,

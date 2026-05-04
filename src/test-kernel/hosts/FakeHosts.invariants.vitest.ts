@@ -2,10 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import {
-  FakeTerminalHandle,
-  createFakeUIHosts,
-} from '../../test/support/FakeHosts';
+import { FakeTerminalHandle, createFakeUIHosts } from '@test/support/FakeHosts';
 
 describe('FakeHosts kernel invariants', () => {
   it('records prompt effects and returns queued responses', async () => {

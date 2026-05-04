@@ -2,10 +2,10 @@
 import { strict as assert } from 'assert';
 
 // Local imports - test support
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { createFakeUIHosts } from '../support/FakeHosts';
 
 // Local imports - controllers
-import { SettingsProfileKeyController } from '../../controllers/settingsView/SettingsProfileKeyController';
 
 function createController(options?: {
   inputResponses?: readonly (string | undefined)[];
