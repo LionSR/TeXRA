@@ -47,11 +47,6 @@ describe('shared file-listing rules', () => {
       false,
     );
     expect(passesFileFilters('templates/main.tex', filters)).toBe(true);
-    expect(
-      passesFileFilters('templates/main.tex', filters, {
-        keywordScope: 'path',
-      }),
-    ).toBe(false);
     expect(passesFileFilters('.cache/main.tex', filters)).toBe(false);
   });
 

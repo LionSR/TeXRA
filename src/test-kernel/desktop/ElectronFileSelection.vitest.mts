@@ -40,6 +40,7 @@ describe('desktop file selection', () => {
     await mkdir(join(workspacePath, 'sections'), { recursive: true });
     await mkdir(join(workspacePath, 'build'), { recursive: true });
     await mkdir(join(workspacePath, 'figures'), { recursive: true });
+    await mkdir(join(workspacePath, 'templates'), { recursive: true });
     await mkdir(join(workspacePath, 'node_modules', 'pkg'), {
       recursive: true,
     });
@@ -50,6 +51,7 @@ describe('desktop file selection', () => {
     await writeFile(join(workspacePath, 'sections', 'main_edited.tex'), '');
     await writeFile(join(workspacePath, 'build', 'ignored.tex'), '');
     await writeFile(join(workspacePath, 'figures', 'plot.png'), '');
+    await writeFile(join(workspacePath, 'templates', 'main.tex'), '');
     await writeFile(
       join(workspacePath, 'node_modules', 'pkg', 'ignored.tex'),
       '',
@@ -80,6 +82,7 @@ describe('desktop file selection', () => {
           'notes.md',
           'sections/main_edited.tex',
           'sections/main_r1.tex',
+          'templates/main.tex',
         ],
       }),
     );
@@ -94,6 +97,7 @@ describe('desktop file selection', () => {
           'notes.md',
           'sections/main_edited.tex',
           'sections/main_r1.tex',
+          'templates/main.tex',
         ],
       }),
     );
@@ -175,6 +179,7 @@ describe('desktop file selection', () => {
           'notes.md',
           'sections/main_edited.tex',
           'sections/main_r1.tex',
+          'templates/main.tex',
         ],
         preserveBaseFile: true,
       }),

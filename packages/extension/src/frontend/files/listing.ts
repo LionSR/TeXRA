@@ -8,7 +8,6 @@ import * as vscode from 'vscode';
 import {
   passesFileFilters,
   prepareFileFilters,
-  sanitizeDirectories,
   type PreparedFileFilters,
 } from '@common/files/fileListingRules';
 import { normalizeFilePath } from '@shared/utils/path';
@@ -83,17 +82,17 @@ function prepareFilters(
   excludeKeywords: string[],
   excludeFiles: string[],
 ): VSCodeFileFilters {
-  const sanitizedDirs = sanitizeDirectories(excludeDirectories);
+  const filters = prepareFileFilters({
+    extensions: includeExtensions,
+    ignoredExtensions: excludeExtensions,
+    ignoredDirs: excludeDirectories,
+    ignoredKeywords: excludeKeywords,
+    ignoredFiles: excludeFiles,
+  });
 
   return {
-    ...prepareFileFilters({
-      extensions: includeExtensions,
-      ignoredExtensions: excludeExtensions,
-      ignoredDirs: excludeDirectories,
-      ignoredKeywords: excludeKeywords,
-      ignoredFiles: excludeFiles,
-    }),
-    excludePattern: createExcludePattern(root, sanitizedDirs),
+    ...filters,
+    excludePattern: createExcludePattern(root, filters.sanitizedDirs),
   };
 }
 
@@ -122,7 +121,5 @@ export async function getFilesRecursively(
 
   return files
     .map((uri) => getRelativePathPreservingSymlinks(uri.fsPath, root))
-    .filter((relativePath) =>
-      passesFileFilters(relativePath, filters, { keywordScope: 'fileName' }),
-    );
+    .filter((relativePath) => passesFileFilters(relativePath, filters));
 }
