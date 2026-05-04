@@ -5,18 +5,13 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
+import {
+  passesFileFilters,
+  prepareFileFilters,
+  type PreparedFileFilters,
+} from '@common/files/fileListingRules';
 import { normalizeFilePath } from '@shared/utils/path';
 import { WorkspaceFS } from '@utils/files';
-
-/** Normalize and clean directory paths for filtering */
-function sanitizeDirectories(directories: string[]): string[] {
-  return directories
-    .map((dir) => dir.trim())
-    .filter((dir) => dir.length > 0)
-    .map((dir) =>
-      dir.replaceAll('\\', '/').replace(/^\//, '').replace(/\/$/, ''),
-    );
-}
 
 /** Create VS Code exclude pattern from directory list */
 function createExcludePattern(
@@ -32,13 +27,6 @@ function createExcludePattern(
     globSegments.length === 1 ? globSegments[0] : `{${globSegments.join(',')}}`;
 
   return new vscode.RelativePattern(root, globPattern);
-}
-
-/** Check if path contains hidden segments (starting with .) */
-function containsHiddenSegment(relativePath: string): boolean {
-  return relativePath
-    .split(/[/\\]/)
-    .some((segment) => segment.startsWith('.') && segment.length > 1);
 }
 
 /**
@@ -81,21 +69,7 @@ function getRelativePathPreservingSymlinks(
   return normalizeFilePath(path.relative(root, absolutePath));
 }
 
-/** Check if path contains an excluded directory segment */
-function containsExcludedDirectory(
-  relativePath: string,
-  excludeDirs: string[],
-): boolean {
-  const pathSegments = relativePath.split(/[/\\]/).map((s) => s.toLowerCase());
-  return pathSegments.some((segment) => excludeDirs.includes(segment));
-}
-
-interface FileFilters {
-  includeExt: string[];
-  excludeExt: string[];
-  excludeKeywords: string[];
-  excludeDirs: string[];
-  excludeFiles: string[];
+interface VSCodeFileFilters extends PreparedFileFilters {
   excludePattern?: vscode.RelativePattern;
 }
 
@@ -107,35 +81,19 @@ function prepareFilters(
   excludeDirectories: string[],
   excludeKeywords: string[],
   excludeFiles: string[],
-): FileFilters {
-  const sanitizedDirs = sanitizeDirectories(excludeDirectories);
+): VSCodeFileFilters {
+  const filters = prepareFileFilters({
+    extensions: includeExtensions,
+    ignoredExtensions: excludeExtensions,
+    ignoredDirs: excludeDirectories,
+    ignoredKeywords: excludeKeywords,
+    ignoredFiles: excludeFiles,
+  });
 
   return {
-    includeExt: includeExtensions.map((ext) => ext.toLowerCase()),
-    excludeExt: excludeExtensions.map((ext) => ext.toLowerCase()),
-    excludeKeywords: excludeKeywords.map((kw) => kw.toLowerCase()),
-    excludeDirs: sanitizedDirs.map((dir) => dir.toLowerCase()),
-    excludeFiles: excludeFiles.map((file) => file.toLowerCase()),
-    excludePattern: createExcludePattern(root, sanitizedDirs),
+    ...filters,
+    excludePattern: createExcludePattern(root, filters.sanitizedDirs),
   };
-}
-
-/** Check if a filename passes extension and keyword filters */
-function passesFileFilters(
-  fileNameLower: string,
-  filters: FileFilters,
-): boolean {
-  if (
-    filters.includeExt.length > 0 &&
-    !filters.includeExt.some((ext) => fileNameLower.endsWith(ext))
-  ) {
-    return false;
-  }
-  if (filters.excludeExt.some((ext) => fileNameLower.endsWith(ext)))
-    return false;
-  if (filters.excludeKeywords.some((kw) => fileNameLower.includes(kw)))
-    return false;
-  return true;
 }
 
 export async function getFilesRecursively(
@@ -163,15 +121,5 @@ export async function getFilesRecursively(
 
   return files
     .map((uri) => getRelativePathPreservingSymlinks(uri.fsPath, root))
-    .filter((relativePath) => {
-      if (!relativePath || containsHiddenSegment(relativePath)) return false;
-      if (containsExcludedDirectory(relativePath, filters.excludeDirs))
-        return false;
-
-      const fileNameLower = path.basename(relativePath).toLowerCase();
-      return (
-        !filters.excludeFiles.includes(fileNameLower) &&
-        passesFileFilters(fileNameLower, filters)
-      );
-    });
+    .filter((relativePath) => passesFileFilters(relativePath, filters));
 }

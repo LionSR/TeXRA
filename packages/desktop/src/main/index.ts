@@ -3,7 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { ELECTRON_WEBVIEW_PUSH_CHANNEL } from '../hostBridgeChannels.js';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
+import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
 
@@ -45,6 +47,7 @@ function createWindow(): void {
       sandbox: true,
     },
   });
+  const reportAsyncError = (error: unknown) => console.error(error);
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
@@ -59,10 +62,28 @@ function createWindow(): void {
       await dialog.showMessageBox(window, { message, type: 'error' });
     },
   });
+  const fileSelection = createDesktopFileSelection({
+    postToRenderer: (message) => {
+      if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+      window.webContents.send(ELECTRON_WEBVIEW_PUSH_CHANNEL, message);
+    },
+    showOpenFileDialog: async (options) => {
+      const result = await dialog.showOpenDialog(window, {
+        title: options.title,
+        defaultPath: options.defaultPath,
+        filters: options.filters,
+        properties: ['openFile'],
+      });
+      return result.canceled ? undefined : result.filePaths[0];
+    },
+    onError: reportAsyncError,
+  });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     getCustomAgentDirectory: () => getAgentDirectories().custom(),
     openPath,
     executeAgent: (message) => agentExecution.handleExecute(message),
+    fileSelection,
+    onAsyncError: reportAsyncError,
   });
   ipcRef.current = mainViewIpc;
   window.once('closed', () => agentExecution.dispose());
