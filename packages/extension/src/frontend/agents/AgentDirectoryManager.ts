@@ -15,6 +15,7 @@ import type { AgentSource } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import * as logger from '@logger/logUtils';
+import { AGENT_SOURCE } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentLoad';
@@ -150,7 +151,7 @@ export class AgentDirectoryManager {
     };
 
     this.watcherSubscriptions.add(subscription);
-    void this.ensureAgentWatchers();
+    this.scheduleAgentWatcherSetup();
 
     return {
       dispose: () => {
@@ -243,7 +244,7 @@ export class AgentDirectoryManager {
         continue;
       }
 
-      if (entry.source !== 'custom') {
+      if (entry.source !== AGENT_SOURCE.CUSTOM) {
         skippedDirectories.push(entry.directory);
         continue;
       }
@@ -366,7 +367,16 @@ export class AgentDirectoryManager {
   private requestAgentWatcherRebuild(): void {
     this.watcherDirectories = null;
     this.watcherRebuildRequested = true;
-    void this.ensureAgentWatchers();
+    this.scheduleAgentWatcherSetup();
+  }
+
+  private scheduleAgentWatcherSetup(): void {
+    void this.ensureAgentWatchers().catch((error) => {
+      logger.error(
+        CHANNEL,
+        `Failed to refresh agent directory watchers: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
   }
 
   private async isDirectoryUri(uri: vscode.Uri): Promise<boolean> {
@@ -380,7 +390,7 @@ export class AgentDirectoryManager {
 
   private async realDirectoryPath(uri: vscode.Uri): Promise<string> {
     try {
-      return this.normalizeFsPath(await fs.realpath(uri.fsPath));
+      return await fs.realpath(uri.fsPath);
     } catch {
       return this.normalizeFsPath(uri.fsPath);
     }
