@@ -159,6 +159,38 @@ describe('desktop main-view IPC', () => {
       },
     ]);
 
+    sends.length = 0;
+    rendererListener?.(
+      { sender: webContents },
+      { command: COMMON_COMMANDS.SWITCH_VIEW, view: 'progress' },
+    );
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'progress' },
+      },
+    ]);
+
+    sends.length = 0;
+    rendererListener?.(
+      { sender: webContents },
+      { command: COMMON_COMMANDS.SWITCH_VIEW, view: 'dashboard' },
+    );
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS },
+    );
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+    ]);
+
     nativeTheme.shouldUseHighContrastColors = true;
     themeListener?.();
     expect(sends.at(-1)).toEqual({

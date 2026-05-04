@@ -22,7 +22,16 @@ body {
   box-sizing: border-box;
 }
 
-.desktop-view > * {
+.desktop-route {
+  display: block;
+  min-height: 100vh;
+}
+
+.desktop-route[hidden] {
+  display: none;
+}
+
+.desktop-route > * {
   display: block;
   min-height: 100vh;
 }

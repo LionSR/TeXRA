@@ -4,6 +4,10 @@ import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 
 import {
+  DESKTOP_SHELL_COMMANDS,
+  type DesktopRoute,
+} from '../desktopShellMessages.js';
+import {
   installDesktopHostBridge,
   type DesktopHostBridge,
 } from './hostBridge.js';
@@ -57,6 +61,21 @@ export function installDesktopMainViewIpc(
       debugMode,
     });
   }
+  function postRoute(route: DesktopRoute) {
+    bridge.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+      route,
+    });
+  }
+  function postRouteForSwitchView(message: unknown) {
+    const view =
+      typeof message === 'object' && message !== null && 'view' in message
+        ? message.view
+        : undefined;
+    const route =
+      view === 'progress' ? 'progress' : view === 'main' ? 'main' : 'settings';
+    postRoute(route);
+  }
   function postInitialState() {
     postTheme();
     postDebugMode();
@@ -73,6 +92,15 @@ export function installDesktopMainViewIpc(
         break;
       case MAIN_VIEW_COMMANDS.GET_DEBUG_MODE:
         postDebugMode();
+        break;
+      case COMMON_COMMANDS.SWITCH_VIEW:
+        postRouteForSwitchView(message);
+        break;
+      case MAIN_VIEW_COMMANDS.SETTINGS_OPEN:
+      case MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS:
+      case MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS:
+      case MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS:
+        postRoute('settings');
         break;
     }
   }
