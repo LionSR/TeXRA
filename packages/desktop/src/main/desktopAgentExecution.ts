@@ -12,13 +12,15 @@ import type { ProgressSink } from '@agent/runtime/ProgressSink';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 import {
   STREAM_STATUS,
+  type ActiveChildInfo,
   type AgentCategory,
+  type ConversationProgress,
   type ProgressViewOutboundMessage,
   type StreamMetadata,
   type StreamStatus,
@@ -42,7 +44,14 @@ export interface DesktopAgentExecution {
 
 type TaskState = ProgressEventPayloads['setTaskState']['taskState'];
 
-class DesktopProgressBridge {
+type StreamBadgeSnapshot = {
+  activeSubagents: ActiveChildInfo[];
+  finishedSubagentCount: number;
+  activeProcesses: ActiveChildInfo[];
+  finishedProcessCount: number;
+};
+
+export class DesktopProgressBridge {
   private readonly streamLogs = new StreamLogStore();
   private readonly cursors = new Map<StreamTabId, number>();
   private readonly taskStates = new Map<StreamTabId, TaskState>();
@@ -51,6 +60,12 @@ class DesktopProgressBridge {
   private readonly executionIds = new Map<StreamTabId, string>();
   private readonly descriptions = new Map<StreamTabId, string>();
   private readonly parentStreams = new Map<StreamTabId, StreamTabId>();
+  private readonly creationTimestamps = new Map<StreamTabId, number>();
+  private readonly conversationProgress = new Map<
+    StreamTabId,
+    ConversationProgress
+  >();
+  private readonly streamBadges = new Map<StreamTabId, StreamBadgeSnapshot>();
   private activeStream: StreamTabId | '' = '';
   private readonly unsubscribe: () => void;
 
@@ -71,6 +86,15 @@ class DesktopProgressBridge {
   dispose(): void {
     this.unsubscribe();
     this.cursors.clear();
+    this.taskStates.clear();
+    this.statuses.clear();
+    this.categories.clear();
+    this.executionIds.clear();
+    this.descriptions.clear();
+    this.parentStreams.clear();
+    this.creationTimestamps.clear();
+    this.conversationProgress.clear();
+    this.streamBadges.clear();
   }
 
   private send(message: ProgressViewOutboundMessage): void {
@@ -88,10 +112,19 @@ class DesktopProgressBridge {
     streamId: StreamTabId,
     category: AgentCategory = AGENT_CATEGORY.WORKFLOW,
   ): void {
+    this.getCreationTimestamp(streamId);
     this.streamLogs.ensureStream(streamId);
     if (!this.categories.has(streamId)) {
       this.categories.set(streamId, category);
     }
+  }
+
+  private getCreationTimestamp(streamId: StreamTabId): number {
+    const existing = this.creationTimestamps.get(streamId);
+    if (existing != null) return existing;
+    const createdAt = this.streamLogs.getFirstTimestamp(streamId) ?? Date.now();
+    this.creationTimestamps.set(streamId, createdAt);
+    return createdAt;
   }
 
   private buildStreamInfo(streamId: StreamTabId): StreamTabInfo {
@@ -115,8 +148,7 @@ class DesktopProgressBridge {
       agentCategory: category,
       hasMultipleOutputs: config?.useMultipleOutputs ?? false,
       inputFile,
-      creationTimestamp:
-        this.streamLogs.getFirstTimestamp(streamId) ?? Date.now(),
+      creationTimestamp: this.getCreationTimestamp(streamId),
       executionId: this.executionIds.get(streamId),
       parentStreamId: this.parentStreams.get(streamId),
       description: this.descriptions.get(streamId),
@@ -132,12 +164,48 @@ class DesktopProgressBridge {
       kind: category,
       status: this.statuses.get(streamId) ?? STREAM_STATUS.READY,
       lastTimestamp: this.streamLogs.getLastTimestamp(streamId),
-      conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
+      conversationProgress: this.conversationProgress.get(streamId) ?? {
+        conversationTurns: 0,
+        toolCallCount: 0,
+      },
+      activeSubagents: this.streamBadges.get(streamId)?.activeSubagents ?? [],
+      finishedSubagentCount:
+        this.streamBadges.get(streamId)?.finishedSubagentCount ?? 0,
+      activeProcesses: this.streamBadges.get(streamId)?.activeProcesses ?? [],
+      finishedProcessCount:
+        this.streamBadges.get(streamId)?.finishedProcessCount ?? 0,
+    };
+  }
+
+  private updateActiveChildren(
+    parentStreamId: StreamTabId,
+    opts: {
+      activeField: 'activeSubagents' | 'activeProcesses';
+      countField: 'finishedSubagentCount' | 'finishedProcessCount';
+      next: ActiveChildInfo[];
+    },
+  ): StreamBadgeSnapshot {
+    this.ensureStream(parentStreamId);
+    const previous = this.streamBadges.get(parentStreamId) ?? {
       activeSubagents: [],
       finishedSubagentCount: 0,
       activeProcesses: [],
       finishedProcessCount: 0,
     };
+    const previousIds = new Set(
+      previous[opts.activeField].map((child) => child.executionId),
+    );
+    const nextIds = new Set(opts.next.map((child) => child.executionId));
+    const newlyFinished = [...previousIds].filter(
+      (id) => !nextIds.has(id),
+    ).length;
+    const nextBadges = {
+      ...previous,
+      [opts.activeField]: opts.next,
+      [opts.countField]: previous[opts.countField] + newlyFinished,
+    };
+    this.streamBadges.set(parentStreamId, nextBadges);
+    return nextBadges;
   }
 
   private syncStreams(): void {
@@ -222,23 +290,24 @@ class DesktopProgressBridge {
       }
       case 'updateStreamStatus': {
         const data = payload as ProgressEventPayloads['updateStreamStatus'];
+        const wasKnownStream = this.streamLogs.has(data.streamId);
         this.ensureStream(data.streamId);
         this.statuses.set(data.streamId, data.status);
-        if (!this.streamLogs.has(data.streamId)) {
+        if (!wasKnownStream) {
           this.syncStreams();
-        } else {
-          this.send({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
-            stream: data.streamId,
-            status: data.status,
-            lastTimestamp: this.streamLogs.getLastTimestamp(data.streamId),
-          });
         }
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+          stream: data.streamId,
+          status: data.status,
+          lastTimestamp: this.streamLogs.getLastTimestamp(data.streamId),
+        });
         break;
       }
       case 'updateConversationProgress': {
         const data =
           payload as ProgressEventPayloads['updateConversationProgress'];
+        this.conversationProgress.set(data.streamId, data.progress);
         this.send({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS,
           stream: data.streamId,
@@ -328,22 +397,25 @@ class DesktopProgressBridge {
         const data = payload as
           | ProgressEventPayloads['updateActiveSubagents']
           | ProgressEventPayloads['updateActiveProcesses'];
+        const badges =
+          event === 'updateActiveSubagents'
+            ? this.updateActiveChildren(data.parentStreamId, {
+                activeField: 'activeSubagents',
+                countField: 'finishedSubagentCount',
+                next: (data as ProgressEventPayloads['updateActiveSubagents'])
+                  .children,
+              })
+            : this.updateActiveChildren(data.parentStreamId, {
+                activeField: 'activeProcesses',
+                countField: 'finishedProcessCount',
+                next: (data as ProgressEventPayloads['updateActiveProcesses'])
+                  .processes,
+              });
         this.syncStreams();
         this.send({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
           stream: data.parentStreamId,
-          activeSubagents:
-            event === 'updateActiveSubagents'
-              ? (data as ProgressEventPayloads['updateActiveSubagents'])
-                  .children
-              : [],
-          finishedSubagentCount: 0,
-          activeProcesses:
-            event === 'updateActiveProcesses'
-              ? (data as ProgressEventPayloads['updateActiveProcesses'])
-                  .processes
-              : [],
-          finishedProcessCount: 0,
+          ...badges,
         });
         break;
       }
