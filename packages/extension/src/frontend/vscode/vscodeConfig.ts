@@ -20,8 +20,14 @@ function configKeys(key: string): string[] {
   return [key, `texra.${key}`];
 }
 
+function workspaceConfiguration(
+  section?: string,
+): vscode.WorkspaceConfiguration {
+  return vscode.workspace.getConfiguration(section, null);
+}
+
 function inspectKey<T>(key: string): VscodeConfigInspection<T> | undefined {
-  return vscode.workspace.getConfiguration().inspect<T>(key);
+  return workspaceConfiguration().inspect<T>(key);
 }
 
 function toConfigurationTarget(
@@ -55,15 +61,15 @@ export class VscodeConfigProvider implements ConfigProvider {
 
     // Try multiple namespaces in order of priority (using === undefined to
     // preserve null values).
-    let result: unknown = vscode.workspace
-      .getConfiguration(parts[0])
-      .get(parts.slice(1).join('.'));
+    let result: unknown = workspaceConfiguration(parts[0]).get(
+      parts.slice(1).join('.'),
+    );
 
     if (result === undefined) {
-      result = vscode.workspace.getConfiguration('texra').get(key);
+      result = workspaceConfiguration('texra').get(key);
     }
     if (result === undefined) {
-      result = vscode.workspace.getConfiguration().get(`texra.${key}`);
+      result = workspaceConfiguration().get(`texra.${key}`);
     }
 
     return result !== undefined ? (result as T) : (defaultValue as T);
@@ -76,9 +82,11 @@ export class VscodeConfigProvider implements ConfigProvider {
   ): Promise<void> {
     // `configUtils.updateConfig` owns prefix policy, including explicit
     // `prefix: false` writes. Preserve the exact key passed to this adapter.
-    await vscode.workspace
-      .getConfiguration()
-      .update(key, value, toConfigurationTarget(target));
+    await workspaceConfiguration().update(
+      key,
+      value,
+      toConfigurationTarget(target),
+    );
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
