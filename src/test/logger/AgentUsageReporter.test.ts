@@ -4,7 +4,6 @@ import { strict as assert } from 'assert';
 // Local imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
-  createAgentRuntimeHost,
   runWithAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
@@ -16,13 +15,13 @@ function createUsageHost(): { events: unknown[]; host: AgentRuntimeHost } {
   const events: unknown[] = [];
   return {
     events,
-    host: createAgentRuntimeHost({
+    host: {
       emit: (event, payload) => {
         if (event === 'updateStreamUsage') {
           events.push(payload);
         }
       },
-    }),
+    },
   };
 }
 

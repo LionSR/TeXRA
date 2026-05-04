@@ -27,12 +27,12 @@ import { TextEditorTool } from './TextEditorTool';
 import { WriteFileTool } from './WriteTool';
 import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
-import { WolframTool } from './wolfram';
-import { TexcountTool } from './texcount';
+import { WolframTool } from './wolfram/WolframTool';
+import { TexcountTool } from './texcount/TexcountTool';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
-import { PlanTool } from './plan';
-import { TodoWriteTool } from './todo';
-import { MemoryTool } from './memory';
+import { PlanTool } from './plan/PlanTool';
+import { TodoWriteTool } from './todo/TodoTool';
+import { MemoryTool } from './memory/MemoryTool';
 import {
   ZoteroAddTool,
   ZoteroCollectionsTool,
