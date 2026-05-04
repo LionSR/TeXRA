@@ -63,10 +63,7 @@ describe('ProgressWorkflowActionsController', () => {
   });
 
   it('builds diff requests from workflow task and output state', async () => {
-    const output = createOutputFile(
-      '/workspace/generated.tex',
-      'generated.tex',
-    );
+    const output = createOutputFile();
     const taskState = createWorkflowTaskState(
       { outputFiles: ['declared.tex'] },
       { output: false },
