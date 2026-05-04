@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
 
+import {
+  MainViewInteractionController,
+  type MainViewCommandPlan,
+} from '@controllers/mainView/MainViewInteractionController';
+import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
+import { MainViewStatusController } from '@controllers/mainView/MainViewStatusController';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { toErrorMessage } from '@common/errors';
 import {
@@ -24,12 +30,6 @@ import { DiffManager } from './managers/DiffManager';
 import { ExecutionManager } from './managers/ExecutionManager';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
-import {
-  MainViewInteractionController,
-  type MainViewCommandPlan,
-} from '../controllers/mainView/MainViewInteractionController';
-import { MainViewStartupController } from '../controllers/mainView/MainViewStartupController';
-import { MainViewStatusController } from '../controllers/mainView/MainViewStatusController';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
