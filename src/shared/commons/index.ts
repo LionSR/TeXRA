@@ -74,10 +74,8 @@ export { BaseWebviewApp } from '@shared/BaseWebviewApp';
 // Shared: host bridge API
 export {
   hostBridge,
-  vscode,
   postMessage,
   type HostBridgeApi,
-  type VSCodeApi,
 } from '@shared/hostBridge';
 
 // Shared: Schemas (re-export everything)

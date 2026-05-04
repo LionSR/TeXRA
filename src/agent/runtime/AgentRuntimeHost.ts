@@ -6,32 +6,18 @@ import {
   type ProgressSink,
 } from './ProgressSink';
 
-export interface AgentRuntimeHost {
-  progressSink: ProgressSink;
-  emit: ProgressSink['emit'];
-}
-
-export function createAgentRuntimeHost(
-  progressSink: ProgressSink,
-): AgentRuntimeHost {
-  return {
-    progressSink,
-    emit: (event, payload) => progressSink.emit(event, payload),
-  };
-}
+export type AgentRuntimeHost = ProgressSink;
 
 let defaultAgentRuntimeHost: AgentRuntimeHost | undefined;
 const runtimeHostScope = new AsyncLocalStorage<AgentRuntimeHost>();
 
 export function setDefaultAgentRuntimeHost(host: AgentRuntimeHost): void {
   defaultAgentRuntimeHost = host;
-  setDefaultProgressSink(host.progressSink);
+  setDefaultProgressSink(host);
 }
 
 export function getDefaultAgentRuntimeHost(): AgentRuntimeHost {
-  return (
-    defaultAgentRuntimeHost ?? createAgentRuntimeHost(getDefaultProgressSink())
-  );
+  return defaultAgentRuntimeHost ?? getDefaultProgressSink();
 }
 
 export function getAgentRuntimeHost(): AgentRuntimeHost {

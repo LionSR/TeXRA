@@ -3,7 +3,6 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import {
-  createAgentRuntimeHost,
   runWithAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
@@ -23,9 +22,9 @@ function createRecordingHost(): {
   const events: RecordedEvent[] = [];
   return {
     events,
-    host: createAgentRuntimeHost({
+    host: {
       emit: (event, payload) => events.push({ event, payload }),
-    }),
+    },
   };
 }
 

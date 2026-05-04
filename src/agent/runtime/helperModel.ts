@@ -8,7 +8,7 @@
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import type { ModelHandler } from '@agent/modelHandlers';
+import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { getGlobalState } from '@agent/core/stateStore';
 import { GlobalStateKey } from '@common/state';
