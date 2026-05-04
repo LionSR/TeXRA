@@ -53,8 +53,10 @@ function createWindow(): void {
       if (errorMessage) throw new Error(errorMessage);
     },
     fileSelection: createDesktopFileSelection({
-      postToRenderer: (message) =>
-        window.webContents.send(ELECTRON_WEBVIEW_PUSH_CHANNEL, message),
+      postToRenderer: (message) => {
+        if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+        window.webContents.send(ELECTRON_WEBVIEW_PUSH_CHANNEL, message);
+      },
       showOpenFileDialog: async (options) => {
         const result = await dialog.showOpenDialog(window, {
           title: options.title,
