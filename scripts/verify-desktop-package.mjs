@@ -12,7 +12,18 @@ const desktopRoot = join(repoRoot, 'packages', 'desktop');
 const packageRoot = join(desktopRoot, 'dist-packaged');
 const desktopPackageJsonPath = join(desktopRoot, 'package.json');
 const vscodeRuntimeImportPattern =
-  /\b(?:import\s+[^;]*\s+from\s+['"]vscode['"]|require\(['"]vscode['"]\))/;
+  /\b(?:import\s*\(\s*['"]vscode['"]\s*\)|import\s+[^;]*\s+from\s+['"]vscode['"]|(?:__require|require|requireFn)(?:\?\.)?\(\s*['"]vscode['"]\s*\))/;
+const vscodeBackedStateImportPattern =
+  /^\s*import\s+[^;]*\bfrom\s+['"]@common\/state(?:\/stateManager)?['"]/m;
+const desktopSharedSourceDirs = [
+  join(repoRoot, 'packages', 'desktop', 'src'),
+  join(repoRoot, 'src', 'agent', 'implementations', 'flows', 'tooluse'),
+  join(repoRoot, 'src', 'agent', 'runtime'),
+  join(repoRoot, 'src', 'logger'),
+  join(repoRoot, 'src', 'model'),
+  join(repoRoot, 'src', 'shared'),
+  join(repoRoot, 'src', 'utils'),
+];
 
 async function exists(path) {
   try {
@@ -25,6 +36,20 @@ async function exists(path) {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
+}
+
+async function collectFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const entryPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectFiles(entryPath)));
+    } else if (entry.isFile()) {
+      files.push(entryPath);
+    }
+  }
+  return files.sort();
 }
 
 async function findPackagedApp() {
@@ -130,6 +155,26 @@ async function checkNoVscodeRuntimeImport(app, failures) {
   );
 }
 
+async function checkDesktopSourceBoundaries(failures) {
+  for (const dir of desktopSharedSourceDirs) {
+    if (!(await exists(dir))) continue;
+    for (const filePath of await collectFiles(dir)) {
+      if (!/\.[cm]?tsx?$/.test(filePath)) continue;
+      if (
+        !vscodeBackedStateImportPattern.test(await readFile(filePath, 'utf8'))
+      ) {
+        continue;
+      }
+      failures.push(
+        `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
+          repoRoot,
+          filePath,
+        )}`,
+      );
+    }
+  }
+}
+
 function dependencyPackageJsonPath(name) {
   return join('node_modules', name, 'package.json');
 }
@@ -199,6 +244,7 @@ if (!app) {
   await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);
   await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
   await checkNoVscodeRuntimeImport(app, failures);
+  await checkDesktopSourceBoundaries(failures);
 
   const assets = await app.listDir('dist/renderer/assets');
   if (!assets.some((asset) => asset.endsWith('.js'))) {
@@ -226,5 +272,6 @@ console.log(
     '- package.json runtime dependencies',
     '- node_modules runtime dependency packages',
     '- no VS Code extension host runtime import',
+    '- desktop-shared source uses vscode-free state keys',
   ].join('\n'),
 );

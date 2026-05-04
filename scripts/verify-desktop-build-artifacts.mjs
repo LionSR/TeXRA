@@ -46,7 +46,18 @@ const requiredFiles = [
 ];
 const failures = [];
 const vscodeRuntimeImportPattern =
-  /\b(?:import\s+[^;]*\s+from\s+['"]vscode['"]|require\(['"]vscode['"]\))/;
+  /\b(?:import\s*\(\s*['"]vscode['"]\s*\)|import\s+[^;]*\s+from\s+['"]vscode['"]|(?:__require|require|requireFn)(?:\?\.)?\(\s*['"]vscode['"]\s*\))/;
+const vscodeBackedStateImportPattern =
+  /^\s*import\s+[^;]*\bfrom\s+['"]@common\/state(?:\/stateManager)?['"]/m;
+const desktopSharedSourceDirs = [
+  path.join(rootDir, 'packages', 'desktop', 'src'),
+  path.join(rootDir, 'src', 'agent', 'implementations', 'flows', 'tooluse'),
+  path.join(rootDir, 'src', 'agent', 'runtime'),
+  path.join(rootDir, 'src', 'logger'),
+  path.join(rootDir, 'src', 'model'),
+  path.join(rootDir, 'src', 'shared'),
+  path.join(rootDir, 'src', 'utils'),
+];
 
 for (const filePath of requiredFiles) {
   if (!fileExists(filePath)) {
@@ -71,6 +82,20 @@ if (
   failures.push(
     'Desktop main bundle contains a runtime import of the VS Code extension host module.',
   );
+}
+
+for (const dir of desktopSharedSourceDirs) {
+  if (!fs.existsSync(dir)) continue;
+  for (const filePath of collectFiles(dir)) {
+    if (!/\.[cm]?tsx?$/.test(filePath)) continue;
+    if (!vscodeBackedStateImportPattern.test(fs.readFileSync(filePath, 'utf8')))
+      continue;
+    failures.push(
+      `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
+        filePath,
+      )}`,
+    );
+  }
 }
 
 if (failures.length > 0) {

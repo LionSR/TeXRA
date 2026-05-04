@@ -16,7 +16,7 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common/Ba
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { getGlobalState } from '@agent/core/stateStore';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
-import { GlobalStateKey } from '@common/state';
+import { GlobalStateKey } from '@common/state/stateKeys';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import {

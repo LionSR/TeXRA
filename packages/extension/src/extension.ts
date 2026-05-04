@@ -19,7 +19,12 @@ import {
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SupabaseAuthProvider } from '@auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@auth/UriHandler';
-import { isSupabaseConfigured, setRuntimeExtensionId } from '@auth/config';
+import {
+  getAuthCallbackUri,
+  isSupabaseConfigured,
+  setExternalAuthCallbackResolver,
+  setRuntimeExtensionId,
+} from '@auth/config';
 import { getAuthStatus } from '@auth/authCommands';
 import { toErrorMessage } from '@common/errors';
 import {
@@ -142,6 +147,9 @@ export async function activate(context: vscode.ExtensionContext) {
   SecretManager.initialize(context);
   agentDirectories.initialize(context);
   setAgentDirectories(agentDirectories);
+  logger.setOutputChannelFactory((name) =>
+    vscode.window.createOutputChannel(name),
+  );
   initializePolishModel(context.extensionPath);
   initializeStateManagers(context);
   initPlatform({
@@ -198,6 +206,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
   try {
     setRuntimeExtensionId(context.extension.id);
+    setExternalAuthCallbackResolver(async () => {
+      const baseCallbackUri = vscode.Uri.parse(
+        getAuthCallbackUri(vscode.env.uriScheme),
+      );
+      const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
+      const vscodeState = new URLSearchParams(externalUri.query).get('state');
+      const baseUrl = `${externalUri.scheme}://${externalUri.authority}${externalUri.path}`;
+
+      return { baseUrl, vscodeState, fullUrl: externalUri.toString() };
+    });
 
     if (!isSupabaseConfigured()) {
       logger.warn(

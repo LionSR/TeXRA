@@ -1,11 +1,18 @@
-// Local imports - common (direct import to avoid circular dependency via barrel)
-import { globalSM, GlobalStateKey } from '@common/state/stateManager';
+// Local imports - platform
+import { tryPlatform } from '@platform/platform';
+
+// Local imports - common
+import { GlobalStateKey } from '@common/state/stateKeys';
 
 // Local imports - config utils
 import * as logger from '@logger/logUtils';
 import { getConfig } from './configUtils';
 
 const CHANNEL = 'config';
+
+function globalState() {
+  return tryPlatform()?.globalState;
+}
 
 // Settings query constants for VS Code settings UI
 export const SETTINGS_QUERY = {
@@ -67,12 +74,13 @@ export function getToolUsePersistenceTtlHours(): number {
 
 /** Set whether the memory tool is enabled for tool-use sessions. */
 export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
-  await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
+  await globalState()?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
 }
 
 /** Get the set of tool group IDs disabled by the user. */
 export function getDisabledToolIds(): ReadonlySet<string> {
-  const raw = globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+  const raw =
+    globalState()?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
   return new Set(raw);
 }
 
@@ -82,12 +90,12 @@ export async function setToolEnabled(
   enabled: boolean,
 ): Promise<void> {
   const current =
-    globalSM?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+    globalState()?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
   const set = new Set(current);
   if (enabled) {
     set.delete(toolId);
   } else {
     set.add(toolId);
   }
-  await globalSM?.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
+  await globalState()?.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
 }
