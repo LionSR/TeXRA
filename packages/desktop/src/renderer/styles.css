@@ -1,4 +1,5 @@
 :root {
+  --desktop-nav-height: 40px;
   font-family: var(--texra-font-family);
   background: var(--texra-editor-background);
   color: var(--texra-editor-foreground);
@@ -11,18 +12,60 @@ body {
 
 .desktop-shell {
   min-height: 100vh;
+  display: grid;
+  grid-template-rows: var(--desktop-nav-height) minmax(0, 1fr);
   background: var(--texra-editor-background);
   color: var(--texra-editor-foreground);
+}
+
+.desktop-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--desktop-nav-height);
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--texra-panel-border);
+  background: var(--texra-sideBar-background);
+}
+
+.desktop-nav-button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--texra-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.desktop-nav-button:hover {
+  background: var(--texra-toolbar-hoverBackground);
+}
+
+.desktop-nav-button[aria-pressed='true'] {
+  border-color: var(--texra-focusBorder);
+  background: var(--texra-button-secondaryBackground);
 }
 
 .desktop-view {
   display: block;
   min-width: 0;
-  min-height: 100vh;
+  min-height: 0;
   box-sizing: border-box;
 }
 
-.desktop-view > * {
+.desktop-route {
   display: block;
-  min-height: 100vh;
+  min-height: 100%;
+}
+
+.desktop-route[hidden] {
+  display: none;
+}
+
+.desktop-route > * {
+  display: block;
+  min-height: 100%;
 }
