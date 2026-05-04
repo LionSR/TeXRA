@@ -3,7 +3,12 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { readJson } from './extension-package-utils.mjs';
+import {
+  getDesktopSharedSourceDirs,
+  readJson,
+  vscodeBackedStateImportPattern,
+  vscodeRuntimeImportPattern,
+} from './extension-package-utils.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -45,8 +50,7 @@ const requiredFiles = [
   path.join(desktopDir, 'dist', 'renderer', 'index.html'),
 ];
 const failures = [];
-const vscodeRuntimeImportPattern =
-  /\b(?:import\s+[^;]*\s+from\s+['"]vscode['"]|require\(['"]vscode['"]\))/;
+const desktopSharedSourceDirs = getDesktopSharedSourceDirs(rootDir);
 
 for (const filePath of requiredFiles) {
   if (!fileExists(filePath)) {
@@ -71,6 +75,20 @@ if (
   failures.push(
     'Desktop main bundle contains a runtime import of the VS Code extension host module.',
   );
+}
+
+for (const dir of desktopSharedSourceDirs) {
+  if (!fs.existsSync(dir)) continue;
+  for (const filePath of collectFiles(dir)) {
+    if (!/\.[cm]?tsx?$/.test(filePath)) continue;
+    if (!vscodeBackedStateImportPattern.test(fs.readFileSync(filePath, 'utf8')))
+      continue;
+    failures.push(
+      `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
+        filePath,
+      )}`,
+    );
+  }
 }
 
 if (failures.length > 0) {
