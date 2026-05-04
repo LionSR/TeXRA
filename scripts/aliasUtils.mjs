@@ -20,6 +20,25 @@ export function loadAliases(rootDir) {
   );
 }
 
+export function loadAliasEntries(rootDir) {
+  const tsconfig = readTsconfig(resolve(rootDir, 'tsconfig.json'));
+
+  return Object.entries(tsconfig.compilerOptions.paths).flatMap(
+    ([key, values]) => {
+      const alias = key.replace('/*', '');
+      const requiresSubpath = key.endsWith('/*');
+
+      return values
+        .filter((pathValue) => !pathValue.endsWith('.d.ts'))
+        .map((pathValue) => ({
+          alias,
+          requiresSubpath,
+          absolutePath: resolve(rootDir, pathValue.replace('/*', '')),
+        }));
+    },
+  );
+}
+
 function readTsconfig(tsconfigPath) {
   const tsconfigText = readFileSync(tsconfigPath, 'utf8');
   return JSON.parse(stripJsonComments(tsconfigText));
