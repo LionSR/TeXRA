@@ -41,6 +41,7 @@
     "check:settings-configuration": "npm run compile-tests && node scripts/sync-settings-configuration.mjs --check",
     "sync:extension-package-invariants": "node scripts/verify-extension-package-invariants.mjs --update",
     "check:extension-package-invariants": "node scripts/verify-extension-package-invariants.mjs",
+    "check:vsix-contents": "node scripts/verify-vsix-contents.mjs",
     "sync:remote-agents": "node scripts/sync-remote-agents.mjs -o docs/supabase/SYNC_REFERENCE_AGENTS.sql",
     "check:remote-agents": "node scripts/sync-remote-agents.mjs --check"
   },

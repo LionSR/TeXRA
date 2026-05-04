@@ -55,3 +55,9 @@ jobs:
 
       - name: Build workspace packages
         run: pnpm run workspace:build
+
+      - name: Build extension VSIX
+        run: pnpm run build:fast
+
+      - name: Check VSIX contents
+        run: pnpm run check:vsix-contents
