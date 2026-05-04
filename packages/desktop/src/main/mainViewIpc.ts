@@ -2,6 +2,12 @@ import { nativeTheme, type BrowserWindow } from 'electron';
 
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import { AGENT_CATEGORY, type AgentCategory } from '@shared/schemas/agent';
+import {
+  SETTINGS_TAB,
+  type SettingsTab,
+} from '@shared/schemas/settingsViewMessages';
 
 import {
   DESKTOP_SHELL_COMMANDS,
@@ -40,6 +46,18 @@ function getNativeTheme(): DesktopTheme {
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
 }
 
+function getAgentSettingsSubTab(message: unknown): AgentCategory | undefined {
+  if (
+    typeof message === 'object' &&
+    message !== null &&
+    'sessionType' in message &&
+    message.sessionType === AGENT_CATEGORY.TOOL_USE
+  ) {
+    return AGENT_CATEGORY.TOOL_USE;
+  }
+  return undefined;
+}
+
 export function installDesktopMainViewIpc(
   window: BrowserWindow,
   options: DesktopMainViewIpcOptions = {},
@@ -65,6 +83,18 @@ export function installDesktopMainViewIpc(
     bridge.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
       route,
+    });
+  }
+  function postSettingsRoute(
+    tabIndex?: SettingsTab,
+    agentSubTab?: AgentCategory,
+  ) {
+    postRoute('settings');
+    if (tabIndex == null) return;
+    bridge.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+      tabIndex,
+      ...(agentSubTab && { agentSubTab }),
     });
   }
   function postRouteForSwitchView(message: unknown) {
@@ -97,10 +127,19 @@ export function installDesktopMainViewIpc(
         postRouteForSwitchView(message);
         break;
       case MAIN_VIEW_COMMANDS.SETTINGS_OPEN:
+        postSettingsRoute();
+        break;
       case MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS:
+        postSettingsRoute(SETTINGS_TAB.AGENTS, getAgentSettingsSubTab(message));
+        break;
       case MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS:
+        postSettingsRoute(SETTINGS_TAB.MODELS);
+        break;
       case MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS:
-        postRoute('settings');
+        postSettingsRoute(SETTINGS_TAB.MULTI_AGENT);
+        break;
+      case MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY:
+        postSettingsRoute(SETTINGS_TAB.AGENTS);
         break;
     }
   }

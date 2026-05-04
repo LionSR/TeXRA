@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - webview command constants
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -180,6 +183,21 @@ describe('desktop main-view IPC', () => {
       { sender: webContents },
       { command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS },
     );
+    rendererListener?.(
+      { sender: webContents },
+      {
+        command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+        sessionType: AGENT_CATEGORY.TOOL_USE,
+      },
+    );
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS },
+    );
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY },
+    );
     expect(sends).toEqual([
       {
         channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
@@ -188,6 +206,47 @@ describe('desktop main-view IPC', () => {
       {
         channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
         message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex: SETTINGS_TAB.MODELS,
+        },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          agentSubTab: AGENT_CATEGORY.TOOL_USE,
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex: SETTINGS_TAB.AGENTS,
+        },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex: SETTINGS_TAB.MULTI_AGENT,
+        },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex: SETTINGS_TAB.AGENTS,
+        },
       },
     ]);
 
