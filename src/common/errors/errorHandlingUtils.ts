@@ -1,34 +1,15 @@
 import * as vscode from 'vscode';
 
 import * as logger from '@logger/logUtils';
-import { toErrorMessage } from './errorMessage';
+import { formatError, formatZodError } from './errorFormatUtils';
 import type { z } from 'zod';
 
+export { formatError, formatZodError };
 export { toErrorMessage } from './errorMessage';
 export { isDiskFullError, isFileNotFoundError } from './errorPredicates';
 
 /** Valid documentation identifiers for error messages. */
 export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
-
-const MAX_ERROR_LENGTH = 500;
-
-/** Format an error with a prefix for logging or user messages. */
-export function formatError(prefix: string, err: unknown): string {
-  const detail = toErrorMessage(err);
-  if (detail.length > MAX_ERROR_LENGTH) {
-    return `${prefix}: ${detail.substring(0, MAX_ERROR_LENGTH)}...`;
-  }
-  return `${prefix}: ${detail}`;
-}
-
-/** Format a Zod validation error into a human-readable string. */
-export function formatZodError(error: z.ZodError): string {
-  return error.issues
-    .map((i) =>
-      i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message,
-    )
-    .join(', ');
-}
 
 /** Parse data with a Zod schema and show a user-friendly error if parsing fails. */
 export async function parseWithErrorDisplay<T>(

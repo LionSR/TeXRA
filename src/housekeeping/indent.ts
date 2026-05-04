@@ -1,6 +1,6 @@
 import * as path from 'path';
 
-import { showLoggedErrorMessage, showLoggedMessage } from '@common/errors';
+import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { isDirectory, isFile, isSymlink } from '@common/files/fsEntryType';
 import { runLatexFormatter } from '@latex/texFormatter';
@@ -45,10 +45,7 @@ export async function indentLatexFilesInDirectory(
   logger.debug(CHANNEL, `Formatter: ${formatter}, Config: ${config}`);
 
   if (config && !(await AbsoluteFS.exists(config))) {
-    await showLoggedMessage(
-      CHANNEL,
-      `Formatter config file not found at ${config}`,
-    );
+    logger.error(CHANNEL, `Formatter config file not found at ${config}`);
     return 0;
   }
 
@@ -104,10 +101,9 @@ export async function indentLatexFilesInDirectory(
     );
     return indentedCount;
   } catch (err) {
-    await showLoggedErrorMessage(
+    logger.error(
       CHANNEL,
-      'Error during indentation process',
-      err,
+      `Error during indentation process: ${toErrorMessage(err)}`,
     );
     return 0;
   }

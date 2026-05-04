@@ -45,6 +45,8 @@ const requiredFiles = [
   path.join(desktopDir, 'dist', 'renderer', 'index.html'),
 ];
 const failures = [];
+const vscodeRuntimeImportPattern =
+  /\b(?:import\s+[^;]*\s+from\s+['"]vscode['"]|require\(['"]vscode['"]\))/;
 
 for (const filePath of requiredFiles) {
   if (!fileExists(filePath)) {
@@ -61,6 +63,14 @@ if (!rendererAssets.some((filePath) => filePath.endsWith('.js'))) {
 }
 if (!rendererAssets.some((filePath) => filePath.endsWith('.css'))) {
   failures.push('Desktop renderer build did not emit a CSS asset.');
+}
+if (
+  fileExists(manifestMain) &&
+  vscodeRuntimeImportPattern.test(fs.readFileSync(manifestMain, 'utf8'))
+) {
+  failures.push(
+    'Desktop main bundle contains a runtime import of the VS Code extension host module.',
+  );
 }
 
 if (failures.length > 0) {

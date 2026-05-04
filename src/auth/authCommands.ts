@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { showSettingsView } from '@commands/settings';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { getConfig } from '@utils/config';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';

@@ -5,7 +5,10 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { showLoggedErrorMessage, showLoggedInfoMessage } from '@common/errors';
+import {
+  showLoggedErrorMessage,
+  showLoggedInfoMessage,
+} from '@common/errors/errorHandlingUtils';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
