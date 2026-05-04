@@ -4,13 +4,11 @@ import { ZodError } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core';
-import { registerExecution } from '@agent/storage';
-import { executeAgent } from '@agent/runtime/executeAgent';
+import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { formatZodError } from '@common/errors';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core/executionId';
 
 const CHANNEL = 'ExecuteCommand';
 
@@ -38,18 +36,11 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       : null;
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
 
-    const executionId =
-      (wrapped?.executionId as ExecutionId | undefined) ??
-      generateExecutionId();
-    const isResume = wrapped?.executionId !== undefined;
-
-    if (!isResume) {
-      await registerExecution(executionId, config, config.agent);
-    }
-    const result = await executeAgent(config, executionId);
-    if (result.category === 'workflow') {
-      await openFinalOutputIfAvailable(result);
-    }
+    const executionId = wrapped?.executionId as ExecutionId | undefined;
+    await runValidatedExecutionRequest(
+      { config, executionId },
+      { openWorkflowOutput: openFinalOutputIfAvailable },
+    );
   } catch (error) {
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${formatZodError(error)}`;

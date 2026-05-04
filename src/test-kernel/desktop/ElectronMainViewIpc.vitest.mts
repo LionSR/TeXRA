@@ -27,6 +27,7 @@ interface MainViewIpcModule {
       getCustomAgentDirectory?: () => Promise<string>;
       openPath?: (filePath: string) => Promise<void>;
       fileSelection?: { handleMessage(message: { command: string }): boolean };
+      executeAgent?: (message: unknown) => Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
   ): {
@@ -108,6 +109,7 @@ describe('desktop main-view IPC', () => {
           message.command === MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
       ),
     };
+    const executeAgent = vi.fn(async (_message: unknown) => {});
     const webContents = {
       isDestroyed: () => false,
       send: vi.fn((channel, message) => sends.push({ channel, message })),
@@ -126,6 +128,7 @@ describe('desktop main-view IPC', () => {
       getCustomAgentDirectory: async () => '/agents/custom',
       openPath,
       fileSelection,
+      executeAgent,
     });
 
     expect(ipcMain.on).toHaveBeenCalledWith(
@@ -299,6 +302,15 @@ describe('desktop main-view IPC', () => {
     await Promise.resolve();
     expect(openPath).toHaveBeenCalledWith('/agents/custom');
     expect(sends).toEqual([]);
+
+    const executeMessage = {
+      command: MAIN_VIEW_COMMANDS.EXECUTE,
+      agent: 'direct-agent',
+      model: 'gpt-5.4',
+    };
+    rendererListener?.({ sender: webContents }, executeMessage);
+    await Promise.resolve();
+    expect(executeAgent).toHaveBeenCalledWith(executeMessage);
 
     nativeTheme.shouldUseHighContrastColors = true;
     themeListener?.();
