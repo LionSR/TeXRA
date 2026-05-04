@@ -33,6 +33,7 @@ In the Extension Development Host:
 
 ```bash
 npm run build:fast
+npm run check:vsix-contents
 
 VSIX="releases/texra-$(node -p "require('./packages/extension/package.json').version").vsix"
 SMOKE_ROOT="$(mktemp -d)"
