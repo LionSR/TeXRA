@@ -11,7 +11,7 @@
 | Item                            | Status         | Notes                                                                 |
 | ------------------------------- | -------------- | --------------------------------------------------------------------- |
 | Base Lit app class              | ✅ Done        | `src/shared/BaseWebviewApp.ts` extracted and ProgressView now extends |
-| VS Code webview wrapper         | ✅ Done        | `src/shared/vscode.ts` + ProgressView import updated                  |
+| Host bridge wrapper             | ✅ Done        | `src/shared/hostBridge.ts` + ProgressView import updated              |
 | Reactive store helper           | ✅ Done        | `src/shared/createStore.ts` added for reuse                           |
 | Design tokens extraction        | ✅ Done        | `src/shared/styles/tokens.css` + common.css imports it                |
 | Shared resource roots           | ✅ Done        | `src/common/webview/resourceRoots.ts` includes shared styles          |
@@ -423,7 +423,7 @@ Already exists in `src/common/`:
 | Base Lit app class     | `ProgressApp.ts`         | `src/shared/BaseWebviewApp.ts` |
 | Common Lit components  | `<prompt-overlay>`, etc. | `src/shared/components/`       |
 | Reactive store pattern | `store.ts`               | `src/shared/createStore.ts`    |
-| VS Code API wrapper    | Message posting          | `src/shared/vscode.ts`         |
+| Host bridge wrapper    | Message posting          | `src/shared/hostBridge.ts`     |
 | Design tokens          | CSS variables            | `src/shared/styles/tokens.css` |
 
 Note: Schemas already live in `src/shared/schemas/` from Phase 1 (single source of truth).
