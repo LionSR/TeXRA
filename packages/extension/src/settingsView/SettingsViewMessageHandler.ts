@@ -74,10 +74,7 @@ import {
   formatCost,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
-import {
-  invalidateApiKeyCache,
-  lookupApiKeyOrigin,
-} from '@model/apiProviders';
+import { invalidateApiKeyCache, lookupApiKeyOrigin } from '@model/apiProviders';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { buildStreamInfo } from '@progressView/streamInfoUtils';
 import type { ExecutionId } from '@shared/schemas';

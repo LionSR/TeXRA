@@ -203,5 +203,4 @@ export abstract class BaseViewMessageHandler<
     this.logger.debug(this.channel, 'Webview ready signal received');
     // Subclasses can override for custom ready handling
   }
-
 }
