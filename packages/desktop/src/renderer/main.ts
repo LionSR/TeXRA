@@ -6,7 +6,7 @@ import '@settingsView/frontend';
 import '@webview/frontend';
 
 import {
-  DESKTOP_SHELL_COMMANDS,
+  DesktopSetRouteMessageSchema,
   type DesktopRoute,
   type DesktopSetRouteMessage,
 } from '../desktopShellMessages';
@@ -85,16 +85,7 @@ routeContainers.get('settings')?.replaceChildren(settingsApp);
 function isDesktopSetRouteMessage(
   message: unknown,
 ): message is DesktopSetRouteMessage {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    'command' in message &&
-    message.command === DESKTOP_SHELL_COMMANDS.SET_ROUTE &&
-    'route' in message &&
-    (message.route === 'main' ||
-      message.route === 'progress' ||
-      message.route === 'settings')
-  );
+  return DesktopSetRouteMessageSchema.safeParse(message).success;
 }
 
 function setRoute(route: DesktopRoute): void {

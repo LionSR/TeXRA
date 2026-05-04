@@ -1,10 +1,17 @@
+import { z } from 'zod';
+
 export const DESKTOP_SHELL_COMMANDS = {
   SET_ROUTE: 'desktop:setRoute',
 } as const;
 
-export type DesktopRoute = 'main' | 'progress' | 'settings';
+export const DesktopRouteSchema = z.enum(['main', 'progress', 'settings']);
+export type DesktopRoute = z.infer<typeof DesktopRouteSchema>;
 
-export interface DesktopSetRouteMessage {
-  command: typeof DESKTOP_SHELL_COMMANDS.SET_ROUTE;
-  route: DesktopRoute;
-}
+export const DesktopSetRouteMessageSchema = z.object({
+  command: z.literal(DESKTOP_SHELL_COMMANDS.SET_ROUTE),
+  route: DesktopRouteSchema,
+});
+
+export type DesktopSetRouteMessage = z.infer<
+  typeof DesktopSetRouteMessageSchema
+>;

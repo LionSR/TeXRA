@@ -29,8 +29,7 @@ describe('desktop renderer shell', () => {
   it('listens for desktop route pushes from the Electron host', () => {
     const rendererMain = readRendererMain();
 
-    expect(rendererMain).toContain('DESKTOP_SHELL_COMMANDS.SET_ROUTE');
-    expect(rendererMain).toContain('message.command ===');
+    expect(rendererMain).toContain('DesktopSetRouteMessageSchema.safeParse');
     expect(rendererMain).toContain('window.addEventListener');
     expect(rendererMain).toContain('document.body.dataset.desktopRoute');
   });

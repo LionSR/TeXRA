@@ -24,6 +24,9 @@ interface MainViewIpcModule {
     options?: {
       debugMode?: boolean;
       getTheme?: () => 'dark' | 'light' | 'high-contrast';
+      getCustomAgentDirectory?: () => Promise<string>;
+      openPath?: (filePath: string) => Promise<void>;
+      onAsyncError?: (error: unknown) => void;
     },
   ): {
     postToRenderer(message: unknown): void;
@@ -97,6 +100,7 @@ describe('desktop main-view IPC', () => {
       installDesktopMainViewIpc,
     } = await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
     const sends: Array<{ channel: string; message: unknown }> = [];
+    const openPath = vi.fn(async (_filePath: string) => {});
     const webContents = {
       isDestroyed: () => false,
       send: vi.fn((channel, message) => sends.push({ channel, message })),
@@ -110,7 +114,11 @@ describe('desktop main-view IPC', () => {
       webContents,
     };
 
-    const ipc = installDesktopMainViewIpc(window, { debugMode: true });
+    const ipc = installDesktopMainViewIpc(window, {
+      debugMode: true,
+      getCustomAgentDirectory: async () => '/agents/custom',
+      openPath,
+    });
 
     expect(ipcMain.on).toHaveBeenCalledWith(
       ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
@@ -249,6 +257,16 @@ describe('desktop main-view IPC', () => {
         },
       },
     ]);
+
+    sends.length = 0;
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY, customDirSet: true },
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(openPath).toHaveBeenCalledWith('/agents/custom');
+    expect(sends).toEqual([]);
 
     nativeTheme.shouldUseHighContrastColors = true;
     themeListener?.();

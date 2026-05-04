@@ -5,6 +5,10 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { AGENT_CATEGORY, type AgentCategory } from '@shared/schemas/agent';
 import {
+  SwitchViewMessageSchema,
+  type SwitchViewTarget,
+} from '@shared/schemas/commonViewMessages';
+import {
   SETTINGS_TAB,
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
@@ -23,6 +27,9 @@ type DesktopTheme = 'dark' | 'light' | 'high-contrast';
 export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;
   getTheme?: () => DesktopTheme;
+  getCustomAgentDirectory?: () => Promise<string>;
+  openPath?: (filePath: string) => Promise<void>;
+  onAsyncError?: (error: unknown) => void;
 }
 
 export interface DesktopMainViewIpc {
@@ -57,6 +64,12 @@ function getAgentSettingsSubTab(message: unknown): AgentCategory | undefined {
   }
   return undefined;
 }
+
+const SWITCH_VIEW_ROUTES = {
+  main: 'main',
+  progress: 'progress',
+  dashboard: 'settings',
+} satisfies Record<SwitchViewTarget, DesktopRoute>;
 
 export function installDesktopMainViewIpc(
   window: BrowserWindow,
@@ -98,13 +111,36 @@ export function installDesktopMainViewIpc(
     });
   }
   function postRouteForSwitchView(message: unknown) {
-    const view =
-      typeof message === 'object' && message !== null && 'view' in message
-        ? message.view
-        : undefined;
-    const route =
-      view === 'progress' ? 'progress' : view === 'main' ? 'main' : 'settings';
-    postRoute(route);
+    const result = SwitchViewMessageSchema.safeParse(message);
+    if (!result.success) return;
+    postRoute(SWITCH_VIEW_ROUTES[result.data.view]);
+  }
+  function reportAsyncError(error: unknown) {
+    if (options.onAsyncError) {
+      options.onAsyncError(error);
+      return;
+    }
+    console.error(error);
+  }
+  async function openCustomAgentDirectory() {
+    if (!options.getCustomAgentDirectory || !options.openPath) {
+      postSettingsRoute(SETTINGS_TAB.AGENTS);
+      return;
+    }
+    const customDir = await options.getCustomAgentDirectory();
+    await options.openPath(customDir);
+  }
+  function handleOpenAgentDirectory(message: unknown) {
+    const customDirSet =
+      typeof message === 'object' &&
+      message !== null &&
+      'customDirSet' in message &&
+      message.customDirSet === true;
+    if (!customDirSet) {
+      postSettingsRoute(SETTINGS_TAB.AGENTS);
+      return;
+    }
+    void openCustomAgentDirectory().catch(reportAsyncError);
   }
   function postInitialState() {
     postTheme();
@@ -139,7 +175,7 @@ export function installDesktopMainViewIpc(
         postSettingsRoute(SETTINGS_TAB.MULTI_AGENT);
         break;
       case MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY:
-        postSettingsRoute(SETTINGS_TAB.AGENTS);
+        handleOpenAgentDirectory(message);
         break;
     }
   }
