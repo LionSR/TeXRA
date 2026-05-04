@@ -3,8 +3,8 @@ import * as path from 'path';
 
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
+import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';

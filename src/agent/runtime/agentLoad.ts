@@ -22,7 +22,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as logger from '@agent/core/logger';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { resolveToolDefinitions } from '@tools/registry';
 
 // Internal imports

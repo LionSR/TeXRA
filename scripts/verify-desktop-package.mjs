@@ -11,6 +11,8 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopRoot = join(repoRoot, 'packages', 'desktop');
 const packageRoot = join(desktopRoot, 'dist-packaged');
 const desktopPackageJsonPath = join(desktopRoot, 'package.json');
+const vscodeRuntimeImportPattern =
+  /\b(?:import\s+[^;]*\s+from\s+['"]vscode['"]|require\(['"]vscode['"]\))/;
 
 async function exists(path) {
   try {
@@ -76,6 +78,9 @@ function createAsarAppReader(asarPath) {
     async readJson(path) {
       return JSON.parse(extractFile(asarPath, path).toString('utf8'));
     },
+    async readText(path) {
+      return extractFile(asarPath, path).toString('utf8');
+    },
     async listDir(path) {
       const prefix = `${normalizeAsarPath(path)}/`;
       return [...entries]
@@ -96,6 +101,9 @@ function createDirectoryAppReader(appRoot) {
     readJson(path) {
       return readJson(join(appRoot, path));
     },
+    readText(path) {
+      return readFile(join(appRoot, path), 'utf8');
+    },
     listDir(path) {
       return readdir(join(appRoot, path));
     },
@@ -105,6 +113,16 @@ function createDirectoryAppReader(appRoot) {
 async function checkExists(app, path, label, failures) {
   if (await app.exists(path)) return;
   failures.push(`Missing ${label}: ${path}`);
+}
+
+async function checkNoVscodeRuntimeImport(app, failures) {
+  const mainBundlePath = 'dist/main/index.js';
+  if (!(await app.exists(mainBundlePath))) return;
+  const mainBundle = await app.readText(mainBundlePath);
+  if (!vscodeRuntimeImportPattern.test(mainBundle)) return;
+  failures.push(
+    'Packaged desktop main bundle contains a runtime import of the VS Code extension host module.',
+  );
 }
 
 function dependencyPackageJsonPath(name) {
@@ -175,6 +193,7 @@ if (!app) {
   await checkExists(app, 'dist/main/index.js', 'main bundle', failures);
   await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);
   await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
+  await checkNoVscodeRuntimeImport(app, failures);
 
   const assets = await app.listDir('dist/renderer/assets');
   if (!assets.some((asset) => asset.endsWith('.js'))) {
@@ -201,5 +220,6 @@ console.log(
     '- dist/renderer/assets/*.css',
     '- package.json runtime dependencies',
     '- node_modules runtime dependency packages',
+    '- no VS Code extension host runtime import',
   ].join('\n'),
 );

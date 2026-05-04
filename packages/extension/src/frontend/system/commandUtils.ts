@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { showLoggedErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 const DEFAULT_CHANNEL = 'commandUtils';
 
