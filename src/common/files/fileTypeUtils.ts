@@ -18,7 +18,7 @@ export type ExtensionCategory =
   | 'audio'
   | 'edited';
 
-export const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
+const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   input: 'texra.files.included.inputExtensions',
   reference: 'texra.files.included.referenceExtensions',
   auxiliary: 'texra.files.included.auxiliaryExtensions',
@@ -30,9 +30,7 @@ export const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
 /**
  * Return the built-in extension defaults for a file category.
  */
-export function getDefaultIncludedExtensions(
-  category: ExtensionCategory,
-): string[] {
+function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
   const { included } = DEFAULT_TEXRA_SETTINGS.files;
   switch (category) {
     case 'input':
@@ -53,26 +51,18 @@ export function getDefaultIncludedExtensions(
 /**
  * Retrieve included extensions for the given extension category.
  */
-export function getIncludedExtensions(
-  category: ExtensionCategory,
-  defaultExtensions: string[] = [],
-): string[] {
+export function getIncludedExtensions(category: ExtensionCategory): string[] {
   return getConfig<string[]>(
     INCLUDED_EXTENSION_KEYS[category],
-    defaultExtensions,
+    getDefaultIncludedExtensions(category),
   );
 }
 
 /**
  * Retrieve included extensions without the leading dot (for VS Code file filters).
  */
-export function getFilterExtensions(
-  category: ExtensionCategory,
-  defaultExtensions: string[] = [],
-): string[] {
-  return getIncludedExtensions(category, defaultExtensions).map((ext) =>
-    ext.replace('.', ''),
-  );
+export function getFilterExtensions(category: ExtensionCategory): string[] {
+  return getIncludedExtensions(category).map((ext) => ext.replace(/^\./, ''));
 }
 
 /**
