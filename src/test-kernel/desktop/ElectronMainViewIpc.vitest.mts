@@ -26,6 +26,7 @@ interface MainViewIpcModule {
       getTheme?: () => 'dark' | 'light' | 'high-contrast';
       getCustomAgentDirectory?: () => Promise<string>;
       openPath?: (filePath: string) => Promise<void>;
+      fileSelection?: { handleMessage(message: { command: string }): boolean };
       onAsyncError?: (error: unknown) => void;
     },
   ): {
@@ -101,6 +102,12 @@ describe('desktop main-view IPC', () => {
     } = await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
     const sends: Array<{ channel: string; message: unknown }> = [];
     const openPath = vi.fn(async (_filePath: string) => {});
+    const fileSelection = {
+      handleMessage: vi.fn(
+        (message: { command: string }) =>
+          message.command === MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
+      ),
+    };
     const webContents = {
       isDestroyed: () => false,
       send: vi.fn((channel, message) => sends.push({ channel, message })),
@@ -118,6 +125,7 @@ describe('desktop main-view IPC', () => {
       debugMode: true,
       getCustomAgentDirectory: async () => '/agents/custom',
       openPath,
+      fileSelection,
     });
 
     expect(ipcMain.on).toHaveBeenCalledWith(
@@ -144,6 +152,14 @@ describe('desktop main-view IPC', () => {
         message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: true },
       },
     ]);
+
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE },
+    );
+    expect(fileSelection.handleMessage).toHaveBeenCalledWith({
+      command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
+    });
 
     sends.length = 0;
     nativeTheme.shouldUseDarkColors = false;

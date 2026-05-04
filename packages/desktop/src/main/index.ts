@@ -1,8 +1,10 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { createDesktopFileSelection } from './desktopFileSelection.js';
+import { ELECTRON_WEBVIEW_PUSH_CHANNEL } from '../hostBridgeChannels.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
 
@@ -50,6 +52,19 @@ function createWindow(): void {
       const errorMessage = await shell.openPath(filePath);
       if (errorMessage) throw new Error(errorMessage);
     },
+    fileSelection: createDesktopFileSelection({
+      postToRenderer: (message) =>
+        window.webContents.send(ELECTRON_WEBVIEW_PUSH_CHANNEL, message),
+      showOpenFileDialog: async (options) => {
+        const result = await dialog.showOpenDialog(window, {
+          title: options.title,
+          defaultPath: options.defaultPath,
+          filters: options.filters,
+          properties: ['openFile'],
+        });
+        return result.canceled ? undefined : result.filePaths[0];
+      },
+    }),
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {

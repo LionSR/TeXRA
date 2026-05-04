@@ -21,6 +21,7 @@ import {
   installDesktopHostBridge,
   type DesktopHostBridge,
 } from './hostBridge.js';
+import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 type DesktopTheme = 'dark' | 'light' | 'high-contrast';
 
@@ -29,6 +30,7 @@ export interface DesktopMainViewIpcOptions {
   getTheme?: () => DesktopTheme;
   getCustomAgentDirectory?: () => Promise<string>;
   openPath?: (filePath: string) => Promise<void>;
+  fileSelection?: DesktopFileSelection;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -148,6 +150,7 @@ export function installDesktopMainViewIpc(
   }
   function handleRendererMessage(message: unknown) {
     if (!isMessageWithCommand(message)) return;
+    if (options.fileSelection?.handleMessage(message)) return;
 
     switch (message.command) {
       case MAIN_VIEW_COMMANDS.WEBVIEW_READY:
