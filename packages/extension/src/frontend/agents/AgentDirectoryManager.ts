@@ -42,7 +42,7 @@ interface AgentDirectoryWatcherSubscription {
 export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
   private directoryService: AgentDirectoryService | undefined;
-  private watcherDisposables: vscode.FileSystemWatcher[] = [];
+  private watcherDisposables: vscode.Disposable[] = [];
   private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
   private watcherDirectories: Array<{
     directory: string;
@@ -205,45 +205,118 @@ export class AgentDirectoryManager {
         return;
       }
 
-      this.buildAgentWatchers(directories);
+      await this.buildAgentWatchers(directories);
     } finally {
       resolveSetup!();
       this.watcherSetupPromise = null;
     }
   }
 
-  private buildAgentWatchers(
+  private async buildAgentWatchers(
     directories: Array<{ directory: string; source: AgentSource }>,
-  ): void {
+  ): Promise<void> {
     // Dispose old watchers
     this.watcherDisposables.forEach((watcher) => watcher.dispose());
     this.watcherDisposables = [];
     this.watcherDirectories = directories;
 
+    const watchedDirectories: string[] = [];
+    const skippedDirectories: string[] = [];
+
     for (const entry of directories) {
-      const pattern = new vscode.RelativePattern(entry.directory, '**/*');
-      const watcher = vscode.workspace.createFileSystemWatcher(
-        pattern,
-        false,
-        false,
-        false,
-      );
-      this.watcherDisposables.push(watcher);
+      const directoryUri = vscode.Uri.file(entry.directory);
+      const workspaceFolder = vscode.workspace.getWorkspaceFolder(directoryUri);
 
-      const dispatch = (type: AgentDirectoryEventType) => (uri: vscode.Uri) =>
-        this.dispatchAgentEvent(entry, type, uri);
+      if (workspaceFolder) {
+        this.watchDirectoryTree(entry, directoryUri, '**/*');
+        watchedDirectories.push(entry.directory);
+        continue;
+      }
 
-      watcher.onDidCreate(dispatch('create'));
-      watcher.onDidChange(dispatch('change'));
-      watcher.onDidDelete(dispatch('delete'));
+      if (entry.source !== 'custom') {
+        skippedDirectories.push(entry.directory);
+        continue;
+      }
+
+      await this.watchExternalCustomDirectory(entry, directoryUri);
+      watchedDirectories.push(entry.directory);
     }
 
     logger.info(
       CHANNEL,
-      `Agent directory watchers enabled: ${directories
-        .map((dir) => dir.directory)
-        .join(', ')}`,
+      `Agent directory watchers enabled: ${watchedDirectories.join(', ')}`,
     );
+
+    if (skippedDirectories.length > 0) {
+      logger.debug(
+        CHANNEL,
+        `Skipped external built-in agent directory watchers: ${skippedDirectories.join(', ')}`,
+      );
+    }
+  }
+
+  private watchDirectoryTree(
+    entry: { directory: string; source: AgentSource },
+    directoryUri: vscode.Uri,
+    pattern: string,
+    onCreateOrDelete?: () => void,
+  ): void {
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(directoryUri, pattern),
+      false,
+      false,
+      false,
+    );
+    this.watcherDisposables.push(watcher);
+
+    watcher.onDidCreate((uri) => {
+      this.dispatchAgentEvent(entry, 'create', uri);
+      onCreateOrDelete?.();
+    });
+    watcher.onDidChange((uri) => this.dispatchAgentEvent(entry, 'change', uri));
+    watcher.onDidDelete((uri) => {
+      this.dispatchAgentEvent(entry, 'delete', uri);
+      onCreateOrDelete?.();
+    });
+  }
+
+  private async watchExternalCustomDirectory(
+    entry: { directory: string; source: AgentSource },
+    directoryUri: vscode.Uri,
+  ): Promise<void> {
+    const directories = await this.collectDirectoryUris(directoryUri);
+
+    for (const dirUri of directories) {
+      this.watchDirectoryTree(entry, dirUri, '*', () => {
+        this.watcherDirectories = null;
+        void this.ensureAgentWatchers();
+      });
+    }
+  }
+
+  private async collectDirectoryUris(root: vscode.Uri): Promise<vscode.Uri[]> {
+    const directories: vscode.Uri[] = [root];
+
+    for (let i = 0; i < directories.length; i++) {
+      let entries: [string, vscode.FileType][];
+      try {
+        entries = await vscode.workspace.fs.readDirectory(directories[i]);
+      } catch (error) {
+        logger.debug(
+          CHANNEL,
+          `Unable to scan agent directory ${directories[i].fsPath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        continue;
+      }
+
+      for (const [name, type] of entries) {
+        if (type === vscode.FileType.Directory) {
+          directories.push(vscode.Uri.joinPath(directories[i], name));
+        }
+      }
+    }
+
+    return directories;
   }
 
   private dispatchAgentEvent(
