@@ -1,3 +1,4 @@
+import { platform } from '@platform/platform';
 import { AgentDirectoryService } from '@agent/index/AgentDirectoryService';
 import {
   BundledAgentDirectorySync,
@@ -7,7 +8,6 @@ import {
 import { setAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { GlobalStateKey } from '@common/state/stateKeys';
-import { platform } from '@platform/platform';
 
 export function createElectronAgentDirectories(): AgentDirectoryService {
   return new AgentDirectoryService({
