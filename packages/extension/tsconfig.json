@@ -23,6 +23,7 @@
       "@latex": ["../../src/latex"],
       "@latex/*": ["../../src/latex/*"],
       "@commands/*": ["src/commands/*"],
+      "@resources/*": ["resources/*"],
       "@model": ["../../src/model"],
       "@model/*": ["../../src/model/*"],
       "@housekeeping": ["../../src/housekeeping"],

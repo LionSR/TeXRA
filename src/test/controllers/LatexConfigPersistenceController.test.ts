@@ -2,10 +2,10 @@
 import { strict as assert } from 'assert';
 
 // Local imports - state keys
-import { WorkspaceStateKey } from '../../common/state/stateKeys';
+import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 
 // Local imports - controllers
-import { LatexConfigPersistenceController } from '../../controllers/settingsView/LatexConfigPersistenceController';
 
 describe('LatexConfigPersistenceController', () => {
   it('builds webview config values from defined workspace entries', () => {
