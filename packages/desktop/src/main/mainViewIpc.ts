@@ -22,6 +22,7 @@ import {
   type DesktopHostBridge,
 } from './hostBridge.js';
 import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
+import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 type DesktopTheme = 'dark' | 'light' | 'high-contrast';
 
@@ -30,6 +31,7 @@ export interface DesktopMainViewIpcOptions {
   getTheme?: () => DesktopTheme;
   getCustomAgentDirectory?: () => Promise<string>;
   openPath?: (filePath: string) => Promise<void>;
+  fileSelection?: DesktopFileSelection;
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
@@ -156,6 +158,7 @@ export function installDesktopMainViewIpc(
   }
   function handleRendererMessage(message: unknown) {
     if (!isMessageWithCommand(message)) return;
+    if (options.fileSelection?.handleMessage(message)) return;
 
     switch (message.command) {
       case MAIN_VIEW_COMMANDS.WEBVIEW_READY:
@@ -184,6 +187,13 @@ export function installDesktopMainViewIpc(
         break;
       case MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY:
         handleOpenAgentDirectory(message);
+        break;
+      case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
+        bridge.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+          commits: [],
+          isGitRepo: false,
+        });
         break;
       case MAIN_VIEW_COMMANDS.EXECUTE:
         handleExecute(message);
