@@ -6,6 +6,7 @@ import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { ELECTRON_WEBVIEW_PUSH_CHANNEL } from '../hostBridgeChannels.js';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
+import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
 
@@ -78,11 +79,16 @@ function createWindow(): void {
     },
     onError: reportAsyncError,
   });
+  const settingsIpc = createDesktopSettingsIpc({
+    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    onError: reportAsyncError,
+  });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     getCustomAgentDirectory: () => getAgentDirectories().custom(),
     openPath,
     executeAgent: (message) => agentExecution.handleExecute(message),
     fileSelection,
+    settings: settingsIpc,
     onAsyncError: reportAsyncError,
   });
   ipcRef.current = mainViewIpc;

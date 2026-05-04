@@ -91,7 +91,8 @@ export abstract class BaseWebviewApp<TMessage = any> extends LitElement {
     window.addEventListener('message', this.messageListener);
     const command = this.readyCommand;
     if (command) {
-      postMessage(command);
+      const view = this.getAttribute('data-desktop-view');
+      postMessage(command, view == null ? {} : { view });
     }
   }
 
