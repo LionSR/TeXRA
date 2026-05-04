@@ -8,6 +8,8 @@ import globals from 'globals';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { loadAliasEntries } from './scripts/aliasUtils.mjs';
+
 const INTERNAL_ALIAS_NAMES = [
   'agent',
   'auth',
@@ -58,6 +60,13 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),
 ]);
 
+const extensionPackageDir = path.join(__dirname, 'packages', 'extension');
+
+const ALIAS_CONFIGS = [
+  aliasConfigForRoot(extensionPackageDir),
+  aliasConfigForRoot(__dirname),
+];
+
 const VSCODE_FREE_ZONE_DIRS = [
   'src/agent',
   'src/model',
@@ -80,6 +89,83 @@ function isUnderDir(filename, dir) {
     !relativePath.startsWith('..') &&
     !path.isAbsolute(relativePath)
   );
+}
+
+function aliasConfigForRoot(rootDir) {
+  return {
+    rootDir,
+    entries: aliasEntriesFromTsconfigPaths(rootDir),
+  };
+}
+
+function aliasEntriesFromTsconfigPaths(rootDir) {
+  const byAliasAndPath = new Map();
+
+  for (const { alias, absolutePath, requiresSubpath } of loadAliasEntries(
+    rootDir,
+  )) {
+    const key = `${alias}\0${absolutePath}\0${requiresSubpath}`;
+    byAliasAndPath.set(key, {
+      alias,
+      requiresSubpath,
+      absolutePath: path.normalize(absolutePath),
+    });
+  }
+
+  return [...byAliasAndPath.values()].sort(
+    (left, right) => right.absolutePath.length - left.absolutePath.length,
+  );
+}
+
+function toPosixPath(importPath) {
+  return importPath.split(path.sep).join('/');
+}
+
+function parentTraversalCount(importPath) {
+  return importPath.split('/').filter((part) => part === '..').length;
+}
+
+function isSameOrUnderPath(childPath, parentPath) {
+  const relativePath = path.relative(parentPath, childPath);
+  return (
+    relativePath === '' ||
+    (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+  );
+}
+
+function aliasEntriesForFile(filename) {
+  return (
+    ALIAS_CONFIGS.find(({ rootDir }) => isSameOrUnderPath(filename, rootDir))
+      ?.entries ?? []
+  );
+}
+
+function aliasedImportFor(filename, importPath) {
+  if (
+    typeof importPath !== 'string' ||
+    parentTraversalCount(importPath) < 2 ||
+    !path.isAbsolute(filename)
+  ) {
+    return undefined;
+  }
+
+  const targetPath = path.normalize(
+    path.resolve(path.dirname(filename), importPath),
+  );
+  const matchingAlias = aliasEntriesForFile(filename).find((aliasEntry) => {
+    if (!isSameOrUnderPath(targetPath, aliasEntry.absolutePath)) return false;
+
+    const relativePath = path.relative(aliasEntry.absolutePath, targetPath);
+    return aliasEntry.requiresSubpath === Boolean(relativePath);
+  });
+
+  if (!matchingAlias) return undefined;
+  const relativePath = path.relative(matchingAlias.absolutePath, targetPath);
+  const aliasedPath = relativePath
+    ? `${matchingAlias.alias}/${toPosixPath(relativePath)}`
+    : matchingAlias.alias;
+
+  return aliasedPath === importPath ? undefined : aliasedPath;
 }
 
 const localRules = {
@@ -193,6 +279,69 @@ const localRules = {
         };
       },
     },
+    'prefer-alias-for-deep-relative-imports': {
+      meta: {
+        type: 'suggestion',
+        fixable: 'code',
+        docs: {
+          description:
+            'Prefer configured path aliases over deep relative imports.',
+        },
+        messages: {
+          preferAlias:
+            'Use "{{aliasPath}}" instead of deep relative import "{{importPath}}".',
+        },
+        schema: [],
+      },
+      create(context) {
+        function reportIfAliasExists(source) {
+          const importPath = source?.value;
+          const aliasPath = aliasedImportFor(context.filename, importPath);
+
+          if (!aliasPath) return;
+
+          context.report({
+            node: source,
+            messageId: 'preferAlias',
+            data: {
+              aliasPath,
+              importPath,
+            },
+            fix(fixer) {
+              const quote = source.raw?.startsWith("'") ? "'" : '"';
+              return fixer.replaceText(source, `${quote}${aliasPath}${quote}`);
+            },
+          });
+        }
+
+        return {
+          ImportDeclaration(node) {
+            reportIfAliasExists(node.source);
+          },
+          ExportAllDeclaration(node) {
+            reportIfAliasExists(node.source);
+          },
+          ExportNamedDeclaration(node) {
+            reportIfAliasExists(node.source);
+          },
+          TSImportEqualsDeclaration(node) {
+            reportIfAliasExists(node.moduleReference?.expression);
+          },
+          CallExpression(node) {
+            if (
+              node.callee.type === 'Identifier' &&
+              node.callee.name === 'require' &&
+              node.arguments.length === 1
+            ) {
+              reportIfAliasExists(node.arguments[0]);
+            }
+          },
+          ImportExpression(node) {
+            reportIfAliasExists(node.source);
+          },
+        };
+      },
+    },
   },
 };
 
@@ -248,6 +397,7 @@ export default tseslint.config(
       curly: 'off',
       eqeqeq: ['warn', 'always', { null: 'ignore' }],
       'no-throw-literal': 'warn',
+      'local/prefer-alias-for-deep-relative-imports': 'error',
       'import/order': [
         'warn',
         {
