@@ -29,7 +29,9 @@ interface PackageJson {
 }
 
 const packageRequire = createRequire(__filename);
-const packageJson = packageRequire('../../../package.json') as PackageJson;
+const packageJson = packageRequire(
+  '../../../packages/extension/package.json',
+) as PackageJson;
 
 function normalizeCommand(command: PackageCommand): PackageCommand {
   return {
