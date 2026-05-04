@@ -1,9 +1,14 @@
 // Node imports
 import { join } from 'node:path';
 
+// Local imports - desktop test paths
+import { repoPath } from './desktopTestPaths.mjs';
+
+const TEST_ELECTRON_STORAGE_ROOT = repoPath('.test-electron');
+
 export const app = {
-  getAppPath: () => process.cwd(),
-  getPath: (name: string) => join(process.cwd(), '.test-electron', name),
+  getAppPath: () => repoPath(),
+  getPath: (name: string) => join(TEST_ELECTRON_STORAGE_ROOT, name),
   getVersion: () => '0.0.0-test',
 };
 
