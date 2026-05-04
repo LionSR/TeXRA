@@ -156,7 +156,7 @@ function aliasedImportFor(filename, importPath) {
     if (!isSameOrUnderPath(targetPath, aliasEntry.absolutePath)) return false;
 
     const relativePath = path.relative(aliasEntry.absolutePath, targetPath);
-    return Boolean(relativePath) || !aliasEntry.requiresSubpath;
+    return aliasEntry.requiresSubpath === Boolean(relativePath);
   });
 
   if (!matchingAlias) return undefined;
