@@ -17,6 +17,7 @@ interface DesktopFileSelectionModule {
       defaultPath?: string;
       filters: Array<{ name: string; extensions: string[] }>;
     }) => Promise<string | undefined>;
+    onError?: (error: unknown) => void;
   }): {
     handleMessage(
       message: { command: string } & Record<string, unknown>,
@@ -39,6 +40,9 @@ describe('desktop file selection', () => {
     await mkdir(join(workspacePath, 'sections'), { recursive: true });
     await mkdir(join(workspacePath, 'build'), { recursive: true });
     await mkdir(join(workspacePath, 'figures'), { recursive: true });
+    await mkdir(join(workspacePath, 'node_modules', 'pkg'), {
+      recursive: true,
+    });
     await writeFile(join(workspacePath, 'main.tex'), '');
     await writeFile(join(workspacePath, 'notes.md'), '');
     await writeFile(join(workspacePath, 'command.tex'), '');
@@ -46,6 +50,10 @@ describe('desktop file selection', () => {
     await writeFile(join(workspacePath, 'sections', 'main_edited.tex'), '');
     await writeFile(join(workspacePath, 'build', 'ignored.tex'), '');
     await writeFile(join(workspacePath, 'figures', 'plot.png'), '');
+    await writeFile(
+      join(workspacePath, 'node_modules', 'pkg', 'ignored.tex'),
+      '',
+    );
   });
 
   afterEach(async () => {
@@ -140,6 +148,42 @@ describe('desktop file selection', () => {
       expect(messages).toContainEqual({
         command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
         files: ['sections/main_edited.tex', 'sections/main_r1.tex'],
+      }),
+    );
+  });
+
+  it('reports asynchronous file-listing errors without rejecting from handleMessage', async () => {
+    const { createDesktopFileSelection } = await loadDesktopFileSelection();
+    const onError = vi.fn();
+    const files = createDesktopFileSelection({
+      postToRenderer: vi.fn(),
+      getWorkspacePath: () => join(workspacePath, 'missing'),
+      onError,
+    });
+
+    expect(
+      files.handleMessage({ command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE }),
+    ).toBe(true);
+
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+  });
+
+  it('normalizes selected external paths before sending them to the renderer', async () => {
+    const { createDesktopFileSelection } = await loadDesktopFileSelection();
+    const messages: unknown[] = [];
+    const externalFile = `${join(workspacePath, '..', 'external')}\\paper.tex`;
+    const files = createDesktopFileSelection({
+      postToRenderer: (message) => messages.push(message),
+      getWorkspacePath: () => workspacePath,
+      showOpenFileDialog: async () => externalFile,
+    });
+
+    files.handleMessage({ command: MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE });
+
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({
+        command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
+        filePath: externalFile.replaceAll('\\', '/'),
       }),
     );
   });

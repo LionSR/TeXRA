@@ -44,6 +44,7 @@ export interface DesktopFileSelectionOptions {
   showOpenFileDialog?: (
     options: DesktopFileSelectionDialogOptions,
   ) => Promise<string | undefined>;
+  onError?: (error: unknown) => void;
 }
 
 export interface DesktopFileSelection {
@@ -94,6 +95,16 @@ function normalizeRelative(filePath: string): string {
 
 function cleanList(values: readonly string[]): string[] {
   return values.map((value) => value.toLowerCase());
+}
+
+function normalizeListConfig(config: FileListConfig): FileListConfig {
+  return {
+    extensions: cleanList(config.extensions),
+    ignoredExtensions: cleanList(config.ignoredExtensions),
+    ignoredDirs: cleanList(config.ignoredDirs),
+    ignoredKeywords: cleanList(config.ignoredKeywords),
+    ignoredFiles: cleanList(config.ignoredFiles),
+  };
 }
 
 function configuredList(key: string, fallback: string[]): string[] {
@@ -205,29 +216,38 @@ function passesFilters(relativePath: string, config: FileListConfig): boolean {
   const lowerPath = relativePath.toLowerCase();
   const fileName = basename(lowerPath);
   const dirs = lowerPath.split('/').slice(0, -1);
-  const ignoredDirs = cleanList(config.ignoredDirs);
 
-  if (dirs.some((segment) => ignoredDirs.includes(segment))) return false;
-  if (cleanList(config.ignoredFiles).includes(fileName)) return false;
-  if (cleanList(config.ignoredKeywords).some((kw) => lowerPath.includes(kw))) {
+  if (dirs.some((segment) => config.ignoredDirs.includes(segment))) {
     return false;
   }
-  if (
-    cleanList(config.ignoredExtensions).some((ext) => lowerPath.endsWith(ext))
-  ) {
+  if (config.ignoredFiles.includes(fileName)) return false;
+  if (config.ignoredKeywords.some((kw) => lowerPath.includes(kw))) return false;
+  if (config.ignoredExtensions.some((ext) => lowerPath.endsWith(ext))) {
     return false;
   }
 
-  const included = cleanList(config.extensions);
   return (
-    included.length === 0 || included.some((ext) => lowerPath.endsWith(ext))
+    config.extensions.length === 0 ||
+    config.extensions.some((ext) => lowerPath.endsWith(ext))
   );
+}
+
+function shouldVisitDirectory(
+  relativePath: string,
+  config: FileListConfig,
+): boolean {
+  if (!relativePath || containsHiddenSegment(relativePath)) return false;
+  return !relativePath
+    .toLowerCase()
+    .split('/')
+    .some((segment) => config.ignoredDirs.includes(segment));
 }
 
 async function listFiles(
   root: string,
-  config: FileListConfig,
+  rawConfig: FileListConfig,
 ): Promise<string[]> {
+  const config = normalizeListConfig(rawConfig);
   const results: string[] = [];
 
   async function visit(directory: string): Promise<void> {
@@ -236,7 +256,7 @@ async function listFiles(
       const absolutePath = join(directory, entry.name);
       const relativePath = normalizeRelative(relative(root, absolutePath));
       if (entry.isDirectory()) {
-        if (!containsHiddenSegment(relativePath)) {
+        if (shouldVisitDirectory(relativePath, config)) {
           await visit(absolutePath);
         }
         continue;
@@ -259,7 +279,7 @@ function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const absolutePath = resolveWorkspaceFile(workspacePath, filePath);
   const relativePath = relative(workspacePath, absolutePath);
   return relativePath.startsWith('..') || isAbsolute(relativePath)
-    ? absolutePath
+    ? normalizeFilePath(absolutePath)
     : normalizeRelative(relativePath);
 }
 
@@ -273,6 +293,15 @@ export function createDesktopFileSelection(
   const getWorkspacePath =
     options.getWorkspacePath ??
     (() => getWorkspaceProvider().getWorkspacePath());
+  const onError =
+    options.onError ??
+    ((error) => {
+      console.error(error);
+    });
+
+  function runAsync(work: Promise<void>): void {
+    void work.catch(onError);
+  }
 
   function postFileList(
     fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
@@ -395,37 +424,41 @@ export function createDesktopFileSelection(
   ): boolean {
     switch (message.command) {
       case MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE:
-        void requestSingleFileList('input');
+        runAsync(requestSingleFileList('input'));
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE:
-        void requestSingleFileList('reference');
+        runAsync(requestSingleFileList('reference'));
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE:
-        void requestSingleFileList('auxiliary');
+        runAsync(requestSingleFileList('auxiliary'));
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE:
-        void requestSingleFileList('media');
+        runAsync(requestSingleFileList('media'));
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE:
-        void requestSingleFileList('base');
+        runAsync(requestSingleFileList('base'));
         return true;
       case MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES:
-        void requestAllSingleFiles();
+        runAsync(requestAllSingleFiles());
         return true;
       case MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE:
       case MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE:
       case MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE:
       case MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE:
-        void selectSingleFile(message.command);
+        runAsync(selectSingleFile(message.command));
         return true;
       case MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED:
-        void updateEditedFiles(
-          typeof message.filePath === 'string' ? message.filePath : undefined,
+        runAsync(
+          updateEditedFiles(
+            typeof message.filePath === 'string' ? message.filePath : undefined,
+          ),
         );
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE:
-        void updateEditedFiles(
-          typeof message.baseFile === 'string' ? message.baseFile : undefined,
+        runAsync(
+          updateEditedFiles(
+            typeof message.baseFile === 'string' ? message.baseFile : undefined,
+          ),
         );
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
