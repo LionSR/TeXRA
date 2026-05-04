@@ -1,5 +1,5 @@
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { AgentLogger } from '@logger/AgentLogger';
 import {

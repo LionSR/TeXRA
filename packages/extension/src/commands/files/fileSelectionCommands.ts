@@ -2,8 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import { showLoggedErrorMessage } from '@common/errors';
 import { FILE_SELECTION_COMMAND_IDS, getFilterExtensions } from '@common/files';
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getFileLister } from '@frontend/files';
 import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';

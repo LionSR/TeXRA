@@ -6,7 +6,7 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessage,
-} from '@common/errors';
+} from '@common/errors/errorHandlingUtils';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import { runIndentTeX } from '@housekeeping';
 import { runLatexFormatter } from '@latex/texFormatter';

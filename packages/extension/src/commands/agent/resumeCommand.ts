@@ -8,7 +8,7 @@ import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
-import { logErrorMessage } from '@common/errors';
+import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 import { STREAM_STATUS } from '@shared/schemas';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 
