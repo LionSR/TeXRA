@@ -10,7 +10,7 @@ import {
 } from '@tools/approval';
 
 import { buildStreamInfos } from '../streamInfoUtils';
-import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '../../controllers/progressView/ProgressStreamLifecycleController';
+import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';
 import type { ProgressViewProvider } from '../ProgressViewProvider';
 
 type StreamTabId = import('@shared/schemas').StreamTabId;
