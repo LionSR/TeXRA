@@ -1,17 +1,17 @@
-// Local types
-/** Minimal host bridge surface used by frontend code. */
-export interface HostBridgeApi {
-  postMessage(message: unknown): void;
-  getState(): unknown;
-  setState(state: unknown): void;
-}
+import {
+  HOST_BRIDGE_API_KEY,
+  LEGACY_HOST_BRIDGE_API_KEY,
+  type HostBridgeApi,
+} from './hostBridgeTypes';
 
-export type VSCodeApi = HostBridgeApi;
+export {
+  HOST_BRIDGE_API_KEY,
+  LEGACY_HOST_BRIDGE_API_KEY,
+  type HostBridgeApi,
+  type VSCodeApi,
+} from './hostBridgeTypes';
 
 declare const acquireVsCodeApi: (() => HostBridgeApi) | undefined;
-
-const API_KEY = '__texraHostBridgeApi';
-const LEGACY_API_KEY = '__texraVscodeApi';
 
 const fallbackApi: HostBridgeApi = {
   postMessage: () => undefined,
@@ -21,22 +21,22 @@ const fallbackApi: HostBridgeApi = {
 
 function resolveHostBridgeApi(): HostBridgeApi {
   const globalScope = globalThis as typeof globalThis & {
-    [API_KEY]?: HostBridgeApi;
-    [LEGACY_API_KEY]?: HostBridgeApi;
+    [HOST_BRIDGE_API_KEY]?: HostBridgeApi;
+    [LEGACY_HOST_BRIDGE_API_KEY]?: HostBridgeApi;
   };
 
-  if (globalScope[API_KEY]) {
-    return globalScope[API_KEY] as HostBridgeApi;
+  if (globalScope[HOST_BRIDGE_API_KEY]) {
+    return globalScope[HOST_BRIDGE_API_KEY] as HostBridgeApi;
   }
 
-  if (globalScope[LEGACY_API_KEY]) {
-    globalScope[API_KEY] = globalScope[LEGACY_API_KEY];
-    return globalScope[API_KEY] as HostBridgeApi;
+  if (globalScope[LEGACY_HOST_BRIDGE_API_KEY]) {
+    globalScope[HOST_BRIDGE_API_KEY] = globalScope[LEGACY_HOST_BRIDGE_API_KEY];
+    return globalScope[HOST_BRIDGE_API_KEY] as HostBridgeApi;
   }
 
   if (typeof acquireVsCodeApi === 'function') {
     const api = acquireVsCodeApi();
-    globalScope[API_KEY] = api;
+    globalScope[HOST_BRIDGE_API_KEY] = api;
     return api;
   }
 

@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, session } from 'electron';
 
+import { installDesktopHostBridge } from './hostBridge.js';
 import { initializeElectronPlatform } from './platform/index.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -42,6 +43,7 @@ function createWindow(): void {
       sandbox: true,
     },
   });
+  installDesktopHostBridge(window);
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
