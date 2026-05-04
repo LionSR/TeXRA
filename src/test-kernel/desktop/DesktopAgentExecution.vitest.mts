@@ -28,7 +28,7 @@ interface DesktopAgentExecutionModule {
   createDesktopAgentExecution(options: {
     postToRenderer(message: unknown): void;
     openPath?: (filePath: string) => Promise<void>;
-    showInformationMessage?: (message: string) => Promise<void> | void;
+    showErrorMessage?: (message: string) => Promise<void> | void;
   }): DesktopExecution;
 }
 
@@ -152,7 +152,7 @@ async function createBridge(messages: unknown[]): Promise<TestableBridge> {
 
 async function createExecution(options: {
   postToRenderer?: (message: unknown) => void;
-  showInformationMessage?: (message: string) => Promise<void> | void;
+  showErrorMessage?: (message: string) => Promise<void> | void;
   prepareMainViewExecutionRequest: (message: unknown) => unknown;
   runValidatedExecutionRequest?: () => Promise<void>;
 }): Promise<DesktopExecution> {
@@ -201,7 +201,7 @@ async function createExecution(options: {
   )) as DesktopAgentExecutionModule;
   return createDesktopAgentExecution({
     postToRenderer: options.postToRenderer ?? vi.fn(),
-    showInformationMessage: options.showInformationMessage,
+    showErrorMessage: options.showErrorMessage,
   });
 }
 
@@ -344,13 +344,13 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
-  it('surfaces invalid execution requests through the host notification path', async () => {
+  it('surfaces invalid execution requests through the host error path', async () => {
     const postToRenderer = vi.fn();
-    const showInformationMessage = vi.fn();
+    const showErrorMessage = vi.fn();
     const runValidatedExecutionRequest = vi.fn(async () => {});
     const execution = await createExecution({
       postToRenderer,
-      showInformationMessage,
+      showErrorMessage,
       runValidatedExecutionRequest,
       prepareMainViewExecutionRequest: vi.fn(() => ({
         valid: false,
@@ -360,7 +360,7 @@ describe('DesktopProgressBridge', () => {
 
     try {
       await execution.handleExecute({ command: 'execute' });
-      expect(showInformationMessage).toHaveBeenCalledWith(
+      expect(showErrorMessage).toHaveBeenCalledWith(
         'Select an input file first.',
       );
       expect(postToRenderer).not.toHaveBeenCalled();

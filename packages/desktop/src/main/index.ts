@@ -55,8 +55,8 @@ function createWindow(): void {
   const agentExecution = createDesktopAgentExecution({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     openPath,
-    showInformationMessage: async (message) => {
-      await dialog.showMessageBox(window, { message, type: 'info' });
+    showErrorMessage: async (message) => {
+      await dialog.showMessageBox(window, { message, type: 'error' });
     },
   });
   const mainViewIpc = installDesktopMainViewIpc(window, {

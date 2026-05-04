@@ -33,7 +33,7 @@ import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): void;
   openPath?: (filePath: string) => Promise<void>;
-  showInformationMessage?: (message: string) => Promise<void> | void;
+  showErrorMessage?: (message: string) => Promise<void> | void;
 }
 
 export interface DesktopAgentExecution {
@@ -442,7 +442,7 @@ export function createDesktopAgentExecution(
     async handleExecute(message) {
       const preparation = prepareMainViewExecutionRequest(message);
       if (!preparation.valid) {
-        await options.showInformationMessage?.(preparation.message);
+        await options.showErrorMessage?.(preparation.message);
         return;
       }
 
