@@ -71,8 +71,8 @@ import {
 import { codexToolRenderers } from './codexToolTemplates';
 
 // Side-effect import to register <tool-timer> custom element
-import '../../components/ToolTimer';
-import '../../components/TerminalOutput';
+import '@progressView/frontend/components/ToolTimer';
+import '@progressView/frontend/components/TerminalOutput';
 
 /** Known per-tool default timeouts (ms) for display in the running timer. */
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
