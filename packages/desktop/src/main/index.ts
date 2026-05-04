@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { ELECTRON_WEBVIEW_PUSH_CHANNEL } from '../hostBridgeChannels.js';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
@@ -64,10 +63,7 @@ function createWindow(): void {
     },
   });
   const fileSelection = createDesktopFileSelection({
-    postToRenderer: (message) => {
-      if (window.isDestroyed() || window.webContents.isDestroyed()) return;
-      window.webContents.send(ELECTRON_WEBVIEW_PUSH_CHANNEL, message);
-    },
+    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     showOpenFileDialog: async (options) => {
       const result = await dialog.showOpenDialog(window, {
         title: options.title,
