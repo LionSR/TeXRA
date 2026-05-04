@@ -1,10 +1,6 @@
 import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
 
-import {
-  getDefaultIncludedExtensions,
-  getIncludedExtensions,
-  type ExtensionCategory,
-} from './fileTypeUtils';
+import { getIncludedExtensions, type ExtensionCategory } from './fileTypeUtils';
 
 export type ListableFileType = Exclude<ExtensionCategory, 'audio'>;
 
@@ -36,15 +32,6 @@ export interface PreparedFileFilters {
 }
 
 type ConfigReader = (key: string, fallback: string[]) => string[];
-
-function getConfiguredIncludedExtensions(
-  category: ExtensionCategory,
-): string[] {
-  return getIncludedExtensions(
-    category,
-    getDefaultIncludedExtensions(category),
-  );
-}
 
 function normalizePathSeparators(filePath: string): string {
   return filePath.replaceAll('\\', '/');
@@ -114,7 +101,7 @@ export function getFileListConfig(
   switch (fileType) {
     case 'input':
       return {
-        extensions: getConfiguredIncludedExtensions('input'),
+        extensions: getIncludedExtensions('input'),
         ignoredExtensions: settings.ignoredFileExtensions,
         ignoredDirs: [
           ...settings.ignoredDirectories,
@@ -125,7 +112,7 @@ export function getFileListConfig(
       };
     case 'reference':
       return {
-        extensions: getConfiguredIncludedExtensions('reference'),
+        extensions: getIncludedExtensions('reference'),
         ignoredExtensions: settings.ignoredFileExtensions,
         ignoredDirs: settings.ignoredDirectories,
         ignoredKeywords: settings.ignoredKeywords,
@@ -133,7 +120,7 @@ export function getFileListConfig(
       };
     case 'auxiliary':
       return {
-        extensions: getConfiguredIncludedExtensions('auxiliary'),
+        extensions: getIncludedExtensions('auxiliary'),
         ignoredExtensions: settings.ignoredFileExtensions,
         ignoredDirs: settings.ignoredDirectories,
         ignoredKeywords: [
@@ -144,7 +131,7 @@ export function getFileListConfig(
       };
     case 'media':
       return {
-        extensions: getConfiguredIncludedExtensions('media'),
+        extensions: getIncludedExtensions('media'),
         ignoredExtensions: [],
         ignoredDirs: settings.ignoredMediaDirs,
         ignoredKeywords: settings.ignoredKeywords,
@@ -159,7 +146,7 @@ export function getEditedFileListConfig(
   settings: FileListSettings,
 ): FileListConfig {
   return {
-    extensions: getConfiguredIncludedExtensions('edited'),
+    extensions: getIncludedExtensions('edited'),
     ignoredExtensions: settings.ignoredFileExtensions,
     ignoredDirs: [
       ...settings.ignoredDirectories,
@@ -168,12 +155,6 @@ export function getEditedFileListConfig(
     ignoredKeywords: settings.ignoredKeywords,
     ignoredFiles: settings.ignoredInputFiles,
   };
-}
-
-export function getFilterExtensions(fileType: ListableFileType): string[] {
-  return getConfiguredIncludedExtensions(fileType).map((ext) =>
-    ext.replace(/^\./, ''),
-  );
 }
 
 export function sanitizeDirectories(directories: readonly string[]): string[] {

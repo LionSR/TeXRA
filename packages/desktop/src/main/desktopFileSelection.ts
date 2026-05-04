@@ -2,10 +2,10 @@ import { readdir } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { getWorkspaceProvider } from '@agent/core/workspace';
+import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import {
   getEditedFileListConfig,
   getFileListConfig,
-  getFilterExtensions as getConfiguredFilterExtensions,
   loadFileListSettings,
   matchesEditedFile,
   passesFileFilters,
@@ -190,7 +190,7 @@ export function createDesktopFileSelection(
       filters: [
         {
           name: `${fileType} files`,
-          extensions: getConfiguredFilterExtensions(fileType),
+          extensions: getFilterExtensions(fileType),
         },
       ],
     });
