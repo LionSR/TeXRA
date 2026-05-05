@@ -92,7 +92,10 @@ describe('SettingsAgentDirectoryController', () => {
     const { controller } = createController();
 
     assert.deepEqual(
-      controller.planOpenAgentYaml({ source: 'builtInWorkflow', name: 'writer' }),
+      controller.planOpenAgentYaml({
+        source: 'builtInWorkflow',
+        name: 'writer',
+      }),
       { ok: true, path: '/repo/resources/agents/writer.yaml' },
     );
   });

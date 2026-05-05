@@ -4,7 +4,7 @@ settings:
   outputExt: tex
   isRewrite: False
   prefills:
-    - "Here is the Beamer poster. <documents>"
+    - 'Here is the Beamer poster. <documents>'
   requiredFilesInternal:
     TEMPLATE_POSTER: template_poster.tex
     TEMPLATE_POSTER_STYLE: beamercolorthemempi.sty

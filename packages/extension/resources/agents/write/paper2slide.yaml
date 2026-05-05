@@ -3,7 +3,7 @@ settings:
   agentCategory: workflow
   outputExt: tex
   prefills:
-    - "Here is the Beamer presentation. <documents>"
+    - 'Here is the Beamer presentation. <documents>'
   requiredFilesInternal:
     TEMPLATE_SLIDE: template_slide.tex
 
