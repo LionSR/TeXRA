@@ -12,7 +12,7 @@ const fatalLogPatterns = [
   {
     label: 'VS Code runtime import',
     pattern:
-      /Cannot find (?:module|package) ['"]vscode['"]|ERR_MODULE_NOT_FOUND.*['"]vscode['"]|from ['"]vscode['"]/is,
+      /Cannot find (?:module|package) ['"]vscode['"]|ERR_MODULE_NOT_FOUND.*['"]vscode['"]|from ['"]vscode['"]/i,
   },
   {
     label: 'desktop startup failure',
