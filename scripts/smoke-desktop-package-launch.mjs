@@ -1,4 +1,5 @@
-import { access } from 'node:fs/promises';
+import { access, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { spawn } from 'node:child_process';
@@ -32,6 +33,10 @@ const fatalLogPatterns = [
   {
     label: 'unhandled runtime exception',
     pattern: /Uncaught Exception|UnhandledPromiseRejection/i,
+  },
+  {
+    label: 'esbuild dynamic require failure',
+    pattern: /Dynamic require of ["'][^"']+["'] is not supported/i,
   },
   {
     label: 'constructor startup failure',
@@ -121,42 +126,51 @@ const timeoutMs = readPositiveNumber(
 
 await assertExecutableExists(executablePath);
 
-const child = spawn(executablePath, [], {
-  cwd: repoRoot,
-  env: {
-    ...process.env,
-    ELECTRON_ENABLE_LOGGING: process.env.ELECTRON_ENABLE_LOGGING ?? '1',
-  },
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-
+const smokeHome = await mkdtemp(join(tmpdir(), 'texra-desktop-smoke-home-'));
 let output = '';
-child.stdout.on('data', (chunk) => {
-  output = appendBoundedLog(output, chunk, MAX_LOG_CHARS);
-});
-child.stderr.on('data', (chunk) => {
-  output = appendBoundedLog(output, chunk, MAX_LOG_CHARS);
-});
+let result;
 
-const exitPromise = waitForExit(child);
-const closePromise = waitForClose(child);
-const result = await waitForExitOrTimeout(exitPromise, timeoutMs);
+try {
+  const child = spawn(executablePath, [], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      ELECTRON_ENABLE_LOGGING: process.env.ELECTRON_ENABLE_LOGGING ?? '1',
+      HOME: smokeHome,
+      XDG_CONFIG_HOME: join(smokeHome, '.config'),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 
-if (result.timeout) {
-  if (hasExited(child)) {
-    result.exit = await exitPromise;
-  } else {
-    result.exit = await readPendingExit(exitPromise);
-    if (!result.exit) {
-      await stopChild(child, exitPromise, {
-        graceMs: SHUTDOWN_GRACE_MS,
-        label: 'Packaged app',
-      });
+  child.stdout.on('data', (chunk) => {
+    output = appendBoundedLog(output, chunk, MAX_LOG_CHARS);
+  });
+  child.stderr.on('data', (chunk) => {
+    output = appendBoundedLog(output, chunk, MAX_LOG_CHARS);
+  });
+
+  const exitPromise = waitForExit(child);
+  const closePromise = waitForClose(child);
+  result = await waitForExitOrTimeout(exitPromise, timeoutMs);
+
+  if (result.timeout) {
+    if (hasExited(child)) {
+      result.exit = await exitPromise;
+    } else {
+      result.exit = await readPendingExit(exitPromise);
+      if (!result.exit) {
+        await stopChild(child, exitPromise, {
+          graceMs: SHUTDOWN_GRACE_MS,
+          label: 'Packaged app',
+        });
+      }
     }
   }
-}
 
-await closePromise;
+  await closePromise;
+} finally {
+  await rm(smokeHome, { force: true, recursive: true });
+}
 
 if (result.exit) {
   failEarlyExit(result.exit, timeoutMs, output);
