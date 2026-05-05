@@ -40,11 +40,17 @@ function getWorkspacePathArg(argv: readonly string[]): string | undefined {
     const arg = argv[index];
     if (arg == null) continue;
     if (arg === '--texra-workspace') {
-      return argv[index + 1]?.trim() || undefined;
+      return getPositionalWorkspacePathArg(argv[index + 1]);
     }
     if (arg.startsWith('--texra-workspace=')) {
       return arg.slice('--texra-workspace='.length).trim() || undefined;
     }
   }
   return undefined;
+}
+
+function getPositionalWorkspacePathArg(arg: string | undefined): string | undefined {
+  const trimmed = arg?.trim();
+  if (!trimmed || trimmed.startsWith('--')) return undefined;
+  return trimmed;
 }

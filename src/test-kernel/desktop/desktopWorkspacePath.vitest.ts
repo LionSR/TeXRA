@@ -45,6 +45,20 @@ describe('desktop workspace path', () => {
     );
   });
 
+  it('does not treat option-like positional workspace values as paths', () => {
+    assert.equal(
+      hasWorkspacePath({ argv: ['--texra-workspace', '--inspect'], env: {} }),
+      false,
+    );
+    assert.equal(
+      resolveWorkspacePath({
+        argv: ['--texra-workspace', '--inspect'],
+        env: {},
+      }),
+      undefined,
+    );
+  });
+
   it('uses main-process workspace resolution when exposing renderer state', () => {
     assert.equal(
       hasResolvedWorkspacePath({
