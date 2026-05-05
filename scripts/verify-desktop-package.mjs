@@ -1,6 +1,6 @@
 import { access, readdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { basename, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +25,7 @@ const desktopVscodeFreeSourceDirSet = new Set(desktopVscodeFreeSourceDirs);
 const desktopSourceBoundaryDirs = [
   ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
 ];
+const bundledAgentResourceDirs = ['agents', 'tool_use_agents'];
 
 async function exists(path) {
   try {
@@ -96,10 +97,12 @@ function normalizeAsarPath(path) {
 
 function createAsarAppReader(asarPath) {
   const entries = new Set(listPackage(asarPath));
+  const resourceRoot = dirname(asarPath);
   return {
     label: relative(repoRoot, asarPath),
     async exists(path) {
-      return entries.has(normalizeAsarPath(path));
+      if (entries.has(normalizeAsarPath(path))) return true;
+      return exists(join(resourceRoot, path));
     },
     async readJson(path) {
       return JSON.parse(extractFile(asarPath, path).toString('utf8'));
@@ -109,11 +112,18 @@ function createAsarAppReader(asarPath) {
     },
     async listDir(path) {
       const prefix = `${normalizeAsarPath(path)}/`;
-      return [...entries]
+      const asarEntries = [...entries]
         .filter((entry) => entry.startsWith(prefix))
         .map((entry) => entry.slice(prefix.length))
         .filter((entry) => entry && !entry.includes('/'))
         .map((entry) => basename(entry));
+      if (asarEntries.length > 0) return asarEntries;
+      try {
+        return await readdir(join(resourceRoot, path));
+      } catch (error) {
+        if (error?.code === 'ENOENT') return [];
+        throw error;
+      }
     },
   };
 }
@@ -251,6 +261,17 @@ async function checkRuntimeDependencies(app, appPackageJson, failures) {
   }
 }
 
+async function checkBundledResources(app, failures) {
+  for (const directoryName of bundledAgentResourceDirs) {
+    const entries = await app.listDir(`resources/${directoryName}`);
+    if (entries.length === 0) {
+      failures.push(
+        `Packaged app is missing bundled resource directory: resources/${directoryName}`,
+      );
+    }
+  }
+}
+
 const app = await findPackagedApp();
 const failures = [];
 
@@ -269,6 +290,7 @@ if (!app) {
   await checkExists(app, 'dist/main/index.js', 'main bundle', failures);
   await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);
   await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
+  await checkBundledResources(app, failures);
   await checkNoVscodeRuntimeImport(app, failures);
   await checkDesktopMainDynamicRequireShim(app, failures);
 
@@ -297,6 +319,7 @@ console.log(
     '- dist/renderer/index.html',
     '- dist/renderer/assets/*.js',
     '- dist/renderer/assets/*.css',
+    '- resources/agents and resources/tool_use_agents',
     '- package.json runtime dependencies',
     '- node_modules runtime dependency packages',
     '- no VS Code extension host runtime import',

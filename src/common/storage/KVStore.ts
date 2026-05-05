@@ -9,10 +9,10 @@
 
 import * as path from 'path';
 
-import { isFileNotFoundError } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { isFile } from '@common/files/fsEntryType';
-import { StorageFS } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
+import { StorageFS } from '@utils/files/storageFS';
 
 async function withNotFoundFallback<T>(
   operation: () => Promise<T>,
