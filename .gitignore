@@ -5,6 +5,7 @@ out/
 .env
 .aider*
 releases/
+artifacts/
 
 .DS_Store
 .cursor
