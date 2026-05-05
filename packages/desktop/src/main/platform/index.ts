@@ -15,6 +15,7 @@ import { ElectronStorageProvider } from './electronStorage.js';
 import { JsonStore } from './jsonStore.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
+import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '../../workspacePath.js';
 
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
@@ -24,11 +25,15 @@ export async function initializeElectronPlatform(
   mainDirname: string,
 ): Promise<ElectronPlatformInitResult> {
   const userDataPath = app.getPath('userData');
-  const workspacePath = resolveWorkspacePath();
-  const storage = new ElectronStorageProvider(userDataPath, workspacePath);
   const globalStateStore = await JsonStore.open(
     join(userDataPath, 'state', 'global.json'),
   );
+  const workspacePath = resolveWorkspacePath({
+    storedWorkspacePath: globalStateStore.get<string>(
+      DESKTOP_WORKSPACE_PATH_STATE_KEY,
+    ),
+  });
+  const storage = new ElectronStorageProvider(userDataPath, workspacePath);
   const workspaceStateStore = await JsonStore.open(
     join(storage.getStoragePath(), 'state.json'),
   );

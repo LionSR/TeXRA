@@ -7,20 +7,41 @@ import {
   hasResolvedWorkspacePath,
   hasWorkspacePath,
   serializeWorkspacePresenceArg,
+  withWorkspacePathArg,
 } from '../../../packages/desktop/src/workspacePath';
 
 describe('desktop workspace path', () => {
-  it('resolves CLI workspace path before env and stored state', () => {
+  it('resolves CLI workspace path before env and stored workspace', () => {
     assert.equal(
       resolveWorkspacePath({
         argv: ['--texra-workspace', 'cli-workspace'],
         env: { TEXRA_WORKSPACE_PATH: 'env-workspace' },
+        storedWorkspacePath: 'stored-workspace',
       }),
       resolve('cli-workspace'),
     );
   });
 
-  it('does not persist or restore selected workspace folders yet', () => {
+  it('resolves env workspace before stored workspace', () => {
+    assert.equal(
+      resolveWorkspacePath({
+        argv: [],
+        env: { TEXRA_WORKSPACE_PATH: 'env-workspace' },
+        storedWorkspacePath: 'stored-workspace',
+      }),
+      resolve('env-workspace'),
+    );
+  });
+
+  it('restores the last desktop-opened workspace when CLI and env are absent', () => {
+    assert.equal(
+      resolveWorkspacePath({
+        argv: [],
+        env: {},
+        storedWorkspacePath: 'stored-workspace',
+      }),
+      resolve('stored-workspace'),
+    );
     assert.equal(
       resolveWorkspacePath({
         argv: [],
@@ -75,6 +96,29 @@ describe('desktop workspace path', () => {
         ],
       }),
       false,
+    );
+  });
+
+  it('replaces existing workspace CLI args when relaunching into a selected folder', () => {
+    assert.deepEqual(
+      withWorkspacePathArg(
+        [
+          '/Applications/TeXRA.app',
+          '--inspect',
+          '--texra-workspace',
+          'old-workspace',
+          '--flag',
+          '--texra-workspace=/tmp/other-workspace',
+        ],
+        '/Users/ray/paper',
+      ),
+      [
+        '/Applications/TeXRA.app',
+        '--inspect',
+        '--flag',
+        '--texra-workspace',
+        '/Users/ray/paper',
+      ],
     );
   });
 });
