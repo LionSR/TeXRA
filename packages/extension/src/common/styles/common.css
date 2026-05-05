@@ -200,6 +200,34 @@
   --texra-widget-shadow: var(--vscode-widget-shadow);
 }
 
+/*
+ * Web Awesome design-token bridge.
+ *
+ * WA components read --wa-*. The host (VS Code webview) supplies --vscode-*.
+ * This block links the two so --vscode-* is the only host token the rest of
+ * the codebase ever sees through this adapter.
+ */
+:root {
+  --wa-font-family-body: var(--vscode-font-family);
+  --wa-font-family-heading: var(--vscode-font-family);
+  --wa-font-size-m: var(--vscode-font-size);
+  --wa-font-weight-normal: var(--vscode-font-weight);
+
+  --wa-color-text-normal: var(--vscode-foreground);
+  --wa-color-text-quiet: var(--vscode-descriptionForeground);
+  --wa-color-text-link: var(--vscode-textLink-foreground);
+  --wa-color-surface-default: var(--vscode-editor-background);
+  --wa-color-surface-raised: var(--vscode-editorWidget-background);
+  --wa-color-surface-lowered: var(--vscode-sideBar-background);
+  --wa-color-surface-border: var(--vscode-panel-border);
+
+  --wa-color-focus: var(--vscode-focusBorder);
+
+  --wa-color-brand-fill-loud: var(--vscode-button-background);
+  --wa-color-brand-on-loud: var(--vscode-button-foreground);
+  --wa-color-brand-border-loud: var(--vscode-button-border);
+}
+
 body {
   margin: 0;
   padding: 20px;
