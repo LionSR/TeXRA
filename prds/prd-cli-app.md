@@ -1120,3 +1120,877 @@ commander (or citty) + Ink (lazy) + picocolors + log-update + ora + @clack/promp
 ```
 
 That's the whole story. The agent core is already CLI-shaped — this PRD is just describing how to wrap it in `process.argv` + a TTY.
+
+---
+
+## 21. Iteration log — round 2 (2026-05-05)
+
+Round 1 above defined the CLI as a thin Node shell over an already host-neutral kernel. Two follow-on investigations sharpened that picture:
+
+1. **Runtime audit** of every `AsyncLocalStorage` scope and module-level `let foo: X | undefined` setter pair across `src/agent/`, `src/tools/approval/`, `src/auth/`, `src/eventBus/`, and `src/logger/`. The audit names ~20 ambient bindings and ~3 singleton coordinators that v1 of the SDK has to live with but a v1.1 MCP-server / re-entrant SDK cannot.
+2. **Ecosystem survey** of Codex CLI (Rust + TOML + `codex mcp` + `codex exec --json --output-last-message`), Claude Code (`claude mcp serve`, JSONL transcripts under `~/.claude/projects/<hash>/`, hook contract with `permissionDecision` namespacing, `--output-format stream-json`), OpenCode (Bun HTTP server + Go TUI generated from OpenAPI 3.1.1, `permission` map with glob+last-match semantics), and the `claude-code-base-action` composite-action / Bun-runner pattern.
+
+**User-feedback intake (2026-05-05):**
+
+- Sandbox-mode dimension on approval policy is too complicated; round-1's 1D `never|ask|auto-edits|auto|yolo` stays. We do not adopt Codex's 2D `approval × sandbox` matrix. (See §26 for the rejection rationale.)
+- Unifying agent-SDK / message-SDK with conversation compaction is a desirable cross-host goal but **not v1 scope** — parked in §32 alongside other v2+ work.
+
+Round 2 lands six concrete deltas plus one cross-cutting kernel refactor that all three hosts (extension, desktop, CLI) benefit from. None of these change the round-1 LOC band by more than ~600 lines combined; most are about replacing ad-hoc patterns with the kernel-shaped abstractions the audit revealed are already partially in place.
+
+| Delta | Round 1 status | Round 2 position | New §  |
+| ----- | -------------- | ---------------- | ------ |
+| Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work | **v1 prereq for `texra mcp serve` and re-entrant SDK; v1.0 ships with the migration shim path** | §22 |
+| Structured logger with explicit context, no module globals | Hand-waved as "consoleLog plus filter wrapper" | **v1 deliverable; `LogBackend` interface widened to take a context object** | §23 |
+| `texra mcp serve` (callable from Claude Code, Codex, opencode) | Listed as v1.1 future | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)** | §24 |
+| Hook system (SessionStart, PreToolUse, PostToolUse, …) | Not mentioned | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner** | §25 |
+| Approval policy revisited (no 2D sandbox axis) | 1D `never|ask|auto-edits|auto|yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
+| Session transcripts as JSONL under project-hash sharding | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics** | §27 |
+| GitHub Action: composite + Bun (not JS Action) | §12 picked JS Action | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in** | §28 |
+| Cross-platform shared structure refactor (kernel side) | Implicit | **Explicit — what the three hosts share, what they don't, where the seams go** | §29 |
+| Container / GitHub-runner target matrix (slim, alpine, texlive) | Sketched in §12.3 | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues** | §30 |
+| Phase plan delta + LOC delta | — | **Aggregated** | §31 |
+| Parking lot — unified agent-SDK / message-SDK / context compaction | — | **Out of v1; sized in §32 for visibility** | §32 |
+
+The rest of round 2 is the spec for these deltas, in dependency order: §22 → §23 unblock §24 (an MCP server can't safely host concurrent sessions until the kernel's ambient state is gone); §24 + §25 + §26 are independent hosts on the new context; §27 + §28 + §29 + §30 are deployment / packaging concerns that don't gate kernel work.
+
+## 22. RunContext — replace ambient ALS + singletons
+
+### 22.1 What's ambient today
+
+The May 2026 runtime audit (in commit-time order, not severity) found:
+
+**AsyncLocalStorage scopes (2):**
+
+- `src/agent/runtime/AgentRuntimeHost.ts:12` — `runtimeHostScope` carries the current `AgentRuntimeHost` (≡ `ProgressSink`). Entered via `runWithAgentRuntimeHost(host, fn)` at line 27; read via `getAgentRuntimeHost()` at line 23 with fallback to a process-global `defaultAgentRuntimeHost` (line 11) and then to `getDefaultProgressSink()` (`ProgressSink.ts:20`).
+- `src/logger/logUtils.ts:10` — `contextStorage` carries a `Map<channel-key, group-id stack>` so `runWithGroupContext()` can attach a `[groupId]` tag to each line. Read at lines 63 and 136.
+
+**Module-level `let X | undefined` + setter pairs (~20):**
+
+| Concern | Setter | File:line |
+| ------- | ------ | --------- |
+| Default progress sink | `setDefaultProgressSink` | `src/agent/runtime/ProgressSink.ts:14` |
+| Default runtime host | `setDefaultAgentRuntimeHost` | `src/agent/runtime/AgentRuntimeHost.ts:11` |
+| Run storage service | `setRunStorageService` | `src/agent/runtime/RunStorageService.ts:10` |
+| Tool-edit approval handler | `setToolEditApprovalHandler` | `src/tools/approval/toolEditApproval.ts:74,113` |
+| Latex-preview handler | `setLatexBuildDisplay` | `src/tools/approval/latexPreview.ts:21` |
+| GitHub token provider | `setGitHubTokenProvider` | `src/tools/github/githubAuth.ts:13` |
+| Extension checker | `setExtensionChecker` | `src/tools/externalToolDefs.ts:35` |
+| Server-side key service | `setServerSideKeyService` | `src/auth/serverKeys/index.ts:34` |
+| Tier service | `setTierService` | `src/auth/tier/index.ts:31` |
+| Auth callback resolver | `setExternalAuthCallbackResolver` | `src/auth/config.ts:183` |
+| Runtime extension id | `setRuntimeExtensionId` | `src/auth/config.ts:137` |
+| Output-channel factory (logger) | `setOutputChannelFactory` | `src/logger/logUtils.ts:108` |
+
+**Exported singleton coordinators (3):**
+
+- `planApprovalCoordinator` — `src/agent/runtime/PlanApprovalCoordinator.ts:128`
+- `retryCoordinator` — `src/agent/runtime/RetryRequestCoordinator.ts:145`
+- `proposalCoordinator` — `src/agent/runtime/AgentProposalCoordinator.ts:89`
+
+**Caches that survive across runs (4):**
+
+- Agent-registry cache + init promise — `src/agent/index/agentRegistry.ts:143,146-147`
+- Execution listing cache + workspace-path cache — `src/agent/storage/executionListing.ts:52-54`
+- Output-poll timer + in-flight flag — `src/agent/runtime/executionRegistry.ts:335-336`
+- Polish-model template cache — `src/agent/runtime/polishModel.ts:11-12`
+
+### 22.2 Why this hurts the CLI
+
+Round-1 §7.6's caveat — "two SDK callers in the same process can step on each other's defaults" — covers only the tip. The full failure surface for the CLI is:
+
+1. **`texra mcp serve` (§24)** must host N concurrent sessions in one process, each with its own progress sink, its own approval policy, its own logger context, and its own abort signal. Today's ambient-default + ALS-fallback model conflates "this run's sink" with "this process's sink"; an MCP server that serves two clients simultaneously will leak progress events between them whenever a `getDefaultProgressSink()` path is hit (which the audit shows is the default fallback in `getAgentRuntimeHost` at `AgentRuntimeHost.ts:24`).
+2. **Re-entrant `runAgent()` from the SDK (§7.6)** — same problem. A user piping two polish runs in parallel through `Promise.all([runAgent(...), runAgent(...)])` will see interleaved progress on whichever process-global sink the second call happened to install last.
+3. **Hooks (§25)** that fire from a sub-flow (e.g., `PreToolUse` raised inside a delegate-agent subagent) need the hook handler to know which session it belongs to. The ALS scope already passes the runtime host correctly, but the singleton coordinators (`planApprovalCoordinator`) don't — they fan out events to whoever the current global handler is.
+4. **Tests** routinely have to `setDefaultProgressSink(noop)` and `setRunStorageService(fake)` in `beforeEach` and unwind them in `afterEach`. A `RunContext` argument removes ~150 LOC of this kind of setup.
+
+### 22.3 The shape
+
+A single `RunContext` value, threaded explicitly through the call graph, with one ALS scope at the outermost entry to support legacy call sites during migration. No module globals, no per-domain singletons.
+
+```ts
+// packages/core/src/runtime/runContext.ts
+export interface RunContext {
+  /** Stable identifier for this run; root for child contexts. */
+  readonly runId: RunId;
+  /** Stream tab id within the run (one per agent activation). */
+  readonly streamId: StreamTabId;
+  /** Lineage from the user-initiated root, useful for log prefixes. */
+  readonly streamLineage: StreamTabId[];
+
+  /** Where progress events go. Replaces `getAgentRuntimeHost()`. */
+  readonly progress: ProgressSink;
+  /** Structured logger scoped to this run. Replaces `logUtils` group-context ALS. */
+  readonly log: Logger;
+
+  /** Cooperative cancel signal for this run. Replaces InterruptManager singleton. */
+  readonly signal: AbortSignal;
+
+  /** Approval policy for this run (resolved from flag > env > config > schema default). */
+  readonly approval: ApprovalPolicy; // 1D — see §26
+
+  /** Workspace root (cwd) for this run. Per-run override of WorkspaceProvider. */
+  readonly workspaceRoot: string;
+
+  /** Runtime-resolved capabilities. Replaces `setExtensionChecker`, `setGitHubTokenProvider`. */
+  readonly capabilities: RunCapabilities;
+
+  /** Coordinators bound to this run's progress sink. Replaces exported singletons. */
+  readonly coordinators: {
+    plan: PlanApprovalCoordinator;
+    proposal: AgentProposalCoordinator;
+    retry: RetryRequestCoordinator;
+    edit: ToolEditApprovalController;
+    bash: BashApprovalController;
+  };
+
+  /** Spawn a child context for a delegate_agent / delegate_workflow subagent. */
+  child(opts: ChildContextOptions): RunContext;
+}
+
+export interface RunCapabilities {
+  github: GitHubTokenProvider | null;
+  extensionPresent: boolean;
+  externalAuthCallback: ExternalAuthCallbackResolver | null;
+  // …other host capabilities, populated by the host adapter
+}
+```
+
+`buildAgentLaunchContext()` in `executeAgent.ts:166` already constructs almost all of this; the round-2 refactor is to (a) lift it to the kernel boundary so it's the only entry point that matters and (b) pass it explicitly into every coordinator method that today reads from a singleton.
+
+### 22.4 Migration shim
+
+Because the audit found ~30 sites that read singletons today, a hard cutover is not realistic for v1. The shim:
+
+- `runContextScope = new AsyncLocalStorage<RunContext>()` lives in `packages/core/src/runtime/runContext.ts`.
+- `withRunContext(ctx, fn)` wraps every `executeAgent()` call. The existing `runWithAgentRuntimeHost()` wrapper is kept and now reads from `runContextScope.getStore()` for forward compatibility.
+- Every singleton getter (`getDefaultProgressSink()`, `getRunStorageService()`, `getServerSideKeyService()`, …) gets a `// LEGACY:` comment and a path forward: it reads `runContextScope.getStore()?.<field>` first and falls back to the module global.
+- Internal kernel call sites are converted in batches (one per phase): coordinators first (Phase 0 of round 2), then approval handlers (Phase 1), then auth services (Phase 2). Each batch deletes a module global once its readers all take an explicit `ctx`.
+- ESLint rule `no-ambient-runtime-state` blocks new module-level `let` + setter pairs in `src/agent/`, `src/tools/`, `src/auth/`. Rationale: same shape as the §13.1 import-restriction rule.
+
+### 22.5 Migration order (gated on, not blocking, CLI v1.0)
+
+| Round | Singletons retired | Files touched | Net LOC |
+| ----- | ------------------ | ------------- | ------- |
+| Pre-v1.0 | `runContextScope` lives at boundary; `runWithAgentRuntimeHost` reads it; new `Logger`/`progress` getters on context (§23) | `executeAgent.ts`, `runContext.ts` (new), `Logger.ts` (new) | +180 / -10 |
+| v1.0 | `planApprovalCoordinator`, `proposalCoordinator`, `retryCoordinator` become per-context instances created in `buildAgentLaunchContext()` | `Plan/Retry/AgentProposalCoordinator.ts`, ~5 call sites | +60 / -30 |
+| v1.1 (gates `texra mcp serve`) | `defaultProgressSink`, `defaultAgentRuntimeHost`, `runStorageService` singletons removed | `ProgressSink.ts`, `AgentRuntimeHost.ts`, `RunStorageService.ts` + ~40 reader sites | +0 / -120 |
+| v1.2 | `setToolEditApprovalHandler`, `setGitHubTokenProvider`, `setExtensionChecker`, `setLatexBuildDisplay` — replaced by `RunCapabilities` injection | `tools/{approval,github,externalToolDefs}/*` | +40 / -90 |
+| v1.3 | Auth singletons (`tierService`, `serverSideKeyService`) become per-`RunContext` resolutions backed by a kernel-side `AuthRegistry` | `auth/*` | +60 / -100 |
+
+Net: at v1.3 the kernel has zero `let X | undefined` + setter pairs in the agnostic zones, and ~250 LOC has been deleted on net. The CLI's `texra mcp serve` becomes safe at the v1.1 boundary; v1.0 ships with the shim.
+
+### 22.6 Why not "just drop ALS entirely"
+
+The shim is necessary because the kernel has 30+ call sites that read the runtime host implicitly (every emit, every approval prompt, every coordinator call). A pure-explicit migration would touch 30+ files in one PR and break every in-flight branch. ALS-with-an-explicit-context is the ergonomic compromise OpenTelemetry, Vercel AI SDK, and Encore all settled on; we copy that. The audit confirms zero call sites of `getStore()` outside the `runtimeHostScope`/`contextStorage` files themselves, so wrapping access in a single `useRunContext()` helper is a one-line change at every reader.
+
+### 22.7 The "stream context lost across `.then()`" risk
+
+The LangSmith #2274 issue is the canonical foot-gun: ALS context can be lost when a stream's `.then()` resolves outside the original async chain. We have one such site today — `RunStorageService`'s background poll timer (`executionRegistry.ts:335`) fires outside any `runWithAgentRuntimeHost()` scope. The mitigation is the same one the survey flagged: bind the context at registration time. Practically: `pollInFlight` becomes a `Map<RunId, RunContext>` and the timer callback uses `withRunContext(stored, fn)` rather than reading whatever scope happens to be active. ~20 LOC.
+
+## 23. Logger v2 — structured events, explicit context, no module globals
+
+### 23.1 What's wrong with today's logger
+
+`src/logger/logUtils.ts` is a serviceable VS Code-shaped logger. It is also wrong for the CLI in three concrete ways:
+
+1. **`outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level state.** The audit finds exactly one setter in production code (`packages/extension/src/extension.ts`), but tests and an MCP-server mode that hosts concurrent runs cannot safely share these. The `setOutputChannelFactory(null)` reset disposes channels for *every* concurrent caller.
+2. **Group context lives in its own ALS (`contextStorage`, line 10), separate from the runtime host's ALS (`runtimeHostScope`, `AgentRuntimeHost.ts:12`).** A sub-agent that emits a log line passes through both scopes; the two are kept in sync by convention, not enforcement.
+3. **`writeLine` calls `getConfig('texra.logger.debugMode', false)` on every line (line 79).** That's fine in the extension where `getConfig` is a wrapped `vscode.workspace.getConfiguration`, but in the CLI before `initPlatform()` runs (which the audit shows happens for ~40 module-load-time `initialize()` calls), the config provider may not exist yet. Today's `tryPlatform()` fallback works because `getConfig` returns the default; in the CLI we want stricter guarantees that log lines emitted during boot don't silently lose their context.
+
+Plus a non-bug observation: the JSON / NDJSON renderer specced in round 1 §11.2 is a *separate* code path from the human renderer. Two formats, one schema is fine; two formats, two code paths is duplication waiting to bit-rot.
+
+### 23.2 Shape
+
+A single `Logger` interface that is part of `RunContext` (§22.3), with sinks plugged in by the host:
+
+```ts
+// packages/core/src/runtime/logger.ts
+export interface Logger {
+  debug(msg: string, fields?: LogFields): void;
+  info(msg: string, fields?: LogFields): void;
+  warn(msg: string, fields?: LogFields): void;
+  error(msg: string, fields?: LogFields): void;
+
+  /** Push a group; returned function pops it. Replaces logUtils' ALS. */
+  group(label: string): () => void;
+  /** Wrap an async fn in a group; returns its result. */
+  withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T>;
+
+  /** Per-domain child — adds a static field to every emission. Cheap. */
+  child(fields: LogFields): Logger;
+}
+
+export interface LogFields {
+  /** Stream lineage. Auto-injected by RunContext.log; usable by hosts for prefix. */
+  readonly streamId?: StreamTabId;
+  readonly runId?: RunId;
+  readonly groupId?: string;
+  /** Free-form structured data; the host decides whether to render it. */
+  readonly [k: string]: unknown;
+}
+```
+
+The host registers a single `LogSink` (renamed from `LogBackend` to make explicit that it consumes structured records, not formatted strings):
+
+```ts
+export interface LogRecord {
+  ts: string;             // ISO-8601 with millis
+  level: LogLevel;
+  message: string;
+  fields: LogFields;
+  groups: readonly string[];   // current group stack at emit time
+}
+
+export interface LogSink {
+  write(record: LogRecord): void;
+  flush?(): Promise<void>;
+}
+```
+
+### 23.3 What each host installs
+
+| Host       | Sink                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| Extension  | `VscodeOutputChannelSink` — writes formatted strings to `vscode.OutputChannel` (today's behavior). One channel per agent. |
+| Desktop    | `electronLogSink` over `electron-log` (Electron PRD §6.4); same channel-per-agent shape.        |
+| CLI headless | `StderrTextSink` — picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`. Also writes to `--log-file` if passed. |
+| CLI JSON   | `NdjsonStdoutSink` — one JSON object per line, schema-validated against `LogRecord`. **This is the same data path §11.2 specs as the event stream — log records and progress events share the JSON Lines envelope.** |
+| CLI MCP    | `McpProgressSink` — converts each record to an MCP `notifications/progress` payload bound to the request's progress token. Respects the client's progress-update opt-in. |
+| Tests      | `MemorySink` — pushes records into an array for assertion; auto-installed via `withRunContext()` in `vitest.setup.ts`. |
+
+### 23.4 Rendering rules — round-1 §11 reconciled
+
+Round 1 §11.2 specifies an NDJSON event stream. Round 2 unifies it with the log stream:
+
+- Every `LogRecord` is also a `ProgressEvent` with `event: "log"`. The schema is `LogRecord ∪ ProgressEventPayloads` (a Zod discriminated union on `event`).
+- Consumers that care only about logs filter `event === "log"`. Consumers that care only about progress (e.g. `texra-action`'s log-group renderer) filter `event !== "log"`.
+- Schema lives in `packages/shared/schemas/runStream.ts` (new). Versioned per round-1 §11.2's policy.
+- The headless text renderer (`StderrTextSink`) renders `event === "log"` lines as `[time] [agent] message` and `event !== "log"` lines as the structured progress format. One renderer, two sub-paths, one schema.
+
+### 23.5 Group context migration
+
+The current `runWithGroupContext()` is replaced by `RunContext.log.withGroup()`. The migration is mechanical:
+
+```ts
+// before
+await runWithGroupContext(channel, groupId, isAgent, async () => {
+  logger.info(channel, 'doing thing');
+});
+
+// after
+await ctx.log.child({ channel }).withGroup(groupId, () => {
+  ctx.log.info('doing thing');
+});
+```
+
+Both forms run for one release; the old form is `@deprecated` and routes to the new one. The `contextStorage` ALS in `logUtils.ts:10` is deleted at the end of the migration.
+
+### 23.6 Boot-time logging
+
+The CLI emits ~3–5 log lines before `initPlatform()` returns (config layer load, secret resolution, agent-directory bootstrap). Today these go through `console.info` at module load time. Round 2 routes them through a `BootstrapLogger` — a `Logger` impl that buffers records into an array until `initPlatform()` finishes, then flushes them through whichever sink the host registered. ~30 LOC. No more "config debug toggle silently broken during boot."
+
+### 23.7 LOC accounting
+
+| Item | New | Modified | Deleted |
+| ---- | --- | -------- | ------- |
+| `packages/core/src/runtime/logger.ts` (new — interface + bootstrap logger + group helpers) | ~180 | — | — |
+| `packages/core/src/runtime/runContext.ts` (logger threaded as field) | (counted under §22) | — | — |
+| `src/logger/logUtils.ts` (kept for legacy callers; routes to new logger) | — | ~80 | — |
+| `src/logger/AgentLogger.ts`, `AgentUsageReporter.ts` (route through `ctx.log`) | — | ~40 | — |
+| Per-host sinks: `VscodeOutputChannelSink` (extension), `StderrTextSink` + `NdjsonStdoutSink` (CLI), `McpProgressSink` (CLI v1.1) | ~250 | — | — |
+| `texra config` exposes `logger.debugMode` via `ConfigProvider.watch()`; remove the per-write `getConfig` lookup | — | ~10 | ~5 |
+| **Subtotal** | **~430** | **~130** | **~5** |
+
+This counts against §14's pre-refactor budget (~430 → ~860 with logger v2 added). Within the engineering-week envelope from §15 because §22 + §23 deliverables are the natural prerequisite for §24.
+
+## 24. `texra mcp serve` — callable from Claude Code, Codex, and opencode
+
+### 24.1 Why now
+
+Round 1 §18.1 deferred MCP-server mode to v1.1. Round 2 promotes it to v1 because the survey is unambiguous: every CLI in this category (Claude Code's `claude mcp serve`, OpenAI Codex's `codex mcp`, opencode via its OpenAPI server) ships a stdio MCP server as its delegate-from-another-agent surface. A TeXRA CLI without one is an island.
+
+The user's framing — "to be callable by Claude Code and Codex etc" — is exactly this surface. From a Claude Code session, the user adds:
+
+```jsonc
+// .mcp.json (project) or ~/.claude/mcp.json (user)
+{
+  "mcpServers": {
+    "texra": {
+      "command": "texra",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+… and Claude Code can now call `texra__run_polish`, `texra__run_elevate`, `texra__list_agents`, etc. as tools. The Codex equivalent goes in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.texra]
+command = "texra"
+args = ["mcp", "serve"]
+transport = "stdio"
+```
+
+`texra mcp serve` is the single most leveraged feature in round 2: it makes every TeXRA agent reusable from every other agent that speaks MCP, without a fork.
+
+### 24.2 Surface
+
+A minimum viable v1 surface — three tools, no resources, no prompts. Resources can come in v1.1 once we know what callers actually want.
+
+| MCP tool name | Backed by | Purpose |
+| ------------- | --------- | ------- |
+| `run_workflow` | `executeAgent({ category: "workflow", ... })` | Run a workflow agent (correct, polish, elevate, devise, criticize, merge, OCR, transcribe). Inputs: `agent`, `inputFile`, `outputFile`, `rounds?`, `model?`, `useMultiple?`. Output: `AgentFlowResult`. |
+| `run_chat` | `executeAgent({ category: "toolUse", ... })` | Run a tool-use agent (orchestrator, devise, search, generic). Inputs: `agent`, `instruction`, `cwd?`, `allowedTools?`, `disallowedTools?`. Output: streaming via `notifications/progress`; final `AgentFlowResult` on completion. |
+| `list_agents` | `getAgentsBySource()` from `@agent/index/agentRegistry` | Returns the agent catalog (id, category, description, source). Lets the calling agent decide what's safe to delegate. |
+
+All three accept an optional `runId` so the caller can correlate progress notifications. Approval policy is forced to `never` by default in MCP mode (no TTY for prompts) — callers wanting bash/edit auto-approval pass `approvalPolicy: "yolo"` explicitly, exactly as round 1 §9 specifies for headless mode.
+
+### 24.3 Process model
+
+stdio JSON-RPC 2.0, one process per client connection, exactly the Claude Code / Codex pattern. The server lifecycle:
+
+1. `texra mcp serve` boots, calls `initPlatform()` once with a special `McpHostAdapter` (config from `~/.config/texra/`, secrets from keyring, no stdout writes — all output is JSON-RPC framed on stdout).
+2. `initialize` request from the MCP client establishes session capabilities and the `progressToken` shape.
+3. Each `tools/call` from the client builds a fresh `RunContext` (§22.3) — fresh `progress: McpProgressSink`, fresh `signal: AbortController`, fresh `coordinators`. **This is why §22's singleton retirement gates v1.1 of `texra mcp serve`** — until coordinators are per-context, two concurrent `tools/call`s leak progress between them.
+4. `notifications/progress` from the server streams progress events to the client (one notification per `ProgressEvent`). The client's handler decides whether to render them (Claude Code's hook system can route them to a sub-stream tab).
+5. On `notifications/cancelled`, the matching run's `signal` is aborted; the run cleans up via existing cooperative-cancel paths.
+6. Server exits when stdin closes.
+
+### 24.4 Permission propagation
+
+The MCP client (Claude Code, Codex, etc.) is itself a permission boundary. TeXRA's MCP-server mode trusts the client to have already obtained user approval for the *call* (e.g., Claude Code asked the user "let texra__run_polish run?"). What TeXRA still owns is what the *agent inside* TeXRA does — the bash and edit gates inside a `run_chat` orchestrator session.
+
+Three policies for those inner gates, selected by tool argument:
+
+- `approvalPolicy: "never"` (default in MCP mode) — auto-deny inner edits/bash. The orchestrator agent must complete without them or fail. Suitable for trusted reasoning + read-only file inspection.
+- `approvalPolicy: "yolo"` — auto-approve inner edits/bash. Caller takes responsibility (the caller is itself an agent that already negotiated permission with its user).
+- `approvalPolicy: "ask"` — emit a `notifications/elicitation/create` to ask the caller. Requires MCP Spec 2025-03-26+ elicitation support. v1 ships `never|yolo`; `ask` lands when ecosystem support stabilizes.
+
+### 24.5 v1 vs v1.1 deliverables
+
+**v1.0 ships:**
+
+- `texra mcp serve` subcommand using `@modelcontextprotocol/sdk` (the official TS SDK). ~250 LOC of glue.
+- Three tools above.
+- `notifications/progress` streaming.
+- Cancellation via `notifications/cancelled`.
+- Session isolation **only** to the extent the §22.5 v1.0 migration achieves it (per-context coordinators). One concurrent run per process; concurrent calls serialize. Documented limitation.
+
+**v1.1 ships (gated on §22.5 v1.1 migration):**
+
+- True concurrent sessions in one MCP-server process. The audit's singleton-retirement work removes the leak risk.
+- Optional MCP `resources` surface exposing `~/.texra/projects/<hash>/<sessionId>.jsonl` (§27) for transcript replay.
+- Elicitation-based approvals.
+
+### 24.6 LOC
+
+| Item | New | Modified |
+| ---- | --- | -------- |
+| `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising) | ~120 | — |
+| `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts` | ~250 | — |
+| `packages/cli/src/mcp/sinks/McpProgressSink.ts` (also used by Logger v2 §23.3) | ~80 | — |
+| `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch) | — | ~30 |
+| `packages/cli/src/commands/mcp.ts` (`texra mcp serve`) | ~40 | — |
+| **Subtotal** | **~490** | **~30** |
+
+## 25. Hook system (Claude Code-style)
+
+### 25.1 Why now
+
+Hook contracts are easy to bolt on later in theory and a nightmare in practice — every hook event the kernel doesn't fire today is one that consumers can't depend on tomorrow. The survey shows Claude Code's hook event taxonomy is the de facto standard (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStop`, `Stop`, `Notification`, `PreCompact`, `PostCompact`, `PermissionRequest`). We adopt the same names and the same wire contract; that buys us:
+
+- Users who already have Claude Code hooks can copy them with a one-line `command:` change.
+- A `texra` hook can call out to a `claude` hook handler and vice versa with no translation.
+- The hook contract — JSON on stdin, JSON or empty on stdout, `exit 2` to block — is dead simple to implement in any language.
+
+### 25.2 Wire contract (verbatim from Claude Code)
+
+```jsonc
+// hook input on stdin
+{
+  "hookEventName": "PreToolUse",
+  "session": { "id": "ses_abc123", "cwd": "/path/to/project", "agent": "orchestrator" },
+  "tool": { "name": "bash", "input": { "command": "rm -rf /" } }
+}
+```
+
+```jsonc
+// hook output on stdout (optional)
+{
+  "hookSpecificOutput": {
+    "permissionDecision": "deny",
+    "reason": "rm -rf is not allowed in this project"
+  }
+}
+```
+
+`exit 0` with no stdout = no opinion (continue). `exit 0` with stdout = parsed as a `HookOutput`. `exit 2` = block; stderr is forwarded to the agent as a tool-result error. Other non-zero codes = log a warning, don't block.
+
+### 25.3 Where hooks fire
+
+| Event | Fires from | RunContext field |
+| ----- | ---------- | ---------------- |
+| `SessionStart` | `executeAgent.ts` after `buildAgentLaunchContext` | `runId`, `streamId`, `cwd` |
+| `UserPromptSubmit` | Tool-use REPL on each user submit | `runId`, `instruction` |
+| `PreToolUse` | `requestToolEditApproval`, `requestBashApproval`, generic tool dispatch | `runId`, `tool.name`, `tool.input` |
+| `PostToolUse` | Tool dispatch after result | `runId`, `tool.name`, `tool.result.summary` |
+| `Stop` | `executeAgent` finalizer | `runId`, `result.status` |
+| `SubagentStop` | Delegation child completion | `runId`, `parentStreamId`, `childStreamId`, `result` |
+| `Notification` | Any `requestShowError` / `requestShowInstruction` emission | `runId`, `message` |
+| `PreCompact` / `PostCompact` | (Future, §32 — context compaction) | `runId`, `compactionStats` |
+| `PermissionRequest` | The same gate `PreToolUse` covers, but specifically for the approval gates §9 lists | Same as `PreToolUse` plus `gate: "edit"|"bash"|"plan"|"proposal"|"retry"` |
+
+### 25.4 Configuration
+
+`hooks.yaml` under each scope, layered the same way config is (`flag > project > user`). `~/.config/texra/hooks.yaml` for user, `.texra/hooks.yaml` for project, both validated against a Zod schema:
+
+```yaml
+# .texra/hooks.yaml
+PreToolUse:
+  - matcher: { tool: bash }
+    handler:
+      type: command
+      command: ./scripts/audit-bash.sh
+      timeoutMs: 5000
+  - matcher: { tool: edit, path: 'src/legacy/**' }
+    handler:
+      type: command
+      command: ./scripts/no-legacy-edits.sh
+
+PostToolUse:
+  - matcher: { tool: '*' }
+    handler:
+      type: command
+      command: ./scripts/log-tool.sh
+
+SessionStart:
+  - handler:
+      type: prompt
+      append: 'Always cite ArXiv numbers when referencing papers.'
+```
+
+Handler types (subset of Claude Code's): `command` (shell), `prompt` (append text to the system prompt), `mcp_tool` (call an MCP tool). `http` and `agent` are deferred — they're nice but not on the critical path.
+
+### 25.5 v1 deliverable
+
+v1.0 ships `command` and `prompt` handlers and the eight events listed above except `Pre/PostCompact`. ~400 LOC, mostly schema validation and the dispatch loop. Each hook runs in a 30s default timeout (configurable per hook). Multi-handler matchers: all run in parallel; any non-zero exit blocks; first-match `permissionDecision` wins.
+
+### 25.6 Why this is in the CLI PRD, not a separate one
+
+Hooks fire from kernel code paths (`executeAgent.ts`, approval coordinators) — which means the kernel needs a `HookHost` interface (shape: `dispatch(event, payload): Promise<HookOutput>`). The extension and the desktop host get hooks for free once the kernel side is wired. That's a kernel pre-refactor (call it C9):
+
+**C9. `HookHost` interface in `core/hosts/hooks.ts`.** _(~60 LOC interface + ~80 LOC dispatcher in core; ~60 LOC of hook-loading + matcher logic in core; ~250 LOC of CLI-side adapter to load `hooks.yaml` and execute commands.)_
+
+The CLI adapter is the only handler-runner v1.0 ships. The extension and desktop hosts can install a no-op `HookHost` at v1.0 and pick up `command`-handler support whenever they want — no kernel work needed.
+
+## 26. Approval policy revisited (no 2D sandbox axis)
+
+### 26.1 Why we're not adopting Codex's matrix
+
+Round 2's first draft proposed adopting Codex's `approval_policy × sandbox_mode` 2D matrix. User feedback: that's too complicated. Round 1's 1D model — `never | ask | auto-edits | auto | yolo` — stays.
+
+The reasons it's the right call:
+
+1. **Codex's `sandbox_mode` solves a problem we don't have.** Codex sandbox modes wrap *all* agent file/network access in an OS-level sandbox (Seatbelt on macOS, Landlock on Linux). TeXRA today doesn't sandbox — its tools call `executeCommand` (`@utils/system/execUtils`) and `nodeFilesystem` directly. Adding a real OS sandbox is a 4–6 engineering-week project of its own and orthogonal to the CLI shell.
+2. **Surface-level "in-project / outside-project" distinction is enough for v1.** Round 1 §9.2 already says "in-project" auto-approves under `auto`/`auto-edits`, "outside-project" prompts. That's where 90% of the value is. The remaining 10% is "I want a true OS sandbox," which the desktop's macOS App Sandbox / Windows AppContainer / Linux unprivileged-namespaces story will eventually solve in a host-uniform way — *not* a CLI-only knob.
+3. **A 2D matrix doubles the test surface and doubles the doc surface.** The mental load — "if I pass `--approval-policy auto --sandbox workspace-write` what happens to bash that touches `/tmp`?" — is exactly the friction users complained about with Codex's first iteration.
+
+### 26.2 What round 2 *does* sharpen
+
+Round 1 §9.2 says "in-project means the candidate file/cwd is inside the resolved workspace path." Round 2 specifies the predicate concretely so the kernel and the CLI agree:
+
+```ts
+// packages/core/src/runtime/approvalPredicates.ts (new — ~40 LOC)
+export function isInProject(
+  candidate: string,
+  workspaceRoot: string,
+): boolean {
+  const candidateAbs = path.resolve(candidate);
+  const rootAbs = path.resolve(workspaceRoot);
+  const rel = path.relative(rootAbs, candidateAbs);
+  return !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+```
+
+Edge cases the predicate handles explicitly:
+
+- Symlink resolution: `path.resolve()` does NOT resolve symlinks; we deliberately do not follow them. A symlink inside the project pointing outside is treated as outside-project for approval purposes, which matches user intuition ("a symlink to /etc isn't 'inside my project'").
+- Case-insensitive filesystems (macOS HFS+, Windows NTFS): `path.relative` returns the actual case from the filesystem; comparison is exact-string. This is correct — case folding belongs in the filesystem layer, not the policy predicate.
+- `cwd === workspaceRoot`: trivially in-project; no separate codepath.
+- Files under the workspace's `.git/` directory: in-project by predicate, but flagged with a separate `isInsideHiddenDir` helper that approval handlers check before auto-approving (we never auto-approve writes to `.git/`, period).
+
+### 26.3 Bash command predicate
+
+Bash is harder than file paths — "auto-approve when in-project" doesn't make sense for `rm -rf $HOME`. Round 1 punted on this. Round 2 spec:
+
+- `auto` policy auto-approves bash *only* when the resolved cwd is in-project AND the command's argv[0] is in a built-in safe list. The safe list is small and conservative: `ls`, `cat`, `head`, `tail`, `wc`, `find` (read-only flags only), `grep`, `rg`, `git status`, `git diff`, `git log`, `pdflatex`, `latexmk`, `pandoc`, `texcount`. Editable per-project via `approval.allowedBash` in config (round 1 §9.4).
+- Any redirect to `/`, any unquoted variable, any `&&` / `||` / `|` chain that contains a non-listed command → falls back to `ask` even under `auto`.
+- `yolo` short-circuits all of this; `never` always denies.
+
+The argv parser is `shell-quote` (~3 KB, MIT, 30M weekly downloads) — well-trodden territory, no need to write a shell parser.
+
+### 26.4 No new flags, no policy renames
+
+Same vocabulary as round 1 §9.2. Same flags. The §26 work is just the predicate library and ~40 LOC of guard code in `cli/src/approval/policyEngine.ts`. Total: ~80 LOC of new code, ~20 LOC modified.
+
+## 27. Session transcripts — JSONL under project-hash sharding
+
+### 27.1 What today's storage layout looks like
+
+`RunStorageService` (and `executionRegistry.ts`) writes per-execution snapshots to `nodeStorage` workspace storage — the shape is "a directory per execution, files inside." This works for the extension's progress webview (which reads the snapshot to repopulate the tab on reload) but is awkward for a CLI:
+
+- No single file to `tail -f`.
+- No `find` query for "all sessions in project X."
+- No way to import a session into a new project (project identity is implicit).
+- `texra resume <id>` has to reconstruct context from disparate files.
+
+### 27.2 The new layout
+
+Match Claude Code's pattern, with TeXRA's run/stream lineage:
+
+```
+~/.texra/projects/
+  <projectHash>/                # sha256(absolute cwd), first 16 hex chars
+    project.json                # { cwd, agentCategoryDefaults, lastSession }
+    sessions/
+      <sessionId>.jsonl         # one event per line; round-1 §11.2 schema
+      <sessionId>.meta.json     # { createdAt, agent, model, status, duration, parentSession? }
+```
+
+`<sessionId>` is `ses_` + 12 hex chars (collision-safe; ULID-like). Project hash is stable across machines because the cwd is normalized (resolved symlinks, lowercased on case-insensitive filesystems, no trailing slash).
+
+### 27.3 What's in the JSONL
+
+Each line is exactly one `LogRecord ∪ ProgressEventPayloads` from §23.4. The first line is a synthetic `event: "session_start"` carrying the `AgentConfigPayload`, the resolved model, the workspace root, and the approval policy. The last line is `event: "session_end"` with `AgentFlowResult`. Everything between is the round-1 §11.2 NDJSON event stream as it happened, with timestamps preserved.
+
+This gives us several wins for free:
+
+- `texra run ... --output-format ndjson > out.ndjson` and the on-disk transcript are byte-for-byte the same data shape (modulo the synthetic start/end markers). Tools that parse one parse the other.
+- Replay: `cat <sessionId>.jsonl | jq -c .` is a debug session.
+- Compaction (§32): a `texra session compact <id>` subcommand can rewrite the JSONL with summarized turns; the schema knows what's safe to drop.
+
+### 27.4 `texra resume` semantics
+
+```
+texra resume                           # interactive picker over recent sessions in cwd's project
+texra resume <id>                      # resume that specific session
+texra run --continue                   # most recent session in cwd's project
+texra run --fork-session <id>          # branch from <id>; creates new sessionId, copies context up to fork point
+```
+
+`--continue` is shorthand for `texra resume <last>`; `--fork-session` matches Claude Code's verb. The runtime side is the existing `resumeToolUseFromSnapshot()` — but it now takes a `sessionId` and reads the JSONL up to the last `session_end` (or the end of file for a still-active session).
+
+### 27.5 Migration
+
+The existing `~/.texra/global-storage/<workspace>/runs/` layout stays for one release; an entry-point shim translates legacy reads. New sessions write to the new layout. ~80 LOC of migration code; ~120 LOC of writer + reader.
+
+### 27.6 LOC
+
+| Item | New | Modified |
+| ---- | --- | -------- |
+| `packages/core/src/storage/sessionStore.ts` (new — JSONL writer + reader, project-hash util) | ~200 | — |
+| `packages/core/src/storage/sessionMigration.ts` (legacy → new) | ~80 | — |
+| `cli/src/commands/resume.ts` (consumes sessionStore directly) | — | ~30 |
+| `cli/src/commands/run.ts` (`--continue`, `--fork-session` flags) | — | ~20 |
+| **Subtotal** | **~280** | **~50** |
+
+## 28. GitHub Action revisited — composite + Bun, not JS
+
+### 28.1 Why round 1's JS Action pick was wrong
+
+Round 1 §6 #9 picked JS Action ("warm-cached and faster than Docker for this use case"). The survey shows `claude-code-base-action` actually ships as a **composite action** that shells out via `bun run ${GITHUB_ACTION_PATH}/src/index.ts`. The reasons that's the right pick — and round 1 missed them:
+
+1. **No `dist/` checked into the action repo.** JS Actions require a bundled `dist/index.js` committed to the repo (because GitHub Actions runners only download the `action.yml` + the repo contents, not run `npm install`). Composite actions can install dependencies at action-run time, which means the action repo holds source, not bundles, and PRs are reviewable.
+2. **Faster iteration.** A composite action can pin a specific CLI version (`npm install -g @texra/cli@x.y.z`) per release without re-bundling. JS Actions need a release-cut process every CLI release.
+3. **Bun caches the install.** The runner's `actions/cache` key on `~/.bun/install/global` makes repeat runs near-instant, matching JS Action's warm-cache claim.
+4. **Composite + `runs.using: composite`** lets us stitch multiple steps (cache restore → install → run → upload artifacts) without a Node entrypoint that has to do all of those itself.
+
+### 28.2 Revised action shape
+
+```yaml
+# texra-ai/texra-base-action/action.yml
+name: TeXRA Base Action
+description: Run a TeXRA agent on inputs in your repository.
+inputs:
+  agent: { description: 'Agent name (polish, elevate, …)', required: true }
+  input: { description: 'Input file path', required: false }
+  output: { description: 'Output file path', required: false }
+  rounds: { description: 'Workflow rounds', required: false, default: '1' }
+  model: { description: 'Model name', required: false }
+  approval-policy: { description: 'never|ask|auto-edits|auto|yolo', default: 'never' }
+  texra-version: { description: 'Pinned CLI version', default: 'latest' }
+  output-format: { description: 'text|json|ndjson', default: 'ndjson' }
+outputs:
+  status: { description: 'completed|failed|cancelled' }
+  output-files: { description: 'JSON array of output file paths' }
+  session-id: { description: 'Session id for resume' }
+  execution-file: { description: 'Path to NDJSON transcript on the runner' }
+runs:
+  using: composite
+  steps:
+    - name: Cache TeXRA CLI
+      id: cache-cli
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.bun/install/global
+          ~/.npm
+        key: texra-cli-${{ runner.os }}-${{ inputs.texra-version }}
+
+    - name: Install TeXRA CLI
+      if: steps.cache-cli.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm install -g @texra/cli@${{ inputs.texra-version }}
+
+    - name: Run TeXRA
+      id: run
+      shell: bash
+      env:
+        TEXRA_OUTPUT_FORMAT: ${{ inputs.output-format }}
+      run: |
+        texra run "${{ inputs.agent }}" \
+          ${{ inputs.input && format('--input "{0}"', inputs.input) || '' }} \
+          ${{ inputs.output && format('--output "{0}"', inputs.output) || '' }} \
+          --rounds "${{ inputs.rounds }}" \
+          ${{ inputs.model && format('--model "{0}"', inputs.model) || '' }} \
+          --approval-policy "${{ inputs.approval-policy }}" \
+          --output-format "${{ inputs.output-format }}" \
+          | tee texra-transcript.ndjson
+
+        # Parse final summary line for outputs
+        summary=$(tail -1 texra-transcript.ndjson)
+        echo "status=$(echo "$summary" | jq -r .status)" >> "$GITHUB_OUTPUT"
+        echo "output-files=$(echo "$summary" | jq -c .outputs)" >> "$GITHUB_OUTPUT"
+        echo "session-id=$(echo "$summary" | jq -r .meta.sessionId)" >> "$GITHUB_OUTPUT"
+        echo "execution-file=texra-transcript.ndjson" >> "$GITHUB_OUTPUT"
+
+    - name: Upload transcript
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: texra-transcript-${{ inputs.agent }}
+        path: texra-transcript.ndjson
+        retention-days: 7
+```
+
+~80 lines of YAML; no JS to write at all for the base action. The high-level `texra-action` (§12.2) still has logic — trigger detection, PR comment posting, optional commit-back — and stays a TS-source composite action that runs `bun run src/index.ts` for that logic.
+
+### 28.3 Cold-start measurements (target)
+
+- First run on a fresh runner: `npm install -g @texra/cli` ≈ 12s + first `texra run` ≈ 4s = ~16s overhead before the model call.
+- Cached run: `actions/cache` hit ≈ 1s + `texra run` ≈ 4s = ~5s overhead.
+- JS Action equivalent: ~3s (no install) + ~4s = ~7s. The composite is +2s on the warm path and -∞ on the iteration path (no bundle re-cuts needed).
+
+### 28.4 Updated round-1 §6 decision
+
+| #   | Concern                | Round 1 pick      | Round 2 pick |
+| --- | ---------------------- | ----------------- | ------------ |
+| 9   | GitHub Action          | JS Action         | **Composite action + Bun runner; install CLI from npm at run time** |
+
+No other round-1 picks change.
+
+## 29. Cross-platform shared structure (kernel-side refactor)
+
+### 29.1 Today's shape
+
+The pnpm workspace has three packages skeletoned (`packages/{core,extension,desktop}`) with the kernel still living at root `src/`. Round 1 §7.1 assumed Electron Phase 0 finishes the kernel migration and the CLI is the fourth peer. Round 2 sharpens what "the kernel" means and where the per-host seams go — because the audit revealed three categories of shared code that today live mixed together.
+
+### 29.2 Three layers under `packages/core/`
+
+The kernel splits cleanly into three concentric rings; each ring has a different host-coupling rule.
+
+**Ring 1: pure logic** (zero host coupling, zero ALS).
+
+- `core/agent/` minus runtime — every modelHandler, every flow, every node, every reasoning strategy.
+- `core/model/`, `core/latex/`, `core/replacement/`, `core/eventBus/` (schemas only — no emitters).
+- `core/tools/` minus `core/tools/approval/`.
+- `core/shared/` — IPC schemas, `runStream.ts` (§23.4).
+
+These take a `RunContext` argument (post-§22) but never reach for the ambient store. Test harnesses pass a synthesized `RunContext` and never need a fake host.
+
+**Ring 2: runtime orchestration** (consumes `RunContext`; no `vscode`/`electron`/`process` access).
+
+- `core/runtime/` — `RunContext`, `Logger`, `ProgressSink` interface, `executeAgent`, all coordinators.
+- `core/tools/approval/` — gates and controllers.
+- `core/auth/` — `SupabaseSessionCoordinator`, `TierService`, `ServerSideKeyService` (post-§22.5 per-context).
+- `core/hosts/` — every host port (`PromptHost`, `ExternalOpener`, `DiffViewHost`, `TerminalHost`, `ClipboardHost`, plus the new `HookHost` from §25.6).
+- `core/storage/sessionStore.ts` (§27.6).
+
+These import from Ring 1 freely, and they accept host services through their constructor / `RunContext` — but they never `import 'vscode'`, never `import 'electron'`, never `process.exit`.
+
+**Ring 3: platform defaults** (Node-only; no `vscode`/`electron`).
+
+- `core/platform/defaults/` — today's `consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `EnvSecrets`. CLI uses 5 of 6; desktop uses similar set; extension uses none.
+
+These are the shared concrete impls that any Node host gets for free. Adding a new Node-based host (e.g. a `texra serve` daemon, or a future Tauri-based app) should require only Ring 3 + a thin host adapter — no Ring 1 or Ring 2 changes.
+
+### 29.3 What lives in `packages/{extension,desktop,cli}/`
+
+Per-host code is everything that imports a host SDK or interacts with a host's surface. Crisp rule: **the host package's `src/` is allowed to import `vscode` / `electron` / `commander` / Ink, and nothing under `core/` is**.
+
+| Host | Owns | Doesn't own |
+| ---- | ---- | ----------- |
+| Extension | `vscode.commands`, webview hosts, `frontend/vscode/*`, controllers wired to webview message handlers, `VscodeOutputChannelSink` | The agent runtime (in core); coordinators (in core) |
+| Desktop | Electron `main`, preload bridges, BrowserWindow lifecycle, `electronLogSink`, packaging | Same |
+| CLI | `commander` parsing, Ink TUI, `texra mcp serve`, `StderrTextSink`, `NdjsonStdoutSink`, hook command-runner | Same |
+
+### 29.4 The host-port catalog (consolidated)
+
+Round 1 §4.1 lists the host ports already landed (`PromptHost`, `ExternalOpener`, etc.). Round 2 adds:
+
+| Port | Added in | Implementations |
+| ---- | -------- | --------------- |
+| `LogSink` | §23.2 | `VscodeOutputChannelSink`, `electronLogSink`, `StderrTextSink`, `NdjsonStdoutSink`, `McpProgressSink`, `MemorySink` |
+| `HookHost` | §25.6 | `CommandHookHost` (CLI), `NoopHookHost` (extension/desktop v1.0) |
+| `SessionStore` | §27.6 | `JsonlSessionStore` (shared across all Node hosts; extension uses storage path under `globalStorageUri`) |
+
+All ports live in `packages/core/src/hosts/`. The `Platform` interface from `src/platform/platform.ts` stays the same — those are the *infrastructure* services (config, fs, secrets); ports are the *interaction* services. They're not the same thing and they should not merge.
+
+### 29.5 What this saves
+
+The refactor isn't free — it's ~150 LOC of `index.ts` re-exports + ESLint rules + a few moves. What it buys:
+
+- **A new host needs only the rings it cares about.** A future Tauri app: import Ring 1 + Ring 2 + a Tauri-specific Ring 3 (`tauriFilesystem`, `tauriSecrets`); zero extension or CLI code touched.
+- **Tests don't fake hosts to test logic.** Ring 1 has no host. The kernel's existing FakePlatform suite stays in Ring 2 and only exercises Ring 2 code paths.
+- **Webview vs CLI vs Electron diff is a wiring diff, not a behavior diff.** When `polish` rewrites a paragraph differently in the CLI than the extension, we have one place to look (Ring 1 + the agent's YAML), not three.
+
+### 29.6 LOC
+
+| Item | New | Modified | Deleted |
+| ---- | --- | -------- | ------- |
+| Reorg of `packages/core/src/` into `agent/` (R1), `runtime/` (R2), `platform/` (R3) — mostly `git mv` | — | ~10 (re-export files) | — |
+| ESLint `no-cross-ring-imports` rule | ~40 | — | — |
+| `core/hosts/index.ts` re-export catalog | ~30 | — | — |
+| `core/runtime/index.ts` re-export | ~20 | — | — |
+| **Subtotal** | **~90** | **~10** | — |
+
+Mostly mechanical; no rewrites of business logic.
+
+## 30. Container & GitHub-runner target matrix
+
+### 30.1 Survey-driven revisions
+
+Round 1 §12.3 listed five containers as "verified to run." The survey turns up two corrections:
+
+1. **`node:20-alpine` is best-effort, not first-class.** Alpine's musl libc breaks `@napi-rs/keyring` prebuilds (we already plan to fall back to file-based secrets there). It also breaks Bun's prebuilt binaries — relevant if a user wants to run `texra mcp serve` from Bun rather than Node. We document Alpine as supported only with the file-secrets fallback and Node-only execution.
+2. **`node:20-bookworm-slim` is the recommended Linux image.** Glibc, smallish (~80 MB before TeXRA), and `apt-get install libsecret-1-0` for keyring is one line.
+
+### 30.2 Updated matrix
+
+| Image / runner | Tier | Notes |
+| -------------- | ---- | ----- |
+| `ubuntu-22.04` (default GitHub runner) | First-class | Node 20 preinstalled. CI matrix runs full E2E here. |
+| `ubuntu-24.04` | First-class | Same. Recommended once GHA's default flips. |
+| `macos-14` (GitHub-hosted M-series) | First-class | E2E runs here for keyring path coverage. |
+| `windows-latest` | First-class | E2E runs here for path-handling coverage. |
+| `node:20-bookworm-slim` | First-class | Recommended self-hosted/container. ~80 MB. |
+| `node:20-bookworm` | First-class | Same plus build tools. ~150 MB. |
+| `texlive/texlive:latest` | First-class | TeXRA's primary integration container. Adds Node 20 via `apt-get install nodejs npm`. |
+| `mcr.microsoft.com/devcontainers/typescript-node:20` | First-class | Dev container; smoke-tested in Phase 0. |
+| `node:20-alpine` | Best-effort | Keyring fallback to file. Bun unavailable. Documented in §10.3. |
+| `gitpod/workspace-full` | Best-effort | Smoke-tested but not in CI matrix. |
+
+### 30.3 Local-development "callable from Claude Code / Codex" verification
+
+The survey-driven user goal — "callable by Claude code and codex etc" — is verified in CI by an integration test:
+
+- A GitHub Actions job spawns a fresh runner.
+- Installs `@anthropic-ai/claude-code` + `@texra/cli`.
+- Writes `.mcp.json` pointing at `texra mcp serve`.
+- Runs `claude --print "list the workflow agents available via texra"` in headless mode.
+- Asserts the response mentions at least three TeXRA workflow agent names.
+
+The same test pattern with `@openai/codex` covers the Codex path. ~120 LOC of test, runs once per PR. Cost: ~$0.03 per run (a few thousand tokens). Catches regressions in the MCP wire contract specifically — the surface most likely to silently rot because no human-in-the-loop session exercises it.
+
+### 30.4 Where-does-the-CLI-write-files matrix
+
+To make GitHub-Actions ephemerality explicit (and prevent secrets leaking via uploaded artifacts), every file path the CLI writes is documented with a default and an env override:
+
+| Concern | Default (linux) | Env override | Allowed in CI artifact upload? |
+| ------- | --------------- | ------------ | ------------------------------ |
+| Config | `~/.config/texra/config.yaml` | `TEXRA_CONFIG_DIR` | No — may contain endpoint URLs. |
+| Secrets fallback | `~/.texra/secrets.json` (chmod 0600) | `TEXRA_DATA_DIR` | **Never** — explicit gitignore + `.actignore` patterns. |
+| Session JSONL | `~/.texra/projects/<hash>/sessions/<id>.jsonl` | `TEXRA_DATA_DIR` | Yes if `--allow-session-upload` (false by default). Inputs/outputs are paths, not content; safe. |
+| Runtime cache | `~/.cache/texra/` | `TEXRA_CACHE_DIR` | Yes; non-sensitive (downloaded model schemas, agent registry). |
+| Logs (`--log-file`) | User-specified | — | User-controlled — they pick. |
+
+Documented as `texra config path` output for fast diagnosis from `texra doctor`.
+
+## 31. Round 2 — phase plan delta and aggregate LOC
+
+### 31.1 Phase plan delta vs round 1 §15
+
+Round 2 adds new work into existing phases plus one new phase (Phase 1.5) for the MCP-server surface. Phases 0, 2, 3, 4, 5 from round 1 keep their scope; Phase 1 absorbs §22 + §23 + §26 (all kernel-side, all on the critical path for tool-use agents).
+
+| Phase | Round-1 scope | Round-2 additions |
+| ----- | ------------- | ----------------- |
+| 0 | Workspace + headless workflow runner | + `RunContext` shim + Ring 1/2/3 reorg (§22.5 pre-v1, §29) |
+| 1 | Tool-use + approval engine | + per-context coordinators (§22.5 v1.0) + Logger v2 (§23) + bash predicate (§26.3) |
+| 1.5 (new) | — | `texra mcp serve` v1.0 surface (§24.5) + integration test (§30.3) |
+| 2 | Config + secrets + auth | unchanged |
+| 3 | Interactive REPL | unchanged |
+| 4 | GitHub Action | composite-action revision (§28) |
+| 5 | Polish, docs | + JSONL session migration (§27.5) + hook system v1 (§25.5) |
+
+### 31.2 Aggregate LOC
+
+| Bucket | Round-1 net | Round-2 additions | Round-2 total |
+| ------ | ----------- | ----------------- | ------------- |
+| `packages/cli/` | 2,800–3,800 | +730 (MCP §24.6, hooks adapter §25, sessions §27.6, sandbox-removed §26 ≈ 0) | **3,530–4,530** |
+| `packages/core/` (CLI pre-refactors) | ~730 | +940 (RunContext §22 net ~+170, Logger v2 §23 ~+430, HookHost §25.6 ~+140, sessionStore §27.6 ~+200, ring re-exports §29.6 ~+90, approval predicates §26 ~+80, minus overlap with Logger) | **~1,670** |
+| `texra-ai/texra-action` (separate repo) | ~800 | -300 (no JS shim; YAML composite + small TS for the high-level action only) | **~500** |
+| **Total v1** | **~4,330–5,330** | **+~1,370** | **~5,700–6,700** |
+
+The round-2 work expands the project by ~30%, but ~70% of the addition is in the kernel — work that the extension and the desktop app inherit unchanged. The CLI shell still finishes in the same ballpark (3.5–4.5 KLOC). v1 ships in **~9–11 weeks** for a single engineer, **~6–8** for two engineers (Phases 0 + 1 sequential, 1.5 + 2 parallel, 3 sequential, 4 + 5 parallel).
+
+### 31.3 Updated success criteria (additive to §17)
+
+- `texra mcp serve` is callable from Claude Code with default `.mcp.json` config; the integration test in §30.3 passes on every PR.
+- `RunContext` is the only path through which kernel code accesses progress / log / signal / approval. The ESLint `no-ambient-runtime-state` rule has zero exceptions in `packages/core/src/agent/`, `core/tools/`, `core/auth/` after v1.3.
+- A user can `texra run polish ...` from inside `texlive/texlive:latest` with only `npm install -g @texra/cli` and `ANTHROPIC_API_KEY` set — no extra setup, no other binaries.
+- Session JSONL transcripts are byte-equivalent to `--output-format ndjson` output (modulo the synthetic `session_start`/`session_end` markers).
+
+## 32. Parking lot — out of v1 scope (sized for visibility)
+
+Items the user surfaced or round-2 research uncovered as "would be nice but not urgent." Sized so the team can pick them up without re-discovering scope.
+
+### 32.1 Unified agent-SDK / message-SDK with conversation compaction
+
+User's words: "It would be nice we have a unifying agent SDK or message SDK with compactization etc but that is no rush."
+
+**Sketch:**
+
+A `core/messages/` ring sitting between Ring 1 and Ring 2: typed message envelope (`UserMessage | AssistantMessage | ToolCall | ToolResult | SystemNote`), compaction policies (`KeepAll`, `SlidingWindow(N)`, `SummarizeOldest(N)`, `TokenBudget(N)`), and a `Conversation` abstraction that all model handlers consume instead of building their own array of provider-shaped messages. Today every modelHandler in `src/agent/modelHandlers/` builds its own message array; the differences are mostly cosmetic. Compaction would hook into `PreCompact` / `PostCompact` events from §25.
+
+**Why not v1:**
+
+- Compaction policies are agent-specific (an OCR agent's "drop oldest message" is different from an orchestrator's). Designing the API right requires usage data we don't yet have.
+- Provider message shapes diverge subtly (Anthropic's vs OpenAI's vs Gemini's tool-result envelopes) — a unifying SDK either picks one and translates, or invents a new shape; both are 4–6 engineering weeks of design.
+- Round 1's existing `executeAgent` surface is enough for the CLI to ship.
+
+**Tracking:** v2.0 work; new PRD when there's a concrete proposal.
+
+### 32.2 OS-level sandbox on agent execution
+
+Codex's `seatbelt` / `landlock` model. Round 2 §26.1 declines for v1 because it's orthogonal to the CLI shell. Tracking issue when the desktop app's macOS-App-Sandbox / Windows-AppContainer story wants to converge with a CLI-side equivalent.
+
+### 32.3 `texra serve` long-lived daemon
+
+Round 1 §18.1. Same shape as opencode's HTTP server. Sized at ~800 LOC if it shares §27's session store + §24's RunContext. v1.x or v2.
+
+### 32.4 MCP resources surface (not just tools)
+
+Round 1 §18 lists `texra mcp serve` as v1.1; round 2 promotes the `tools` half but not `resources`. Resources would expose session JSONL transcripts and agent definitions as MCP resources (callers can `resources/read` to import them). ~150 LOC; depends on what calling agents actually want.
+
+### 32.5 Replay / cost guards / pipeline-as-code
+
+Round 1 §18.1 listed all three. Unchanged.
+
+### 32.6 Hooks: HTTP and `agent` handlers
+
+Round 2 ships only `command` and `prompt` handler types in §25.5. `http` (POST to a webhook) and `agent` (call back into a TeXRA agent) handlers are 80–120 LOC each and should land when there's a concrete user request — building them speculatively risks getting the contract wrong.
+
+---
+
+End of round 2. The CLI is still a thin Node shell over a host-neutral kernel; round 2 just makes the kernel honestly host-neutral (no ambient singletons), bigger in the right direction (RunContext + Logger v2 + HookHost + SessionStore are kernel-shared infra), and *callable by every other agent that speaks MCP* — which was the user's framing all along.
