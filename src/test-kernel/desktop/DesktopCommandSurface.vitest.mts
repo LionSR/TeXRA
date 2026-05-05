@@ -16,7 +16,7 @@ import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 import type { DesktopCommandActions } from '../../../packages/desktop/src/desktopCommandSurface';
 
 interface DesktopCommandSurfaceModule {
-  DESKTOP_COMMAND_IDS: readonly CommandId[];
+  DESKTOP_COMMAND_IDS: readonly string[];
   buildDesktopMenuTemplate(
     actions: DesktopCommandActions,
     platform?: NodeJS.Platform,
@@ -26,14 +26,14 @@ interface DesktopCommandSurfaceModule {
     submenu?: DesktopMenuItem[];
   }>;
   dispatchDesktopCommand(
-    id: CommandId,
+    id: string,
     actions: DesktopCommandActions,
   ): boolean;
   getDesktopCommandMenuEntries(
-    ids?: readonly CommandId[],
+    ids?: readonly string[],
     platform?: NodeJS.Platform,
   ): Array<{
-    id: CommandId;
+    id: string;
     label: string;
     category: string;
     accelerator?: string;
@@ -74,7 +74,11 @@ describe('desktop command surface', () => {
 
     expect(entries.map((entry) => entry.id)).toEqual(DESKTOP_COMMAND_IDS);
     for (const entry of entries) {
-      const catalogEntry = commandCatalogById.get(entry.id);
+      const catalogEntry = commandCatalogById.get(entry.id as CommandId);
+      if (!catalogEntry) {
+        expect(entry.category).toBe('TeXRA');
+        continue;
+      }
       expect(catalogEntry).toBeDefined();
       expect(entry.label).toBe(catalogEntry?.shortTitle ?? catalogEntry?.title);
       expect(entry.category).toBe(catalogEntry?.category);
@@ -181,6 +185,8 @@ describe('desktop command surface', () => {
     expect(submenu.map((item) => item.label ?? item.type)).toEqual([
       'Show Launcher',
       'Show Progress',
+      'Open Folder',
+      'Open Logs Folder',
       'Open TeXRA Settings',
       'separator',
       'Show Memory',
@@ -192,7 +198,7 @@ describe('desktop command surface', () => {
     ]);
 
     submenu[0].click?.();
-    submenu[6].click?.();
+    submenu[8].click?.();
     expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
   });
