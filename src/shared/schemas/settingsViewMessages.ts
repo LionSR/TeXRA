@@ -509,11 +509,14 @@ export type UpdateLatexConfigValuesMessage = z.infer<
 // to avoid duplicating definitions. The command literal strings are identical.
 
 // Provider key inbound messages (settings-only)
-const SubmittedApiKeySchema = z.preprocess(
-  (value) =>
-    typeof value === 'string' && value.trim() === '' ? undefined : value,
-  z.string().trim().min(1).optional(),
-);
+// Keep the outer optional: callers may omit apiKey so the host can prompt.
+const SubmittedApiKeySchema = z
+  .preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().trim().min(1).optional(),
+  )
+  .optional();
 
 const SetProviderKeyMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_KEY),
