@@ -281,4 +281,34 @@ describe('desktop command palette', () => {
     );
     expect(controller.element.hidden).toBe(false);
   });
+
+  it('does not steal shortcuts from shadow-dom text entry targets', async () => {
+    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
+    const dom = new JSDOM('<main-app id="host"></main-app>');
+    const host = dom.window.document.querySelector<HTMLElement>('#host');
+    const shadowRoot = host?.attachShadow({ mode: 'open' });
+    const shadowInput = dom.window.document.createElement('input');
+    shadowRoot?.append(shadowInput);
+    const controller = createDesktopCommandPalette({
+      document: dom.window.document,
+      actions: {
+        showRoute: vi.fn(),
+        showSettings: vi.fn(),
+      },
+      platform: 'darwin',
+    });
+
+    dom.window.document.body.append(controller.element);
+    shadowInput.focus();
+    shadowInput.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', {
+        key: 'k',
+        metaKey: true,
+        bubbles: true,
+        composed: true,
+      }),
+    );
+
+    expect(controller.element.hidden).toBe(true);
+  });
 });

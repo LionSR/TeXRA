@@ -206,7 +206,7 @@ export function createDesktopCommandPalette({
 
   document.defaultView?.addEventListener('keydown', (event) => {
     if (!isCommandPaletteShortcut(event)) return;
-    if (isTextEntryTarget(view, event.target)) return;
+    if (isTextEntryShortcutTarget(view, document, event)) return;
     event.preventDefault();
     open();
   });
@@ -289,7 +289,18 @@ function isElement(
   return elementConstructor != null && target instanceof elementConstructor;
 }
 
-function isTextEntryTarget(
+function isTextEntryShortcutTarget(
+  view: Window | null,
+  document: Document,
+  event: KeyboardEvent,
+): boolean {
+  if (event.composedPath().some((target) => isTextEntryElement(view, target))) {
+    return true;
+  }
+  return isTextEntryElement(view, getDeepActiveElement(document));
+}
+
+function isTextEntryElement(
   view: Window | null,
   target: EventTarget | null,
 ): boolean {
@@ -299,4 +310,12 @@ function isTextEntryTarget(
       'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
     ) != null
   );
+}
+
+function getDeepActiveElement(document: Document): Element | null {
+  let activeElement = document.activeElement;
+  while (activeElement?.shadowRoot?.activeElement) {
+    activeElement = activeElement.shadowRoot.activeElement;
+  }
+  return activeElement;
 }
