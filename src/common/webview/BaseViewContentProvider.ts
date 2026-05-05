@@ -127,6 +127,8 @@ export abstract class BaseViewContentProvider {
         BaseViewContentProvider.SHARED_MODULE_DESCRIPTORS,
         ['dist', 'shared'],
       ),
+      // The codicon stylesheet stays in node_modules, but the font file must
+      // come from Vite output because VSIX builds omit node_modules fonts.
       codiconsFontUri: this.buildUri(webview, [
         'dist',
         this.getViewPath(),
