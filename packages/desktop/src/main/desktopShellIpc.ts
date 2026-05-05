@@ -20,6 +20,7 @@ import {
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
+import type { DesktopCommandActions } from '../desktopCommandSurface.js';
 
 export interface DesktopShellIpcOptions {
   actions?: DesktopShellActions;
@@ -28,11 +29,9 @@ export interface DesktopShellIpcOptions {
   onAsyncError?: (error: unknown) => void;
 }
 
-export interface DesktopShellActions {
+export interface DesktopShellActions extends DesktopCommandActions {
   openAgentDirectory(customDirSet?: boolean): void;
   setRecentCommitsUnavailable(): void;
-  showRoute(route: DesktopRoute): void;
-  showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
 }
 
 const SWITCH_VIEW_ROUTES = {
