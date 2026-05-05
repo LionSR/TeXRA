@@ -20,6 +20,11 @@ export class MainViewContentProvider extends BaseViewContentProvider {
         'webview',
         'bundle.js',
       ]),
+      mainViewStyleUri: this.buildUri(webview, [
+        'dist',
+        'webview',
+        'index.css',
+      ]),
     };
   }
 }
