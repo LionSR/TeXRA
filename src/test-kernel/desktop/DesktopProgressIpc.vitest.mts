@@ -15,6 +15,37 @@ interface DesktopProgressIpcModule {
       setAgentFilter(filter: string): void;
       deleteStream(stream: string): Promise<void>;
       deleteAllStreams(): Promise<void>;
+      stopStream(stream: string): void;
+      resumeStream(stream: string): Promise<void>;
+      runNewStream(stream: string): Promise<void>;
+      sendFollowUp(stream: string, text: string): Promise<void>;
+      openFile(file: string): Promise<void>;
+      handleToolEditApprovalAction(message: {
+        command: string;
+        requestId: string;
+        action: string;
+        feedback?: string;
+      }): boolean;
+      handleBashApprovalAction(message: {
+        command: string;
+        requestId: string;
+        action: string;
+        feedback?: string;
+      }): Promise<void>;
+      handlePlanApprovalAction(message: {
+        command: string;
+        approvalId: string;
+        action: string;
+        feedback?: string;
+      }): void;
+      handleAgentProposalAction(message: {
+        command: string;
+        proposalId: string;
+        action: string;
+        feedback?: string;
+        model?: string;
+        agent?: string;
+      }): boolean;
     };
     onUnsupportedCommand?: (message: { command: string }) => void;
     onAsyncError?: (error: unknown) => void;
@@ -39,6 +70,15 @@ function createProgress() {
     setAgentFilter: vi.fn(),
     deleteStream: vi.fn(async (_stream: string) => {}),
     deleteAllStreams: vi.fn(async () => {}),
+    stopStream: vi.fn(),
+    resumeStream: vi.fn(async (_stream: string) => {}),
+    runNewStream: vi.fn(async (_stream: string) => {}),
+    sendFollowUp: vi.fn(async (_stream: string, _text: string) => {}),
+    openFile: vi.fn(async (_file: string) => {}),
+    handleToolEditApprovalAction: vi.fn(() => true),
+    handleBashApprovalAction: vi.fn(async () => {}),
+    handlePlanApprovalAction: vi.fn(),
+    handleAgentProposalAction: vi.fn(() => true),
   };
 }
 
@@ -106,10 +146,8 @@ describe('desktop Progress IPC', () => {
         stream: 'run-1',
       }),
     ).toBe(true);
-    expect(onUnsupportedCommand).toHaveBeenCalledWith({
-      command: PROGRESS_VIEW_COMMANDS.STOP_STREAM,
-      stream: 'run-1',
-    });
+    expect(progress.stopStream).toHaveBeenCalledWith('run-1');
+    expect(onUnsupportedCommand).not.toHaveBeenCalled();
 
     expect(
       ipc.handleMessage({
@@ -117,6 +155,120 @@ describe('desktop Progress IPC', () => {
         view: 'progress',
       }),
     ).toBe(false);
-    expect(onUnsupportedCommand).toHaveBeenCalledTimes(1);
+    expect(onUnsupportedCommand).not.toHaveBeenCalled();
+  });
+
+  it('maps high-use Progress action commands to the desktop bridge', async () => {
+    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
+    const progress = createProgress();
+    const ipc = createDesktopProgressIpc({ progress });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.RESUME,
+        stream: 'run-1',
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
+        stream: 'run-1',
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: 'run-1',
+        text: 'continue please',
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
+        file: '/tmp/out.tex',
+        line: 4,
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE,
+        file: '/tmp/out.pdf',
+      }),
+    ).toBe(true);
+
+    await Promise.resolve();
+    expect(progress.resumeStream).toHaveBeenCalledWith('run-1');
+    expect(progress.runNewStream).toHaveBeenCalledWith('run-1');
+    expect(progress.sendFollowUp).toHaveBeenCalledWith(
+      'run-1',
+      'continue please',
+    );
+    expect(progress.openFile).toHaveBeenNthCalledWith(1, '/tmp/out.tex');
+    expect(progress.openFile).toHaveBeenNthCalledWith(2, '/tmp/out.pdf');
+  });
+
+  it('maps approval actions and reports desktop-only unsupported approval variants', async () => {
+    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
+    const progress = createProgress();
+    const onUnsupportedCommand = vi.fn();
+    const ipc = createDesktopProgressIpc({
+      progress,
+      onUnsupportedCommand,
+    });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
+        requestId: 'bash-1',
+        action: 'approve',
+      }),
+    ).toBe(true);
+    expect(progress.handleBashApprovalAction).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
+      requestId: 'bash-1',
+      action: 'approve',
+    });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+        approvalId: 'plan-1',
+        action: 'reject',
+        feedback: 'needs work',
+      }),
+    ).toBe(true);
+    expect(progress.handlePlanApprovalAction).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+      approvalId: 'plan-1',
+      action: 'reject',
+      feedback: 'needs work',
+    });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+        requestId: 'edit-1',
+        action: 'approve',
+      }),
+    ).toBe(true);
+    expect(progress.handleToolEditApprovalAction).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+      requestId: 'edit-1',
+      action: 'approve',
+    });
+
+    progress.handleToolEditApprovalAction.mockReturnValueOnce(false);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+        requestId: 'edit-2',
+        action: 'openDiff',
+      }),
+    ).toBe(true);
+    expect(onUnsupportedCommand).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+      requestId: 'edit-2',
+      action: 'openDiff',
+    });
   });
 });
