@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
-} from '@common/errors/errorHandlingUtils';
+} from '@frontend/ui/errorHandlingUtils';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { tikzPictureManager } from '@latex/TikzPictureManager';

@@ -1,7 +1,7 @@
 /**
  * Common host-neutral error utilities.
  *
- * VS Code notification helpers live in @common/errors/errorHandlingUtils.
+ * VS Code notification helpers live in @frontend/ui/errorHandlingUtils.
  * SDK-specific utilities (isContextWindowError, attachStreamDiagnostics,
  * buildErrorLogData, etc.) should be imported directly from
  * @common/errors/sdkErrorUtils - they are not part of the public barrel.
