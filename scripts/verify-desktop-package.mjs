@@ -156,6 +156,19 @@ async function checkNoVscodeRuntimeImport(app, failures) {
   );
 }
 
+async function checkDesktopMainDynamicRequireShim(app, failures) {
+  const mainBundlePath = 'dist/main/index.js';
+  if (!(await app.exists(mainBundlePath))) return;
+
+  const mainBundle = await app.readText(mainBundlePath);
+  if (!mainBundle.includes('Dynamic require of')) return;
+  if (mainBundle.includes('__texraCreateRequire(import.meta.url)')) return;
+
+  failures.push(
+    'Packaged desktop main bundle contains esbuild dynamic require calls without the Node createRequire shim.',
+  );
+}
+
 async function checkDesktopSourceBoundaries(failures) {
   for (const dir of desktopSourceBoundaryDirs) {
     if (!(await exists(dir))) continue;
@@ -257,6 +270,7 @@ if (!app) {
   await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);
   await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
   await checkNoVscodeRuntimeImport(app, failures);
+  await checkDesktopMainDynamicRequireShim(app, failures);
 
   const assets = await app.listDir('dist/renderer/assets');
   if (!assets.some((asset) => asset.endsWith('.js'))) {
@@ -286,6 +300,7 @@ console.log(
     '- package.json runtime dependencies',
     '- node_modules runtime dependency packages',
     '- no VS Code extension host runtime import',
+    '- desktop main dynamic require shim',
     '- desktop-shared source uses vscode-free state keys',
     '- desktop-shared source avoids VS Code runtime imports',
   ].join('\n'),

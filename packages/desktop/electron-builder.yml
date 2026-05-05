@@ -5,6 +5,7 @@ asar: true
 npmRebuild: false
 directories:
   output: dist-packaged
+  buildResources: build
 files:
   - from: dist
     to: dist
@@ -12,6 +13,7 @@ files:
       - '**/*'
   - package.json
 mac:
+  icon: build/icon.icns
   target:
     - dir
 win:
