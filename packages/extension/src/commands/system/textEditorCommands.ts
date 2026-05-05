@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - Tool implementations
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import {
   TextEditorTool,

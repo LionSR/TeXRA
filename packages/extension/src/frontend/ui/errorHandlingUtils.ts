@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 
+import { formatError, formatZodError } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { formatError, formatZodError } from './errorFormatUtils';
 import type { z } from 'zod';
 
 export { formatError, formatZodError };
-export { toErrorMessage } from './errorMessage';
-export { isDiskFullError, isFileNotFoundError } from './errorPredicates';
+export {
+  isDiskFullError,
+  isFileNotFoundError,
+  toErrorMessage,
+} from '@common/errors';
 
 /** Valid documentation identifiers for error messages. */
 export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';

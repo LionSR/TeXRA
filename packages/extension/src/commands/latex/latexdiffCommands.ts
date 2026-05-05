@@ -18,7 +18,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
   showLoggedMessageWithDocs,
-} from '@common/errors/errorHandlingUtils';
+} from '@frontend/ui/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   runPackLatexdiffvc,
