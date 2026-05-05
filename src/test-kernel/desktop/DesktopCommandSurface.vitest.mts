@@ -9,13 +9,18 @@ import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import type { DesktopShellActions } from '../../../packages/desktop/src/main/desktopShellIpc';
 
 interface DesktopCommandSurfaceModule {
   DESKTOP_COMMAND_IDS: readonly CommandId[];
   buildDesktopMenuTemplate(
     actions: DesktopShellActions,
     platform?: NodeJS.Platform,
-  ): DesktopMenuItem[];
+  ): Array<{
+    label?: string;
+    role?: string;
+    submenu?: DesktopMenuItem[];
+  }>;
   dispatchDesktopCommand(id: CommandId, actions: DesktopShellActions): boolean;
   getDesktopCommandMenuEntries(
     ids?: readonly CommandId[],
@@ -30,13 +35,6 @@ interface DesktopCommandSurfaceModule {
     keybinding: { key: string; mac?: string },
     platform?: NodeJS.Platform,
   ): string;
-}
-
-interface DesktopShellActions {
-  openAgentDirectory(customDirSet?: boolean): void;
-  setRecentCommitsUnavailable(): void;
-  showRoute(route: string): void;
-  showSettings(tabIndex?: string): void;
 }
 
 interface DesktopMenuItem {
@@ -138,9 +136,17 @@ describe('desktop command surface', () => {
     };
     const menu = buildDesktopMenuTemplate(actions, 'darwin');
 
-    expect(menu).toHaveLength(1);
-    expect(menu[0].label).toBe('TeXRA');
-    const submenu = menu[0].submenu ?? [];
+    expect(menu.map((item) => item.label ?? item.role)).toEqual([
+      'appMenu',
+      'fileMenu',
+      'TeXRA',
+      'editMenu',
+      'viewMenu',
+      'windowMenu',
+      'help',
+    ]);
+    const texraMenu = menu.find((item) => item.label === 'TeXRA');
+    const submenu = texraMenu?.submenu ?? [];
     expect(submenu.map((item) => item.label ?? item.type)).toEqual([
       'Show Launcher',
       'Show Progress',

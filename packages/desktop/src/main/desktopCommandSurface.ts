@@ -4,6 +4,7 @@ import {
   type CommandKeybinding,
 } from '@commands/catalog';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopShellActions } from './desktopShellIpc.js';
 
 export const DESKTOP_COMMAND_IDS = [
@@ -27,14 +28,6 @@ export interface DesktopCommandMenuEntry {
   label: string;
   category: string;
   accelerator?: string;
-}
-
-export interface DesktopMenuItem {
-  label?: string;
-  accelerator?: string;
-  submenu?: DesktopMenuItem[];
-  type?: 'separator';
-  click?: () => void;
 }
 
 const DESKTOP_MENU_GROUPS = [
@@ -121,14 +114,14 @@ export function dispatchDesktopCommand(
 export function buildDesktopMenuTemplate(
   actions: DesktopShellActions,
   platform: NodeJS.Platform = process.platform,
-): DesktopMenuItem[] {
+): MenuItemConstructorOptions[] {
   const entriesById = new Map(
     getDesktopCommandMenuEntries(DESKTOP_COMMAND_IDS, platform).map((entry) => [
       entry.id,
       entry,
     ]),
   );
-  const commandItem = (id: DesktopCommandId): DesktopMenuItem => {
+  const commandItem = (id: DesktopCommandId): MenuItemConstructorOptions => {
     const entry = entriesById.get(id);
     if (!entry) throw new Error(`Missing desktop menu entry: ${id}`);
     return {
@@ -139,16 +132,27 @@ export function buildDesktopMenuTemplate(
       },
     };
   };
+  const customMenu: MenuItemConstructorOptions = {
+    label: 'TeXRA',
+    submenu: [
+      ...DESKTOP_MENU_GROUPS[0].map(commandItem),
+      { type: 'separator' },
+      ...DESKTOP_MENU_GROUPS[1].map(commandItem),
+    ],
+  };
 
   return [
-    {
-      label: 'TeXRA',
-      submenu: [
-        ...DESKTOP_MENU_GROUPS[0].map(commandItem),
-        { type: 'separator' },
-        ...DESKTOP_MENU_GROUPS[1].map(commandItem),
-      ],
-    },
+    ...(platform === 'darwin'
+      ? ([
+          { role: 'appMenu' },
+          { role: 'fileMenu' },
+        ] satisfies MenuItemConstructorOptions[])
+      : ([{ role: 'fileMenu' }] satisfies MenuItemConstructorOptions[])),
+    customMenu,
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    { role: 'help' },
   ];
 }
 
