@@ -1,4 +1,5 @@
 // Node imports
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,28 +19,34 @@ interface ElectronTestStubOptions {
 }
 
 const DEFAULT_SAFE_STORAGE_BACKEND = 'os_crypt';
-let resetCounter = 0;
-let userDataPath = makeDefaultUserDataPath();
+let userDataPath: string | undefined;
 let safeStorageBackend: SafeStorageBackend = DEFAULT_SAFE_STORAGE_BACKEND;
 let safeStorageEncryptionAvailable = true;
 
 function makeDefaultUserDataPath(): string {
-  resetCounter += 1;
-  return join(tmpdir(), `texra-electron-test-${process.pid}-${resetCounter}`);
+  return mkdtempSync(join(tmpdir(), 'texra-electron-test-'));
+}
+
+function getUserDataPath(): string {
+  userDataPath ??= makeDefaultUserDataPath();
+  return userDataPath;
 }
 
 export function configureElectronTestStub(
   options: ElectronTestStubOptions,
 ): void {
   userDataPath = options.userDataPath ?? userDataPath;
-  safeStorageBackend =
-    options.safeStorageBackend ?? DEFAULT_SAFE_STORAGE_BACKEND;
+  safeStorageBackend = options.safeStorageBackend ?? safeStorageBackend;
   safeStorageEncryptionAvailable =
-    options.safeStorageEncryptionAvailable ?? true;
+    options.safeStorageEncryptionAvailable ?? safeStorageEncryptionAvailable;
+}
+
+export function getElectronTestStubUserDataPath(): string | undefined {
+  return userDataPath;
 }
 
 export function resetElectronTestStub(): void {
-  userDataPath = makeDefaultUserDataPath();
+  userDataPath = undefined;
   safeStorageBackend = DEFAULT_SAFE_STORAGE_BACKEND;
   safeStorageEncryptionAvailable = true;
 }
@@ -47,7 +54,7 @@ export function resetElectronTestStub(): void {
 export const app = {
   getAppPath: () => repoPath(),
   getPath: (name: string) =>
-    name === 'userData' ? userDataPath : join(userDataPath, name),
+    name === 'userData' ? getUserDataPath() : join(getUserDataPath(), name),
   getVersion: () => '0.0.0-test',
 };
 

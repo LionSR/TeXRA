@@ -10,8 +10,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   app as electronApp,
   configureElectronTestStub,
+  getElectronTestStubUserDataPath,
   resetElectronTestStub,
+  safeStorage as electronSafeStorage,
 } from './electronTestStub.mjs';
+import { REPO_ROOT } from './desktopTestPaths.mjs';
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 
 interface JsonStore {
@@ -80,12 +83,13 @@ describe('desktop platform adapters', () => {
 
   afterEach(async () => {
     process.env = { ...originalEnv };
+    const stubUserDataPath = getElectronTestStubUserDataPath();
+    if (stubUserDataPath != null) tempDirs.push(stubUserDataPath);
     resetElectronTestStub();
     vi.restoreAllMocks();
+    const pathsToRemove = [...new Set(tempDirs.splice(0))];
     await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((path) => rm(path, { recursive: true, force: true })),
+      pathsToRemove.map((path) => rm(path, { recursive: true, force: true })),
     );
   });
 
@@ -95,13 +99,29 @@ describe('desktop platform adapters', () => {
     return tempDir;
   }
 
-  it('keeps Electron app paths isolated from the checkout', async () => {
+  it('keeps default Electron app paths isolated from the checkout', () => {
+    const userDataPath = electronApp.getPath('userData');
+
+    expect(userDataPath).not.toContain(REPO_ROOT);
+    expect(userDataPath).toContain('texra-electron-test-');
+    expect(electronApp.getPath('logs')).toBe(join(userDataPath, 'logs'));
+  });
+
+  it('allows tests to override Electron app paths', async () => {
     const root = await makeTempDir('texra-electron-user-data-');
 
     configureElectronTestStub({ userDataPath: root });
 
     expect(electronApp.getPath('userData')).toBe(root);
     expect(electronApp.getPath('logs')).toBe(join(root, 'logs'));
+  });
+
+  it('merges partial Electron stub safe storage configuration', () => {
+    configureElectronTestStub({ safeStorageEncryptionAvailable: false });
+    configureElectronTestStub({ safeStorageBackend: 'basic_text' });
+
+    expect(electronSafeStorage.isEncryptionAvailable()).toBe(false);
+    expect(electronSafeStorage.getSelectedStorageBackend()).toBe('basic_text');
   });
 
   it('persists state values and deletes undefined updates through JsonStore', async () => {
