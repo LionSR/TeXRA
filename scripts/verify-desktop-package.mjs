@@ -1,6 +1,6 @@
-import { access, readdir, readFile } from 'node:fs/promises';
+import { access, readdir, readFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { basename, dirname, join, relative } from 'node:path';
+import { basename, dirname, join, posix, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +27,24 @@ const desktopSourceBoundaryDirs = [
   ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
 ];
 const bundledAgentResourceDirs = ['agents', 'tool_use_agents'];
+const desktopStartupForbiddenBundleMarkers = [
+  {
+    label: '@google/genai',
+    patterns: [
+      '@google/genai',
+      'node_modules/.pnpm/@google+genai',
+      'google-auth-library',
+    ],
+  },
+  {
+    label: 'OpenAI SDK',
+    patterns: ['node_modules/.pnpm/openai@'],
+  },
+  {
+    label: 'Anthropic SDK',
+    patterns: ['node_modules/.pnpm/@anthropic-ai'],
+  },
+];
 
 async function exists(path) {
   try {
@@ -105,6 +123,18 @@ function createAsarAppReader(asarPath) {
       if (entries.has(normalizeAsarPath(path))) return true;
       return exists(join(resourceRoot, path));
     },
+    async isDirectory(path) {
+      const normalizedPath = normalizeAsarPath(path);
+      for (const entry of entries) {
+        if (entry.startsWith(`${normalizedPath}/`)) return true;
+      }
+      try {
+        return (await stat(join(resourceRoot, path))).isDirectory();
+      } catch (error) {
+        if (error?.code === 'ENOENT') return false;
+        throw error;
+      }
+    },
     async readJson(path) {
       return JSON.parse(extractFile(asarPath, path).toString('utf8'));
     },
@@ -141,6 +171,14 @@ function createDirectoryAppReader(appRoot) {
     exists(path) {
       return exists(join(appRoot, path));
     },
+    async isDirectory(path) {
+      try {
+        return (await stat(join(appRoot, path))).isDirectory();
+      } catch (error) {
+        if (error?.code === 'ENOENT') return false;
+        throw error;
+      }
+    },
     readJson(path) {
       return readJson(join(appRoot, path));
     },
@@ -167,26 +205,102 @@ async function checkExists(app, path, label, failures) {
 }
 
 async function checkNoVscodeRuntimeImport(app, failures) {
-  const mainBundlePath = 'dist/main/index.js';
-  if (!(await app.exists(mainBundlePath))) return;
-  const mainBundle = await app.readText(mainBundlePath);
-  if (!vscodeRuntimeImportPattern.test(mainBundle)) return;
-  failures.push(
-    'Packaged desktop main bundle contains a runtime import of the VS Code extension host module.',
-  );
+  for (const bundlePath of await collectMainJavaScriptBundles(app)) {
+    const mainBundle = await app.readText(bundlePath);
+    if (!vscodeRuntimeImportPattern.test(mainBundle)) continue;
+    failures.push(
+      `Packaged desktop main bundle contains a runtime import of the VS Code extension host module: ${bundlePath}`,
+    );
+  }
 }
 
 async function checkDesktopMainDynamicRequireShim(app, failures) {
-  const mainBundlePath = 'dist/main/index.js';
-  if (!(await app.exists(mainBundlePath))) return;
+  for (const bundlePath of await collectMainJavaScriptBundles(app)) {
+    const mainBundle = await app.readText(bundlePath);
+    if (!mainBundle.includes('Dynamic require of')) continue;
+    if (mainBundle.includes('__texraCreateRequire(import.meta.url)')) continue;
 
-  const mainBundle = await app.readText(mainBundlePath);
-  if (!mainBundle.includes('Dynamic require of')) return;
-  if (mainBundle.includes('__texraCreateRequire(import.meta.url)')) return;
+    failures.push(
+      `Packaged desktop main bundle contains esbuild dynamic require calls without the Node createRequire shim: ${bundlePath}`,
+    );
+  }
+}
 
-  failures.push(
-    'Packaged desktop main bundle contains esbuild dynamic require calls without the Node createRequire shim.',
-  );
+async function collectMainJavaScriptBundles(app, dir = 'dist/main') {
+  const entries = await app.listDir(dir);
+  const bundles = [];
+  for (const entry of entries) {
+    const entryPath = posix.join(dir, entry);
+    if (entry.endsWith('.js')) {
+      bundles.push(entryPath);
+    } else if (await app.isDirectory(entryPath)) {
+      bundles.push(...(await collectMainJavaScriptBundles(app, entryPath)));
+    }
+  }
+  return bundles.sort();
+}
+
+function parseStaticRelativeImports(source) {
+  const imports = [];
+  const staticImportPattern =
+    /^(?:import\s+(?:[^'"]*?\s+from\s+)?|export\s+(?:\*|{[^}]*}|\*\s+as\s+\w+)\s+from\s+)['"](\.\/[^'"]+)['"];?/gm;
+  for (const match of source.matchAll(staticImportPattern)) {
+    imports.push(match[1]);
+  }
+  return imports;
+}
+
+function parseDynamicRelativeImports(source) {
+  const imports = [];
+  const dynamicImportPattern = /import\(\s*['"](\.\/[^'"]+)['"]\s*\)/g;
+  for (const match of source.matchAll(dynamicImportPattern)) {
+    imports.push(match[1]);
+  }
+  return imports;
+}
+
+async function checkDesktopStartupBundles(app, failures) {
+  const entryPath = 'dist/main/index.js';
+  if (!(await app.exists(entryPath))) return;
+
+  const pending = [entryPath];
+  const visited = new Set();
+  while (pending.length > 0) {
+    const bundlePath = pending.shift();
+    if (!bundlePath || visited.has(bundlePath)) continue;
+    visited.add(bundlePath);
+
+    const source = await app.readText(bundlePath);
+    const forbidden = desktopStartupForbiddenBundleMarkers.filter(
+      ({ patterns }) => patterns.some((pattern) => source.includes(pattern)),
+    );
+    if (forbidden.length > 0) {
+      failures.push(
+        `Packaged desktop startup bundle eagerly includes provider SDK code (${forbidden
+          .map(({ label }) => label)
+          .join(', ')}): ${bundlePath}`,
+      );
+    }
+
+    const imports = parseStaticRelativeImports(source);
+    if (bundlePath === entryPath) {
+      const dynamicImports = parseDynamicRelativeImports(source);
+      if (dynamicImports.length !== 1) {
+        failures.push(
+          `Packaged desktop bootstrap entry should have exactly one startup dynamic import, found ${dynamicImports.length}.`,
+        );
+      }
+      imports.push(...dynamicImports);
+    }
+    for (const specifier of imports) {
+      const importedPath = posix.normalize(
+        posix.join(posix.dirname(bundlePath), specifier),
+      );
+      if (await app.exists(importedPath)) {
+        pending.push(importedPath);
+      }
+    }
+  }
 }
 
 async function checkDesktopSourceBoundaries(failures) {
@@ -326,6 +440,7 @@ if (!app) {
   checkedMacIcon = await checkMacIcon(app, failures);
   await checkNoVscodeRuntimeImport(app, failures);
   await checkDesktopMainDynamicRequireShim(app, failures);
+  await checkDesktopStartupBundles(app, failures);
 
   const assets = await app.listDir('dist/renderer/assets');
   if (!assets.some((asset) => asset.endsWith('.js'))) {
@@ -356,6 +471,7 @@ const summary = [
   '- node_modules runtime dependency packages',
   '- no VS Code extension host runtime import',
   '- desktop main dynamic require shim',
+  '- desktop startup bundles exclude provider SDKs',
   '- desktop-shared source uses vscode-free state keys',
   '- desktop-shared source avoids VS Code runtime imports',
 ];
