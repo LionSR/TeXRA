@@ -1,6 +1,6 @@
 import { Menu } from 'electron';
 
-import { buildDesktopMenuTemplate } from './desktopCommandSurface.js';
+import { buildDesktopMenuTemplate } from '../desktopCommandSurface.js';
 import type { DesktopShellActions } from './desktopShellIpc.js';
 
 export function installDesktopMenu(actions: DesktopShellActions): void {
