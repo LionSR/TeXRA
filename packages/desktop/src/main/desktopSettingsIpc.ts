@@ -1,6 +1,7 @@
-import { platform } from '@platform/platform';
+import { platform, tryPlatform } from '@platform/platform';
 
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import {
   SettingsAgentCatalogController,
   type SettingsAgentCatalogState,
@@ -22,13 +23,35 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import {
+  API_PROVIDERS,
+  apiKeySecretName,
+  invalidateApiKeyCache,
+  loadApiKeyStatusMap,
+  type ApiProvider,
+} from '@model/apiProviders';
+import {
   DEFAULT_MODELS,
   buildBasicModelOptionsData,
 } from '@model/modelOptionsBasic';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import {
+  PROVIDER_DISPLAY_NAMES,
+  PROVIDER_URLS,
+} from '@shared/constants/providers';
+import {
+  LATEX_WORKSHOP_EXT_ID,
+  normalizePlatform,
+} from '@shared/constants/latex';
+import {
+  NESTED_DELEGATION_DEPTH_RANGE,
+  clampNestedDelegationDepth,
+} from '@shared/constants/delegationPolicy';
 import type { LatexConfigField } from '@shared/constants/latex';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   SettingsViewInboundMessageSchema,
+  type LatexSettingsStatus,
+  type ProviderKeyStatus,
   type ReasoningLevel,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
@@ -43,8 +66,25 @@ import {
   applyGitAuthorSettings,
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
+import { BinaryResolver } from '@utils/system/binaryResolver';
+import {
+  checkToolInstalled,
+  detectPackageManager,
+} from '@utils/system/toolUtils';
+import {
+  getGlobalStreaming,
+  getProviderDisplayName,
+  getProviderEndpoint,
+  getProviderKeyUrl,
+  getProviderStreaming,
+  setGlobalStreaming,
+  setProviderEndpoint,
+  setProviderStreaming,
+  supportsCustomEndpoint,
+} from '@utils/config/providerConfig';
 import type { ConfigProvider } from '@platform/interfaces/config';
 import type { StateStore } from '@platform/interfaces/state';
+import type { PlatformSecrets } from '@platform/secrets';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -68,6 +108,21 @@ export interface DesktopSettingsIpcOptions {
   selectCustomAgentDirectory?: () => Promise<string | undefined>;
   openExternalUrl?: (url: string) => Promise<void>;
   installToolExtension?: (extensionId: string) => Promise<void>;
+  promptSecret?: (input: {
+    title: string;
+    prompt: string;
+  }) => Promise<string | undefined>;
+  promptText?: (input: {
+    title: string;
+    prompt: string;
+  }) => Promise<string | undefined>;
+  showInfoMessage?: (message: string) => Promise<void>;
+  showErrorMessage?: (message: string) => Promise<void>;
+  signIn?: () => Promise<void>;
+  signOut?: () => Promise<void>;
+  secrets?: PlatformSecrets;
+  detectLatexSettingsStatus?: () => Promise<LatexSettingsStatus>;
+  runInstallCommand?: (command: string) => Promise<void>;
   runToolCommand?: (input: {
     toolId: string;
     command: string;
@@ -77,6 +132,12 @@ export interface DesktopSettingsIpcOptions {
 }
 
 export type DesktopSettingsIpc = DesktopMessageHandler;
+
+const emptySecrets: PlatformSecrets = {
+  get: () => Promise.resolve(undefined),
+  set: () => Promise.resolve(),
+  delete: () => Promise.resolve(),
+};
 
 async function buildDefaultToolDashboardItems(
   cachedResults?: ExternalToolCheckResult[],
@@ -112,6 +173,10 @@ async function findToolCommand(
   return kind === 'install' ? def?.installCommand : def?.authCommand;
 }
 
+function isApiProvider(provider: string): provider is ApiProvider {
+  return (API_PROVIDERS as readonly string[]).includes(provider);
+}
+
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): DesktopSettingsIpc {
@@ -131,10 +196,23 @@ export function createDesktopSettingsIpc(
     options.buildToolDashboardItems ?? buildDefaultToolDashboardItems;
   const refreshToolAvailability =
     options.refreshToolAvailability ?? refreshDefaultToolAvailability;
+  const secrets = options.secrets ?? tryPlatform()?.secrets ?? emptySecrets;
   const getCustomAgentDirectory =
     options.getCustomAgentDirectory ?? (() => getAgentDirectories().custom());
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
+  const latexToolingController = new LatexToolingController({
+    checkToolInstalled: (tool) => checkToolInstalled(tool, false),
+    findPath: (tool) => BinaryResolver.findPath(tool),
+    detectPackageManager,
+    getPlatform: () => normalizePlatform(process.platform),
+    isLatexWorkshopInstalled: () => false,
+    getRecommendedStatus: () => ({
+      outDir: true,
+      autoRevealExclude: true,
+    }),
+    onDetectionError: onError,
+  });
   const agentCatalogState: SettingsAgentCatalogState = {
     getEnabledAgentKeys: (category) =>
       workspaceState.get<string[]>(getAgentStateKey(category)),
@@ -295,6 +373,7 @@ export function createDesktopSettingsIpc(
   }
 
   function postMainModelOptionsData(): void {
+    invalidateModelOptionsCache();
     options.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       optionsData: buildBasicModelOptionsData(
@@ -318,7 +397,24 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function postProfileData(): void {
+  async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
+    const statuses = await loadApiKeyStatusMap(secrets, API_PROVIDERS);
+    return API_PROVIDERS.map((provider) => ({
+      provider,
+      displayName: getProviderDisplayName(
+        provider,
+        PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+      ),
+      status: statuses[provider],
+      keyUrl: getProviderKeyUrl(provider, PROVIDER_URLS[provider] ?? ''),
+      streaming: getProviderStreaming(provider),
+      customEndpoint: getProviderEndpoint(provider),
+      supportsCustomEndpoint: supportsCustomEndpoint(provider),
+      vscodeSettings: [],
+    }));
+  }
+
+  async function postProfileData(): Promise<void> {
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       authenticated: false,
@@ -329,8 +425,8 @@ export function createDesktopSettingsIpc(
       apiAccessMode: 'personal',
       allowedModels: [],
       tierConstants: { ultra: ULTRA_TIER, max: MAX_TIER },
-      providerKeyStatuses: [],
-      globalStreamingDefault: true,
+      providerKeyStatuses: await getProviderKeyStatuses(),
+      globalStreamingDefault: getGlobalStreaming(),
     });
   }
 
@@ -345,6 +441,45 @@ export function createDesktopSettingsIpc(
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       items,
+    });
+  }
+
+  async function postLatexSettingsStatus(): Promise<void> {
+    const settings =
+      (await options.detectLatexSettingsStatus?.()) ??
+      (await latexToolingController.detectStatus());
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+      settings,
+    });
+  }
+
+  function postSuperYoloEnabled(): void {
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
+      enabled: true,
+      reliabilitySettings: [],
+      allowOrchestratorKill: workspaceState.get<boolean>(
+        WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+        true,
+      ),
+      detachSubagentsOnStop: workspaceState.get<boolean>(
+        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+        false,
+      ),
+      nestedDelegationMaxDepth: clampNestedDelegationDepth(
+        workspaceState.get<number>(
+          WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+          NESTED_DELEGATION_DEPTH_RANGE.default,
+        ),
+      ),
+    });
+  }
+
+  function postAgentModePresets(): void {
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+      customPresets: agentCatalogController.getCustomPresets(),
     });
   }
 
@@ -379,10 +514,13 @@ export function createDesktopSettingsIpc(
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
-    postProfileData();
     postModelSelectionData();
+    postSuperYoloEnabled();
+    postAgentModePresets();
     postApprovalSettings();
     await Promise.all([
+      postProfileData(),
+      postLatexSettingsStatus(),
       postAgentSelectionData(),
       postCustomAgentDir(),
       postToolDashboardData(),
@@ -442,6 +580,86 @@ export function createDesktopSettingsIpc(
     postModelSelectionData();
   }
 
+  async function refreshAfterCredentialChange(): Promise<void> {
+    invalidateApiKeyCache();
+    invalidateModelOptionsCache();
+    await postProfileData();
+    postModelSelectionData();
+    postMainModelOptionsData();
+  }
+
+  async function setProviderKey(provider: string): Promise<void> {
+    if (!isApiProvider(provider)) {
+      await options.showErrorMessage?.(`Unknown API provider: ${provider}`);
+      return;
+    }
+    const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+    const apiKey = await options.promptSecret?.({
+      title: `Set ${displayName} API key`,
+      prompt: `Enter ${displayName} API key`,
+    });
+    const trimmed = apiKey?.trim();
+    if (!trimmed) return;
+
+    await secrets.set(apiKeySecretName(provider), trimmed);
+    await options.showInfoMessage?.(`${displayName} API key has been set`);
+    await refreshAfterCredentialChange();
+  }
+
+  async function removeProviderKey(provider: string): Promise<void> {
+    if (!isApiProvider(provider)) {
+      await options.showErrorMessage?.(`Unknown API provider: ${provider}`);
+      return;
+    }
+    const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+    await secrets.delete(apiKeySecretName(provider));
+    await options.showInfoMessage?.(`${displayName} API key has been removed`);
+    await refreshAfterCredentialChange();
+  }
+
+  async function openProviderKeyUrl(provider: string): Promise<void> {
+    const defaultUrl = PROVIDER_URLS[provider];
+    if (!defaultUrl) return;
+    await options.openExternalUrl?.(getProviderKeyUrl(provider, defaultUrl));
+  }
+
+  async function updateProviderStreaming(input: {
+    provider: string;
+    enabled: boolean;
+  }): Promise<void> {
+    await setProviderStreaming(input.provider, input.enabled);
+    await postProfileData();
+  }
+
+  async function updateProviderEndpoint(input: {
+    provider: string;
+    endpoint: string;
+  }): Promise<void> {
+    await setProviderEndpoint(input.provider, input.endpoint);
+    await postProfileData();
+  }
+
+  async function updateGlobalStreaming(enabled: boolean): Promise<void> {
+    await setGlobalStreaming(enabled);
+    await postProfileData();
+  }
+
+  async function signIn(): Promise<void> {
+    if (options.signIn) {
+      await options.signIn();
+    } else {
+      await options.showInfoMessage?.(
+        'Researcher Access sign-in is not connected in this desktop build. Add a provider API key in Settings > Models to run agents with your own account.',
+      );
+    }
+    await postProfileData();
+  }
+
+  async function signOut(): Promise<void> {
+    await options.signOut?.();
+    await postProfileData();
+  }
+
   async function updateCodexSetting(
     key: WorkspaceStateKey,
     value: string,
@@ -457,6 +675,22 @@ export function createDesktopSettingsIpc(
       'workspace',
     );
     postApprovalSettings();
+  }
+
+  async function updateBooleanWorkspaceSetting(
+    key: WorkspaceStateKey,
+    enabled: boolean,
+  ): Promise<void> {
+    await workspaceState.update(key, enabled);
+    postSuperYoloEnabled();
+  }
+
+  async function updateNestedDelegationMaxDepth(value: number): Promise<void> {
+    await workspaceState.update(
+      WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+      clampNestedDelegationDepth(value),
+    );
+    postSuperYoloEnabled();
   }
 
   async function setToolEnabled(
@@ -534,6 +768,33 @@ export function createDesktopSettingsIpc(
     ]);
   }
 
+  async function applyAgentModePreset(presetId: string): Promise<void> {
+    await loadAgentRegistry();
+    const result = await agentCatalogController.applyPreset(presetId);
+    if (!result.ok) {
+      await options.showErrorMessage?.(`Unknown team: ${presetId}`);
+      return;
+    }
+    await Promise.all([postAgentSelectionData(), postMainAgentOptionsData()]);
+    await options.showInfoMessage?.(`Applied "${result.preset.name}" team`);
+  }
+
+  async function saveAgentModePreset(): Promise<void> {
+    const name = await options.promptText?.({
+      title: 'Save agent team',
+      prompt: 'Name for the new team',
+    });
+    if (!name?.trim()) return;
+    await loadAgentRegistry();
+    await agentCatalogController.saveCurrentPreset(name);
+    postAgentModePresets();
+  }
+
+  async function deleteAgentModePreset(presetId: string): Promise<void> {
+    await agentCatalogController.deleteCustomPreset(presetId);
+    postAgentModePresets();
+  }
+
   function runAsync(work: Promise<void>): void {
     void work.catch(onError);
   }
@@ -562,6 +823,55 @@ export function createDesktopSettingsIpc(
         case SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION:
           postModelSelectionData();
           return true;
+        case SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA:
+          runAsync(postProfileData());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SIGN_IN:
+          runAsync(signIn());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SIGN_OUT:
+          runAsync(signOut());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE:
+          runAsync(
+            result.data.mode === 'included'
+              ? signIn()
+              : Promise.resolve().then(postProfileData),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY:
+          runAsync(setProviderKey(result.data.provider));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY:
+          runAsync(removeProviderKey(result.data.provider));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL:
+          runAsync(openProviderKeyUrl(result.data.provider));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING:
+          runAsync(
+            updateProviderStreaming({
+              provider: result.data.provider,
+              enabled: result.data.enabled,
+            }),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT:
+          runAsync(
+            updateProviderEndpoint({
+              provider: result.data.provider,
+              endpoint: result.data.endpoint,
+            }),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING:
+          runAsync(updateGlobalStreaming(result.data.enabled));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL:
+          runAsync(
+            options.openExternalUrl?.(result.data.url) ?? Promise.resolve(),
+          );
+          return true;
         case SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED:
           runAsync(
             updateModelEnabled({
@@ -586,6 +896,31 @@ export function createDesktopSettingsIpc(
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS:
           postApprovalSettings();
+          return true;
+        case SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED:
+          postSuperYoloEnabled();
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED:
+          postSuperYoloEnabled();
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL:
+          runAsync(
+            updateBooleanWorkspaceSetting(
+              WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+              result.data.enabled,
+            ),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP:
+          runAsync(
+            updateBooleanWorkspaceSetting(
+              WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+              result.data.enabled,
+            ),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH:
+          runAsync(updateNestedDelegationMaxDepth(result.data.value));
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED:
           runAsync(updateBashApprovalEnabled(result.data.enabled));
@@ -670,8 +1005,38 @@ export function createDesktopSettingsIpc(
         case SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR:
           runAsync(resetCustomAgentDir());
           return true;
+        case SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS:
+          postAgentModePresets();
+          return true;
+        case SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET:
+          runAsync(applyAgentModePreset(result.data.presetId));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET:
+          runAsync(saveAgentModePreset());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET:
+          runAsync(deleteAgentModePreset(result.data.presetId));
+          return true;
         case SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS:
           postGitAuthorSettings();
+          return true;
+        case SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS:
+          runAsync(postLatexSettingsStatus());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS:
+          runAsync(postLatexSettingsStatus());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP:
+          runAsync(
+            options.installToolExtension?.(LATEX_WORKSHOP_EXT_ID) ??
+              Promise.resolve(),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND:
+          runAsync(
+            options.runInstallCommand?.(result.data.installCommand) ??
+              Promise.resolve(),
+          );
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_LATEX_CONFIG_VALUES:
           postLatexConfigValues();
