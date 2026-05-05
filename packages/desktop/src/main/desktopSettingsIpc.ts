@@ -30,16 +30,29 @@ import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   SettingsViewInboundMessageSchema,
   type ReasoningLevel,
+  type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
+import type { ExternalToolCheckResult } from '@tools/toolAvailability';
+import {
+  parseCodexApprovalPolicy,
+  parseCodexReasoningEffort,
+  parseCodexSandboxMode,
+} from '@tools/codexConfig';
+import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import {
   applyGitAuthorSettings,
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
+import type { ConfigProvider } from '@platform/interfaces/config';
 import type { StateStore } from '@platform/interfaces/state';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
 } from './desktopIpcTypes.js';
+
+type ToolDashboardBuilder = (
+  cachedResults?: ExternalToolCheckResult[],
+) => Promise<ToolDashboardItem[]>;
 
 export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
@@ -48,11 +61,56 @@ export interface DesktopSettingsIpcOptions {
   loadAgentOptionsData?: typeof computeAgentOptionsData;
   globalState?: StateStore;
   workspaceState?: StateStore;
+  config?: ConfigProvider;
+  buildToolDashboardItems?: ToolDashboardBuilder;
+  refreshToolAvailability?: () => Promise<void>;
+  getCustomAgentDirectory?: () => Promise<string>;
   selectCustomAgentDirectory?: () => Promise<string | undefined>;
+  openExternalUrl?: (url: string) => Promise<void>;
+  installToolExtension?: (extensionId: string) => Promise<void>;
+  runToolCommand?: (input: {
+    toolId: string;
+    command: string;
+    kind: 'install' | 'auth';
+  }) => Promise<void>;
   onError?: (error: unknown) => void;
 }
 
 export type DesktopSettingsIpc = DesktopMessageHandler;
+
+async function buildDefaultToolDashboardItems(
+  cachedResults?: ExternalToolCheckResult[],
+): Promise<ToolDashboardItem[]> {
+  const { buildToolDashboardItems } =
+    await import('@settingsView/utils/toolDashboardData');
+  return buildToolDashboardItems(cachedResults);
+}
+
+async function refreshDefaultToolAvailability(): Promise<void> {
+  const { refreshToolAvailability } = await import('@tools/toolAvailability');
+  await refreshToolAvailability();
+}
+
+async function getCachedToolCheckResults(): Promise<
+  ExternalToolCheckResult[] | undefined
+> {
+  const { getLastCheckResults } = await import('@tools/toolAvailability');
+  return getLastCheckResults() ?? undefined;
+}
+
+async function refreshDefaultDisabledToolCache(): Promise<void> {
+  const { refreshDisabledToolCache } = await import('@tools/toolAvailability');
+  refreshDisabledToolCache();
+}
+
+async function findToolCommand(
+  toolId: string,
+  kind: 'install' | 'auth',
+): Promise<string | undefined> {
+  const { findExternalToolDef } = await import('@tools/externalToolDefs');
+  const def = findExternalToolDef(toolId);
+  return kind === 'install' ? def?.installCommand : def?.authCommand;
+}
 
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
@@ -67,6 +125,14 @@ export function createDesktopSettingsIpc(
   const loadAgentRegistry = options.loadAgents ?? loadAgents;
   const loadAgentOptionsData =
     options.loadAgentOptionsData ?? computeAgentOptionsData;
+  const usesDefaultToolDashboardBuilder =
+    options.buildToolDashboardItems == null;
+  const buildToolDashboardItems =
+    options.buildToolDashboardItems ?? buildDefaultToolDashboardItems;
+  const refreshToolAvailability =
+    options.refreshToolAvailability ?? refreshDefaultToolAvailability;
+  const getCustomAgentDirectory =
+    options.getCustomAgentDirectory ?? (() => getAgentDirectories().custom());
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
   const agentCatalogState: SettingsAgentCatalogState = {
@@ -99,7 +165,7 @@ export function createDesktopSettingsIpc(
           customDir || undefined,
         );
       },
-      getCustomDir: () => getAgentDirectories().custom(),
+      getCustomDir: getCustomAgentDirectory,
       getSourceDir: getAgentDirectory,
       getAgent: (source, name) => getAgent(`${source}:${name}`) ?? null,
     },
@@ -152,6 +218,10 @@ export function createDesktopSettingsIpc(
     return readGitAuthorSettingsFromState(workspaceState);
   }
 
+  function getConfigProvider(): ConfigProvider {
+    return options.config ?? platform().config;
+  }
+
   function applyCurrentGitAuthorSettings() {
     return applyGitAuthorSettings(readCurrentGitAuthorSettings());
   }
@@ -196,7 +266,7 @@ export function createDesktopSettingsIpc(
     const directories = getAgentDirectories();
     switch (source) {
       case 'custom':
-        return directories.custom();
+        return getCustomAgentDirectory();
       case 'builtInWorkflow':
         return directories.builtIn();
       case 'builtInToolUse':
@@ -264,12 +334,59 @@ export function createDesktopSettingsIpc(
     });
   }
 
+  async function postToolDashboardData(postOptions?: {
+    skipChecks?: boolean;
+  }): Promise<void> {
+    const cachedResults =
+      postOptions?.skipChecks && usesDefaultToolDashboardBuilder
+        ? await getCachedToolCheckResults()
+        : undefined;
+    const items = await buildToolDashboardItems(cachedResults);
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      items,
+    });
+  }
+
+  function postApprovalSettings(): void {
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      bashApprovalEnabled: getConfigProvider().get<boolean>(
+        BASH_APPROVAL_CONFIG_KEY,
+        true,
+      ),
+      codexSandboxMode: parseCodexSandboxMode(
+        workspaceState.get<string>(
+          WorkspaceStateKey.CODEX_SANDBOX_MODE,
+          'workspace-write',
+        ) ?? 'workspace-write',
+      ),
+      codexReasoningEffort: parseCodexReasoningEffort(
+        workspaceState.get<string>(
+          WorkspaceStateKey.CODEX_REASONING_EFFORT,
+          'high',
+        ) ?? 'high',
+      ),
+      codexApprovalPolicy: parseCodexApprovalPolicy(
+        workspaceState.get<string>(
+          WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+          'never',
+        ) ?? 'never',
+      ),
+    });
+  }
+
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
     postProfileData();
     postModelSelectionData();
-    await Promise.all([postAgentSelectionData(), postCustomAgentDir()]);
+    postApprovalSettings();
+    await Promise.all([
+      postAgentSelectionData(),
+      postCustomAgentDir(),
+      postToolDashboardData(),
+    ]);
   }
 
   async function updateGitAuthorSetting(
@@ -323,6 +440,58 @@ export function createDesktopSettingsIpc(
   async function updatePreferShortModelNames(enabled: boolean): Promise<void> {
     await modelSelectionController.setPreferShortModelNames(enabled);
     postModelSelectionData();
+  }
+
+  async function updateCodexSetting(
+    key: WorkspaceStateKey,
+    value: string,
+  ): Promise<void> {
+    await workspaceState.update(key, value);
+    postApprovalSettings();
+  }
+
+  async function updateBashApprovalEnabled(enabled: boolean): Promise<void> {
+    await getConfigProvider().update(
+      BASH_APPROVAL_CONFIG_KEY,
+      enabled,
+      'workspace',
+    );
+    postApprovalSettings();
+  }
+
+  async function setToolEnabled(
+    toolId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    const current = globalState.get<string[]>(
+      GlobalStateKey.DISABLED_TOOLS,
+      [],
+    );
+    const disabled = new Set(current);
+    if (enabled) {
+      disabled.delete(toolId);
+    } else {
+      disabled.add(toolId);
+    }
+    await globalState.update(GlobalStateKey.DISABLED_TOOLS, [...disabled]);
+    if (usesDefaultToolDashboardBuilder) {
+      await refreshDefaultDisabledToolCache();
+    }
+    await postToolDashboardData({ skipChecks: true });
+  }
+
+  async function recheckToolStatus(): Promise<void> {
+    await refreshToolAvailability();
+    await postToolDashboardData({ skipChecks: true });
+  }
+
+  async function runToolCommand(input: {
+    toolId: string;
+    kind: 'install' | 'auth';
+  }): Promise<void> {
+    const command = await findToolCommand(input.toolId, input.kind);
+    if (!command) return;
+    await options.runToolCommand?.({ ...input, command });
   }
 
   async function updateAgentEnabled(input: {
@@ -414,6 +583,64 @@ export function createDesktopSettingsIpc(
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES:
           runAsync(updatePreferShortModelNames(result.data.enabled));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS:
+          postApprovalSettings();
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED:
+          runAsync(updateBashApprovalEnabled(result.data.enabled));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE:
+          runAsync(
+            updateCodexSetting(
+              WorkspaceStateKey.CODEX_SANDBOX_MODE,
+              result.data.mode,
+            ),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT:
+          runAsync(
+            updateCodexSetting(
+              WorkspaceStateKey.CODEX_REASONING_EFFORT,
+              result.data.effort,
+            ),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY:
+          runAsync(
+            updateCodexSetting(
+              WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+              result.data.policy,
+            ),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA:
+          runAsync(postToolDashboardData());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL:
+          runAsync(
+            options.openExternalUrl?.(result.data.url) ?? Promise.resolve(),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION:
+          runAsync(
+            options.installToolExtension?.(result.data.extensionId) ??
+              Promise.resolve(),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS:
+          runAsync(recheckToolStatus());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL:
+          runAsync(setToolEnabled(result.data.toolId, result.data.enabled));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND:
+          runAsync(
+            runToolCommand({
+              toolId: result.data.toolId,
+              kind: result.data.kind,
+            }),
+          );
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED:
           runAsync(
