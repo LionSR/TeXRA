@@ -1477,9 +1477,6 @@
   ],
   "requiredPackagedPaths": [
     "LICENSE.txt",
-    "dist/progressView/codicon.ttf",
-    "dist/settingsView/codicon.ttf",
-    "dist/webview/codicon.ttf",
     "resources/agents",
     "resources/docs/agent-creation",
     "resources/examples",
