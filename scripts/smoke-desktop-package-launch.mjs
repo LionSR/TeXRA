@@ -86,6 +86,12 @@ function waitForExit(child) {
   });
 }
 
+function waitForClose(child) {
+  return new Promise((resolve) => {
+    child.once('close', (code, signal) => resolve({ code, signal }));
+  });
+}
+
 function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -102,6 +108,26 @@ function formatOutput(output) {
 
 function formatExit(exit) {
   return exit.signal ?? `code ${exit.code}`;
+}
+
+function failIfFatalLog(output) {
+  const fatalLog = findFatalLog(output);
+  if (!fatalLog) return false;
+
+  console.error(`Desktop launch smoke failed: ${fatalLog.label}.`);
+  console.error(formatOutput(output));
+  process.exit(1);
+}
+
+function failEarlyExit(exit, timeoutMs, output) {
+  failIfFatalLog(output);
+  console.error(
+    `Desktop launch smoke failed: app exited before ${timeoutMs}ms with ${formatExit(
+      exit,
+    )}.`,
+  );
+  console.error(formatOutput(output));
+  process.exit(1);
 }
 
 function hasExited(child) {
@@ -159,6 +185,7 @@ child.stderr.on('data', (chunk) => {
 });
 
 const exitPromise = waitForExit(child);
+const closePromise = waitForClose(child);
 const result = await waitForExitOrTimeout(exitPromise, timeoutMs);
 
 if (result.timeout) {
@@ -169,45 +196,13 @@ if (result.timeout) {
   }
 }
 
-if (!result.timeout) {
-  const fatalLog = findFatalLog(output);
-  if (fatalLog) {
-    console.error(`Desktop launch smoke failed: ${fatalLog.label}.`);
-    console.error(formatOutput(output));
-    process.exit(1);
-  }
-
-  console.error(
-    `Desktop launch smoke failed: app exited before ${timeoutMs}ms with ${formatExit(
-      result.exit,
-    )}.`,
-  );
-  console.error(formatOutput(output));
-  process.exit(1);
-}
+await closePromise;
 
 if (result.exit) {
-  const fatalLog = findFatalLog(output);
-  if (fatalLog) {
-    console.error(`Desktop launch smoke failed: ${fatalLog.label}.`);
-    console.error(formatOutput(output));
-    process.exit(1);
-  }
-  console.error(
-    `Desktop launch smoke failed: app exited before ${timeoutMs}ms with ${formatExit(
-      result.exit,
-    )}.`,
-  );
-  console.error(formatOutput(output));
-  process.exit(1);
+  failEarlyExit(result.exit, timeoutMs, output);
 }
 
-const fatalLog = findFatalLog(output);
-if (fatalLog) {
-  console.error(`Desktop launch smoke failed: ${fatalLog.label}.`);
-  console.error(formatOutput(output));
-  process.exit(1);
-}
+failIfFatalLog(output);
 
 console.log(
   `Desktop launch smoke passed for ${executablePath} after ${timeoutMs}ms.`,
