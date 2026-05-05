@@ -321,6 +321,9 @@ importers:
 
   packages/desktop:
     dependencies:
+      '@openai/codex-sdk':
+        specifier: ^0.128.0
+        version: 0.128.0
       fix-path:
         specifier: ^5.0.0
         version: 5.0.0

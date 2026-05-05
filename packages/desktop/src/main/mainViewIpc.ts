@@ -1,5 +1,6 @@
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
+import { createDesktopMainViewStartup } from './desktopMainViewStartup.js';
 import {
   isDesktopCommandMessage,
   type DesktopMessageHandler,
@@ -68,7 +69,12 @@ export function installDesktopMainViewIpc(
     executeAgent: options.executeAgent,
     onAsyncError: options.onAsyncError,
   });
+  const startup = createDesktopMainViewStartup({
+    renderer: bridge,
+    onAsyncError: options.onAsyncError,
+  });
   messageHandlers = [
+    startup,
     options.fileSelection,
     options.settings,
     options.progress,

@@ -9,19 +9,13 @@
  * - LatexSettingsHandlers: LaTeX tool detection and recommended settings
  */
 import * as vscode from 'vscode';
-import {
-  MODELS,
-  MODEL_CONFIGS,
-  ModelProvider,
-  ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
 
 // Shared schemas and dispatchers
 import {
   SettingsMemoryController,
   type SettingsMemoryMessage,
 } from '@controllers/settingsView/SettingsMemoryController';
+import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { platform } from '@platform/platform';
 import { getAgentsBySource, loadAgents } from '@agent/index';
@@ -33,8 +27,6 @@ import {
 } from '@agent/storage';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
-import { getHelperModelName } from '@agent/runtime/helperModel';
-import { LEVEL_TO_EFFORT } from '@agent/runtime/reasoningEffort';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
@@ -68,12 +60,7 @@ import {
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { compileLatex2Pdf } from '@latex/texTools';
-import {
-  DEFAULT_MODELS,
-  formatContext,
-  formatCost,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -88,18 +75,12 @@ import {
   type SettingsViewInboundMessage,
   type SettingsMessageFor,
   SETTINGS_VIEW_CMD,
-  ReasoningLevelSchema,
-  type ModelSelectionItem,
-  type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import {
   PROVIDER_DISPLAY_NAMES,
-  MODEL_PROVIDERS_ORDER,
-  DEFAULT_HELPER_MODEL,
   PROVIDER_URLS,
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
-import { isFastFirstResponseModel } from '@shared/constants/fastModels';
 import {
   NESTED_DELEGATION_DEPTH_RANGE,
   clampNestedDelegationDepth,
@@ -247,101 +228,32 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
   }));
 }
 
-const modelProvidersSet = new Set<string>(MODEL_PROVIDERS_ORDER);
-
-/**
- * Reverse of LEVEL_TO_EFFORT: maps ReasoningEffort enum values → UI level strings.
- * Derived from the canonical map in reasoningEffort.ts so there's one source of truth.
- * Efforts not in LEVEL_TO_EFFORT (e.g. XHIGH) intentionally have no entry —
- * the UI will show a plain "Default" label instead of lying about the level.
- */
-const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
-  Object.entries(LEVEL_TO_EFFORT).map(
-    ([level, effort]) => [effort, level as ReasoningLevel] as const,
-  ),
-);
-
-/** Read persisted reasoning level overrides from global state. */
-function getReasoningLevelOverrides(): Record<string, string> {
-  return globalSM.get<Record<string, string>>(
-    GlobalStateKey.REASONING_LEVELS,
-    {},
-  );
-}
-
-function supportsReasoningLevel(config: ModelConfig): boolean {
-  return (
-    config.capabilities.supportsReasoningEffort ||
-    (config.provider === ModelProvider.DEEPSEEK &&
-      config.capabilities.supportsReasoning)
-  );
-}
-
-function getIncludedAccessReasoningCap(
-  config: ModelConfig,
-): ReasoningLevel | undefined {
-  if (
-    !getServerSideKeyService().getUseIncludedModelAccess() ||
-    !config.name.startsWith('gpt5') ||
-    config.capabilities.reasoningEffort !== ReasoningEffort.XHIGH
-  ) {
-    return undefined;
-  }
-
-  const userTier = getServerSideKeyService().getUserTier();
-  if (userTier === MAX_TIER) return 'high';
-  if (userTier === FREE_TIER) return 'medium';
-  return undefined;
-}
-
-function buildModelSelectionItems(): ModelSelectionItem[] {
-  const enabledSet = new Set(
-    globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
-  );
-  const reasoningOverrides = getReasoningLevelOverrides();
-
-  const items: ModelSelectionItem[] = [];
-  for (const name of MODELS) {
-    const config = MODEL_CONFIGS[name];
-    if (!config || !modelProvidersSet.has(config.provider)) continue;
-
-    const { reasoningEffort } = config.capabilities;
-
-    const item: ModelSelectionItem = {
-      name,
-      label: config.label,
-      provider: config.provider,
-      enabled: enabledSet.has(name),
-      deprecated: config.deprecated ?? false,
-      contextWindow: formatContext(config.contextWindow),
-      cost: formatCost(config.inputPrice, config.outputPrice),
-      isFast: isFastFirstResponseModel(config.inputPrice),
-    };
-
-    if (supportsReasoningLevel(config)) {
-      item.supportsReasoningLevel = true;
-      // Only set defaultReasoningLevel when the effort has a UI-level equivalent.
-      // XHIGH and unknown efforts get no label — the UI shows plain "Default".
-      const defaultLevel = EFFORT_TO_LEVEL.get(reasoningEffort);
-      if (defaultLevel) {
-        item.defaultReasoningLevel = defaultLevel;
-      }
-      const includedAccessCap = getIncludedAccessReasoningCap(config);
-      if (includedAccessCap) {
-        item.includedAccessReasoningCap = includedAccessCap;
-      }
-      // Validate persisted override against the schema instead of blindly casting.
-      const parsed = ReasoningLevelSchema.safeParse(reasoningOverrides[name]);
-      if (parsed.success) {
-        item.reasoningLevel = parsed.data;
-      }
-    }
-
-    items.push(item);
-  }
-
-  return items.sort((a, b) => a.name.localeCompare(b.name));
-}
+const modelSelectionController = new SettingsModelSelectionController({
+  state: {
+    getEnabledModels: () =>
+      globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS),
+    setEnabledModels: async (models) => {
+      await globalSM.update(GlobalStateKey.ENABLED_MODELS, models);
+    },
+    getHelperModel: () => globalSM.get<string>(GlobalStateKey.HELPER_MODEL),
+    setHelperModel: async (model) => {
+      await globalSM.update(GlobalStateKey.HELPER_MODEL, model);
+    },
+    getReasoningLevelOverrides: () =>
+      globalSM.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS),
+    setReasoningLevelOverrides: async (overrides) => {
+      await globalSM.update(GlobalStateKey.REASONING_LEVELS, overrides);
+    },
+    getPreferShortModelNames: () =>
+      globalSM.get<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
+    setPreferShortModelNames: async (enabled) => {
+      await globalSM.update(GlobalStateKey.PREFER_SHORT_MODEL_NAMES, enabled);
+    },
+  },
+  useIncludedAccess: () =>
+    getServerSideKeyService().getUseIncludedModelAccess(),
+  getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
+});
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -918,15 +830,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
-    const models = buildModelSelectionItems();
+    const data = modelSelectionController.buildSelectionData();
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      models,
-      helperModel: getHelperModelName(),
-      preferShortModelNames: globalSM.get<boolean>(
-        GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-        false,
-      ),
+      ...data,
     });
   }
 
@@ -1650,36 +1557,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetModelEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_ENABLED>,
   ): Promise<void> {
-    const current = globalSM.get<string[]>(
-      GlobalStateKey.ENABLED_MODELS,
-      DEFAULT_MODELS,
-    );
-
-    let updated: string[];
-    if (data.enabled) {
-      updated = current.includes(data.modelName)
-        ? current
-        : [...current, data.modelName];
-    } else {
-      updated = current.filter((m) => m !== data.modelName);
-    }
-
-    // Capture before updating ENABLED_MODELS — getHelperModelName() reads
-    // the enabled list, so checking after the update would never match.
-    const wasHelper = !data.enabled && getHelperModelName() === data.modelName;
-
-    await globalSM.update(GlobalStateKey.ENABLED_MODELS, updated);
-
-    // Persist a new helper model so stale state doesn't silently resurface
-    // if the disabled model is later re-enabled.
-    if (wasHelper) {
-      await globalSM.update(
-        GlobalStateKey.HELPER_MODEL,
-        updated[0] ?? DEFAULT_HELPER_MODEL,
-      );
-    }
-
-    // Enabled model list changed — invalidate cached options.
+    await modelSelectionController.setModelEnabled({
+      modelName: data.modelName,
+      enabled: data.enabled,
+    });
     invalidateModelOptionsCache();
     await Promise.all([
       vscode.commands.executeCommand('texra.refreshAllOptions'),
@@ -1690,32 +1571,24 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetHelperModel(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_HELPER_MODEL>,
   ): Promise<void> {
-    await globalSM.update(GlobalStateKey.HELPER_MODEL, data.modelName);
+    await modelSelectionController.setHelperModel(data.modelName);
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
   private async handleSetModelReasoningLevel(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_REASONING_LEVEL>,
   ): Promise<void> {
-    const overrides = getReasoningLevelOverrides();
-
-    if (data.level) {
-      overrides[data.modelName] = data.level;
-    } else {
-      delete overrides[data.modelName];
-    }
-
-    await globalSM.update(GlobalStateKey.REASONING_LEVELS, overrides);
+    await modelSelectionController.setReasoningLevel({
+      modelName: data.modelName,
+      level: data.level,
+    });
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
   private async handleSetPreferShortModelNames(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PREFER_SHORT_MODEL_NAMES>,
   ): Promise<void> {
-    await globalSM.update(
-      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-      data.enabled,
-    );
+    await modelSelectionController.setPreferShortModelNames(data.enabled);
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
