@@ -20,13 +20,31 @@ interface StateStore {
 interface DesktopSettingsIpcModule {
   createDesktopSettingsIpc(options: {
     postToRenderer(message: unknown): void;
+    sendStartupCatalogData?: boolean;
     globalState?: StateStore;
     workspaceState?: StateStore;
+    config?: {
+      get<T>(key: string, defaultValue?: T): T;
+      update<T>(
+        key: string,
+        value: T,
+        target?: 'global' | 'workspace',
+      ): Promise<void>;
+      inspect<T = unknown>(key: string): { effectiveValue?: T } | undefined;
+      isExplicitlySet(key: string): boolean;
+      watch(
+        key: string | readonly string[] | RegExp,
+        listener: () => void,
+      ): { dispose(): void };
+    };
     loadAgents?: () => Promise<void>;
     loadAgentOptionsData?: () => Promise<{
       workflow: unknown[];
       toolUse: unknown[];
     }>;
+    buildToolDashboardItems?: (cachedResults?: unknown[]) => Promise<unknown[]>;
+    refreshToolAvailability?: () => Promise<void>;
+    getCustomAgentDirectory?: () => Promise<string>;
     selectCustomAgentDirectory?: () => Promise<string | undefined>;
     onError?: (error: unknown) => void;
   }): {
@@ -52,6 +70,38 @@ class MemoryStateStore implements StateStore {
   }
 }
 
+class MemoryConfigStore {
+  readonly values = new Map<string, unknown>();
+
+  get<T>(key: string, defaultValue?: T): T {
+    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
+  }
+
+  async update<T>(
+    key: string,
+    value: T,
+    _target?: 'global' | 'workspace',
+  ): Promise<void> {
+    if (value === undefined) {
+      this.values.delete(key);
+    } else {
+      this.values.set(key, value);
+    }
+  }
+
+  inspect<T = unknown>(key: string): { effectiveValue?: T } | undefined {
+    return { effectiveValue: this.get<T>(key) };
+  }
+
+  isExplicitlySet(key: string): boolean {
+    return this.values.has(key);
+  }
+
+  watch(): { dispose(): void } {
+    return { dispose: () => undefined };
+  }
+}
+
 async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
   return import(
     moduleFileUrl(desktopSourcePath('main', 'desktopSettingsIpc.ts'))
@@ -59,7 +109,9 @@ async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
 }
 
 function flushAsyncWork(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
+  return new Promise((resolve) =>
+    setImmediate(() => setImmediate(() => resolve())),
+  );
 }
 
 describe('desktop settings IPC', () => {
@@ -400,6 +452,143 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       preferShortModelNames: true,
     });
+  });
+
+  it('loads desktop tool dashboard and approval settings on settings readiness', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    workspaceState.values.set(
+      WorkspaceStateKey.CODEX_SANDBOX_MODE,
+      'danger-full-access',
+    );
+    const config = new MemoryConfigStore();
+    config.values.set('texra.toolUse.requireBashApproval', false);
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      globalState: new MemoryStateStore(),
+      config,
+      sendStartupCatalogData: true,
+      loadAgents: async () => undefined,
+      getCustomAgentDirectory: async () => '',
+      buildToolDashboardItems: async () => [
+        {
+          id: 'file-ops',
+          name: 'File & Shell Operations',
+          category: 'file',
+          description: 'Built-in file tools',
+          tools: [],
+          status: 'available',
+          requiresSetup: false,
+        },
+      ],
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'settings',
+      }),
+    ).toBe(false);
+    await flushAsyncWork();
+
+    expect(
+      posted.find(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      bashApprovalEnabled: false,
+      codexSandboxMode: 'danger-full-access',
+    });
+    expect(
+      posted.find(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      items: [expect.objectContaining({ id: 'file-ops' })],
+    });
+  });
+
+  it('handles desktop tool dashboard refreshes and toggles', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    const posted: unknown[] = [];
+    let refreshCount = 0;
+    const buildCalls: unknown[][] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      config: new MemoryConfigStore(),
+      buildToolDashboardItems: async (cachedResults = []) => {
+        buildCalls.push(cachedResults);
+        return [
+          {
+            id: 'zotero',
+            name: 'Zotero Integration',
+            category: 'academic',
+            description: 'Citation tools',
+            tools: [],
+            status: 'available',
+            requiresSetup: true,
+            toggleable: true,
+            enabled: !(
+              globalState.values.get(GlobalStateKey.DISABLED_TOOLS) as
+                | string[]
+                | undefined
+            )?.includes('zotero'),
+          },
+        ];
+      },
+      refreshToolAvailability: async () => {
+        refreshCount++;
+      },
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      items: [expect.objectContaining({ id: 'zotero', enabled: true })],
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
+        toolId: 'zotero',
+        enabled: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+    expect(globalState.values.get(GlobalStateKey.DISABLED_TOOLS)).toEqual([
+      'zotero',
+    ]);
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      items: [expect.objectContaining({ id: 'zotero', enabled: false })],
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+    expect(refreshCount).toBe(1);
+    expect(buildCalls.length).toBeGreaterThanOrEqual(3);
   });
 
   it('refreshes launcher agent options after agent visibility changes', async () => {
