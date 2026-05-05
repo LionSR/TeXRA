@@ -11,7 +11,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
-import { KVStore } from '@common/storage';
+import { KVStore } from '@common/storage/KVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 
 // ============================================================================
