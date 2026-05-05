@@ -57,9 +57,9 @@ import {
   globalSM,
   workspaceSM,
 } from '@common/state';
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import {
   applyGitAuthorConfig,

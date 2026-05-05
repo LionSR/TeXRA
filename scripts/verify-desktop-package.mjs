@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   getDesktopSharedSourceDirs,
+  getDesktopVscodeFreeSourceDirs,
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
@@ -18,6 +19,12 @@ const desktopRoot = join(repoRoot, 'packages', 'desktop');
 const packageRoot = join(desktopRoot, 'dist-packaged');
 const desktopPackageJsonPath = join(desktopRoot, 'package.json');
 const desktopSharedSourceDirs = getDesktopSharedSourceDirs(repoRoot);
+const desktopVscodeFreeSourceDirs = getDesktopVscodeFreeSourceDirs(repoRoot);
+const desktopSharedSourceDirSet = new Set(desktopSharedSourceDirs);
+const desktopVscodeFreeSourceDirSet = new Set(desktopVscodeFreeSourceDirs);
+const desktopSourceBoundaryDirs = [
+  ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
+];
 
 async function exists(path) {
   try {
@@ -150,21 +157,33 @@ async function checkNoVscodeRuntimeImport(app, failures) {
 }
 
 async function checkDesktopSourceBoundaries(failures) {
-  for (const dir of desktopSharedSourceDirs) {
+  for (const dir of desktopSourceBoundaryDirs) {
     if (!(await exists(dir))) continue;
     for (const filePath of await collectFiles(dir)) {
       if (!/\.[cm]?tsx?$/.test(filePath)) continue;
+      const source = await readFile(filePath, 'utf8');
       if (
-        !vscodeBackedStateImportPattern.test(await readFile(filePath, 'utf8'))
+        desktopSharedSourceDirSet.has(dir) &&
+        vscodeBackedStateImportPattern.test(source)
       ) {
-        continue;
+        failures.push(
+          `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
+            repoRoot,
+            filePath,
+          )}`,
+        );
       }
-      failures.push(
-        `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
-          repoRoot,
-          filePath,
-        )}`,
-      );
+      if (
+        desktopVscodeFreeSourceDirSet.has(dir) &&
+        vscodeRuntimeImportPattern.test(source)
+      ) {
+        failures.push(
+          `Desktop-shared source imports the VS Code runtime module: ${relative(
+            repoRoot,
+            filePath,
+          )}`,
+        );
+      }
     }
   }
 }
@@ -268,5 +287,6 @@ console.log(
     '- node_modules runtime dependency packages',
     '- no VS Code extension host runtime import',
     '- desktop-shared source uses vscode-free state keys',
+    '- desktop-shared source avoids VS Code runtime imports',
   ].join('\n'),
 );
