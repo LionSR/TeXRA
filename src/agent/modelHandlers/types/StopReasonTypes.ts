@@ -14,7 +14,7 @@ export const OPENAI_CHAT_FINISH = {
   TOOL_CALLS: 'tool_calls',
   CONTENT_FILTER: 'content_filter',
   FUNCTION_CALL: 'function_call',
-} as const;
+} as const satisfies Record<string, NonNullable<OpenAIChatFinishReason>>;
 export type OpenAIChatFinishReason = ChatCompletion.Choice['finish_reason'];
 
 /**
@@ -25,7 +25,7 @@ export const OPENAI_COMPLETION_FINISH = {
   STOP: 'stop',
   LENGTH: 'length',
   CONTENT_FILTER: 'content_filter',
-} as const;
+} as const satisfies Record<string, NonNullable<OpenAICompletionFinishReason>>;
 export type OpenAICompletionFinishReason = CompletionChoice['finish_reason'];
 
 /** Stop reasons defined in the Model Context Protocol SDK. */
