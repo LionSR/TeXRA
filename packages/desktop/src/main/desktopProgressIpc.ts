@@ -96,7 +96,7 @@ export function createDesktopProgressIpc(
           runAsync(options.progress.openFile(result.data.file));
           return true;
         case PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE:
-          runAsync(options.progress.openFile(result.data.file));
+          runAsync(options.progress.openFileCompile(result.data.file));
           return true;
         default:
           if (passThroughCommands.has(result.data.command)) return false;

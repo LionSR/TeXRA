@@ -20,6 +20,7 @@ interface DesktopProgressIpcModule {
       runNewStream(stream: string): Promise<void>;
       sendFollowUp(stream: string, text: string): Promise<void>;
       openFile(file: string): Promise<void>;
+      openFileCompile(file: string): Promise<void>;
       handleToolEditApprovalAction(message: {
         command: string;
         requestId: string;
@@ -75,6 +76,7 @@ function createProgress() {
     runNewStream: vi.fn(async (_stream: string) => {}),
     sendFollowUp: vi.fn(async (_stream: string, _text: string) => {}),
     openFile: vi.fn(async (_file: string) => {}),
+    openFileCompile: vi.fn(async (_file: string) => {}),
     handleToolEditApprovalAction: vi.fn(() => true),
     handleBashApprovalAction: vi.fn(async () => {}),
     handlePlanApprovalAction: vi.fn(),
@@ -203,8 +205,8 @@ describe('desktop Progress IPC', () => {
       'run-1',
       'continue please',
     );
-    expect(progress.openFile).toHaveBeenNthCalledWith(1, '/tmp/out.tex');
-    expect(progress.openFile).toHaveBeenNthCalledWith(2, '/tmp/out.pdf');
+    expect(progress.openFile).toHaveBeenCalledWith('/tmp/out.tex');
+    expect(progress.openFileCompile).toHaveBeenCalledWith('/tmp/out.pdf');
   });
 
   it('maps approval actions and reports desktop-only unsupported approval variants', async () => {

@@ -4,6 +4,7 @@ import {
   prepareMainViewExecutionRequest,
   type MainViewExecuteMessage,
 } from '@controllers/mainView/MainViewExecutionController';
+import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
@@ -68,7 +69,7 @@ type StreamBadgeSnapshot = {
 export interface DesktopProgressBridgeOptions {
   detachSubagentsOnStop?: boolean;
   openPath?: (filePath: string) => Promise<void>;
-  showMessage?: (message: string, type?: 'info' | 'warning') => Promise<void>;
+  showMessage?: (message: string) => Promise<void>;
 }
 
 export class DesktopProgressBridge {
@@ -569,6 +570,32 @@ export class DesktopProgressBridge {
         });
         break;
       }
+      case 'clearMissingOutputs':
+      case 'showRetryRequest':
+      case 'resolveRetryRequest':
+      case 'showExternalInquiry':
+      case 'resolveExternalInquiry':
+      case 'followUpSent':
+      case 'removeStream':
+      case 'extensionDeactivating':
+      case 'githubTokenInvalid':
+      case 'prSubscriptionsChanged':
+      case 'prSubscriptionBindingsChanged':
+      case 'repoSubscriptionsChanged':
+      case 'repoSubscriptionBindingsChanged':
+      case 'issueSubscriptionsChanged':
+      case 'issueSubscriptionBindingsChanged':
+      case 'toolAvailabilityChanged':
+      case 'workspaceFilesWritten':
+      case 'requestOpenFile':
+      case 'requestShowInstruction':
+      case 'showAgentConfigBanner':
+      case 'requestShowError':
+        break;
+      default: {
+        const exhaustive: never = event;
+        return exhaustive;
+      }
     }
   }
 
@@ -697,12 +724,15 @@ export class DesktopProgressBridge {
 
     await this.options.showMessage?.(
       'No active session. Start a new agent task to continue.',
-      'warning',
     );
   }
 
   async openFile(filePath: string): Promise<void> {
     await this.options.openPath?.(filePath);
+  }
+
+  async openFileCompile(filePath: string): Promise<void> {
+    await this.openFile(filePath);
   }
 
   async handleBashApprovalAction(
@@ -765,10 +795,7 @@ export class DesktopProgressBridge {
     return true;
   }
 
-  private async runExecution(request: {
-    config: TaskState['agentConfig'];
-    executionId?: string;
-  }): Promise<void> {
+  async runExecution(request: ValidatedExecutionRequest): Promise<void> {
     const { runValidatedExecutionRequest } =
       await import('@agent/runtime/runExecutionRequest');
     await runValidatedExecutionRequest(request, {
@@ -788,13 +815,7 @@ export function createDesktopAgentExecution(
 ): DesktopAgentExecution {
   const progress = new DesktopProgressBridge(options.postToRenderer, {
     openPath: options.openPath,
-    showMessage: async (message, type = 'info') => {
-      if (type === 'warning') {
-        await options.showErrorMessage?.(message);
-      } else {
-        await options.showErrorMessage?.(message);
-      }
-    },
+    showMessage: async (message) => options.showErrorMessage?.(message),
   });
 
   return {
@@ -806,17 +827,7 @@ export function createDesktopAgentExecution(
         return;
       }
 
-      const { runValidatedExecutionRequest } =
-        await import('@agent/runtime/runExecutionRequest');
-      await runValidatedExecutionRequest(preparation.request, {
-        runtimeHost: progress.runtimeHost,
-        openWorkflowOutput: async (result) => {
-          const output = result.outputs.at(-1);
-          if (output && options.openPath) {
-            await options.openPath(output.absolutePath);
-          }
-        },
-      });
+      await progress.runExecution(preparation.request);
     },
     dispose() {
       progress.dispose();
