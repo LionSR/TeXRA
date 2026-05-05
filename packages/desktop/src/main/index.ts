@@ -95,8 +95,6 @@ function createWindow(): void {
     },
   );
   const mainViewIpc = installDesktopMainViewIpc(window, {
-    getCustomAgentDirectory: () => getAgentDirectories().custom(),
-    openPath,
     executeAgent: (message) => agentExecution.handleExecute(message),
     fileSelection,
     settings: settingsIpc,

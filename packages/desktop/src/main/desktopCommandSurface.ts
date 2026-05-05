@@ -11,8 +11,6 @@ export const DESKTOP_COMMAND_IDS = [
   'texra.showMainView',
   'texra.showProgressView',
   'texra.openSettings',
-  'texra.showDashboard',
-  'texra.showSettingsView',
   'texra.showMemory',
   'texra.showAgentHistory',
   'texra.showModels',
@@ -84,8 +82,6 @@ export function dispatchDesktopCommand(
       actions.showRoute('progress');
       return true;
     case 'texra.openSettings':
-    case 'texra.showDashboard':
-    case 'texra.showSettingsView':
       actions.showSettings();
       return true;
     case 'texra.showMemory':
@@ -169,7 +165,16 @@ function toElectronAcceleratorPart(part: string): string {
       return 'Alt';
     case 'shift':
       return 'Shift';
+    case 'enter':
+      return 'Enter';
+    case 'escape':
+      return 'Escape';
+    case 'space':
+      return 'Space';
+    case 'tab':
+      return 'Tab';
     default:
+      if (/^f\d{1,2}$/.test(normalized)) return normalized.toUpperCase();
       return normalized.length === 1 ? normalized.toUpperCase() : normalized;
   }
 }
