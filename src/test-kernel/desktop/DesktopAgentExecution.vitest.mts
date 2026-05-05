@@ -71,7 +71,7 @@ async function createBridge(messages: unknown[]): Promise<TestableBridge> {
   vi.doMock('@agent/runtime/runExecutionRequest', () => ({
     runValidatedExecutionRequest: vi.fn(),
   }));
-  vi.doMock('@common/storage', () => ({
+  vi.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
       async read(): Promise<undefined> {
         return undefined;
@@ -186,7 +186,7 @@ async function createExecution(options: {
     runValidatedExecutionRequest:
       options.runValidatedExecutionRequest ?? vi.fn(async () => {}),
   }));
-  vi.doMock('@common/storage', () => ({
+  vi.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
       async read(): Promise<undefined> {
         return undefined;
@@ -240,7 +240,7 @@ describe('DesktopProgressBridge', () => {
   afterEach(() => {
     vi.doUnmock('@agent/runtime/RunStorageService');
     vi.doUnmock('@agent/runtime/runExecutionRequest');
-    vi.doUnmock('@common/storage');
+    vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
     vi.doUnmock('@logger/AgentLogger');
     vi.doUnmock('vscode');
