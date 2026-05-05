@@ -425,6 +425,28 @@ isolated temporary user profile. It fails on early exits, desktop startup failur
 dynamic `require()` calls, or runtime VS Code import errors. Set `TEXRA_DESKTOP_LAUNCH_SMOKE_MS` to
 change the default 8 second launch window.
 
+### Local macOS Desktop Installer
+
+To produce an installable macOS artifact, run the distributable package command from the repository
+root:
+
+```bash
+npm run desktop:package:dist
+npm run check:desktop-installers
+```
+
+The release package path is:
+
+```text
+packages/desktop/dist-packaged/
+```
+
+For macOS, the distributable targets are a DMG and ZIP. Windows release builds use NSIS, and Linux
+release builds use AppImage and deb. These local artifacts are unsigned and not notarized until the
+signing jobs are wired. Local smoke tests should continue using
+`npm run desktop:package:local` because the unpacked directory target launches faster and keeps
+startup regression coverage separate from installer generation.
+
 ---
 
 ## What Stays the Same
