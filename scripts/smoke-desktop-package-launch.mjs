@@ -42,6 +42,11 @@ const fatalLogPatterns = [
     label: 'constructor startup failure',
     pattern: /TypeError: .* is not a constructor/i,
   },
+  {
+    label: 'packaged asset load failure',
+    pattern:
+      /Failed to load URL:.*ERR_FILE_NOT_FOUND|Unable to load preload script|preload\/index\.cjs not found/i,
+  },
 ];
 
 function readPositiveNumber(value, fallback) {
