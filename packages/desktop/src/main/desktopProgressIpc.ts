@@ -60,6 +60,44 @@ export function createDesktopProgressIpc(
         case PROGRESS_VIEW_COMMANDS.DELETE_ALL:
           runAsync(options.progress.deleteAllStreams());
           return true;
+        case PROGRESS_VIEW_COMMANDS.STOP_STREAM:
+          options.progress.stopStream(result.data.stream);
+          return true;
+        case PROGRESS_VIEW_COMMANDS.RESUME:
+          runAsync(options.progress.resumeStream(result.data.stream));
+          return true;
+        case PROGRESS_VIEW_COMMANDS.RUN_NEW:
+          runAsync(options.progress.runNewStream(result.data.stream));
+          return true;
+        case PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP:
+          runAsync(
+            options.progress.sendFollowUp(result.data.stream, result.data.text),
+          );
+          return true;
+        case PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION:
+          if (options.progress.handleToolEditApprovalAction(result.data)) {
+            return true;
+          }
+          onUnsupportedCommand(result.data);
+          return true;
+        case PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION:
+          runAsync(options.progress.handleBashApprovalAction(result.data));
+          return true;
+        case PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION:
+          options.progress.handlePlanApprovalAction(result.data);
+          return true;
+        case PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION:
+          if (options.progress.handleAgentProposalAction(result.data)) {
+            return true;
+          }
+          onUnsupportedCommand(result.data);
+          return true;
+        case PROGRESS_VIEW_COMMANDS.OPEN_FILE:
+          runAsync(options.progress.openFile(result.data.file));
+          return true;
+        case PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE:
+          runAsync(options.progress.openFileCompile(result.data.file));
+          return true;
         default:
           if (passThroughCommands.has(result.data.command)) return false;
           onUnsupportedCommand(result.data);

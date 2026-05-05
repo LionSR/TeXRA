@@ -4,8 +4,20 @@ import {
   prepareMainViewExecutionRequest,
   type MainViewExecuteMessage,
 } from '@controllers/mainView/MainViewExecutionController';
+import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
+import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
+import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import {
+  detachActiveChildren,
+  interruptActiveChildren,
+} from '@agent/runtime/executionRegistry';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
+import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -16,6 +28,7 @@ import {
   type AgentCategory,
   type AgentCategoryFilter,
   type ConversationProgress,
+  type ProgressViewInboundMessage,
   type ProgressViewOutboundMessage,
   type StreamMetadata,
   type StreamStatus,
@@ -23,6 +36,12 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import {
+  cleanupAllApprovals,
+  cleanupApprovalsForStream,
+  handleProgressViewBashApprovalAction,
+} from '@tools/approval';
+import { toolEditApprovalController } from '@tools/approval/toolEditApproval';
 
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 
@@ -47,6 +66,12 @@ type StreamBadgeSnapshot = {
   finishedProcessCount: number;
 };
 
+export interface DesktopProgressBridgeOptions {
+  detachSubagentsOnStop?: boolean;
+  openPath?: (filePath: string) => Promise<void>;
+  showMessage?: (message: string) => Promise<void>;
+}
+
 export class DesktopProgressBridge {
   private readonly streamLogs = new StreamLogStore();
   private readonly cursors = new Map<StreamTabId, number>();
@@ -68,7 +93,10 @@ export class DesktopProgressBridge {
 
   readonly runtimeHost: AgentRuntimeHost;
 
-  constructor(private readonly postToRenderer: (message: unknown) => void) {
+  constructor(
+    private readonly postToRenderer: (message: unknown) => void,
+    private readonly options: DesktopProgressBridgeOptions = {},
+  ) {
     AgentLogger.setStreamLogStore(this.streamLogs);
     setRunStorageService({ isViewVisible: () => true });
     this.unsubscribe = this.streamLogs.onChange((streamId) =>
@@ -426,6 +454,148 @@ export class DesktopProgressBridge {
         });
         break;
       }
+      case 'showToolEditPermission': {
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'show',
+          permission: {
+            kind: 'toolEdit',
+            data: payload as ProgressEventPayloads['showToolEditPermission'],
+          },
+        });
+        break;
+      }
+      case 'resolveToolEditPermission': {
+        const data =
+          payload as ProgressEventPayloads['resolveToolEditPermission'];
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'resolve',
+          kind: 'toolEdit',
+          id: data.requestId,
+        });
+        break;
+      }
+      case 'updateToolEditApprovalBypassState': {
+        const data =
+          payload as ProgressEventPayloads['updateToolEditApprovalBypassState'];
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
+          stream: data.streamId,
+          type: 'toolEdit',
+          bypassActive: data.bypassActive,
+        });
+        break;
+      }
+      case 'showBashPermission': {
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'show',
+          permission: {
+            kind: 'bash',
+            data: payload as ProgressEventPayloads['showBashPermission'],
+          },
+        });
+        break;
+      }
+      case 'resolveBashPermission': {
+        const data = payload as ProgressEventPayloads['resolveBashPermission'];
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'resolve',
+          kind: 'bash',
+          id: data.requestId,
+        });
+        break;
+      }
+      case 'showAgentProposal': {
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'show',
+          permission: {
+            kind: 'proposal',
+            data: payload as ProgressEventPayloads['showAgentProposal'],
+          },
+        });
+        break;
+      }
+      case 'resolveAgentProposal': {
+        const data = payload as ProgressEventPayloads['resolveAgentProposal'];
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'resolve',
+          kind: 'proposal',
+          id: data.proposalId,
+        });
+        break;
+      }
+      case 'showPlanApproval': {
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'show',
+          permission: {
+            kind: 'planApproval',
+            data: payload as ProgressEventPayloads['showPlanApproval'],
+          },
+        });
+        break;
+      }
+      case 'resolvePlanApproval': {
+        const data = payload as ProgressEventPayloads['resolvePlanApproval'];
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'resolve',
+          kind: 'planApproval',
+          id: data.approvalId,
+        });
+        break;
+      }
+      case 'updateSuperYoloBypassState': {
+        const data =
+          payload as ProgressEventPayloads['updateSuperYoloBypassState'];
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
+          stream: data.streamId,
+          type: 'superYolo',
+          bypassActive: data.bypassActive,
+        });
+        break;
+      }
+      case 'updateQueuedFollowUps': {
+        const data = payload as ProgressEventPayloads['updateQueuedFollowUps'];
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
+          stream: data.streamId,
+          messages: ToolUseFollowUpQueue.getAll(data.streamId),
+        });
+        break;
+      }
+      case 'clearMissingOutputs':
+      case 'showRetryRequest':
+      case 'resolveRetryRequest':
+      case 'showExternalInquiry':
+      case 'resolveExternalInquiry':
+      case 'followUpSent':
+      case 'removeStream':
+      case 'extensionDeactivating':
+      case 'githubTokenInvalid':
+      case 'prSubscriptionsChanged':
+      case 'prSubscriptionBindingsChanged':
+      case 'repoSubscriptionsChanged':
+      case 'repoSubscriptionBindingsChanged':
+      case 'issueSubscriptionsChanged':
+      case 'issueSubscriptionBindingsChanged':
+      case 'toolAvailabilityChanged':
+      case 'workspaceFilesWritten':
+      case 'requestOpenFile':
+      case 'requestShowInstruction':
+      case 'showAgentConfigBanner':
+      case 'requestShowError':
+        break;
+      default: {
+        const exhaustive: never = event;
+        return exhaustive;
+      }
     }
   }
 
@@ -456,6 +626,10 @@ export class DesktopProgressBridge {
     const hadStream =
       this.streamLogs.has(streamId) || this.taskStates.has(streamId);
     if (!hadStream) return;
+
+    cleanupApprovalsForStream(streamId);
+    retryCoordinator.clearRequest(streamId);
+    ToolUseFollowUpQueue.release(streamId);
 
     await this.streamLogs.delete(streamId);
     this.taskStates.delete(streamId);
@@ -488,6 +662,12 @@ export class DesktopProgressBridge {
   }
 
   async deleteAllStreams(): Promise<void> {
+    cleanupAllApprovals();
+    for (const streamId of this.streamLogs.keys()) {
+      retryCoordinator.clearRequest(streamId);
+      ToolUseFollowUpQueue.release(streamId);
+    }
+
     await this.streamLogs.clear();
     this.cursors.clear();
     this.taskStates.clear();
@@ -503,12 +683,140 @@ export class DesktopProgressBridge {
     this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
     this.syncStreams();
   }
+
+  stopStream(streamId: StreamTabId): void {
+    retryCoordinator.clearRequest(streamId);
+    if (this.options.detachSubagentsOnStop === true) {
+      detachActiveChildren(streamId);
+    } else {
+      interruptActiveChildren(streamId);
+    }
+    getInterruptible(streamId)?.interrupt();
+    StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
+      runtimeHost: this.runtimeHost,
+    });
+  }
+
+  async resumeStream(streamId: StreamTabId): Promise<void> {
+    const taskState = this.taskStates.get(streamId);
+    if (!taskState) return;
+
+    const executionId = this.executionIds.get(streamId);
+    await this.runExecution({
+      config: taskState.agentConfig,
+      ...(executionId && { executionId }),
+    });
+  }
+
+  async runNewStream(streamId: StreamTabId): Promise<void> {
+    const taskState = this.taskStates.get(streamId);
+    if (!taskState) return;
+
+    await this.runExecution({ config: taskState.agentConfig });
+  }
+
+  async sendFollowUp(streamId: StreamTabId, text: string): Promise<void> {
+    const result = await sendFollowUp(streamId, text);
+    if (result.status === 'sent' || result.status === 'queued') {
+      this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
+      return;
+    }
+
+    await this.options.showMessage?.(
+      'No active session. Start a new agent task to continue.',
+    );
+  }
+
+  async openFile(filePath: string): Promise<void> {
+    await this.options.openPath?.(filePath);
+  }
+
+  async openFileCompile(filePath: string): Promise<void> {
+    await this.openFile(filePath);
+  }
+
+  async handleBashApprovalAction(
+    message: Extract<
+      ProgressViewInboundMessage,
+      { command: typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION }
+    >,
+  ): Promise<void> {
+    await handleProgressViewBashApprovalAction(message);
+  }
+
+  handleToolEditApprovalAction(
+    message: Extract<
+      ProgressViewInboundMessage,
+      { command: typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION }
+    >,
+  ): boolean {
+    if (message.action !== 'approve' && message.action !== 'reject') {
+      return false;
+    }
+
+    const entry = toolEditApprovalController.getPending(message.requestId);
+    if (!entry || entry.isSettled()) return true;
+    entry.settle({
+      accepted: message.action === 'approve',
+      userMessage:
+        message.action === 'reject' ? message.feedback?.trim() : undefined,
+    });
+    return true;
+  }
+
+  handlePlanApprovalAction(
+    message: Extract<
+      ProgressViewInboundMessage,
+      { command: typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION }
+    >,
+  ): void {
+    planApprovalCoordinator.resolveRequest(message.approvalId, {
+      action: message.action,
+      ...(message.action === 'reject' && { feedback: message.feedback }),
+    });
+  }
+
+  handleAgentProposalAction(
+    message: Extract<
+      ProgressViewInboundMessage,
+      { command: typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION }
+    >,
+  ): boolean {
+    if (message.action === 'setup') return false;
+
+    proposalCoordinator.resolveRequest(message.proposalId, {
+      action: message.action,
+      ...(message.action === 'approve' && {
+        model: message.model,
+        agent: message.agent,
+      }),
+      ...(message.action === 'reject' && { feedback: message.feedback }),
+    });
+    return true;
+  }
+
+  async runExecution(request: ValidatedExecutionRequest): Promise<void> {
+    const { runValidatedExecutionRequest } =
+      await import('@agent/runtime/runExecutionRequest');
+    await runValidatedExecutionRequest(request, {
+      runtimeHost: this.runtimeHost,
+      openWorkflowOutput: async (result) => {
+        const output = result.outputs.at(-1);
+        if (output) {
+          await this.options.openPath?.(output.absolutePath);
+        }
+      },
+    });
+  }
 }
 
 export function createDesktopAgentExecution(
   options: DesktopAgentExecutionOptions,
 ): DesktopAgentExecution {
-  const progress = new DesktopProgressBridge(options.postToRenderer);
+  const progress = new DesktopProgressBridge(options.postToRenderer, {
+    openPath: options.openPath,
+    showMessage: async (message) => options.showErrorMessage?.(message),
+  });
 
   return {
     progress,
@@ -519,17 +827,7 @@ export function createDesktopAgentExecution(
         return;
       }
 
-      const { runValidatedExecutionRequest } =
-        await import('@agent/runtime/runExecutionRequest');
-      await runValidatedExecutionRequest(preparation.request, {
-        runtimeHost: progress.runtimeHost,
-        openWorkflowOutput: async (result) => {
-          const output = result.outputs.at(-1);
-          if (output && options.openPath) {
-            await options.openPath(output.absolutePath);
-          }
-        },
-      });
+      await progress.runExecution(preparation.request);
     },
     dispose() {
       progress.dispose();
