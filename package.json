@@ -22,6 +22,7 @@
     "workspace:build": "corepack pnpm --recursive --if-present build",
     "desktop:build": "corepack pnpm --filter @texra/desktop build",
     "desktop:package:local": "corepack pnpm run desktop:build && corepack pnpm --filter @texra/desktop package:dir",
+    "desktop:package:smoke": "node scripts/smoke-desktop-package-launch.mjs",
     "build:initial": "corepack pnpm run desktop:build && corepack pnpm run build:fast && corepack pnpm run check:initial-build-artifacts",
     "build": "corepack pnpm --filter texra build:fast",
     "format": "prettier --write .",
