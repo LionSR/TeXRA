@@ -3,9 +3,9 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { setPendingState } from '@common/state';
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { buildMainViewState } from '@frontend/mainViewStateUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { TaskStateSchema, type TaskState } from '@logger/TaskState';

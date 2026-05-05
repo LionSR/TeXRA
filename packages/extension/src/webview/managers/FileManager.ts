@@ -15,11 +15,11 @@ import {
   type MultiFileCategory,
 } from '@common/files';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { getFileLister } from '@frontend/files';
 import {
   showLoggedErrorMessage,
   toErrorMessage,
-} from '@common/errors/errorHandlingUtils';
-import { getFileLister } from '@frontend/files';
+} from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import type { MainViewInboundMessage } from '@shared/schemas';
