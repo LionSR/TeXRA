@@ -16,6 +16,7 @@ import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
+import { serializeWorkspacePresenceArg } from '../workspacePath.js';
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const __dirname = findDesktopMainDir(moduleDirname);
@@ -66,7 +67,7 @@ function installContentSecurityPolicy(): void {
   });
 }
 
-function createWindow(): void {
+function createWindow(options: { workspacePath: string | undefined }): void {
   const window = new BrowserWindow({
     width: 960,
     height: 680,
@@ -78,6 +79,9 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      additionalArguments: [
+        serializeWorkspacePresenceArg(options.workspacePath != null),
+      ],
     },
   });
   const reportAsyncError = (error: unknown) => console.error(error);
@@ -168,12 +172,14 @@ function createWindow(): void {
 app
   .whenReady()
   .then(async () => {
-    await initializeElectronPlatform(__dirname);
+    const platformInit = await initializeElectronPlatform(__dirname);
     installContentSecurityPolicy();
-    createWindow();
+    createWindow({ workspacePath: platformInit.workspacePath });
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow({ workspacePath: platformInit.workspacePath });
+      }
     });
   })
   .catch((error: unknown) => {

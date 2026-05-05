@@ -3,7 +3,11 @@ import { resolve } from 'node:path';
 import { describe, it } from 'vitest';
 
 import { resolveWorkspacePath } from '../../../packages/desktop/src/main/platform/paths';
-import { hasWorkspacePath } from '../../../packages/desktop/src/workspacePath';
+import {
+  hasResolvedWorkspacePath,
+  hasWorkspacePath,
+  serializeWorkspacePresenceArg,
+} from '../../../packages/desktop/src/workspacePath';
 
 describe('desktop workspace path', () => {
   it('resolves CLI workspace path before env and stored state', () => {
@@ -38,6 +42,25 @@ describe('desktop workspace path', () => {
     assert.equal(
       hasWorkspacePath({ argv: ['--texra-workspace', 'paper'], env: {} }),
       true,
+    );
+  });
+
+  it('uses main-process workspace resolution when exposing renderer state', () => {
+    assert.equal(
+      hasResolvedWorkspacePath({
+        argv: [serializeWorkspacePresenceArg(true)],
+      }),
+      true,
+    );
+    assert.equal(
+      hasResolvedWorkspacePath({
+        argv: [
+          '--texra-workspace',
+          'renderer-process-argv-is-not-authoritative',
+          serializeWorkspacePresenceArg(false),
+        ],
+      }),
+      false,
     );
   });
 });

@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  SettingsModelSelectionController,
+  type SettingsModelSelectionState,
+} from '@controllers/settingsView/SettingsModelSelectionController';
+import { MAX_TIER } from '@auth/sharedConfig';
+
+function createState(
+  overrides: Partial<{
+    enabledModels: string[];
+    helperModel: string;
+    reasoningLevelOverrides: Record<string, string>;
+    preferShortModelNames: boolean;
+  }> = {},
+): SettingsModelSelectionState {
+  const state = {
+    enabledModels: overrides.enabledModels,
+    helperModel: overrides.helperModel,
+    reasoningLevelOverrides: overrides.reasoningLevelOverrides,
+    preferShortModelNames: overrides.preferShortModelNames,
+  };
+  return {
+    getEnabledModels: () => state.enabledModels,
+    setEnabledModels: async (models) => {
+      state.enabledModels = models;
+    },
+    getHelperModel: () => state.helperModel,
+    setHelperModel: async (model) => {
+      state.helperModel = model;
+    },
+    getReasoningLevelOverrides: () => state.reasoningLevelOverrides,
+    setReasoningLevelOverrides: async (overrides) => {
+      state.reasoningLevelOverrides = overrides;
+    },
+    getPreferShortModelNames: () => state.preferShortModelNames,
+    setPreferShortModelNames: async (enabled) => {
+      state.preferShortModelNames = enabled;
+    },
+  };
+}
+
+describe('SettingsModelSelectionController', () => {
+  it('uses canonical tier constants for included-access reasoning caps', () => {
+    const controller = new SettingsModelSelectionController({
+      state: createState(),
+      useIncludedAccess: () => true,
+      getUserTier: () => MAX_TIER,
+    });
+
+    const gpt55 = controller
+      .buildSelectionData()
+      .models.find((model) => model.name === 'gpt55');
+
+    expect(gpt55).toMatchObject({
+      supportsReasoningLevel: true,
+      includedAccessReasoningCap: 'high',
+    });
+  });
+
+  it('moves a stale helper fallback when disabling the effective helper model', async () => {
+    const state = createState({
+      enabledModels: ['gpt55', 'sonnet46T'],
+      helperModel: 'removed-model',
+    });
+    const controller = new SettingsModelSelectionController({ state });
+
+    expect(controller.buildSelectionData().helperModel).toBe('gpt55');
+
+    await controller.setModelEnabled({ modelName: 'gpt55', enabled: false });
+
+    expect(state.getEnabledModels()).toEqual(['sonnet46T']);
+    expect(state.getHelperModel()).toBe('sonnet46T');
+  });
+});

@@ -7,6 +7,7 @@ import {
 } from 'llm-zoo';
 
 import { LEVEL_TO_EFFORT } from '@agent/runtime/reasoningEffort';
+import { FREE_TIER, MAX_TIER } from '@auth/sharedConfig';
 import {
   DEFAULT_MODELS,
   formatContext,
@@ -47,9 +48,6 @@ export interface SettingsModelSelectionData {
   preferShortModelNames: boolean;
 }
 
-const FREE_TIER = 'free';
-const MAX_TIER = 'max';
-
 const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
   Object.entries(LEVEL_TO_EFFORT).map(
     ([level, effort]) => [effort, level as ReasoningLevel] as const,
@@ -68,12 +66,10 @@ export class SettingsModelSelectionController {
   }
 
   buildSelectionData(): SettingsModelSelectionData {
+    const visibleModels = this.getVisibleModels();
     return {
       models: this.buildSelectionItems(),
-      helperModel:
-        this.deps.state.getHelperModel() ??
-        this.getVisibleModels()[0] ??
-        DEFAULT_HELPER_MODEL,
+      helperModel: this.getEffectiveHelperModel(visibleModels),
       preferShortModelNames:
         this.deps.state.getPreferShortModelNames() ?? false,
     };
@@ -91,8 +87,7 @@ export class SettingsModelSelectionController {
       : current.filter((modelName) => modelName !== input.modelName);
     const wasHelper =
       !input.enabled &&
-      (this.deps.state.getHelperModel() ?? DEFAULT_HELPER_MODEL) ===
-        input.modelName;
+      this.getEffectiveHelperModel(current) === input.modelName;
 
     await this.deps.state.setEnabledModels(updated);
     if (wasHelper) {
@@ -149,6 +144,12 @@ export class SettingsModelSelectionController {
     }
 
     return items.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  private getEffectiveHelperModel(visibleModels: readonly string[]): string {
+    const helperModel = this.deps.state.getHelperModel();
+    if (helperModel && visibleModels.includes(helperModel)) return helperModel;
+    return visibleModels[0] ?? DEFAULT_HELPER_MODEL;
   }
 
   private addReasoningLevelData(
