@@ -512,6 +512,7 @@ export type UpdateLatexConfigValuesMessage = z.infer<
 const SetProviderKeyMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_KEY),
   provider: z.string().min(1),
+  apiKey: z.string().optional(),
 });
 
 const RemoveProviderKeyMessageSchema = z.object({

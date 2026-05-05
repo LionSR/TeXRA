@@ -588,16 +588,21 @@ export function createDesktopSettingsIpc(
     postMainModelOptionsData();
   }
 
-  async function setProviderKey(provider: string): Promise<void> {
+  async function setProviderKey(
+    provider: string,
+    submittedApiKey?: string,
+  ): Promise<void> {
     if (!isApiProvider(provider)) {
       await options.showErrorMessage?.(`Unknown API provider: ${provider}`);
       return;
     }
     const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
-    const apiKey = await options.promptSecret?.({
-      title: `Set ${displayName} API key`,
-      prompt: `Enter ${displayName} API key`,
-    });
+    const apiKey =
+      submittedApiKey ??
+      (await options.promptSecret?.({
+        title: `Set ${displayName} API key`,
+        prompt: `Enter ${displayName} API key`,
+      }));
     const trimmed = apiKey?.trim();
     if (!trimmed) return;
 
@@ -840,7 +845,7 @@ export function createDesktopSettingsIpc(
           );
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY:
-          runAsync(setProviderKey(result.data.provider));
+          runAsync(setProviderKey(result.data.provider, result.data.apiKey));
           return true;
         case SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY:
           runAsync(removeProviderKey(result.data.provider));
