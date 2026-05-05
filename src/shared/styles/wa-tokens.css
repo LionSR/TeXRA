@@ -1,0 +1,39 @@
+/*
+ * Web Awesome design-token bridge.
+ *
+ * Web Awesome components read --wa-* design tokens. TeXRA owns the --texra-*
+ * theme contract, which is supplied by:
+ *   - VS Code:   --vscode-* -> --texra-*  (packages/extension/src/common/styles/common.css)
+ *   - Electron:  desktop tokens -> --texra-* (packages/desktop/src/renderer/themeTokens.css)
+ *
+ * This file provides the missing --texra-* -> --wa-* link so wa-* components
+ * inherit the host theme. The Web Awesome default theme uses :where(:root) at
+ * 0 specificity, so :root { ... } overrides reliably win.
+ *
+ * Mappings are added per control family as components are migrated.
+ */
+
+:root {
+  /* Typography */
+  --wa-font-family-body: var(--texra-font-family);
+  --wa-font-family-heading: var(--texra-font-family);
+  --wa-font-size-m: var(--texra-font-size);
+  --wa-font-weight-normal: var(--texra-font-weight);
+
+  /* Surfaces & text */
+  --wa-color-text-normal: var(--texra-foreground);
+  --wa-color-text-quiet: var(--texra-descriptionForeground);
+  --wa-color-text-link: var(--texra-textLink-foreground);
+  --wa-color-surface-default: var(--texra-editor-background);
+  --wa-color-surface-raised: var(--texra-editorWidget-background);
+  --wa-color-surface-lowered: var(--texra-sideBar-background);
+  --wa-color-surface-border: var(--texra-panel-border);
+
+  /* Focus ring */
+  --wa-color-focus: var(--texra-focusBorder);
+
+  /* Brand / primary action (drives wa-button[appearance=filled variant=brand]) */
+  --wa-color-brand-fill-loud: var(--texra-button-background);
+  --wa-color-brand-on-loud: var(--texra-button-foreground);
+  --wa-color-brand-border-loud: var(--texra-button-border);
+}
