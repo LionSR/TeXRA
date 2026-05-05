@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
