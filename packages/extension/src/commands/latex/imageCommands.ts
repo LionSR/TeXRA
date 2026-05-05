@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - errors
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as dialogUtils from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import {
