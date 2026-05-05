@@ -24,10 +24,21 @@ import {
   type DesktopCommandActions,
 } from '../desktopCommandSurface.js';
 
-export interface DesktopShellIpcOptions {
-  actions?: DesktopShellActions;
+export type DesktopShellIpcOptions =
+  | DesktopShellActionFactoryOptions
+  | DesktopShellActionInstanceOptions;
+
+export interface DesktopShellActionFactoryOptions {
+  actions?: never;
   getCustomAgentDirectory?: () => Promise<string>;
   openPath?: (filePath: string) => Promise<void>;
+  onAsyncError?: (error: unknown) => void;
+}
+
+export interface DesktopShellActionInstanceOptions {
+  actions: DesktopShellActions;
+  getCustomAgentDirectory?: never;
+  openPath?: never;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -50,7 +61,7 @@ function getAgentSettingsSubTab(message: DesktopCommandMessage) {
 
 export function createDesktopShellActions(
   renderer: DesktopRenderer,
-  options: DesktopShellIpcOptions = {},
+  options: DesktopShellActionFactoryOptions = {},
 ): DesktopShellActions {
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
@@ -108,7 +119,9 @@ export function createDesktopShellIpc(
   options: DesktopShellIpcOptions = {},
 ): DesktopMessageHandler {
   const actions =
-    options.actions ?? createDesktopShellActions(renderer, options);
+    options.actions != null
+      ? options.actions
+      : createDesktopShellActions(renderer, options);
 
   function postRouteForSwitchView(message: DesktopCommandMessage) {
     const result = SwitchViewMessageSchema.safeParse(message);
