@@ -1,6 +1,7 @@
-import { readdir } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { tryPlatform } from '@platform/platform';
 import { getWorkspaceProvider } from '@agent/core/workspace';
 import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import {
@@ -8,12 +9,10 @@ import {
   getFileListConfig,
   loadFileListSettings,
   matchesEditedFile,
-  passesFileFilters,
-  prepareFileFilters,
-  shouldVisitDirectory,
   type FileListConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
+import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { normalizeFilePath } from '@shared/utils/path';
 import { getConfig } from '@utils/config/configUtils';
@@ -71,32 +70,19 @@ function getListSettings() {
   return loadFileListSettings(getConfig);
 }
 
+function readDirectory(directory: string) {
+  return (tryPlatform()?.fs ?? nodeFilesystem).readDirectory(directory);
+}
+
 async function listFiles(
   root: string,
   rawConfig: FileListConfig,
 ): Promise<string[]> {
-  const filters = prepareFileFilters(rawConfig);
-  const results: string[] = [];
-
-  async function visit(directory: string): Promise<void> {
-    const entries = await readdir(directory, { withFileTypes: true });
-    for (const entry of entries) {
-      const absolutePath = join(directory, entry.name);
-      const relativePath = normalizeFilePath(relative(root, absolutePath));
-      if (entry.isDirectory()) {
-        if (shouldVisitDirectory(relativePath, filters)) {
-          await visit(absolutePath);
-        }
-        continue;
-      }
-      if (entry.isFile() && passesFileFilters(relativePath, filters)) {
-        results.push(relativePath);
-      }
-    }
-  }
-
-  await visit(root);
-  return results.sort((a, b) => a.localeCompare(b));
+  return listWorkspaceFiles({
+    root,
+    config: rawConfig,
+    readDirectory,
+  });
 }
 
 function resolveWorkspaceFile(workspacePath: string, filePath: string): string {
