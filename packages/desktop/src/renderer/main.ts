@@ -4,6 +4,7 @@ import './codiconStylesheet';
 
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { postMessage } from '@shared/hostBridge';
+import { SetThemeMessageSchema } from '@shared/schemas/commonViewMessages';
 import '@vscode-elements/elements/dist/bundled.js';
 import '@progressView/frontend';
 import '@settingsView/frontend';
@@ -170,12 +171,7 @@ function isDesktopSetRouteMessage(
 function isThemeMessage(
   message: unknown,
 ): message is { command: typeof COMMON_COMMANDS.THEME_SET; theme: string } {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    (message as { command?: unknown }).command === COMMON_COMMANDS.THEME_SET &&
-    typeof (message as { theme?: unknown }).theme === 'string'
-  );
+  return SetThemeMessageSchema.safeParse(message).success;
 }
 
 function setRoute(route: DesktopRoute): void {

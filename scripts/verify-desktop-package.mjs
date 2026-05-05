@@ -435,17 +435,38 @@ function codexBinaryPath(prefix, platformInfo) {
 }
 
 function expectedCodexPlatformKeys(app) {
-  if (app.label.includes('.app/Contents/Resources/app.asar')) {
+  const label = app.label.replaceAll('\\', '/').toLowerCase();
+  if (label.includes('.app/contents/resources/app')) {
     return ['darwin-x64', 'darwin-arm64'];
   }
 
-  const key = `${process.platform}-${process.arch}`;
-  return Object.hasOwn(codexPlatformInfoByKey, key) ? [key] : [];
+  if (label.includes('linux')) {
+    return [
+      label.includes('arm64') || label.includes('aarch64')
+        ? 'linux-arm64'
+        : 'linux-x64',
+    ];
+  }
+
+  if (label.includes('win')) {
+    return [
+      label.includes('arm64') || label.includes('aarch64')
+        ? 'win32-arm64'
+        : 'win32-x64',
+    ];
+  }
+
+  return [];
 }
 
 async function checkCodexUnpackedBinaries(app, failures) {
   const platformKeys = expectedCodexPlatformKeys(app);
-  if (platformKeys.length === 0) return false;
+  if (platformKeys.length === 0) {
+    failures.push(
+      `Could not infer expected Codex CLI platform from packaged app path: ${app.label}`,
+    );
+    return false;
+  }
 
   for (const platformKey of platformKeys) {
     const platformInfo = codexPlatformInfoByKey[platformKey];

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
 import {
@@ -21,6 +22,11 @@ interface DesktopSettingsIpcModule {
     postToRenderer(message: unknown): void;
     globalState?: StateStore;
     workspaceState?: StateStore;
+    loadAgents?: () => Promise<void>;
+    loadAgentOptionsData?: () => Promise<{
+      workflow: unknown[];
+      toolUse: unknown[];
+    }>;
     selectCustomAgentDirectory?: () => Promise<string | undefined>;
     onError?: (error: unknown) => void;
   }): {
@@ -394,6 +400,52 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       preferShortModelNames: true,
     });
+  });
+
+  it('refreshes launcher agent options after agent visibility changes', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      globalState: new MemoryStateStore(),
+      loadAgents: async () => undefined,
+      loadAgentOptionsData: async () => ({
+        workflow: [{ value: 'builtInWorkflow:correct', label: 'correct' }],
+        toolUse: [],
+      }),
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
+        category: 'workflow',
+        agentSource: 'builtInWorkflow',
+        agentName: 'polish',
+        enabled: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(workspaceState.values.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
+      expect.not.arrayContaining(['builtInWorkflow:polish', 'polish']),
+    );
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      ),
+    ).toBe(true);
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      ),
+    ).toBe(true);
   });
 
   it('ignores unsupported or malformed settings messages', async () => {

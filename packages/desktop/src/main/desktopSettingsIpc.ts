@@ -9,6 +9,7 @@ import { SettingsAgentDirectoryController } from '@controllers/settingsView/Sett
 import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import {
+  computeAgentOptionsData,
   getAgent,
   getToolUseAgents,
   getWorkflowAgents,
@@ -43,6 +44,8 @@ import type {
 export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
   sendStartupCatalogData?: boolean;
+  loadAgents?: typeof loadAgents;
+  loadAgentOptionsData?: typeof computeAgentOptionsData;
   globalState?: StateStore;
   workspaceState?: StateStore;
   selectCustomAgentDirectory?: () => Promise<string | undefined>;
@@ -61,6 +64,9 @@ export function createDesktopSettingsIpc(
     ((error) => {
       console.error(error);
     });
+  const loadAgentRegistry = options.loadAgents ?? loadAgents;
+  const loadAgentOptionsData =
+    options.loadAgentOptionsData ?? computeAgentOptionsData;
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
   const agentCatalogState: SettingsAgentCatalogState = {
@@ -201,7 +207,7 @@ export function createDesktopSettingsIpc(
   }
 
   async function postAgentSelectionData(): Promise<void> {
-    await loadAgents();
+    await loadAgentRegistry();
     const { workflow, toolUse } = agentCatalogController.buildSelectionItems();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
@@ -224,6 +230,13 @@ export function createDesktopSettingsIpc(
       optionsData: buildBasicModelOptionsData(
         modelSelectionController.getVisibleModels(),
       ),
+    });
+  }
+
+  async function postMainAgentOptionsData(): Promise<void> {
+    options.postToRenderer({
+      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      optionsData: await loadAgentOptionsData(),
     });
   }
 
@@ -319,7 +332,7 @@ export function createDesktopSettingsIpc(
     enabled: boolean;
   }): Promise<void> {
     await agentVisibilityController.setAgentEnabled(input);
-    await postAgentSelectionData();
+    await Promise.all([postAgentSelectionData(), postMainAgentOptionsData()]);
   }
 
   async function updateAllAgentsEnabled(input: {
@@ -328,20 +341,28 @@ export function createDesktopSettingsIpc(
     enabled: boolean;
   }): Promise<void> {
     await agentVisibilityController.setAllAgentsEnabled(input);
-    await postAgentSelectionData();
+    await Promise.all([postAgentSelectionData(), postMainAgentOptionsData()]);
   }
 
   async function setCustomAgentDir(): Promise<void> {
     const selectedPath = await options.selectCustomAgentDirectory?.();
     if (!selectedPath) return;
 
-    await globalState.update(GlobalStateKey.CUSTOM_AGENT_DIR, selectedPath);
-    await Promise.all([postCustomAgentDir(), postAgentSelectionData()]);
+    await agentDirectoryController.setCustomDir(selectedPath);
+    await Promise.all([
+      postCustomAgentDir(),
+      postAgentSelectionData(),
+      postMainAgentOptionsData(),
+    ]);
   }
 
   async function resetCustomAgentDir(): Promise<void> {
     await agentDirectoryController.resetCustomDir();
-    await Promise.all([postCustomAgentDir(), postAgentSelectionData()]);
+    await Promise.all([
+      postCustomAgentDir(),
+      postAgentSelectionData(),
+      postMainAgentOptionsData(),
+    ]);
   }
 
   function runAsync(work: Promise<void>): void {

@@ -5,6 +5,7 @@ import {
   type SettingsModelSelectionState,
 } from '@controllers/settingsView/SettingsModelSelectionController';
 import { MAX_TIER } from '@auth/sharedConfig';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 function createState(
   overrides: Partial<{
@@ -71,5 +72,17 @@ describe('SettingsModelSelectionController', () => {
 
     expect(state.getEnabledModels()).toEqual(['sonnet46T']);
     expect(state.getHelperModel()).toBe('sonnet46T');
+  });
+
+  it('uses the runtime helper default when no helper model is configured', () => {
+    const controller = new SettingsModelSelectionController({
+      state: createState({
+        enabledModels: ['gpt55', 'sonnet46T'],
+      }),
+    });
+
+    expect(controller.buildSelectionData().helperModel).toBe(
+      DEFAULT_HELPER_MODEL,
+    );
   });
 });

@@ -147,8 +147,13 @@ export class SettingsModelSelectionController {
   }
 
   private getEffectiveHelperModel(visibleModels: readonly string[]): string {
-    const helperModel = this.deps.state.getHelperModel();
-    if (helperModel && visibleModels.includes(helperModel)) return helperModel;
+    const helperModel = this.deps.state.getHelperModel()?.trim();
+    if (!helperModel || helperModel === DEFAULT_HELPER_MODEL) {
+      return DEFAULT_HELPER_MODEL;
+    }
+    if (visibleModels.length === 0 || visibleModels.includes(helperModel)) {
+      return helperModel;
+    }
     return visibleModels[0] ?? DEFAULT_HELPER_MODEL;
   }
 
