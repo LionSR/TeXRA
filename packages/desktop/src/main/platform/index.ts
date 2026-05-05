@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { app } from 'electron';
+import { app, dialog } from 'electron';
 
 import { consoleLog } from '@platform/defaults/consoleLog';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -54,7 +54,11 @@ export async function initializeElectronPlatform(
     fs: nodeFilesystem,
     workspace: createNodeWorkspace(() => workspacePath),
     storage,
-    secrets: new ElectronSecrets(secretsStore),
+    secrets: new ElectronSecrets(secretsStore, {
+      showWarningMessage: async (message) => {
+        await dialog.showMessageBox({ message, type: 'warning' });
+      },
+    }),
   });
 
   await bootstrapElectronAgentDirectories(
