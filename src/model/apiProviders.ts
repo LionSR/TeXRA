@@ -4,7 +4,7 @@
  * Shared between SecretManager (VS Code), ModelHandler (agent core),
  * and computeModelOptions (model). Platform-agnostic.
  */
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
+import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;

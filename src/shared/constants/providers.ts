@@ -98,20 +98,6 @@ export const MODEL_PROVIDERS_ORDER: ModelProvider[] = PROVIDER_REGISTRY.map(
   (p) => p.id,
 );
 
-/** Providers where users can configure direct API keys. */
-export const API_KEY_PROVIDER_IDS = [
-  'openai',
-  'anthropic',
-  'openRouter',
-  'google',
-  'xai',
-  'deepseek',
-  'moonshot',
-  'dashscope',
-  'minimax',
-  'glm',
-] as const;
-
 /**
  * All providers that support server-side API keys.
  * Derived from PROVIDER_REGISTRY — no manual sync needed.

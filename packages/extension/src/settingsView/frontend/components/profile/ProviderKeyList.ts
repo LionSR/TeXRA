@@ -231,7 +231,7 @@ export class ProviderKeyList extends LitElement {
     `;
   }
 
-  override render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult {
     const rows = resolveProviderKeyRows(this.providerKeyStatuses);
 
     const description =
