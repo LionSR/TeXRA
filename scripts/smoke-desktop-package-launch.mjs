@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const DEFAULT_TIMEOUT_MS = 8_000;
+const SHUTDOWN_GRACE_MS = 3_000;
 const MAX_LOG_CHARS = 256_000;
 const fatalLogPatterns = [
   {
@@ -85,12 +86,51 @@ function waitForExit(child) {
   });
 }
 
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function findFatalLog(output) {
   return fatalLogPatterns.find(({ pattern }) => pattern.test(output));
 }
 
 function formatOutput(output) {
   return output.trim().length > 0 ? output.trim() : '(no output)';
+}
+
+function formatExit(exit) {
+  return exit.signal ?? `code ${exit.code}`;
+}
+
+function hasExited(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+async function waitForExitOrTimeout(exitPromise, timeoutMs) {
+  return Promise.race([
+    exitPromise.then((exit) => ({ exit })),
+    delay(timeoutMs).then(() => ({ timeout: true })),
+  ]);
+}
+
+async function stopChild(child, exitPromise) {
+  if (hasExited(child)) return exitPromise;
+  child.kill('SIGTERM');
+  const gracefulExit = await waitForExitOrTimeout(
+    exitPromise,
+    SHUTDOWN_GRACE_MS,
+  );
+  if (!gracefulExit.timeout) return gracefulExit.exit;
+
+  child.kill('SIGKILL');
+  const forcedExit = await waitForExitOrTimeout(exitPromise, SHUTDOWN_GRACE_MS);
+  if (!forcedExit.timeout) return forcedExit.exit;
+
+  throw new Error(
+    `Packaged app did not exit within ${SHUTDOWN_GRACE_MS}ms after SIGKILL.`,
+  );
 }
 
 const executablePath = parseAppPath(process.argv.slice(2));
@@ -119,29 +159,47 @@ child.stderr.on('data', (chunk) => {
 });
 
 const exitPromise = waitForExit(child);
-const result = await Promise.race([
-  exitPromise.then((exit) => ({ exit })),
-  new Promise((resolve) => {
-    setTimeout(() => resolve({ timeout: true }), timeoutMs);
-  }),
-]);
+const result = await waitForExitOrTimeout(exitPromise, timeoutMs);
 
 if (result.timeout) {
-  child.kill('SIGTERM');
-  await exitPromise.catch(() => undefined);
+  if (hasExited(child)) {
+    result.exit = await exitPromise;
+  } else {
+    await stopChild(child, exitPromise);
+  }
+}
+
+if (!result.timeout) {
   const fatalLog = findFatalLog(output);
   if (fatalLog) {
     console.error(`Desktop launch smoke failed: ${fatalLog.label}.`);
     console.error(formatOutput(output));
     process.exit(1);
   }
-  console.log(
-    `Desktop launch smoke passed for ${executablePath} after ${timeoutMs}ms.`,
+
+  console.error(
+    `Desktop launch smoke failed: app exited before ${timeoutMs}ms with ${formatExit(
+      result.exit,
+    )}.`,
   );
-  if (output.trim().length > 0) {
-    console.log(formatOutput(output));
+  console.error(formatOutput(output));
+  process.exit(1);
+}
+
+if (result.exit) {
+  const fatalLog = findFatalLog(output);
+  if (fatalLog) {
+    console.error(`Desktop launch smoke failed: ${fatalLog.label}.`);
+    console.error(formatOutput(output));
+    process.exit(1);
   }
-  process.exit(0);
+  console.error(
+    `Desktop launch smoke failed: app exited before ${timeoutMs}ms with ${formatExit(
+      result.exit,
+    )}.`,
+  );
+  console.error(formatOutput(output));
+  process.exit(1);
 }
 
 const fatalLog = findFatalLog(output);
@@ -151,10 +209,9 @@ if (fatalLog) {
   process.exit(1);
 }
 
-console.error(
-  `Desktop launch smoke failed: app exited before ${timeoutMs}ms with ${
-    result.exit.signal ?? `code ${result.exit.code}`
-  }.`,
+console.log(
+  `Desktop launch smoke passed for ${executablePath} after ${timeoutMs}ms.`,
 );
-console.error(formatOutput(output));
-process.exit(1);
+if (output.trim().length > 0) {
+  console.log(formatOutput(output));
+}
