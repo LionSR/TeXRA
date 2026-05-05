@@ -385,12 +385,16 @@ describe('desktop settings IPC', () => {
     const secrets = new MemorySecrets();
     const posted: unknown[] = [];
     const infoMessages: string[] = [];
+    let promptCalls = 0;
 
     const settings = createDesktopSettingsIpc({
       workspaceState: new MemoryStateStore(),
       globalState: new MemoryStateStore(),
       secrets,
-      promptSecret: async () => '  sk-test  ',
+      promptSecret: async () => {
+        promptCalls += 1;
+        return '  sk-test  ';
+      },
       showInfoMessage: async (message) => {
         infoMessages.push(message);
       },
@@ -415,11 +419,13 @@ describe('desktop settings IPC', () => {
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
         provider: 'google',
+        apiKey: '  sk-modal  ',
       }),
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(secrets.values.get('apiKey.google')).toBe('sk-test');
+    expect(promptCalls).toBe(0);
+    expect(secrets.values.get('apiKey.google')).toBe('sk-modal');
     expect(infoMessages).toEqual(['Google API key has been set']);
     expect(
       posted.findLast(
@@ -432,6 +438,43 @@ describe('desktop settings IPC', () => {
         expect.objectContaining({ provider: 'google', status: 'set' }),
       ]),
     });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+        provider: 'google',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(secrets.values.has('apiKey.google')).toBe(false);
+    expect(infoMessages).toEqual([
+      'Google API key has been set',
+      'Google API key has been removed',
+    ]);
+  });
+
+  it('falls back to the host secret prompt when no provider key is submitted', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const secrets = new MemorySecrets();
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      secrets,
+      promptSecret: async () => '  sk-prompt  ',
+      postToRenderer: () => {},
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+        provider: 'google',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(secrets.values.get('apiKey.google')).toBe('sk-prompt');
   });
 
   it('round-trips LaTeX config writes through workspace state and refreshes the renderer', async () => {
