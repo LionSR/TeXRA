@@ -21,13 +21,16 @@ import {
 } from './desktopIpcTypes.js';
 import {
   buildDesktopSettingsTabMessage,
+  DESKTOP_LOCAL_COMMANDS,
   type DesktopCommandActions,
 } from '../desktopCommandSurface.js';
 
 export interface DesktopShellIpcOptions {
   actions?: DesktopShellActions;
   getCustomAgentDirectory?: () => Promise<string>;
+  openLogFolder?: () => Promise<void>;
   openPath?: (filePath: string) => Promise<void>;
+  openWorkspaceFolder?: () => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -89,8 +92,18 @@ export function createDesktopShellActions(
     void openCustomAgentDirectory().catch(reportAsyncError);
   }
 
+  function openLogFolder() {
+    void options.openLogFolder?.().catch(reportAsyncError);
+  }
+
+  function openWorkspaceFolder() {
+    void options.openWorkspaceFolder?.().catch(reportAsyncError);
+  }
+
   return {
     openAgentDirectory,
+    openLogFolder,
+    openWorkspaceFolder,
     setRecentCommitsUnavailable: () => {
       renderer.postToRenderer({
         command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
@@ -142,6 +155,12 @@ export function createDesktopShellIpc(
           return true;
         case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
           actions.setRecentCommitsUnavailable();
+          return true;
+        case DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER:
+          actions.openLogFolder?.();
+          return true;
+        case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
+          actions.openWorkspaceFolder?.();
           return true;
         default:
           return false;

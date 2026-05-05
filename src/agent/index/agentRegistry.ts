@@ -9,7 +9,6 @@ import {
   AgentSource,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as logger from '@agent/core/logger';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
@@ -545,6 +544,7 @@ function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
 
 async function loadRemoteAgents(): Promise<AgentEntry[]> {
   try {
+    const { RemoteAgentLoader } = await import('@agent/remote/RemoteAgentLoader');
     const remotes = await RemoteAgentLoader.listRemoteAgents();
     const grouped = groupByVariants(remotes, (r) => r.name);
     const metaCache = getPersistedRemoteAgentMeta();

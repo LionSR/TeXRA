@@ -36,4 +36,13 @@ installElectronHostBridge({
 
 contextBridge.exposeInMainWorld('texraDesktop', {
   electronVersion: process.versions.electron,
+  hasWorkspace: hasDesktopWorkspace(),
 });
+
+function hasDesktopWorkspace(): boolean {
+  return (
+    Boolean(process.env.TEXRA_WORKSPACE_PATH?.trim()) ||
+    process.argv.includes('--texra-workspace') ||
+    process.argv.some((arg) => arg.startsWith('--texra-workspace='))
+  );
+}

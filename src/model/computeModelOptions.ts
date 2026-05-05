@@ -1,5 +1,5 @@
 // Third-party imports
-import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 // Local imports - platform
 import { platform } from '@platform/platform';
@@ -8,114 +8,34 @@ import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - state
-import { GlobalStateKey } from '@common/state/stateKeys';
-
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared constants
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
-import {
-  FAST_FIRST_RESPONSE_HINT,
-  isFastFirstResponseModel,
-} from '@shared/constants/fastModels';
-import {
-  EXPENSIVE_MODEL_HINT,
-  isExpensiveModel,
-} from '@shared/constants/expensiveModels';
 
 // Local imports - sibling
 import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
+import {
+  buildModelHint,
+  formatContext,
+  formatCost,
+  getVisibleModels,
+} from './modelOptionsBasic';
+
+export {
+  buildBasicModelOptionsData,
+  DEFAULT_MODELS,
+  formatContext,
+  formatCost,
+  getVisibleModels,
+  MODEL_LIST_VERSION,
+  resolveVisibleModel,
+} from './modelOptionsBasic';
 
 /** Return whether the registry marks a model as deprecated. */
 export function isDeprecatedModel(model: string): boolean {
   return MODEL_CONFIGS[model]?.deprecated ?? false;
-}
-
-/**
- * Default models that should be present in every user's model list.
- * Update this list and increment MODEL_LIST_VERSION below when adding or
- * removing models.
- */
-export const DEFAULT_MODELS = [
-  'gemini31p',
-  'sonnet46T',
-  'opus47T',
-  'gpt55',
-  'gpt54',
-  'deepseekT',
-  'deepseekproT',
-  'kimi26T',
-];
-
-/**
- * Version gate for model-list migrations.
- * Increment this when adding/removing defaults or when existing users need
- * their persisted enabled-model list reconciled with current model metadata.
- * A simple integer avoids hash-collision risks and doesn't trigger on
- * harmless reordering.
- */
-export const MODEL_LIST_VERSION = 15;
-
-/**
- * Get the list of visible models from extension global state.
- * This should be used to validate model selections in proposals.
- */
-export function getVisibleModels(): string[] {
-  return platform().globalState.get<string[]>(
-    GlobalStateKey.ENABLED_MODELS,
-    DEFAULT_MODELS,
-  );
-}
-
-/**
- * Resolve a model to a valid visible model.
- * Returns the model as-is if visible, falls back to the first visible model,
- * or allows any model when none are configured (consistent with agent filterVisible).
- */
-export function resolveVisibleModel(model: string): string {
-  const visibleModels = getVisibleModels();
-  if (visibleModels.length === 0) return model;
-  if (visibleModels.includes(model)) return model;
-  return visibleModels[0];
-}
-
-/** Context window formatting thresholds */
-const MILLION = 1_000_000;
-const THOUSAND = 1_000;
-
-/** Format context window number for display. */
-export function formatContext(context: number | undefined): string | undefined {
-  if (context === undefined) return undefined;
-  if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
-  if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
-  return context.toString();
-}
-
-/** Format cost values for display. */
-export function formatCost(
-  inputPrice: number | undefined,
-  outputPrice: number | undefined,
-): string | undefined {
-  if (inputPrice === undefined || outputPrice === undefined) return undefined;
-  return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
-}
-
-const prefixHint = (prefix: string, base: string): string =>
-  base ? `${prefix} | ${base}` : prefix;
-
-/**
- * Build the model tooltip string, prepending an attention-grabbing nudge
- * for unusually cheap fast options or unusually expensive Pro variants.
- * Expensive takes precedence — no current model is both.
- */
-function buildModelHint(config: ModelConfig): string {
-  const base = hint(config);
-  if (isExpensiveModel(config.provider, config.name))
-    return prefixHint(EXPENSIVE_MODEL_HINT, base);
-  if (isFastFirstResponseModel(config.inputPrice))
-    return prefixHint(FAST_FIRST_RESPONSE_HINT, base);
-  return base;
 }
 
 /** Check if a model is available via personal API keys. */
@@ -236,26 +156,6 @@ async function buildModelOptionData(
     requiresKey: !available,
     disabled: !available,
   };
-}
-
-/**
- * Build basic model options from static config only (synchronous).
- * Includes provider, context, and cost metadata but skips async
- * availability checks. All models are shown as enabled.
- */
-export function buildBasicModelOptionsData(): ModelOptionData[] {
-  return getVisibleModels().map((model) => {
-    const config = MODEL_CONFIGS[model];
-    if (!config) return { value: model, label: model };
-    return {
-      value: model,
-      label: config.label,
-      provider: config.provider,
-      context: formatContext(config.contextWindow),
-      cost: formatCost(config.inputPrice, config.outputPrice),
-      hint: buildModelHint(config),
-    };
-  });
 }
 
 /**

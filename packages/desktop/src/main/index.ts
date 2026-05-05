@@ -6,6 +6,10 @@ import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
+import {
+  attachRendererConsoleLog,
+  getDesktopLogDirectory,
+} from './desktopAppLog.js';
 import { installDesktopMenu } from './desktopMenu.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
@@ -84,6 +88,17 @@ function createWindow(): void {
     const errorMessage = await shell.openPath(filePath);
     if (errorMessage) throw new Error(errorMessage);
   };
+  const openLogsFolder = async () => openPath(getDesktopLogDirectory());
+  const openWorkspaceFolder = async () => {
+    console.warn('Desktop workspace folder switching is disabled.');
+    await dialog.showMessageBox(window, {
+      type: 'info',
+      message: 'Open Folder is not enabled in this desktop build yet.',
+      detail:
+        'Folder switching needs the same workspace lifecycle guarantees as the VS Code extension. For now, launch TeXRA from a known workspace or use the TeXRA VS Code extension for folder-aware workflows.',
+    });
+  };
+  attachRendererConsoleLog(window.webContents);
   const agentExecution = createDesktopAgentExecution({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     openPath,
@@ -106,6 +121,7 @@ function createWindow(): void {
   });
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    sendStartupCatalogData: true,
     onError: reportAsyncError,
   });
   const progressIpc = createDesktopProgressIpc({
@@ -116,7 +132,9 @@ function createWindow(): void {
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
       getCustomAgentDirectory: () => getAgentDirectories().custom(),
+      openLogFolder: openLogsFolder,
       openPath,
+      openWorkspaceFolder,
       onAsyncError: reportAsyncError,
     },
   );
