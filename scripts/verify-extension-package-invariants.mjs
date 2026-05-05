@@ -54,6 +54,7 @@ const REQUIRED_PACKAGED_PATHS = [
 
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
+  '!dist/**/codicon.ttf',
   '!resources/**',
   '!src/common/styles/*.css',
   '!src/progressView/*.html',
