@@ -25,14 +25,17 @@ const platformRequirements = {
   mac: {
     label: 'macOS',
     extensions: ['.dmg', '.zip'],
+    iconPath: join(repoRoot, 'packages', 'desktop', 'build', 'icon.icns'),
   },
   win: {
     label: 'Windows',
     extensions: ['.exe'],
+    iconPath: join(repoRoot, 'packages', 'desktop', 'build', 'icon.ico'),
   },
   linux: {
     label: 'Linux',
     extensions: ['.AppImage', '.deb'],
+    iconPath: join(repoRoot, 'packages', 'desktop', 'build', 'icon.png'),
   },
 };
 
@@ -88,6 +91,23 @@ for (const extension of requirement.extensions) {
   );
 }
 
+try {
+  const iconStat = await stat(requirement.iconPath);
+  if (iconStat.size === 0) {
+    failures.push(
+      `${requirement.label} installer icon is empty: ${relative(repoRoot, requirement.iconPath)}`,
+    );
+  }
+} catch (error) {
+  if (error?.code === 'ENOENT') {
+    failures.push(
+      `Missing ${requirement.label} installer icon: ${relative(repoRoot, requirement.iconPath)}`,
+    );
+  } else {
+    throw error;
+  }
+}
+
 for (const [extension, artifacts] of matchedArtifacts.entries()) {
   if (artifacts.length === 0) {
     failures.push(
@@ -113,6 +133,7 @@ if (failures.length > 0) {
 }
 
 console.log(`${requirement.label} desktop installer artifact check passed:`);
+console.log(`- ${relative(repoRoot, requirement.iconPath)}`);
 for (const artifacts of matchedArtifacts.values()) {
   for (const artifact of artifacts) {
     console.log(`- ${relative(repoRoot, artifact)}`);
