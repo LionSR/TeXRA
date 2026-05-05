@@ -1,35 +1,5 @@
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import {
-  APIConnectionError as AnthropicConnectionError,
-  APIConnectionTimeoutError as AnthropicConnectionTimeoutError,
-  APIError as AnthropicAPIError,
-  APIUserAbortError as AnthropicUserAbortError,
-  AuthenticationError as AnthropicAuthenticationError,
-  BadRequestError as AnthropicBadRequestError,
-  ConflictError as AnthropicConflictError,
-  InternalServerError as AnthropicInternalServerError,
-  NotFoundError as AnthropicNotFoundError,
-  PermissionDeniedError as AnthropicPermissionDeniedError,
-  RateLimitError as AnthropicRateLimitError,
-  UnprocessableEntityError as AnthropicUnprocessableEntityError,
-} from '@anthropic-ai/sdk';
-import { ApiError as GoogleGenAIApiError } from '@google/genai';
-import {
-  APIConnectionError as OpenAIConnectionError,
-  APIConnectionTimeoutError as OpenAIConnectionTimeoutError,
-  APIError as OpenAIAPIError,
-  APIUserAbortError as OpenAIUserAbortError,
-  AuthenticationError as OpenAIAuthenticationError,
-  BadRequestError as OpenAIBadRequestError,
-  ConflictError as OpenAIConflictError,
-  InternalServerError as OpenAIInternalServerError,
-  NotFoundError as OpenAINotFoundError,
-  PermissionDeniedError as OpenAIPermissionDeniedError,
-  RateLimitError as OpenAIRateLimitError,
-  UnprocessableEntityError as OpenAIUnprocessableEntityError,
-} from 'openai';
-
-import {
   type ErrorContext,
   type ErrorLogData,
   type ProviderError,
@@ -49,78 +19,67 @@ function safeGetReasonPhrase(statusCode: number): string | undefined {
   }
 }
 
-type ErrorConstructor<T extends Error = Error> = abstract new (
-  ...args: never[]
-) => T;
-
 /** SDK error mapping entry. Provider detected from class name. */
 interface SdkErrorEntry {
-  ctor: ErrorConstructor;
+  classNames: readonly string[];
   message?: string;
   fallbackStatusCode?: number;
   retryable?: boolean;
 }
 
-function createErrorPair(
-  openAiCtor: ErrorConstructor,
-  anthropicCtor: ErrorConstructor,
-  config: Omit<SdkErrorEntry, 'ctor'>,
-): SdkErrorEntry[] {
-  return [
-    { ctor: openAiCtor, ...config },
-    { ctor: anthropicCtor, ...config },
-  ];
-}
-
 const SDK_ERRORS: SdkErrorEntry[] = [
   // Connection errors (retryable)
-  ...createErrorPair(
-    OpenAIConnectionTimeoutError,
-    AnthropicConnectionTimeoutError,
-    { message: 'Connection timed out', retryable: true },
-  ),
-  ...createErrorPair(OpenAIConnectionError, AnthropicConnectionError, {
+  {
+    classNames: ['APIConnectionTimeoutError'],
+    message: 'Connection timed out',
+    retryable: true,
+  },
+  {
+    classNames: ['APIConnectionError'],
     message: 'Connection error',
     retryable: true,
-  }),
+  },
   // Abort errors (not retryable)
-  ...createErrorPair(OpenAIUserAbortError, AnthropicUserAbortError, {
+  {
+    classNames: ['APIUserAbortError'],
     message: 'Request aborted',
     retryable: false,
-  }),
+  },
   // HTTP errors (retryable derived from status code)
-  ...createErrorPair(OpenAIBadRequestError, AnthropicBadRequestError, {
+  {
+    classNames: ['BadRequestError'],
     fallbackStatusCode: StatusCodes.BAD_REQUEST,
-  }),
-  ...createErrorPair(OpenAIAuthenticationError, AnthropicAuthenticationError, {
+  },
+  {
+    classNames: ['AuthenticationError'],
     fallbackStatusCode: StatusCodes.UNAUTHORIZED,
-  }),
-  ...createErrorPair(
-    OpenAIPermissionDeniedError,
-    AnthropicPermissionDeniedError,
-    { fallbackStatusCode: StatusCodes.FORBIDDEN },
-  ),
-  ...createErrorPair(OpenAINotFoundError, AnthropicNotFoundError, {
+  },
+  {
+    classNames: ['PermissionDeniedError'],
+    fallbackStatusCode: StatusCodes.FORBIDDEN,
+  },
+  {
+    classNames: ['NotFoundError'],
     fallbackStatusCode: StatusCodes.NOT_FOUND,
-  }),
-  ...createErrorPair(OpenAIConflictError, AnthropicConflictError, {
+  },
+  {
+    classNames: ['ConflictError'],
     fallbackStatusCode: StatusCodes.CONFLICT,
-  }),
-  ...createErrorPair(
-    OpenAIUnprocessableEntityError,
-    AnthropicUnprocessableEntityError,
-    { fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY },
-  ),
-  ...createErrorPair(OpenAIRateLimitError, AnthropicRateLimitError, {
+  },
+  {
+    classNames: ['UnprocessableEntityError'],
+    fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
+  },
+  {
+    classNames: ['RateLimitError'],
     fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
-  }),
-  ...createErrorPair(OpenAIInternalServerError, AnthropicInternalServerError, {
+  },
+  {
+    classNames: ['InternalServerError'],
     fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-  }),
+  },
   // Generic API errors (no fallback)
-  { ctor: OpenAIAPIError },
-  { ctor: AnthropicAPIError },
-  { ctor: GoogleGenAIApiError },
+  { classNames: ['APIError', 'ApiError'] },
 ];
 
 /** Server errors (5xx), rate limits (429), and request timeouts (408) are retryable
@@ -142,7 +101,10 @@ function matchSdkError(
   err: unknown,
   rawErrorBody: unknown,
 ): SdkMatchResult | undefined {
-  const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
+  const errorClassNames = getErrorClassNames(err);
+  const entry = SDK_ERRORS.find(({ classNames }) =>
+    classNames.some((className) => errorClassNames.includes(className)),
+  );
   if (!entry) {
     return undefined;
   }
@@ -200,6 +162,21 @@ function matchSdkError(
     retryable: isRetryableStatusCode(statusCode),
     requestId,
   };
+}
+
+function getErrorClassNames(err: unknown): string[] {
+  if (!isObject(err)) return [];
+
+  const classNames = new Set<string>();
+  let prototype = Object.getPrototypeOf(err);
+  while (prototype && prototype !== Object.prototype) {
+    const className = prototype.constructor?.name;
+    if (isString(className) && className.length > 0) {
+      classNames.add(className);
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return [...classNames];
 }
 
 type StatusCarrier = {
@@ -349,10 +326,7 @@ export function takeTail(text: string, maxChars: number): string {
 
 /** True if `err` is an SDK user-abort error (OpenAI or Anthropic). */
 export function isUserAbort(err: unknown): boolean {
-  return (
-    err instanceof OpenAIUserAbortError ||
-    err instanceof AnthropicUserAbortError
-  );
+  return getErrorClassNames(err).includes('APIUserAbortError');
 }
 
 /** Factory for symbol-keyed error metadata. Creates matched attach/detect

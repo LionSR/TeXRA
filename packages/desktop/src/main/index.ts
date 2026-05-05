@@ -1,4 +1,5 @@
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
@@ -12,7 +13,25 @@ import { createDesktopShellActions } from './desktopShellIpc.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
+const __dirname = findDesktopMainDir(moduleDirname);
+
+function findDesktopMainDir(startDir: string): string {
+  let currentDir = startDir;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (
+      existsSync(join(currentDir, '../preload/index.cjs')) &&
+      existsSync(join(currentDir, '../renderer/index.html'))
+    ) {
+      return currentDir;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) break;
+    currentDir = parentDir;
+  }
+  return startDir;
+}
 
 // The packaged renderer uses Lit style attributes and bundled font data URLs
 // (codicons/KaTeX). Keep script execution locked to app files while allowing

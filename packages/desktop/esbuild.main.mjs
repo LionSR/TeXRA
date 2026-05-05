@@ -1,15 +1,21 @@
 import * as esbuild from 'esbuild';
+import { rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const outdir = resolve(__dirname, 'dist/main');
+
+await rm(outdir, { force: true, recursive: true });
 
 await esbuild.build({
-  entryPoints: [resolve(__dirname, 'src/main/bootstrap.ts')],
+  entryPoints: { index: resolve(__dirname, 'src/main/bootstrap.ts') },
   bundle: true,
   platform: 'node',
   format: 'esm',
-  outfile: resolve(__dirname, 'dist/main/index.js'),
+  splitting: true,
+  outdir,
+  chunkNames: 'chunks/[name]-[hash]',
   external: ['electron', 'fsevents'],
   tsconfig: resolve(__dirname, 'tsconfig.main.json'),
   target: 'node22',
