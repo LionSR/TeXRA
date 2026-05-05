@@ -6,8 +6,14 @@ const path = require('node:path');
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-dev-shm-usage');
 
-const RENDER_TIMEOUT_MS = Number(
-  process.env.TEXRA_WEBVIEW_SMOKE_TIMEOUT_MS ?? 10_000,
+function readPositiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const RENDER_TIMEOUT_MS = readPositiveNumber(
+  process.env.TEXRA_WEBVIEW_SMOKE_TIMEOUT_MS,
+  10_000,
 );
 
 function normalizeConsoleMessage(levelOrDetails, message) {

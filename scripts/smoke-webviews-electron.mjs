@@ -93,7 +93,14 @@ function hostBridgeShim() {
 }
 
 function injectHostBridge(html) {
-  return html.replace('<body>', `<body>\n    ${hostBridgeShim()}`);
+  const bodyTagPattern = /<body\b[^>]*>/i;
+  if (!bodyTagPattern.test(html)) {
+    throw new Error('Webview template is missing a <body> tag.');
+  }
+  return html.replace(
+    bodyTagPattern,
+    (bodyTag) => `${bodyTag}\n    ${hostBridgeShim()}`,
+  );
 }
 
 async function prepareViewHtml(view) {
