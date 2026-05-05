@@ -2,6 +2,8 @@ appId: ai.texra.desktop
 productName: TeXRA
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 asar: true
+asarUnpack:
+  - '**/node_modules/@openai/codex-*/**'
 npmRebuild: false
 directories:
   output: dist-packaged
@@ -20,6 +22,7 @@ extraResources:
 mac:
   category: public.app-category.productivity
   icon: build/icon.icns
+  x64ArchFiles: '**/app.asar.unpacked/node_modules/@openai/codex-*/vendor/**'
   target:
     - target: dmg
       arch:
