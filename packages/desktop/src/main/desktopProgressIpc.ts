@@ -4,11 +4,12 @@ import {
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 
-import type { DesktopProgressBridge } from './desktopAgentExecution.js';
-import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
+import {
+  createDesktopErrorReporter,
+  type DesktopCommandMessage,
+  type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
+import type { DesktopProgressBridge } from './desktopAgentExecution.js';
 
 export interface DesktopProgressIpcOptions {
   progress: DesktopProgressBridge;
@@ -28,11 +29,7 @@ const passThroughCommands = new Set<string>([
 export function createDesktopProgressIpc(
   options: DesktopProgressIpcOptions,
 ): DesktopProgressIpc {
-  const onAsyncError =
-    options.onAsyncError ??
-    ((error) => {
-      console.error(error);
-    });
+  const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
   const onUnsupportedCommand =
     options.onUnsupportedCommand ??
     ((message) => {
@@ -40,7 +37,7 @@ export function createDesktopProgressIpc(
     });
 
   function runAsync(work: Promise<void>): void {
-    void work.catch(onAsyncError);
+    void work.catch(reportAsyncError);
   }
 
   return {

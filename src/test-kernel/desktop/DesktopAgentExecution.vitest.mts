@@ -3,7 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - progress schemas
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
-import { AGENT_CATEGORY, STREAM_STATUS } from '@shared/schemas';
+import {
+  AGENT_CATEGORY,
+  LOG_LEVELS,
+  STREAM_LOG_ENTRY_TYPES,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -14,6 +20,20 @@ type Bridge = {
 
 type TestableBridge = Bridge & {
   handleProgressEvent(event: string, payload: unknown): void;
+  deleteStream(streamId: StreamTabId): Promise<void>;
+  deleteAllStreams(): Promise<void>;
+  streamLogs: {
+    append(
+      streamId: StreamTabId,
+      entry: {
+        id: string;
+        type: string;
+        level: string;
+        timestamp: number;
+        text: string;
+      },
+    ): unknown;
+  };
 };
 
 type DesktopExecution = {
@@ -34,6 +54,10 @@ interface DesktopAgentExecutionModule {
 
 type ProgressMessage = {
   command?: string;
+  activeStream?: string;
+  stream?: string;
+  streamId?: string;
+  entries?: Array<{ text?: string }>;
   streams?: Array<{ name: string; creationTimestamp: number }>;
   streamStates?: Record<string, unknown>;
 };
@@ -332,6 +356,92 @@ describe('DesktopProgressBridge', () => {
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS)[0]
           ?.streamStates?.['new-stream'],
       ).toMatchObject({ status: STREAM_STATUS.RUNNING });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('emits delete-stream cleanup and flushes fallback active stream logs', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'first',
+        agentCategory: AGENT_CATEGORY.WORKFLOW,
+      });
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'second',
+        agentCategory: AGENT_CATEGORY.WORKFLOW,
+      });
+      bridge.streamLogs.append('first', {
+        id: 'first-log',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 1_500,
+        text: 'first stream log',
+      });
+      messages.length = 0;
+
+      await bridge.deleteStream('second');
+
+      expect(
+        messages.map((message) => (message as ProgressMessage).command),
+      ).toEqual([
+        PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+        PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      ]);
+      expect(messages[0]).toMatchObject({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        stream: 'second',
+      });
+      expect(messages[1]).toMatchObject({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        activeStream: 'first',
+      });
+      expect(messages[2]).toMatchObject({
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+        activeStream: 'first',
+      });
+      expect(messages[3]).toMatchObject({
+        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        streamId: 'first',
+        entries: [expect.objectContaining({ text: 'first stream log' })],
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('emits delete-all cleanup before syncing an empty stream list', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'active',
+        agentCategory: AGENT_CATEGORY.WORKFLOW,
+      });
+      messages.length = 0;
+
+      await bridge.deleteAllStreams();
+
+      expect(
+        messages.map((message) => (message as ProgressMessage).command),
+      ).toEqual([
+        PROGRESS_VIEW_COMMANDS.DELETE_ALL,
+        PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      ]);
+      expect(messages[1]).toMatchObject({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        activeStream: '',
+        streams: [],
+        streamStates: {},
+      });
     } finally {
       bridge.dispose();
     }

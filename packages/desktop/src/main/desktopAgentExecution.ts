@@ -452,6 +452,11 @@ export class DesktopProgressBridge {
   }
 
   async deleteStream(streamId: StreamTabId): Promise<void> {
+    const hadStream =
+      this.streamLogs.has(streamId) || this.taskStates.has(streamId);
+    if (!hadStream) return;
+
+    const wasActive = this.activeStream === streamId;
     await this.streamLogs.delete(streamId);
     this.taskStates.delete(streamId);
     this.statuses.delete(streamId);
@@ -464,10 +469,21 @@ export class DesktopProgressBridge {
     this.streamBadges.delete(streamId);
     this.cursors.delete(streamId);
 
-    if (this.activeStream === streamId) {
+    if (wasActive) {
       this.activeStream = this.streamLogs.keys()[0] ?? '';
     }
+    this.send({
+      command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+      stream: streamId,
+    });
     this.syncStreams();
+    if (wasActive && this.activeStream) {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+        activeStream: this.activeStream,
+      });
+      this.flushLogs(this.activeStream);
+    }
   }
 
   async deleteAllStreams(): Promise<void> {
@@ -483,6 +499,7 @@ export class DesktopProgressBridge {
     this.conversationProgress.clear();
     this.streamBadges.clear();
     this.activeStream = '';
+    this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
     this.syncStreams();
   }
 }
