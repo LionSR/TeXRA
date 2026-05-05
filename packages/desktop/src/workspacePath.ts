@@ -49,7 +49,9 @@ function getWorkspacePathArg(argv: readonly string[]): string | undefined {
   return undefined;
 }
 
-function getPositionalWorkspacePathArg(arg: string | undefined): string | undefined {
+function getPositionalWorkspacePathArg(
+  arg: string | undefined,
+): string | undefined {
   const trimmed = arg?.trim();
   if (!trimmed || trimmed.startsWith('--')) return undefined;
   return trimmed;
