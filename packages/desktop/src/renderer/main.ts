@@ -3,6 +3,7 @@ import './themeTokens.css';
 import './codiconStylesheet';
 
 import { COMMON_COMMANDS } from '@common/webview/commands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { postMessage } from '@shared/hostBridge';
 import { SetThemeMessageSchema } from '@shared/schemas/commonViewMessages';
 import '@vscode-elements/elements/dist/bundled.js';
@@ -19,7 +20,21 @@ import {
   buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
 } from '../desktopCommandSurface';
+import {
+  DESKTOP_WORKSPACE_EXPLORER_COMMANDS,
+  DesktopWorkspaceTreeMessageSchema,
+  type DesktopWorkspaceFileCategory,
+  type DesktopWorkspaceTreeMessage,
+} from '../desktopWorkspaceExplorerMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
+
+interface WorkspaceTreeNode {
+  name: string;
+  path: string;
+  type: 'directory' | 'file';
+  children?: WorkspaceTreeNode[];
+  categories?: string[];
+}
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -51,11 +66,14 @@ appRoot.innerHTML = `
         Open Folder
       </button>
     </nav>
-    <main class="desktop-view" id="desktop-view">
-      <section class="desktop-route" data-route="main"></section>
-      <section class="desktop-route" data-route="progress" hidden></section>
-      <section class="desktop-route" data-route="settings" hidden></section>
-    </main>
+    <div class="desktop-workbench">
+      <aside class="desktop-explorer" id="desktop-explorer" aria-label="Workspace Explorer"></aside>
+      <main class="desktop-view" id="desktop-view">
+        <section class="desktop-route" data-route="main"></section>
+        <section class="desktop-route" data-route="progress" hidden></section>
+        <section class="desktop-route" data-route="settings" hidden></section>
+      </main>
+    </div>
   </section>
 `;
 
@@ -64,6 +82,13 @@ const desktopViewContainer =
 if (desktopViewContainer == null) {
   throw new Error('TeXRA desktop view container was not found.');
 }
+
+const workspaceExplorerElement =
+  appRoot.querySelector<HTMLElement>('#desktop-explorer');
+if (workspaceExplorerElement == null) {
+  throw new Error('TeXRA desktop workspace explorer was not found.');
+}
+const workspaceExplorerContainer: HTMLElement = workspaceExplorerElement;
 
 const routeContainers = new Map<DesktopRoute, HTMLElement>();
 for (const route of ['main', 'progress', 'settings'] as const) {
@@ -89,6 +114,10 @@ for (const route of ['main', 'progress', 'settings'] as const) {
 }
 
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
+let selectedExplorerFile = '';
+let currentExplorerTree: WorkspaceTreeNode[] = [];
+
+renderWorkspaceExplorerLoading();
 
 if (hasWorkspace) {
   const mainApp = document.createElement('main-app');
@@ -161,6 +190,7 @@ openWorkspaceButton.addEventListener('click', () =>
 openLogButton.addEventListener('click', () =>
   postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
 );
+requestWorkspaceTree();
 
 function isDesktopSetRouteMessage(
   message: unknown,
@@ -189,6 +219,8 @@ window.addEventListener('message', (event) => {
     setRoute(event.data.route);
   } else if (isThemeMessage(event.data)) {
     applyDesktopTheme(event.data.theme);
+  } else if (isWorkspaceTreeMessage(event.data)) {
+    renderWorkspaceExplorer(event.data);
   }
 });
 
@@ -250,4 +282,257 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
     );
   return container;
+}
+
+function isWorkspaceTreeMessage(
+  message: unknown,
+): message is DesktopWorkspaceTreeMessage {
+  return DesktopWorkspaceTreeMessageSchema.safeParse(message).success;
+}
+
+function requestWorkspaceTree(): void {
+  if (!hasWorkspace) {
+    renderWorkspaceExplorerNoWorkspace();
+    return;
+  }
+  postMessage(DESKTOP_WORKSPACE_EXPLORER_COMMANDS.REQUEST_TREE);
+}
+
+function renderWorkspaceExplorerLoading(): void {
+  workspaceExplorerContainer.replaceChildren();
+  workspaceExplorerContainer.append(
+    createExplorerHeader('Workspace', true),
+    createExplorerStatus('Loading workspace files...'),
+  );
+}
+
+function renderWorkspaceExplorerNoWorkspace(): void {
+  workspaceExplorerContainer.replaceChildren();
+  const prompt = document.createElement('section');
+  prompt.className = 'desktop-explorer-empty';
+  prompt.innerHTML = `
+    <span class="codicon codicon-folder-opened" aria-hidden="true"></span>
+    <h2>No workspace</h2>
+    <p>Open a folder before selecting files for agents.</p>
+    <button class="desktop-primary-button" type="button" data-explorer-open-folder>
+      Open Folder
+    </button>
+  `;
+  prompt
+    .querySelector<HTMLButtonElement>('[data-explorer-open-folder]')
+    ?.addEventListener('click', () =>
+      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+    );
+  workspaceExplorerContainer.append(prompt);
+}
+
+function renderWorkspaceExplorer(message: DesktopWorkspaceTreeMessage): void {
+  currentExplorerTree = message.tree;
+  workspaceExplorerContainer.replaceChildren();
+  workspaceExplorerContainer.append(
+    createExplorerHeader(message.workspaceName ?? 'Workspace'),
+  );
+
+  if (message.tree.length === 0) {
+    workspaceExplorerContainer.append(
+      createExplorerStatus('No selectable workspace files found.'),
+    );
+    return;
+  }
+
+  const tree = document.createElement('div');
+  tree.className = 'desktop-explorer-tree';
+  tree.setAttribute('role', 'tree');
+  renderTreeNodes(tree, message.tree, 0);
+
+  const selection = document.createElement('section');
+  selection.className = 'desktop-explorer-selection';
+  selection.setAttribute('aria-live', 'polite');
+  selection.dataset.selectionPanel = 'true';
+
+  workspaceExplorerContainer.append(tree, selection);
+  updateExplorerSelectionPanel(message.tree);
+}
+
+function createExplorerHeader(title: string, loading = false): HTMLElement {
+  const header = document.createElement('header');
+  header.className = 'desktop-explorer-header';
+  const label = document.createElement('span');
+  label.className = 'desktop-explorer-title';
+  label.textContent = title;
+  const refresh = document.createElement('button');
+  refresh.className = 'desktop-explorer-icon-button codicon codicon-refresh';
+  refresh.type = 'button';
+  refresh.title = 'Refresh workspace files';
+  refresh.setAttribute('aria-label', 'Refresh workspace files');
+  refresh.disabled = loading || !hasWorkspace;
+  refresh.addEventListener('click', requestWorkspaceTree);
+  header.append(label, refresh);
+  return header;
+}
+
+function createExplorerStatus(text: string): HTMLElement {
+  const status = document.createElement('p');
+  status.className = 'desktop-explorer-status';
+  status.textContent = text;
+  return status;
+}
+
+function renderTreeNodes(
+  container: HTMLElement,
+  nodes: readonly WorkspaceTreeNode[],
+  depth: number,
+): void {
+  for (const node of nodes) {
+    if (node.type === 'directory') {
+      const details = document.createElement('details');
+      details.className = 'desktop-explorer-directory';
+      details.open = depth < 2;
+      details.style.setProperty('--tree-depth', String(depth));
+
+      const summary = document.createElement('summary');
+      summary.className = 'desktop-explorer-row desktop-explorer-folder-row';
+      summary.setAttribute('role', 'treeitem');
+      summary.innerHTML = `
+        <span class="codicon codicon-chevron-right desktop-explorer-chevron" aria-hidden="true"></span>
+        <span class="codicon codicon-folder" aria-hidden="true"></span>
+        <span class="desktop-explorer-name"></span>
+      `;
+      summary.querySelector('.desktop-explorer-name')!.textContent = node.name;
+      details.append(summary);
+
+      const group = document.createElement('div');
+      group.setAttribute('role', 'group');
+      renderTreeNodes(group, node.children ?? [], depth + 1);
+      details.append(group);
+      container.append(details);
+      continue;
+    }
+
+    const row = document.createElement('button');
+    row.className = 'desktop-explorer-row desktop-explorer-file-row';
+    row.type = 'button';
+    row.dataset.filePath = node.path;
+    row.style.setProperty('--tree-depth', String(depth));
+    row.setAttribute('role', 'treeitem');
+    row.title = node.path;
+    row.innerHTML = `
+      <span class="codicon codicon-file" aria-hidden="true"></span>
+      <span class="desktop-explorer-name"></span>
+      <span class="desktop-explorer-category-strip"></span>
+    `;
+    row.querySelector('.desktop-explorer-name')!.textContent = node.name;
+    row
+      .querySelector('.desktop-explorer-category-strip')
+      ?.replaceChildren(...createCategoryDots(node.categories ?? []));
+    row.addEventListener('click', () => selectExplorerFile(node.path));
+    row.addEventListener('dblclick', () => openWorkspaceFile(node.path));
+    container.append(row);
+  }
+}
+
+function createCategoryDots(categories: readonly string[]): HTMLElement[] {
+  return categories.map((category) => {
+    const dot = document.createElement('span');
+    dot.className = 'desktop-explorer-category-dot';
+    dot.title = category;
+    dot.dataset.category = category;
+    return dot;
+  });
+}
+
+function selectExplorerFile(filePath: string): void {
+  selectedExplorerFile = filePath;
+  for (const row of workspaceExplorerContainer.querySelectorAll<HTMLElement>(
+    '.desktop-explorer-file-row',
+  )) {
+    row.dataset.selected = String(row.dataset.filePath === filePath);
+  }
+  updateExplorerSelectionPanel(currentExplorerTree);
+}
+
+function updateExplorerSelectionPanel(
+  tree: readonly WorkspaceTreeNode[],
+): void {
+  const panel = workspaceExplorerContainer.querySelector<HTMLElement>(
+    '[data-selection-panel]',
+  );
+  if (!panel) return;
+  const node = selectedExplorerFile
+    ? findFileNode(tree, selectedExplorerFile)
+    : undefined;
+  if (!node) {
+    panel.textContent =
+      'Select a file to open it or attach it to the launcher.';
+    return;
+  }
+
+  panel.replaceChildren();
+  const path = document.createElement('div');
+  path.className = 'desktop-explorer-selected-path';
+  path.textContent = node.path;
+  const actions = document.createElement('div');
+  actions.className = 'desktop-explorer-selection-actions';
+
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'desktop-secondary-button';
+  open.textContent = 'Open';
+  open.addEventListener('click', () => openWorkspaceFile(node.path));
+  actions.append(open);
+
+  for (const category of node.categories ?? []) {
+    const typedCategory = parseExplorerCategory(category);
+    if (!typedCategory) continue;
+    const select = document.createElement('button');
+    select.type = 'button';
+    select.className = 'desktop-secondary-button';
+    select.textContent = `Use as ${typedCategory}`;
+    select.addEventListener('click', () =>
+      selectWorkspaceFile(typedCategory, node.path),
+    );
+    actions.append(select);
+  }
+
+  panel.append(path, actions);
+}
+
+function findFileNode(
+  nodes: readonly WorkspaceTreeNode[],
+  filePath: string,
+): WorkspaceTreeNode | undefined {
+  for (const node of nodes) {
+    if (node.type === 'file' && node.path === filePath) return node;
+    const childMatch = node.children
+      ? findFileNode(node.children, filePath)
+      : undefined;
+    if (childMatch) return childMatch;
+  }
+  return undefined;
+}
+
+function parseExplorerCategory(
+  value: string,
+): DesktopWorkspaceFileCategory | undefined {
+  return ['input', 'reference', 'auxiliary', 'media'].includes(value)
+    ? (value as DesktopWorkspaceFileCategory)
+    : undefined;
+}
+
+function openWorkspaceFile(filePath: string): void {
+  postMessage(DESKTOP_WORKSPACE_EXPLORER_COMMANDS.OPEN_FILE, { filePath });
+}
+
+function selectWorkspaceFile(
+  fileType: DesktopWorkspaceFileCategory,
+  filePath: string,
+): void {
+  postMessage(DESKTOP_WORKSPACE_EXPLORER_COMMANDS.SELECT_FILE, {
+    fileType,
+    filePath,
+  });
+  if (fileType === 'input') {
+    postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, { baseFile: filePath });
+  }
+  setRoute('main');
 }
