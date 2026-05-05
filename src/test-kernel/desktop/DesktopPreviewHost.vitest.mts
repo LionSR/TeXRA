@@ -22,9 +22,16 @@ interface DesktopPreviewHostModule {
 
 async function loadDesktopPreviewHost(
   compileLatex2Pdf = vi.fn(async () => true),
+  access?: (filePath: string) => Promise<void>,
 ): Promise<DesktopPreviewHostModule> {
   vi.resetModules();
   vi.doMock('@latex/texTools', () => ({ compileLatex2Pdf }));
+  if (access != null) {
+    vi.doMock('node:fs/promises', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('node:fs/promises')>()),
+      access,
+    }));
+  }
   return import(
     moduleFileUrl(desktopSourcePath('main', 'desktopPreviewHost.ts'))
   ) as Promise<DesktopPreviewHostModule>;
@@ -35,6 +42,7 @@ describe('desktop preview host', () => {
 
   afterEach(async () => {
     vi.doUnmock('@latex/texTools');
+    vi.doUnmock('node:fs/promises');
     vi.restoreAllMocks();
     const dirs = tempDirs.splice(0);
     await Promise.all(
@@ -80,6 +88,35 @@ describe('desktop preview host', () => {
     );
     expect(showErrorMessage).toHaveBeenCalledWith(
       `File not found: ${missingPath}`,
+    );
+    expect(shell.openPath).not.toHaveBeenCalled();
+  });
+
+  it('preserves access failure details before calling shell.openPath', async () => {
+    const accessError = Object.assign(new Error('permission denied'), {
+      code: 'EACCES',
+    });
+    const access = vi.fn(async (_filePath: string) => {
+      throw accessError;
+    });
+    const { createDesktopPreviewHost } = await loadDesktopPreviewHost(
+      undefined,
+      access,
+    );
+    const filePath = path.join(await makeTempDir(), 'blocked.pdf');
+    const showErrorMessage = vi.fn();
+    const shell = {
+      openExternal: vi.fn(async (_url: string) => {}),
+      openPath: vi.fn(async (_path: string) => ''),
+    };
+
+    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+
+    await expect(host.openPath(filePath)).rejects.toThrow(
+      `Cannot access file ${filePath}: permission denied`,
+    );
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      `Cannot access file ${filePath}: permission denied`,
     );
     expect(shell.openPath).not.toHaveBeenCalled();
   });

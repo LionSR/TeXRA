@@ -26,6 +26,12 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function getErrorCode(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : undefined;
+}
+
 export function createDesktopPreviewHost(
   options: DesktopPreviewHostOptions,
 ): DesktopPreviewHost {
@@ -37,7 +43,10 @@ export function createDesktopPreviewHost(
   async function ensurePathExists(filePath: string): Promise<void> {
     try {
       await access(filePath);
-    } catch {
+    } catch (error) {
+      if (getErrorCode(error) !== 'ENOENT') {
+        await fail(`Cannot access file ${filePath}: ${toErrorMessage(error)}`);
+      }
       await fail(`File not found: ${filePath}`);
     }
   }
