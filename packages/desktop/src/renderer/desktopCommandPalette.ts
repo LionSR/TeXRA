@@ -49,9 +49,11 @@ export function createDesktopCommandPalette({
   actions,
   platform = getRendererPlatform(document.defaultView),
 }: DesktopCommandPaletteOptions): DesktopCommandPaletteController {
+  const view = document.defaultView;
   const entries = getDesktopCommandMenuEntries(undefined, platform);
   let visibleEntries = entries;
   let activeIndex = entries.length > 0 ? 0 : -1;
+  let previouslyFocusedElement: HTMLElement | null = null;
 
   const element = document.createElement('div');
   element.className = 'desktop-command-palette';
@@ -78,7 +80,7 @@ export function createDesktopCommandPalette({
   element.append(panel);
 
   const executeActiveCommand = (): void => {
-    const entry = visibleEntries.at(activeIndex);
+    const entry = visibleEntries[activeIndex];
     if (!entry) return;
     if (dispatchDesktopCommand(entry.id, actions)) close();
   };
@@ -136,6 +138,9 @@ export function createDesktopCommandPalette({
   };
 
   const open = (): void => {
+    previouslyFocusedElement = isHTMLElement(view, document.activeElement)
+      ? document.activeElement
+      : null;
     element.hidden = false;
     input.value = '';
     refreshFilter();
@@ -144,12 +149,26 @@ export function createDesktopCommandPalette({
 
   const close = (): void => {
     element.hidden = true;
+    if (previouslyFocusedElement?.isConnected) {
+      previouslyFocusedElement.focus();
+    }
+    previouslyFocusedElement = null;
   };
 
   element.addEventListener('click', (event) => {
     if (event.target === element) close();
   });
   input.addEventListener('input', refreshFilter);
+  element.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+      return;
+    }
+    if (event.key === 'Tab') {
+      trapPaletteFocus(event, panel);
+    }
+  });
   input.addEventListener('keydown', (event) => {
     switch (event.key) {
       case 'ArrowDown':
@@ -207,4 +226,51 @@ function getRendererPlatform(view: Window | null): NodeJS.Platform {
   if (platform.includes('mac')) return 'darwin';
   if (platform.includes('win')) return 'win32';
   return 'linux';
+}
+
+function trapPaletteFocus(event: KeyboardEvent, panel: HTMLElement): void {
+  const focusableElements = getFocusableElements(panel);
+  if (focusableElements.length === 0) return;
+
+  const activeElement = panel.ownerDocument.activeElement;
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements.at(-1);
+  if (!firstElement || !lastElement) return;
+
+  if (event.shiftKey && activeElement === firstElement) {
+    event.preventDefault();
+    lastElement.focus();
+    return;
+  }
+  if (!event.shiftKey && activeElement === lastElement) {
+    event.preventDefault();
+    firstElement.focus();
+  }
+}
+
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return [
+    ...container.querySelectorAll<HTMLElement>(
+      [
+        'button:not([disabled])',
+        'input:not([disabled])',
+        'select:not([disabled])',
+        'textarea:not([disabled])',
+        '[tabindex]:not([tabindex="-1"])',
+      ].join(','),
+    ),
+  ].filter((element) => !element.hidden);
+}
+
+function isHTMLElement(
+  view: Window | null,
+  element: Element | null,
+): element is HTMLElement {
+  const htmlElementConstructor =
+    view == null
+      ? undefined
+      : (view as Window & { HTMLElement?: typeof HTMLElement }).HTMLElement;
+  return (
+    htmlElementConstructor != null && element instanceof htmlElementConstructor
+  );
 }

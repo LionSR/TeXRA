@@ -123,6 +123,11 @@ body {
   font: inherit;
 }
 
+.desktop-command-palette-input:focus {
+  outline: 2px solid var(--texra-focusBorder);
+  outline-offset: -2px;
+}
+
 .desktop-command-palette-list {
   max-height: min(420px, 58vh);
   overflow: auto;
