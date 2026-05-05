@@ -18,6 +18,7 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopRoot = join(repoRoot, 'packages', 'desktop');
 const packageRoot = join(desktopRoot, 'dist-packaged');
 const desktopPackageJsonPath = join(desktopRoot, 'package.json');
+const desktopIconPath = join(desktopRoot, 'build', 'icon.icns');
 const desktopSharedSourceDirs = getDesktopSharedSourceDirs(repoRoot);
 const desktopVscodeFreeSourceDirs = getDesktopVscodeFreeSourceDirs(repoRoot);
 const desktopSharedSourceDirSet = new Set(desktopSharedSourceDirs);
@@ -110,6 +111,12 @@ function createAsarAppReader(asarPath) {
     async readText(path) {
       return extractFile(asarPath, path).toString('utf8');
     },
+    async readBuffer(path) {
+      if (entries.has(normalizeAsarPath(path))) {
+        return extractFile(asarPath, path);
+      }
+      return readFile(join(resourceRoot, path));
+    },
     async listDir(path) {
       const prefix = `${normalizeAsarPath(path)}/`;
       const asarEntries = [...entries]
@@ -139,6 +146,9 @@ function createDirectoryAppReader(appRoot) {
     },
     readText(path) {
       return readFile(join(appRoot, path), 'utf8');
+    },
+    readBuffer(path) {
+      return readFile(join(appRoot, path));
     },
     async listDir(path) {
       try {
@@ -272,8 +282,30 @@ async function checkBundledResources(app, failures) {
   }
 }
 
+async function checkMacIcon(app, failures) {
+  if (!app.label.includes('.app/Contents/Resources/app.asar')) return false;
+
+  const appIconPath = 'icon.icns';
+  if (!(await app.exists(appIconPath))) {
+    failures.push(`Packaged macOS app is missing TeXRA icon: ${appIconPath}`);
+    return true;
+  }
+
+  const [expectedIcon, actualIcon] = await Promise.all([
+    readFile(desktopIconPath),
+    app.readBuffer(appIconPath),
+  ]);
+  if (!expectedIcon.equals(actualIcon)) {
+    failures.push(
+      `Packaged macOS app icon does not match source icon: ${appIconPath}`,
+    );
+  }
+  return true;
+}
+
 const app = await findPackagedApp();
 const failures = [];
+let checkedMacIcon = false;
 
 if (!app) {
   failures.push(`No packaged Electron app found under ${packageRoot}`);
@@ -291,6 +323,7 @@ if (!app) {
   await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);
   await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
   await checkBundledResources(app, failures);
+  checkedMacIcon = await checkMacIcon(app, failures);
   await checkNoVscodeRuntimeImport(app, failures);
   await checkDesktopMainDynamicRequireShim(app, failures);
 
@@ -311,20 +344,22 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(
-  [
-    `Desktop package check passed for ${app.label}`,
-    '- dist/main/index.js',
-    '- dist/preload/index.cjs',
-    '- dist/renderer/index.html',
-    '- dist/renderer/assets/*.js',
-    '- dist/renderer/assets/*.css',
-    '- resources/agents and resources/tool_use_agents',
-    '- package.json runtime dependencies',
-    '- node_modules runtime dependency packages',
-    '- no VS Code extension host runtime import',
-    '- desktop main dynamic require shim',
-    '- desktop-shared source uses vscode-free state keys',
-    '- desktop-shared source avoids VS Code runtime imports',
-  ].join('\n'),
-);
+const summary = [
+  `Desktop package check passed for ${app.label}`,
+  '- dist/main/index.js',
+  '- dist/preload/index.cjs',
+  '- dist/renderer/index.html',
+  '- dist/renderer/assets/*.js',
+  '- dist/renderer/assets/*.css',
+  '- resources/agents and resources/tool_use_agents',
+  '- package.json runtime dependencies',
+  '- node_modules runtime dependency packages',
+  '- no VS Code extension host runtime import',
+  '- desktop main dynamic require shim',
+  '- desktop-shared source uses vscode-free state keys',
+  '- desktop-shared source avoids VS Code runtime imports',
+];
+
+if (checkedMacIcon) summary.splice(7, 0, '- macOS app icon');
+
+console.log(summary.join('\n'));
