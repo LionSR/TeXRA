@@ -3,6 +3,19 @@
 Use this checklist after changes that affect the extension package layout,
 extension manifest, activation flow, or webview asset packaging.
 
+## Electron Bundle Render Smoke
+
+```bash
+npm run smoke:webviews
+```
+
+This command builds the extension webview bundles, renders the launcher,
+progress view, and settings view in Electron, and writes screenshots to
+`artifacts/webview-smoke/`. It verifies that the bundled webview frontends load
+without renderer errors, but it does not verify VS Code command registration,
+activation events, or view-container integration. Use the VS Code checks below
+for those host-level behaviors.
+
 ## Development Host
 
 ```bash

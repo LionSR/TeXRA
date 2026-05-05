@@ -66,6 +66,19 @@ jobs:
       - name: Build initial extension and desktop artifacts
         run: pnpm run build:initial
 
+      - name: Smoke extension webviews in Electron
+        if: runner.os == 'macOS'
+        run: pnpm run smoke:webviews:run
+
+      - name: Upload webview smoke screenshots
+        if: runner.os == 'macOS' && always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-webview-smoke-screenshots
+          path: artifacts/webview-smoke/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload extension VSIX artifact
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
