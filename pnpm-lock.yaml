@@ -36,8 +36,8 @@ importers:
         specifier: ^0.128.0
         version: 0.128.0
       '@openrouter/sdk':
-        specifier: ^0.12.25
-        version: 0.12.25
+        specifier: ^0.12.26
+        version: 0.12.26
       '@supabase/supabase-js':
         specifier: ^2.105.3
         version: 2.105.3
@@ -374,8 +374,8 @@ importers:
         specifier: ^0.128.0
         version: 0.128.0
       '@openrouter/sdk':
-        specifier: ^0.12.25
-        version: 0.12.25
+        specifier: ^0.12.26
+        version: 0.12.26
       '@supabase/supabase-js':
         specifier: ^2.105.3
         version: 2.105.3
@@ -1246,8 +1246,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@openrouter/sdk@0.12.25':
-    resolution: {integrity: sha512-t3iLIk/s1VwUlXCCTarr8tRFG1CldlSvN1dSMU90TKCm3DGijyKmoaQ/Xv5FcA0mN+Fw08XJa3kzipwzP4p1Bw==}
+  '@openrouter/sdk@0.12.26':
+    resolution: {integrity: sha512-mENdlVld+XSQ7VeoV0erugpvLoFgDDftWD0AmfTQZx42S/LSBIq/3agjhwrAwNbyeT+1o2aTc5MZBnHHlukwXA==}
 
   '@oxc-project/types@0.127.0':
     resolution: {integrity: sha512-aIYXQBo4lCbO4z0R3FHeucQHpF46l2LbMdxRvqvuRuW2OxdnSkcng5B8+K12spgLDj93rtN3+J2Vac/TIO+ciQ==}
@@ -6197,7 +6197,7 @@ snapshots:
   '@openai/codex@0.128.0-win32-x64':
     optional: true
 
-  '@openrouter/sdk@0.12.25':
+  '@openrouter/sdk@0.12.26':
     dependencies:
       zod: 4.4.3
 
