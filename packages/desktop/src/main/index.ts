@@ -6,8 +6,10 @@ import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
+import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import {
   attachRendererConsoleLog,
@@ -98,11 +100,16 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
-  const openPath = async (filePath: string) => {
-    const errorMessage = await shell.openPath(filePath);
-    if (errorMessage) throw new Error(errorMessage);
+  const showErrorMessage = async (message: string) => {
+    await dialog.showMessageBox(window, { message, type: 'error' });
   };
-  const openLogsFolder = async () => openPath(getDesktopLogDirectory());
+  const previewHost = createDesktopPreviewHost({
+    shell,
+    showErrorMessage,
+  });
+  setOpenBuildDisplay(previewHost.openBuildDisplay);
+  const openLogsFolder = async () =>
+    previewHost.openPath(getDesktopLogDirectory());
   const openWorkspaceFolder = async () => {
     const result = await dialog.showOpenDialog(window, {
       title: 'Open Workspace Folder',
@@ -123,10 +130,8 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   attachRendererConsoleLog(window.webContents);
   const agentExecution = createDesktopAgentExecution({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
-    openPath,
-    showErrorMessage: async (message) => {
-      await dialog.showMessageBox(window, { message, type: 'error' });
-    },
+    opener: previewHost,
+    showErrorMessage,
   });
   const fileSelection = createDesktopFileSelection({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
@@ -143,7 +148,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   });
   const workspaceExplorer = createDesktopWorkspaceExplorer({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
-    openPath,
+    openPath: previewHost.openPath,
     onError: reportAsyncError,
   });
   const settingsIpc = createDesktopSettingsIpc({
@@ -181,11 +186,9 @@ function createWindow(options: { workspacePath: string | undefined }): void {
       });
       return result.canceled ? undefined : result.filePaths[0];
     },
-    openExternalUrl: async (url) => {
-      await shell.openExternal(url);
-    },
+    openExternalUrl: (url) => previewHost.openExternal(url),
     installToolExtension: async (extensionId) => {
-      await shell.openExternal(
+      await previewHost.openExternal(
         `https://marketplace.visualstudio.com/items?itemName=${encodeURIComponent(extensionId)}`,
       );
     },
@@ -214,7 +217,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
     {
       getCustomAgentDirectory: () => getAgentDirectories().custom(),
       openLogFolder: openLogsFolder,
-      openPath,
+      openPath: previewHost.openPath,
       openWorkspaceFolder,
       onAsyncError: reportAsyncError,
     },
