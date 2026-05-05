@@ -4,7 +4,7 @@
  */
 
 // Third-party imports
-import { html, css, type TemplateResult } from 'lit';
+import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, query } from 'lit/decorators.js';
 
 // Local imports - shared webview
@@ -65,6 +65,7 @@ import './tabs/MultiAgentTab';
 import './tabs/ToolsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
+import './components/profile/ProviderKeyModal';
 import type { HistoryTab } from './tabs/HistoryTab';
 
 const HISTORY_ACTION_COMMANDS: Record<string, string> = {
@@ -152,6 +153,10 @@ export class SettingsApp extends SettingsAppBase {
   private readonly accessExpiresAt = signal<string | null>(null);
   private readonly providerKeyStatuses = signal<ProviderKeyStatus[]>([]);
   private readonly globalStreamingDefault = signal(true);
+  private readonly providerKeyModal = signal<{
+    provider: string;
+    displayName: string;
+  } | null>(null);
 
   // Model selection state
   private readonly modelSelectionItems = signal<ModelSelectionItem[]>([]);
@@ -321,9 +326,38 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
   );
 
-  private handleSetProviderKey = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-  );
+  private isDesktopHost(): boolean {
+    return (
+      this.getAttribute('data-desktop-view') === 'settings' ||
+      Object.hasOwn(window, 'texraDesktop')
+    );
+  }
+
+  private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
+    if (!this.isDesktopHost()) {
+      postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, event.detail);
+      return;
+    }
+
+    const status = this.providerKeyStatuses
+      .get()
+      .find((entry) => entry.provider === event.detail.provider);
+    this.providerKeyModal.set({
+      provider: event.detail.provider,
+      displayName: status?.displayName ?? event.detail.provider,
+    });
+  }
+
+  private handleProviderKeySubmit(
+    event: CustomEvent<{ provider: string; apiKey: string }>,
+  ): void {
+    this.providerKeyModal.set(null);
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, event.detail);
+  }
+
+  private readonly handleProviderKeyCancel = (): void => {
+    this.providerKeyModal.set(null);
+  };
 
   private handleRemoveProviderKey = forwardDetail(
     SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
@@ -588,6 +622,22 @@ export class SettingsApp extends SettingsAppBase {
     `;
   }
 
+  private renderProviderKeyModal(): TemplateResult | typeof nothing {
+    const modal = this.providerKeyModal.get();
+    if (modal == null) {
+      return nothing;
+    }
+
+    return html`
+      <provider-key-modal
+        .provider=${modal.provider}
+        .displayName=${modal.displayName}
+        @provider-key-submit=${this.handleProviderKeySubmit}
+        @provider-key-cancel=${this.handleProviderKeyCancel}
+      ></provider-key-modal>
+    `;
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="settings-container">
@@ -780,6 +830,7 @@ export class SettingsApp extends SettingsAppBase {
             ></latex-tab>
           </vscode-tab-panel>
         </vscode-tabs>
+        ${this.renderProviderKeyModal()}
       </div>
     `;
   }
