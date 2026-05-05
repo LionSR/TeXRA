@@ -458,7 +458,6 @@ export class DesktopProgressBridge {
       this.streamLogs.has(streamId) || this.taskStates.has(streamId);
     if (!hadStream) return;
 
-    const wasActive = this.activeStream === streamId;
     await this.streamLogs.delete(streamId);
     this.taskStates.delete(streamId);
     this.statuses.delete(streamId);
@@ -471,7 +470,8 @@ export class DesktopProgressBridge {
     this.streamBadges.delete(streamId);
     this.cursors.delete(streamId);
 
-    if (wasActive) {
+    const shouldSelectFallback = this.activeStream === streamId;
+    if (shouldSelectFallback) {
       this.activeStream = this.streamLogs.keys()[0] ?? '';
     }
     this.send({
@@ -479,7 +479,7 @@ export class DesktopProgressBridge {
       stream: streamId,
     });
     this.syncStreams();
-    if (wasActive && this.activeStream) {
+    if (shouldSelectFallback && this.activeStream) {
       this.send({
         command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
         activeStream: this.activeStream,
