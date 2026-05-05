@@ -15,6 +15,7 @@ import {
   STREAM_STATUS,
   type ActiveChildInfo,
   type AgentCategory,
+  type AgentCategoryFilter,
   type ConversationProgress,
   type ProgressViewOutboundMessage,
   type StreamMetadata,
@@ -34,6 +35,7 @@ export interface DesktopAgentExecutionOptions {
 
 export interface DesktopAgentExecution {
   handleExecute(message: MainViewExecuteMessage): Promise<void>;
+  progress: DesktopProgressBridge;
   dispose(): void;
 }
 
@@ -62,6 +64,7 @@ export class DesktopProgressBridge {
   >();
   private readonly streamBadges = new Map<StreamTabId, StreamBadgeSnapshot>();
   private activeStream: StreamTabId | '' = '';
+  private agentFilter: AgentCategoryFilter = 'all';
   private readonly unsubscribe: () => void;
 
   readonly runtimeHost: AgentRuntimeHost;
@@ -216,7 +219,7 @@ export class DesktopProgressBridge {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
       streams,
       activeStream: this.activeStream,
-      agentFilter: 'all',
+      agentFilter: this.agentFilter,
       streamStates,
     });
   }
@@ -426,6 +429,62 @@ export class DesktopProgressBridge {
       }
     }
   }
+
+  syncFullView(): void {
+    this.syncStreams();
+    if (this.activeStream) this.flushLogs(this.activeStream);
+  }
+
+  setActiveStream(streamId: StreamTabId): void {
+    this.ensureStream(streamId);
+    this.activeStream = streamId;
+    this.syncStreams();
+    this.send({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: streamId,
+    });
+    this.flushLogs(streamId);
+  }
+
+  setAgentFilter(filter: AgentCategoryFilter): void {
+    this.agentFilter = filter;
+    this.syncStreams();
+  }
+
+  async deleteStream(streamId: StreamTabId): Promise<void> {
+    await this.streamLogs.delete(streamId);
+    this.taskStates.delete(streamId);
+    this.statuses.delete(streamId);
+    this.categories.delete(streamId);
+    this.executionIds.delete(streamId);
+    this.descriptions.delete(streamId);
+    this.parentStreams.delete(streamId);
+    this.creationTimestamps.delete(streamId);
+    this.conversationProgress.delete(streamId);
+    this.streamBadges.delete(streamId);
+    this.cursors.delete(streamId);
+
+    if (this.activeStream === streamId) {
+      this.activeStream = this.streamLogs.keys()[0] ?? '';
+    }
+    this.syncStreams();
+  }
+
+  async deleteAllStreams(): Promise<void> {
+    await this.streamLogs.clear();
+    this.cursors.clear();
+    this.taskStates.clear();
+    this.statuses.clear();
+    this.categories.clear();
+    this.executionIds.clear();
+    this.descriptions.clear();
+    this.parentStreams.clear();
+    this.creationTimestamps.clear();
+    this.conversationProgress.clear();
+    this.streamBadges.clear();
+    this.activeStream = '';
+    this.syncStreams();
+  }
 }
 
 export function createDesktopAgentExecution(
@@ -434,6 +493,7 @@ export function createDesktopAgentExecution(
   const progress = new DesktopProgressBridge(options.postToRenderer);
 
   return {
+    progress,
     async handleExecute(message) {
       const preparation = prepareMainViewExecutionRequest(message);
       if (!preparation.valid) {
