@@ -3,6 +3,7 @@ import {
   type CommandId,
   type CommandKeybinding,
 } from '@commands/catalog';
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { type AgentCategory } from '@shared/schemas/agent';
 import {
   SETTINGS_TAB,
@@ -35,6 +36,12 @@ export interface DesktopCommandMenuEntry {
 export interface DesktopCommandActions {
   showRoute(route: DesktopRoute): void;
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
+}
+
+export interface DesktopSettingsTabMessage {
+  command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
+  tabIndex: SettingsTab;
+  agentSubTab?: AgentCategory;
 }
 
 const DESKTOP_MENU_GROUPS = [
@@ -114,6 +121,17 @@ export function dispatchDesktopCommand(
     default:
       return false;
   }
+}
+
+export function buildDesktopSettingsTabMessage(
+  tabIndex: SettingsTab,
+  agentSubTab?: AgentCategory,
+): DesktopSettingsTabMessage {
+  return {
+    command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+    tabIndex,
+    ...(agentSubTab && { agentSubTab }),
+  };
 }
 
 export function buildDesktopMenuTemplate(
