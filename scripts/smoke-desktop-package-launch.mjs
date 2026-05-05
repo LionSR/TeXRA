@@ -94,7 +94,8 @@ function waitForClose(child) {
 
 function delay(ms) {
   return new Promise((resolve) => {
-    setTimeout(resolve, ms);
+    const timeout = setTimeout(resolve, ms);
+    timeout.unref();
   });
 }
 
