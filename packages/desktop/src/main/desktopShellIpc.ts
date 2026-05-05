@@ -1,6 +1,5 @@
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { AGENT_CATEGORY, type AgentCategory } from '@shared/schemas/agent';
 import {
   SwitchViewMessageSchema,
@@ -20,7 +19,10 @@ import {
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
-import type { DesktopCommandActions } from '../desktopCommandSurface.js';
+import {
+  buildDesktopSettingsTabMessage,
+  type DesktopCommandActions,
+} from '../desktopCommandSurface.js';
 
 export interface DesktopShellIpcOptions {
   actions?: DesktopShellActions;
@@ -65,11 +67,9 @@ export function createDesktopShellActions(
   ) {
     postRoute('settings');
     if (tabIndex == null) return;
-    renderer.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tabIndex,
-      ...(agentSubTab && { agentSubTab }),
-    });
+    renderer.postToRenderer(
+      buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
+    );
   }
 
   async function openCustomAgentDirectory() {

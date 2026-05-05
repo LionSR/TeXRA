@@ -5,13 +5,12 @@ import '@progressView/frontend';
 import '@settingsView/frontend';
 import '@webview/frontend';
 
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
-
 import {
   DesktopSetRouteMessageSchema,
   type DesktopRoute,
   type DesktopSetRouteMessage,
 } from '../desktopShellMessages';
+import { buildDesktopSettingsTabMessage } from '../desktopCommandSurface';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -103,11 +102,7 @@ const commandPalette = createDesktopCommandPalette({
       setRoute('settings');
       if (tabIndex == null) return;
       window.postMessage(
-        {
-          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-          tabIndex,
-          ...(agentSubTab && { agentSubTab }),
-        },
+        buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
         getWindowTargetOrigin(),
       );
     },
