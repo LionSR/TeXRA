@@ -25,8 +25,6 @@ interface MainViewIpcModule {
     options?: {
       debugMode?: boolean;
       getTheme?: () => 'dark' | 'light' | 'high-contrast';
-      getCustomAgentDirectory?: () => Promise<string>;
-      openPath?: (filePath: string) => Promise<void>;
       fileSelection?: { handleMessage(message: { command: string }): boolean };
       settings?: { handleMessage(message: { command: string }): boolean };
       progress?: { handleMessage(message: { command: string }): boolean };
@@ -105,7 +103,6 @@ describe('desktop main-view IPC', () => {
       installDesktopMainViewIpc,
     } = await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
     const sends: Array<{ channel: string; message: unknown }> = [];
-    const openPath = vi.fn(async (_filePath: string) => {});
     const fileSelection = {
       handleMessage: vi.fn(
         (message: { command: string }) =>
@@ -140,8 +137,6 @@ describe('desktop main-view IPC', () => {
 
     const ipc = installDesktopMainViewIpc(window, {
       debugMode: true,
-      getCustomAgentDirectory: async () => '/agents/custom',
-      openPath,
       fileSelection,
       settings,
       progress,
@@ -332,10 +327,19 @@ describe('desktop main-view IPC', () => {
       { sender: webContents },
       { command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY, customDirSet: true },
     );
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(openPath).toHaveBeenCalledWith('/agents/custom');
-    expect(sends).toEqual([]);
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: { command: 'desktop:setRoute', route: 'settings' },
+      },
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message: {
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex: SETTINGS_TAB.AGENTS,
+        },
+      },
+    ]);
 
     const executeMessage = {
       command: MAIN_VIEW_COMMANDS.EXECUTE,
