@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - command catalog
 import { commandCatalogById, type CommandId } from '@commands/catalog';
 
+// Local imports - webview commands
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+
 // Local imports - shared schemas
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
@@ -141,7 +144,7 @@ describe('desktop command surface', () => {
       await loadDesktopCommandSurface();
 
     expect(buildDesktopSettingsTabMessage(SETTINGS_TAB.MODELS)).toEqual({
-      command: 'setTab',
+      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tabIndex: SETTINGS_TAB.MODELS,
     });
     expect(
@@ -151,7 +154,7 @@ describe('desktop command surface', () => {
       ),
     ).toEqual({
       agentSubTab: AGENT_CATEGORY.TOOL_USE,
-      command: 'setTab',
+      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tabIndex: SETTINGS_TAB.AGENTS,
     });
   });
