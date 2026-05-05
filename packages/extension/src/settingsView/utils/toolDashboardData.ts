@@ -1,9 +1,8 @@
 /**
  * Tool dashboard data builder.
  *
- * Enriches tool groups with runtime availability and per-tool descriptions
- * from the registry. External tool definitions (SSOT) live in
- * {@link @tools/externalToolDefs}.
+ * Enriches tool groups with runtime availability. External tool definitions
+ * (SSOT) live in {@link @tools/externalToolDefs}.
  */
 
 // Local imports
@@ -12,10 +11,7 @@ import type {
   ToolInfo,
 } from '@shared/schemas/settingsViewMessages';
 import { findExternalToolDef } from '@tools/externalToolDefs';
-import {
-  getDefaultToolRegistry,
-  type RegisteredToolName,
-} from '@tools/registry';
+import type { RegisteredToolName } from '@tools/registry';
 import {
   runExternalToolChecks,
   type ExternalToolCheckResult,
@@ -26,19 +22,8 @@ import { getDisabledToolIds } from '@utils/config/constants';
 // Tool description enrichment
 // ============================================================
 
-/**
- * Look up per-tool descriptions from the registry.
- * Falls back to name-only when a tool isn't registered.
- */
 function enrichTools(toolNames: readonly string[]): ToolInfo[] {
-  const registry = getDefaultToolRegistry();
-  return toolNames.map((name) => {
-    const tool = registry.get(name);
-    return {
-      name,
-      description: tool?.definition.description,
-    };
-  });
+  return toolNames.map((name) => ({ name }));
 }
 
 // ============================================================
