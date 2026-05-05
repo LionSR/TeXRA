@@ -22,9 +22,17 @@ import {
 } from './desktopIpcTypes.js';
 
 export interface DesktopShellIpcOptions {
+  actions?: DesktopShellActions;
   getCustomAgentDirectory?: () => Promise<string>;
   openPath?: (filePath: string) => Promise<void>;
   onAsyncError?: (error: unknown) => void;
+}
+
+export interface DesktopShellActions {
+  openAgentDirectory(customDirSet?: boolean): void;
+  setRecentCommitsUnavailable(): void;
+  showRoute(route: DesktopRoute): void;
+  showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
 }
 
 const SWITCH_VIEW_ROUTES = {
@@ -39,10 +47,10 @@ function getAgentSettingsSubTab(message: DesktopCommandMessage) {
     : undefined;
 }
 
-export function createDesktopShellIpc(
+export function createDesktopShellActions(
   renderer: DesktopRenderer,
   options: DesktopShellIpcOptions = {},
-): DesktopMessageHandler {
+): DesktopShellActions {
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
   function postRoute(route: DesktopRoute) {
@@ -65,12 +73,6 @@ export function createDesktopShellIpc(
     });
   }
 
-  function postRouteForSwitchView(message: DesktopCommandMessage) {
-    const result = SwitchViewMessageSchema.safeParse(message);
-    if (!result.success) return;
-    postRoute(SWITCH_VIEW_ROUTES[result.data.view]);
-  }
-
   async function openCustomAgentDirectory() {
     if (!options.getCustomAgentDirectory || !options.openPath) {
       postSettingsRoute(SETTINGS_TAB.AGENTS);
@@ -80,12 +82,39 @@ export function createDesktopShellIpc(
     await options.openPath(customDir);
   }
 
-  function handleOpenAgentDirectory(message: DesktopCommandMessage) {
-    if (message.customDirSet !== true) {
+  function openAgentDirectory(customDirSet?: boolean) {
+    if (customDirSet !== true) {
       postSettingsRoute(SETTINGS_TAB.AGENTS);
       return;
     }
     void openCustomAgentDirectory().catch(reportAsyncError);
+  }
+
+  return {
+    openAgentDirectory,
+    setRecentCommitsUnavailable: () => {
+      renderer.postToRenderer({
+        command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+        commits: [],
+        isGitRepo: false,
+      });
+    },
+    showRoute: postRoute,
+    showSettings: postSettingsRoute,
+  };
+}
+
+export function createDesktopShellIpc(
+  renderer: DesktopRenderer,
+  options: DesktopShellIpcOptions = {},
+): DesktopMessageHandler {
+  const actions =
+    options.actions ?? createDesktopShellActions(renderer, options);
+
+  function postRouteForSwitchView(message: DesktopCommandMessage) {
+    const result = SwitchViewMessageSchema.safeParse(message);
+    if (!result.success) return;
+    actions.showRoute(SWITCH_VIEW_ROUTES[result.data.view]);
   }
 
   return {
@@ -95,29 +124,25 @@ export function createDesktopShellIpc(
           postRouteForSwitchView(message);
           return true;
         case MAIN_VIEW_COMMANDS.SETTINGS_OPEN:
-          postSettingsRoute();
+          actions.showSettings();
           return true;
         case MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS:
-          postSettingsRoute(
+          actions.showSettings(
             SETTINGS_TAB.AGENTS,
             getAgentSettingsSubTab(message),
           );
           return true;
         case MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS:
-          postSettingsRoute(SETTINGS_TAB.MODELS);
+          actions.showSettings(SETTINGS_TAB.MODELS);
           return true;
         case MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS:
-          postSettingsRoute(SETTINGS_TAB.MULTI_AGENT);
+          actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
           return true;
         case MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY:
-          handleOpenAgentDirectory(message);
+          actions.openAgentDirectory(message.customDirSet === true);
           return true;
         case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
-          renderer.postToRenderer({
-            command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-            commits: [],
-            isGitRepo: false,
-          });
+          actions.setRecentCommitsUnavailable();
           return true;
         default:
           return false;
