@@ -98,6 +98,14 @@ async function createBridge(messages: unknown[]): Promise<TestableBridge> {
   vi.doMock('@logger/AgentLogger', () => ({
     AgentLogger: class {
       static setStreamLogStore(): void {}
+
+      debug(): void {}
+
+      info(): void {}
+
+      warn(): void {}
+
+      error(): void {}
     },
   }));
   vi.doMock('vscode', () => ({
@@ -213,6 +221,14 @@ async function createExecution(options: {
   vi.doMock('@logger/AgentLogger', () => ({
     AgentLogger: class {
       static setStreamLogStore(): void {}
+
+      debug(): void {}
+
+      info(): void {}
+
+      warn(): void {}
+
+      error(): void {}
     },
   }));
   const { createDesktopAgentExecution } = (await import(
