@@ -436,7 +436,9 @@ export class DesktopProgressBridge {
   }
 
   setActiveStream(streamId: StreamTabId): void {
-    this.ensureStream(streamId);
+    if (!this.streamLogs.has(streamId) && !this.taskStates.has(streamId)) {
+      return;
+    }
     this.activeStream = streamId;
     this.syncStreams();
     this.send({

@@ -20,6 +20,7 @@ type Bridge = {
 
 type TestableBridge = Bridge & {
   handleProgressEvent(event: string, payload: unknown): void;
+  setActiveStream(streamId: StreamTabId): void;
   deleteStream(streamId: StreamTabId): Promise<void>;
   deleteAllStreams(): Promise<void>;
   streamLogs: {
@@ -356,6 +357,19 @@ describe('DesktopProgressBridge', () => {
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS)[0]
           ?.streamStates?.['new-stream'],
       ).toMatchObject({ status: STREAM_STATUS.RUNNING });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('ignores renderer switches to unknown streams', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.setActiveStream('ghost-stream');
+
+      expect(messages).toEqual([]);
     } finally {
       bridge.dispose();
     }
