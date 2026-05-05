@@ -5,8 +5,10 @@ import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
+import { installDesktopMenu } from './desktopMenu.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
+import { createDesktopShellActions } from './desktopShellIpc.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
 
@@ -84,6 +86,14 @@ function createWindow(): void {
     progress: agentExecution.progress,
     onAsyncError: reportAsyncError,
   });
+  const shellActions = createDesktopShellActions(
+    { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
+    {
+      getCustomAgentDirectory: () => getAgentDirectories().custom(),
+      openPath,
+      onAsyncError: reportAsyncError,
+    },
+  );
   const mainViewIpc = installDesktopMainViewIpc(window, {
     getCustomAgentDirectory: () => getAgentDirectories().custom(),
     openPath,
@@ -91,9 +101,11 @@ function createWindow(): void {
     fileSelection,
     settings: settingsIpc,
     progress: progressIpc,
+    shellActions,
     onAsyncError: reportAsyncError,
   });
   ipcRef.current = mainViewIpc;
+  installDesktopMenu(shellActions);
   window.once('closed', () => agentExecution.dispose());
 
   if (process.env.ELECTRON_RENDERER_URL) {
