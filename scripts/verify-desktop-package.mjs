@@ -111,12 +111,45 @@ async function findPackagedApp() {
 }
 
 function normalizeAsarPath(path) {
-  return `/${path.replaceAll('\\', '/')}`;
+  const normalized = path.replaceAll('\\', '/');
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
 }
 
 function createAsarAppReader(asarPath) {
-  const entries = new Set(listPackage(asarPath));
+  const entryPathByNormalizedPath = new Map(
+    listPackage(asarPath).map((entry) => [normalizeAsarPath(entry), entry]),
+  );
+  const entries = new Set(entryPathByNormalizedPath.keys());
   const resourceRoot = dirname(asarPath);
+  function stripLeadingArchiveSeparator(path) {
+    return path.replace(/^[/\\]+/, '');
+  }
+  function asarEntryPathCandidates(path) {
+    const mappedPath = entryPathByNormalizedPath.get(normalizeAsarPath(path));
+    return [
+      mappedPath,
+      mappedPath == null ? null : stripLeadingArchiveSeparator(mappedPath),
+      mappedPath == null
+        ? null
+        : stripLeadingArchiveSeparator(mappedPath).replaceAll('\\', '/'),
+      stripLeadingArchiveSeparator(path),
+      stripLeadingArchiveSeparator(path).replaceAll('\\', '/'),
+      path,
+    ].filter((candidate, index, candidates) => {
+      return candidate != null && candidates.indexOf(candidate) === index;
+    });
+  }
+  function readAsarFile(path) {
+    let lastError = null;
+    for (const candidate of asarEntryPathCandidates(path)) {
+      try {
+        return extractFile(asarPath, candidate);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  }
   return {
     label: relative(repoRoot, asarPath),
     async exists(path) {
@@ -136,14 +169,14 @@ function createAsarAppReader(asarPath) {
       }
     },
     async readJson(path) {
-      return JSON.parse(extractFile(asarPath, path).toString('utf8'));
+      return JSON.parse(readAsarFile(path).toString('utf8'));
     },
     async readText(path) {
-      return extractFile(asarPath, path).toString('utf8');
+      return readAsarFile(path).toString('utf8');
     },
     async readBuffer(path) {
       if (entries.has(normalizeAsarPath(path))) {
-        return extractFile(asarPath, path);
+        return readAsarFile(path);
       }
       return readFile(join(resourceRoot, path));
     },
