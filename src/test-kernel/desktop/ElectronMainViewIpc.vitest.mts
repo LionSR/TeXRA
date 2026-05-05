@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - webview command constants
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
@@ -28,6 +29,7 @@ interface MainViewIpcModule {
       openPath?: (filePath: string) => Promise<void>;
       fileSelection?: { handleMessage(message: { command: string }): boolean };
       settings?: { handleMessage(message: { command: string }): boolean };
+      progress?: { handleMessage(message: { command: string }): boolean };
       executeAgent?: (message: unknown) => Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
@@ -116,6 +118,12 @@ describe('desktop main-view IPC', () => {
           message.command === SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
       ),
     };
+    const progress = {
+      handleMessage: vi.fn(
+        (message: { command: string }) =>
+          message.command === PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
+      ),
+    };
     const executeAgent = vi.fn(async (_message: unknown) => {});
     const webContents = {
       isDestroyed: () => false,
@@ -136,6 +144,7 @@ describe('desktop main-view IPC', () => {
       openPath,
       fileSelection,
       settings,
+      progress,
       executeAgent,
     });
 
@@ -178,6 +187,15 @@ describe('desktop main-view IPC', () => {
     );
     expect(settings.handleMessage).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS,
+    });
+
+    rendererListener?.(
+      { sender: webContents },
+      { command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, stream: 'run-1' },
+    );
+    expect(progress.handleMessage).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
+      stream: 'run-1',
     });
 
     sends.length = 0;

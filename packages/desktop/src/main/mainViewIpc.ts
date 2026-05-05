@@ -9,6 +9,7 @@ import {
   createDesktopViewStateIpc,
   type DesktopTheme,
 } from './desktopViewStateIpc.js';
+import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
@@ -21,6 +22,7 @@ export interface DesktopMainViewIpcOptions {
   openPath?: (filePath: string) => Promise<void>;
   fileSelection?: DesktopFileSelection;
   settings?: DesktopSettingsIpc;
+  progress?: DesktopProgressIpc;
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
@@ -63,6 +65,7 @@ export function installDesktopMainViewIpc(
   messageHandlers = [
     options.fileSelection,
     options.settings,
+    options.progress,
     viewState,
     shell,
     execution,
