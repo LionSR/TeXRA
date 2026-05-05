@@ -502,7 +502,7 @@ class ResponseContinuationNode<C> extends BaseNode<
     return {
       shouldSkip,
       interrupted,
-      stopReason: shared.stopReason,
+      stopReason: shared.stopReason ?? undefined,
       processedResponse: shared.processedResponse,
       messages: shared.messages,
     };
