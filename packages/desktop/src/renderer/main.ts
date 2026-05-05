@@ -5,11 +5,14 @@ import '@progressView/frontend';
 import '@settingsView/frontend';
 import '@webview/frontend';
 
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+
 import {
   DesktopSetRouteMessageSchema,
   type DesktopRoute,
   type DesktopSetRouteMessage,
 } from '../desktopShellMessages';
+import { createDesktopCommandPalette } from './desktopCommandPalette';
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -30,6 +33,9 @@ appRoot.innerHTML = `
       </button>
       <button class="desktop-nav-button" type="button" data-route-button="settings" aria-pressed="false">
         Settings
+      </button>
+      <button class="desktop-command-button" type="button" data-command-palette-button aria-haspopup="dialog">
+        Commands
       </button>
     </nav>
     <main class="desktop-view" id="desktop-view">
@@ -82,6 +88,34 @@ routeContainers.get('main')?.replaceChildren(mainApp);
 routeContainers.get('progress')?.replaceChildren(progressApp);
 routeContainers.get('settings')?.replaceChildren(settingsApp);
 
+const commandPaletteButton = appRoot.querySelector<HTMLButtonElement>(
+  '[data-command-palette-button]',
+);
+if (commandPaletteButton == null) {
+  throw new Error('TeXRA desktop command palette button was not found.');
+}
+
+const commandPalette = createDesktopCommandPalette({
+  document,
+  actions: {
+    showRoute: setRoute,
+    showSettings: (tabIndex, agentSubTab) => {
+      setRoute('settings');
+      if (tabIndex == null) return;
+      window.postMessage(
+        {
+          command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+          tabIndex,
+          ...(agentSubTab && { agentSubTab }),
+        },
+        getWindowTargetOrigin(),
+      );
+    },
+  },
+});
+appRoot.append(commandPalette.element);
+commandPaletteButton.addEventListener('click', commandPalette.open);
+
 function isDesktopSetRouteMessage(
   message: unknown,
 ): message is DesktopSetRouteMessage {
@@ -103,3 +137,10 @@ window.addEventListener('message', (event) => {
     setRoute(event.data.route);
   }
 });
+
+function getWindowTargetOrigin(): string {
+  // Electron loads this renderer over file://, where origin is "null".
+  return window.location.origin && window.location.origin !== 'null'
+    ? window.location.origin
+    : '*';
+}
