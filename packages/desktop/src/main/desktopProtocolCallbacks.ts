@@ -113,7 +113,9 @@ export function createDesktopProtocolCallbackRouter(
     routeUrl(rawUrl) {
       const callback = parseDesktopProtocolCallback(rawUrl);
       if (!callback) {
-        options.log?.debug?.('Ignoring unsupported desktop protocol callback URL');
+        options.log?.debug?.(
+          'Ignoring unsupported desktop protocol callback URL',
+        );
         return false;
       }
 
