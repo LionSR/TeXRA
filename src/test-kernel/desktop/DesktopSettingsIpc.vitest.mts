@@ -52,6 +52,10 @@ async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
   ) as Promise<DesktopSettingsIpcModule>;
 }
 
+function flushAsyncWork(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 describe('desktop settings IPC', () => {
   afterEach(() => {
     setGitAuthorEnv({});
@@ -329,11 +333,13 @@ describe('desktop settings IPC', () => {
     ]);
     globalState.values.set(GlobalStateKey.HELPER_MODEL, 'gpt55');
     const posted: unknown[] = [];
+    const errors: unknown[] = [];
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
       globalState,
       postToRenderer: (message) => posted.push(message),
+      onError: (error) => errors.push(error),
     });
 
     expect(
@@ -343,8 +349,7 @@ describe('desktop settings IPC', () => {
         enabled: false,
       }),
     ).toBe(true);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushAsyncWork();
 
     expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
       'sonnet46T',
@@ -352,10 +357,27 @@ describe('desktop settings IPC', () => {
     expect(globalState.values.get(GlobalStateKey.HELPER_MODEL)).toBe(
       'sonnet46T',
     );
-    expect(posted.at(-1)).toMatchObject({
+    expect(errors).toEqual([]);
+    expect(
+      posted.findLast(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ),
+    ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       helperModel: 'sonnet46T',
     });
+    const modelOptionsMessage = posted.at(-1) as {
+      command?: string;
+      optionsData?: Array<{ value?: string }>;
+    };
+    expect(modelOptionsMessage.command).toBe('setModelOptions');
+    expect(modelOptionsMessage.optionsData).toContainEqual(
+      expect.objectContaining({
+        value: 'sonnet46T',
+      }),
+    );
 
     expect(
       settings.handleMessage({
@@ -363,8 +385,7 @@ describe('desktop settings IPC', () => {
         enabled: true,
       }),
     ).toBe(true);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushAsyncWork();
 
     expect(
       globalState.values.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),

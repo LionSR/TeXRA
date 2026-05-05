@@ -95,7 +95,7 @@ function createWindow(): void {
       type: 'info',
       message: 'Open Folder is not enabled in this desktop build yet.',
       detail:
-        'Folder switching needs the same workspace lifecycle guarantees as the VS Code extension. For now, launch TeXRA from a known workspace or use the TeXRA VS Code extension for folder-aware workflows.',
+        'Folder switching needs the same workspace lifecycle guarantees as the VS Code extension. For now, launch TeXRA with --texra-workspace <path>, set TEXRA_WORKSPACE_PATH, or use the TeXRA VS Code extension for folder-aware workflows.',
     });
   };
   attachRendererConsoleLog(window.webContents);

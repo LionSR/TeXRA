@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 import { installElectronHostBridge } from './hostBridge.js';
+import { hasWorkspacePath } from '../workspacePath.js';
 
 const rendererWindow = globalThis as typeof globalThis & {
   addEventListener?: (
@@ -36,13 +37,5 @@ installElectronHostBridge({
 
 contextBridge.exposeInMainWorld('texraDesktop', {
   electronVersion: process.versions.electron,
-  hasWorkspace: hasDesktopWorkspace(),
+  hasWorkspace: hasWorkspacePath(),
 });
-
-function hasDesktopWorkspace(): boolean {
-  return (
-    Boolean(process.env.TEXRA_WORKSPACE_PATH?.trim()) ||
-    process.argv.includes('--texra-workspace') ||
-    process.argv.some((arg) => arg.startsWith('--texra-workspace='))
-  );
-}

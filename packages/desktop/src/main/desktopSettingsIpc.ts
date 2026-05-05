@@ -1,29 +1,33 @@
 import { platform } from '@platform/platform';
-import { MODELS, MODEL_CONFIGS } from 'llm-zoo';
 
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import {
+  SettingsAgentCatalogController,
+  type SettingsAgentCatalogState,
+} from '@controllers/settingsView/SettingsAgentCatalogController';
+import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
+import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
+import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
+import {
+  getAgent,
   getToolUseAgents,
   getWorkflowAgents,
   loadAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import {
   DEFAULT_MODELS,
-  formatContext,
-  formatCost,
+  buildBasicModelOptionsData,
 } from '@model/modelOptionsBasic';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
-import { isFastFirstResponseModel } from '@shared/constants/fastModels';
 import type { LatexConfigField } from '@shared/constants/latex';
-import { agentKey, agentName } from '@shared/schemas/agent';
+import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   SettingsViewInboundMessageSchema,
-  type AgentSelectionItem,
-  type ModelSelectionItem,
+  type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import {
   applyGitAuthorSettings,
@@ -58,6 +62,84 @@ export function createDesktopSettingsIpc(
     });
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
+  const agentCatalogState: SettingsAgentCatalogState = {
+    getEnabledAgentKeys: (category) =>
+      workspaceState.get<string[]>(getAgentStateKey(category)),
+    setEnabledAgentKeys: async (category, enabledKeys) => {
+      await workspaceState.update(getAgentStateKey(category), enabledKeys);
+    },
+    getAgents,
+    getVisibleAgents: getAgents,
+    getCustomPresetsRaw: () =>
+      workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
+    setCustomPresets: async (presets) => {
+      await workspaceState.update(
+        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+        presets,
+      );
+    },
+  };
+  const agentCatalogController = new SettingsAgentCatalogController({
+    state: agentCatalogState,
+  });
+  const agentDirectoryController = new SettingsAgentDirectoryController({
+    state: {
+      getConfiguredCustomDir: () =>
+        globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
+      setConfiguredCustomDir: async (customDir) => {
+        await globalState.update(
+          GlobalStateKey.CUSTOM_AGENT_DIR,
+          customDir || undefined,
+        );
+      },
+      getCustomDir: () => getAgentDirectories().custom(),
+      getSourceDir: getAgentDirectory,
+      getAgent: (source, name) => getAgent(`${source}:${name}`) ?? null,
+    },
+  });
+  const agentVisibilityController = new SettingsAgentVisibilityController({
+    state: {
+      getEnabledAgentKeys: agentCatalogState.getEnabledAgentKeys,
+      setEnabledAgentKeys: agentCatalogState.setEnabledAgentKeys,
+      getAgents: (category) =>
+        getAgents(category).map((entry) => ({
+          source: entry.source,
+          name: entry.name,
+        })),
+    },
+  });
+  const modelSelectionController = new SettingsModelSelectionController({
+    state: {
+      getEnabledModels: () =>
+        globalState.get<string[]>(
+          GlobalStateKey.ENABLED_MODELS,
+          DEFAULT_MODELS,
+        ),
+      setEnabledModels: async (models) => {
+        await globalState.update(GlobalStateKey.ENABLED_MODELS, models);
+      },
+      getHelperModel: () => globalState.get(GlobalStateKey.HELPER_MODEL),
+      setHelperModel: async (model) => {
+        await globalState.update(GlobalStateKey.HELPER_MODEL, model);
+      },
+      getReasoningLevelOverrides: () =>
+        globalState.get<Record<string, string>>(
+          GlobalStateKey.REASONING_LEVELS,
+          {},
+        ),
+      setReasoningLevelOverrides: async (overrides) => {
+        await globalState.update(GlobalStateKey.REASONING_LEVELS, overrides);
+      },
+      getPreferShortModelNames: () =>
+        globalState.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
+      setPreferShortModelNames: async (enabled) => {
+        await globalState.update(
+          GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+          enabled,
+        );
+      },
+    },
+  });
 
   function readCurrentGitAuthorSettings() {
     return readGitAuthorSettingsFromState(workspaceState);
@@ -93,112 +175,62 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function getAgents(category: 'workflow' | 'toolUse'): AgentEntry[] {
+  function getAgents(category: AgentCategory): AgentEntry[] {
     return category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
   }
 
-  function getAgentStateKey(
-    category: 'workflow' | 'toolUse',
-  ): WorkspaceStateKey {
+  function getAgentStateKey(category: AgentCategory): WorkspaceStateKey {
     return category === 'workflow'
       ? WorkspaceStateKey.ENABLED_AGENTS
       : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
   }
 
-  function getDefaultAgentKeys(category: 'workflow' | 'toolUse'): string[] {
-    return getAgents(category).map((entry) =>
-      agentKey(entry.source, entry.name),
-    );
-  }
-
-  function getEnabledAgentKeys(category: 'workflow' | 'toolUse'): Set<string> {
-    const stateKey = getAgentStateKey(category);
-    const defaultKeys = getDefaultAgentKeys(category);
-    return new Set(
-      workspaceState.get<string[]>(stateKey, defaultKeys) ?? defaultKeys,
-    );
-  }
-
-  function toAgentSelectionItem(
-    entry: AgentEntry,
-    enabledKeys: Set<string>,
-  ): AgentSelectionItem {
-    return {
-      name: entry.name,
-      category: entry.category,
-      description: entry.description,
-      source: entry.source,
-      hasPath: Boolean(entry.path),
-      filePath: entry.path || undefined,
-      tools: entry.tools,
-      hasMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
-      hasMultiplePath: Boolean(entry.multiplePath),
-      enabled:
-        enabledKeys.has(agentKey(entry.source, entry.name)) ||
-        enabledKeys.has(agentName(entry.name)),
-    };
+  function getAgentDirectory(source: AgentSource): Promise<string | undefined> {
+    const directories = getAgentDirectories();
+    switch (source) {
+      case 'custom':
+        return directories.custom();
+      case 'builtInWorkflow':
+        return directories.builtIn();
+      case 'builtInToolUse':
+        return directories.builtInToolUse();
+      case 'remote':
+        return Promise.resolve(undefined);
+    }
   }
 
   async function postAgentSelectionData(): Promise<void> {
     await loadAgents();
-    const workflowEnabled = getEnabledAgentKeys('workflow');
-    const toolUseEnabled = getEnabledAgentKeys('toolUse');
+    const { workflow, toolUse } = agentCatalogController.buildSelectionItems();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      workflow: getWorkflowAgents().map((entry) =>
-        toAgentSelectionItem(entry, workflowEnabled),
-      ),
-      toolUse: getToolUseAgents().map((entry) =>
-        toAgentSelectionItem(entry, toolUseEnabled),
-      ),
+      workflow,
+      toolUse,
     });
   }
 
-  function buildModelSelectionItems(): ModelSelectionItem[] {
-    const enabledSet = new Set(
-      globalState.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS),
-    );
-    return MODELS.flatMap((name): ModelSelectionItem[] => {
-      const config = MODEL_CONFIGS[name];
-      if (!config) return [];
-      return [
-        {
-          name,
-          label: config.label,
-          provider: config.provider,
-          enabled: enabledSet.has(name),
-          deprecated: config.deprecated ?? false,
-          contextWindow: formatContext(config.contextWindow),
-          cost: formatCost(config.inputPrice, config.outputPrice),
-          isFast: isFastFirstResponseModel(config.inputPrice),
-        },
-      ];
-    }).sort((a, b) => a.name.localeCompare(b.name));
-  }
-
   function postModelSelectionData(): void {
+    const data = modelSelectionController.buildSelectionData();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      models: buildModelSelectionItems(),
-      helperModel: globalState.get<string>(
-        GlobalStateKey.HELPER_MODEL,
-        DEFAULT_HELPER_MODEL,
-      ),
-      preferShortModelNames: globalState.get<boolean>(
-        GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-        false,
+      ...data,
+    });
+  }
+
+  function postMainModelOptionsData(): void {
+    options.postToRenderer({
+      command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      optionsData: buildBasicModelOptionsData(
+        modelSelectionController.getVisibleModels(),
       ),
     });
   }
 
   async function postCustomAgentDir(): Promise<void> {
-    const configuredPath = globalState
-      .get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '')
-      .trim();
+    const status = await agentDirectoryController.getCustomDirStatus();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-      path: await getAgentDirectories().custom(),
-      isDefault: configuredPath.length === 0,
+      ...status,
     });
   }
 
@@ -256,91 +288,45 @@ export function createDesktopSettingsIpc(
     modelName: string;
     enabled: boolean;
   }): Promise<void> {
-    const current = globalState.get<string[]>(
-      GlobalStateKey.ENABLED_MODELS,
-      DEFAULT_MODELS,
-    );
-    const updated = input.enabled
-      ? current.includes(input.modelName)
-        ? current
-        : [...current, input.modelName]
-      : current.filter((modelName) => modelName !== input.modelName);
-    const wasHelper =
-      !input.enabled &&
-      globalState.get<string>(
-        GlobalStateKey.HELPER_MODEL,
-        DEFAULT_HELPER_MODEL,
-      ) === input.modelName;
-
-    await globalState.update(GlobalStateKey.ENABLED_MODELS, updated);
-    if (wasHelper) {
-      await globalState.update(
-        GlobalStateKey.HELPER_MODEL,
-        updated[0] ?? DEFAULT_HELPER_MODEL,
-      );
-    }
+    await modelSelectionController.setModelEnabled(input);
     postModelSelectionData();
+    postMainModelOptionsData();
   }
 
   async function updateModelReasoningLevel(input: {
     modelName: string;
-    level: string | null;
+    level: ReasoningLevel | null;
   }): Promise<void> {
-    const overrides = {
-      ...globalState.get<Record<string, string>>(
-        GlobalStateKey.REASONING_LEVELS,
-        {},
-      ),
-    };
-    if (input.level == null) {
-      delete overrides[input.modelName];
-    } else {
-      overrides[input.modelName] = input.level;
-    }
-    await globalState.update(GlobalStateKey.REASONING_LEVELS, overrides);
+    await modelSelectionController.setReasoningLevel(input);
+    postModelSelectionData();
+  }
+
+  async function updateHelperModel(modelName: string): Promise<void> {
+    await modelSelectionController.setHelperModel(modelName);
+    postModelSelectionData();
+  }
+
+  async function updatePreferShortModelNames(enabled: boolean): Promise<void> {
+    await modelSelectionController.setPreferShortModelNames(enabled);
     postModelSelectionData();
   }
 
   async function updateAgentEnabled(input: {
-    category: 'workflow' | 'toolUse';
-    source: string;
+    category: AgentCategory;
+    source: AgentSource;
     name: string;
     enabled: boolean;
   }): Promise<void> {
-    const stateKey = getAgentStateKey(input.category);
-    const defaultKeys = getDefaultAgentKeys(input.category);
-    const current = workspaceState.get<string[]>(stateKey, defaultKeys) ?? [];
-    const currentSet = new Set(current);
-    const targetKey = agentKey(input.source, input.name);
-    if (input.enabled) {
-      currentSet.add(targetKey);
-    } else {
-      currentSet.delete(targetKey);
-    }
-    await workspaceState.update(stateKey, [...currentSet]);
+    await agentVisibilityController.setAgentEnabled(input);
     await postAgentSelectionData();
   }
 
   async function updateAllAgentsEnabled(input: {
-    category: 'workflow' | 'toolUse';
-    source: string;
+    category: AgentCategory;
+    source: AgentSource;
     enabled: boolean;
   }): Promise<void> {
-    const stateKey = getAgentStateKey(input.category);
-    const defaultKeys = getDefaultAgentKeys(input.category);
-    const current = workspaceState.get<string[]>(stateKey, defaultKeys) ?? [];
-    const currentSet = new Set(current);
-    const sourceKeys = getAgents(input.category)
-      .filter((entry) => entry.source === input.source)
-      .map((entry) => agentKey(entry.source, entry.name));
-    for (const key of sourceKeys) {
-      if (input.enabled) {
-        currentSet.add(key);
-      } else {
-        currentSet.delete(key);
-      }
-    }
-    await workspaceState.update(stateKey, [...currentSet]);
+    await agentVisibilityController.setAllAgentsEnabled(input);
     await postAgentSelectionData();
   }
 
@@ -353,7 +339,7 @@ export function createDesktopSettingsIpc(
   }
 
   async function resetCustomAgentDir(): Promise<void> {
-    await globalState.update(GlobalStateKey.CUSTOM_AGENT_DIR, undefined);
+    await agentDirectoryController.resetCustomDir();
     await Promise.all([postCustomAgentDir(), postAgentSelectionData()]);
   }
 
@@ -394,14 +380,7 @@ export function createDesktopSettingsIpc(
           );
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL:
-          runAsync(
-            Promise.resolve(
-              globalState.update(
-                GlobalStateKey.HELPER_MODEL,
-                result.data.modelName,
-              ),
-            ).then(() => postModelSelectionData()),
-          );
+          runAsync(updateHelperModel(result.data.modelName));
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL:
           runAsync(
@@ -412,14 +391,7 @@ export function createDesktopSettingsIpc(
           );
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES:
-          runAsync(
-            Promise.resolve(
-              globalState.update(
-                GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-                result.data.enabled,
-              ),
-            ).then(() => postModelSelectionData()),
-          );
+          runAsync(updatePreferShortModelNames(result.data.enabled));
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED:
           runAsync(

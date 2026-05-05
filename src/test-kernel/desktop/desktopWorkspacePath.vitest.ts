@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, it } from 'vitest';
 
 import { resolveWorkspacePath } from '../../../packages/desktop/src/main/platform/paths';
+import { hasWorkspacePath } from '../../../packages/desktop/src/workspacePath';
 
 describe('desktop workspace path', () => {
   it('resolves CLI workspace path before env and stored state', () => {
@@ -22,6 +23,21 @@ describe('desktop workspace path', () => {
         env: {},
       }),
       undefined,
+    );
+  });
+
+  it('does not treat empty workspace flags as an opened workspace', () => {
+    assert.equal(
+      hasWorkspacePath({ argv: ['--texra-workspace'], env: {} }),
+      false,
+    );
+    assert.equal(
+      hasWorkspacePath({ argv: ['--texra-workspace='], env: {} }),
+      false,
+    );
+    assert.equal(
+      hasWorkspacePath({ argv: ['--texra-workspace', 'paper'], env: {} }),
+      true,
     );
   });
 });

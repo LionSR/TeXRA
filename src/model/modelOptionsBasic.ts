@@ -77,8 +77,10 @@ export function buildModelHint(config: ModelConfig): string {
 }
 
 /** Build model options from static config without provider availability checks. */
-export function buildBasicModelOptionsData(): ModelOptionData[] {
-  return getVisibleModels().map((model) => {
+export function buildBasicModelOptionsData(
+  visibleModels: readonly string[] = getVisibleModels(),
+): ModelOptionData[] {
+  return visibleModels.map((model) => {
     const config = MODEL_CONFIGS[model];
     if (!config) return { value: model, label: model };
     return {

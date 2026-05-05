@@ -23,16 +23,6 @@ import {
   getVisibleModels,
 } from './modelOptionsBasic';
 
-export {
-  buildBasicModelOptionsData,
-  DEFAULT_MODELS,
-  formatContext,
-  formatCost,
-  getVisibleModels,
-  MODEL_LIST_VERSION,
-  resolveVisibleModel,
-} from './modelOptionsBasic';
-
 /** Return whether the registry marks a model as deprecated. */
 export function isDeprecatedModel(model: string): boolean {
   return MODEL_CONFIGS[model]?.deprecated ?? false;

@@ -182,8 +182,12 @@ export function dispatchDesktopCommand(
       actions.openWorkspaceFolder?.();
       return true;
     default:
-      return false;
+      return assertNever(id);
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled desktop command: ${value}`);
 }
 
 function isDesktopLocalCommandId(id: string): id is DesktopLocalCommandId {

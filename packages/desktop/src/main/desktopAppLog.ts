@@ -1,4 +1,10 @@
-import { appendFileSync, mkdirSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  statSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { format } from 'node:util';
 
@@ -16,6 +22,7 @@ type RendererConsoleMessage = Pick<
 >;
 
 const LOG_FILE_NAME = 'texra-desktop.log';
+const MAX_LOG_BYTES = 5 * 1024 * 1024;
 const CONSOLE_LEVELS = ['debug', 'error', 'info', 'log', 'warn'] as const;
 
 let logFilePath: string | undefined;
@@ -25,6 +32,7 @@ export function installDesktopAppLog(): string {
   const logDir = getDesktopLogDirectory();
   mkdirSync(logDir, { recursive: true });
   logFilePath = join(logDir, LOG_FILE_NAME);
+  rotateDesktopLogFile(logFilePath);
   appendDesktopLogLine('info', '--- TeXRA desktop session started ---');
   installConsoleMirror();
   return logFilePath;
@@ -80,6 +88,15 @@ function appendDesktopLogLine(level: ConsoleLevel, ...args: unknown[]): void {
     appendFileSync(path, `${new Date().toISOString()} [${level}] ${message}\n`);
   } catch {
     // Logging must never become a startup dependency.
+  }
+}
+
+function rotateDesktopLogFile(path: string): void {
+  try {
+    if (!existsSync(path) || statSync(path).size <= MAX_LOG_BYTES) return;
+    renameSync(path, `${path}.old`);
+  } catch {
+    // Log rotation is best-effort; app startup should continue without it.
   }
 }
 

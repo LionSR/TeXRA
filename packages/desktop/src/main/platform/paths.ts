@@ -4,6 +4,8 @@ import { join, resolve } from 'node:path';
 import { app } from 'electron';
 
 import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirectories';
+import { getWorkspacePathInput } from '../../workspacePath.js';
+export { hasWorkspacePath } from '../../workspacePath.js';
 
 interface WorkspacePathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;
@@ -20,29 +22,8 @@ interface ResourcesPathOptions {
 export function resolveWorkspacePath(
   options: WorkspacePathOptions = {},
 ): string | undefined {
-  const env = options.env ?? process.env;
-  const argv = options.argv ?? process.argv.slice(1);
-  const argvWorkspacePath = getWorkspacePathArg(argv);
-  if (argvWorkspacePath) return resolve(argvWorkspacePath);
-
-  const configured = env.TEXRA_WORKSPACE_PATH?.trim();
-  if (configured) return resolve(configured);
-
-  return undefined;
-}
-
-function getWorkspacePathArg(argv: readonly string[]): string | undefined {
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg == null) continue;
-    if (arg === '--texra-workspace') {
-      return argv[index + 1]?.trim();
-    }
-    if (arg.startsWith('--texra-workspace=')) {
-      return arg.slice('--texra-workspace='.length).trim();
-    }
-  }
-  return undefined;
+  const workspacePath = getWorkspacePathInput(options);
+  return workspacePath == null ? undefined : resolve(workspacePath);
 }
 
 export function resolveResourcesPath(
