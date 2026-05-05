@@ -25,7 +25,6 @@ import {
   DEFAULT_MODELS,
   buildBasicModelOptionsData,
 } from '@model/modelOptionsBasic';
-import { buildToolDashboardItems as buildDefaultToolDashboardItems } from '@settingsView/utils/toolDashboardData';
 import type { LatexConfigField } from '@shared/constants/latex';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
@@ -33,13 +32,7 @@ import {
   type ReasoningLevel,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
-import {
-  getLastCheckResults,
-  refreshDisabledToolCache,
-  refreshToolAvailability as refreshDefaultToolAvailability,
-  type ExternalToolCheckResult,
-} from '@tools/toolAvailability';
-import { findExternalToolDef } from '@tools/externalToolDefs';
+import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import {
   parseCodexApprovalPolicy,
   parseCodexReasoningEffort,
@@ -71,6 +64,7 @@ export interface DesktopSettingsIpcOptions {
   config?: ConfigProvider;
   buildToolDashboardItems?: ToolDashboardBuilder;
   refreshToolAvailability?: () => Promise<void>;
+  getCustomAgentDirectory?: () => Promise<string>;
   selectCustomAgentDirectory?: () => Promise<string | undefined>;
   openExternalUrl?: (url: string) => Promise<void>;
   installToolExtension?: (extensionId: string) => Promise<void>;
@@ -83,6 +77,40 @@ export interface DesktopSettingsIpcOptions {
 }
 
 export type DesktopSettingsIpc = DesktopMessageHandler;
+
+async function buildDefaultToolDashboardItems(
+  cachedResults?: ExternalToolCheckResult[],
+): Promise<ToolDashboardItem[]> {
+  const { buildToolDashboardItems } =
+    await import('@settingsView/utils/toolDashboardData');
+  return buildToolDashboardItems(cachedResults);
+}
+
+async function refreshDefaultToolAvailability(): Promise<void> {
+  const { refreshToolAvailability } = await import('@tools/toolAvailability');
+  await refreshToolAvailability();
+}
+
+async function getCachedToolCheckResults(): Promise<
+  ExternalToolCheckResult[] | undefined
+> {
+  const { getLastCheckResults } = await import('@tools/toolAvailability');
+  return getLastCheckResults() ?? undefined;
+}
+
+async function refreshDefaultDisabledToolCache(): Promise<void> {
+  const { refreshDisabledToolCache } = await import('@tools/toolAvailability');
+  refreshDisabledToolCache();
+}
+
+async function findToolCommand(
+  toolId: string,
+  kind: 'install' | 'auth',
+): Promise<string | undefined> {
+  const { findExternalToolDef } = await import('@tools/externalToolDefs');
+  const def = findExternalToolDef(toolId);
+  return kind === 'install' ? def?.installCommand : def?.authCommand;
+}
 
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
@@ -97,10 +125,14 @@ export function createDesktopSettingsIpc(
   const loadAgentRegistry = options.loadAgents ?? loadAgents;
   const loadAgentOptionsData =
     options.loadAgentOptionsData ?? computeAgentOptionsData;
+  const usesDefaultToolDashboardBuilder =
+    options.buildToolDashboardItems == null;
   const buildToolDashboardItems =
     options.buildToolDashboardItems ?? buildDefaultToolDashboardItems;
   const refreshToolAvailability =
     options.refreshToolAvailability ?? refreshDefaultToolAvailability;
+  const getCustomAgentDirectory =
+    options.getCustomAgentDirectory ?? (() => getAgentDirectories().custom());
   const latexConfigPersistenceController =
     new LatexConfigPersistenceController();
   const agentCatalogState: SettingsAgentCatalogState = {
@@ -133,7 +165,7 @@ export function createDesktopSettingsIpc(
           customDir || undefined,
         );
       },
-      getCustomDir: () => getAgentDirectories().custom(),
+      getCustomDir: getCustomAgentDirectory,
       getSourceDir: getAgentDirectory,
       getAgent: (source, name) => getAgent(`${source}:${name}`) ?? null,
     },
@@ -234,7 +266,7 @@ export function createDesktopSettingsIpc(
     const directories = getAgentDirectories();
     switch (source) {
       case 'custom':
-        return directories.custom();
+        return getCustomAgentDirectory();
       case 'builtInWorkflow':
         return directories.builtIn();
       case 'builtInToolUse':
@@ -305,9 +337,10 @@ export function createDesktopSettingsIpc(
   async function postToolDashboardData(postOptions?: {
     skipChecks?: boolean;
   }): Promise<void> {
-    const cachedResults = postOptions?.skipChecks
-      ? (getLastCheckResults() ?? undefined)
-      : undefined;
+    const cachedResults =
+      postOptions?.skipChecks && usesDefaultToolDashboardBuilder
+        ? await getCachedToolCheckResults()
+        : undefined;
     const items = await buildToolDashboardItems(cachedResults);
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
@@ -441,7 +474,9 @@ export function createDesktopSettingsIpc(
       disabled.add(toolId);
     }
     await globalState.update(GlobalStateKey.DISABLED_TOOLS, [...disabled]);
-    refreshDisabledToolCache();
+    if (usesDefaultToolDashboardBuilder) {
+      await refreshDefaultDisabledToolCache();
+    }
     await postToolDashboardData({ skipChecks: true });
   }
 
@@ -454,9 +489,7 @@ export function createDesktopSettingsIpc(
     toolId: string;
     kind: 'install' | 'auth';
   }): Promise<void> {
-    const def = findExternalToolDef(input.toolId);
-    const command =
-      input.kind === 'install' ? def?.installCommand : def?.authCommand;
+    const command = await findToolCommand(input.toolId, input.kind);
     if (!command) return;
     await options.runToolCommand?.({ ...input, command });
   }

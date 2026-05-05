@@ -44,6 +44,7 @@ interface DesktopSettingsIpcModule {
     }>;
     buildToolDashboardItems?: (cachedResults?: unknown[]) => Promise<unknown[]>;
     refreshToolAvailability?: () => Promise<void>;
+    getCustomAgentDirectory?: () => Promise<string>;
     selectCustomAgentDirectory?: () => Promise<string | undefined>;
     onError?: (error: unknown) => void;
   }): {
@@ -108,7 +109,9 @@ async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
 }
 
 function flushAsyncWork(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
+  return new Promise((resolve) =>
+    setImmediate(() => setImmediate(() => resolve())),
+  );
 }
 
 describe('desktop settings IPC', () => {
@@ -468,6 +471,7 @@ describe('desktop settings IPC', () => {
       config,
       sendStartupCatalogData: true,
       loadAgents: async () => undefined,
+      getCustomAgentDirectory: async () => '',
       buildToolDashboardItems: async () => [
         {
           id: 'file-ops',
