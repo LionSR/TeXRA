@@ -46,6 +46,26 @@ interface DesktopSettingsIpcModule {
     refreshToolAvailability?: () => Promise<void>;
     getCustomAgentDirectory?: () => Promise<string>;
     selectCustomAgentDirectory?: () => Promise<string | undefined>;
+    openExternalUrl?: (url: string) => Promise<void>;
+    installToolExtension?: (extensionId: string) => Promise<void>;
+    promptSecret?: (input: {
+      title: string;
+      prompt: string;
+    }) => Promise<string | undefined>;
+    promptText?: (input: {
+      title: string;
+      prompt: string;
+    }) => Promise<string | undefined>;
+    showInfoMessage?: (message: string) => Promise<void>;
+    showErrorMessage?: (message: string) => Promise<void>;
+    signIn?: () => Promise<void>;
+    secrets?: {
+      get(key: string): Promise<string | undefined>;
+      set(key: string, value: string): Promise<void>;
+      delete(key: string): Promise<void>;
+    };
+    detectLatexSettingsStatus?: () => Promise<unknown>;
+    runInstallCommand?: (command: string) => Promise<void>;
     onError?: (error: unknown) => void;
   }): {
     handleMessage(
@@ -99,6 +119,22 @@ class MemoryConfigStore {
 
   watch(): { dispose(): void } {
     return { dispose: () => undefined };
+  }
+}
+
+class MemorySecrets {
+  readonly values = new Map<string, string>();
+
+  async get(key: string): Promise<string | undefined> {
+    return this.values.get(key);
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    this.values.set(key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    this.values.delete(key);
   }
 }
 
@@ -298,6 +334,106 @@ describe('desktop settings IPC', () => {
     });
   });
 
+  it('loads desktop LaTeX tooling status instead of leaving the tab spinning', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      detectLatexSettingsStatus: async () => ({
+        outDir: true,
+        autoRevealExclude: true,
+        texDistributionInstalled: true,
+        latexWorkshopInstalled: false,
+        latexdiffInstalled: true,
+        latexindentInstalled: false,
+        texcountInstalled: true,
+        imageProcessingInstalled: false,
+        platform: 'darwin',
+        pdflatexPath: '/Library/TeX/texbin/pdflatex',
+        latexmkPath: '/Library/TeX/texbin/latexmk',
+        latexdiffPath: '/opt/homebrew/bin/latexdiff',
+        latexindentPath: null,
+        texcountPath: '/opt/homebrew/bin/texcount',
+        ghostscriptPath: null,
+        graphicsmagickPath: null,
+        packageManager: 'brew',
+      }),
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+      settings: expect.objectContaining({
+        platform: 'darwin',
+        texDistributionInstalled: true,
+        latexdiffInstalled: true,
+      }),
+    });
+  });
+
+  it('shows provider key rows and stores desktop API keys', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const secrets = new MemorySecrets();
+    const posted: unknown[] = [];
+    const infoMessages: string[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      secrets,
+      promptSecret: async () => '  sk-test  ',
+      showInfoMessage: async (message) => {
+        infoMessages.push(message);
+      },
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+      providerKeyStatuses: expect.arrayContaining([
+        expect.objectContaining({ provider: 'google', status: 'not-set' }),
+      ]),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+        provider: 'google',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(secrets.values.get('apiKey.google')).toBe('sk-test');
+    expect(infoMessages).toEqual(['Google API key has been set']);
+    expect(
+      posted.findLast(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+      ),
+    ).toMatchObject({
+      providerKeyStatuses: expect.arrayContaining([
+        expect.objectContaining({ provider: 'google', status: 'set' }),
+      ]),
+    });
+  });
+
   it('round-trips LaTeX config writes through workspace state and refreshes the renderer', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
@@ -483,6 +619,25 @@ describe('desktop settings IPC', () => {
           requiresSetup: false,
         },
       ],
+      detectLatexSettingsStatus: async () => ({
+        outDir: true,
+        autoRevealExclude: true,
+        texDistributionInstalled: false,
+        latexWorkshopInstalled: false,
+        latexdiffInstalled: false,
+        latexindentInstalled: false,
+        texcountInstalled: false,
+        imageProcessingInstalled: false,
+        platform: 'linux',
+        pdflatexPath: null,
+        latexmkPath: null,
+        latexdiffPath: null,
+        latexindentPath: null,
+        texcountPath: null,
+        ghostscriptPath: null,
+        graphicsmagickPath: null,
+        packageManager: null,
+      }),
       postToRenderer: (message) => posted.push(message),
     });
 
