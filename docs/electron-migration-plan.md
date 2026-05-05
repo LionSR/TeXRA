@@ -389,6 +389,7 @@ From the repository root:
 corepack pnpm install --frozen-lockfile
 npm run desktop:package:local
 npm run check:desktop-package
+npm run desktop:package:smoke
 ```
 
 On Apple Silicon macOS, the local app bundle is written to:
@@ -418,6 +419,10 @@ npm run build:initial
 
 That command builds the Electron desktop app and the VS Code extension package, then checks that the
 desktop build artifacts and `.vsix` are present.
+
+`npm run desktop:package:smoke` launches the packaged app briefly from the command line and fails on
+early exits, desktop startup failures, or runtime VS Code import errors. Set
+`TEXRA_DESKTOP_LAUNCH_SMOKE_MS` to change the default 8 second launch window.
 
 ---
 
