@@ -12,6 +12,11 @@ files:
     filter:
       - '**/*'
   - package.json
+extraResources:
+  - from: ../extension/resources
+    to: resources
+    filter:
+      - '**/*'
 mac:
   icon: build/icon.icns
   target:

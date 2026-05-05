@@ -34,16 +34,17 @@ import {
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
 import { delay } from '@utils/core';
-import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import {
   getWebSocketEnabled,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
+import { flexibleFS } from '@utils/files/flexibleFS';
+import type { FileLocation } from '@utils/files/taskRunStorage';
+import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 

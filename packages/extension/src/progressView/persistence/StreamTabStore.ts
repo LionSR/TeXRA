@@ -19,7 +19,7 @@
 
 import * as path from 'path';
 
-import { KVStore } from '@common/storage';
+import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 
 import type {

@@ -66,6 +66,18 @@ jobs:
       - name: Build initial extension and desktop artifacts
         run: pnpm run build:initial
 
+      - name: Package desktop app
+        if: runner.os == 'macOS'
+        run: pnpm run desktop:package:local
+
+      - name: Check desktop package
+        if: runner.os == 'macOS'
+        run: pnpm run check:desktop-package
+
+      - name: Smoke packaged desktop launch
+        if: runner.os == 'macOS'
+        run: pnpm run desktop:package:smoke
+
       - name: Smoke extension webviews in Electron
         if: runner.os == 'macOS'
         run: pnpm run smoke:webviews:run
