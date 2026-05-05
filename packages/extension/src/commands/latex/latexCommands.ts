@@ -15,6 +15,8 @@ import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { delay } from '@utils/core';
 
+import { getIndentTeXNotification } from './latexHousekeepingNotifications';
+
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
@@ -36,7 +38,7 @@ export function registerLatexCommands(context: vscode.ExtensionContext): void {
       latexCommands.getTeXCount,
       handleGetTeXCount,
     ),
-    vscode.commands.registerCommand(latexCommands.indentTeX, runIndentTeX),
+    vscode.commands.registerCommand(latexCommands.indentTeX, handleIndentTeX),
     vscode.commands.registerCommand(
       latexCommands.applyReplacements,
       handleApplyReplacements,
@@ -46,6 +48,25 @@ export function registerLatexCommands(context: vscode.ExtensionContext): void {
       handleFixCompilation,
     ),
   );
+}
+
+async function handleIndentTeX(): Promise<void> {
+  try {
+    const notification = getIndentTeXNotification(await runIndentTeX());
+    if (!notification) return;
+
+    if (notification.severity === 'error') {
+      await showLoggedErrorMessage(
+        CHANNEL,
+        notification.message,
+        notification.error,
+      );
+    } else {
+      await showLoggedMessage(CHANNEL, notification.message);
+    }
+  } catch (err) {
+    await showLoggedErrorMessage(CHANNEL, 'Error in indentTeX command', err);
+  }
 }
 
 async function handleFixCompilation(): Promise<void> {
