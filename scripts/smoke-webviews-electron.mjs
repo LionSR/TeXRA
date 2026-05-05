@@ -120,7 +120,11 @@ function runElectron(configPath) {
     'scripts',
     'smoke-webviews-electron-runner.cjs',
   );
-  const child = spawn(electronBinaryPath, ['--no-sandbox', runnerPath], {
+  const electronArgs =
+    process.env.TEXRA_WEBVIEW_SMOKE_NO_SANDBOX === '1'
+      ? ['--no-sandbox', runnerPath]
+      : [runnerPath];
+  const child = spawn(electronBinaryPath, electronArgs, {
     cwd: repoRoot,
     env: {
       ...process.env,

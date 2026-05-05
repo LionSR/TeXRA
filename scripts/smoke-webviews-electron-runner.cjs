@@ -6,6 +6,10 @@ const path = require('node:path');
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-dev-shm-usage');
 
+const RENDER_TIMEOUT_MS = Number(
+  process.env.TEXRA_WEBVIEW_SMOKE_TIMEOUT_MS ?? 10_000,
+);
+
 function normalizeConsoleMessage(levelOrDetails, message) {
   if (typeof levelOrDetails === 'object' && levelOrDetails !== null) {
     return {
@@ -28,16 +32,34 @@ function isConsoleError(level) {
 }
 
 async function waitForRenderedElement(window, tagName) {
+  const missingElementMessage = `Missing rendered element: ${tagName}`;
+  const timeoutMessage = `Timed out waiting for custom element: ${tagName}`;
   return window.webContents.executeJavaScript(
     `
       (async () => {
-        await customElements.whenDefined(${JSON.stringify(tagName)});
+        await Promise.race([
+          customElements.whenDefined(${JSON.stringify(tagName)}),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error(${JSON.stringify(timeoutMessage)})),
+              ${JSON.stringify(RENDER_TIMEOUT_MS)},
+            ),
+          ),
+        ]);
         const element = document.querySelector(${JSON.stringify(tagName)});
         if (!element) {
-          throw new Error('Missing rendered element: ${tagName}');
+          throw new Error(${JSON.stringify(missingElementMessage)});
         }
         if (element.updateComplete && typeof element.updateComplete.then === 'function') {
-          await element.updateComplete;
+          await Promise.race([
+            element.updateComplete,
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error(${JSON.stringify(timeoutMessage)})),
+                ${JSON.stringify(RENDER_TIMEOUT_MS)},
+              ),
+            ),
+          ]);
         }
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const rect = element.getBoundingClientRect();
@@ -62,9 +84,9 @@ function createSmokeWindow(errors) {
     show: false,
     webPreferences: {
       backgroundThrottling: false,
-      contextIsolation: false,
+      contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -90,7 +112,17 @@ function createSmokeWindow(errors) {
 async function smokeView(window, view, outputDir, errors) {
   errors.length = 0;
   await window.loadFile(view.htmlPath);
-  const result = await waitForRenderedElement(window, view.tagName);
+  let result;
+  try {
+    result = await waitForRenderedElement(window, view.tagName);
+  } catch (error) {
+    if (errors.length === 0) throw error;
+    throw new Error(
+      `${view.name} render failed: ${
+        error instanceof Error ? error.message : String(error)
+      }\n${errors.join('\n')}`,
+    );
+  }
   if (result.width <= 0 || result.height <= 0) {
     throw new Error(
       `${view.name} rendered with invalid bounds: ${result.width}x${result.height}`,
@@ -118,22 +150,18 @@ async function main() {
   }
 
   const config = JSON.parse(await readFile(configPath, 'utf8'));
+  if (!Array.isArray(config.views) || config.views.length === 0) {
+    throw new Error('At least one webview smoke target is required.');
+  }
   mkdirSync(config.outputDir, { recursive: true });
   const errors = [];
   const window = createSmokeWindow(errors);
-  const renderedViews = [];
   try {
     for (const view of config.views) {
       await smokeView(window, view, config.outputDir, errors);
-      renderedViews.push(view.name);
     }
   } finally {
     window.destroy();
-  }
-  if (renderedViews.length !== config.views.length) {
-    throw new Error(
-      `Rendered ${renderedViews.length} of ${config.views.length} webviews.`,
-    );
   }
 }
 
