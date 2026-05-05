@@ -18,6 +18,11 @@ export class SettingsViewContentProvider extends BaseViewContentProvider {
         'settingsView',
         'bundle.js',
       ]),
+      settingsStyleUri: this.buildUri(webview, [
+        'dist',
+        'settingsView',
+        'index.css',
+      ]),
     };
   }
 }
