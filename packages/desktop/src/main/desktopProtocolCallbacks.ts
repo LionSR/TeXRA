@@ -166,7 +166,8 @@ export function installDesktopProtocolCallbackLifecycle(
 
   app.on('open-url', (event, url) => {
     event.preventDefault();
-    if (router.routeUrl(url)) {
+    const didRoute = router.routeUrl(url);
+    if (didRoute || isDesktopProtocolUrl(url)) {
       options.focusMainWindow?.();
     }
   });
@@ -179,6 +180,14 @@ export function installDesktopProtocolCallbackLifecycle(
 function normalizeProtocolPath(url: URL): string {
   if (url.pathname && url.pathname !== '/') return url.pathname;
   return url.hostname ? `/${url.hostname}` : '';
+}
+
+function isDesktopProtocolUrl(rawUrl: string): boolean {
+  try {
+    return new URL(rawUrl).protocol === `${TEXRA_PROTOCOL}:`;
+  } catch {
+    return false;
+  }
 }
 
 function registerProtocolClient(options: InstallDesktopProtocolOptions): void {

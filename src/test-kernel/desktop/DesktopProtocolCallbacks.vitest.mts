@@ -194,6 +194,25 @@ describe('desktop protocol callbacks', () => {
     expect(focusMainWindow).toHaveBeenCalled();
   });
 
+  it('focuses the existing window for unsupported texra open-url events', () => {
+    const app = createFakeProtocolApp();
+    const focusMainWindow = vi.fn();
+    const lifecycle = installDesktopProtocolCallbackLifecycle({
+      app,
+      argv: [],
+      focusMainWindow,
+    });
+    const listener = vi.fn();
+    const event = { preventDefault: vi.fn() };
+    lifecycle.router.subscribe(listener);
+
+    app.listeners.openUrl?.(event, 'texra://texra-ai.texra/help');
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+    expect(focusMainWindow).toHaveBeenCalledTimes(1);
+  });
+
   it('quits when another desktop instance owns the protocol lifecycle', () => {
     const app = createFakeProtocolApp({
       requestSingleInstanceLock: vi.fn(() => false),
