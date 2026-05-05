@@ -4,7 +4,10 @@ import {
   isDesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
-import { createDesktopShellIpc } from './desktopShellIpc.js';
+import {
+  createDesktopShellIpc,
+  type DesktopShellActions,
+} from './desktopShellIpc.js';
 import {
   createDesktopViewStateIpc,
   type DesktopTheme,
@@ -23,6 +26,7 @@ export interface DesktopMainViewIpcOptions {
   fileSelection?: DesktopFileSelection;
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
+  shellActions?: DesktopShellActions;
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
@@ -54,6 +58,7 @@ export function installDesktopMainViewIpc(
     getTheme: options.getTheme,
   });
   const shell = createDesktopShellIpc(bridge, {
+    actions: options.shellActions,
     getCustomAgentDirectory: options.getCustomAgentDirectory,
     openPath: options.openPath,
     onAsyncError: options.onAsyncError,
