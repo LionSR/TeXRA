@@ -10,6 +10,7 @@ export { hasWorkspacePath } from '../../workspacePath.js';
 interface WorkspacePathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;
   argv?: readonly string[];
+  storedWorkspacePath?: string;
 }
 
 interface ResourcesPathOptions {
