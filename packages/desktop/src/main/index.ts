@@ -8,6 +8,7 @@ import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
+import { createDesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import {
   attachRendererConsoleLog,
   getDesktopLogDirectory,
@@ -140,6 +141,11 @@ function createWindow(options: { workspacePath: string | undefined }): void {
     },
     onError: reportAsyncError,
   });
+  const workspaceExplorer = createDesktopWorkspaceExplorer({
+    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    openPath,
+    onError: reportAsyncError,
+  });
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     sendStartupCatalogData: true,
@@ -216,6 +222,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   const mainViewIpc = installDesktopMainViewIpc(window, {
     executeAgent: (message) => agentExecution.handleExecute(message),
     fileSelection,
+    workspaceExplorer,
     settings: settingsIpc,
     progress: progressIpc,
     shellActions,
