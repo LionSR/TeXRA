@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
 import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import {
@@ -12,11 +13,14 @@ import {
   getDesktopLogDirectory,
 } from './desktopAppLog.js';
 import { installDesktopMenu } from './desktopMenu.js';
+import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
+import { buildDesktopSettingsTabMessage } from '../desktopCommandSurface.js';
+import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
@@ -139,6 +143,31 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     sendStartupCatalogData: true,
+    promptSecret: (input) =>
+      promptInRenderer(window, { ...input, password: true }),
+    promptText: (input) => promptInRenderer(window, input),
+    showInfoMessage: async (message) => {
+      await dialog.showMessageBox(window, { type: 'info', message });
+    },
+    showErrorMessage: async (message) => {
+      await dialog.showMessageBox(window, { type: 'error', message });
+    },
+    signIn: async () => {
+      await dialog.showMessageBox(window, {
+        type: 'info',
+        message:
+          'Researcher Access sign-in is not connected in this desktop build',
+        detail:
+          'Use Settings > Models to add a provider API key, or use the TeXRA VS Code extension for included-access sign-in while desktop auth is completed.',
+      });
+      ipcRef.current?.postToRenderer({
+        command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+        route: 'settings',
+      });
+      ipcRef.current?.postToRenderer(
+        buildDesktopSettingsTabMessage(SETTINGS_TAB.MODELS),
+      );
+    },
     selectCustomAgentDirectory: async () => {
       const result = await dialog.showOpenDialog(window, {
         title: 'Select Custom Agents Folder',
@@ -155,6 +184,13 @@ function createWindow(options: { workspacePath: string | undefined }): void {
       );
     },
     runToolCommand: async ({ command }) => {
+      await dialog.showMessageBox(window, {
+        type: 'info',
+        message: 'Run this setup command in a terminal',
+        detail: command,
+      });
+    },
+    runInstallCommand: async (command) => {
       await dialog.showMessageBox(window, {
         type: 'info',
         message: 'Run this setup command in a terminal',

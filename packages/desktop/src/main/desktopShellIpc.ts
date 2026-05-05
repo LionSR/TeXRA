@@ -160,6 +160,11 @@ export function createDesktopShellIpc(
         case MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS:
           actions.showSettings(SETTINGS_TAB.MODELS);
           return true;
+        case MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER:
+        case MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY:
+        case MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY:
+          actions.showSettings(SETTINGS_TAB.MODELS);
+          return true;
         case MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS:
           actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
           return true;
