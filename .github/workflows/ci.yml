@@ -139,6 +139,9 @@ jobs:
       - name: Package macOS desktop installers
         run: pnpm --filter @texra/desktop package:dist
 
+      - name: Check macOS packaged desktop app contents
+        run: pnpm run check:desktop-package
+
       - name: Check macOS desktop installer artifacts
         run: pnpm run check:desktop-installers
 
@@ -182,6 +185,9 @@ jobs:
 
       - name: Package Linux desktop installers
         run: pnpm --filter @texra/desktop package:dist
+
+      - name: Check Linux packaged desktop app contents
+        run: pnpm run check:desktop-package
 
       - name: Check Linux desktop installer artifacts
         run: pnpm run check:desktop-installers
@@ -232,6 +238,9 @@ jobs:
 
       - name: Package Windows desktop installer
         run: pnpm --filter @texra/desktop package:dist
+
+      - name: Check Windows packaged desktop app contents
+        run: pnpm run check:desktop-package
 
       - name: Check Windows desktop installer artifacts
         run: pnpm run check:desktop-installers
