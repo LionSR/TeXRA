@@ -17,6 +17,9 @@ import {
 const LEGACY_AGENT_FILES = [
   'agents/generic.yaml',
   'agents/generic_multiple.yaml',
+  'agents/correct_multiple.yaml',
+  'agents/polish_multiple.yaml',
+  'agents/merge_multiple.yaml',
   'agents/write/paper2cover.yaml',
   'agents/write/write_slide.yaml',
 ];

@@ -34,7 +34,6 @@ import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import {
   loadAgentSettingAndPrompts,
   ensureAgentCategoryForSource,
-  type AgentLoadOptions,
 } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
@@ -97,7 +96,7 @@ interface AgentLaunchContext extends AgentCore {
 
 export async function getAgentPath(
   agentIdentifier: string,
-  options?: AgentLoadOptions & { runtimeHost?: AgentRuntimeHost },
+  options?: { runtimeHost?: AgentRuntimeHost },
 ): Promise<ResolvedAgent> {
   const result = resolveAgent(agentIdentifier);
   if (result) return result;

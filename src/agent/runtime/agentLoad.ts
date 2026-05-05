@@ -75,12 +75,6 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   return yaml.parse(yamlContent);
 }
 
-/**
- * Options for loading agent definitions.
- * This is the unified options type for agent loading/resolution operations.
- */
-export interface AgentLoadOptions {}
-
 export function ensureAgentCategoryForSource<
   T extends { agentCategory?: AgentCategory },
 >(settings: T, source: AgentSource): T {
@@ -92,7 +86,6 @@ export function ensureAgentCategoryForSource<
 
 export async function loadAgentSettingAndPrompts(
   resolution: ResolvedAgent,
-  options?: AgentLoadOptions,
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
     const { entry } = resolution;
