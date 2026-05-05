@@ -56,7 +56,7 @@ prompts:
       </documents>
       {% else %}
       <documents>
-      <document name="{{ INPUT_FILE }}">
+      <document name="ocr_result.tex">
       {LATEX_OCR_CONTENT}
       </document>
       </documents>
@@ -80,7 +80,7 @@ prompts:
       </documents>
       {% else %}
       <documents>
-      <document name="{{ INPUT_FILE }}">
+      <document name="ocr_result.tex">
       {REFINED_LATEX_OCR_CONTENT}
       </document>
       </documents>

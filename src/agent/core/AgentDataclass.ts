@@ -70,6 +70,18 @@ function normalizeAgentSettingInput(input: unknown): unknown {
     rest.rounds = maxRounds;
   }
 
+  // Derive endTag from documentTag when endTag is not explicitly set.
+  // Mirror the same default as documentTag.prefault so legacy agents with a
+  // custom documentTag (e.g. 'latex_document') get '</${documentTag}>' rather
+  // than the unified default '</documents>'.
+  if (rest.endTag === undefined) {
+    const docTag =
+      typeof rest.documentTag === 'string' && rest.documentTag.length > 0
+        ? rest.documentTag
+        : 'documents';
+    rest.endTag = `</${docTag}>`;
+  }
+
   // Already has agentCategory - just strip legacy agentType if present
   if (rest.agentCategory !== undefined) {
     return rest;

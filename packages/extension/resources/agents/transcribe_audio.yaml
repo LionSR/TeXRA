@@ -57,7 +57,7 @@ prompts:
       </documents>
       {% else %}
       <documents>
-      <document name="{{ INPUT_FILE }}">
+      <document name="transcript.tex">
       [HH:MM:SS:MS] SpeakerName: INITIAL_TRANSCRIPT_WITH_SPEAKERS_AND_EQUATIONS
       </document>
       </documents>
@@ -85,7 +85,7 @@ prompts:
       </documents>
       {% else %}
       <documents>
-      <document name="{{ INPUT_FILE }}">
+      <document name="transcript.tex">
       [HH:MM:SS:MS] SpeakerName: REFINED_TRANSCRIPT_WITH_SECTIONS_SPEAKERS_AND_EQUATIONS
       </document>
       </documents>
