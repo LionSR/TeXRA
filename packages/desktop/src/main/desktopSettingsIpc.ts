@@ -9,10 +9,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import {
-  GlobalStateKey,
-  WorkspaceStateKey,
-} from '@common/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import {
   DEFAULT_MODELS,

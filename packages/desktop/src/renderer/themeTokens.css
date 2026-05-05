@@ -106,12 +106,8 @@
   --vscode-button-foreground: var(--texra-button-foreground);
   --vscode-button-border: var(--texra-button-border);
   --vscode-button-hoverBackground: var(--texra-button-hoverBackground);
-  --vscode-button-secondaryBackground: var(
-    --texra-button-secondaryBackground
-  );
-  --vscode-button-secondaryForeground: var(
-    --texra-button-secondaryForeground
-  );
+  --vscode-button-secondaryBackground: var(--texra-button-secondaryBackground);
+  --vscode-button-secondaryForeground: var(--texra-button-secondaryForeground);
   --vscode-button-secondaryHoverBackground: var(
     --texra-button-secondaryHoverBackground
   );
@@ -198,13 +194,9 @@
   --vscode-terminal-selectionBackground: var(
     --texra-terminal-selectionBackground
   );
-  --vscode-terminalCursor-foreground: var(
-    --texra-terminalCursor-foreground
-  );
+  --vscode-terminalCursor-foreground: var(--texra-terminalCursor-foreground);
   --vscode-scrollbar-shadow: var(--texra-scrollbar-shadow);
-  --vscode-scrollbarSlider-background: var(
-    --texra-scrollbarSlider-background
-  );
+  --vscode-scrollbarSlider-background: var(--texra-scrollbarSlider-background);
   --vscode-scrollbarSlider-hoverBackground: var(
     --texra-scrollbarSlider-hoverBackground
   );

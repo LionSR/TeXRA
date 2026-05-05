@@ -94,9 +94,7 @@ function getConsoleMessageDetails(
   };
 }
 
-function toConsoleLevel(
-  level: RendererConsoleMessage['level'],
-): ConsoleLevel {
+function toConsoleLevel(level: RendererConsoleMessage['level']): ConsoleLevel {
   switch (level) {
     case 'debug':
       return 'debug';
