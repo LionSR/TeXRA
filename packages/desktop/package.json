@@ -2,7 +2,12 @@
   "name": "@texra/desktop",
   "version": "0.37.8",
   "description": "TeXRA standalone desktop application",
-  "author": "TeXRA contributors",
+  "author": "TeXRA.ai <contact@texra.ai>",
+  "homepage": "https://texra.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/texra-ai/texra-issues.git"
+  },
   "private": true,
   "type": "module",
   "main": "./dist/main/index.js",
@@ -13,7 +18,8 @@
     "build:preload": "esbuild src/preload/index.ts --bundle --platform=node --format=cjs --outfile=dist/preload/index.cjs --external:electron",
     "build:renderer": "vite build --config vite.config.ts",
     "build": "corepack pnpm run typecheck && corepack pnpm run build:main && corepack pnpm run build:preload && corepack pnpm run build:renderer",
-    "package:dir": "corepack pnpm exec electron-builder --dir --config electron-builder.yml"
+    "package:dir": "corepack pnpm exec electron-builder --dir --config electron-builder.yml",
+    "package:dist": "corepack pnpm exec electron-builder --config electron-builder.yml --publish never"
   },
   "devDependencies": {
     "@texra/core": "workspace:*",
