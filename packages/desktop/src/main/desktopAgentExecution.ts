@@ -6,7 +6,6 @@ import {
 } from '@controllers/mainView/MainViewExecutionController';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
-import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -520,6 +519,8 @@ export function createDesktopAgentExecution(
         return;
       }
 
+      const { runValidatedExecutionRequest } =
+        await import('@agent/runtime/runExecutionRequest');
       await runValidatedExecutionRequest(preparation.request, {
         runtimeHost: progress.runtimeHost,
         openWorkflowOutput: async (result) => {
