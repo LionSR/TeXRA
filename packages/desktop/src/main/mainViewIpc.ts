@@ -21,8 +21,6 @@ import type { BrowserWindow } from 'electron';
 export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;
   getTheme?: () => DesktopTheme;
-  getCustomAgentDirectory?: () => Promise<string>;
-  openPath?: (filePath: string) => Promise<void>;
   fileSelection?: DesktopFileSelection;
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
@@ -59,8 +57,6 @@ export function installDesktopMainViewIpc(
   });
   const shell = createDesktopShellIpc(bridge, {
     actions: options.shellActions,
-    getCustomAgentDirectory: options.getCustomAgentDirectory,
-    openPath: options.openPath,
     onAsyncError: options.onAsyncError,
   });
   const execution = createDesktopExecutionIpc({
