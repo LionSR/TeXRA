@@ -4,6 +4,17 @@ import { JsonStore } from './jsonStore.js';
 import type { PlatformSecrets } from '@platform/secrets';
 
 type StoredSecret = { encrypted: true; value: string };
+type SecretStorageMode = 'encrypted' | 'basic_text' | 'unavailable';
+
+interface ElectronSecretsOptions {
+  showWarningMessage?: (message: string) => Promise<void> | void;
+}
+
+export const LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE =
+  'TeXRA cannot store secrets securely because Electron is using Linux basic_text storage. Set up a system keyring such as GNOME Keyring/libsecret or KWallet, then restart TeXRA. Environment variables still work for API keys.';
+
+const SAFE_STORAGE_UNAVAILABLE_MESSAGE =
+  'Electron safeStorage is unavailable for secret writes.';
 
 function isStoredSecret(value: unknown): value is StoredSecret {
   return (
@@ -15,7 +26,12 @@ function isStoredSecret(value: unknown): value is StoredSecret {
 }
 
 export class ElectronSecrets implements PlatformSecrets {
-  constructor(private readonly store: JsonStore) {}
+  private warnedAboutBasicText = false;
+
+  constructor(
+    private readonly store: JsonStore,
+    private readonly options: ElectronSecretsOptions = {},
+  ) {}
 
   /** Environment variables override persisted Electron secrets. */
   async get(key: string): Promise<string | undefined> {
@@ -28,25 +44,55 @@ export class ElectronSecrets implements PlatformSecrets {
   }
 
   async set(key: string, value: string): Promise<void> {
-    if (!isSafeStorageUsable()) {
-      throw new Error('Electron safeStorage is unavailable for secret writes.');
+    const storageMode = getSecretStorageMode();
+    switch (storageMode) {
+      case 'encrypted': {
+        const stored: StoredSecret = {
+          encrypted: true,
+          value: safeStorage.encryptString(value).toString('base64'),
+        };
+        await this.store.set(key, stored);
+        return;
+      }
+      case 'unavailable':
+        throw new Error(SAFE_STORAGE_UNAVAILABLE_MESSAGE);
+      case 'basic_text':
+        await this.warnAboutBasicTextStorage();
+        throw new Error(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE);
+      default:
+        assertNever(storageMode);
     }
-    const stored: StoredSecret = {
-      encrypted: true,
-      value: safeStorage.encryptString(value).toString('base64'),
-    };
-    await this.store.set(key, stored);
   }
 
   async delete(key: string): Promise<void> {
     await this.store.set(key, undefined);
   }
+
+  private async warnAboutBasicTextStorage(): Promise<void> {
+    if (this.warnedAboutBasicText) return;
+    this.warnedAboutBasicText = true;
+    try {
+      await this.options.showWarningMessage?.(
+        LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
+      );
+    } catch {
+      // Secret writes must still reject with the storage-policy error even if
+      // the warning dialog itself fails.
+    }
+  }
 }
 
-function isSafeStorageUsable(): boolean {
-  if (!safeStorage.isEncryptionAvailable()) return false;
-  return (
-    process.platform !== 'linux' ||
-    safeStorage.getSelectedStorageBackend() !== 'basic_text'
-  );
+export function getSecretStorageMode(): SecretStorageMode {
+  if (!safeStorage.isEncryptionAvailable()) return 'unavailable';
+  if (
+    process.platform === 'linux' &&
+    safeStorage.getSelectedStorageBackend() === 'basic_text'
+  ) {
+    return 'basic_text';
+  }
+  return 'encrypted';
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled Electron secret storage mode: ${value}`);
 }
