@@ -181,6 +181,30 @@
   --texra-symbolIcon-keywordForeground: light-dark(#8250df, #c586c0);
   --texra-symbolIcon-propertyForeground: var(--desktop-color-accent);
   --texra-symbolIcon-variableForeground: var(--desktop-color-input-foreground);
+
+  /*
+   * Web Awesome design-token bridge.
+   * WA components read --wa-*. The Electron renderer supplies its own desktop
+   * tokens (above), so this links them directly without going through --texra-*.
+   */
+  --wa-font-family-body: var(--desktop-font-family);
+  --wa-font-family-heading: var(--desktop-font-family);
+  --wa-font-size-m: var(--desktop-font-size);
+  --wa-font-weight-normal: var(--desktop-font-weight);
+
+  --wa-color-text-normal: var(--desktop-color-foreground);
+  --wa-color-text-quiet: var(--desktop-color-muted);
+  --wa-color-text-link: var(--desktop-color-accent);
+  --wa-color-surface-default: var(--desktop-color-background);
+  --wa-color-surface-raised: var(--desktop-color-sidebar);
+  --wa-color-surface-lowered: var(--desktop-color-sidebar-header);
+  --wa-color-surface-border: var(--desktop-color-border);
+
+  --wa-color-focus: var(--desktop-color-accent);
+
+  --wa-color-brand-fill-loud: var(--desktop-color-accent);
+  --wa-color-brand-on-loud: #ffffff;
+  --wa-color-brand-border-loud: transparent;
 }
 
 body.vscode-light,
@@ -227,6 +251,8 @@ body.texra-high-contrast {
   --texra-menu-selectionForeground: HighlightText;
   --texra-badge-foreground: HighlightText;
   --texra-contrastBorder: CanvasText;
+  --wa-color-brand-on-loud: HighlightText;
+  --wa-color-brand-border-loud: CanvasText;
 }
 
 /* Compatibility exports for reused VS Code webview CSS and @vscode-elements. */
