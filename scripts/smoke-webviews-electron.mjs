@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import process from 'node:process';
+import { formatExit, waitForExit } from './smoke-process-utils.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const extensionRoot = join(repoRoot, 'packages', 'extension');
@@ -120,7 +121,7 @@ async function prepareViewHtml(view) {
   };
 }
 
-function runElectron(configPath) {
+async function runElectron(configPath) {
   const electronBinaryPath = desktopRequire('electron');
   const runnerPath = join(
     repoRoot,
@@ -140,20 +141,10 @@ function runElectron(configPath) {
     stdio: 'inherit',
   });
 
-  return new Promise((resolve, reject) => {
-    child.on('error', reject);
-    child.on('exit', (code, signal) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(
-        new Error(
-          `Electron webview smoke failed with ${signal ?? `exit code ${code}`}.`,
-        ),
-      );
-    });
-  });
+  const exit = await waitForExit(child);
+  if (exit.code === 0) return;
+
+  throw new Error(`Electron webview smoke failed with ${formatExit(exit)}.`);
 }
 
 await rm(outputDir, { recursive: true, force: true });
