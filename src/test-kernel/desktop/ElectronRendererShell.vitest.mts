@@ -49,7 +49,7 @@ describe('desktop renderer shell', () => {
 
     expect(rendererMain).toContain('createDesktopCommandPalette');
     expect(rendererMain).toContain('data-command-palette-button');
-    expect(rendererMain).toContain('SETTINGS_VIEW_COMMANDS.SET_TAB');
+    expect(rendererMain).toContain('buildDesktopSettingsTabMessage');
     expect(rendererMain).toContain('showSettings: (tabIndex, agentSubTab)');
   });
 });
