@@ -18,6 +18,7 @@ type BuildDisplayFn = (
   location: FileLocation,
   options?: { preserveFocus?: boolean },
 ) => Promise<void>;
+export type { BuildDisplayFn };
 let openBuildDisplayIfTex: BuildDisplayFn = async () => {};
 /** Inject the VS Code LaTeX build+display function. Default: no-op. */
 export function setOpenBuildDisplay(fn: BuildDisplayFn): void {
