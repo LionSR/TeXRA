@@ -27,11 +27,15 @@ const fatalLogPatterns = [
   },
   {
     label: 'desktop startup failure',
-    pattern: /Failed to start TeXRA desktop/i,
+    pattern: /Failed to start TeXRA desktop|Fatal TeXRA desktop error/i,
   },
   {
     label: 'unhandled runtime exception',
     pattern: /Uncaught Exception|UnhandledPromiseRejection/i,
+  },
+  {
+    label: 'constructor startup failure',
+    pattern: /TypeError: .* is not a constructor/i,
   },
 ];
 
