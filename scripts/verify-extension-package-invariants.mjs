@@ -36,6 +36,7 @@ const MANIFEST_KEYS = [
 ];
 
 const REQUIRED_PACKAGED_PATHS = [
+  'LICENSE.txt',
   'resources/agents',
   'resources/docs/agent-creation',
   'resources/examples',
