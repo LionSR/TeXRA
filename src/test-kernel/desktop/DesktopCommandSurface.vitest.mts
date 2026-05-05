@@ -25,10 +25,7 @@ interface DesktopCommandSurfaceModule {
     role?: string;
     submenu?: DesktopMenuItem[];
   }>;
-  dispatchDesktopCommand(
-    id: string,
-    actions: DesktopCommandActions,
-  ): boolean;
+  dispatchDesktopCommand(id: string, actions: DesktopCommandActions): boolean;
   getDesktopCommandMenuEntries(
     ids?: readonly string[],
     platform?: NodeJS.Platform,
