@@ -1137,19 +1137,19 @@ Round 1 above defined the CLI as a thin Node shell over an already host-neutral 
 
 Round 2 lands six concrete deltas plus one cross-cutting kernel refactor that all three hosts (extension, desktop, CLI) benefit from. None of these change the round-1 LOC band by more than ~600 lines combined; most are about replacing ad-hoc patterns with the kernel-shaped abstractions the audit revealed are already partially in place.
 
-| Delta | Round 1 status | Round 2 position | New §  |
-| ----- | -------------- | ---------------- | ------ |
-| Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work | **v1 prereq for `texra mcp serve` and re-entrant SDK; v1.0 ships with the migration shim path** | §22 |
-| Structured logger with explicit context, no module globals | Hand-waved as "consoleLog plus filter wrapper" | **v1 deliverable; `LogBackend` interface widened to take a context object** | §23 |
-| `texra mcp serve` (callable from Claude Code, Codex, opencode) | Listed as v1.1 future | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)** | §24 |
-| Hook system (SessionStart, PreToolUse, PostToolUse, …) | Not mentioned | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner** | §25 |
-| Approval policy revisited (no 2D sandbox axis) | 1D `never|ask|auto-edits|auto|yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
-| Session transcripts as JSONL under project-hash sharding | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics** | §27 |
-| GitHub Action: composite + Bun (not JS Action) | §12 picked JS Action | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in** | §28 |
-| Cross-platform shared structure refactor (kernel side) | Implicit | **Explicit — what the three hosts share, what they don't, where the seams go** | §29 |
-| Container / GitHub-runner target matrix (slim, alpine, texlive) | Sketched in §12.3 | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues** | §30 |
-| Phase plan delta + LOC delta | — | **Aggregated** | §31 |
-| Parking lot — unified agent-SDK / message-SDK / context compaction | — | **Out of v1; sized in §32 for visibility** | §32 |
+| Delta                                                                         | Round 1 status                                       | Round 2 position                                                                                                | New §      |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------- | ---- | ----- | ---------------------------------------------------------------------------------------------------------------------------- | --- |
+| Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work                               | **v1 prereq for `texra mcp serve` and re-entrant SDK; v1.0 ships with the migration shim path**                 | §22        |
+| Structured logger with explicit context, no module globals                    | Hand-waved as "consoleLog plus filter wrapper"       | **v1 deliverable; `LogBackend` interface widened to take a context object**                                     | §23        |
+| `texra mcp serve` (callable from Claude Code, Codex, opencode)                | Listed as v1.1 future                                | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)**                   | §24        |
+| Hook system (SessionStart, PreToolUse, PostToolUse, …)                        | Not mentioned                                        | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner**           | §25        |
+| Approval policy revisited (no 2D sandbox axis)                                | 1D `never                                            | ask                                                                                                             | auto-edits | auto | yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
+| Session transcripts as JSONL under project-hash sharding                      | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics**                                 | §27        |
+| GitHub Action: composite + Bun (not JS Action)                                | §12 picked JS Action                                 | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in**      | §28        |
+| Cross-platform shared structure refactor (kernel side)                        | Implicit                                             | **Explicit — what the three hosts share, what they don't, where the seams go**                                  | §29        |
+| Container / GitHub-runner target matrix (slim, alpine, texlive)               | Sketched in §12.3                                    | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues** | §30        |
+| Phase plan delta + LOC delta                                                  | —                                                    | **Aggregated**                                                                                                  | §31        |
+| Parking lot — unified agent-SDK / message-SDK / context compaction            | —                                                    | **Out of v1; sized in §32 for visibility**                                                                      | §32        |
 
 The rest of round 2 is the spec for these deltas, in dependency order: §22 → §23 unblock §24 (an MCP server can't safely host concurrent sessions until the kernel's ambient state is gone); §24 + §25 + §26 are independent hosts on the new context; §27 + §28 + §29 + §30 are deployment / packaging concerns that don't gate kernel work.
 
@@ -1166,20 +1166,20 @@ The May 2026 runtime audit (in commit-time order, not severity) found:
 
 **Module-level `let X | undefined` + setter pairs (~20):**
 
-| Concern | Setter | File:line |
-| ------- | ------ | --------- |
-| Default progress sink | `setDefaultProgressSink` | `src/agent/runtime/ProgressSink.ts:14` |
-| Default runtime host | `setDefaultAgentRuntimeHost` | `src/agent/runtime/AgentRuntimeHost.ts:11` |
-| Run storage service | `setRunStorageService` | `src/agent/runtime/RunStorageService.ts:10` |
-| Tool-edit approval handler | `setToolEditApprovalHandler` | `src/tools/approval/toolEditApproval.ts:74,113` |
-| Latex-preview handler | `setLatexBuildDisplay` | `src/tools/approval/latexPreview.ts:21` |
-| GitHub token provider | `setGitHubTokenProvider` | `src/tools/github/githubAuth.ts:13` |
-| Extension checker | `setExtensionChecker` | `src/tools/externalToolDefs.ts:35` |
-| Server-side key service | `setServerSideKeyService` | `src/auth/serverKeys/index.ts:34` |
-| Tier service | `setTierService` | `src/auth/tier/index.ts:31` |
-| Auth callback resolver | `setExternalAuthCallbackResolver` | `src/auth/config.ts:183` |
-| Runtime extension id | `setRuntimeExtensionId` | `src/auth/config.ts:137` |
-| Output-channel factory (logger) | `setOutputChannelFactory` | `src/logger/logUtils.ts:108` |
+| Concern                         | Setter                            | File:line                                       |
+| ------------------------------- | --------------------------------- | ----------------------------------------------- |
+| Default progress sink           | `setDefaultProgressSink`          | `src/agent/runtime/ProgressSink.ts:14`          |
+| Default runtime host            | `setDefaultAgentRuntimeHost`      | `src/agent/runtime/AgentRuntimeHost.ts:11`      |
+| Run storage service             | `setRunStorageService`            | `src/agent/runtime/RunStorageService.ts:10`     |
+| Tool-edit approval handler      | `setToolEditApprovalHandler`      | `src/tools/approval/toolEditApproval.ts:74,113` |
+| Latex-preview handler           | `setLatexBuildDisplay`            | `src/tools/approval/latexPreview.ts:21`         |
+| GitHub token provider           | `setGitHubTokenProvider`          | `src/tools/github/githubAuth.ts:13`             |
+| Extension checker               | `setExtensionChecker`             | `src/tools/externalToolDefs.ts:35`              |
+| Server-side key service         | `setServerSideKeyService`         | `src/auth/serverKeys/index.ts:34`               |
+| Tier service                    | `setTierService`                  | `src/auth/tier/index.ts:31`                     |
+| Auth callback resolver          | `setExternalAuthCallbackResolver` | `src/auth/config.ts:183`                        |
+| Runtime extension id            | `setRuntimeExtensionId`           | `src/auth/config.ts:137`                        |
+| Output-channel factory (logger) | `setOutputChannelFactory`         | `src/logger/logUtils.ts:108`                    |
 
 **Exported singleton coordinators (3):**
 
@@ -1269,13 +1269,13 @@ Because the audit found ~30 sites that read singletons today, a hard cutover is 
 
 ### 22.5 Migration order (gated on, not blocking, CLI v1.0)
 
-| Round | Singletons retired | Files touched | Net LOC |
-| ----- | ------------------ | ------------- | ------- |
-| Pre-v1.0 | `runContextScope` lives at boundary; `runWithAgentRuntimeHost` reads it; new `Logger`/`progress` getters on context (§23) | `executeAgent.ts`, `runContext.ts` (new), `Logger.ts` (new) | +180 / -10 |
-| v1.0 | `planApprovalCoordinator`, `proposalCoordinator`, `retryCoordinator` become per-context instances created in `buildAgentLaunchContext()` | `Plan/Retry/AgentProposalCoordinator.ts`, ~5 call sites | +60 / -30 |
-| v1.1 (gates `texra mcp serve`) | `defaultProgressSink`, `defaultAgentRuntimeHost`, `runStorageService` singletons removed | `ProgressSink.ts`, `AgentRuntimeHost.ts`, `RunStorageService.ts` + ~40 reader sites | +0 / -120 |
-| v1.2 | `setToolEditApprovalHandler`, `setGitHubTokenProvider`, `setExtensionChecker`, `setLatexBuildDisplay` — replaced by `RunCapabilities` injection | `tools/{approval,github,externalToolDefs}/*` | +40 / -90 |
-| v1.3 | Auth singletons (`tierService`, `serverSideKeyService`) become per-`RunContext` resolutions backed by a kernel-side `AuthRegistry` | `auth/*` | +60 / -100 |
+| Round                          | Singletons retired                                                                                                                              | Files touched                                                                       | Net LOC    |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------- |
+| Pre-v1.0                       | `runContextScope` lives at boundary; `runWithAgentRuntimeHost` reads it; new `Logger`/`progress` getters on context (§23)                       | `executeAgent.ts`, `runContext.ts` (new), `Logger.ts` (new)                         | +180 / -10 |
+| v1.0                           | `planApprovalCoordinator`, `proposalCoordinator`, `retryCoordinator` become per-context instances created in `buildAgentLaunchContext()`        | `Plan/Retry/AgentProposalCoordinator.ts`, ~5 call sites                             | +60 / -30  |
+| v1.1 (gates `texra mcp serve`) | `defaultProgressSink`, `defaultAgentRuntimeHost`, `runStorageService` singletons removed                                                        | `ProgressSink.ts`, `AgentRuntimeHost.ts`, `RunStorageService.ts` + ~40 reader sites | +0 / -120  |
+| v1.2                           | `setToolEditApprovalHandler`, `setGitHubTokenProvider`, `setExtensionChecker`, `setLatexBuildDisplay` — replaced by `RunCapabilities` injection | `tools/{approval,github,externalToolDefs}/*`                                        | +40 / -90  |
+| v1.3                           | Auth singletons (`tierService`, `serverSideKeyService`) become per-`RunContext` resolutions backed by a kernel-side `AuthRegistry`              | `auth/*`                                                                            | +60 / -100 |
 
 Net: at v1.3 the kernel has zero `let X | undefined` + setter pairs in the agnostic zones, and ~250 LOC has been deleted on net. The CLI's `texra mcp serve` becomes safe at the v1.1 boundary; v1.0 ships with the shim.
 
@@ -1293,11 +1293,11 @@ The LangSmith #2274 issue is the canonical foot-gun: ALS context can be lost whe
 
 `src/logger/logUtils.ts` is a serviceable VS Code-shaped logger. It is also wrong for the CLI in three concrete ways:
 
-1. **`outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level state.** The audit finds exactly one setter in production code (`packages/extension/src/extension.ts`), but tests and an MCP-server mode that hosts concurrent runs cannot safely share these. The `setOutputChannelFactory(null)` reset disposes channels for *every* concurrent caller.
+1. **`outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level state.** The audit finds exactly one setter in production code (`packages/extension/src/extension.ts`), but tests and an MCP-server mode that hosts concurrent runs cannot safely share these. The `setOutputChannelFactory(null)` reset disposes channels for _every_ concurrent caller.
 2. **Group context lives in its own ALS (`contextStorage`, line 10), separate from the runtime host's ALS (`runtimeHostScope`, `AgentRuntimeHost.ts:12`).** A sub-agent that emits a log line passes through both scopes; the two are kept in sync by convention, not enforcement.
 3. **`writeLine` calls `getConfig('texra.logger.debugMode', false)` on every line (line 79).** That's fine in the extension where `getConfig` is a wrapped `vscode.workspace.getConfiguration`, but in the CLI before `initPlatform()` runs (which the audit shows happens for ~40 module-load-time `initialize()` calls), the config provider may not exist yet. Today's `tryPlatform()` fallback works because `getConfig` returns the default; in the CLI we want stricter guarantees that log lines emitted during boot don't silently lose their context.
 
-Plus a non-bug observation: the JSON / NDJSON renderer specced in round 1 §11.2 is a *separate* code path from the human renderer. Two formats, one schema is fine; two formats, two code paths is duplication waiting to bit-rot.
+Plus a non-bug observation: the JSON / NDJSON renderer specced in round 1 §11.2 is a _separate_ code path from the human renderer. Two formats, one schema is fine; two formats, two code paths is duplication waiting to bit-rot.
 
 ### 23.2 Shape
 
@@ -1334,11 +1334,11 @@ The host registers a single `LogSink` (renamed from `LogBackend` to make explici
 
 ```ts
 export interface LogRecord {
-  ts: string;             // ISO-8601 with millis
+  ts: string; // ISO-8601 with millis
   level: LogLevel;
   message: string;
   fields: LogFields;
-  groups: readonly string[];   // current group stack at emit time
+  groups: readonly string[]; // current group stack at emit time
 }
 
 export interface LogSink {
@@ -1349,14 +1349,14 @@ export interface LogSink {
 
 ### 23.3 What each host installs
 
-| Host       | Sink                                                                                            |
-| ---------- | ----------------------------------------------------------------------------------------------- |
-| Extension  | `VscodeOutputChannelSink` — writes formatted strings to `vscode.OutputChannel` (today's behavior). One channel per agent. |
-| Desktop    | `electronLogSink` over `electron-log` (Electron PRD §6.4); same channel-per-agent shape.        |
-| CLI headless | `StderrTextSink` — picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`. Also writes to `--log-file` if passed. |
-| CLI JSON   | `NdjsonStdoutSink` — one JSON object per line, schema-validated against `LogRecord`. **This is the same data path §11.2 specs as the event stream — log records and progress events share the JSON Lines envelope.** |
-| CLI MCP    | `McpProgressSink` — converts each record to an MCP `notifications/progress` payload bound to the request's progress token. Respects the client's progress-update opt-in. |
-| Tests      | `MemorySink` — pushes records into an array for assertion; auto-installed via `withRunContext()` in `vitest.setup.ts`. |
+| Host         | Sink                                                                                                                                                                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extension    | `VscodeOutputChannelSink` — writes formatted strings to `vscode.OutputChannel` (today's behavior). One channel per agent.                                                                                            |
+| Desktop      | `electronLogSink` over `electron-log` (Electron PRD §6.4); same channel-per-agent shape.                                                                                                                             |
+| CLI headless | `StderrTextSink` — picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`. Also writes to `--log-file` if passed.                                                                                       |
+| CLI JSON     | `NdjsonStdoutSink` — one JSON object per line, schema-validated against `LogRecord`. **This is the same data path §11.2 specs as the event stream — log records and progress events share the JSON Lines envelope.** |
+| CLI MCP      | `McpProgressSink` — converts each record to an MCP `notifications/progress` payload bound to the request's progress token. Respects the client's progress-update opt-in.                                             |
+| Tests        | `MemorySink` — pushes records into an array for assertion; auto-installed via `withRunContext()` in `vitest.setup.ts`.                                                                                               |
 
 ### 23.4 Rendering rules — round-1 §11 reconciled
 
@@ -1391,15 +1391,15 @@ The CLI emits ~3–5 log lines before `initPlatform()` returns (config layer loa
 
 ### 23.7 LOC accounting
 
-| Item | New | Modified | Deleted |
-| ---- | --- | -------- | ------- |
-| `packages/core/src/runtime/logger.ts` (new — interface + bootstrap logger + group helpers) | ~180 | — | — |
-| `packages/core/src/runtime/runContext.ts` (logger threaded as field) | (counted under §22) | — | — |
-| `src/logger/logUtils.ts` (kept for legacy callers; routes to new logger) | — | ~80 | — |
-| `src/logger/AgentLogger.ts`, `AgentUsageReporter.ts` (route through `ctx.log`) | — | ~40 | — |
-| Per-host sinks: `VscodeOutputChannelSink` (extension), `StderrTextSink` + `NdjsonStdoutSink` (CLI), `McpProgressSink` (CLI v1.1) | ~250 | — | — |
-| `texra config` exposes `logger.debugMode` via `ConfigProvider.watch()`; remove the per-write `getConfig` lookup | — | ~10 | ~5 |
-| **Subtotal** | **~430** | **~130** | **~5** |
+| Item                                                                                                                             | New                 | Modified | Deleted |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------- | ------- |
+| `packages/core/src/runtime/logger.ts` (new — interface + bootstrap logger + group helpers)                                       | ~180                | —        | —       |
+| `packages/core/src/runtime/runContext.ts` (logger threaded as field)                                                             | (counted under §22) | —        | —       |
+| `src/logger/logUtils.ts` (kept for legacy callers; routes to new logger)                                                         | —                   | ~80      | —       |
+| `src/logger/AgentLogger.ts`, `AgentUsageReporter.ts` (route through `ctx.log`)                                                   | —                   | ~40      | —       |
+| Per-host sinks: `VscodeOutputChannelSink` (extension), `StderrTextSink` + `NdjsonStdoutSink` (CLI), `McpProgressSink` (CLI v1.1) | ~250                | —        | —       |
+| `texra config` exposes `logger.debugMode` via `ConfigProvider.watch()`; remove the per-write `getConfig` lookup                  | —                   | ~10      | ~5      |
+| **Subtotal**                                                                                                                     | **~430**            | **~130** | **~5**  |
 
 This counts against §14's pre-refactor budget (~430 → ~860 with logger v2 added). Within the engineering-week envelope from §15 because §22 + §23 deliverables are the natural prerequisite for §24.
 
@@ -1417,9 +1417,9 @@ The user's framing — "to be callable by Claude Code and Codex etc" — is exac
   "mcpServers": {
     "texra": {
       "command": "texra",
-      "args": ["mcp", "serve"]
-    }
-  }
+      "args": ["mcp", "serve"],
+    },
+  },
 }
 ```
 
@@ -1438,11 +1438,11 @@ transport = "stdio"
 
 A minimum viable v1 surface — three tools, no resources, no prompts. Resources can come in v1.1 once we know what callers actually want.
 
-| MCP tool name | Backed by | Purpose |
-| ------------- | --------- | ------- |
-| `run_workflow` | `executeAgent({ category: "workflow", ... })` | Run a workflow agent (correct, polish, elevate, devise, criticize, merge, OCR, transcribe). Inputs: `agent`, `inputFile`, `outputFile`, `rounds?`, `model?`, `useMultiple?`. Output: `AgentFlowResult`. |
-| `run_chat` | `executeAgent({ category: "toolUse", ... })` | Run a tool-use agent (orchestrator, devise, search, generic). Inputs: `agent`, `instruction`, `cwd?`, `allowedTools?`, `disallowedTools?`. Output: streaming via `notifications/progress`; final `AgentFlowResult` on completion. |
-| `list_agents` | `getAgentsBySource()` from `@agent/index/agentRegistry` | Returns the agent catalog (id, category, description, source). Lets the calling agent decide what's safe to delegate. |
+| MCP tool name  | Backed by                                               | Purpose                                                                                                                                                                                                                           |
+| -------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run_workflow` | `executeAgent({ category: "workflow", ... })`           | Run a workflow agent (correct, polish, elevate, devise, criticize, merge, OCR, transcribe). Inputs: `agent`, `inputFile`, `outputFile`, `rounds?`, `model?`, `useMultiple?`. Output: `AgentFlowResult`.                           |
+| `run_chat`     | `executeAgent({ category: "toolUse", ... })`            | Run a tool-use agent (orchestrator, devise, search, generic). Inputs: `agent`, `instruction`, `cwd?`, `allowedTools?`, `disallowedTools?`. Output: streaming via `notifications/progress`; final `AgentFlowResult` on completion. |
+| `list_agents`  | `getAgentsBySource()` from `@agent/index/agentRegistry` | Returns the agent catalog (id, category, description, source). Lets the calling agent decide what's safe to delegate.                                                                                                             |
 
 All three accept an optional `runId` so the caller can correlate progress notifications. Approval policy is forced to `never` by default in MCP mode (no TTY for prompts) — callers wanting bash/edit auto-approval pass `approvalPolicy: "yolo"` explicitly, exactly as round 1 §9 specifies for headless mode.
 
@@ -1459,7 +1459,7 @@ stdio JSON-RPC 2.0, one process per client connection, exactly the Claude Code /
 
 ### 24.4 Permission propagation
 
-The MCP client (Claude Code, Codex, etc.) is itself a permission boundary. TeXRA's MCP-server mode trusts the client to have already obtained user approval for the *call* (e.g., Claude Code asked the user "let texra__run_polish run?"). What TeXRA still owns is what the *agent inside* TeXRA does — the bash and edit gates inside a `run_chat` orchestrator session.
+The MCP client (Claude Code, Codex, etc.) is itself a permission boundary. TeXRA's MCP-server mode trusts the client to have already obtained user approval for the _call_ (e.g., Claude Code asked the user "let texra\_\_run_polish run?"). What TeXRA still owns is what the _agent inside_ TeXRA does — the bash and edit gates inside a `run_chat` orchestrator session.
 
 Three policies for those inner gates, selected by tool argument:
 
@@ -1485,14 +1485,14 @@ Three policies for those inner gates, selected by tool argument:
 
 ### 24.6 LOC
 
-| Item | New | Modified |
-| ---- | --- | -------- |
-| `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising) | ~120 | — |
-| `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts` | ~250 | — |
-| `packages/cli/src/mcp/sinks/McpProgressSink.ts` (also used by Logger v2 §23.3) | ~80 | — |
-| `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch) | — | ~30 |
-| `packages/cli/src/commands/mcp.ts` (`texra mcp serve`) | ~40 | — |
-| **Subtotal** | **~490** | **~30** |
+| Item                                                                           | New      | Modified |
+| ------------------------------------------------------------------------------ | -------- | -------- |
+| `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising)    | ~120     | —        |
+| `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts`               | ~250     | —        |
+| `packages/cli/src/mcp/sinks/McpProgressSink.ts` (also used by Logger v2 §23.3) | ~80      | —        |
+| `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch)             | —        | ~30      |
+| `packages/cli/src/commands/mcp.ts` (`texra mcp serve`)                         | ~40      | —        |
+| **Subtotal**                                                                   | **~490** | **~30**  |
 
 ## 25. Hook system (Claude Code-style)
 
@@ -1510,8 +1510,12 @@ Hook contracts are easy to bolt on later in theory and a nightmare in practice �
 // hook input on stdin
 {
   "hookEventName": "PreToolUse",
-  "session": { "id": "ses_abc123", "cwd": "/path/to/project", "agent": "orchestrator" },
-  "tool": { "name": "bash", "input": { "command": "rm -rf /" } }
+  "session": {
+    "id": "ses_abc123",
+    "cwd": "/path/to/project",
+    "agent": "orchestrator",
+  },
+  "tool": { "name": "bash", "input": { "command": "rm -rf /" } },
 }
 ```
 
@@ -1520,8 +1524,8 @@ Hook contracts are easy to bolt on later in theory and a nightmare in practice �
 {
   "hookSpecificOutput": {
     "permissionDecision": "deny",
-    "reason": "rm -rf is not allowed in this project"
-  }
+    "reason": "rm -rf is not allowed in this project",
+  },
 }
 ```
 
@@ -1529,17 +1533,17 @@ Hook contracts are easy to bolt on later in theory and a nightmare in practice �
 
 ### 25.3 Where hooks fire
 
-| Event | Fires from | RunContext field |
-| ----- | ---------- | ---------------- |
-| `SessionStart` | `executeAgent.ts` after `buildAgentLaunchContext` | `runId`, `streamId`, `cwd` |
-| `UserPromptSubmit` | Tool-use REPL on each user submit | `runId`, `instruction` |
-| `PreToolUse` | `requestToolEditApproval`, `requestBashApproval`, generic tool dispatch | `runId`, `tool.name`, `tool.input` |
-| `PostToolUse` | Tool dispatch after result | `runId`, `tool.name`, `tool.result.summary` |
-| `Stop` | `executeAgent` finalizer | `runId`, `result.status` |
-| `SubagentStop` | Delegation child completion | `runId`, `parentStreamId`, `childStreamId`, `result` |
-| `Notification` | Any `requestShowError` / `requestShowInstruction` emission | `runId`, `message` |
-| `PreCompact` / `PostCompact` | (Future, §32 — context compaction) | `runId`, `compactionStats` |
-| `PermissionRequest` | The same gate `PreToolUse` covers, but specifically for the approval gates §9 lists | Same as `PreToolUse` plus `gate: "edit"|"bash"|"plan"|"proposal"|"retry"` |
+| Event                        | Fires from                                                                          | RunContext field                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- | ------ | ------ | ---------- | -------- |
+| `SessionStart`               | `executeAgent.ts` after `buildAgentLaunchContext`                                   | `runId`, `streamId`, `cwd`                           |
+| `UserPromptSubmit`           | Tool-use REPL on each user submit                                                   | `runId`, `instruction`                               |
+| `PreToolUse`                 | `requestToolEditApproval`, `requestBashApproval`, generic tool dispatch             | `runId`, `tool.name`, `tool.input`                   |
+| `PostToolUse`                | Tool dispatch after result                                                          | `runId`, `tool.name`, `tool.result.summary`          |
+| `Stop`                       | `executeAgent` finalizer                                                            | `runId`, `result.status`                             |
+| `SubagentStop`               | Delegation child completion                                                         | `runId`, `parentStreamId`, `childStreamId`, `result` |
+| `Notification`               | Any `requestShowError` / `requestShowInstruction` emission                          | `runId`, `message`                                   |
+| `PreCompact` / `PostCompact` | (Future, §32 — context compaction)                                                  | `runId`, `compactionStats`                           |
+| `PermissionRequest`          | The same gate `PreToolUse` covers, but specifically for the approval gates §9 lists | Same as `PreToolUse` plus `gate: "edit"              | "bash" | "plan" | "proposal" | "retry"` |
 
 ### 25.4 Configuration
 
@@ -1592,20 +1596,17 @@ Round 2's first draft proposed adopting Codex's `approval_policy × sandbox_mode
 
 The reasons it's the right call:
 
-1. **Codex's `sandbox_mode` solves a problem we don't have.** Codex sandbox modes wrap *all* agent file/network access in an OS-level sandbox (Seatbelt on macOS, Landlock on Linux). TeXRA today doesn't sandbox — its tools call `executeCommand` (`@utils/system/execUtils`) and `nodeFilesystem` directly. Adding a real OS sandbox is a 4–6 engineering-week project of its own and orthogonal to the CLI shell.
-2. **Surface-level "in-project / outside-project" distinction is enough for v1.** Round 1 §9.2 already says "in-project" auto-approves under `auto`/`auto-edits`, "outside-project" prompts. That's where 90% of the value is. The remaining 10% is "I want a true OS sandbox," which the desktop's macOS App Sandbox / Windows AppContainer / Linux unprivileged-namespaces story will eventually solve in a host-uniform way — *not* a CLI-only knob.
+1. **Codex's `sandbox_mode` solves a problem we don't have.** Codex sandbox modes wrap _all_ agent file/network access in an OS-level sandbox (Seatbelt on macOS, Landlock on Linux). TeXRA today doesn't sandbox — its tools call `executeCommand` (`@utils/system/execUtils`) and `nodeFilesystem` directly. Adding a real OS sandbox is a 4–6 engineering-week project of its own and orthogonal to the CLI shell.
+2. **Surface-level "in-project / outside-project" distinction is enough for v1.** Round 1 §9.2 already says "in-project" auto-approves under `auto`/`auto-edits`, "outside-project" prompts. That's where 90% of the value is. The remaining 10% is "I want a true OS sandbox," which the desktop's macOS App Sandbox / Windows AppContainer / Linux unprivileged-namespaces story will eventually solve in a host-uniform way — _not_ a CLI-only knob.
 3. **A 2D matrix doubles the test surface and doubles the doc surface.** The mental load — "if I pass `--approval-policy auto --sandbox workspace-write` what happens to bash that touches `/tmp`?" — is exactly the friction users complained about with Codex's first iteration.
 
-### 26.2 What round 2 *does* sharpen
+### 26.2 What round 2 _does_ sharpen
 
 Round 1 §9.2 says "in-project means the candidate file/cwd is inside the resolved workspace path." Round 2 specifies the predicate concretely so the kernel and the CLI agree:
 
 ```ts
 // packages/core/src/runtime/approvalPredicates.ts (new — ~40 LOC)
-export function isInProject(
-  candidate: string,
-  workspaceRoot: string,
-): boolean {
+export function isInProject(candidate: string, workspaceRoot: string): boolean {
   const candidateAbs = path.resolve(candidate);
   const rootAbs = path.resolve(workspaceRoot);
   const rel = path.relative(rootAbs, candidateAbs);
@@ -1624,7 +1625,7 @@ Edge cases the predicate handles explicitly:
 
 Bash is harder than file paths — "auto-approve when in-project" doesn't make sense for `rm -rf $HOME`. Round 1 punted on this. Round 2 spec:
 
-- `auto` policy auto-approves bash *only* when the resolved cwd is in-project AND the command's argv[0] is in a built-in safe list. The safe list is small and conservative: `ls`, `cat`, `head`, `tail`, `wc`, `find` (read-only flags only), `grep`, `rg`, `git status`, `git diff`, `git log`, `pdflatex`, `latexmk`, `pandoc`, `texcount`. Editable per-project via `approval.allowedBash` in config (round 1 §9.4).
+- `auto` policy auto-approves bash _only_ when the resolved cwd is in-project AND the command's argv[0] is in a built-in safe list. The safe list is small and conservative: `ls`, `cat`, `head`, `tail`, `wc`, `find` (read-only flags only), `grep`, `rg`, `git status`, `git diff`, `git log`, `pdflatex`, `latexmk`, `pandoc`, `texcount`. Editable per-project via `approval.allowedBash` in config (round 1 §9.4).
 - Any redirect to `/`, any unquoted variable, any `&&` / `||` / `|` chain that contains a non-listed command → falls back to `ask` even under `auto`.
 - `yolo` short-circuits all of this; `never` always denies.
 
@@ -1687,13 +1688,13 @@ The existing `~/.texra/global-storage/<workspace>/runs/` layout stays for one re
 
 ### 27.6 LOC
 
-| Item | New | Modified |
-| ---- | --- | -------- |
-| `packages/core/src/storage/sessionStore.ts` (new — JSONL writer + reader, project-hash util) | ~200 | — |
-| `packages/core/src/storage/sessionMigration.ts` (legacy → new) | ~80 | — |
-| `cli/src/commands/resume.ts` (consumes sessionStore directly) | — | ~30 |
-| `cli/src/commands/run.ts` (`--continue`, `--fork-session` flags) | — | ~20 |
-| **Subtotal** | **~280** | **~50** |
+| Item                                                                                         | New      | Modified |
+| -------------------------------------------------------------------------------------------- | -------- | -------- |
+| `packages/core/src/storage/sessionStore.ts` (new — JSONL writer + reader, project-hash util) | ~200     | —        |
+| `packages/core/src/storage/sessionMigration.ts` (legacy → new)                               | ~80      | —        |
+| `cli/src/commands/resume.ts` (consumes sessionStore directly)                                | —        | ~30      |
+| `cli/src/commands/run.ts` (`--continue`, `--fork-session` flags)                             | —        | ~20      |
+| **Subtotal**                                                                                 | **~280** | **~50**  |
 
 ## 28. GitHub Action revisited — composite + Bun, not JS
 
@@ -1718,7 +1719,8 @@ inputs:
   output: { description: 'Output file path', required: false }
   rounds: { description: 'Workflow rounds', required: false, default: '1' }
   model: { description: 'Model name', required: false }
-  approval-policy: { description: 'never|ask|auto-edits|auto|yolo', default: 'never' }
+  approval-policy:
+    { description: 'never|ask|auto-edits|auto|yolo', default: 'never' }
   texra-version: { description: 'Pinned CLI version', default: 'latest' }
   output-format: { description: 'text|json|ndjson', default: 'ndjson' }
 outputs:
@@ -1784,9 +1786,9 @@ runs:
 
 ### 28.4 Updated round-1 §6 decision
 
-| #   | Concern                | Round 1 pick      | Round 2 pick |
-| --- | ---------------------- | ----------------- | ------------ |
-| 9   | GitHub Action          | JS Action         | **Composite action + Bun runner; install CLI from npm at run time** |
+| #   | Concern       | Round 1 pick | Round 2 pick                                                        |
+| --- | ------------- | ------------ | ------------------------------------------------------------------- |
+| 9   | GitHub Action | JS Action    | **Composite action + Bun runner; install CLI from npm at run time** |
 
 No other round-1 picks change.
 
@@ -1829,23 +1831,23 @@ These are the shared concrete impls that any Node host gets for free. Adding a n
 
 Per-host code is everything that imports a host SDK or interacts with a host's surface. Crisp rule: **the host package's `src/` is allowed to import `vscode` / `electron` / `commander` / Ink, and nothing under `core/` is**.
 
-| Host | Owns | Doesn't own |
-| ---- | ---- | ----------- |
+| Host      | Owns                                                                                                                            | Doesn't own                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | Extension | `vscode.commands`, webview hosts, `frontend/vscode/*`, controllers wired to webview message handlers, `VscodeOutputChannelSink` | The agent runtime (in core); coordinators (in core) |
-| Desktop | Electron `main`, preload bridges, BrowserWindow lifecycle, `electronLogSink`, packaging | Same |
-| CLI | `commander` parsing, Ink TUI, `texra mcp serve`, `StderrTextSink`, `NdjsonStdoutSink`, hook command-runner | Same |
+| Desktop   | Electron `main`, preload bridges, BrowserWindow lifecycle, `electronLogSink`, packaging                                         | Same                                                |
+| CLI       | `commander` parsing, Ink TUI, `texra mcp serve`, `StderrTextSink`, `NdjsonStdoutSink`, hook command-runner                      | Same                                                |
 
 ### 29.4 The host-port catalog (consolidated)
 
 Round 1 §4.1 lists the host ports already landed (`PromptHost`, `ExternalOpener`, etc.). Round 2 adds:
 
-| Port | Added in | Implementations |
-| ---- | -------- | --------------- |
-| `LogSink` | §23.2 | `VscodeOutputChannelSink`, `electronLogSink`, `StderrTextSink`, `NdjsonStdoutSink`, `McpProgressSink`, `MemorySink` |
-| `HookHost` | §25.6 | `CommandHookHost` (CLI), `NoopHookHost` (extension/desktop v1.0) |
-| `SessionStore` | §27.6 | `JsonlSessionStore` (shared across all Node hosts; extension uses storage path under `globalStorageUri`) |
+| Port           | Added in | Implementations                                                                                                     |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `LogSink`      | §23.2    | `VscodeOutputChannelSink`, `electronLogSink`, `StderrTextSink`, `NdjsonStdoutSink`, `McpProgressSink`, `MemorySink` |
+| `HookHost`     | §25.6    | `CommandHookHost` (CLI), `NoopHookHost` (extension/desktop v1.0)                                                    |
+| `SessionStore` | §27.6    | `JsonlSessionStore` (shared across all Node hosts; extension uses storage path under `globalStorageUri`)            |
 
-All ports live in `packages/core/src/hosts/`. The `Platform` interface from `src/platform/platform.ts` stays the same — those are the *infrastructure* services (config, fs, secrets); ports are the *interaction* services. They're not the same thing and they should not merge.
+All ports live in `packages/core/src/hosts/`. The `Platform` interface from `src/platform/platform.ts` stays the same — those are the _infrastructure_ services (config, fs, secrets); ports are the _interaction_ services. They're not the same thing and they should not merge.
 
 ### 29.5 What this saves
 
@@ -1857,13 +1859,13 @@ The refactor isn't free — it's ~150 LOC of `index.ts` re-exports + ESLint rule
 
 ### 29.6 LOC
 
-| Item | New | Modified | Deleted |
-| ---- | --- | -------- | ------- |
-| Reorg of `packages/core/src/` into `agent/` (R1), `runtime/` (R2), `platform/` (R3) — mostly `git mv` | — | ~10 (re-export files) | — |
-| ESLint `no-cross-ring-imports` rule | ~40 | — | — |
-| `core/hosts/index.ts` re-export catalog | ~30 | — | — |
-| `core/runtime/index.ts` re-export | ~20 | — | — |
-| **Subtotal** | **~90** | **~10** | — |
+| Item                                                                                                  | New     | Modified              | Deleted |
+| ----------------------------------------------------------------------------------------------------- | ------- | --------------------- | ------- |
+| Reorg of `packages/core/src/` into `agent/` (R1), `runtime/` (R2), `platform/` (R3) — mostly `git mv` | —       | ~10 (re-export files) | —       |
+| ESLint `no-cross-ring-imports` rule                                                                   | ~40     | —                     | —       |
+| `core/hosts/index.ts` re-export catalog                                                               | ~30     | —                     | —       |
+| `core/runtime/index.ts` re-export                                                                     | ~20     | —                     | —       |
+| **Subtotal**                                                                                          | **~90** | **~10**               | —       |
 
 Mostly mechanical; no rewrites of business logic.
 
@@ -1878,18 +1880,18 @@ Round 1 §12.3 listed five containers as "verified to run." The survey turns up 
 
 ### 30.2 Updated matrix
 
-| Image / runner | Tier | Notes |
-| -------------- | ---- | ----- |
-| `ubuntu-22.04` (default GitHub runner) | First-class | Node 20 preinstalled. CI matrix runs full E2E here. |
-| `ubuntu-24.04` | First-class | Same. Recommended once GHA's default flips. |
-| `macos-14` (GitHub-hosted M-series) | First-class | E2E runs here for keyring path coverage. |
-| `windows-latest` | First-class | E2E runs here for path-handling coverage. |
-| `node:20-bookworm-slim` | First-class | Recommended self-hosted/container. ~80 MB. |
-| `node:20-bookworm` | First-class | Same plus build tools. ~150 MB. |
-| `texlive/texlive:latest` | First-class | TeXRA's primary integration container. Adds Node 20 via `apt-get install nodejs npm`. |
-| `mcr.microsoft.com/devcontainers/typescript-node:20` | First-class | Dev container; smoke-tested in Phase 0. |
-| `node:20-alpine` | Best-effort | Keyring fallback to file. Bun unavailable. Documented in §10.3. |
-| `gitpod/workspace-full` | Best-effort | Smoke-tested but not in CI matrix. |
+| Image / runner                                       | Tier        | Notes                                                                                 |
+| ---------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------- |
+| `ubuntu-22.04` (default GitHub runner)               | First-class | Node 20 preinstalled. CI matrix runs full E2E here.                                   |
+| `ubuntu-24.04`                                       | First-class | Same. Recommended once GHA's default flips.                                           |
+| `macos-14` (GitHub-hosted M-series)                  | First-class | E2E runs here for keyring path coverage.                                              |
+| `windows-latest`                                     | First-class | E2E runs here for path-handling coverage.                                             |
+| `node:20-bookworm-slim`                              | First-class | Recommended self-hosted/container. ~80 MB.                                            |
+| `node:20-bookworm`                                   | First-class | Same plus build tools. ~150 MB.                                                       |
+| `texlive/texlive:latest`                             | First-class | TeXRA's primary integration container. Adds Node 20 via `apt-get install nodejs npm`. |
+| `mcr.microsoft.com/devcontainers/typescript-node:20` | First-class | Dev container; smoke-tested in Phase 0.                                               |
+| `node:20-alpine`                                     | Best-effort | Keyring fallback to file. Bun unavailable. Documented in §10.3.                       |
+| `gitpod/workspace-full`                              | Best-effort | Smoke-tested but not in CI matrix.                                                    |
 
 ### 30.3 Local-development "callable from Claude Code / Codex" verification
 
@@ -1907,13 +1909,13 @@ The same test pattern with `@openai/codex` covers the Codex path. ~120 LOC of te
 
 To make GitHub-Actions ephemerality explicit (and prevent secrets leaking via uploaded artifacts), every file path the CLI writes is documented with a default and an env override:
 
-| Concern | Default (linux) | Env override | Allowed in CI artifact upload? |
-| ------- | --------------- | ------------ | ------------------------------ |
-| Config | `~/.config/texra/config.yaml` | `TEXRA_CONFIG_DIR` | No — may contain endpoint URLs. |
-| Secrets fallback | `~/.texra/secrets.json` (chmod 0600) | `TEXRA_DATA_DIR` | **Never** — explicit gitignore + `.actignore` patterns. |
-| Session JSONL | `~/.texra/projects/<hash>/sessions/<id>.jsonl` | `TEXRA_DATA_DIR` | Yes if `--allow-session-upload` (false by default). Inputs/outputs are paths, not content; safe. |
-| Runtime cache | `~/.cache/texra/` | `TEXRA_CACHE_DIR` | Yes; non-sensitive (downloaded model schemas, agent registry). |
-| Logs (`--log-file`) | User-specified | — | User-controlled — they pick. |
+| Concern             | Default (linux)                                | Env override       | Allowed in CI artifact upload?                                                                   |
+| ------------------- | ---------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------ |
+| Config              | `~/.config/texra/config.yaml`                  | `TEXRA_CONFIG_DIR` | No — may contain endpoint URLs.                                                                  |
+| Secrets fallback    | `~/.texra/secrets.json` (chmod 0600)           | `TEXRA_DATA_DIR`   | **Never** — explicit gitignore + `.actignore` patterns.                                          |
+| Session JSONL       | `~/.texra/projects/<hash>/sessions/<id>.jsonl` | `TEXRA_DATA_DIR`   | Yes if `--allow-session-upload` (false by default). Inputs/outputs are paths, not content; safe. |
+| Runtime cache       | `~/.cache/texra/`                              | `TEXRA_CACHE_DIR`  | Yes; non-sensitive (downloaded model schemas, agent registry).                                   |
+| Logs (`--log-file`) | User-specified                                 | —                  | User-controlled — they pick.                                                                     |
 
 Documented as `texra config path` output for fast diagnosis from `texra doctor`.
 
@@ -1923,24 +1925,24 @@ Documented as `texra config path` output for fast diagnosis from `texra doctor`.
 
 Round 2 adds new work into existing phases plus one new phase (Phase 1.5) for the MCP-server surface. Phases 0, 2, 3, 4, 5 from round 1 keep their scope; Phase 1 absorbs §22 + §23 + §26 (all kernel-side, all on the critical path for tool-use agents).
 
-| Phase | Round-1 scope | Round-2 additions |
-| ----- | ------------- | ----------------- |
-| 0 | Workspace + headless workflow runner | + `RunContext` shim + Ring 1/2/3 reorg (§22.5 pre-v1, §29) |
-| 1 | Tool-use + approval engine | + per-context coordinators (§22.5 v1.0) + Logger v2 (§23) + bash predicate (§26.3) |
-| 1.5 (new) | — | `texra mcp serve` v1.0 surface (§24.5) + integration test (§30.3) |
-| 2 | Config + secrets + auth | unchanged |
-| 3 | Interactive REPL | unchanged |
-| 4 | GitHub Action | composite-action revision (§28) |
-| 5 | Polish, docs | + JSONL session migration (§27.5) + hook system v1 (§25.5) |
+| Phase     | Round-1 scope                        | Round-2 additions                                                                  |
+| --------- | ------------------------------------ | ---------------------------------------------------------------------------------- |
+| 0         | Workspace + headless workflow runner | + `RunContext` shim + Ring 1/2/3 reorg (§22.5 pre-v1, §29)                         |
+| 1         | Tool-use + approval engine           | + per-context coordinators (§22.5 v1.0) + Logger v2 (§23) + bash predicate (§26.3) |
+| 1.5 (new) | —                                    | `texra mcp serve` v1.0 surface (§24.5) + integration test (§30.3)                  |
+| 2         | Config + secrets + auth              | unchanged                                                                          |
+| 3         | Interactive REPL                     | unchanged                                                                          |
+| 4         | GitHub Action                        | composite-action revision (§28)                                                    |
+| 5         | Polish, docs                         | + JSONL session migration (§27.5) + hook system v1 (§25.5)                         |
 
 ### 31.2 Aggregate LOC
 
-| Bucket | Round-1 net | Round-2 additions | Round-2 total |
-| ------ | ----------- | ----------------- | ------------- |
-| `packages/cli/` | 2,800–3,800 | +730 (MCP §24.6, hooks adapter §25, sessions §27.6, sandbox-removed §26 ≈ 0) | **3,530–4,530** |
-| `packages/core/` (CLI pre-refactors) | ~730 | +940 (RunContext §22 net ~+170, Logger v2 §23 ~+430, HookHost §25.6 ~+140, sessionStore §27.6 ~+200, ring re-exports §29.6 ~+90, approval predicates §26 ~+80, minus overlap with Logger) | **~1,670** |
-| `texra-ai/texra-action` (separate repo) | ~800 | -300 (no JS shim; YAML composite + small TS for the high-level action only) | **~500** |
-| **Total v1** | **~4,330–5,330** | **+~1,370** | **~5,700–6,700** |
+| Bucket                                  | Round-1 net      | Round-2 additions                                                                                                                                                                         | Round-2 total    |
+| --------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `packages/cli/`                         | 2,800–3,800      | +730 (MCP §24.6, hooks adapter §25, sessions §27.6, sandbox-removed §26 ≈ 0)                                                                                                              | **3,530–4,530**  |
+| `packages/core/` (CLI pre-refactors)    | ~730             | +940 (RunContext §22 net ~+170, Logger v2 §23 ~+430, HookHost §25.6 ~+140, sessionStore §27.6 ~+200, ring re-exports §29.6 ~+90, approval predicates §26 ~+80, minus overlap with Logger) | **~1,670**       |
+| `texra-ai/texra-action` (separate repo) | ~800             | -300 (no JS shim; YAML composite + small TS for the high-level action only)                                                                                                               | **~500**         |
+| **Total v1**                            | **~4,330–5,330** | **+~1,370**                                                                                                                                                                               | **~5,700–6,700** |
 
 The round-2 work expands the project by ~30%, but ~70% of the addition is in the kernel — work that the extension and the desktop app inherit unchanged. The CLI shell still finishes in the same ballpark (3.5–4.5 KLOC). v1 ships in **~9–11 weeks** for a single engineer, **~6–8** for two engineers (Phases 0 + 1 sequential, 1.5 + 2 parallel, 3 sequential, 4 + 5 parallel).
 
@@ -1993,4 +1995,4 @@ Round 2 ships only `command` and `prompt` handler types in §25.5. `http` (POST 
 
 ---
 
-End of round 2. The CLI is still a thin Node shell over a host-neutral kernel; round 2 just makes the kernel honestly host-neutral (no ambient singletons), bigger in the right direction (RunContext + Logger v2 + HookHost + SessionStore are kernel-shared infra), and *callable by every other agent that speaks MCP* — which was the user's framing all along.
+End of round 2. The CLI is still a thin Node shell over a host-neutral kernel; round 2 just makes the kernel honestly host-neutral (no ambient singletons), bigger in the right direction (RunContext + Logger v2 + HookHost + SessionStore are kernel-shared infra), and _callable by every other agent that speaks MCP_ — which was the user's framing all along.
