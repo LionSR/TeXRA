@@ -164,7 +164,7 @@
     "mutative": "^1.3.0",
     "nanoid": "^5.1.11",
     "node-pandoc": "^0.3.0",
-    "openai": "^6.35.0",
+    "openai": "^6.36.0",
     "p-map": "^7.0.4",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
