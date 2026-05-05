@@ -133,6 +133,30 @@ describe('desktop Progress IPC', () => {
     expect(progress.deleteAllStreams).toHaveBeenCalledTimes(1);
   });
 
+  it('opens Progress file actions through the desktop preview host', async () => {
+    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
+    const progress = createProgress();
+    const ipc = createDesktopProgressIpc({ progress });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
+        file: '/tmp/output.pdf',
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    expect(progress.openFile).toHaveBeenCalledWith('/tmp/output.pdf');
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE,
+        file: '/tmp/output.tex',
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    expect(progress.openFileCompile).toHaveBeenCalledWith('/tmp/output.tex');
+  });
+
   it('routes unsupported Progress commands through an explicit handler', async () => {
     const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
     const progress = createProgress();
