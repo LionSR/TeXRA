@@ -34,6 +34,9 @@ export function apiKeyEnvName(provider: ApiProvider): string {
 /** Where a resolved API key came from. */
 export type ApiKeyOrigin = 'secret' | 'env' | 'none';
 
+/** UI-safe provider key status derived from a resolved API key origin. */
+export type ApiKeyStatus = 'set' | 'env' | 'not-set';
+
 interface ResolvedApiKey {
   value: string | undefined;
   origin: ApiKeyOrigin;
@@ -48,8 +51,10 @@ const lookupCache = new Map<
   { value: ResolvedApiKey; expiry: number }
 >();
 const lookupPending = new Map<ApiProvider, Promise<ResolvedApiKey>>();
+let lookupCacheGeneration = 0;
 
 export function invalidateApiKeyCache(): void {
+  lookupCacheGeneration += 1;
   lookupCache.clear();
   lookupPending.clear();
 }
@@ -64,6 +69,7 @@ async function resolveApiKey(
   const inFlight = lookupPending.get(provider);
   if (inFlight) return inFlight;
 
+  const requestGeneration = lookupCacheGeneration;
   const request = (async (): Promise<ResolvedApiKey> => {
     const stored = await secrets.get(apiKeySecretName(provider));
     if (stored) return { value: stored, origin: 'secret' };
@@ -74,10 +80,12 @@ async function resolveApiKey(
   lookupPending.set(provider, request);
   try {
     const value = await request;
-    lookupCache.set(provider, {
-      value,
-      expiry: Date.now() + LOOKUP_CACHE_TTL_MS,
-    });
+    if (lookupCacheGeneration === requestGeneration) {
+      lookupCache.set(provider, {
+        value,
+        expiry: Date.now() + LOOKUP_CACHE_TTL_MS,
+      });
+    }
     return value;
   } finally {
     if (lookupPending.get(provider) === request) lookupPending.delete(provider);
@@ -105,6 +113,28 @@ export async function lookupApiKeyOrigin(
   provider: ApiProvider,
 ): Promise<ApiKeyOrigin> {
   return (await resolveApiKey(secrets, provider)).origin;
+}
+
+function apiKeyStatusFromOrigin(origin: ApiKeyOrigin): ApiKeyStatus {
+  if (origin === 'secret') return 'set';
+  if (origin === 'env') return 'env';
+  return 'not-set';
+}
+
+/**
+ * Resolve key statuses for providers from the canonical API-key origin cache.
+ */
+export async function loadApiKeyStatusMap<const Provider extends ApiProvider>(
+  secrets: PlatformSecrets,
+  providers: readonly Provider[],
+): Promise<Record<Provider, ApiKeyStatus>> {
+  const entries = await Promise.all(
+    providers.map(async (provider) => [
+      provider,
+      apiKeyStatusFromOrigin(await lookupApiKeyOrigin(secrets, provider)),
+    ]),
+  );
+  return Object.fromEntries(entries) as Record<Provider, ApiKeyStatus>;
 }
 
 /**
