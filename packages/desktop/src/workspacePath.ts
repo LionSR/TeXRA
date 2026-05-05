@@ -1,9 +1,11 @@
 interface WorkspacePathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;
   argv?: readonly string[];
+  storedWorkspacePath?: string;
 }
 
 const WORKSPACE_PRESENT_ARG = '--texra-has-workspace=';
+export const DESKTOP_WORKSPACE_PATH_STATE_KEY = 'texra.desktop.workspacePath';
 
 export function getWorkspacePathInput(
   options: WorkspacePathOptions = {},
@@ -16,7 +18,7 @@ export function getWorkspacePathInput(
   const configured = env.TEXRA_WORKSPACE_PATH?.trim();
   if (configured) return configured;
 
-  return undefined;
+  return options.storedWorkspacePath?.trim() || undefined;
 }
 
 export function hasWorkspacePath(options: WorkspacePathOptions = {}): boolean {
@@ -25,6 +27,28 @@ export function hasWorkspacePath(options: WorkspacePathOptions = {}): boolean {
 
 export function serializeWorkspacePresenceArg(hasWorkspace: boolean): string {
   return `${WORKSPACE_PRESENT_ARG}${hasWorkspace ? '1' : '0'}`;
+}
+
+export function withWorkspacePathArg(
+  argv: readonly string[],
+  workspacePath: string,
+): string[] {
+  const nextArgs: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg == null) continue;
+    if (arg === '--texra-workspace') {
+      const value = argv[index + 1];
+      if (value != null && !value.startsWith('--')) {
+        index += 1;
+      }
+      continue;
+    }
+    if (arg.startsWith('--texra-workspace=')) continue;
+    nextArgs.push(arg);
+  }
+  nextArgs.push('--texra-workspace', workspacePath);
+  return nextArgs;
 }
 
 export function hasResolvedWorkspacePath(
