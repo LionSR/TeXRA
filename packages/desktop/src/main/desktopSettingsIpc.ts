@@ -16,6 +16,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { FREE_TIER, MAX_TIER, ULTRA_TIER } from '@auth/sharedConfig';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
@@ -239,12 +240,12 @@ export function createDesktopSettingsIpc(
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       authenticated: false,
       user: null,
-      tier: 'free',
+      tier: FREE_TIER,
       permissions: [],
       remoteAgents: [],
       apiAccessMode: 'personal',
       allowedModels: [],
-      tierConstants: { ultra: 'ultra', max: 'max' },
+      tierConstants: { ultra: ULTRA_TIER, max: MAX_TIER },
       providerKeyStatuses: [],
       globalStreamingDefault: true,
     });
