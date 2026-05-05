@@ -63,11 +63,7 @@ export class ModelsTab extends LitElement {
   private readonly handleScrollToApiConfig = (): void =>
     this.scrollToSection('provider-key-list');
 
-  private renderTabHint(): TemplateResult | typeof nothing {
-    if (this.providerKeyStatuses.length === 0) {
-      return nothing;
-    }
-
+  private renderTabHint(): TemplateResult {
     const description =
       this.apiAccessMode === 'included'
         ? 'Personal provider API keys are optional overrides—configure them in the API Configuration section below.'
