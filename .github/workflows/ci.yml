@@ -5,6 +5,13 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+    inputs:
+      run_windows_desktop:
+        description: 'Build Windows desktop artifacts'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -66,6 +73,18 @@ jobs:
       - name: Build initial extension and desktop artifacts
         run: pnpm run build:initial
 
+      - name: Package macOS desktop app
+        if: runner.os == 'macOS'
+        run: pnpm --filter @texra/desktop package:dir
+
+      - name: Check packaged desktop app
+        if: runner.os == 'macOS'
+        run: pnpm run check:desktop-package
+
+      - name: Smoke packaged desktop app
+        if: runner.os == 'macOS'
+        run: pnpm run desktop:package:smoke
+
       - name: Smoke extension webviews in Electron
         if: runner.os == 'macOS'
         run: pnpm run smoke:webviews:run
@@ -98,6 +117,7 @@ jobs:
 
   desktop-windows-artifact:
     name: desktop artifact (Windows)
+    if: github.event_name == 'push' || inputs.run_windows_desktop
     runs-on: windows-latest
     timeout-minutes: 30
 
@@ -153,7 +173,7 @@ jobs:
             echo 'Validation matrix result: ${{ needs.validate.result }}'
             exit 1
           fi
-          if [ '${{ needs.desktop-windows-artifact.result }}' != 'success' ]; then
+          if [ '${{ needs.desktop-windows-artifact.result }}' != 'success' ] && [ '${{ needs.desktop-windows-artifact.result }}' != 'skipped' ]; then
             echo 'Windows desktop artifact result: ${{ needs.desktop-windows-artifact.result }}'
             exit 1
           fi
