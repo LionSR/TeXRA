@@ -51,6 +51,24 @@ describe('ProgressStreamLifecycleController', () => {
     assert.deepEqual(recorder.calls.get('deleteWebview'), ['stream-a']);
   });
 
+  it('preserves stream switches that land during active stream deletion', async () => {
+    const { controller, recorder, state, streams, activeStream } =
+      createProgressStreamLifecycleHarness({
+        streams: ['stream-a', 'stream-b', 'stream-c'],
+        activeStream: 'stream-a',
+        visibleStreams: ['stream-b', 'stream-c'],
+      });
+
+    const deletePromise = controller.deleteStream('stream-a');
+    state.setActiveStream('stream-c');
+    await deletePromise;
+
+    assert.deepEqual(streams(), ['stream-b', 'stream-c']);
+    assert.equal(activeStream(), 'stream-c');
+    assert.deepEqual(recorder.calls.get('setActiveStream'), undefined);
+    assert.deepEqual(recorder.calls.get('deleteWebview'), ['stream-a']);
+  });
+
   it('stops running streams and activates the next visible stream', async () => {
     const { controller, recorder, streams, activeStream } =
       createProgressStreamLifecycleHarness({
