@@ -1,4 +1,4 @@
-import { KVStore } from '@common/storage';
+import { KVStore } from '@common/storage/KVStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {

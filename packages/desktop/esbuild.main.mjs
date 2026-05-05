@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 await esbuild.build({
-  entryPoints: [resolve(__dirname, 'src/main/index.ts')],
+  entryPoints: [resolve(__dirname, 'src/main/bootstrap.ts')],
   bundle: true,
   platform: 'node',
   format: 'esm',

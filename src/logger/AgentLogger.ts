@@ -117,7 +117,7 @@ export interface AgentLogStream {
 }
 
 export class AgentLogger {
-  private static streamLogStore: StreamLogStore = getDefaultStreamLogStore();
+  private static streamLogStore: StreamLogStore | undefined;
 
   static setStreamLogStore(store: StreamLogStore): void {
     setDefaultStreamLogStore(store);
@@ -125,11 +125,12 @@ export class AgentLogger {
   }
 
   static getStreamLogStore(): StreamLogStore {
+    AgentLogger.streamLogStore ??= getDefaultStreamLogStore();
     return AgentLogger.streamLogStore;
   }
 
   private get store(): StreamLogStore {
-    return AgentLogger.streamLogStore;
+    return AgentLogger.getStreamLogStore();
   }
 
   constructor(

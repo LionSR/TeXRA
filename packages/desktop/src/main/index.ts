@@ -14,8 +14,15 @@ import { initializeElectronPlatform } from './platform/index.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
-const PRODUCTION_CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self';";
+// The packaged renderer uses Lit style attributes and bundled font data URLs
+// (codicons/KaTeX). Keep script execution locked to app files while allowing
+// those renderer primitives.
+const PRODUCTION_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+].join('; ');
 const DEVELOPMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval'",
