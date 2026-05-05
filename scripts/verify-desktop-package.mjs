@@ -111,11 +111,12 @@ async function findPackagedApp() {
 }
 
 function normalizeAsarPath(path) {
-  return `/${path.replaceAll('\\', '/')}`;
+  const normalized = path.replaceAll('\\', '/');
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
 }
 
 function createAsarAppReader(asarPath) {
-  const entries = new Set(listPackage(asarPath));
+  const entries = new Set(listPackage(asarPath).map(normalizeAsarPath));
   const resourceRoot = dirname(asarPath);
   return {
     label: relative(repoRoot, asarPath),
