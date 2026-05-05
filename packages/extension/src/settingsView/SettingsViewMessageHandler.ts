@@ -74,7 +74,10 @@ import {
   formatCost,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
-import { invalidateApiKeyCache, lookupApiKeyOrigin } from '@model/apiProviders';
+import {
+  invalidateApiKeyCache,
+  loadApiKeyStatusMap,
+} from '@model/apiProviders';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { buildStreamInfo } from '@progressView/streamInfoUtils';
 import type { ExecutionId } from '@shared/schemas';
@@ -224,45 +227,11 @@ function getReliabilitySettings(): NumberVscodeSetting[] {
   }));
 }
 
-type SecretStatusMap = Record<string, ProviderKeyStatus['status']>;
-
-let _secretStatusCache: SecretStatusMap | null = null;
-let _secretStatusPending: Promise<SecretStatusMap> | null = null;
-
-function invalidateProviderSecretStatusCache(): void {
-  _secretStatusCache = null;
-  _secretStatusPending = null;
-}
-
-async function loadProviderSecretStatuses(): Promise<SecretStatusMap> {
-  if (_secretStatusCache) return _secretStatusCache;
-  if (_secretStatusPending) return _secretStatusPending;
-
-  const request = (async () => {
-    const secrets = platform().secrets;
-    const entries = await Promise.all(
-      SecretManager.API_PROVIDERS.map(async (provider) => {
-        const origin = await lookupApiKeyOrigin(secrets, provider);
-        const status: ProviderKeyStatus['status'] =
-          origin === 'secret' ? 'set' : origin === 'env' ? 'env' : 'not-set';
-        return [provider, status] as const;
-      }),
-    );
-    return Object.fromEntries(entries) as SecretStatusMap;
-  })();
-
-  _secretStatusPending = request;
-  try {
-    const result = await request;
-    if (_secretStatusPending === request) _secretStatusCache = result;
-    return result;
-  } finally {
-    if (_secretStatusPending === request) _secretStatusPending = null;
-  }
-}
-
 async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
-  const secretStatuses = await loadProviderSecretStatuses();
+  const secretStatuses = await loadApiKeyStatusMap(
+    platform().secrets,
+    SecretManager.API_PROVIDERS,
+  );
   return SecretManager.API_PROVIDERS.map((provider) => ({
     provider,
     displayName: getProviderDisplayName(
@@ -1598,7 +1567,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // Invalidate caches so downstream refreshes see fresh key state.
     invalidateModelOptionsCache();
     invalidateApiKeyCache();
-    invalidateProviderSecretStatusCache();
     await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
     await Promise.all([
       vscode.commands.executeCommand('texra.refreshAllOptions'),
