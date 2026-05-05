@@ -145,20 +145,20 @@ async function openLatexdiffResult(
   return diffFilePath;
 }
 
-async function showLatexdiffPackNotifications(
+function showLatexdiffPackNotifications(
   notifications: LatexHousekeepingNotification[],
-): Promise<void> {
+): void {
   for (const notification of notifications) {
     if (notification.severity === 'info') {
-      await showLoggedInfoMessage(CHANNEL, notification.message);
+      void showLoggedInfoMessage(CHANNEL, notification.message);
     } else if (notification.severity === 'error') {
-      await showLoggedErrorMessage(
+      void showLoggedErrorMessage(
         CHANNEL,
         notification.message,
         notification.error,
       );
     } else {
-      await showLoggedMessage(CHANNEL, notification.message);
+      void showLoggedMessage(CHANNEL, notification.message);
     }
   }
 }
@@ -297,7 +297,7 @@ async function handlePackLatexdiffvc(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
       );
       const fileToUse = baseFile ?? inputFile;
-      await showLatexdiffPackNotifications(
+      showLatexdiffPackNotifications(
         getLatexdiffPackNotifications(
           await runPackLatexdiffvc(fileToUse, commitHash, clean),
         ),
@@ -320,7 +320,7 @@ async function handlePackLatexdiffvcMultiple(
         `Command called with: commitHash=${commitHash}, clean=${clean}`,
       );
       logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
-      await showLatexdiffPackNotifications(
+      showLatexdiffPackNotifications(
         getLatexdiffPackNotifications(
           await runPackLatexdiffvcMultiple(inputFiles, commitHash, clean),
         ),
@@ -343,7 +343,7 @@ async function handleCleanLatexdiffvc(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
       );
       const fileToUse = baseFile ?? inputFile;
-      await showLatexdiffPackNotifications(
+      showLatexdiffPackNotifications(
         getLatexdiffPackNotifications(
           await runCleanLatexdiffvc(fileToUse, commitHash),
         ),
@@ -362,7 +362,7 @@ async function handleCleanLatexdiffvcMultiple(
     async () => {
       logger.debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
       logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
-      await showLatexdiffPackNotifications(
+      showLatexdiffPackNotifications(
         getLatexdiffPackNotifications(
           await runCleanLatexdiffvcMultiple(inputFiles, commitHash),
         ),
