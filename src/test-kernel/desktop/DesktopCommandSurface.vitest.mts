@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - command catalog
 import { commandCatalogById, type CommandId } from '@commands/catalog';
 
+// Local imports - webview commands
+import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+
 // Local imports - shared schemas
+import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
@@ -38,6 +42,14 @@ interface DesktopCommandSurfaceModule {
     keybinding: { key: string; mac?: string },
     platform?: NodeJS.Platform,
   ): string;
+  buildDesktopSettingsTabMessage(
+    tabIndex: number,
+    agentSubTab?: string,
+  ): {
+    command: string;
+    tabIndex: number;
+    agentSubTab?: string;
+  };
 }
 
 interface DesktopMenuItem {
@@ -125,6 +137,26 @@ describe('desktop command surface', () => {
       3,
       SETTINGS_TAB.AGENTS,
     );
+  });
+
+  it('builds settings-tab messages from one shared helper', async () => {
+    const { buildDesktopSettingsTabMessage } =
+      await loadDesktopCommandSurface();
+
+    expect(buildDesktopSettingsTabMessage(SETTINGS_TAB.MODELS)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+      tabIndex: SETTINGS_TAB.MODELS,
+    });
+    expect(
+      buildDesktopSettingsTabMessage(
+        SETTINGS_TAB.AGENTS,
+        AGENT_CATEGORY.TOOL_USE,
+      ),
+    ).toEqual({
+      agentSubTab: AGENT_CATEGORY.TOOL_USE,
+      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+      tabIndex: SETTINGS_TAB.AGENTS,
+    });
   });
 
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
