@@ -31,6 +31,8 @@
     "vite:webviews": "corepack pnpm --filter texra vite:webviews",
     "vite:webviews:dev": "corepack pnpm --filter texra vite:webviews:dev",
     "vite:webviews:watch": "corepack pnpm --filter texra vite:webviews:watch",
+    "smoke:webviews": "corepack pnpm run vite:webviews && corepack pnpm run smoke:webviews:run",
+    "smoke:webviews:run": "node scripts/smoke-webviews-electron.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test-kernel.json && corepack pnpm --filter texra typecheck",
     "compile:fast": "corepack pnpm --filter texra compile:fast",
     "compile:safe": "npm run typecheck && npm run compile:fast",
