@@ -17,14 +17,14 @@ import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@commands/agent/agentTemplateRenderer';
 import {
-  showLoggedErrorMessage,
-  toErrorMessage,
-} from '@common/errors/errorHandlingUtils';
-import {
   agentDirectories,
   promptToAddAgentToConfig,
   type AgentVariantMetadata,
 } from '@frontend/agents';
+import {
+  showLoggedErrorMessage,
+  toErrorMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core/stringCore';

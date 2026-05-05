@@ -13,7 +13,7 @@ import {
 } from '@agent/index';
 import type { AgentSource } from '@agent/index';
 import { GlobalStateKey, globalSM } from '@common/state';
-import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
+import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { AGENT_SOURCE } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';

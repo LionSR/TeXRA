@@ -6,7 +6,7 @@ import fsExtra from 'fs-extra';
 import * as vscode from 'vscode';
 
 // Local imports - fs
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
