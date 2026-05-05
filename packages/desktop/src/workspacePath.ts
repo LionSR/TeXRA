@@ -5,6 +5,7 @@ interface WorkspacePathOptions {
 }
 
 const WORKSPACE_PRESENT_ARG = '--texra-has-workspace=';
+const DESKTOP_PROTOCOL = 'texra:';
 export const DESKTOP_WORKSPACE_PATH_STATE_KEY = 'texra.desktop.workspacePath';
 
 export function getWorkspacePathInput(
@@ -37,6 +38,7 @@ export function withWorkspacePathArg(
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg == null) continue;
+    if (isDesktopProtocolCallbackArg(arg)) continue;
     if (arg === '--texra-workspace') {
       const value = argv[index + 1];
       if (value != null && !value.startsWith('--')) {
@@ -67,7 +69,9 @@ function getWorkspacePathArg(argv: readonly string[]): string | undefined {
       return getPositionalWorkspacePathArg(argv[index + 1]);
     }
     if (arg.startsWith('--texra-workspace=')) {
-      return arg.slice('--texra-workspace='.length).trim() || undefined;
+      return getPositionalWorkspacePathArg(
+        arg.slice('--texra-workspace='.length),
+      );
     }
   }
   return undefined;
@@ -77,6 +81,20 @@ function getPositionalWorkspacePathArg(
   arg: string | undefined,
 ): string | undefined {
   const trimmed = arg?.trim();
-  if (!trimmed || trimmed.startsWith('--')) return undefined;
+  if (
+    !trimmed ||
+    trimmed.startsWith('--') ||
+    isDesktopProtocolCallbackArg(trimmed)
+  ) {
+    return undefined;
+  }
   return trimmed;
+}
+
+function isDesktopProtocolCallbackArg(arg: string): boolean {
+  try {
+    return new URL(arg).protocol === DESKTOP_PROTOCOL;
+  } catch {
+    return false;
+  }
 }

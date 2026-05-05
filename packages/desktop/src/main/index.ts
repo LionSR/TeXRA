@@ -10,6 +10,7 @@ import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
+import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import { createDesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import {
   attachRendererConsoleLog,
@@ -32,6 +33,21 @@ import {
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const __dirname = findDesktopMainDir(moduleDirname);
+let mainWindow: BrowserWindow | null = null;
+
+const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
+  app,
+  argv: process.argv.slice(1),
+  execPath: process.execPath,
+  devAppArg: process.argv[1],
+  focusMainWindow: () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  },
+  log: console,
+});
 
 function findDesktopMainDir(startDir: string): string {
   let currentDir = startDir;
@@ -96,6 +112,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
       ],
     },
   });
+  mainWindow = window;
   const reportAsyncError = (error: unknown) => console.error(error);
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
@@ -233,7 +250,12 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   });
   ipcRef.current = mainViewIpc;
   installDesktopMenu(shellActions);
-  window.once('closed', () => agentExecution.dispose());
+  window.once('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = null;
+    }
+    agentExecution.dispose();
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -243,24 +265,26 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   void window.loadFile(join(__dirname, '../renderer/index.html'));
 }
 
-app
-  .whenReady()
-  .then(async () => {
-    const platformInit = await initializeElectronPlatform(__dirname);
-    installContentSecurityPolicy();
-    createWindow({ workspacePath: platformInit.workspacePath });
+if (protocolLifecycle.shouldContinue) {
+  app
+    .whenReady()
+    .then(async () => {
+      const platformInit = await initializeElectronPlatform(__dirname);
+      installContentSecurityPolicy();
+      createWindow({ workspacePath: platformInit.workspacePath });
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow({ workspacePath: platformInit.workspacePath });
-      }
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          createWindow({ workspacePath: platformInit.workspacePath });
+        }
+      });
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Failed to start TeXRA desktop: ${message}`);
+      app.quit();
     });
-  })
-  .catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`Failed to start TeXRA desktop: ${message}`);
-    app.quit();
-  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
