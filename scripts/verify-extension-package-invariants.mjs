@@ -37,6 +37,9 @@ const MANIFEST_KEYS = [
 
 const REQUIRED_PACKAGED_PATHS = [
   'LICENSE.txt',
+  'dist/progressView/codicon.ttf',
+  'dist/settingsView/codicon.ttf',
+  'dist/webview/codicon.ttf',
   'resources/agents',
   'resources/docs/agent-creation',
   'resources/examples',
@@ -54,6 +57,7 @@ const REQUIRED_PACKAGED_PATHS = [
 
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
+  '!dist/**/codicon.ttf',
   '!resources/**',
   '!src/common/styles/*.css',
   '!src/progressView/*.html',
