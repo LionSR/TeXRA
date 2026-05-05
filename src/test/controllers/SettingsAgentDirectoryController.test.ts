@@ -88,24 +88,12 @@ describe('SettingsAgentDirectoryController', () => {
     assert.equal(getConfiguredCustomDir(), '/repo/custom');
   });
 
-  it('plans base and multiple YAML opens', () => {
+  it('plans YAML open for a built-in agent', () => {
     const { controller } = createController();
 
     assert.deepEqual(
-      controller.planOpenAgentYaml({
-        source: 'builtInWorkflow',
-        name: 'writer',
-        variant: 'base',
-      }),
+      controller.planOpenAgentYaml({ source: 'builtInWorkflow', name: 'writer' }),
       { ok: true, path: '/repo/resources/agents/writer.yaml' },
-    );
-    assert.deepEqual(
-      controller.planOpenAgentYaml({
-        source: 'builtInWorkflow',
-        name: 'writer',
-        variant: 'multiple',
-      }),
-      { ok: true, path: '/repo/resources/agents/writer_multiple.yaml' },
     );
   });
 
@@ -113,19 +101,11 @@ describe('SettingsAgentDirectoryController', () => {
     const { controller } = createController();
 
     assert.deepEqual(
-      controller.planOpenAgentYaml({
-        source: 'custom',
-        name: 'unknown',
-        variant: 'base',
-      }),
+      controller.planOpenAgentYaml({ source: 'custom', name: 'unknown' }),
       { ok: false, reason: 'missingAgent' },
     );
     assert.deepEqual(
-      controller.planOpenAgentYaml({
-        source: 'custom',
-        name: 'pathless',
-        variant: 'base',
-      }),
+      controller.planOpenAgentYaml({ source: 'custom', name: 'pathless' }),
       { ok: false, reason: 'missingPath' },
     );
   });

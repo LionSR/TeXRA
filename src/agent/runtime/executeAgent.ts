@@ -708,6 +708,7 @@ export async function executeAgent(
           streamId,
           executionId,
           taskState: agentConfigToTaskState(config),
+        });
 
         const taskStage = await logger.stage(
           `Task: ${agentName}@${config.model}`,

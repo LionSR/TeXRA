@@ -141,7 +141,6 @@ export class AgentHandlers {
       const result = this.directoryController.planOpenAgentYaml({
         source: data.agentSource,
         name: data.agentName,
-        variant: data.variant,
       });
       if (!result.ok && result.reason === 'missingAgent') {
         await vscode.window.showErrorMessage(

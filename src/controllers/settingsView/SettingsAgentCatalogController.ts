@@ -142,8 +142,6 @@ export class SettingsAgentCatalogController {
       hasPath: Boolean(entry.path),
       filePath: entry.path || undefined,
       tools: entry.tools,
-      hasMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
-      hasMultiplePath: Boolean(entry.multiplePath),
       // undefined = never configured -> all enabled; [] = explicitly none enabled.
       enabled:
         enabledKeys === undefined ||
