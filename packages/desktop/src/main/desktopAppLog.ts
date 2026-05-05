@@ -27,11 +27,13 @@ const CONSOLE_LEVELS = ['debug', 'error', 'info', 'log', 'warn'] as const;
 
 let logFilePath: string | undefined;
 let consoleInstalled = false;
+let logSetupFailed = false;
 
-export function installDesktopAppLog(): string {
-  const logDir = getDesktopLogDirectory();
-  mkdirSync(logDir, { recursive: true });
-  logFilePath = join(logDir, LOG_FILE_NAME);
+export function installDesktopAppLog(): string | undefined {
+  logSetupFailed = false;
+  logFilePath = initializeDesktopLogFile();
+  if (logFilePath == null) return undefined;
+
   rotateDesktopLogFile(logFilePath);
   appendDesktopLogLine('info', '--- TeXRA desktop session started ---');
   installConsoleMirror();
@@ -82,12 +84,38 @@ function installConsoleMirror(): void {
 }
 
 function appendDesktopLogLine(level: ConsoleLevel, ...args: unknown[]): void {
-  const path = logFilePath ?? getDesktopLogFilePath();
+  const path = resolveActiveLogFilePath();
+  if (path == null) return;
+
   const message = args.length === 0 ? '' : format(...args);
   try {
     appendFileSync(path, `${new Date().toISOString()} [${level}] ${message}\n`);
   } catch {
     // Logging must never become a startup dependency.
+  }
+}
+
+function initializeDesktopLogFile(): string | undefined {
+  try {
+    const logDir = getDesktopLogDirectory();
+    mkdirSync(logDir, { recursive: true });
+    return join(logDir, LOG_FILE_NAME);
+  } catch (error) {
+    logSetupFailed = true;
+    console.warn('TeXRA desktop file logging is disabled.', error);
+    return undefined;
+  }
+}
+
+function resolveActiveLogFilePath(): string | undefined {
+  if (logFilePath != null) return logFilePath;
+  if (logSetupFailed) return undefined;
+
+  try {
+    return getDesktopLogFilePath();
+  } catch {
+    logSetupFailed = true;
+    return undefined;
   }
 }
 
