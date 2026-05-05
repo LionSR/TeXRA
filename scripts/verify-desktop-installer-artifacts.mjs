@@ -50,13 +50,11 @@ if (!platformKey) {
   process.exit(1);
 }
 
-async function collectFiles(dir) {
+async function collectTopLevelFiles(dir) {
   const files = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const entryPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await collectFiles(entryPath)));
-    } else if (entry.isFile()) {
+    if (entry.isFile()) {
       files.push(entryPath);
     }
   }
@@ -72,7 +70,7 @@ const failures = [];
 let files = [];
 
 try {
-  files = await collectFiles(desktopPackageRoot);
+  files = await collectTopLevelFiles(desktopPackageRoot);
 } catch (error) {
   if (error?.code === 'ENOENT') {
     failures.push(
