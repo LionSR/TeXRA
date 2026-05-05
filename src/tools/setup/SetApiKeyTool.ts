@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { invalidateApiKeyCache } from '@model/apiProviders';
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local file imports
@@ -82,12 +83,11 @@ export class SetApiKeyTool extends defineTool({
 
     await platform.secrets.setApiKey(provider, input.key.trim());
 
-    // Drop the TTL-cached model-options computation before the refresh
-    // so the re-rendered picker actually reflects the just-added key —
-    // otherwise the UI can replay a recent pre-key result and still
-    // show the provider's models as unavailable. Matches the manual
-    // `texra.setApiKey` command's ordering in `apiKeyCommands`.
+    // Drop cached model availability and key-origin lookups before the refresh
+    // so every downstream status surface sees the just-added key. Matches the
+    // manual `texra.setApiKey` command's ordering in `apiKeyCommands`.
     invalidateModelOptionsCache();
+    invalidateApiKeyCache();
     await Promise.all([
       platform.commands
         .invoke('texra.refreshApiKeyStatus')
