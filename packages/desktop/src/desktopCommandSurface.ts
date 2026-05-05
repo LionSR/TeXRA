@@ -3,9 +3,11 @@ import {
   type CommandId,
   type CommandKeybinding,
 } from '@commands/catalog';
+import { type AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
 import type { MenuItemConstructorOptions } from 'electron';
-import type { DesktopShellActions } from './desktopShellIpc.js';
+import type { DesktopRoute } from './desktopShellMessages.js';
 
 export const DESKTOP_COMMAND_IDS = [
   'texra.showMainView',
@@ -26,6 +28,11 @@ export interface DesktopCommandMenuEntry {
   label: string;
   category: string;
   accelerator?: string;
+}
+
+export interface DesktopCommandActions {
+  showRoute(route: DesktopRoute): void;
+  showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
 }
 
 const DESKTOP_MENU_GROUPS = [
@@ -72,7 +79,7 @@ export function toElectronAccelerator(
 
 export function dispatchDesktopCommand(
   id: CommandId,
-  actions: DesktopShellActions,
+  actions: DesktopCommandActions,
 ): boolean {
   switch (id) {
     case 'texra.showMainView':
@@ -108,7 +115,7 @@ export function dispatchDesktopCommand(
 }
 
 export function buildDesktopMenuTemplate(
-  actions: DesktopShellActions,
+  actions: DesktopCommandActions,
   platform: NodeJS.Platform = process.platform,
 ): MenuItemConstructorOptions[] {
   const entriesById = new Map(

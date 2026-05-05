@@ -49,6 +49,22 @@ body {
   background: var(--texra-button-secondaryBackground);
 }
 
+.desktop-command-button {
+  height: 28px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--texra-panel-border);
+  border-radius: 4px;
+  background: var(--texra-button-secondaryBackground);
+  color: var(--texra-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.desktop-command-button:hover {
+  background: var(--texra-toolbar-hoverBackground);
+}
+
 .desktop-view {
   display: block;
   min-width: 0;
@@ -68,4 +84,82 @@ body {
 .desktop-route > * {
   display: block;
   min-height: 100%;
+}
+
+.desktop-command-palette {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: start center;
+  padding: 12vh 16px 16px;
+  box-sizing: border-box;
+  background: rgb(0 0 0 / 35%);
+}
+
+.desktop-command-palette[hidden] {
+  display: none;
+}
+
+.desktop-command-palette-panel {
+  width: min(560px, 100%);
+  border: 1px solid var(--texra-panel-border);
+  border-radius: 6px;
+  background: var(--texra-editor-background);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 32%);
+  overflow: hidden;
+}
+
+.desktop-command-palette-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 0;
+  border-bottom: 1px solid var(--texra-panel-border);
+  outline: 0;
+  background: var(--texra-input-background);
+  color: var(--texra-input-foreground);
+  font: inherit;
+}
+
+.desktop-command-palette-list {
+  max-height: min(420px, 58vh);
+  overflow: auto;
+  padding: 4px;
+}
+
+.desktop-command-palette-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--texra-foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-command-palette-item[aria-selected='true'] {
+  background: var(--texra-list-activeSelectionBackground);
+  color: var(--texra-list-activeSelectionForeground);
+}
+
+.desktop-command-palette-label,
+.desktop-command-palette-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-command-palette-meta {
+  color: var(--texra-descriptionForeground);
+  font-size: 12px;
 }
