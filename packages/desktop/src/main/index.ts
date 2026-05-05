@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
+import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
@@ -79,12 +80,17 @@ function createWindow(): void {
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     onError: reportAsyncError,
   });
+  const progressIpc = createDesktopProgressIpc({
+    progress: agentExecution.progress,
+    onAsyncError: reportAsyncError,
+  });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     getCustomAgentDirectory: () => getAgentDirectories().custom(),
     openPath,
     executeAgent: (message) => agentExecution.handleExecute(message),
     fileSelection,
     settings: settingsIpc,
+    progress: progressIpc,
     onAsyncError: reportAsyncError,
   });
   ipcRef.current = mainViewIpc;
