@@ -251,6 +251,8 @@ body.texra-high-contrast {
   --texra-menu-selectionForeground: HighlightText;
   --texra-badge-foreground: HighlightText;
   --texra-contrastBorder: CanvasText;
+  --wa-color-brand-on-loud: HighlightText;
+  --wa-color-brand-border-loud: CanvasText;
 }
 
 /* Compatibility exports for reused VS Code webview CSS and @vscode-elements. */
