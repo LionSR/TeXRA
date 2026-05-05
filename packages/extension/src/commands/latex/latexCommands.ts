@@ -8,7 +8,7 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
-import { runIndentTeX } from '@housekeeping';
+import { indentLatexFilesInDirectory } from '@housekeeping';
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
 import * as logger from '@logger/logUtils';
@@ -52,7 +52,9 @@ export function registerLatexCommands(context: vscode.ExtensionContext): void {
 
 async function handleIndentTeX(): Promise<void> {
   try {
-    const notification = getIndentTeXNotification(await runIndentTeX());
+    const notification = getIndentTeXNotification(
+      await indentLatexFilesInDirectory(),
+    );
     if (!notification) return;
 
     if (notification.severity === 'error') {

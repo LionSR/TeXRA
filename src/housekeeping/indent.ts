@@ -137,10 +137,3 @@ export async function indentLatexFilesInDirectory(
     return { status: 'error', directory, count: 0, error: err };
   }
 }
-
-/**
- * Indents all LaTeX files in the workspace
- */
-export async function runIndentTeX(): Promise<IndentLatexResult> {
-  return indentLatexFilesInDirectory('.');
-}

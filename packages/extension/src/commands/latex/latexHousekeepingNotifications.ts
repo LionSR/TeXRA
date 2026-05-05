@@ -23,7 +23,8 @@ export function getIndentTeXNotification(
         message: 'Error during indentation process',
         error: result.error,
       };
-    default:
+    case 'disabled':
+    case 'formatted':
       return undefined;
   }
 }
