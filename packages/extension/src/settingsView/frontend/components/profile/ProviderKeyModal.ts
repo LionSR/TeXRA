@@ -155,15 +155,38 @@ export class ProviderKeyModal extends LitElement {
   @state() private error = '';
 
   @query('input') private keyInput?: HTMLInputElement;
+  @query('.provider-key-dialog') private dialog?: HTMLFormElement;
+
+  private previousFocus: HTMLElement | null = null;
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+  }
 
   override firstUpdated(): void {
     this.keyInput?.focus();
   }
 
-  private close(): void {
+  private clearSecretValue(): void {
     this.value = '';
+    if (this.keyInput) {
+      this.keyInput.value = '';
+    }
+  }
+
+  private restoreFocus(): void {
+    this.previousFocus?.focus();
+  }
+
+  private close(): void {
+    this.clearSecretValue();
     this.error = '';
     this.dispatchEvent(createEvent('provider-key-cancel'));
+    this.restoreFocus();
   }
 
   private handleBackdropClick(event: MouseEvent): void {
@@ -188,17 +211,53 @@ export class ProviderKeyModal extends LitElement {
       return;
     }
 
+    this.clearSecretValue();
+    this.error = '';
     this.dispatchEvent(
       createEvent('provider-key-submit', {
         provider: this.provider,
         apiKey,
       }),
     );
-    this.value = '';
-    if (this.keyInput) {
-      this.keyInput.value = '';
+    this.restoreFocus();
+  }
+
+  private getFocusableElements(): HTMLElement[] {
+    const selector = [
+      'button:not([disabled])',
+      'input:not([disabled])',
+      '[href]',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',');
+    return [...(this.dialog?.querySelectorAll<HTMLElement>(selector) ?? [])];
+  }
+
+  private handleDialogKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.close();
+      return;
     }
-    this.error = '';
+
+    if (event.key !== 'Tab') {
+      return;
+    }
+
+    const focusable = this.getFocusableElements();
+    const first = focusable.at(0);
+    const last = focusable.at(-1);
+    if (!first || !last) {
+      return;
+    }
+
+    const active = this.shadowRoot?.activeElement;
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   override render(): TemplateResult {
@@ -215,6 +274,7 @@ export class ProviderKeyModal extends LitElement {
           aria-modal="true"
           aria-labelledby="provider-key-title"
           @submit=${this.handleSubmit}
+          @keydown=${this.handleDialogKeydown}
         >
           <div class="provider-key-header">
             <h2 id="provider-key-title">Set ${displayName} API key</h2>

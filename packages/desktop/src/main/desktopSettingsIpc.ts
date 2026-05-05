@@ -597,8 +597,9 @@ export function createDesktopSettingsIpc(
       return;
     }
     const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+    const trimmedSubmittedKey = submittedApiKey?.trim();
     const apiKey =
-      submittedApiKey ??
+      trimmedSubmittedKey ||
       (await options.promptSecret?.({
         title: `Set ${displayName} API key`,
         prompt: `Enter ${displayName} API key`,
