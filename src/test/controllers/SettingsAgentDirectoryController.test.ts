@@ -80,6 +80,14 @@ describe('SettingsAgentDirectoryController', () => {
     assert.equal(getConfiguredCustomDir(), '');
   });
 
+  it('sets configured custom directory state through the controller', async () => {
+    const { controller, getConfiguredCustomDir } = createController();
+
+    await controller.setCustomDir('/repo/custom');
+
+    assert.equal(getConfiguredCustomDir(), '/repo/custom');
+  });
+
   it('plans base and multiple YAML opens', () => {
     const { controller } = createController();
 
