@@ -108,6 +108,100 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  desktop-macos-installer:
+    name: desktop installer (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.2
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build desktop app
+        run: pnpm run desktop:build
+
+      - name: Package macOS desktop installers
+        run: pnpm --filter @texra/desktop package:dist
+
+      - name: Check macOS packaged desktop app contents
+        run: pnpm run check:desktop-package
+
+      - name: Check macOS desktop installer artifacts
+        run: pnpm run check:desktop-installers
+
+      - name: Upload macOS desktop installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-installers-macOS
+          path: |
+            packages/desktop/dist-packaged/*.dmg
+            packages/desktop/dist-packaged/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  desktop-linux-installer:
+    name: desktop installer (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.2
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build desktop app
+        run: pnpm run desktop:build
+
+      - name: Package Linux desktop installers
+        run: pnpm --filter @texra/desktop package:dist
+
+      - name: Check Linux packaged desktop app contents
+        run: pnpm run check:desktop-package
+
+      - name: Check Linux desktop installer artifacts
+        run: pnpm run check:desktop-installers
+
+      - name: Upload Linux desktop installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-installers-Linux
+          path: |
+            packages/desktop/dist-packaged/*.AppImage
+            packages/desktop/dist-packaged/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
   desktop-windows-artifact:
     name: desktop artifact (Windows)
     runs-on: windows-latest
@@ -142,6 +236,23 @@ jobs:
       - name: Check desktop build artifacts
         run: pnpm run check:desktop-build-artifacts
 
+      - name: Package Windows desktop installer
+        run: pnpm --filter @texra/desktop package:dist
+
+      - name: Check Windows packaged desktop app contents
+        run: pnpm run check:desktop-package
+
+      - name: Check Windows desktop installer artifacts
+        run: pnpm run check:desktop-installers
+
+      - name: Upload Windows desktop installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-installer-Windows
+          path: packages/desktop/dist-packaged/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload desktop build artifact
         uses: actions/upload-artifact@v7
         with:
@@ -155,6 +266,8 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - validate
+      - desktop-macos-installer
+      - desktop-linux-installer
       - desktop-windows-artifact
     if: always()
 
@@ -163,6 +276,14 @@ jobs:
         run: |
           if [ '${{ needs.validate.result }}' != 'success' ]; then
             echo 'Validation matrix result: ${{ needs.validate.result }}'
+            exit 1
+          fi
+          if [ '${{ needs.desktop-macos-installer.result }}' != 'success' ]; then
+            echo 'macOS desktop installer result: ${{ needs.desktop-macos-installer.result }}'
+            exit 1
+          fi
+          if [ '${{ needs.desktop-linux-installer.result }}' != 'success' ]; then
+            echo 'Linux desktop installer result: ${{ needs.desktop-linux-installer.result }}'
             exit 1
           fi
           if [ '${{ needs.desktop-windows-artifact.result }}' != 'success' ]; then
