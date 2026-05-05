@@ -105,7 +105,20 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron"
-    ]
+    ],
+    "supportedArchitectures": {
+      "os": [
+        "current"
+      ],
+      "cpu": [
+        "current",
+        "x64",
+        "arm64"
+      ],
+      "libc": [
+        "current"
+      ]
+    }
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.93.0",

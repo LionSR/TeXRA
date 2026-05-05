@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
 import {
@@ -19,7 +20,14 @@ interface StateStore {
 interface DesktopSettingsIpcModule {
   createDesktopSettingsIpc(options: {
     postToRenderer(message: unknown): void;
+    globalState?: StateStore;
     workspaceState?: StateStore;
+    loadAgents?: () => Promise<void>;
+    loadAgentOptionsData?: () => Promise<{
+      workflow: unknown[];
+      toolUse: unknown[];
+    }>;
+    selectCustomAgentDirectory?: () => Promise<string | undefined>;
     onError?: (error: unknown) => void;
   }): {
     handleMessage(
@@ -50,6 +58,10 @@ async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
   ) as Promise<DesktopSettingsIpcModule>;
 }
 
+function flushAsyncWork(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 describe('desktop settings IPC', () => {
   afterEach(() => {
     setGitAuthorEnv({});
@@ -68,6 +80,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -110,6 +123,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -166,6 +180,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -209,6 +224,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -237,6 +253,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -288,6 +305,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
       onError: (error) => errors.push(error),
     });
@@ -311,11 +329,131 @@ describe('desktop settings IPC', () => {
     expect(posted).toEqual([]);
   });
 
+  it('persists model settings through global state', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const globalState = new MemoryStateStore();
+    globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
+      'gpt55',
+      'sonnet46T',
+    ]);
+    globalState.values.set(GlobalStateKey.HELPER_MODEL, 'gpt55');
+    const posted: unknown[] = [];
+    const errors: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      globalState,
+      postToRenderer: (message) => posted.push(message),
+      onError: (error) => errors.push(error),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
+        modelName: 'gpt55',
+        enabled: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+      'sonnet46T',
+    ]);
+    expect(globalState.values.get(GlobalStateKey.HELPER_MODEL)).toBe(
+      'sonnet46T',
+    );
+    expect(errors).toEqual([]);
+    expect(
+      posted.findLast(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      helperModel: 'sonnet46T',
+    });
+    const modelOptionsMessage = posted.at(-1) as {
+      command?: string;
+      optionsData?: Array<{ value?: string }>;
+    };
+    expect(modelOptionsMessage.command).toBe('setModelOptions');
+    expect(modelOptionsMessage.optionsData).toContainEqual(
+      expect.objectContaining({
+        value: 'sonnet46T',
+      }),
+    );
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES,
+        enabled: true,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(
+      globalState.values.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
+    ).toBe(true);
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      preferShortModelNames: true,
+    });
+  });
+
+  it('refreshes launcher agent options after agent visibility changes', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      globalState: new MemoryStateStore(),
+      loadAgents: async () => undefined,
+      loadAgentOptionsData: async () => ({
+        workflow: [{ value: 'builtInWorkflow:correct', label: 'correct' }],
+        toolUse: [],
+      }),
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
+        category: 'workflow',
+        agentSource: 'builtInWorkflow',
+        agentName: 'polish',
+        enabled: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(workspaceState.values.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
+      expect.not.arrayContaining(['builtInWorkflow:polish', 'polish']),
+    );
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      ),
+    ).toBe(true);
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      ),
+    ).toBe(true);
+  });
+
   it('ignores unsupported or malformed settings messages', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const posted: unknown[] = [];
     const settings = createDesktopSettingsIpc({
       workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 

@@ -29,18 +29,32 @@
   --texra-input-border: #d0d7de;
   --texra-input-foreground: #1f2328;
   --texra-input-placeholderForeground: #6e7781;
+  --texra-inputOption-activeBackground: #ddf4ff;
+  --texra-inputOption-activeBorder: #0969da;
+  --texra-inputOption-activeForeground: #1f2328;
+  --texra-inputValidation-errorBackground: #ffebe9;
+  --texra-inputValidation-errorBorder: #cf222e;
   --texra-list-activeSelectionBackground: #0969da;
   --texra-list-activeSelectionForeground: #ffffff;
+  --texra-list-focusOutline: #0969da;
+  --texra-list-hoverForeground: #1f2328;
+  --texra-list-inactiveSelectionBackground: #dbeafe;
   --texra-list-hoverBackground: #eef2f6;
   --texra-list-warningForeground: #9a6700;
   --texra-menu-background: #ffffff;
   --texra-menu-border: #d0d7de;
   --texra-menu-foreground: #1f2328;
+  --texra-menu-selectionBackground: #0969da;
+  --texra-menu-selectionForeground: #ffffff;
+  --texra-menu-separatorBackground: #d0d7de;
   --texra-toolbar-activeBackground: #dbeafe;
   --texra-toolbar-hoverBackground: #eaeef2;
+  --texra-toolbar-hoverOutline: #8c959f;
   --texra-widget-border: #d0d7de;
   --texra-widget-shadow: rgb(31 35 40 / 15%);
   --texra-icon-foreground: #57606a;
+  --texra-badge-background: #0969da;
+  --texra-badge-foreground: #ffffff;
   --texra-textLink-foreground: #0969da;
   --texra-textLink-activeForeground: #0550ae;
   --texra-errorForeground: #cf222e;
@@ -61,6 +75,148 @@
   --texra-terminal-foreground: #24292f;
   --texra-terminal-selectionBackground: #ddf4ff;
   --texra-terminalCursor-foreground: #24292f;
+  --texra-scrollbar-shadow: rgb(31 35 40 / 15%);
+  --texra-scrollbarSlider-background: rgb(31 35 40 / 20%);
+  --texra-scrollbarSlider-hoverBackground: rgb(31 35 40 / 30%);
+  --texra-scrollbarSlider-activeBackground: rgb(31 35 40 / 45%);
+
+  /* Desktop hosts the extension webviews without VS Code's theme injector. */
+  --vscode-font-family: var(--texra-font-family);
+  --vscode-font-size: var(--texra-font-size);
+  --vscode-font-weight: var(--texra-font-weight);
+  --vscode-foreground: var(--texra-foreground);
+  --vscode-descriptionForeground: var(--texra-descriptionForeground);
+  --vscode-editor-background: var(--texra-editor-background);
+  --vscode-editor-foreground: var(--texra-editor-foreground);
+  --vscode-sideBar-background: var(--texra-sideBar-background);
+  --vscode-sideBar-foreground: var(--texra-sideBar-foreground);
+  --vscode-sideBarSectionHeader-background: var(
+    --texra-sideBarSectionHeader-background
+  );
+  --vscode-sideBarTitle-foreground: var(--texra-sideBarTitle-foreground);
+  --vscode-panel-border: var(--texra-panel-border);
+  --vscode-panel-background: var(--texra-editor-background);
+  --vscode-panelTitle-activeBorder: var(--texra-focusBorder);
+  --vscode-panelTitle-activeForeground: var(--texra-foreground);
+  --vscode-panelTitle-inactiveForeground: var(--texra-descriptionForeground);
+  --vscode-panelSection-border: var(--texra-panelSection-border);
+  --vscode-settings-headerBorder: var(--texra-panel-border);
+  --vscode-focusBorder: var(--texra-focusBorder);
+  --vscode-button-background: var(--texra-button-background);
+  --vscode-button-foreground: var(--texra-button-foreground);
+  --vscode-button-border: var(--texra-button-border);
+  --vscode-button-hoverBackground: var(--texra-button-hoverBackground);
+  --vscode-button-secondaryBackground: var(--texra-button-secondaryBackground);
+  --vscode-button-secondaryForeground: var(--texra-button-secondaryForeground);
+  --vscode-button-secondaryHoverBackground: var(
+    --texra-button-secondaryHoverBackground
+  );
+  --vscode-button-separator: var(--texra-button-separator);
+  --vscode-dropdown-background: var(--texra-input-background);
+  --vscode-dropdown-border: var(--texra-dropdown-border);
+  --vscode-dropdown-foreground: var(--texra-input-foreground);
+  --vscode-input-background: var(--texra-input-background);
+  --vscode-input-border: var(--texra-input-border);
+  --vscode-input-foreground: var(--texra-input-foreground);
+  --vscode-input-placeholderForeground: var(
+    --texra-input-placeholderForeground
+  );
+  --vscode-inputOption-activeBackground: var(
+    --texra-inputOption-activeBackground
+  );
+  --vscode-inputOption-activeBorder: var(--texra-inputOption-activeBorder);
+  --vscode-inputOption-activeForeground: var(
+    --texra-inputOption-activeForeground
+  );
+  --vscode-inputValidation-errorBackground: var(
+    --texra-inputValidation-errorBackground
+  );
+  --vscode-inputValidation-errorBorder: var(
+    --texra-inputValidation-errorBorder
+  );
+  --vscode-textArea-background: var(--texra-input-background);
+  --vscode-textArea-border: var(--texra-input-border);
+  --vscode-textArea-foreground: var(--texra-input-foreground);
+  --vscode-textArea-placeholderForeground: var(
+    --texra-input-placeholderForeground
+  );
+  --vscode-settings-textInputBackground: var(--texra-input-background);
+  --vscode-settings-textInputBorder: var(--texra-input-border);
+  --vscode-settings-textInputForeground: var(--texra-input-foreground);
+  --vscode-checkbox-background: var(--texra-input-background);
+  --vscode-checkbox-border: var(--texra-input-border);
+  --vscode-checkbox-foreground: var(--texra-foreground);
+  --vscode-list-activeSelectionBackground: var(
+    --texra-list-activeSelectionBackground
+  );
+  --vscode-list-activeSelectionForeground: var(
+    --texra-list-activeSelectionForeground
+  );
+  --vscode-list-activeSelectionIconForeground: var(
+    --texra-list-activeSelectionForeground
+  );
+  --vscode-list-focusAndSelectionOutline: var(--texra-list-focusOutline);
+  --vscode-list-focusHighlightForeground: var(--texra-focusBorder);
+  --vscode-list-focusOutline: var(--texra-list-focusOutline);
+  --vscode-list-highlightForeground: var(--texra-focusBorder);
+  --vscode-list-hoverBackground: var(--texra-list-hoverBackground);
+  --vscode-list-hoverForeground: var(--texra-list-hoverForeground);
+  --vscode-list-inactiveSelectionBackground: var(
+    --texra-list-inactiveSelectionBackground
+  );
+  --vscode-list-warningForeground: var(--texra-list-warningForeground);
+  --vscode-menu-background: var(--texra-menu-background);
+  --vscode-menu-border: var(--texra-menu-border);
+  --vscode-menu-foreground: var(--texra-menu-foreground);
+  --vscode-menu-selectionBackground: var(--texra-menu-selectionBackground);
+  --vscode-menu-selectionBorder: var(--texra-menu-selectionBackground);
+  --vscode-menu-selectionForeground: var(--texra-menu-selectionForeground);
+  --vscode-menu-separatorBackground: var(--texra-menu-separatorBackground);
+  --vscode-toolbar-activeBackground: var(--texra-toolbar-activeBackground);
+  --vscode-toolbar-hoverBackground: var(--texra-toolbar-hoverBackground);
+  --vscode-toolbar-hoverOutline: var(--texra-toolbar-hoverOutline);
+  --vscode-widget-border: var(--texra-widget-border);
+  --vscode-widget-shadow: var(--texra-widget-shadow);
+  --vscode-icon-foreground: var(--texra-icon-foreground);
+  --vscode-badge-background: var(--texra-badge-background);
+  --vscode-badge-foreground: var(--texra-badge-foreground);
+  --vscode-progressBar-background: var(--texra-progressBar-background);
+  --vscode-textLink-foreground: var(--texra-textLink-foreground);
+  --vscode-textLink-activeForeground: var(--texra-textLink-activeForeground);
+  --vscode-errorForeground: var(--texra-errorForeground);
+  --vscode-editorError-foreground: var(--texra-editorError-foreground);
+  --vscode-editorWarning-foreground: var(--texra-editorWarning-foreground);
+  --vscode-editorWarning-background: var(--texra-editorWarning-background);
+  --vscode-editorInfo-foreground: var(--texra-editorInfo-foreground);
+  --vscode-editorInfo-background: var(--texra-editorInfo-background);
+  --vscode-terminal-background: var(--texra-terminal-background);
+  --vscode-terminal-foreground: var(--texra-terminal-foreground);
+  --vscode-terminal-selectionBackground: var(
+    --texra-terminal-selectionBackground
+  );
+  --vscode-terminalCursor-foreground: var(--texra-terminalCursor-foreground);
+  --vscode-scrollbar-shadow: var(--texra-scrollbar-shadow);
+  --vscode-scrollbarSlider-background: var(--texra-scrollbarSlider-background);
+  --vscode-scrollbarSlider-hoverBackground: var(
+    --texra-scrollbarSlider-hoverBackground
+  );
+  --vscode-scrollbarSlider-activeBackground: var(
+    --texra-scrollbarSlider-activeBackground
+  );
+  --vscode-testing-iconPassed: var(--texra-testing-iconPassed);
+  --vscode-testing-iconFailed: var(--texra-testing-iconFailed);
+  --vscode-charts-blue: var(--texra-charts-blue);
+  --vscode-charts-green: var(--texra-charts-green);
+  --vscode-charts-orange: var(--texra-charts-orange);
+  --vscode-charts-red: var(--texra-charts-red);
+  --vscode-charts-yellow: var(--texra-charts-yellow);
+  --vscode-settings-checkboxBackground: var(--texra-input-background);
+  --vscode-settings-checkboxBorder: var(--texra-input-border);
+  --vscode-settings-checkboxForeground: var(--texra-foreground);
+  --vscode-settings-dropdownBackground: var(--texra-input-background);
+  --vscode-settings-dropdownBorder: var(--texra-dropdown-border);
+  --vscode-settings-dropdownForeground: var(--texra-input-foreground);
+  --vscode-settings-dropdownListBorder: var(--texra-dropdown-border);
 }
 
 body.vscode-dark,
@@ -87,18 +243,32 @@ body.texra-dark {
   --texra-input-border: #3c3c3c;
   --texra-input-foreground: #cccccc;
   --texra-input-placeholderForeground: #a6a6a6;
+  --texra-inputOption-activeBackground: #04395e;
+  --texra-inputOption-activeBorder: #007acc;
+  --texra-inputOption-activeForeground: #ffffff;
+  --texra-inputValidation-errorBackground: #5a1d1d;
+  --texra-inputValidation-errorBorder: #be1100;
   --texra-list-activeSelectionBackground: #04395e;
   --texra-list-activeSelectionForeground: #ffffff;
+  --texra-list-focusOutline: #007fd4;
+  --texra-list-hoverForeground: #cccccc;
+  --texra-list-inactiveSelectionBackground: #37373d;
   --texra-list-hoverBackground: #2a2d2e;
   --texra-list-warningForeground: #cca700;
   --texra-menu-background: #252526;
   --texra-menu-border: #454545;
   --texra-menu-foreground: #cccccc;
+  --texra-menu-selectionBackground: #04395e;
+  --texra-menu-selectionForeground: #ffffff;
+  --texra-menu-separatorBackground: #454545;
   --texra-toolbar-activeBackground: #37373d;
   --texra-toolbar-hoverBackground: #2a2d2e;
+  --texra-toolbar-hoverOutline: #5a5d5e;
   --texra-widget-border: #454545;
   --texra-widget-shadow: rgb(0 0 0 / 36%);
   --texra-icon-foreground: #c5c5c5;
+  --texra-badge-background: #4d79cc;
+  --texra-badge-foreground: #ffffff;
   --texra-textLink-foreground: #4daafc;
   --texra-textLink-activeForeground: #8fc8ff;
   --texra-errorForeground: #f48771;
@@ -119,6 +289,10 @@ body.texra-dark {
   --texra-terminal-foreground: #cccccc;
   --texra-terminal-selectionBackground: #264f78;
   --texra-terminalCursor-foreground: #cccccc;
+  --texra-scrollbar-shadow: #000000;
+  --texra-scrollbarSlider-background: rgb(121 121 121 / 40%);
+  --texra-scrollbarSlider-hoverBackground: rgb(100 100 100 / 70%);
+  --texra-scrollbarSlider-activeBackground: rgb(191 191 191 / 40%);
 }
 
 body.vscode-high-contrast,
