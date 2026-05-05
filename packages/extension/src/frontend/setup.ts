@@ -18,11 +18,8 @@ import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import {
-  DEFAULT_MODELS,
-  MODEL_LIST_VERSION,
-  isDeprecatedModel,
-} from '@model/computeModelOptions';
+import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
+import { isDeprecatedModel } from '@model/computeModelOptions';
 import { LatexConfigValuesSchema } from '@shared/schemas/settingsViewMessages';
 import {
   LATEX_FIELD_TO_KEY,

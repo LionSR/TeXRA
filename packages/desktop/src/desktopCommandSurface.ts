@@ -12,9 +12,19 @@ import {
 import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopRoute } from './desktopShellMessages.js';
 
+export const DESKTOP_LOCAL_COMMANDS = {
+  OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
+  OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
+} as const;
+
+type DesktopLocalCommandId =
+  (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
+
 export const DESKTOP_COMMAND_IDS = [
   'texra.showMainView',
   'texra.showProgressView',
+  DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+  DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
   'texra.openSettings',
   'texra.showMemory',
   'texra.showAgentHistory',
@@ -22,7 +32,7 @@ export const DESKTOP_COMMAND_IDS = [
   'texra.showAgents',
   'texra.showTools',
   'texra.showMultiAgent',
-] as const satisfies readonly CommandId[];
+] as const satisfies readonly (CommandId | DesktopLocalCommandId)[];
 
 export type DesktopCommandId = (typeof DESKTOP_COMMAND_IDS)[number];
 
@@ -36,6 +46,8 @@ export interface DesktopCommandMenuEntry {
 export interface DesktopCommandActions {
   showRoute(route: DesktopRoute): void;
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
+  openLogFolder?(): void;
+  openWorkspaceFolder?(): void;
 }
 
 export interface DesktopSettingsTabMessage {
@@ -45,7 +57,13 @@ export interface DesktopSettingsTabMessage {
 }
 
 const DESKTOP_MENU_GROUPS = [
-  ['texra.showMainView', 'texra.showProgressView', 'texra.openSettings'],
+  [
+    'texra.showMainView',
+    'texra.showProgressView',
+    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+    DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
+    'texra.openSettings',
+  ],
   [
     'texra.showMemory',
     'texra.showAgentHistory',
@@ -56,11 +74,38 @@ const DESKTOP_MENU_GROUPS = [
   ],
 ] as const satisfies readonly (readonly DesktopCommandId[])[];
 
+const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
+  DesktopLocalCommandId,
+  DesktopCommandMenuEntry
+>([
+  [
+    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+      label: 'Open Folder',
+      category: 'TeXRA',
+      accelerator: 'CommandOrControl+O',
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
+      label: 'Open Logs Folder',
+      category: 'TeXRA',
+    },
+  ],
+]);
+
 export function getDesktopCommandMenuEntries(
   ids: readonly DesktopCommandId[] = DESKTOP_COMMAND_IDS,
   platform: NodeJS.Platform = process.platform,
 ): DesktopCommandMenuEntry[] {
   return ids.map((id) => {
+    if (isDesktopLocalCommandId(id)) {
+      return resolveLocalCommandEntry(id, platform);
+    }
+
     const entry = commandCatalogById.get(id);
     if (!entry) throw new Error(`Missing command catalog entry: ${id}`);
 
@@ -77,6 +122,18 @@ export function getDesktopCommandMenuEntries(
   });
 }
 
+function resolveLocalCommandEntry(
+  id: DesktopLocalCommandId,
+  platform: NodeJS.Platform,
+): DesktopCommandMenuEntry {
+  const entry = DESKTOP_LOCAL_COMMAND_ENTRIES.get(id);
+  if (!entry) throw new Error(`Missing desktop command entry: ${id}`);
+  return {
+    ...entry,
+    accelerator: toPlatformAccelerator(entry.accelerator, platform),
+  };
+}
+
 export function toElectronAccelerator(
   keybinding: CommandKeybinding,
   platform: NodeJS.Platform = process.platform,
@@ -87,7 +144,7 @@ export function toElectronAccelerator(
 }
 
 export function dispatchDesktopCommand(
-  id: CommandId,
+  id: DesktopCommandId,
   actions: DesktopCommandActions,
 ): boolean {
   switch (id) {
@@ -118,9 +175,34 @@ export function dispatchDesktopCommand(
     case 'texra.showMultiAgent':
       actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
       return true;
+    case DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER:
+      actions.openLogFolder?.();
+      return true;
+    case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
+      actions.openWorkspaceFolder?.();
+      return true;
     default:
-      return false;
+      return assertNever(id);
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled desktop command: ${value}`);
+}
+
+function isDesktopLocalCommandId(id: string): id is DesktopLocalCommandId {
+  return (Object.values(DESKTOP_LOCAL_COMMANDS) as readonly string[]).includes(
+    id,
+  );
+}
+
+function toPlatformAccelerator(
+  accelerator: string | undefined,
+  platform: NodeJS.Platform,
+): string | undefined {
+  if (!accelerator) return undefined;
+  if (platform !== 'darwin') return accelerator;
+  return accelerator.replaceAll('CommandOrControl', 'Command');
 }
 
 export function buildDesktopSettingsTabMessage(

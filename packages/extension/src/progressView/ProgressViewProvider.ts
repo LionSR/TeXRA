@@ -12,10 +12,8 @@ import {
 } from '@common/webview';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import {
-  buildBasicModelOptionsData,
-  computeModelOptionsData,
-} from '@model/computeModelOptions';
+import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';

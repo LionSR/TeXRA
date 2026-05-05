@@ -54,6 +54,10 @@ export class SettingsAgentDirectoryController {
     await this.deps.state.setConfiguredCustomDir('');
   }
 
+  async setCustomDir(path: string): Promise<void> {
+    await this.deps.state.setConfiguredCustomDir(path);
+  }
+
   planOpenAgentYaml(input: {
     source: AgentSource;
     name: string;
