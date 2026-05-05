@@ -130,6 +130,9 @@ describe('desktop command palette', () => {
     dom.window.document.body.append(controller.element);
     controller.open();
 
+    expect(controller.element.getAttribute('aria-label')).toBe(
+      'Command palette',
+    );
     const input = controller.element.querySelector<HTMLInputElement>(
       '.desktop-command-palette-input',
     );

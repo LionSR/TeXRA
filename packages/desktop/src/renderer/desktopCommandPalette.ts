@@ -60,6 +60,7 @@ export function createDesktopCommandPalette({
   element.hidden = true;
   element.setAttribute('role', 'dialog');
   element.setAttribute('aria-modal', 'true');
+  element.setAttribute('aria-label', 'Command palette');
 
   const panel = document.createElement('div');
   panel.className = 'desktop-command-palette-panel';
