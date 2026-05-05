@@ -1,93 +1,265 @@
 :root {
-  color-scheme: light;
-  --texra-font-family:
+  color-scheme: light dark;
+
+  --desktop-font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', sans-serif;
-  --texra-font-size: 13px;
-  --texra-font-weight: 400;
-  --texra-foreground: #1f2328;
-  --texra-descriptionForeground: #57606a;
-  --texra-editor-background: #ffffff;
-  --texra-editor-foreground: #1f2328;
-  --texra-sideBar-background: #f6f8fa;
-  --texra-sideBar-foreground: #1f2328;
-  --texra-sideBarSectionHeader-background: #eaeef2;
-  --texra-sideBarTitle-foreground: #1f2328;
-  --texra-panel-border: #d0d7de;
-  --texra-panelSection-border: #d0d7de;
-  --texra-focusBorder: #0969da;
-  --texra-button-background: #0969da;
+  --desktop-font-size: 13px;
+  --desktop-font-weight: 400;
+
+  --desktop-color-background: light-dark(#ffffff, #1e1e1e);
+  --desktop-color-foreground: light-dark(#1f2328, #d4d4d4);
+  --desktop-color-muted: light-dark(#57606a, #a6a6a6);
+  --desktop-color-sidebar: light-dark(#f6f8fa, #181818);
+  --desktop-color-sidebar-header: light-dark(#eaeef2, #222222);
+  --desktop-color-border: light-dark(#d0d7de, #2b2b2b);
+  --desktop-color-widget-border: light-dark(#d0d7de, #454545);
+  --desktop-color-input-background: light-dark(#ffffff, #313131);
+  --desktop-color-input-border: light-dark(#d0d7de, #3c3c3c);
+  --desktop-color-input-foreground: light-dark(#1f2328, #cccccc);
+  --desktop-color-placeholder: light-dark(#6e7781, #a6a6a6);
+  --desktop-color-accent: light-dark(#0969da, #0e639c);
+  --desktop-color-accent-hover: light-dark(#0757b7, #1177bb);
+  --desktop-color-accent-subtle: light-dark(#ddf4ff, #04395e);
+  --desktop-color-button-secondary: light-dark(#f6f8fa, #313131);
+  --desktop-color-button-secondary-hover: light-dark(#eaeef2, #3c3c3c);
+  --desktop-color-toolbar-active: light-dark(#dbeafe, #37373d);
+  --desktop-color-toolbar-hover: light-dark(#eaeef2, #2a2d2e);
+  --desktop-color-list-hover: light-dark(#eef2f6, #2a2d2e);
+  --desktop-color-menu-background: light-dark(#ffffff, #252526);
+  --desktop-color-menu-border: light-dark(#d0d7de, #454545);
+  --desktop-color-shadow: light-dark(rgb(31 35 40 / 15%), rgb(0 0 0 / 36%));
+  --desktop-color-error: light-dark(#cf222e, #f48771);
+  --desktop-color-warning: light-dark(#9a6700, #cca700);
+  --desktop-color-warning-background: light-dark(#fff8c5, #332a00);
+  --desktop-color-info: light-dark(#0969da, #75beff);
+  --desktop-color-info-background: light-dark(#ddf4ff, #063b49);
+  --desktop-color-success: light-dark(#1a7f37, #73c991);
+  --desktop-color-orange: light-dark(#bc4c00, #d18616);
+  --desktop-color-yellow: light-dark(#bf8700, #cca700);
+  --desktop-color-terminal-selection: light-dark(#ddf4ff, #264f78);
+  --desktop-color-scrollbar: light-dark(
+    rgb(31 35 40 / 20%),
+    rgb(121 121 121 / 40%)
+  );
+  --desktop-color-scrollbar-hover: light-dark(
+    rgb(31 35 40 / 30%),
+    rgb(100 100 100 / 70%)
+  );
+  --desktop-color-scrollbar-active: light-dark(
+    rgb(31 35 40 / 45%),
+    rgb(191 191 191 / 40%)
+  );
+
+  --texra-font-family: var(--desktop-font-family);
+  --texra-font-size: var(--desktop-font-size);
+  --texra-font-weight: var(--desktop-font-weight);
+  --texra-foreground: var(--desktop-color-foreground);
+  --texra-descriptionForeground: var(--desktop-color-muted);
+  --texra-editor-background: var(--desktop-color-background);
+  --texra-editor-foreground: var(--desktop-color-foreground);
+  --texra-editor-font-family: var(--desktop-font-family);
+  --texra-editor-font-size: var(--desktop-font-size);
+  --texra-sideBar-background: var(--desktop-color-sidebar);
+  --texra-sideBar-foreground: var(--desktop-color-foreground);
+  --texra-sideBarSectionHeader-background: var(--desktop-color-sidebar-header);
+  --texra-sideBarTitle-foreground: var(--desktop-color-foreground);
+  --texra-panel-border: var(--desktop-color-border);
+  --texra-panelSection-border: var(--desktop-color-border);
+  --texra-focusBorder: var(--desktop-color-accent);
+  --texra-button-background: var(--desktop-color-accent);
   --texra-button-foreground: #ffffff;
   --texra-button-border: transparent;
-  --texra-button-hoverBackground: #0757b7;
-  --texra-button-secondaryBackground: #f6f8fa;
-  --texra-button-secondaryForeground: #24292f;
-  --texra-button-secondaryHoverBackground: #eaeef2;
+  --texra-button-hoverBackground: var(--desktop-color-accent-hover);
+  --texra-button-secondaryBackground: var(--desktop-color-button-secondary);
+  --texra-button-secondaryForeground: var(--desktop-color-input-foreground);
+  --texra-button-secondaryHoverBackground: var(
+    --desktop-color-button-secondary-hover
+  );
   --texra-button-separator: rgb(255 255 255 / 40%);
-  --texra-dropdown-border: #d0d7de;
-  --texra-input-background: #ffffff;
-  --texra-input-border: #d0d7de;
-  --texra-input-foreground: #1f2328;
-  --texra-input-placeholderForeground: #6e7781;
-  --texra-inputOption-activeBackground: #ddf4ff;
-  --texra-inputOption-activeBorder: #0969da;
-  --texra-inputOption-activeForeground: #1f2328;
-  --texra-inputValidation-errorBackground: #ffebe9;
-  --texra-inputValidation-errorBorder: #cf222e;
-  --texra-list-activeSelectionBackground: #0969da;
+  --texra-dropdown-border: var(--desktop-color-input-border);
+  --texra-input-background: var(--desktop-color-input-background);
+  --texra-input-border: var(--desktop-color-input-border);
+  --texra-input-foreground: var(--desktop-color-input-foreground);
+  --texra-input-placeholderForeground: var(--desktop-color-placeholder);
+  --texra-inputOption-activeBackground: var(--desktop-color-accent-subtle);
+  --texra-inputOption-activeBorder: var(--desktop-color-accent);
+  --texra-inputOption-activeForeground: var(--desktop-color-foreground);
+  --texra-inputValidation-errorBackground: light-dark(#ffebe9, #5a1d1d);
+  --texra-inputValidation-errorBorder: var(--desktop-color-error);
+  --texra-inputValidation-infoBackground: var(--desktop-color-info-background);
+  --texra-inputValidation-infoBorder: var(--desktop-color-info);
+  --texra-inputValidation-infoForeground: var(--desktop-color-info);
+  --texra-inputValidation-warningBackground: var(
+    --desktop-color-warning-background
+  );
+  --texra-inputValidation-warningBorder: var(--desktop-color-warning);
+  --texra-inputValidation-warningForeground: var(--desktop-color-warning);
+  --texra-list-activeSelectionBackground: var(--desktop-color-accent);
   --texra-list-activeSelectionForeground: #ffffff;
-  --texra-list-focusOutline: #0969da;
-  --texra-list-hoverForeground: #1f2328;
-  --texra-list-inactiveSelectionBackground: #dbeafe;
-  --texra-list-hoverBackground: #eef2f6;
-  --texra-list-warningForeground: #9a6700;
-  --texra-menu-background: #ffffff;
-  --texra-menu-border: #d0d7de;
-  --texra-menu-foreground: #1f2328;
-  --texra-menu-selectionBackground: #0969da;
+  --texra-list-focusOutline: var(--desktop-color-accent);
+  --texra-list-hoverForeground: var(--desktop-color-foreground);
+  --texra-list-inactiveSelectionBackground: var(--desktop-color-accent-subtle);
+  --texra-list-hoverBackground: var(--desktop-color-list-hover);
+  --texra-list-warningForeground: var(--desktop-color-warning);
+  --texra-menu-background: var(--desktop-color-menu-background);
+  --texra-menu-border: var(--desktop-color-menu-border);
+  --texra-menu-foreground: var(--desktop-color-input-foreground);
+  --texra-menu-selectionBackground: var(--desktop-color-accent);
   --texra-menu-selectionForeground: #ffffff;
-  --texra-menu-separatorBackground: #d0d7de;
-  --texra-toolbar-activeBackground: #dbeafe;
-  --texra-toolbar-hoverBackground: #eaeef2;
-  --texra-toolbar-hoverOutline: #8c959f;
-  --texra-widget-border: #d0d7de;
-  --texra-widget-shadow: rgb(31 35 40 / 15%);
-  --texra-icon-foreground: #57606a;
-  --texra-badge-background: #0969da;
+  --texra-menu-separatorBackground: var(--desktop-color-menu-border);
+  --texra-toolbar-activeBackground: var(--desktop-color-toolbar-active);
+  --texra-toolbar-hoverBackground: var(--desktop-color-toolbar-hover);
+  --texra-toolbar-hoverOutline: var(--desktop-color-muted);
+  --texra-widget-border: var(--desktop-color-widget-border);
+  --texra-widget-shadow: var(--desktop-color-shadow);
+  --texra-icon-foreground: var(--desktop-color-muted);
+  --texra-badge-background: var(--desktop-color-accent);
   --texra-badge-foreground: #ffffff;
-  --texra-textLink-foreground: #0969da;
-  --texra-textLink-activeForeground: #0550ae;
-  --texra-errorForeground: #cf222e;
-  --texra-editorError-foreground: #cf222e;
-  --texra-editorWarning-foreground: #9a6700;
-  --texra-editorWarning-background: #fff8c5;
-  --texra-editorInfo-foreground: #0969da;
-  --texra-editorInfo-background: #ddf4ff;
-  --texra-progressBar-background: #0969da;
-  --texra-testing-iconPassed: #1a7f37;
-  --texra-testing-iconFailed: #cf222e;
-  --texra-charts-blue: #0969da;
-  --texra-charts-green: #1a7f37;
-  --texra-charts-orange: #bc4c00;
-  --texra-charts-red: #cf222e;
-  --texra-charts-yellow: #bf8700;
-  --texra-terminal-background: #ffffff;
-  --texra-terminal-foreground: #24292f;
-  --texra-terminal-selectionBackground: #ddf4ff;
-  --texra-terminalCursor-foreground: #24292f;
-  --texra-scrollbar-shadow: rgb(31 35 40 / 15%);
-  --texra-scrollbarSlider-background: rgb(31 35 40 / 20%);
-  --texra-scrollbarSlider-hoverBackground: rgb(31 35 40 / 30%);
-  --texra-scrollbarSlider-activeBackground: rgb(31 35 40 / 45%);
+  --texra-textBlockQuote-background: var(--desktop-color-accent-subtle);
+  --texra-textBlockQuote-border: var(--desktop-color-accent);
+  --texra-textCodeBlock-background: var(--desktop-color-sidebar);
+  --texra-textLink-foreground: var(--desktop-color-accent);
+  --texra-textLink-activeForeground: var(--desktop-color-accent-hover);
+  --texra-textPreformat-foreground: var(--desktop-color-input-foreground);
+  --texra-errorForeground: var(--desktop-color-error);
+  --texra-editorError-foreground: var(--desktop-color-error);
+  --texra-editorWarning-foreground: var(--desktop-color-warning);
+  --texra-editorWarning-background: var(--desktop-color-warning-background);
+  --texra-editorInfo-foreground: var(--desktop-color-info);
+  --texra-editorInfo-background: var(--desktop-color-info-background);
+  --texra-editor-inactiveSelectionBackground: var(
+    --desktop-color-accent-subtle
+  );
+  --texra-editor-selectionBackground: var(--desktop-color-accent-subtle);
+  --texra-editorWidget-background: var(--desktop-color-sidebar);
+  --texra-editorWidget-border: var(--desktop-color-widget-border);
+  --texra-editorHoverWidget-background: var(--desktop-color-sidebar);
+  --texra-editorHoverWidget-border: var(--desktop-color-widget-border);
+  --texra-editorHoverWidget-foreground: var(--desktop-color-foreground);
+  --texra-progressBar-background: var(--desktop-color-accent);
+  --texra-testing-iconPassed: var(--desktop-color-success);
+  --texra-testing-iconFailed: var(--desktop-color-error);
+  --texra-charts-blue: var(--desktop-color-accent);
+  --texra-charts-green: var(--desktop-color-success);
+  --texra-charts-orange: var(--desktop-color-orange);
+  --texra-charts-red: var(--desktop-color-error);
+  --texra-charts-yellow: var(--desktop-color-yellow);
+  --texra-terminal-background: var(--desktop-color-background);
+  --texra-terminal-foreground: var(--desktop-color-input-foreground);
+  --texra-terminal-selectionBackground: var(--desktop-color-terminal-selection);
+  --texra-terminalCursor-foreground: var(--desktop-color-input-foreground);
+  --texra-terminal-ansiBlack: light-dark(#24292f, #000000);
+  --texra-terminal-ansiBlue: var(--desktop-color-accent);
+  --texra-terminal-ansiBrightBlack: light-dark(#6e7781, #666666);
+  --texra-terminal-ansiBrightBlue: light-dark(#0550ae, #3794ff);
+  --texra-terminal-ansiBrightCyan: light-dark(#1b7c83, #39cccc);
+  --texra-terminal-ansiBrightGreen: var(--desktop-color-success);
+  --texra-terminal-ansiBrightMagenta: light-dark(#8250df, #d670d6);
+  --texra-terminal-ansiBrightRed: var(--desktop-color-error);
+  --texra-terminal-ansiBrightWhite: light-dark(#ffffff, #ffffff);
+  --texra-terminal-ansiBrightYellow: var(--desktop-color-yellow);
+  --texra-terminal-ansiCyan: light-dark(#1b7c83, #4ec9b0);
+  --texra-terminal-ansiGreen: var(--desktop-color-success);
+  --texra-terminal-ansiMagenta: light-dark(#8250df, #c586c0);
+  --texra-terminal-ansiRed: var(--desktop-color-error);
+  --texra-terminal-ansiWhite: light-dark(#6e7781, #cccccc);
+  --texra-terminal-ansiYellow: var(--desktop-color-yellow);
+  --texra-terminalCursor-foreground: var(--desktop-color-input-foreground);
+  --texra-scrollbar-shadow: var(--desktop-color-shadow);
+  --texra-scrollbarSlider-background: var(--desktop-color-scrollbar);
+  --texra-scrollbarSlider-hoverBackground: var(--desktop-color-scrollbar-hover);
+  --texra-scrollbarSlider-activeBackground: var(
+    --desktop-color-scrollbar-active
+  );
+  --texra-activityBarBadge-background: var(--desktop-color-accent);
+  --texra-notificationsInfoIcon-foreground: var(--desktop-color-info);
+  --texra-statusBarItem-warningBackground: var(--desktop-color-warning);
+  --texra-symbolIcon-classForeground: var(--desktop-color-orange);
+  --texra-symbolIcon-constantForeground: var(--desktop-color-accent);
+  --texra-symbolIcon-functionForeground: var(--desktop-color-yellow);
+  --texra-symbolIcon-keywordForeground: light-dark(#8250df, #c586c0);
+  --texra-symbolIcon-propertyForeground: var(--desktop-color-accent);
+  --texra-symbolIcon-variableForeground: var(--desktop-color-input-foreground);
+}
 
-  /* Desktop hosts the extension webviews without VS Code's theme injector. */
+body.vscode-light,
+body.texra-light {
+  color-scheme: light;
+}
+
+body.vscode-dark,
+body.texra-dark {
+  color-scheme: dark;
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light,
+body.texra-high-contrast {
+  color-scheme: light dark;
+  --desktop-color-background: Canvas;
+  --desktop-color-foreground: CanvasText;
+  --desktop-color-muted: GrayText;
+  --desktop-color-sidebar: Canvas;
+  --desktop-color-sidebar-header: Canvas;
+  --desktop-color-border: CanvasText;
+  --desktop-color-widget-border: CanvasText;
+  --desktop-color-input-background: Field;
+  --desktop-color-input-border: CanvasText;
+  --desktop-color-input-foreground: FieldText;
+  --desktop-color-placeholder: GrayText;
+  --desktop-color-accent: Highlight;
+  --desktop-color-accent-hover: Highlight;
+  --desktop-color-accent-subtle: Canvas;
+  --desktop-color-button-secondary: ButtonFace;
+  --desktop-color-button-secondary-hover: ButtonFace;
+  --desktop-color-toolbar-active: Highlight;
+  --desktop-color-toolbar-hover: ButtonFace;
+  --desktop-color-list-hover: ButtonFace;
+  --desktop-color-menu-background: Canvas;
+  --desktop-color-menu-border: CanvasText;
+  --desktop-color-error: Mark;
+  --desktop-color-warning: Mark;
+  --desktop-color-info: Highlight;
+  --desktop-color-success: Highlight;
+  --texra-button-foreground: HighlightText;
+  --texra-list-activeSelectionForeground: HighlightText;
+  --texra-menu-selectionForeground: HighlightText;
+  --texra-badge-foreground: HighlightText;
+  --texra-contrastBorder: CanvasText;
+}
+
+/* Compatibility exports for reused VS Code webview CSS and @vscode-elements. */
+:root {
   --vscode-font-family: var(--texra-font-family);
   --vscode-font-size: var(--texra-font-size);
   --vscode-font-weight: var(--texra-font-weight);
   --vscode-foreground: var(--texra-foreground);
   --vscode-descriptionForeground: var(--texra-descriptionForeground);
   --vscode-editor-background: var(--texra-editor-background);
+  --vscode-editor-font-family: var(--texra-editor-font-family);
+  --vscode-editor-font-size: var(--texra-editor-font-size);
   --vscode-editor-foreground: var(--texra-editor-foreground);
+  --vscode-editor-inactiveSelectionBackground: var(
+    --texra-editor-inactiveSelectionBackground
+  );
+  --vscode-editor-selectionBackground: var(--texra-editor-selectionBackground);
+  --vscode-editorError-foreground: var(--texra-editorError-foreground);
+  --vscode-editorHoverWidget-background: var(
+    --texra-editorHoverWidget-background
+  );
+  --vscode-editorHoverWidget-border: var(--texra-editorHoverWidget-border);
+  --vscode-editorHoverWidget-foreground: var(
+    --texra-editorHoverWidget-foreground
+  );
+  --vscode-editorInfo-background: var(--texra-editorInfo-background);
+  --vscode-editorInfo-foreground: var(--texra-editorInfo-foreground);
+  --vscode-editorWarning-background: var(--texra-editorWarning-background);
+  --vscode-editorWarning-foreground: var(--texra-editorWarning-foreground);
+  --vscode-editorWidget-background: var(--texra-editorWidget-background);
+  --vscode-editorWidget-border: var(--texra-editorWidget-border);
+  --vscode-errorForeground: var(--texra-errorForeground);
+  --vscode-focusBorder: var(--texra-focusBorder);
   --vscode-sideBar-background: var(--texra-sideBar-background);
   --vscode-sideBar-foreground: var(--texra-sideBar-foreground);
   --vscode-sideBarSectionHeader-background: var(
@@ -101,10 +273,9 @@
   --vscode-panelTitle-inactiveForeground: var(--texra-descriptionForeground);
   --vscode-panelSection-border: var(--texra-panelSection-border);
   --vscode-settings-headerBorder: var(--texra-panel-border);
-  --vscode-focusBorder: var(--texra-focusBorder);
   --vscode-button-background: var(--texra-button-background);
-  --vscode-button-foreground: var(--texra-button-foreground);
   --vscode-button-border: var(--texra-button-border);
+  --vscode-button-foreground: var(--texra-button-foreground);
   --vscode-button-hoverBackground: var(--texra-button-hoverBackground);
   --vscode-button-secondaryBackground: var(--texra-button-secondaryBackground);
   --vscode-button-secondaryForeground: var(--texra-button-secondaryForeground);
@@ -134,18 +305,41 @@
   --vscode-inputValidation-errorBorder: var(
     --texra-inputValidation-errorBorder
   );
+  --vscode-inputValidation-infoBackground: var(
+    --texra-inputValidation-infoBackground
+  );
+  --vscode-inputValidation-infoBorder: var(--texra-inputValidation-infoBorder);
+  --vscode-inputValidation-infoForeground: var(
+    --texra-inputValidation-infoForeground
+  );
+  --vscode-inputValidation-warningBackground: var(
+    --texra-inputValidation-warningBackground
+  );
+  --vscode-inputValidation-warningBorder: var(
+    --texra-inputValidation-warningBorder
+  );
+  --vscode-inputValidation-warningForeground: var(
+    --texra-inputValidation-warningForeground
+  );
   --vscode-textArea-background: var(--texra-input-background);
   --vscode-textArea-border: var(--texra-input-border);
   --vscode-textArea-foreground: var(--texra-input-foreground);
   --vscode-textArea-placeholderForeground: var(
     --texra-input-placeholderForeground
   );
-  --vscode-settings-textInputBackground: var(--texra-input-background);
-  --vscode-settings-textInputBorder: var(--texra-input-border);
-  --vscode-settings-textInputForeground: var(--texra-input-foreground);
   --vscode-checkbox-background: var(--texra-input-background);
   --vscode-checkbox-border: var(--texra-input-border);
   --vscode-checkbox-foreground: var(--texra-foreground);
+  --vscode-settings-checkboxBackground: var(--texra-input-background);
+  --vscode-settings-checkboxBorder: var(--texra-input-border);
+  --vscode-settings-checkboxForeground: var(--texra-foreground);
+  --vscode-settings-dropdownBackground: var(--texra-input-background);
+  --vscode-settings-dropdownBorder: var(--texra-dropdown-border);
+  --vscode-settings-dropdownForeground: var(--texra-input-foreground);
+  --vscode-settings-dropdownListBorder: var(--texra-dropdown-border);
+  --vscode-settings-textInputBackground: var(--texra-input-background);
+  --vscode-settings-textInputBorder: var(--texra-input-border);
+  --vscode-settings-textInputForeground: var(--texra-input-foreground);
   --vscode-list-activeSelectionBackground: var(
     --texra-list-activeSelectionBackground
   );
@@ -181,20 +375,41 @@
   --vscode-badge-background: var(--texra-badge-background);
   --vscode-badge-foreground: var(--texra-badge-foreground);
   --vscode-progressBar-background: var(--texra-progressBar-background);
-  --vscode-textLink-foreground: var(--texra-textLink-foreground);
+  --vscode-textBlockQuote-background: var(--texra-textBlockQuote-background);
+  --vscode-textBlockQuote-border: var(--texra-textBlockQuote-border);
+  --vscode-textCodeBlock-background: var(--texra-textCodeBlock-background);
   --vscode-textLink-activeForeground: var(--texra-textLink-activeForeground);
-  --vscode-errorForeground: var(--texra-errorForeground);
-  --vscode-editorError-foreground: var(--texra-editorError-foreground);
-  --vscode-editorWarning-foreground: var(--texra-editorWarning-foreground);
-  --vscode-editorWarning-background: var(--texra-editorWarning-background);
-  --vscode-editorInfo-foreground: var(--texra-editorInfo-foreground);
-  --vscode-editorInfo-background: var(--texra-editorInfo-background);
+  --vscode-textLink-foreground: var(--texra-textLink-foreground);
+  --vscode-textPreformat-foreground: var(--texra-textPreformat-foreground);
   --vscode-terminal-background: var(--texra-terminal-background);
   --vscode-terminal-foreground: var(--texra-terminal-foreground);
   --vscode-terminal-selectionBackground: var(
     --texra-terminal-selectionBackground
   );
   --vscode-terminalCursor-foreground: var(--texra-terminalCursor-foreground);
+  --vscode-terminal-ansiBlack: var(--texra-terminal-ansiBlack);
+  --vscode-terminal-ansiBlue: var(--texra-terminal-ansiBlue);
+  --vscode-terminal-ansiBrightBlack: var(--texra-terminal-ansiBrightBlack);
+  --vscode-terminal-ansiBrightBlue: var(--texra-terminal-ansiBrightBlue);
+  --vscode-terminal-ansiBrightCyan: var(--texra-terminal-ansiBrightCyan);
+  --vscode-terminal-ansiBrightGreen: var(--texra-terminal-ansiBrightGreen);
+  --vscode-terminal-ansiBrightMagenta: var(--texra-terminal-ansiBrightMagenta);
+  --vscode-terminal-ansiBrightRed: var(--texra-terminal-ansiBrightRed);
+  --vscode-terminal-ansiBrightWhite: var(--texra-terminal-ansiBrightWhite);
+  --vscode-terminal-ansiBrightYellow: var(--texra-terminal-ansiBrightYellow);
+  --vscode-terminal-ansiCyan: var(--texra-terminal-ansiCyan);
+  --vscode-terminal-ansiGreen: var(--texra-terminal-ansiGreen);
+  --vscode-terminal-ansiMagenta: var(--texra-terminal-ansiMagenta);
+  --vscode-terminal-ansiRed: var(--texra-terminal-ansiRed);
+  --vscode-terminal-ansiWhite: var(--texra-terminal-ansiWhite);
+  --vscode-terminal-ansiYellow: var(--texra-terminal-ansiYellow);
+  --vscode-testing-iconFailed: var(--texra-testing-iconFailed);
+  --vscode-testing-iconPassed: var(--texra-testing-iconPassed);
+  --vscode-charts-blue: var(--texra-charts-blue);
+  --vscode-charts-green: var(--texra-charts-green);
+  --vscode-charts-orange: var(--texra-charts-orange);
+  --vscode-charts-red: var(--texra-charts-red);
+  --vscode-charts-yellow: var(--texra-charts-yellow);
   --vscode-scrollbar-shadow: var(--texra-scrollbar-shadow);
   --vscode-scrollbarSlider-background: var(--texra-scrollbarSlider-background);
   --vscode-scrollbarSlider-hoverBackground: var(
@@ -203,104 +418,29 @@
   --vscode-scrollbarSlider-activeBackground: var(
     --texra-scrollbarSlider-activeBackground
   );
-  --vscode-testing-iconPassed: var(--texra-testing-iconPassed);
-  --vscode-testing-iconFailed: var(--texra-testing-iconFailed);
-  --vscode-charts-blue: var(--texra-charts-blue);
-  --vscode-charts-green: var(--texra-charts-green);
-  --vscode-charts-orange: var(--texra-charts-orange);
-  --vscode-charts-red: var(--texra-charts-red);
-  --vscode-charts-yellow: var(--texra-charts-yellow);
-  --vscode-settings-checkboxBackground: var(--texra-input-background);
-  --vscode-settings-checkboxBorder: var(--texra-input-border);
-  --vscode-settings-checkboxForeground: var(--texra-foreground);
-  --vscode-settings-dropdownBackground: var(--texra-input-background);
-  --vscode-settings-dropdownBorder: var(--texra-dropdown-border);
-  --vscode-settings-dropdownForeground: var(--texra-input-foreground);
-  --vscode-settings-dropdownListBorder: var(--texra-dropdown-border);
-}
-
-body.vscode-dark,
-body.texra-dark {
-  color-scheme: dark;
-  --texra-foreground: #d4d4d4;
-  --texra-descriptionForeground: #a6a6a6;
-  --texra-editor-background: #1e1e1e;
-  --texra-editor-foreground: #d4d4d4;
-  --texra-sideBar-background: #181818;
-  --texra-sideBar-foreground: #cccccc;
-  --texra-sideBarSectionHeader-background: #222222;
-  --texra-sideBarTitle-foreground: #cccccc;
-  --texra-panel-border: #2b2b2b;
-  --texra-panelSection-border: #2b2b2b;
-  --texra-focusBorder: #007fd4;
-  --texra-button-background: #0e639c;
-  --texra-button-hoverBackground: #1177bb;
-  --texra-button-secondaryBackground: #313131;
-  --texra-button-secondaryForeground: #cccccc;
-  --texra-button-secondaryHoverBackground: #3c3c3c;
-  --texra-dropdown-border: #3c3c3c;
-  --texra-input-background: #313131;
-  --texra-input-border: #3c3c3c;
-  --texra-input-foreground: #cccccc;
-  --texra-input-placeholderForeground: #a6a6a6;
-  --texra-inputOption-activeBackground: #04395e;
-  --texra-inputOption-activeBorder: #007acc;
-  --texra-inputOption-activeForeground: #ffffff;
-  --texra-inputValidation-errorBackground: #5a1d1d;
-  --texra-inputValidation-errorBorder: #be1100;
-  --texra-list-activeSelectionBackground: #04395e;
-  --texra-list-activeSelectionForeground: #ffffff;
-  --texra-list-focusOutline: #007fd4;
-  --texra-list-hoverForeground: #cccccc;
-  --texra-list-inactiveSelectionBackground: #37373d;
-  --texra-list-hoverBackground: #2a2d2e;
-  --texra-list-warningForeground: #cca700;
-  --texra-menu-background: #252526;
-  --texra-menu-border: #454545;
-  --texra-menu-foreground: #cccccc;
-  --texra-menu-selectionBackground: #04395e;
-  --texra-menu-selectionForeground: #ffffff;
-  --texra-menu-separatorBackground: #454545;
-  --texra-toolbar-activeBackground: #37373d;
-  --texra-toolbar-hoverBackground: #2a2d2e;
-  --texra-toolbar-hoverOutline: #5a5d5e;
-  --texra-widget-border: #454545;
-  --texra-widget-shadow: rgb(0 0 0 / 36%);
-  --texra-icon-foreground: #c5c5c5;
-  --texra-badge-background: #4d79cc;
-  --texra-badge-foreground: #ffffff;
-  --texra-textLink-foreground: #4daafc;
-  --texra-textLink-activeForeground: #8fc8ff;
-  --texra-errorForeground: #f48771;
-  --texra-editorError-foreground: #f48771;
-  --texra-editorWarning-foreground: #cca700;
-  --texra-editorWarning-background: #332a00;
-  --texra-editorInfo-foreground: #75beff;
-  --texra-editorInfo-background: #063b49;
-  --texra-progressBar-background: #0e70c0;
-  --texra-testing-iconPassed: #73c991;
-  --texra-testing-iconFailed: #f48771;
-  --texra-charts-blue: #3794ff;
-  --texra-charts-green: #89d185;
-  --texra-charts-orange: #d18616;
-  --texra-charts-red: #f48771;
-  --texra-charts-yellow: #cca700;
-  --texra-terminal-background: #1e1e1e;
-  --texra-terminal-foreground: #cccccc;
-  --texra-terminal-selectionBackground: #264f78;
-  --texra-terminalCursor-foreground: #cccccc;
-  --texra-scrollbar-shadow: #000000;
-  --texra-scrollbarSlider-background: rgb(121 121 121 / 40%);
-  --texra-scrollbarSlider-hoverBackground: rgb(100 100 100 / 70%);
-  --texra-scrollbarSlider-activeBackground: rgb(191 191 191 / 40%);
-}
-
-body.vscode-high-contrast,
-body.vscode-high-contrast-light,
-body.texra-high-contrast {
-  --texra-contrastBorder: currentColor;
-  --texra-focusBorder: #f38518;
-  --texra-panel-border: currentColor;
-  --texra-panelSection-border: currentColor;
-  --texra-widget-border: currentColor;
+  --vscode-activityBarBadge-background: var(
+    --texra-activityBarBadge-background
+  );
+  --vscode-notificationsInfoIcon-foreground: var(
+    --texra-notificationsInfoIcon-foreground
+  );
+  --vscode-statusBarItem-warningBackground: var(
+    --texra-statusBarItem-warningBackground
+  );
+  --vscode-symbolIcon-classForeground: var(--texra-symbolIcon-classForeground);
+  --vscode-symbolIcon-constantForeground: var(
+    --texra-symbolIcon-constantForeground
+  );
+  --vscode-symbolIcon-functionForeground: var(
+    --texra-symbolIcon-functionForeground
+  );
+  --vscode-symbolIcon-keywordForeground: var(
+    --texra-symbolIcon-keywordForeground
+  );
+  --vscode-symbolIcon-propertyForeground: var(
+    --texra-symbolIcon-propertyForeground
+  );
+  --vscode-symbolIcon-variableForeground: var(
+    --texra-symbolIcon-variableForeground
+  );
 }
