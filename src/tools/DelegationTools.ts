@@ -39,7 +39,7 @@ import * as logger from '@agent/core/logger';
 import {
   getVisibleModels,
   resolveVisibleModel,
-} from '@model/computeModelOptions';
+} from '@model/modelOptionsBasic';
 import {
   AGENT_CATEGORY,
   DEFAULT_TOOL_CONFIG,

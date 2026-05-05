@@ -49,9 +49,10 @@ body {
   background: var(--texra-button-secondaryBackground);
 }
 
-.desktop-command-button {
+.desktop-command-button,
+.desktop-log-button,
+.desktop-folder-button {
   height: 28px;
-  margin-left: auto;
   padding: 0 10px;
   border: 1px solid var(--texra-panel-border);
   border-radius: 4px;
@@ -61,7 +62,13 @@ body {
   cursor: pointer;
 }
 
-.desktop-command-button:hover {
+.desktop-command-button {
+  margin-left: auto;
+}
+
+.desktop-command-button:hover,
+.desktop-log-button:hover,
+.desktop-folder-button:hover {
   background: var(--texra-toolbar-hoverBackground);
 }
 
@@ -167,4 +174,67 @@ body {
 .desktop-command-palette-meta {
   color: var(--texra-descriptionForeground);
   font-size: 12px;
+}
+
+.desktop-empty-workspace {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: 48px 24px;
+}
+
+.desktop-empty-workspace-panel {
+  max-width: 560px;
+  text-align: center;
+}
+
+.desktop-empty-workspace-icon {
+  color: var(--texra-button-background);
+  font-size: 44px;
+}
+
+.desktop-empty-workspace h1 {
+  margin: 20px 0 10px;
+  color: var(--texra-foreground);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.desktop-empty-workspace p {
+  margin: 0;
+  color: var(--texra-descriptionForeground);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.desktop-empty-workspace-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.desktop-primary-button,
+.desktop-secondary-button {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.desktop-primary-button {
+  border: 1px solid var(--texra-button-background);
+  background: var(--texra-button-background);
+  color: var(--texra-button-foreground);
+}
+
+.desktop-secondary-button {
+  border: 1px solid var(--texra-button-border);
+  background: var(--texra-button-secondaryBackground);
+  color: var(--texra-button-secondaryForeground);
+}
+
+.desktop-secondary-button:hover {
+  background: var(--texra-button-secondaryHoverBackground);
 }

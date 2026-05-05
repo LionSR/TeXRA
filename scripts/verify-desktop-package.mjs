@@ -12,7 +12,7 @@ import {
 } from './extension-package-utils.mjs';
 
 const require = createRequire(import.meta.url);
-const { extractFile, listPackage } = require('@electron/asar');
+const { extractFile, listPackage, statFile } = require('@electron/asar');
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopRoot = join(repoRoot, 'packages', 'desktop');
@@ -27,6 +27,38 @@ const desktopSourceBoundaryDirs = [
   ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
 ];
 const bundledAgentResourceDirs = ['agents', 'tool_use_agents'];
+const codexPlatformInfoByKey = {
+  'linux-x64': {
+    pkg: '@openai/codex-linux-x64',
+    triple: 'x86_64-unknown-linux-musl',
+    binaryName: 'codex',
+  },
+  'linux-arm64': {
+    pkg: '@openai/codex-linux-arm64',
+    triple: 'aarch64-unknown-linux-musl',
+    binaryName: 'codex',
+  },
+  'darwin-x64': {
+    pkg: '@openai/codex-darwin-x64',
+    triple: 'x86_64-apple-darwin',
+    binaryName: 'codex',
+  },
+  'darwin-arm64': {
+    pkg: '@openai/codex-darwin-arm64',
+    triple: 'aarch64-apple-darwin',
+    binaryName: 'codex',
+  },
+  'win32-x64': {
+    pkg: '@openai/codex-win32-x64',
+    triple: 'x86_64-pc-windows-msvc',
+    binaryName: 'codex.exe',
+  },
+  'win32-arm64': {
+    pkg: '@openai/codex-win32-arm64',
+    triple: 'aarch64-pc-windows-msvc',
+    binaryName: 'codex.exe',
+  },
+};
 const desktopStartupForbiddenBundleMarkers = [
   {
     label: '@google/genai',
@@ -150,7 +182,18 @@ function createAsarAppReader(asarPath) {
     }
     throw lastError;
   }
+  function isAsarEntryUnpacked(path) {
+    for (const candidate of asarEntryPathCandidates(path)) {
+      try {
+        return statFile(asarPath, candidate).unpacked === true;
+      } catch {
+        // Try the next normalized candidate.
+      }
+    }
+    return false;
+  }
   return {
+    isAsar: true,
     label: relative(repoRoot, asarPath),
     async exists(path) {
       if (entries.has(normalizeAsarPath(path))) return true;
@@ -180,6 +223,9 @@ function createAsarAppReader(asarPath) {
       }
       return readFile(join(resourceRoot, path));
     },
+    async isUnpacked(path) {
+      return isAsarEntryUnpacked(path);
+    },
     async listDir(path) {
       const prefix = `${normalizeAsarPath(path)}/`;
       const asarEntries = [...entries]
@@ -200,6 +246,7 @@ function createAsarAppReader(asarPath) {
 
 function createDirectoryAppReader(appRoot) {
   return {
+    isAsar: false,
     label: relative(repoRoot, appRoot),
     exists(path) {
       return exists(join(appRoot, path));
@@ -228,6 +275,9 @@ function createDirectoryAppReader(appRoot) {
         if (error?.code === 'ENOENT') return [];
         throw error;
       }
+    },
+    async isUnpacked() {
+      return false;
     },
   };
 }
@@ -372,6 +422,80 @@ function dependencyPackageJsonPath(name) {
   return join('node_modules', name, 'package.json');
 }
 
+function codexBinaryPath(prefix, platformInfo) {
+  return posix.join(
+    prefix,
+    'node_modules',
+    ...platformInfo.pkg.split('/'),
+    'vendor',
+    platformInfo.triple,
+    'codex',
+    platformInfo.binaryName,
+  );
+}
+
+function expectedCodexPlatformKeys(app) {
+  const label = app.label.replaceAll('\\', '/').toLowerCase();
+  if (label.includes('.app/contents/resources/app')) {
+    return ['darwin-x64', 'darwin-arm64'];
+  }
+
+  if (label.includes('linux')) {
+    return [
+      label.includes('arm64') || label.includes('aarch64')
+        ? 'linux-arm64'
+        : 'linux-x64',
+    ];
+  }
+
+  if (label.includes('win')) {
+    return [
+      label.includes('arm64') || label.includes('aarch64')
+        ? 'win32-arm64'
+        : 'win32-x64',
+    ];
+  }
+
+  return [];
+}
+
+async function checkCodexUnpackedBinaries(app, failures) {
+  const platformKeys = expectedCodexPlatformKeys(app);
+  if (platformKeys.length === 0) {
+    failures.push(
+      `Could not infer expected Codex CLI platform from packaged app path: ${app.label}`,
+    );
+    return false;
+  }
+
+  for (const platformKey of platformKeys) {
+    const platformInfo = codexPlatformInfoByKey[platformKey];
+    const unpackedBinaryPath = codexBinaryPath(
+      'app.asar.unpacked',
+      platformInfo,
+    );
+    if (!(await app.exists(unpackedBinaryPath))) {
+      failures.push(
+        `Packaged desktop app is missing the unpacked Codex CLI binary for ${platformKey}: ${unpackedBinaryPath}`,
+      );
+      continue;
+    }
+
+    const archivedBinaryPath = codexBinaryPath('', platformInfo);
+    if (
+      app.isAsar &&
+      (await app.exists(archivedBinaryPath)) &&
+      !(await app.isUnpacked(archivedBinaryPath))
+    ) {
+      failures.push(
+        `Packaged desktop app keeps the Codex CLI binary inside app.asar for ${platformKey}; it must be unpacked: ${archivedBinaryPath}`,
+      );
+    }
+  }
+
+  return true;
+}
+
 async function checkRuntimeDependencies(app, appPackageJson, failures) {
   const sourcePackageJson = await readJson(desktopPackageJsonPath);
   const sourceDependencies = sourcePackageJson.dependencies ?? {};
@@ -453,6 +577,7 @@ async function checkMacIcon(app, failures) {
 const app = await findPackagedApp();
 const failures = [];
 let checkedMacIcon = false;
+let checkedCodexUnpackedBinaries = false;
 
 if (!app) {
   failures.push(`No packaged Electron app found under ${packageRoot}`);
@@ -471,6 +596,10 @@ if (!app) {
   await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
   await checkBundledResources(app, failures);
   checkedMacIcon = await checkMacIcon(app, failures);
+  checkedCodexUnpackedBinaries = await checkCodexUnpackedBinaries(
+    app,
+    failures,
+  );
   await checkNoVscodeRuntimeImport(app, failures);
   await checkDesktopMainDynamicRequireShim(app, failures);
   await checkDesktopStartupBundles(app, failures);
@@ -510,5 +639,12 @@ const summary = [
 ];
 
 if (checkedMacIcon) summary.splice(7, 0, '- macOS app icon');
+if (checkedCodexUnpackedBinaries) {
+  summary.splice(
+    checkedMacIcon ? 8 : 7,
+    0,
+    '- unpacked Codex CLI platform binaries',
+  );
+}
 
 console.log(summary.join('\n'));

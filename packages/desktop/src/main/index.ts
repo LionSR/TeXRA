@@ -6,12 +6,17 @@ import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
+import {
+  attachRendererConsoleLog,
+  getDesktopLogDirectory,
+} from './desktopAppLog.js';
 import { installDesktopMenu } from './desktopMenu.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
+import { serializeWorkspacePresenceArg } from '../workspacePath.js';
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const __dirname = findDesktopMainDir(moduleDirname);
@@ -62,7 +67,7 @@ function installContentSecurityPolicy(): void {
   });
 }
 
-function createWindow(): void {
+function createWindow(options: { workspacePath: string | undefined }): void {
   const window = new BrowserWindow({
     width: 960,
     height: 680,
@@ -74,6 +79,9 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      additionalArguments: [
+        serializeWorkspacePresenceArg(options.workspacePath != null),
+      ],
     },
   });
   const reportAsyncError = (error: unknown) => console.error(error);
@@ -84,6 +92,17 @@ function createWindow(): void {
     const errorMessage = await shell.openPath(filePath);
     if (errorMessage) throw new Error(errorMessage);
   };
+  const openLogsFolder = async () => openPath(getDesktopLogDirectory());
+  const openWorkspaceFolder = async () => {
+    console.warn('Desktop workspace folder switching is disabled.');
+    await dialog.showMessageBox(window, {
+      type: 'info',
+      message: 'Open Folder is not enabled in this desktop build yet.',
+      detail:
+        'Folder switching needs the same workspace lifecycle guarantees as the VS Code extension. For now, launch TeXRA with --texra-workspace <path>, set TEXRA_WORKSPACE_PATH, or use the TeXRA VS Code extension for folder-aware workflows.',
+    });
+  };
+  attachRendererConsoleLog(window.webContents);
   const agentExecution = createDesktopAgentExecution({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     openPath,
@@ -106,6 +125,14 @@ function createWindow(): void {
   });
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    sendStartupCatalogData: true,
+    selectCustomAgentDirectory: async () => {
+      const result = await dialog.showOpenDialog(window, {
+        title: 'Select Custom Agents Folder',
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      return result.canceled ? undefined : result.filePaths[0];
+    },
     onError: reportAsyncError,
   });
   const progressIpc = createDesktopProgressIpc({
@@ -116,7 +143,9 @@ function createWindow(): void {
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
       getCustomAgentDirectory: () => getAgentDirectories().custom(),
+      openLogFolder: openLogsFolder,
       openPath,
+      openWorkspaceFolder,
       onAsyncError: reportAsyncError,
     },
   );
@@ -143,12 +172,14 @@ function createWindow(): void {
 app
   .whenReady()
   .then(async () => {
-    await initializeElectronPlatform(__dirname);
+    const platformInit = await initializeElectronPlatform(__dirname);
     installContentSecurityPolicy();
-    createWindow();
+    createWindow({ workspacePath: platformInit.workspacePath });
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow({ workspacePath: platformInit.workspacePath });
+      }
     });
   })
   .catch((error: unknown) => {
