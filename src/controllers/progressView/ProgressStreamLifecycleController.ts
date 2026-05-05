@@ -54,18 +54,26 @@ export class ProgressStreamLifecycleController {
     const wasActive = this.deps.state.getActiveStream() === stream;
     await this.deps.state.clearStream(stream);
 
-    if (wasActive) {
-      this.deps.state.setActiveStream(
-        this.deps.state.pickValidActiveStream(
-          this.deps.host.getVisibleStreamIds(),
-        ),
-      );
+    let shouldActivateStream = false;
+    const activeAfterClear = this.deps.state.getActiveStream();
+    const visibleStreams = this.deps.host.getVisibleStreamIds();
+    const hasVisibleActive =
+      activeAfterClear !== '' && visibleStreams.includes(activeAfterClear);
+    if (activeAfterClear === stream || (wasActive && !hasVisibleActive)) {
+      const nextActive =
+        visibleStreams.length === 0
+          ? ''
+          : this.deps.state.pickValidActiveStream(visibleStreams);
+      this.deps.state.setActiveStream(nextActive);
+      shouldActivateStream = nextActive !== '';
+    } else if (wasActive && hasVisibleActive) {
+      shouldActivateStream = true;
     }
 
     this.deps.host.deleteRenderedStream(stream);
 
     const nextActive = this.deps.state.getActiveStream();
-    if (wasActive && nextActive) {
+    if (shouldActivateStream && nextActive) {
       await this.deps.host.activateStream(nextActive);
     }
   }
