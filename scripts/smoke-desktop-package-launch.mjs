@@ -142,6 +142,16 @@ async function waitForExitOrTimeout(exitPromise, timeoutMs) {
   ]);
 }
 
+async function readPendingExit(exitPromise) {
+  const result = await Promise.race([
+    exitPromise.then((exit) => ({ exit })),
+    new Promise((resolve) => {
+      setImmediate(() => resolve({}));
+    }),
+  ]);
+  return result.exit;
+}
+
 async function stopChild(child, exitPromise) {
   if (hasExited(child)) return exitPromise;
   child.kill('SIGTERM');
@@ -193,7 +203,10 @@ if (result.timeout) {
   if (hasExited(child)) {
     result.exit = await exitPromise;
   } else {
-    await stopChild(child, exitPromise);
+    result.exit = await readPendingExit(exitPromise);
+    if (!result.exit) {
+      await stopChild(child, exitPromise);
+    }
   }
 }
 
