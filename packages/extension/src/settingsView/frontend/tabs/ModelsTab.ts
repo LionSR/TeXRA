@@ -113,6 +113,11 @@ export class ModelsTab extends LitElement {
     return html`
       <div class="models-container tab-content-container">
         ${this.renderTabHint()} ${apiAccessSection}
+        <provider-key-list
+          .providerKeyStatuses=${this.providerKeyStatuses}
+          .apiAccessMode=${this.apiAccessMode}
+          .globalStreamingDefault=${this.globalStreamingDefault}
+        ></provider-key-list>
         <model-selection-list
           .models=${this.modelSelectionItems}
           .helperModel=${this.helperModel}
@@ -121,11 +126,6 @@ export class ModelsTab extends LitElement {
           .allowedModels=${this.allowedModels}
           .preferShortModelNames=${this.preferShortModelNames}
         ></model-selection-list>
-        <provider-key-list
-          .providerKeyStatuses=${this.providerKeyStatuses}
-          .apiAccessMode=${this.apiAccessMode}
-          .globalStreamingDefault=${this.globalStreamingDefault}
-        ></provider-key-list>
       </div>
     `;
   }
