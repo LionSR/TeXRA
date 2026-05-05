@@ -28,12 +28,15 @@ mac:
       arch:
         - universal
 win:
+  icon: build/icon.ico
   target:
     - target: nsis
       arch:
         - x64
 linux:
   category: Office
+  icon: build/icon.png
+  maintainer: TeXRA.ai <contact@texra.ai>
   target:
     - target: AppImage
       arch:
