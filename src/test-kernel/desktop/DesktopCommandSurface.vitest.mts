@@ -9,19 +9,22 @@ import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-import type { DesktopShellActions } from '../../../packages/desktop/src/main/desktopShellIpc';
+import type { DesktopCommandActions } from '../../../packages/desktop/src/desktopCommandSurface';
 
 interface DesktopCommandSurfaceModule {
   DESKTOP_COMMAND_IDS: readonly CommandId[];
   buildDesktopMenuTemplate(
-    actions: DesktopShellActions,
+    actions: DesktopCommandActions,
     platform?: NodeJS.Platform,
   ): Array<{
     label?: string;
     role?: string;
     submenu?: DesktopMenuItem[];
   }>;
-  dispatchDesktopCommand(id: CommandId, actions: DesktopShellActions): boolean;
+  dispatchDesktopCommand(
+    id: CommandId,
+    actions: DesktopCommandActions,
+  ): boolean;
   getDesktopCommandMenuEntries(
     ids?: readonly CommandId[],
     platform?: NodeJS.Platform,
@@ -47,7 +50,7 @@ interface DesktopMenuItem {
 
 async function loadDesktopCommandSurface(): Promise<DesktopCommandSurfaceModule> {
   return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopCommandSurface.ts'))
+    moduleFileUrl(desktopSourcePath('desktopCommandSurface.ts'))
   ) as Promise<DesktopCommandSurfaceModule>;
 }
 
@@ -98,8 +101,6 @@ describe('desktop command surface', () => {
   it('dispatches supported commands through typed shell actions', async () => {
     const { dispatchDesktopCommand } = await loadDesktopCommandSurface();
     const actions = {
-      openAgentDirectory: vi.fn(),
-      setRecentCommitsUnavailable: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
@@ -129,8 +130,6 @@ describe('desktop command surface', () => {
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
     const { buildDesktopMenuTemplate } = await loadDesktopCommandSurface();
     const actions = {
-      openAgentDirectory: vi.fn(),
-      setRecentCommitsUnavailable: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };

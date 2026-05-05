@@ -43,4 +43,13 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain("button.addEventListener('click'");
     expect(rendererMain).toContain("button.setAttribute('aria-pressed'");
   });
+
+  it('mounts the catalog-backed command palette', () => {
+    const rendererMain = readRendererMain();
+
+    expect(rendererMain).toContain('createDesktopCommandPalette');
+    expect(rendererMain).toContain('data-command-palette-button');
+    expect(rendererMain).toContain('SETTINGS_VIEW_COMMANDS.SET_TAB');
+    expect(rendererMain).toContain('showSettings: (tabIndex, agentSubTab)');
+  });
 });
