@@ -3,6 +3,17 @@ import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import {
+  appendBoundedLog,
+  formatExit,
+  formatOutput,
+  hasExited,
+  readPendingExit,
+  stopChild,
+  waitForClose,
+  waitForExit,
+  waitForExitOrTimeout,
+} from './smoke-process-utils.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const DEFAULT_TIMEOUT_MS = 8_000;
@@ -55,11 +66,6 @@ function parseAppPath(argv) {
   return resolve(value);
 }
 
-function appendBoundedLog(current, chunk) {
-  const next = current + chunk.toString('utf8');
-  return next.length > MAX_LOG_CHARS ? next.slice(-MAX_LOG_CHARS) : next;
-}
-
 async function assertExecutableExists(executablePath) {
   if (!executablePath) {
     throw new Error(
@@ -79,36 +85,8 @@ async function assertExecutableExists(executablePath) {
   }
 }
 
-function waitForExit(child) {
-  return new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('exit', (code, signal) => resolve({ code, signal }));
-  });
-}
-
-function waitForClose(child) {
-  return new Promise((resolve) => {
-    child.once('close', (code, signal) => resolve({ code, signal }));
-  });
-}
-
-function delay(ms) {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ms);
-    timeout.unref();
-  });
-}
-
 function findFatalLog(output) {
   return fatalLogPatterns.find(({ pattern }) => pattern.test(output));
-}
-
-function formatOutput(output) {
-  return output.trim().length > 0 ? output.trim() : '(no output)';
-}
-
-function formatExit(exit) {
-  return exit.signal ?? `code ${exit.code}`;
 }
 
 function failIfFatalLog(output) {
@@ -131,45 +109,6 @@ function failEarlyExit(exit, timeoutMs, output) {
   process.exit(1);
 }
 
-function hasExited(child) {
-  return child.exitCode !== null || child.signalCode !== null;
-}
-
-async function waitForExitOrTimeout(exitPromise, timeoutMs) {
-  return Promise.race([
-    exitPromise.then((exit) => ({ exit })),
-    delay(timeoutMs).then(() => ({ timeout: true })),
-  ]);
-}
-
-async function readPendingExit(exitPromise) {
-  const result = await Promise.race([
-    exitPromise.then((exit) => ({ exit })),
-    new Promise((resolve) => {
-      setImmediate(() => resolve({}));
-    }),
-  ]);
-  return result.exit;
-}
-
-async function stopChild(child, exitPromise) {
-  if (hasExited(child)) return exitPromise;
-  child.kill('SIGTERM');
-  const gracefulExit = await waitForExitOrTimeout(
-    exitPromise,
-    SHUTDOWN_GRACE_MS,
-  );
-  if (!gracefulExit.timeout) return gracefulExit.exit;
-
-  child.kill('SIGKILL');
-  const forcedExit = await waitForExitOrTimeout(exitPromise, SHUTDOWN_GRACE_MS);
-  if (!forcedExit.timeout) return forcedExit.exit;
-
-  throw new Error(
-    `Packaged app did not exit within ${SHUTDOWN_GRACE_MS}ms after SIGKILL.`,
-  );
-}
-
 const executablePath = parseAppPath(process.argv.slice(2));
 const timeoutMs = readPositiveNumber(
   process.env.TEXRA_DESKTOP_LAUNCH_SMOKE_MS,
@@ -189,10 +128,10 @@ const child = spawn(executablePath, [], {
 
 let output = '';
 child.stdout.on('data', (chunk) => {
-  output = appendBoundedLog(output, chunk);
+  output = appendBoundedLog(output, chunk, MAX_LOG_CHARS);
 });
 child.stderr.on('data', (chunk) => {
-  output = appendBoundedLog(output, chunk);
+  output = appendBoundedLog(output, chunk, MAX_LOG_CHARS);
 });
 
 const exitPromise = waitForExit(child);
@@ -205,7 +144,10 @@ if (result.timeout) {
   } else {
     result.exit = await readPendingExit(exitPromise);
     if (!result.exit) {
-      await stopChild(child, exitPromise);
+      await stopChild(child, exitPromise, {
+        graceMs: SHUTDOWN_GRACE_MS,
+        label: 'Packaged app',
+      });
     }
   }
 }
