@@ -2,6 +2,7 @@
 import type { IndentLatexResult, LatexdiffPackResult } from '@housekeeping';
 
 export interface LatexHousekeepingNotification {
+  // "message" maps to showLoggedMessage, which uses VS Code's error toast.
   severity: 'info' | 'message' | 'error';
   message: string;
   error?: unknown;
@@ -51,6 +52,12 @@ export function getLatexdiffPackNotifications(
         return {
           severity: 'message',
           message: 'No input files provided for multiple LaTeX diff packing',
+        };
+      case 'error':
+        return {
+          severity: 'error',
+          message: `Error during packing ${result.inputFile}`,
+          error: result.error,
         };
       case 'processed':
         return [];

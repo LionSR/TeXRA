@@ -44,7 +44,7 @@ export type IndentLatexResult =
  * @param progressCallback Optional callback for progress updates
  * @returns Promise<IndentLatexResult> The formatting outcome
  */
-export async function inspectAndIndentLatexFilesInDirectory(
+export async function indentLatexFilesInDirectory(
   directory: string = '.',
   progressCallback?: (message: string, increment?: number) => void,
 ): Promise<IndentLatexResult> {
@@ -139,23 +139,8 @@ export async function inspectAndIndentLatexFilesInDirectory(
 }
 
 /**
- * Formats LaTeX files in a specific directory and its subdirectories.
- * @returns Promise<number> The number of files formatted.
- */
-export async function indentLatexFilesInDirectory(
-  directory: string = '.',
-  progressCallback?: (message: string, increment?: number) => void,
-): Promise<number> {
-  const result = await inspectAndIndentLatexFilesInDirectory(
-    directory,
-    progressCallback,
-  );
-  return result.count;
-}
-
-/**
  * Indents all LaTeX files in the workspace
  */
 export async function runIndentTeX(): Promise<IndentLatexResult> {
-  return inspectAndIndentLatexFilesInDirectory('.');
+  return indentLatexFilesInDirectory('.');
 }

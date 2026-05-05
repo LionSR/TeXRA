@@ -1,5 +1,6 @@
 import * as path from 'path';
 
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
@@ -29,6 +30,11 @@ export type LatexdiffPackResult =
     }
   | {
       status: 'missing-inputs';
+    }
+  | {
+      status: 'error';
+      inputFile: string;
+      error: unknown;
     };
 
 export async function runPackLatexdiffvc(
@@ -109,7 +115,15 @@ export async function runPackLatexdiffvcMultiple(
 
   const results: LatexdiffPackResult[] = [];
   for (const inputFile of inputFiles) {
-    results.push(await runPackLatexdiffvc(inputFile, commitHash, clean));
+    try {
+      results.push(await runPackLatexdiffvc(inputFile, commitHash, clean));
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error during packing ${inputFile}: ${toErrorMessage(err)}`,
+      );
+      results.push({ status: 'error', inputFile, error: err });
+    }
   }
   return results;
 }

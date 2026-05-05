@@ -51,9 +51,15 @@ describe('latex housekeeping command notifications', () => {
       },
       { status: 'missing-inputs' },
       { status: 'processed', inputFile: 'paper.tex' },
+      {
+        status: 'error',
+        inputFile: 'broken.tex',
+        error: new Error('rename failed'),
+      },
     ];
 
-    expect(getLatexdiffPackNotifications(results)).toEqual([
+    const notifications = getLatexdiffPackNotifications(results);
+    expect(notifications).toMatchObject([
       {
         severity: 'info',
         message: 'No LaTeX diff files found to process',
@@ -70,6 +76,11 @@ describe('latex housekeeping command notifications', () => {
         severity: 'message',
         message: 'No input files provided for multiple LaTeX diff packing',
       },
+      {
+        severity: 'error',
+        message: 'Error during packing broken.tex',
+      },
     ]);
+    expect(notifications.at(-1)?.error).toBeInstanceOf(Error);
   });
 });

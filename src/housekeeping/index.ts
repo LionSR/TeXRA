@@ -15,7 +15,6 @@ export {
 } from './latexdiff';
 export {
   indentLatexFilesInDirectory,
-  inspectAndIndentLatexFilesInDirectory,
   runIndentTeX,
   type IndentLatexResult,
 } from './indent';
