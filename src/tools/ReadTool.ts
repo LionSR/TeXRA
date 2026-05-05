@@ -17,12 +17,12 @@ import {
 } from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml } from '@tools/emlParser';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
-  WorkspaceFS,
   getMimeType,
   OFFICE_EXTENSIONS,
   OFFICE_MIME_TYPES,
-} from '@utils/files';
+} from '@utils/files/mimeUtils';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
