@@ -65,7 +65,7 @@ describe('ProgressStreamLifecycleController', () => {
 
     assert.deepEqual(streams(), ['stream-b', 'stream-c']);
     assert.equal(activeStream(), 'stream-c');
-    assert.deepEqual(recorder.calls.get('setActiveStream'), undefined);
+    assert.deepEqual(recorder.calls.get('setActiveStream'), ['stream-c']);
     assert.deepEqual(recorder.calls.get('deleteWebview'), ['stream-a']);
   });
 

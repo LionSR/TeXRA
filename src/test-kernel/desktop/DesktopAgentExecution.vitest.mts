@@ -474,6 +474,53 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('falls back if a deleted stream is reactivated during deletion', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'first',
+        agentCategory: AGENT_CATEGORY.WORKFLOW,
+      });
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'second',
+        agentCategory: AGENT_CATEGORY.WORKFLOW,
+      });
+      bridge.setActiveStream('first');
+      messages.length = 0;
+
+      const deletePromise = bridge.deleteStream('second');
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'second',
+        agentCategory: AGENT_CATEGORY.WORKFLOW,
+      });
+      await deletePromise;
+
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
+      ).toEqual([
+        {
+          activeStream: 'second',
+          command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+        },
+        {
+          activeStream: 'first',
+          command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+        },
+      ]);
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+          -1,
+        ),
+      ).toMatchObject({
+        activeStream: 'first',
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('emits delete-all cleanup before syncing an empty stream list', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const messages: unknown[] = [];
