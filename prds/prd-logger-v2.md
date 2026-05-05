@@ -43,7 +43,7 @@ The total kernel work is ~430 LOC new + ~130 LOC modified + ~5 LOC deleted. None
 
 `outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level. The audit (per `prd-runcontext-refactor.md` §4) finds exactly one setter in production code (`packages/extension/src/extension.ts`), but:
 
-- Tests have to `setOutputChannelFactory(null)` in `afterEach`, which calls `dispose?.()` on every cached channel. With concurrent vitest runs in the same process this disposes channels for *other* tests' runs.
+- Tests have to `setOutputChannelFactory(null)` in `afterEach`, which calls `dispose?.()` on every cached channel. With concurrent vitest runs in the same process this disposes channels for _other_ tests' runs.
 - An MCP-server mode that hosts concurrent runs cannot share these channels — two `tools/call`s want two distinct sinks.
 - A re-entrant SDK has the same problem.
 
@@ -53,11 +53,11 @@ Group context lives in its own ALS (`contextStorage`, line 10). `runtimeHostScop
 
 ### 4.3 Per-line config lookup
 
-`writeLine` (line 79) calls `getConfig('texra.logger.debugMode', false)` *on every line*. In the extension that's a wrapped `vscode.workspace.getConfiguration` lookup — fast but not free. In the CLI before `initPlatform()` returns it goes through `tryPlatform()` and silently uses the default. Today's behavior is "config debug toggle is silently ignored during boot" — observed when debugging agent-directory bootstrap issues.
+`writeLine` (line 79) calls `getConfig('texra.logger.debugMode', false)` _on every line_. In the extension that's a wrapped `vscode.workspace.getConfiguration` lookup — fast but not free. In the CLI before `initPlatform()` returns it goes through `tryPlatform()` and silently uses the default. Today's behavior is "config debug toggle is silently ignored during boot" — observed when debugging agent-directory bootstrap issues.
 
 ### 4.4 Non-bug observation: two parallel pipelines
 
-The CLI's round-1 §11.2 NDJSON event stream is a *separate* code path from the logger. Two formats, one schema is fine; two formats, two code paths is duplication that will bit-rot. Logger v2 unifies them.
+The CLI's round-1 §11.2 NDJSON event stream is a _separate_ code path from the logger. Two formats, one schema is fine; two formats, two code paths is duplication that will bit-rot. Logger v2 unifies them.
 
 ## 5. Shape
 
@@ -98,11 +98,11 @@ export interface Logger {
 
 ```ts
 export interface LogRecord {
-  ts: string;                  // ISO-8601 with millis
+  ts: string; // ISO-8601 with millis
   level: LogLevel;
   message: string;
   fields: LogFields;
-  groups: readonly string[];   // current group stack at emit time
+  groups: readonly string[]; // current group stack at emit time
 }
 
 export interface LogSink {
@@ -171,14 +171,14 @@ Implications:
 
 Each host installs the sinks it wants. The mapping:
 
-| Host | Sink | Rendering |
-| ---- | ---- | --------- |
-| Extension | `VscodeOutputChannelSink` | Formatted string per line, written to one `vscode.OutputChannel` per agent (today's behavior). |
-| Desktop | `ElectronLogSink` | Wraps `electron-log` (per `prd-electron-app.md` §6.4); same channel-per-agent shape. |
-| CLI headless (`--print` or non-TTY) | `StderrTextSink` | picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`; copies to `--log-file` if passed. |
-| CLI JSON (`--output-format json|ndjson`) | `NdjsonStdoutSink` | One `RunStreamEvent` per line on stdout; schema-validated. |
-| CLI MCP server (`texra mcp serve`) | `McpProgressSink` | Converts each record to an MCP `notifications/progress` payload; respects the client's progress-update opt-in. |
-| Tests | `MemorySink` | Pushes records into an array; auto-installed via `withRunContext()` in `vitest.setup.ts`. |
+| Host                                | Sink                      | Rendering                                                                                                      |
+| ----------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Extension                           | `VscodeOutputChannelSink` | Formatted string per line, written to one `vscode.OutputChannel` per agent (today's behavior).                 |
+| Desktop                             | `ElectronLogSink`         | Wraps `electron-log` (per `prd-electron-app.md` §6.4); same channel-per-agent shape.                           |
+| CLI headless (`--print` or non-TTY) | `StderrTextSink`          | picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`; copies to `--log-file` if passed.         |
+| CLI JSON (`--output-format json     | ndjson`)                  | `NdjsonStdoutSink`                                                                                             | One `RunStreamEvent` per line on stdout; schema-validated. |
+| CLI MCP server (`texra mcp serve`)  | `McpProgressSink`         | Converts each record to an MCP `notifications/progress` payload; respects the client's progress-update opt-in. |
+| Tests                               | `MemorySink`              | Pushes records into an array; auto-installed via `withRunContext()` in `vitest.setup.ts`.                      |
 
 Per-host sinks live in their respective host packages (`packages/{extension,desktop,cli}/`); only the interface lives in `core/hosts/logSink.ts`.
 
@@ -192,7 +192,11 @@ The shim keeps the old signatures working:
 
 ```ts
 // src/logger/logUtils.ts (after migration)
-export function info(channel: string, message: string, options: LogUtilsOptions = {}): void {
+export function info(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions = {},
+): void {
   const ctx = tryUseRunContext();
   const logger = ctx
     ? ctx.log.child({ channel, isAgent: options.isAgent ?? false })
@@ -278,15 +282,15 @@ Today these go through `console.info`. After this PRD: the CLI's `bin/texra.ts` 
 
 ### Aggregate timeline
 
-| Phase | Scope | Net LOC | Engineering weeks |
-| ----- | ----- | ------- | ----------------- |
-| 0 | Interface + bootstrap + legacy sink | +200 / -10 | 1 |
-| 1 | Per-host sinks (extension, desktop, CLI text, CLI ndjson, tests) | +250 / -50 | 1 |
-| 2 | Schema unification with progress | +30 / -80 | 0.5 |
-| 3 | Group ALS retirement | +20 / -60 | 0.5 |
-| 4 | `outputChannelFactory` retirement | +20 / -90 | 0.5 |
-| 5 | MCP sink | +80 | 0.3 |
-| **Total** | | **+~600 / -~290** | **~3.8** |
+| Phase     | Scope                                                            | Net LOC           | Engineering weeks |
+| --------- | ---------------------------------------------------------------- | ----------------- | ----------------- |
+| 0         | Interface + bootstrap + legacy sink                              | +200 / -10        | 1                 |
+| 1         | Per-host sinks (extension, desktop, CLI text, CLI ndjson, tests) | +250 / -50        | 1                 |
+| 2         | Schema unification with progress                                 | +30 / -80         | 0.5               |
+| 3         | Group ALS retirement                                             | +20 / -60         | 0.5               |
+| 4         | `outputChannelFactory` retirement                                | +20 / -90         | 0.5               |
+| 5         | MCP sink                                                         | +80               | 0.3               |
+| **Total** |                                                                  | **+~600 / -~290** | **~3.8**          |
 
 Net code: **~+310 LOC** (the new structured pipeline is bigger than the string-based one it replaces, but the 5 host sinks together are smaller than today's extension-only output-channel logic plus the JSON-renderer duplication).
 
@@ -298,14 +302,14 @@ Net code: **~+310 LOC** (the new structured pipeline is bigger than the string-b
 
 ## 11. Risks & mitigations
 
-| Risk | Likelihood | Impact | Mitigation |
-| ---- | ---------- | ------ | ---------- |
-| Phase 1 sinks render differently from the old logger and surface a regression | Medium | Low | Snapshot tests in `packages/extension/`, `packages/desktop/`, `packages/cli/` capture the rendered output for representative records. CI gate. |
-| Schema unification breaks downstream NDJSON consumers (e.g., `texra-action`) | Low | High | `RunStreamEventSchema` is a strict superset of today's `ProgressEventSchema`. Breaking changes bump `@texra/shared/schemas` major. Documented in the round-1 §11.2 schema doc. |
-| `BootstrapLogger`'s buffer grows unbounded when boot fails | Low | Low | Cap at 1,000 records; warn on overflow. Boot is normally <10 records. |
-| `LogFields` is open-ended; consumers serialize non-JSON-safe values | Medium | Medium | Sink-level guard: `JSON.stringify(record)` is exception-caught; on failure, the sink writes a degraded `{level: 'error', message: 'log serialization failed', error: ...}` record. |
-| Concurrent runs in one process produce interleaved output on `StderrTextSink` | Medium | Low | Each record carries `streamId`/`runId` in fields; `StderrTextSink` renders a `[stream-N]` prefix when more than one run is active. |
-| Extension's existing OutputChannel API doesn't accept structured fields | Low | Low | `VscodeOutputChannelSink` flattens `fields` to `key=value` suffixes — same shape today's logger emits when `texra.logger.debugMode = true`. |
+| Risk                                                                          | Likelihood | Impact | Mitigation                                                                                                                                                                         |
+| ----------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 sinks render differently from the old logger and surface a regression | Medium     | Low    | Snapshot tests in `packages/extension/`, `packages/desktop/`, `packages/cli/` capture the rendered output for representative records. CI gate.                                     |
+| Schema unification breaks downstream NDJSON consumers (e.g., `texra-action`)  | Low        | High   | `RunStreamEventSchema` is a strict superset of today's `ProgressEventSchema`. Breaking changes bump `@texra/shared/schemas` major. Documented in the round-1 §11.2 schema doc.     |
+| `BootstrapLogger`'s buffer grows unbounded when boot fails                    | Low        | Low    | Cap at 1,000 records; warn on overflow. Boot is normally <10 records.                                                                                                              |
+| `LogFields` is open-ended; consumers serialize non-JSON-safe values           | Medium     | Medium | Sink-level guard: `JSON.stringify(record)` is exception-caught; on failure, the sink writes a degraded `{level: 'error', message: 'log serialization failed', error: ...}` record. |
+| Concurrent runs in one process produce interleaved output on `StderrTextSink` | Medium     | Low    | Each record carries `streamId`/`runId` in fields; `StderrTextSink` renders a `[stream-N]` prefix when more than one run is active.                                                 |
+| Extension's existing OutputChannel API doesn't accept structured fields       | Low        | Low    | `VscodeOutputChannelSink` flattens `fields` to `key=value` suffixes — same shape today's logger emits when `texra.logger.debugMode = true`.                                        |
 
 ## 12. Success criteria
 
@@ -314,7 +318,7 @@ Net code: **~+310 LOC** (the new structured pipeline is bigger than the string-b
 - A `texra run` and the same `texra-action` workflow against the same `--output-format ndjson` produce byte-equivalent output streams.
 - The kernel's existing `npm run typecheck` and the test suite pass on every phase merge.
 - An MCP client receives `notifications/progress` for every log emitted inside a `tools/call` (Phase 5 integration test).
-- Boot-time log lines from `texra` show up *with* their structured fields in the final rendered output, not before init drops them.
+- Boot-time log lines from `texra` show up _with_ their structured fields in the final rendered output, not before init drops them.
 
 ## 13. Open questions
 

@@ -29,7 +29,7 @@ The kernel migration is independently valuable to all three hosts (extension, de
 ## 3. Non-goals
 
 - **Not** a pure-explicit refactor — we keep one ALS scope (`runContextScope`) for ergonomic adoption. The OpenTelemetry, Vercel AI SDK, and Encore ecosystems all settled on this hybrid; we copy that.
-- **Not** an OS-level sandbox / capability-based-security project. `RunCapabilities` is a *value-typed* capability bag ("does this run have a github token?"), not a syscall sandbox.
+- **Not** an OS-level sandbox / capability-based-security project. `RunCapabilities` is a _value-typed_ capability bag ("does this run have a github token?"), not a syscall sandbox.
 - **Not** an attempt to delete `getConfig`-style platform service lookups. `platform()` from `@platform` is composition-root state, not per-run state, and stays.
 - **Not** a rewrite of any modelHandler, flow node, or tool. Their interfaces gain a `ctx: RunContext` parameter; their bodies do not change.
 - **Not** a host-specific logger redesign. Logger v2 is its own PRD (`prd-logger-v2.md`); this PRD only states that `Logger` is a field on `RunContext`.
@@ -40,27 +40,27 @@ A May 2026 audit of `src/agent/`, `src/tools/approval/`, `src/auth/`, `src/event
 
 ### 4.1 AsyncLocalStorage scopes (2)
 
-| Scope | File:line | Holds | Entered by | Read by |
-| ----- | --------- | ----- | ---------- | ------- |
-| `runtimeHostScope` | `src/agent/runtime/AgentRuntimeHost.ts:12` | Current `AgentRuntimeHost` (≡ `ProgressSink`) | `runWithAgentRuntimeHost(host, fn)` (line 27) | `getAgentRuntimeHost()` (line 23) — falls back to `defaultAgentRuntimeHost` (line 11), then `getDefaultProgressSink()` |
-| `contextStorage` | `src/logger/logUtils.ts:10` | `Map<channel-key, group-id stack>` for log grouping | `runWithGroupContext()` (line 130) | `getActiveGroupStack()` (line 63), `runWithGroupContext` (line 136) |
+| Scope              | File:line                                  | Holds                                               | Entered by                                    | Read by                                                                                                                |
+| ------------------ | ------------------------------------------ | --------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `runtimeHostScope` | `src/agent/runtime/AgentRuntimeHost.ts:12` | Current `AgentRuntimeHost` (≡ `ProgressSink`)       | `runWithAgentRuntimeHost(host, fn)` (line 27) | `getAgentRuntimeHost()` (line 23) — falls back to `defaultAgentRuntimeHost` (line 11), then `getDefaultProgressSink()` |
+| `contextStorage`   | `src/logger/logUtils.ts:10`                | `Map<channel-key, group-id stack>` for log grouping | `runWithGroupContext()` (line 130)            | `getActiveGroupStack()` (line 63), `runWithGroupContext` (line 136)                                                    |
 
 ### 4.2 Module-level setter/getter pairs (~12 in audit, plus the 8 the controllers list)
 
-| Concern | Setter | File:line |
-| ------- | ------ | --------- |
-| Default progress sink | `setDefaultProgressSink` | `src/agent/runtime/ProgressSink.ts:14` |
-| Default runtime host | `setDefaultAgentRuntimeHost` | `src/agent/runtime/AgentRuntimeHost.ts:11` |
-| Run storage service | `setRunStorageService` | `src/agent/runtime/RunStorageService.ts:10` |
-| Tool-edit approval handler | `setToolEditApprovalHandler` | `src/tools/approval/toolEditApproval.ts:74,113` |
-| Latex-preview handler | `setLatexBuildDisplay` | `src/tools/approval/latexPreview.ts:21` |
-| GitHub token provider | `setGitHubTokenProvider` | `src/tools/github/githubAuth.ts:13` |
-| Extension checker | `setExtensionChecker` | `src/tools/externalToolDefs.ts:35` |
-| Server-side key service | `setServerSideKeyService` | `src/auth/serverKeys/index.ts:34` |
-| Tier service | `setTierService` | `src/auth/tier/index.ts:31` |
-| Auth callback resolver | `setExternalAuthCallbackResolver` | `src/auth/config.ts:183` |
-| Runtime extension id | `setRuntimeExtensionId` | `src/auth/config.ts:137` |
-| Output-channel factory (logger) | `setOutputChannelFactory` | `src/logger/logUtils.ts:108` |
+| Concern                         | Setter                            | File:line                                       |
+| ------------------------------- | --------------------------------- | ----------------------------------------------- |
+| Default progress sink           | `setDefaultProgressSink`          | `src/agent/runtime/ProgressSink.ts:14`          |
+| Default runtime host            | `setDefaultAgentRuntimeHost`      | `src/agent/runtime/AgentRuntimeHost.ts:11`      |
+| Run storage service             | `setRunStorageService`            | `src/agent/runtime/RunStorageService.ts:10`     |
+| Tool-edit approval handler      | `setToolEditApprovalHandler`      | `src/tools/approval/toolEditApproval.ts:74,113` |
+| Latex-preview handler           | `setLatexBuildDisplay`            | `src/tools/approval/latexPreview.ts:21`         |
+| GitHub token provider           | `setGitHubTokenProvider`          | `src/tools/github/githubAuth.ts:13`             |
+| Extension checker               | `setExtensionChecker`             | `src/tools/externalToolDefs.ts:35`              |
+| Server-side key service         | `setServerSideKeyService`         | `src/auth/serverKeys/index.ts:34`               |
+| Tier service                    | `setTierService`                  | `src/auth/tier/index.ts:31`                     |
+| Auth callback resolver          | `setExternalAuthCallbackResolver` | `src/auth/config.ts:183`                        |
+| Runtime extension id            | `setRuntimeExtensionId`           | `src/auth/config.ts:137`                        |
+| Output-channel factory (logger) | `setOutputChannelFactory`         | `src/logger/logUtils.ts:108`                    |
 
 ### 4.3 Exported singleton coordinators (3)
 
@@ -77,7 +77,7 @@ These are problematic because they fan out events to whoever the current global 
 - Output-poll timer + in-flight flag — `src/agent/runtime/executionRegistry.ts:335-336`
 - Polish-model template cache — `src/agent/runtime/polishModel.ts:11-12`
 
-These are intentional caches of *immutable* data (registry, model templates) and stay. They are not the target of this PRD; they're listed only to bound the audit.
+These are intentional caches of _immutable_ data (registry, model templates) and stay. They are not the target of this PRD; they're listed only to bound the audit.
 
 ### 4.5 Why this is the right time
 
@@ -156,7 +156,10 @@ Because the audit found ~30 reader sites of singletons today, a hard cutover is 
 // packages/core/src/runtime/runContext.ts
 export const runContextScope = new AsyncLocalStorage<RunContext>();
 
-export function withRunContext<T>(ctx: RunContext, fn: () => T | Promise<T>): T | Promise<T> {
+export function withRunContext<T>(
+  ctx: RunContext,
+  fn: () => T | Promise<T>,
+): T | Promise<T> {
   return runContextScope.run(ctx, fn);
 }
 
@@ -176,7 +179,7 @@ export function tryUseRunContext(): RunContext | undefined {
 - Every `executeAgent()` call becomes `withRunContext(ctx, () => /* existing body */)`.
 - The existing `runWithAgentRuntimeHost()` keeps working — it now reads from `runContextScope.getStore()?.progress` and falls back to its current path.
 - Every singleton getter (`getDefaultProgressSink`, `getRunStorageService`, `getServerSideKeyService`, …) gets a `// LEGACY:` comment plus a path forward: read `runContextScope.getStore()?.<field>` first, fall back to the module global, log a `DEBUG` if the fallback was used.
-- Internal kernel call sites convert in batches (one per phase). Each batch deletes a module global once *all* its readers take an explicit `ctx`.
+- Internal kernel call sites convert in batches (one per phase). Each batch deletes a module global once _all_ its readers take an explicit `ctx`.
 
 ## 7. Migration phases
 
@@ -215,7 +218,7 @@ Each phase is independently mergeable and ships a concrete kernel improvement.
 ### Phase 4 — Auth singletons (~1 week)
 
 - `tierService` (`auth/tier/index.ts:31`), `serverSideKeyService` (`auth/serverKeys/index.ts:34`), `externalAuthCallbackResolver` (`auth/config.ts:183`), `runtimeExtensionId` (`auth/config.ts:137`) — replaced by per-`RunContext` resolutions backed by a kernel-side `AuthRegistry`.
-- The auth registry itself is composition-root state (initialized once at `initPlatform()`), so it's allowed to be a module global; what's *per-run* is which session/keys/tier resolution applies. That distinction collapses today.
+- The auth registry itself is composition-root state (initialized once at `initPlatform()`), so it's allowed to be a module global; what's _per-run_ is which session/keys/tier resolution applies. That distinction collapses today.
 - **Exit criteria:** auth tests no longer install global services in `beforeEach`.
 
 ### Phase 5 — `then()`-boundary fix + sweep (~3 days)
@@ -226,15 +229,15 @@ Each phase is independently mergeable and ships a concrete kernel improvement.
 
 ### Aggregate timeline
 
-| Phase | Singletons retired | Files touched | Net LOC | Engineering weeks |
-| ----- | ------------------ | ------------- | ------- | ----------------- |
-| 0 | — (foundations) | `runContext.ts` (new), `executeAgent.ts`, `runtime/testing.ts` | +220 / -10 | 1.5 |
-| 1 | 3 coordinators | `Plan/Retry/AgentProposalCoordinator.ts` + 5 readers | +60 / -30 | 1 |
-| 2 | `defaultProgressSink`, `defaultAgentRuntimeHost`, `runStorageService` | `ProgressSink.ts`, `AgentRuntimeHost.ts`, `RunStorageService.ts` + ~40 readers | +20 / -160 | 1.5 |
-| 3 | 4 capability setters | `tools/{approval,github,externalToolDefs}/*` | +60 / -110 | 1 |
-| 4 | 4 auth singletons + extension-id setter | `auth/*` | +80 / -130 | 1 |
-| 5 | (sweep) | `executionRegistry.ts` + lint rule cleanups | +20 / -30 | 0.5 |
-| **Total** | **~14 ambient bindings + 3 coordinators** | | **+460 / -470** | **~6.5** |
+| Phase     | Singletons retired                                                    | Files touched                                                                  | Net LOC         | Engineering weeks |
+| --------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------- | ----------------- |
+| 0         | — (foundations)                                                       | `runContext.ts` (new), `executeAgent.ts`, `runtime/testing.ts`                 | +220 / -10      | 1.5               |
+| 1         | 3 coordinators                                                        | `Plan/Retry/AgentProposalCoordinator.ts` + 5 readers                           | +60 / -30       | 1                 |
+| 2         | `defaultProgressSink`, `defaultAgentRuntimeHost`, `runStorageService` | `ProgressSink.ts`, `AgentRuntimeHost.ts`, `RunStorageService.ts` + ~40 readers | +20 / -160      | 1.5               |
+| 3         | 4 capability setters                                                  | `tools/{approval,github,externalToolDefs}/*`                                   | +60 / -110      | 1                 |
+| 4         | 4 auth singletons + extension-id setter                               | `auth/*`                                                                       | +80 / -130      | 1                 |
+| 5         | (sweep)                                                               | `executionRegistry.ts` + lint rule cleanups                                    | +20 / -30       | 0.5               |
+| **Total** | **~14 ambient bindings + 3 coordinators**                             |                                                                                | **+460 / -470** | **~6.5**          |
 
 Net code change: **~-10 LOC** (the refactor pays for itself in deleted boilerplate). The CLI consumes Phase 1 deliverables for v1.0 and Phase 2 for v1.1; the extension and desktop benefit from every phase but don't gate on them.
 
@@ -275,11 +278,11 @@ Adding a new Node-based host (e.g. a `texra serve` daemon, or a future Tauri-bas
 
 Crisp rule: **the host package's `src/` is allowed to import `vscode` / `electron` / `commander` / Ink, and nothing under `core/` is.**
 
-| Host | Owns | Doesn't own |
-| ---- | ---- | ----------- |
+| Host                  | Owns                                                                                                                            | Doesn't own                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | `packages/extension/` | `vscode.commands`, webview hosts, `frontend/vscode/*`, controllers wired to webview message handlers, `VscodeOutputChannelSink` | The agent runtime (in core); coordinators (in core) |
-| `packages/desktop/` | Electron `main`, preload bridges, BrowserWindow lifecycle, `electronLogSink`, packaging | Same |
-| `packages/cli/` | `commander` parsing, Ink TUI, `texra mcp serve`, `StderrTextSink`, `NdjsonStdoutSink`, hook command-runner | Same |
+| `packages/desktop/`   | Electron `main`, preload bridges, BrowserWindow lifecycle, `electronLogSink`, packaging                                         | Same                                                |
+| `packages/cli/`       | `commander` parsing, Ink TUI, `texra mcp serve`, `StderrTextSink`, `NdjsonStdoutSink`, hook command-runner                      | Same                                                |
 
 ### 8.3 ESLint enforcement
 
@@ -301,16 +304,16 @@ A flat-config rule that the host of each package can import only the rings it ca
 
 ## 9. Risks & mitigations
 
-| Risk | Likelihood | Impact | Mitigation |
-| ---- | ---------- | ------ | ---------- |
-| ALS context lost across `.then()` boundary (the LangSmith-style foot-gun) | Medium | Medium | Phase 5 fixes the one known site (`executionRegistry.ts:335`); ESLint rule + dev review for new timers. |
-| Phase 1 coordinator change breaks an in-flight reader site no one tested | Medium | Medium | Each coordinator's per-context factory keeps the same observable interface; existing tests catch the regression. |
-| `RunContext.child()` semantics get wrong (e.g., child's `signal` doesn't chain) | Low | Medium | Implement child via `AbortSignal.any([parent.signal, childAbort])`; covered by a tabletop test in `runContext.test.ts`. |
-| Singleton retirement merges before consumers update | Low | High | Each phase's exit criteria require zero `git grep` hits for the deleted symbols before merge; CI gate. |
-| `RunCapabilities` shape drifts as new capabilities are added | Medium | Low | Add capabilities incrementally; Zod schema validates at construction; ESLint rule forbids reading capabilities outside `useRunContext()`. |
-| Test setup churn during migration | Medium | Low | `runtime/testing.ts` exposes `synthesizeRunContext({ overrides })` — one call replaces ~5–10 LOC of `beforeEach` setup. |
-| Three-ring ESLint rule produces noisy false positives | Medium | Low | Soft-fail mode in CI for the first two weeks; harden after. |
-| Per-context coordinator instances over-allocate (one set per run) | Low | Low | Coordinators are tiny (Map + a Resolver list); per-run cost is sub-µs. Profiled in tabletop benchmark. |
+| Risk                                                                            | Likelihood | Impact | Mitigation                                                                                                                                |
+| ------------------------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| ALS context lost across `.then()` boundary (the LangSmith-style foot-gun)       | Medium     | Medium | Phase 5 fixes the one known site (`executionRegistry.ts:335`); ESLint rule + dev review for new timers.                                   |
+| Phase 1 coordinator change breaks an in-flight reader site no one tested        | Medium     | Medium | Each coordinator's per-context factory keeps the same observable interface; existing tests catch the regression.                          |
+| `RunContext.child()` semantics get wrong (e.g., child's `signal` doesn't chain) | Low        | Medium | Implement child via `AbortSignal.any([parent.signal, childAbort])`; covered by a tabletop test in `runContext.test.ts`.                   |
+| Singleton retirement merges before consumers update                             | Low        | High   | Each phase's exit criteria require zero `git grep` hits for the deleted symbols before merge; CI gate.                                    |
+| `RunCapabilities` shape drifts as new capabilities are added                    | Medium     | Low    | Add capabilities incrementally; Zod schema validates at construction; ESLint rule forbids reading capabilities outside `useRunContext()`. |
+| Test setup churn during migration                                               | Medium     | Low    | `runtime/testing.ts` exposes `synthesizeRunContext({ overrides })` — one call replaces ~5–10 LOC of `beforeEach` setup.                   |
+| Three-ring ESLint rule produces noisy false positives                           | Medium     | Low    | Soft-fail mode in CI for the first two weeks; harden after.                                                                               |
+| Per-context coordinator instances over-allocate (one set per run)               | Low        | Low    | Coordinators are tiny (Map + a Resolver list); per-run cost is sub-µs. Profiled in tabletop benchmark.                                    |
 
 ## 10. Success criteria
 

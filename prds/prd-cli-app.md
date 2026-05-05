@@ -1137,19 +1137,19 @@ Round 1 above defined the CLI as a thin Node shell over an already host-neutral 
 
 Round 2 lands six concrete deltas plus one cross-cutting kernel refactor that all three hosts (extension, desktop, CLI) benefit from. None of these change the round-1 LOC band by more than ~600 lines combined; most are about replacing ad-hoc patterns with the kernel-shaped abstractions the audit revealed are already partially in place.
 
-| Delta | Round 1 status | Round 2 position | New §  |
-| ----- | -------------- | ---------------- | ------ |
-| Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work | **Promoted to standalone PRD — see [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md). CLI v1.0 consumes Phase 1; v1.1 consumes Phase 2 (gates concurrent MCP sessions).** | §22 (stub) |
-| Structured logger with explicit context, no module globals | Hand-waved as "consoleLog plus filter wrapper" | **Promoted to standalone PRD — see [`prd-logger-v2.md`](./prd-logger-v2.md). CLI installs four sinks (stderr text, NDJSON stdout, Ink, MCP).** | §23 (stub) |
-| `texra mcp serve` (callable from Claude Code, Codex, opencode) | Listed as v1.1 future | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)** | §24 |
-| Hook system (SessionStart, PreToolUse, PostToolUse, …) | Not mentioned | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner** | §25 |
-| Approval policy revisited (no 2D sandbox axis) | 1D `never|ask|auto-edits|auto|yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
-| Session transcripts as JSONL under project-hash sharding | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics** | §27 |
-| GitHub Action: composite + Bun (not JS Action) | §12 picked JS Action | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in** | §28 |
-| Cross-platform shared structure refactor (kernel side) | Implicit | **Promoted into [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) §8 (three-ring kernel structure). CLI-side consumption details retained here.** | §29 (stub) |
-| Container / GitHub-runner target matrix (slim, alpine, texlive) | Sketched in §12.3 | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues** | §30 |
-| Phase plan delta + LOC delta | — | **Aggregated** | §31 |
-| Parking lot — unified agent-SDK / message-SDK / context compaction | — | **Out of v1; sized in §32 for visibility** | §32 |
+| Delta                                                                         | Round 1 status                                       | Round 2 position                                                                                                                                                                     | New §      |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ---- | ----- | ---------------------------------------------------------------------------------------------------------------------------- | --- |
+| Explicit `RunContext` replaces ambient ALS + singletons (§7.6 caveat / #3397) | Tracked as future work                               | **Promoted to standalone PRD — see [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md). CLI v1.0 consumes Phase 1; v1.1 consumes Phase 2 (gates concurrent MCP sessions).** | §22 (stub) |
+| Structured logger with explicit context, no module globals                    | Hand-waved as "consoleLog plus filter wrapper"       | **Promoted to standalone PRD — see [`prd-logger-v2.md`](./prd-logger-v2.md). CLI installs four sinks (stderr text, NDJSON stdout, Ink, MCP).**                                       | §23 (stub) |
+| `texra mcp serve` (callable from Claude Code, Codex, opencode)                | Listed as v1.1 future                                | **Promoted to v1; minimum surface = three tools (`run_workflow`, `run_chat`, `list_agents`)**                                                                                        | §24        |
+| Hook system (SessionStart, PreToolUse, PostToolUse, …)                        | Not mentioned                                        | **v1.1 — copy Claude Code's contract verbatim; spec'd here so v1 doesn't paint itself into a corner**                                                                                | §25        |
+| Approval policy revisited (no 2D sandbox axis)                                | 1D `never                                            | ask                                                                                                                                                                                  | auto-edits | auto | yolo` | **Stays 1D per user feedback. Round 2 sharpens the "in-project / outside-project" semantics with concrete file:line rules.** | §26 |
+| Session transcripts as JSONL under project-hash sharding                      | Implicit reuse of `RunStorageService` snapshot files | **Explicit format; `texra resume` / `--continue` / `--fork-session` semantics**                                                                                                      | §27        |
+| GitHub Action: composite + Bun (not JS Action)                                | §12 picked JS Action                                 | **Reverse — match `claude-code-base-action`'s composite pattern; faster iteration, no `dist/` checked in**                                                                           | §28        |
+| Cross-platform shared structure refactor (kernel side)                        | Implicit                                             | **Promoted into [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) §8 (three-ring kernel structure). CLI-side consumption details retained here.**                         | §29 (stub) |
+| Container / GitHub-runner target matrix (slim, alpine, texlive)               | Sketched in §12.3                                    | **Refined per survey; `node:20-alpine` is downgraded to "best-effort" because of glibc/Bun/native-deps issues**                                                                      | §30        |
+| Phase plan delta + LOC delta                                                  | —                                                    | **Aggregated**                                                                                                                                                                       | §31        |
+| Parking lot — unified agent-SDK / message-SDK / context compaction            | —                                                    | **Out of v1; sized in §32 for visibility**                                                                                                                                           | §32        |
 
 The rest of round 2 is the spec for these deltas, in dependency order: §22 → §23 unblock §24 (an MCP server can't safely host concurrent sessions until the kernel's ambient state is gone); §24 + §25 + §26 are independent hosts on the new context; §27 + §28 + §29 + §30 are deployment / packaging concerns that don't gate kernel work.
 
@@ -1159,31 +1159,31 @@ The rest of round 2 is the spec for these deltas, in dependency order: §22 → 
 
 ### 22.1 What the CLI consumes
 
-The CLI's relationship to the RunContext PRD is one of *consumer*, not *driver*:
+The CLI's relationship to the RunContext PRD is one of _consumer_, not _driver_:
 
 - The CLI's `cli/src/runtime/initPlatform.ts` constructs a `RunContext` per `texra run` invocation, populates `RunCapabilities` (no extension; GitHub token from `process.env.GITHUB_TOKEN`; no callback resolver), and threads it via `withRunContext(ctx, () => executeAgent(...))`.
-- The CLI's `texra mcp serve` host (§24) constructs *one `RunContext` per MCP `tools/call`* — that's the workload that gates the RunContext PRD's Phase 2 (singleton retirement) for v1.1 concurrency safety.
+- The CLI's `texra mcp serve` host (§24) constructs _one `RunContext` per MCP `tools/call`_ — that's the workload that gates the RunContext PRD's Phase 2 (singleton retirement) for v1.1 concurrency safety.
 - Until the RunContext PRD's Phase 1 lands, the CLI's `runAgent()` SDK is documented as **single-consumer-per-process** (round-1 §7.6 caveat). The shim path makes this safe-by-default, not safe-by-design.
 
 ### 22.2 Phase mapping
 
-| RunContext-PRD phase | Lands in CLI release | What the CLI gains |
-| -------------------- | -------------------- | ------------------ |
-| Phase 0 (foundations) | CLI v1.0 prereq | `withRunContext` wraps every `runAgent()` SDK call; `tryUseRunContext()` available to CLI sinks. |
-| Phase 1 (per-context coordinators) | CLI v1.0 | Plan / proposal / retry approvals route through the CLI's TTY prompt handler without singleton interference. |
-| Phase 2 (sink + runtime-host singleton retirement) | CLI v1.1 | `texra mcp serve` hosts concurrent sessions safely. |
-| Phase 3 (capability injection) | CLI v1.2 | `--use-my-keys`, `--no-tier-check`, GitHub token CI flow stop relying on module setters. |
-| Phase 4 (auth singletons) | CLI v1.2 | Multi-account testing in CI no longer needs process restart between tests. |
-| Phase 5 (sweep) | CLI v1.3 | `texra` cold-start drops by ~5ms (no fallback chains in hot paths). |
+| RunContext-PRD phase                               | Lands in CLI release | What the CLI gains                                                                                           |
+| -------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Phase 0 (foundations)                              | CLI v1.0 prereq      | `withRunContext` wraps every `runAgent()` SDK call; `tryUseRunContext()` available to CLI sinks.             |
+| Phase 1 (per-context coordinators)                 | CLI v1.0             | Plan / proposal / retry approvals route through the CLI's TTY prompt handler without singleton interference. |
+| Phase 2 (sink + runtime-host singleton retirement) | CLI v1.1             | `texra mcp serve` hosts concurrent sessions safely.                                                          |
+| Phase 3 (capability injection)                     | CLI v1.2             | `--use-my-keys`, `--no-tier-check`, GitHub token CI flow stop relying on module setters.                     |
+| Phase 4 (auth singletons)                          | CLI v1.2             | Multi-account testing in CI no longer needs process restart between tests.                                   |
+| Phase 5 (sweep)                                    | CLI v1.3             | `texra` cold-start drops by ~5ms (no fallback chains in hot paths).                                          |
 
 ### 22.3 LOC accounting (CLI side only)
 
-| Item | New | Modified |
-| ---- | --- | -------- |
-| `cli/src/runtime/initPlatform.ts` constructs `RunContext` per invocation | ~60 | — |
-| Per-`tools/call` `RunContext` factory in `cli/src/mcp/server.ts` | (counted under §24) | — |
-| Test harness updates to `withRunContext`-wrap all CLI tests | — | ~50 |
-| **Subtotal (CLI side)** | **~60** | **~50** |
+| Item                                                                     | New                 | Modified |
+| ------------------------------------------------------------------------ | ------------------- | -------- |
+| `cli/src/runtime/initPlatform.ts` constructs `RunContext` per invocation | ~60                 | —        |
+| Per-`tools/call` `RunContext` factory in `cli/src/mcp/server.ts`         | (counted under §24) | —        |
+| Test harness updates to `withRunContext`-wrap all CLI tests              | —                   | ~50      |
+| **Subtotal (CLI side)**                                                  | **~60**             | **~50**  |
 
 The kernel work is sized in `prd-runcontext-refactor.md` §7 (~6.5 engineering weeks across Phases 0–5).
 
@@ -1193,12 +1193,12 @@ The kernel work is sized in `prd-runcontext-refactor.md` §7 (~6.5 engineering w
 
 ### 23.1 What the CLI installs
 
-| Mode | Sink | What it does |
-| ---- | ---- | ------------ |
-| Headless text (`--print` or non-TTY) | `StderrTextSink` | picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`; copies to `--log-file` if passed. |
-| JSON / NDJSON (`--output-format json|ndjson`) | `NdjsonStdoutSink` | One `RunStreamEvent` per line on stdout (the same union the §11.2 progress stream uses). |
-| Interactive (Ink TUI) | `InkLogSink` | Routes records to the `<StreamPane />` component as `event === "log"` rows alongside progress events. |
-| MCP server (`texra mcp serve`) | `McpProgressSink` | Records become `notifications/progress` payloads bound to the request's progress token. |
+| Mode                                 | Sink              | What it does                                                                                           |
+| ------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Headless text (`--print` or non-TTY) | `StderrTextSink`  | picocolors-formatted; respects `--quiet` / `--verbose` / `NO_COLOR`; copies to `--log-file` if passed. |
+| JSON / NDJSON (`--output-format json | ndjson`)          | `NdjsonStdoutSink`                                                                                     | One `RunStreamEvent` per line on stdout (the same union the §11.2 progress stream uses). |
+| Interactive (Ink TUI)                | `InkLogSink`      | Routes records to the `<StreamPane />` component as `event === "log"` rows alongside progress events.  |
+| MCP server (`texra mcp serve`)       | `McpProgressSink` | Records become `notifications/progress` payloads bound to the request's progress token.                |
 
 All four CLI-side sinks live in `packages/cli/src/render/sinks/`. `BootstrapLogger` is constructed in `cli/src/bin/texra.ts` immediately and threaded through config-load, secret resolution, agent-directory bootstrap, and mode selection — its buffer flushes through whichever sink the resolved mode picks.
 
@@ -1208,14 +1208,14 @@ The unification of progress events and log records into one `RunStreamEvent` uni
 
 ### 23.3 LOC accounting (CLI side only)
 
-| Item | New |
-| ---- | --- |
-| `StderrTextSink` (picocolors-aware) | ~120 |
-| `NdjsonStdoutSink` (schema-validated) | ~60 |
-| `InkLogSink` (Ink-component-aware; lazy chunk) | ~80 |
-| `McpProgressSink` (counted under §24) | (— ) |
-| Bootstrap wiring in `cli/src/bin/texra.ts` and `cli/src/runtime/initPlatform.ts` | ~30 |
-| **Subtotal (CLI side)** | **~290** |
+| Item                                                                             | New      |
+| -------------------------------------------------------------------------------- | -------- |
+| `StderrTextSink` (picocolors-aware)                                              | ~120     |
+| `NdjsonStdoutSink` (schema-validated)                                            | ~60      |
+| `InkLogSink` (Ink-component-aware; lazy chunk)                                   | ~80      |
+| `McpProgressSink` (counted under §24)                                            | (— )     |
+| Bootstrap wiring in `cli/src/bin/texra.ts` and `cli/src/runtime/initPlatform.ts` | ~30      |
+| **Subtotal (CLI side)**                                                          | **~290** |
 
 The kernel work is sized in `prd-logger-v2.md` §9 (~3.8 engineering weeks across Phases 0–5).
 
@@ -1233,9 +1233,9 @@ The user's framing — "to be callable by Claude Code and Codex etc" — is exac
   "mcpServers": {
     "texra": {
       "command": "texra",
-      "args": ["mcp", "serve"]
-    }
-  }
+      "args": ["mcp", "serve"],
+    },
+  },
 }
 ```
 
@@ -1254,11 +1254,11 @@ transport = "stdio"
 
 A minimum viable v1 surface — three tools, no resources, no prompts. Resources can come in v1.1 once we know what callers actually want.
 
-| MCP tool name | Backed by | Purpose |
-| ------------- | --------- | ------- |
-| `run_workflow` | `executeAgent({ category: "workflow", ... })` | Run a workflow agent (correct, polish, elevate, devise, criticize, merge, OCR, transcribe). Inputs: `agent`, `inputFile`, `outputFile`, `rounds?`, `model?`, `useMultiple?`. Output: `AgentFlowResult`. |
-| `run_chat` | `executeAgent({ category: "toolUse", ... })` | Run a tool-use agent (orchestrator, devise, search, generic). Inputs: `agent`, `instruction`, `cwd?`, `allowedTools?`, `disallowedTools?`. Output: streaming via `notifications/progress`; final `AgentFlowResult` on completion. |
-| `list_agents` | `getAgentsBySource()` from `@agent/index/agentRegistry` | Returns the agent catalog (id, category, description, source). Lets the calling agent decide what's safe to delegate. |
+| MCP tool name  | Backed by                                               | Purpose                                                                                                                                                                                                                           |
+| -------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run_workflow` | `executeAgent({ category: "workflow", ... })`           | Run a workflow agent (correct, polish, elevate, devise, criticize, merge, OCR, transcribe). Inputs: `agent`, `inputFile`, `outputFile`, `rounds?`, `model?`, `useMultiple?`. Output: `AgentFlowResult`.                           |
+| `run_chat`     | `executeAgent({ category: "toolUse", ... })`            | Run a tool-use agent (orchestrator, devise, search, generic). Inputs: `agent`, `instruction`, `cwd?`, `allowedTools?`, `disallowedTools?`. Output: streaming via `notifications/progress`; final `AgentFlowResult` on completion. |
+| `list_agents`  | `getAgentsBySource()` from `@agent/index/agentRegistry` | Returns the agent catalog (id, category, description, source). Lets the calling agent decide what's safe to delegate.                                                                                                             |
 
 All three accept an optional `runId` so the caller can correlate progress notifications. Approval policy is forced to `never` by default in MCP mode (no TTY for prompts) — callers wanting bash/edit auto-approval pass `approvalPolicy: "yolo"` explicitly, exactly as round 1 §9 specifies for headless mode.
 
@@ -1275,7 +1275,7 @@ stdio JSON-RPC 2.0, one process per client connection, exactly the Claude Code /
 
 ### 24.4 Permission propagation
 
-The MCP client (Claude Code, Codex, etc.) is itself a permission boundary. TeXRA's MCP-server mode trusts the client to have already obtained user approval for the *call* (e.g., Claude Code asked the user "let texra__run_polish run?"). What TeXRA still owns is what the *agent inside* TeXRA does — the bash and edit gates inside a `run_chat` orchestrator session.
+The MCP client (Claude Code, Codex, etc.) is itself a permission boundary. TeXRA's MCP-server mode trusts the client to have already obtained user approval for the _call_ (e.g., Claude Code asked the user "let texra\_\_run_polish run?"). What TeXRA still owns is what the _agent inside_ TeXRA does — the bash and edit gates inside a `run_chat` orchestrator session.
 
 Three policies for those inner gates, selected by tool argument:
 
@@ -1301,14 +1301,14 @@ Three policies for those inner gates, selected by tool argument:
 
 ### 24.6 LOC
 
-| Item | New | Modified |
-| ---- | --- | -------- |
-| `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising) | ~120 | — |
-| `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts` | ~250 | — |
-| `packages/cli/src/mcp/sinks/McpProgressSink.ts` (also used by Logger v2 §23.3) | ~80 | — |
-| `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch) | — | ~30 |
-| `packages/cli/src/commands/mcp.ts` (`texra mcp serve`) | ~40 | — |
-| **Subtotal** | **~490** | **~30** |
+| Item                                                                           | New      | Modified |
+| ------------------------------------------------------------------------------ | -------- | -------- |
+| `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising)    | ~120     | —        |
+| `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts`               | ~250     | —        |
+| `packages/cli/src/mcp/sinks/McpProgressSink.ts` (also used by Logger v2 §23.3) | ~80      | —        |
+| `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch)             | —        | ~30      |
+| `packages/cli/src/commands/mcp.ts` (`texra mcp serve`)                         | ~40      | —        |
+| **Subtotal**                                                                   | **~490** | **~30**  |
 
 ## 25. Hook system (Claude Code-style)
 
@@ -1326,8 +1326,12 @@ Hook contracts are easy to bolt on later in theory and a nightmare in practice �
 // hook input on stdin
 {
   "hookEventName": "PreToolUse",
-  "session": { "id": "ses_abc123", "cwd": "/path/to/project", "agent": "orchestrator" },
-  "tool": { "name": "bash", "input": { "command": "rm -rf /" } }
+  "session": {
+    "id": "ses_abc123",
+    "cwd": "/path/to/project",
+    "agent": "orchestrator",
+  },
+  "tool": { "name": "bash", "input": { "command": "rm -rf /" } },
 }
 ```
 
@@ -1336,8 +1340,8 @@ Hook contracts are easy to bolt on later in theory and a nightmare in practice �
 {
   "hookSpecificOutput": {
     "permissionDecision": "deny",
-    "reason": "rm -rf is not allowed in this project"
-  }
+    "reason": "rm -rf is not allowed in this project",
+  },
 }
 ```
 
@@ -1345,17 +1349,17 @@ Hook contracts are easy to bolt on later in theory and a nightmare in practice �
 
 ### 25.3 Where hooks fire
 
-| Event | Fires from | RunContext field |
-| ----- | ---------- | ---------------- |
-| `SessionStart` | `executeAgent.ts` after `buildAgentLaunchContext` | `runId`, `streamId`, `cwd` |
-| `UserPromptSubmit` | Tool-use REPL on each user submit | `runId`, `instruction` |
-| `PreToolUse` | `requestToolEditApproval`, `requestBashApproval`, generic tool dispatch | `runId`, `tool.name`, `tool.input` |
-| `PostToolUse` | Tool dispatch after result | `runId`, `tool.name`, `tool.result.summary` |
-| `Stop` | `executeAgent` finalizer | `runId`, `result.status` |
-| `SubagentStop` | Delegation child completion | `runId`, `parentStreamId`, `childStreamId`, `result` |
-| `Notification` | Any `requestShowError` / `requestShowInstruction` emission | `runId`, `message` |
-| `PreCompact` / `PostCompact` | (Future, §32 — context compaction) | `runId`, `compactionStats` |
-| `PermissionRequest` | The same gate `PreToolUse` covers, but specifically for the approval gates §9 lists | Same as `PreToolUse` plus `gate: "edit"|"bash"|"plan"|"proposal"|"retry"` |
+| Event                        | Fires from                                                                          | RunContext field                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- | ------ | ------ | ---------- | -------- |
+| `SessionStart`               | `executeAgent.ts` after `buildAgentLaunchContext`                                   | `runId`, `streamId`, `cwd`                           |
+| `UserPromptSubmit`           | Tool-use REPL on each user submit                                                   | `runId`, `instruction`                               |
+| `PreToolUse`                 | `requestToolEditApproval`, `requestBashApproval`, generic tool dispatch             | `runId`, `tool.name`, `tool.input`                   |
+| `PostToolUse`                | Tool dispatch after result                                                          | `runId`, `tool.name`, `tool.result.summary`          |
+| `Stop`                       | `executeAgent` finalizer                                                            | `runId`, `result.status`                             |
+| `SubagentStop`               | Delegation child completion                                                         | `runId`, `parentStreamId`, `childStreamId`, `result` |
+| `Notification`               | Any `requestShowError` / `requestShowInstruction` emission                          | `runId`, `message`                                   |
+| `PreCompact` / `PostCompact` | (Future, §32 — context compaction)                                                  | `runId`, `compactionStats`                           |
+| `PermissionRequest`          | The same gate `PreToolUse` covers, but specifically for the approval gates §9 lists | Same as `PreToolUse` plus `gate: "edit"              | "bash" | "plan" | "proposal" | "retry"` |
 
 ### 25.4 Configuration
 
@@ -1408,20 +1412,17 @@ Round 2's first draft proposed adopting Codex's `approval_policy × sandbox_mode
 
 The reasons it's the right call:
 
-1. **Codex's `sandbox_mode` solves a problem we don't have.** Codex sandbox modes wrap *all* agent file/network access in an OS-level sandbox (Seatbelt on macOS, Landlock on Linux). TeXRA today doesn't sandbox — its tools call `executeCommand` (`@utils/system/execUtils`) and `nodeFilesystem` directly. Adding a real OS sandbox is a 4–6 engineering-week project of its own and orthogonal to the CLI shell.
-2. **Surface-level "in-project / outside-project" distinction is enough for v1.** Round 1 §9.2 already says "in-project" auto-approves under `auto`/`auto-edits`, "outside-project" prompts. That's where 90% of the value is. The remaining 10% is "I want a true OS sandbox," which the desktop's macOS App Sandbox / Windows AppContainer / Linux unprivileged-namespaces story will eventually solve in a host-uniform way — *not* a CLI-only knob.
+1. **Codex's `sandbox_mode` solves a problem we don't have.** Codex sandbox modes wrap _all_ agent file/network access in an OS-level sandbox (Seatbelt on macOS, Landlock on Linux). TeXRA today doesn't sandbox — its tools call `executeCommand` (`@utils/system/execUtils`) and `nodeFilesystem` directly. Adding a real OS sandbox is a 4–6 engineering-week project of its own and orthogonal to the CLI shell.
+2. **Surface-level "in-project / outside-project" distinction is enough for v1.** Round 1 §9.2 already says "in-project" auto-approves under `auto`/`auto-edits`, "outside-project" prompts. That's where 90% of the value is. The remaining 10% is "I want a true OS sandbox," which the desktop's macOS App Sandbox / Windows AppContainer / Linux unprivileged-namespaces story will eventually solve in a host-uniform way — _not_ a CLI-only knob.
 3. **A 2D matrix doubles the test surface and doubles the doc surface.** The mental load — "if I pass `--approval-policy auto --sandbox workspace-write` what happens to bash that touches `/tmp`?" — is exactly the friction users complained about with Codex's first iteration.
 
-### 26.2 What round 2 *does* sharpen
+### 26.2 What round 2 _does_ sharpen
 
 Round 1 §9.2 says "in-project means the candidate file/cwd is inside the resolved workspace path." Round 2 specifies the predicate concretely so the kernel and the CLI agree:
 
 ```ts
 // packages/core/src/runtime/approvalPredicates.ts (new — ~40 LOC)
-export function isInProject(
-  candidate: string,
-  workspaceRoot: string,
-): boolean {
+export function isInProject(candidate: string, workspaceRoot: string): boolean {
   const candidateAbs = path.resolve(candidate);
   const rootAbs = path.resolve(workspaceRoot);
   const rel = path.relative(rootAbs, candidateAbs);
@@ -1440,7 +1441,7 @@ Edge cases the predicate handles explicitly:
 
 Bash is harder than file paths — "auto-approve when in-project" doesn't make sense for `rm -rf $HOME`. Round 1 punted on this. Round 2 spec:
 
-- `auto` policy auto-approves bash *only* when the resolved cwd is in-project AND the command's argv[0] is in a built-in safe list. The safe list is small and conservative: `ls`, `cat`, `head`, `tail`, `wc`, `find` (read-only flags only), `grep`, `rg`, `git status`, `git diff`, `git log`, `pdflatex`, `latexmk`, `pandoc`, `texcount`. Editable per-project via `approval.allowedBash` in config (round 1 §9.4).
+- `auto` policy auto-approves bash _only_ when the resolved cwd is in-project AND the command's argv[0] is in a built-in safe list. The safe list is small and conservative: `ls`, `cat`, `head`, `tail`, `wc`, `find` (read-only flags only), `grep`, `rg`, `git status`, `git diff`, `git log`, `pdflatex`, `latexmk`, `pandoc`, `texcount`. Editable per-project via `approval.allowedBash` in config (round 1 §9.4).
 - Any redirect to `/`, any unquoted variable, any `&&` / `||` / `|` chain that contains a non-listed command → falls back to `ask` even under `auto`.
 - `yolo` short-circuits all of this; `never` always denies.
 
@@ -1503,13 +1504,13 @@ The existing `~/.texra/global-storage/<workspace>/runs/` layout stays for one re
 
 ### 27.6 LOC
 
-| Item | New | Modified |
-| ---- | --- | -------- |
-| `packages/core/src/storage/sessionStore.ts` (new — JSONL writer + reader, project-hash util) | ~200 | — |
-| `packages/core/src/storage/sessionMigration.ts` (legacy → new) | ~80 | — |
-| `cli/src/commands/resume.ts` (consumes sessionStore directly) | — | ~30 |
-| `cli/src/commands/run.ts` (`--continue`, `--fork-session` flags) | — | ~20 |
-| **Subtotal** | **~280** | **~50** |
+| Item                                                                                         | New      | Modified |
+| -------------------------------------------------------------------------------------------- | -------- | -------- |
+| `packages/core/src/storage/sessionStore.ts` (new — JSONL writer + reader, project-hash util) | ~200     | —        |
+| `packages/core/src/storage/sessionMigration.ts` (legacy → new)                               | ~80      | —        |
+| `cli/src/commands/resume.ts` (consumes sessionStore directly)                                | —        | ~30      |
+| `cli/src/commands/run.ts` (`--continue`, `--fork-session` flags)                             | —        | ~20      |
+| **Subtotal**                                                                                 | **~280** | **~50**  |
 
 ## 28. GitHub Action revisited — composite + Bun, not JS
 
@@ -1534,7 +1535,8 @@ inputs:
   output: { description: 'Output file path', required: false }
   rounds: { description: 'Workflow rounds', required: false, default: '1' }
   model: { description: 'Model name', required: false }
-  approval-policy: { description: 'never|ask|auto-edits|auto|yolo', default: 'never' }
+  approval-policy:
+    { description: 'never|ask|auto-edits|auto|yolo', default: 'never' }
   texra-version: { description: 'Pinned CLI version', default: 'latest' }
   output-format: { description: 'text|json|ndjson', default: 'ndjson' }
 outputs:
@@ -1600,9 +1602,9 @@ runs:
 
 ### 28.4 Updated round-1 §6 decision
 
-| #   | Concern                | Round 1 pick      | Round 2 pick |
-| --- | ---------------------- | ----------------- | ------------ |
-| 9   | GitHub Action          | JS Action         | **Composite action + Bun runner; install CLI from npm at run time** |
+| #   | Concern       | Round 1 pick | Round 2 pick                                                        |
+| --- | ------------- | ------------ | ------------------------------------------------------------------- |
+| 9   | GitHub Action | JS Action    | **Composite action + Bun runner; install CLI from npm at run time** |
 
 No other round-1 picks change.
 
@@ -1620,7 +1622,7 @@ Per the rule — "the host package's `src/` is allowed to import `vscode` / `ele
 - **No Ring 2 contributions** — runtime orchestration lives in core.
 - **No Ring 3 contributions** — the CLI uses the existing Node defaults (`consoleLog`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `memoryState`) plus the two CLI-side platform adapters from §7.3 (`ConfConfigProvider`, `KeyringSecrets`). The latter are CLI-package code, not Ring 3 code.
 
-The CLI is purely a *consumer* of the three-ring structure. The benefits accrue at the kernel boundary: a future Tauri or daemon host imports the rings and ships only their own host package.
+The CLI is purely a _consumer_ of the three-ring structure. The benefits accrue at the kernel boundary: a future Tauri or daemon host imports the rings and ships only their own host package.
 
 ## 30. Container & GitHub-runner target matrix
 
@@ -1633,18 +1635,18 @@ Round 1 §12.3 listed five containers as "verified to run." The survey turns up 
 
 ### 30.2 Updated matrix
 
-| Image / runner | Tier | Notes |
-| -------------- | ---- | ----- |
-| `ubuntu-22.04` (default GitHub runner) | First-class | Node 20 preinstalled. CI matrix runs full E2E here. |
-| `ubuntu-24.04` | First-class | Same. Recommended once GHA's default flips. |
-| `macos-14` (GitHub-hosted M-series) | First-class | E2E runs here for keyring path coverage. |
-| `windows-latest` | First-class | E2E runs here for path-handling coverage. |
-| `node:20-bookworm-slim` | First-class | Recommended self-hosted/container. ~80 MB. |
-| `node:20-bookworm` | First-class | Same plus build tools. ~150 MB. |
-| `texlive/texlive:latest` | First-class | TeXRA's primary integration container. Adds Node 20 via `apt-get install nodejs npm`. |
-| `mcr.microsoft.com/devcontainers/typescript-node:20` | First-class | Dev container; smoke-tested in Phase 0. |
-| `node:20-alpine` | Best-effort | Keyring fallback to file. Bun unavailable. Documented in §10.3. |
-| `gitpod/workspace-full` | Best-effort | Smoke-tested but not in CI matrix. |
+| Image / runner                                       | Tier        | Notes                                                                                 |
+| ---------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------- |
+| `ubuntu-22.04` (default GitHub runner)               | First-class | Node 20 preinstalled. CI matrix runs full E2E here.                                   |
+| `ubuntu-24.04`                                       | First-class | Same. Recommended once GHA's default flips.                                           |
+| `macos-14` (GitHub-hosted M-series)                  | First-class | E2E runs here for keyring path coverage.                                              |
+| `windows-latest`                                     | First-class | E2E runs here for path-handling coverage.                                             |
+| `node:20-bookworm-slim`                              | First-class | Recommended self-hosted/container. ~80 MB.                                            |
+| `node:20-bookworm`                                   | First-class | Same plus build tools. ~150 MB.                                                       |
+| `texlive/texlive:latest`                             | First-class | TeXRA's primary integration container. Adds Node 20 via `apt-get install nodejs npm`. |
+| `mcr.microsoft.com/devcontainers/typescript-node:20` | First-class | Dev container; smoke-tested in Phase 0.                                               |
+| `node:20-alpine`                                     | Best-effort | Keyring fallback to file. Bun unavailable. Documented in §10.3.                       |
+| `gitpod/workspace-full`                              | Best-effort | Smoke-tested but not in CI matrix.                                                    |
 
 ### 30.3 Local-development "callable from Claude Code / Codex" verification
 
@@ -1662,13 +1664,13 @@ The same test pattern with `@openai/codex` covers the Codex path. ~120 LOC of te
 
 To make GitHub-Actions ephemerality explicit (and prevent secrets leaking via uploaded artifacts), every file path the CLI writes is documented with a default and an env override:
 
-| Concern | Default (linux) | Env override | Allowed in CI artifact upload? |
-| ------- | --------------- | ------------ | ------------------------------ |
-| Config | `~/.config/texra/config.yaml` | `TEXRA_CONFIG_DIR` | No — may contain endpoint URLs. |
-| Secrets fallback | `~/.texra/secrets.json` (chmod 0600) | `TEXRA_DATA_DIR` | **Never** — explicit gitignore + `.actignore` patterns. |
-| Session JSONL | `~/.texra/projects/<hash>/sessions/<id>.jsonl` | `TEXRA_DATA_DIR` | Yes if `--allow-session-upload` (false by default). Inputs/outputs are paths, not content; safe. |
-| Runtime cache | `~/.cache/texra/` | `TEXRA_CACHE_DIR` | Yes; non-sensitive (downloaded model schemas, agent registry). |
-| Logs (`--log-file`) | User-specified | — | User-controlled — they pick. |
+| Concern             | Default (linux)                                | Env override       | Allowed in CI artifact upload?                                                                   |
+| ------------------- | ---------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------ |
+| Config              | `~/.config/texra/config.yaml`                  | `TEXRA_CONFIG_DIR` | No — may contain endpoint URLs.                                                                  |
+| Secrets fallback    | `~/.texra/secrets.json` (chmod 0600)           | `TEXRA_DATA_DIR`   | **Never** — explicit gitignore + `.actignore` patterns.                                          |
+| Session JSONL       | `~/.texra/projects/<hash>/sessions/<id>.jsonl` | `TEXRA_DATA_DIR`   | Yes if `--allow-session-upload` (false by default). Inputs/outputs are paths, not content; safe. |
+| Runtime cache       | `~/.cache/texra/`                              | `TEXRA_CACHE_DIR`  | Yes; non-sensitive (downloaded model schemas, agent registry).                                   |
+| Logs (`--log-file`) | User-specified                                 | —                  | User-controlled — they pick.                                                                     |
 
 Documented as `texra config path` output for fast diagnosis from `texra doctor`.
 
@@ -1678,33 +1680,33 @@ Documented as `texra config path` output for fast diagnosis from `texra doctor`.
 
 Round 2 adds new work into existing phases plus one new phase (Phase 1.5) for the MCP-server surface. Phases 0, 2, 3, 4, 5 from round 1 keep their scope; Phase 1 absorbs §22 + §23 + §26 (all kernel-side, all on the critical path for tool-use agents).
 
-| Phase | Round-1 scope | Round-2 additions |
-| ----- | ------------- | ----------------- |
-| 0 | Workspace + headless workflow runner | + `RunContext` shim + Ring 1/2/3 reorg (§22.5 pre-v1, §29) |
-| 1 | Tool-use + approval engine | + per-context coordinators (§22.5 v1.0) + Logger v2 (§23) + bash predicate (§26.3) |
-| 1.5 (new) | — | `texra mcp serve` v1.0 surface (§24.5) + integration test (§30.3) |
-| 2 | Config + secrets + auth | unchanged |
-| 3 | Interactive REPL | unchanged |
-| 4 | GitHub Action | composite-action revision (§28) |
-| 5 | Polish, docs | + JSONL session migration (§27.5) + hook system v1 (§25.5) |
+| Phase     | Round-1 scope                        | Round-2 additions                                                                  |
+| --------- | ------------------------------------ | ---------------------------------------------------------------------------------- |
+| 0         | Workspace + headless workflow runner | + `RunContext` shim + Ring 1/2/3 reorg (§22.5 pre-v1, §29)                         |
+| 1         | Tool-use + approval engine           | + per-context coordinators (§22.5 v1.0) + Logger v2 (§23) + bash predicate (§26.3) |
+| 1.5 (new) | —                                    | `texra mcp serve` v1.0 surface (§24.5) + integration test (§30.3)                  |
+| 2         | Config + secrets + auth              | unchanged                                                                          |
+| 3         | Interactive REPL                     | unchanged                                                                          |
+| 4         | GitHub Action                        | composite-action revision (§28)                                                    |
+| 5         | Polish, docs                         | + JSONL session migration (§27.5) + hook system v1 (§25.5)                         |
 
 ### 31.2 Aggregate LOC
 
 After the §22/§23/§29 split into dedicated kernel PRDs, the CLI PRD's LOC accounting only counts CLI-package work. Kernel-side LOC is tracked in those PRDs.
 
-| Bucket | Round-1 net | Round-2 additions (CLI-only after split) | Round-2 total |
-| ------ | ----------- | ---------------------------------------- | ------------- |
-| `packages/cli/` | 2,800–3,800 | +730 + ~350 (CLI-side RunContext + Logger sinks + bootstrap wiring, per §§22.3, 23.3) | **~3,880–4,880** |
-| `packages/core/` (CLI's *own* pre-refactors only — C1–C8 from §14) | ~730 | +220 (HookHost §25.6, sessionStore §27.6, approval predicates §26 — minus the items moved to dedicated PRDs) | **~950** |
-| `texra-ai/texra-action` (separate repo) | ~800 | -300 (no JS shim; YAML composite + small TS for the high-level action only) | **~500** |
-| **Total v1 (this PRD's scope)** | **~4,330–5,330** | **+~1,000** | **~5,330–6,330** |
+| Bucket                                                             | Round-1 net      | Round-2 additions (CLI-only after split)                                                                     | Round-2 total    |
+| ------------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------ | ---------------- |
+| `packages/cli/`                                                    | 2,800–3,800      | +730 + ~350 (CLI-side RunContext + Logger sinks + bootstrap wiring, per §§22.3, 23.3)                        | **~3,880–4,880** |
+| `packages/core/` (CLI's _own_ pre-refactors only — C1–C8 from §14) | ~730             | +220 (HookHost §25.6, sessionStore §27.6, approval predicates §26 — minus the items moved to dedicated PRDs) | **~950**         |
+| `texra-ai/texra-action` (separate repo)                            | ~800             | -300 (no JS shim; YAML composite + small TS for the high-level action only)                                  | **~500**         |
+| **Total v1 (this PRD's scope)**                                    | **~4,330–5,330** | **+~1,000**                                                                                                  | **~5,330–6,330** |
 
 Kernel work that the CLI consumes but does not own (sized in the linked PRDs):
 
-| PRD | Kernel net new | Engineering weeks |
-| --- | -------------- | ----------------- |
-| [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) | ~-10 (refactor pays for itself) | ~6.5 |
-| [`prd-logger-v2.md`](./prd-logger-v2.md) | ~+310 | ~3.8 |
+| PRD                                                          | Kernel net new                  | Engineering weeks |
+| ------------------------------------------------------------ | ------------------------------- | ----------------- |
+| [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) | ~-10 (refactor pays for itself) | ~6.5              |
+| [`prd-logger-v2.md`](./prd-logger-v2.md)                     | ~+310                           | ~3.8              |
 
 CLI v1.0 consumes RunContext Phase 1 + Logger Phase 1; CLI v1.1 consumes RunContext Phase 2 + Logger Phase 5. Both kernel PRDs land alongside CLI Phase 0–1 on the engineering plan. v1 of the CLI ships in **~9–11 weeks** for a single engineer, **~6–8** for two engineers running CLI + kernel work in parallel.
 
@@ -1757,4 +1759,4 @@ Round 2 ships only `command` and `prompt` handler types in §25.5. `http` (POST 
 
 ---
 
-End of round 2. The CLI is still a thin Node shell over a host-neutral kernel; round 2 just makes the kernel honestly host-neutral (no ambient singletons), bigger in the right direction (RunContext + Logger v2 + HookHost + SessionStore are kernel-shared infra), and *callable by every other agent that speaks MCP* — which was the user's framing all along.
+End of round 2. The CLI is still a thin Node shell over a host-neutral kernel; round 2 just makes the kernel honestly host-neutral (no ambient singletons), bigger in the right direction (RunContext + Logger v2 + HookHost + SessionStore are kernel-shared infra), and _callable by every other agent that speaks MCP_ — which was the user's framing all along.
