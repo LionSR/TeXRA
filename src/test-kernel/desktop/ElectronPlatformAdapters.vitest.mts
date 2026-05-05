@@ -57,7 +57,14 @@ interface ElectronSecrets {
 }
 
 interface ElectronSecretsModule {
-  ElectronSecrets: new (store: JsonStore) => ElectronSecrets;
+  getSecretStorageMode: () => 'encrypted' | 'basic_text' | 'unavailable';
+  LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE: string;
+  ElectronSecrets: new (
+    store: JsonStore,
+    options?: {
+      showWarningMessage?: (message: string) => Promise<void> | void;
+    },
+  ) => ElectronSecrets;
 }
 
 async function loadJsonStore(): Promise<JsonStoreModule['JsonStore']> {
@@ -164,14 +171,16 @@ describe('desktop platform adapters', () => {
   });
 
   it('stores encrypted secrets, supports env overrides, and deletes persisted values', async () => {
-    const [{ ElectronSecrets }, JsonStore] = await Promise.all([
-      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
-      loadJsonStore(),
-    ]);
+    const [{ ElectronSecrets, getSecretStorageMode }, JsonStore] =
+      await Promise.all([
+        loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
+        loadJsonStore(),
+      ]);
     const root = await makeTempDir('texra-electron-secrets-');
     const store = await JsonStore.open(join(root, 'secrets.json'));
     const secrets = new ElectronSecrets(store);
 
+    expect(getSecretStorageMode()).toBe('encrypted');
     await secrets.set(testSecretKey, 'persisted');
 
     expect(await secrets.get(testSecretKey)).toBe('persisted');
@@ -191,36 +200,79 @@ describe('desktop platform adapters', () => {
   });
 
   it('rejects secret writes when Electron safe storage is unavailable', async () => {
-    const [{ ElectronSecrets }, JsonStore] = await Promise.all([
-      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
-      loadJsonStore(),
-    ]);
+    const [{ ElectronSecrets, getSecretStorageMode }, JsonStore] =
+      await Promise.all([
+        loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
+        loadJsonStore(),
+      ]);
     const root = await makeTempDir('texra-electron-secrets-');
     const store = await JsonStore.open(join(root, 'secrets.json'));
     const secrets = new ElectronSecrets(store);
 
     configureElectronTestStub({ safeStorageEncryptionAvailable: false });
 
+    expect(getSecretStorageMode()).toBe('unavailable');
     await expect(secrets.set(testSecretKey, 'persisted')).rejects.toThrow(
       'Electron safeStorage is unavailable for secret writes.',
     );
     expect(store.snapshot()).toEqual({});
   });
 
-  it('rejects secret writes on the Linux basic_text safe storage backend', async () => {
-    const [{ ElectronSecrets }, JsonStore] = await Promise.all([
+  it('warns once and rejects secret writes on the Linux basic_text safe storage backend', async () => {
+    const [
+      {
+        ElectronSecrets,
+        LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
+        getSecretStorageMode,
+      },
+      JsonStore,
+    ] = await Promise.all([
       loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
       loadJsonStore(),
     ]);
     const root = await makeTempDir('texra-electron-secrets-');
     const store = await JsonStore.open(join(root, 'secrets.json'));
-    const secrets = new ElectronSecrets(store);
+    const showWarningMessage = vi.fn();
+    const secrets = new ElectronSecrets(store, { showWarningMessage });
+
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    configureElectronTestStub({ safeStorageBackend: 'basic_text' });
+
+    expect(getSecretStorageMode()).toBe('basic_text');
+    await expect(secrets.set(testSecretKey, 'persisted')).rejects.toThrow(
+      LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
+    );
+    await expect(secrets.set(testSecretKey, 'persisted')).rejects.toThrow(
+      LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
+    );
+    expect(showWarningMessage).toHaveBeenCalledTimes(1);
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
+    );
+    expect(store.snapshot()).toEqual({});
+  });
+
+  it('preserves the storage-policy error when the basic_text warning fails', async () => {
+    const [
+      { ElectronSecrets, LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE },
+      JsonStore,
+    ] = await Promise.all([
+      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
+      loadJsonStore(),
+    ]);
+    const root = await makeTempDir('texra-electron-secrets-');
+    const store = await JsonStore.open(join(root, 'secrets.json'));
+    const secrets = new ElectronSecrets(store, {
+      showWarningMessage: vi.fn(async () => {
+        throw new Error('dialog failed');
+      }),
+    });
 
     vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
     configureElectronTestStub({ safeStorageBackend: 'basic_text' });
 
     await expect(secrets.set(testSecretKey, 'persisted')).rejects.toThrow(
-      'Electron safeStorage is unavailable for secret writes.',
+      LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
     );
     expect(store.snapshot()).toEqual({});
   });
