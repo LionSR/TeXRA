@@ -4,8 +4,10 @@ import {
   type CommandKeybinding,
 } from '@commands/catalog';
 import { type AgentCategory } from '@shared/schemas/agent';
-import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
-import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
+import {
+  SETTINGS_TAB,
+  type SettingsTab,
+} from '@shared/schemas/settingsViewMessages';
 import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopRoute } from './desktopShellMessages.js';
 

@@ -138,9 +138,11 @@ export function createDesktopCommandPalette({
   };
 
   const open = (): void => {
-    previouslyFocusedElement = isHTMLElement(view, document.activeElement)
-      ? document.activeElement
-      : null;
+    if (element.hidden) {
+      previouslyFocusedElement = isHTMLElement(view, document.activeElement)
+        ? document.activeElement
+        : null;
+    }
     element.hidden = false;
     input.value = '';
     refreshFilter();
@@ -204,6 +206,7 @@ export function createDesktopCommandPalette({
 
   document.defaultView?.addEventListener('keydown', (event) => {
     if (!isCommandPaletteShortcut(event)) return;
+    if (isTextEntryTarget(view, event.target)) return;
     event.preventDefault();
     open();
   });
@@ -272,5 +275,28 @@ function isHTMLElement(
       : (view as Window & { HTMLElement?: typeof HTMLElement }).HTMLElement;
   return (
     htmlElementConstructor != null && element instanceof htmlElementConstructor
+  );
+}
+
+function isElement(
+  view: Window | null,
+  target: EventTarget | null,
+): target is Element {
+  const elementConstructor =
+    view == null
+      ? undefined
+      : (view as Window & { Element?: typeof Element }).Element;
+  return elementConstructor != null && target instanceof elementConstructor;
+}
+
+function isTextEntryTarget(
+  view: Window | null,
+  target: EventTarget | null,
+): boolean {
+  if (!isElement(view, target)) return false;
+  return (
+    target.closest(
+      'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+    ) != null
   );
 }

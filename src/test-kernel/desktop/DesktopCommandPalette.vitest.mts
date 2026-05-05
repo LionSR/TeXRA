@@ -212,4 +212,73 @@ describe('desktop command palette', () => {
     expect(controller.element.hidden).toBe(true);
     expect(dom.window.document.activeElement).toBe(trigger);
   });
+
+  it('keeps the original focus restoration target across repeated opens', async () => {
+    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
+    const dom = new JSDOM('<button id="trigger">Commands</button>');
+    const trigger =
+      dom.window.document.querySelector<HTMLButtonElement>('#trigger');
+    const controller = createDesktopCommandPalette({
+      document: dom.window.document,
+      actions: {
+        showRoute: vi.fn(),
+        showSettings: vi.fn(),
+      },
+      platform: 'darwin',
+    });
+
+    dom.window.document.body.append(controller.element);
+    trigger?.focus();
+    controller.open();
+    expect(
+      controller.element.querySelector<HTMLInputElement>(
+        '.desktop-command-palette-input',
+      ),
+    ).toBe(dom.window.document.activeElement);
+
+    controller.open();
+    controller.close();
+
+    expect(dom.window.document.activeElement).toBe(trigger);
+  });
+
+  it('does not steal command palette shortcuts from text entry targets', async () => {
+    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
+    const dom = new JSDOM(
+      '<button id="trigger">Commands</button><input id="search" />',
+    );
+    const trigger =
+      dom.window.document.querySelector<HTMLButtonElement>('#trigger');
+    const search =
+      dom.window.document.querySelector<HTMLInputElement>('#search');
+    const controller = createDesktopCommandPalette({
+      document: dom.window.document,
+      actions: {
+        showRoute: vi.fn(),
+        showSettings: vi.fn(),
+      },
+      platform: 'darwin',
+    });
+
+    dom.window.document.body.append(controller.element);
+    search?.focus();
+    search?.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', {
+        key: 'k',
+        metaKey: true,
+        bubbles: true,
+      }),
+    );
+    expect(controller.element.hidden).toBe(true);
+
+    trigger?.focus();
+    trigger?.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', {
+        key: 'k',
+        metaKey: true,
+        bubbles: true,
+      }),
+    );
+    expect(controller.element.hidden).toBe(false);
+  });
 });

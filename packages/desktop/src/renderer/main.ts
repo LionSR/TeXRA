@@ -139,6 +139,7 @@ window.addEventListener('message', (event) => {
 });
 
 function getWindowTargetOrigin(): string {
+  // Electron loads this renderer over file://, where origin is "null".
   return window.location.origin && window.location.origin !== 'null'
     ? window.location.origin
     : '*';
