@@ -8,6 +8,7 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { invalidateApiKeyCache } from '@model/apiProviders';
 import { PROVIDER_URLS } from '@shared/constants/providers';
 
 const CHANNEL = 'ApiKeyCommands';
@@ -20,6 +21,7 @@ export const apiKeyCommands = {
 
 async function refreshApiKeyUI(): Promise<void> {
   invalidateModelOptionsCache();
+  invalidateApiKeyCache();
   await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
   await vscode.commands.executeCommand('texra.refreshAllOptions');
 }
