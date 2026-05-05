@@ -1,6 +1,10 @@
 import { app, dialog } from 'electron';
 
+import { installDesktopAppLog } from './desktopAppLog.js';
+
 let fatalStartupErrorReported = false;
+
+installDesktopAppLog();
 
 function formatFatalStartupError(error: unknown): string {
   if (error instanceof Error) {

@@ -16,9 +16,13 @@ import { JsonStore } from './jsonStore.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
 
+export interface ElectronPlatformInitResult {
+  workspacePath: string | undefined;
+}
+
 export async function initializeElectronPlatform(
   mainDirname: string,
-): Promise<void> {
+): Promise<ElectronPlatformInitResult> {
   const userDataPath = app.getPath('userData');
   const workspacePath = resolveWorkspacePath();
   const storage = new ElectronStorageProvider(userDataPath, workspacePath);
@@ -52,4 +56,6 @@ export async function initializeElectronPlatform(
     resolveResourcesPath(mainDirname),
     app.getVersion(),
   );
+
+  return { workspacePath };
 }
