@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
 import {
@@ -19,7 +19,9 @@ interface StateStore {
 interface DesktopSettingsIpcModule {
   createDesktopSettingsIpc(options: {
     postToRenderer(message: unknown): void;
+    globalState?: StateStore;
     workspaceState?: StateStore;
+    selectCustomAgentDirectory?: () => Promise<string | undefined>;
     onError?: (error: unknown) => void;
   }): {
     handleMessage(
@@ -68,6 +70,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -110,6 +113,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -166,6 +170,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -209,6 +214,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -237,6 +243,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -288,6 +295,7 @@ describe('desktop settings IPC', () => {
 
     const settings = createDesktopSettingsIpc({
       workspaceState,
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
       onError: (error) => errors.push(error),
     });
@@ -311,11 +319,68 @@ describe('desktop settings IPC', () => {
     expect(posted).toEqual([]);
   });
 
+  it('persists model settings through global state', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const globalState = new MemoryStateStore();
+    globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
+      'gpt55',
+      'sonnet46T',
+    ]);
+    globalState.values.set(GlobalStateKey.HELPER_MODEL, 'gpt55');
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      globalState,
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
+        modelName: 'gpt55',
+        enabled: false,
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+      'sonnet46T',
+    ]);
+    expect(globalState.values.get(GlobalStateKey.HELPER_MODEL)).toBe(
+      'sonnet46T',
+    );
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      helperModel: 'sonnet46T',
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES,
+        enabled: true,
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      globalState.values.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
+    ).toBe(true);
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      preferShortModelNames: true,
+    });
+  });
+
   it('ignores unsupported or malformed settings messages', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const posted: unknown[] = [];
     const settings = createDesktopSettingsIpc({
       workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
       postToRenderer: (message) => posted.push(message),
     });
 

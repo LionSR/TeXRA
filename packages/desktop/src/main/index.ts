@@ -122,6 +122,13 @@ function createWindow(): void {
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     sendStartupCatalogData: true,
+    selectCustomAgentDirectory: async () => {
+      const result = await dialog.showOpenDialog(window, {
+        title: 'Select Custom Agents Folder',
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      return result.canceled ? undefined : result.filePaths[0];
+    },
     onError: reportAsyncError,
   });
   const progressIpc = createDesktopProgressIpc({
