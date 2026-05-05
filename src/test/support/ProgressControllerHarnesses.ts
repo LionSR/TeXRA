@@ -67,6 +67,9 @@ export function createProgressStreamLifecycleHarness(
     pickValidActiveStream: (availableStreams) => availableStreams[0] ?? '',
     clearStream: async (stream) => {
       streams = streams.filter((candidate) => candidate !== stream);
+      if (activeStream === stream) {
+        activeStream = streams[0] ?? '';
+      }
     },
     clearAll: async () => {
       streams = [];
