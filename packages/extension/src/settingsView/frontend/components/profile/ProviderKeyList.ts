@@ -17,6 +17,7 @@ import type {
 } from '@shared/schemas/settingsViewMessages';
 import { profileViewStyles } from './styles';
 import { ProviderKeyEvents } from './events';
+import { resolveProviderKeyRows } from './providerKeyRows';
 
 const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
   set: 'Set',
@@ -231,9 +232,7 @@ export class ProviderKeyList extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    if (this.providerKeyStatuses.length === 0) {
-      return nothing;
-    }
+    const rows = resolveProviderKeyRows(this.providerKeyStatuses);
 
     const description =
       this.apiAccessMode === 'included'
@@ -254,7 +253,7 @@ export class ProviderKeyList extends LitElement {
             </tr>
           </thead>
           <tbody>
-            ${this.providerKeyStatuses.map((entry) => this.renderRow(entry))}
+            ${rows.map((entry) => this.renderRow(entry))}
           </tbody>
         </table>
       </div>

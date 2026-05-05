@@ -4,20 +4,10 @@
  * Shared between SecretManager (VS Code), ModelHandler (agent core),
  * and computeModelOptions (model). Platform-agnostic.
  */
+import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 import type { PlatformSecrets } from '@platform/secrets';
 
-export const API_PROVIDERS = [
-  'openai',
-  'anthropic',
-  'openRouter',
-  'google',
-  'xai',
-  'deepseek',
-  'moonshot',
-  'dashscope',
-  'minimax',
-  'glm',
-] as const;
+export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 
 export type ApiProvider = (typeof API_PROVIDERS)[number];
 
