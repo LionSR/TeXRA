@@ -146,6 +146,21 @@ function createWindow(options: { workspacePath: string | undefined }): void {
       });
       return result.canceled ? undefined : result.filePaths[0];
     },
+    openExternalUrl: async (url) => {
+      await shell.openExternal(url);
+    },
+    installToolExtension: async (extensionId) => {
+      await shell.openExternal(
+        `https://marketplace.visualstudio.com/items?itemName=${encodeURIComponent(extensionId)}`,
+      );
+    },
+    runToolCommand: async ({ command }) => {
+      await dialog.showMessageBox(window, {
+        type: 'info',
+        message: 'Run this setup command in a terminal',
+        detail: command,
+      });
+    },
     onError: reportAsyncError,
   });
   const progressIpc = createDesktopProgressIpc({
