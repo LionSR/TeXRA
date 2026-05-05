@@ -18,12 +18,29 @@ extraResources:
     filter:
       - '**/*'
 mac:
+  category: public.app-category.productivity
   icon: build/icon.icns
   target:
-    - dir
+    - target: dmg
+      arch:
+        - universal
+    - target: zip
+      arch:
+        - universal
 win:
+  icon: build/icon.ico
   target:
-    - dir
+    - target: nsis
+      arch:
+        - x64
 linux:
+  category: Office
+  icon: build/icon.png
+  maintainer: TeXRA.ai <contact@texra.ai>
   target:
-    - dir
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
