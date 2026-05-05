@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
+import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
@@ -16,7 +17,11 @@ import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
-import { serializeWorkspacePresenceArg } from '../workspacePath.js';
+import {
+  DESKTOP_WORKSPACE_PATH_STATE_KEY,
+  serializeWorkspacePresenceArg,
+  withWorkspacePathArg,
+} from '../workspacePath.js';
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const __dirname = findDesktopMainDir(moduleDirname);
@@ -94,13 +99,21 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   };
   const openLogsFolder = async () => openPath(getDesktopLogDirectory());
   const openWorkspaceFolder = async () => {
-    console.warn('Desktop workspace folder switching is disabled.');
-    await dialog.showMessageBox(window, {
-      type: 'info',
-      message: 'Open Folder is not enabled in this desktop build yet.',
-      detail:
-        'Folder switching needs the same workspace lifecycle guarantees as the VS Code extension. For now, launch TeXRA with --texra-workspace <path>, set TEXRA_WORKSPACE_PATH, or use the TeXRA VS Code extension for folder-aware workflows.',
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Open Workspace Folder',
+      properties: ['openDirectory'],
     });
+    const selectedPath = result.canceled ? undefined : result.filePaths[0];
+    if (!selectedPath) return;
+
+    await platform().globalState.update(
+      DESKTOP_WORKSPACE_PATH_STATE_KEY,
+      selectedPath,
+    );
+    app.relaunch({
+      args: withWorkspacePathArg(process.argv.slice(1), selectedPath),
+    });
+    app.exit(0);
   };
   attachRendererConsoleLog(window.webContents);
   const agentExecution = createDesktopAgentExecution({
