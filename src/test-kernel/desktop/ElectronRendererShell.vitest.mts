@@ -44,6 +44,16 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain("button.setAttribute('aria-pressed'");
   });
 
+  it('mounts a persistent workspace explorer sidebar', () => {
+    const rendererMain = readRendererMain();
+
+    expect(rendererMain).toContain('id="desktop-explorer"');
+    expect(rendererMain).toContain('REQUEST_TREE');
+    expect(rendererMain).toContain('OPEN_FILE');
+    expect(rendererMain).toContain('SELECT_FILE');
+    expect(rendererMain).toContain('Use as ${typedCategory}');
+  });
+
   it('mounts the catalog-backed command palette', () => {
     const rendererMain = readRendererMain();
 

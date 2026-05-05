@@ -79,6 +79,216 @@ body {
   box-sizing: border-box;
 }
 
+.desktop-workbench {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.desktop-explorer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--texra-panel-border);
+  background: var(--texra-sideBar-background);
+  color: var(--texra-sideBar-foreground);
+}
+
+.desktop-explorer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--texra-panel-border);
+  box-sizing: border-box;
+}
+
+.desktop-explorer-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--texra-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.desktop-explorer-icon-button {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--texra-foreground);
+  cursor: pointer;
+}
+
+.desktop-explorer-icon-button:hover {
+  background: var(--texra-toolbar-hoverBackground);
+}
+
+.desktop-explorer-icon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.desktop-explorer-tree {
+  min-width: 0;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.desktop-explorer-directory {
+  min-width: 0;
+}
+
+.desktop-explorer-directory > summary {
+  list-style: none;
+}
+
+.desktop-explorer-directory > summary::-webkit-details-marker {
+  display: none;
+}
+
+.desktop-explorer-directory[open] > summary .desktop-explorer-chevron {
+  transform: rotate(90deg);
+}
+
+.desktop-explorer-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 24px;
+  padding: 0 8px 0 calc(8px + var(--tree-depth, 0) * 14px);
+  border: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+  background: transparent;
+  color: var(--texra-foreground);
+  font: inherit;
+  text-align: left;
+}
+
+.desktop-explorer-folder-row {
+  cursor: pointer;
+}
+
+.desktop-explorer-file-row {
+  cursor: default;
+}
+
+.desktop-explorer-row:hover {
+  background: var(--texra-list-hoverBackground);
+}
+
+.desktop-explorer-file-row[data-selected='true'] {
+  background: var(--texra-list-activeSelectionBackground);
+  color: var(--texra-list-activeSelectionForeground);
+}
+
+.desktop-explorer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-explorer-category-strip {
+  display: flex;
+  gap: 3px;
+}
+
+.desktop-explorer-category-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--texra-descriptionForeground);
+}
+
+.desktop-explorer-category-dot[data-category='input'] {
+  background: var(--texra-charts-blue);
+}
+
+.desktop-explorer-category-dot[data-category='reference'] {
+  background: var(--texra-charts-green);
+}
+
+.desktop-explorer-category-dot[data-category='auxiliary'] {
+  background: var(--texra-charts-yellow);
+}
+
+.desktop-explorer-category-dot[data-category='media'] {
+  background: var(--texra-charts-purple);
+}
+
+.desktop-explorer-status,
+.desktop-explorer-selection,
+.desktop-explorer-empty {
+  padding: 12px;
+  color: var(--texra-descriptionForeground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.desktop-explorer-selection {
+  border-top: 1px solid var(--texra-panel-border);
+}
+
+.desktop-explorer-selected-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--texra-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-explorer-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.desktop-explorer-empty {
+  align-self: center;
+  text-align: center;
+}
+
+.desktop-explorer-empty .codicon {
+  color: var(--texra-button-background);
+  font-size: 30px;
+}
+
+.desktop-explorer-empty h2 {
+  margin: 12px 0 6px;
+  color: var(--texra-foreground);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.desktop-explorer-empty p {
+  margin: 0 0 14px;
+}
+
+@media (max-width: 760px) {
+  .desktop-workbench {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(160px, 32vh) minmax(0, 1fr);
+  }
+
+  .desktop-explorer {
+    border-right: 0;
+    border-bottom: 1px solid var(--texra-panel-border);
+  }
+}
+
 .desktop-route {
   display: block;
   min-height: 100%;

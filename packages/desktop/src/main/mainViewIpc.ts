@@ -16,6 +16,7 @@ import {
 import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
+import type { DesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
 import type { BrowserWindow } from 'electron';
 
@@ -23,6 +24,7 @@ export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;
   getTheme?: () => DesktopTheme;
   fileSelection?: DesktopFileSelection;
+  workspaceExplorer?: DesktopWorkspaceExplorer;
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
   shellActions?: DesktopShellActions;
@@ -75,6 +77,7 @@ export function installDesktopMainViewIpc(
   });
   messageHandlers = [
     startup,
+    options.workspaceExplorer,
     options.fileSelection,
     options.settings,
     options.progress,
