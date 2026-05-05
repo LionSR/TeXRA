@@ -1,4 +1,4 @@
-import { basename } from 'node:path';
+import path, { basename } from 'node:path';
 
 import {
   prepareMainViewExecutionRequest,
@@ -20,6 +20,7 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ExternalOpener } from '@hosts/externalOpener';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 import {
@@ -41,13 +42,21 @@ import {
   cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
+import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { toolEditApprovalController } from '@tools/approval/toolEditApproval';
+import {
+  createExternalLocation,
+  pathToLocation,
+  type FileLocation,
+} from '@utils/files';
 
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): void;
-  openPath?: (filePath: string) => Promise<void>;
+  opener?: Pick<ExternalOpener, 'openPath'> & {
+    openBuildDisplay?: BuildDisplayFn;
+  };
   showErrorMessage?: (message: string) => Promise<void> | void;
 }
 
@@ -69,7 +78,14 @@ type StreamBadgeSnapshot = {
 export interface DesktopProgressBridgeOptions {
   detachSubagentsOnStop?: boolean;
   openPath?: (filePath: string) => Promise<void>;
+  openBuildDisplay?: BuildDisplayFn;
   showMessage?: (message: string) => Promise<void>;
+}
+
+function toFileLocation(filePath: string): FileLocation {
+  return path.isAbsolute(filePath)
+    ? createExternalLocation(filePath)
+    : pathToLocation(filePath);
 }
 
 export class DesktopProgressBridge {
@@ -732,6 +748,10 @@ export class DesktopProgressBridge {
   }
 
   async openFileCompile(filePath: string): Promise<void> {
+    if (this.options.openBuildDisplay) {
+      await this.options.openBuildDisplay(toFileLocation(filePath));
+      return;
+    }
     await this.openFile(filePath);
   }
 
@@ -814,7 +834,8 @@ export function createDesktopAgentExecution(
   options: DesktopAgentExecutionOptions,
 ): DesktopAgentExecution {
   const progress = new DesktopProgressBridge(options.postToRenderer, {
-    openPath: options.openPath,
+    openPath: options.opener?.openPath,
+    openBuildDisplay: options.opener?.openBuildDisplay,
     showMessage: async (message) => options.showErrorMessage?.(message),
   });
 

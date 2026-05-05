@@ -15,6 +15,7 @@ import {
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 type Bridge = {
+  openFileCompile(filePath: string): Promise<void>;
   dispose(): void;
 };
 
@@ -39,8 +40,18 @@ type TestableBridge = Bridge & {
 
 type DesktopExecution = {
   handleExecute(message: unknown): Promise<void>;
+  progress: Bridge;
   dispose(): void;
 };
+
+type RunExecutionRequest = (
+  request: unknown,
+  options: {
+    openWorkflowOutput(result: {
+      outputs: Array<{ absolutePath: string }>;
+    }): Promise<void>;
+  },
+) => Promise<void>;
 
 interface DesktopAgentExecutionModule {
   DesktopProgressBridge: new (
@@ -48,7 +59,10 @@ interface DesktopAgentExecutionModule {
   ) => Bridge;
   createDesktopAgentExecution(options: {
     postToRenderer(message: unknown): void;
-    openPath?: (filePath: string) => Promise<void>;
+    opener?: {
+      openPath(filePath: string): Promise<void>;
+      openBuildDisplay?(location: { absolutePath: string }): Promise<void>;
+    };
     showErrorMessage?: (message: string) => Promise<void> | void;
   }): DesktopExecution;
 }
@@ -182,9 +196,13 @@ async function createBridge(messages: unknown[]): Promise<TestableBridge> {
 
 async function createExecution(options: {
   postToRenderer?: (message: unknown) => void;
+  opener?: {
+    openPath(filePath: string): Promise<void>;
+    openBuildDisplay?(location: { absolutePath: string }): Promise<void>;
+  };
   showErrorMessage?: (message: string) => Promise<void> | void;
   prepareMainViewExecutionRequest: (message: unknown) => unknown;
-  runValidatedExecutionRequest?: () => Promise<void>;
+  runValidatedExecutionRequest?: RunExecutionRequest;
 }): Promise<DesktopExecution> {
   vi.resetModules();
   vi.doMock('@agent/runtime/RunStorageService', () => ({
@@ -236,6 +254,7 @@ async function createExecution(options: {
   )) as DesktopAgentExecutionModule;
   return createDesktopAgentExecution({
     postToRenderer: options.postToRenderer ?? vi.fn(),
+    opener: options.opener,
     showErrorMessage: options.showErrorMessage,
   });
 }
@@ -614,6 +633,60 @@ describe('DesktopProgressBridge', () => {
       await expect(
         execution.handleExecute({ command: 'execute' }),
       ).rejects.toThrow(failure);
+    } finally {
+      execution.dispose();
+    }
+  });
+
+  it('opens workflow outputs through the desktop preview host', async () => {
+    const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
+    const runValidatedExecutionRequest = vi.fn(async (_request, options) => {
+      await options.openWorkflowOutput({
+        outputs: [{ absolutePath: '/tmp/result.pdf' }],
+      });
+    });
+    const execution = await createExecution({
+      opener,
+      runValidatedExecutionRequest,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: true,
+        request: {
+          agentName: 'default',
+          filePath: 'main.tex',
+          prompt: 'run',
+        },
+      })),
+    });
+
+    try {
+      await execution.handleExecute({ command: 'execute' });
+      expect(opener.openPath).toHaveBeenCalledWith('/tmp/result.pdf');
+    } finally {
+      execution.dispose();
+    }
+  });
+
+  it('opens compile-file actions through the desktop preview host', async () => {
+    const opener = {
+      openPath: vi.fn(async (_filePath: string) => {}),
+      openBuildDisplay: vi.fn(
+        async (_location: { absolutePath: string }) => {},
+      ),
+    };
+    const execution = await createExecution({
+      opener,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: false,
+        message: 'not used',
+      })),
+    });
+
+    try {
+      await execution.progress.openFileCompile('/tmp/output.tex');
+      expect(opener.openBuildDisplay).toHaveBeenCalledWith(
+        expect.objectContaining({ absolutePath: '/tmp/output.tex' }),
+      );
+      expect(opener.openPath).not.toHaveBeenCalled();
     } finally {
       execution.dispose();
     }
