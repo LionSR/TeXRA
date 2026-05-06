@@ -40,18 +40,24 @@ import {
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const __dirname = findDesktopMainDir(moduleDirname);
 let mainWindow: BrowserWindow | null = null;
+let reopenMainWindow: (() => void) | undefined;
+
+function focusOrReopenMainWindow(): void {
+  if (!mainWindow) {
+    reopenMainWindow?.();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
 
 const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
   app,
   argv: process.argv.slice(1),
   execPath: process.execPath,
   devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
-  focusMainWindow: () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-  },
+  focusMainWindow: focusOrReopenMainWindow,
   log: console,
 });
 
@@ -308,17 +314,16 @@ if (protocolLifecycle.shouldContinue) {
       });
       initializeDesktopServerSideKeyAccess(console);
       installContentSecurityPolicy();
-      createWindow({
-        workspacePath: platformInit.workspacePath,
-        authCoordinator,
-      });
+      reopenMainWindow = () =>
+        createWindow({
+          workspacePath: platformInit.workspacePath,
+          authCoordinator,
+        });
+      reopenMainWindow();
 
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-          createWindow({
-            workspacePath: platformInit.workspacePath,
-            authCoordinator,
-          });
+          reopenMainWindow?.();
         }
       });
     })
