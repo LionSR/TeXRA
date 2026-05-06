@@ -1,11 +1,10 @@
-// Node.js imports
 import path from 'path';
-
-// Local imports - agent
-import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 
 // Local imports - event bus
 import { bus } from '@eventBus/ProgressEventBus';
+
+// Local imports - latex
+import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
 
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
@@ -17,6 +16,8 @@ import {
   resolveRunDir,
   type FileLocation,
 } from '@utils/files';
+
+export { getAcceptedFileTarget };
 
 export interface ProgressWorkflowFileActionsState {
   getActiveStream(): StreamTabId | '';
@@ -237,66 +238,6 @@ export class ProgressWorkflowFileActionsController {
     }
     return undefined;
   }
-}
-
-export function getAcceptedFileTarget(
-  baseLocation: FileLocation,
-  editedPath: string,
-): {
-  targetLocation: FileLocation;
-  targetFileName: string;
-  isNewFile: boolean;
-} {
-  const basePath = baseLocation.absolutePath;
-  const baseExt = path.extname(basePath).toLowerCase();
-  const editedExt = path.extname(editedPath);
-
-  if (baseExt === editedExt.toLowerCase()) {
-    return {
-      targetLocation: baseLocation,
-      targetFileName: path.basename(basePath),
-      isNewFile: false,
-    };
-  }
-
-  const baseNameWithoutExt = path.parse(basePath).name;
-  const editedNameWithoutExt = path.parse(editedPath).name;
-  const agentSuffix = extractAgentSuffix(
-    baseNameWithoutExt,
-    editedNameWithoutExt,
-  );
-  const targetFileName = agentSuffix
-    ? `${baseNameWithoutExt}_${agentSuffix}${editedExt}`
-    : path.basename(editedPath);
-  const targetAbsolutePath = path.join(path.dirname(basePath), targetFileName);
-
-  if (baseLocation.kind === 'external') {
-    return {
-      targetLocation: { kind: 'external', absolutePath: targetAbsolutePath },
-      targetFileName,
-      isNewFile: true,
-    };
-  }
-
-  const targetRelativePath = path.join(
-    path.dirname(baseLocation.relativePath),
-    targetFileName,
-  );
-  const targetLocation =
-    baseLocation.kind === 'workspace'
-      ? {
-          kind: 'workspace' as const,
-          absolutePath: targetAbsolutePath,
-          relativePath: targetRelativePath,
-        }
-      : {
-          kind: 'runStorage' as const,
-          absolutePath: targetAbsolutePath,
-          relativePath: targetRelativePath,
-          executionId: baseLocation.executionId,
-        };
-
-  return { targetLocation, targetFileName, isNewFile: true };
 }
 
 export function emitAcceptedWorkspaceFile(location: FileLocation): void {

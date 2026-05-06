@@ -446,8 +446,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           ]);
         },
         openLabel: async (label) => {
-          await vscode.commands.executeCommand('texra.openLabel', label);
-          return true;
+          return (
+            (await vscode.commands.executeCommand<boolean>(
+              'texra.openLabel',
+              label,
+            )) ?? false
+          );
         },
         readFile: (file) => flexibleFS.read(createExternalLocation(file)),
         showInfo: async (message) => {
