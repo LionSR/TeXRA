@@ -638,4 +638,33 @@ describe('desktop Supabase auth', () => {
     });
     auth.dispose();
   });
+
+  it('keeps authenticated profile data when remote agent refresh fails', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    installAuthenticatedSupabaseProvider();
+    vi.spyOn(agentRegistry, 'loadAgents').mockRejectedValue(
+      new Error('agent directory unavailable'),
+    );
+    const getAgentsBySource = vi
+      .spyOn(agentRegistry, 'getAgentsBySource')
+      .mockReturnValue([]);
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator: createCoordinator(),
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      initializeServerSideAccess: false,
+    });
+
+    const profile = await auth.getProfileData();
+
+    expect(profile).toMatchObject({
+      authenticated: true,
+      user: { email: 'user@example.com', id: 'user-1' },
+      remoteAgents: [],
+    });
+    expect(getAgentsBySource).not.toHaveBeenCalled();
+    auth.dispose();
+  });
 });

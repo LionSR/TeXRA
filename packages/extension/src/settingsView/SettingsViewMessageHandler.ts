@@ -25,6 +25,7 @@ import {
   deleteExecution,
   deleteAllExecutions,
 } from '@agent/storage';
+import { toRemoteAgentProfileData } from '@agent/index/remoteAgentProfileData';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
@@ -788,13 +789,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     await loadAgents();
     const remoteAgents: RemoteAgent[] = getAgentsBySource('remote').map(
-      (entry) => ({
-        name: entry.name,
-        description: entry.description ?? '',
-        visibility: entry.visibility ?? ['public'],
-        category: entry.category,
-        supportsMultipleOutput: entry.isMultiple ?? false,
-      }),
+      toRemoteAgentProfileData,
     );
 
     const apiAccessMode = serverSideKeyService.getUseIncludedModelAccess()
