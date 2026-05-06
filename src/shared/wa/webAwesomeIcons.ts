@@ -1,42 +1,46 @@
 // Third-party imports
+import { faBackwardStep } from '@fortawesome/free-solid-svg-icons/faBackwardStep';
+import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
+import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
+import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
+import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
+import { faUser } from '@fortawesome/free-solid-svg-icons/faUser';
+import { faXmark } from '@fortawesome/free-solid-svg-icons/faXmark';
 import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon/library.js';
 
 const TEXRA_ICON_LIBRARY = 'texra';
 
-function iconSvg(viewBox: string, path: string): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}"><path fill="currentColor" d="${path}"/></svg>`;
+type FontAwesomePathData = string | string[];
+
+interface FontAwesomeIconDefinition {
+  readonly icon: readonly [
+    width: number,
+    height: number,
+    ligatures: readonly (string | number)[],
+    unicode: string,
+    svgPathData: FontAwesomePathData,
+  ];
 }
 
-const iconSvgs = {
-  // Font Awesome Free 6 icons; registered locally to avoid webview network fetches.
-  'backward-step': iconSvg(
-    '0 0 320 512',
-    'M267.5 440.6c9.5 7.9 22.8 9.7 34.1 4.4s18.4-16.6 18.4-29l0-320c0-12.4-7.2-23.7-18.4-29s-24.5-3.6-34.1 4.4l-192 160L64 241 64 96c0-17.7-14.3-32-32-32S0 78.3 0 96L0 416c0 17.7 14.3 32 32 32s32-14.3 32-32l0-145 11.5 9.6 192 160z',
-  ),
-  gear: iconSvg(
-    '0 0 512 512',
-    'M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4L83.1 425.9c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4C64.6 273.1 64 264.6 64 256s.6-17.1 1.7-25.4L22.4 191.2c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160 80 80 0 1 0 0 160z',
-  ),
-  key: iconSvg(
-    '0 0 512 512',
-    'M336 352c97.2 0 176-78.8 176-176S433.2 0 336 0S160 78.8 160 176c0 18.7 2.9 36.8 8.3 53.7L7 391c-4.5 4.5-7 10.6-7 17v80c0 13.3 10.7 24 24 24h80c13.3 0 24-10.7 24-24v-40h40c13.3 0 24-10.7 24-24v-40h40c6.4 0 12.5-2.5 17-7l33.3-33.3c16.9 5.4 35 8.3 53.7 8.3zM376 96a40 40 0 1 1 0 80 40 40 0 1 1 0-80z',
-  ),
-  'picture-in-picture': iconSvg(
-    '0 0 512 512',
-    'M448 32c35.3 0 64 28.7 64 64l0 112-64 0 0-112-384 0 0 320 144 0 0 64-144 0-6.5-.3c-30.1-3.1-54.1-27-57.1-57.1L0 416 0 96C0 62.9 25.2 35.6 57.5 32.3L64 32 448 32zm16 224c26.5 0 48 21.5 48 48l0 128c0 26.5-21.5 48-48 48l-160 0c-26.5 0-48-21.5-48-48l0-128c0-26.5 21.5-48 48-48l160 0z',
-  ),
-  play: iconSvg(
-    '0 0 448 512',
-    'M91.2 36.9c-12.4-6.8-27.4-6.5-39.6 .7S32 57.9 32 72l0 368c0 14.1 7.5 27.2 19.6 34.4s27.2 7.5 39.6 .7l336-184c12.8-7 20.8-20.5 20.8-35.1s-8-28.1-20.8-35.1l-336-184z',
-  ),
-  user: iconSvg(
-    '0 0 448 512',
-    'M224 248a120 120 0 1 0 0-240 120 120 0 1 0 0 240zm-29.7 56C95.8 304 16 383.8 16 482.3 16 498.7 29.3 512 45.7 512l356.6 0c16.4 0 29.7-13.3 29.7-29.7 0-98.5-79.8-178.3-178.3-178.3l-59.4 0z',
-  ),
-  xmark: iconSvg(
-    '0 0 384 512',
-    'M55.1 73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L147.2 256 9.9 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192.5 301.3 329.9 438.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.8 256 375.1 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192.5 210.7 55.1 73.4z',
-  ),
+function iconSvg(iconDefinition: FontAwesomeIconDefinition): string {
+  const [width, height, , , svgPathData] = iconDefinition.icon;
+  const paths = Array.isArray(svgPathData)
+    ? svgPathData
+        .map((path) => `<path fill="currentColor" d="${path}"/>`)
+        .join('')
+    : `<path fill="currentColor" d="${svgPathData}"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">${paths}</svg>`;
+}
+
+const icons = {
+  // Font Awesome Free icons; Web Awesome renders them from local data URIs.
+  'backward-step': faBackwardStep,
+  gear: faGear,
+  key: faKey,
+  'picture-in-picture': faPictureInPicture,
+  play: faPlay,
+  user: faUser,
+  xmark: faXmark,
 } as const;
 
 let isRegistered = false;
@@ -50,8 +54,8 @@ export function registerTeXRAWebAwesomeIcons(): void {
 
   registerIconLibrary(TEXRA_ICON_LIBRARY, {
     resolver(name) {
-      const svg = iconSvgs[name as keyof typeof iconSvgs];
-      return svg ? dataUri(svg) : '';
+      const icon = icons[name as keyof typeof icons];
+      return icon ? dataUri(iconSvg(icon)) : '';
     },
   });
   isRegistered = true;
