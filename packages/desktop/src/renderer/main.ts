@@ -2,10 +2,12 @@ import './styles.css';
 import './themeTokens.css';
 import './codiconStylesheet';
 
-import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { postMessage } from '@shared/hostBridge';
-import { SetThemeMessageSchema } from '@shared/schemas/commonViewMessages';
+import {
+  SetThemeMessageSchema,
+  type Theme,
+} from '@shared/schemas/commonViewMessages';
 import '@vscode-elements/elements/dist/bundled.js';
 import '@progressView/frontend';
 import '@settingsView/frontend';
@@ -198,12 +200,6 @@ function isDesktopSetRouteMessage(
   return DesktopSetRouteMessageSchema.safeParse(message).success;
 }
 
-function isThemeMessage(
-  message: unknown,
-): message is { command: typeof COMMON_COMMANDS.THEME_SET; theme: string } {
-  return SetThemeMessageSchema.safeParse(message).success;
-}
-
 function setRoute(route: DesktopRoute): void {
   for (const [candidate, container] of routeContainers) {
     container.hidden = candidate !== route;
@@ -215,16 +211,18 @@ function setRoute(route: DesktopRoute): void {
 }
 
 window.addEventListener('message', (event) => {
+  const themeMessageResult = SetThemeMessageSchema.safeParse(event.data);
+
   if (isDesktopSetRouteMessage(event.data)) {
     setRoute(event.data.route);
-  } else if (isThemeMessage(event.data)) {
-    applyDesktopTheme(event.data.theme);
+  } else if (themeMessageResult.success) {
+    applyDesktopTheme(themeMessageResult.data.theme);
   } else if (isWorkspaceTreeMessage(event.data)) {
     renderWorkspaceExplorer(event.data);
   }
 });
 
-function applyDesktopTheme(theme: string): void {
+function applyDesktopTheme(theme: Theme): void {
   document.body.classList.remove(
     'vscode-light',
     'vscode-dark',
