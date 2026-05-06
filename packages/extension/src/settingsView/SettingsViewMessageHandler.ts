@@ -18,14 +18,17 @@ import {
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { platform } from '@platform/platform';
-import { getAgentsBySource, loadAgents } from '@agent/index';
+import {
+  getAgentsBySource,
+  loadAgents,
+  toRemoteAgentProfileData,
+} from '@agent/index';
 import {
   getExecutionStore,
   listExecutions,
   deleteExecution,
   deleteAllExecutions,
 } from '@agent/storage';
-import { toRemoteAgentProfileData } from '@agent/index/remoteAgentProfileData';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
