@@ -21,6 +21,7 @@ interface DesktopShellIpcModule {
     options?: {
       getCustomAgentDirectory?: () => Promise<string>;
       openPath?: (filePath: string) => Promise<void>;
+      signIn?: () => Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
   ): {
@@ -198,6 +199,21 @@ describe('desktop IPC adapters', () => {
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tabIndex: SETTINGS_TAB.AGENTS,
     });
+  });
+
+  it('wires the main login banner to desktop sign-in', async () => {
+    const { createDesktopShellIpc } = await loadDesktopShellIpc();
+    const postToRenderer = vi.fn();
+    const signIn = vi.fn(async () => {});
+    const shellIpc = createDesktopShellIpc({ postToRenderer }, { signIn });
+
+    expect(
+      shellIpc.handleMessage({ command: MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER }),
+    ).toBe(true);
+    await Promise.resolve();
+
+    expect(signIn).toHaveBeenCalledOnce();
+    expect(postToRenderer).not.toHaveBeenCalled();
   });
 
   it('keeps execution forwarding in the execution adapter', async () => {

@@ -274,6 +274,7 @@ function createWindow(options: {
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,
       openWorkspaceFolder,
+      signIn: () => desktopAuth.signIn(),
       onAsyncError: reportAsyncError,
     },
   );
