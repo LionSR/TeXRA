@@ -240,15 +240,19 @@ function detectProvider(err: unknown): string | undefined {
     return candidate.provider;
   }
 
-  const lowered = candidate.constructor?.name?.toLowerCase();
-  if (!lowered) return undefined;
+  const loweredClassNames = getErrorClassNames(err).map((className) =>
+    className.toLowerCase(),
+  );
+  if (isString(candidate.constructor?.name)) {
+    loweredClassNames.push(candidate.constructor.name.toLowerCase());
+  }
 
   // Match SDK class-name fragments, then normalize aliases to the
   // canonical API-provider names used by SecretManager / model handlers.
   // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
   // (class name contains "kimi") maps to "moonshot".
   const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find((p) =>
-    lowered.includes(p),
+    loweredClassNames.some((className) => className.includes(p)),
   );
   if (match === 'kimi') return 'moonshot';
   return match;
