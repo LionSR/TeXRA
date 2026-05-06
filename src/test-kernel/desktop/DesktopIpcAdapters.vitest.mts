@@ -208,7 +208,9 @@ describe('desktop IPC adapters', () => {
     const shellIpc = createDesktopShellIpc({ postToRenderer }, { signIn });
 
     expect(
-      shellIpc.handleMessage({ command: MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER }),
+      shellIpc.handleMessage({
+        command: MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER,
+      }),
     ).toBe(true);
     await Promise.resolve();
 
