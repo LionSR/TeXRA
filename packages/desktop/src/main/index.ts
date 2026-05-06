@@ -165,7 +165,6 @@ function createWindow(options: {
     onSessionChanged: refreshDesktopAuthSurfaces,
     log: console,
     callbackState: options.authCallbackState,
-    initializeServerSideAccess: false,
   });
   setOpenBuildDisplay(previewHost.openBuildDisplay);
   const openLogsFolder = async () =>
