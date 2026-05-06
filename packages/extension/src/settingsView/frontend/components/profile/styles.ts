@@ -467,12 +467,11 @@ export const profileViewStyles: CSSResult = css`
   .provider-group-header {
     display: flex;
     align-items: center;
+    gap: var(--spacing-medium);
     width: 100%;
-    padding: var(--spacing-medium);
     background: var(--texra-editor-background);
     border: none;
     color: var(--texra-foreground);
-    cursor: pointer;
     font-size: var(--font-size-sm);
     font-family: inherit;
     text-align: left;
@@ -482,7 +481,21 @@ export const profileViewStyles: CSSResult = css`
     background: var(--texra-list-hoverBackground);
   }
 
-  .provider-group-header:focus-visible {
+  .provider-group-toggle {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    padding: var(--spacing-medium);
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+
+  .provider-group-toggle:focus-visible {
     outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
@@ -506,12 +519,50 @@ export const profileViewStyles: CSSResult = css`
   .provider-group-name {
     font-weight: var(--font-weight-medium);
     flex: 1;
+    min-width: 0;
   }
 
   .provider-group-count {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     white-space: nowrap;
+  }
+
+  .provider-group-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    padding-right: var(--spacing-medium);
+    white-space: nowrap;
+  }
+
+  .provider-group-key-status {
+    flex-shrink: 0;
+  }
+
+  .provider-group-key-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-tiny);
+    padding: var(--spacing-tiny) var(--spacing-small);
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius-small);
+    background: var(--texra-button-secondaryBackground, transparent);
+    color: var(--texra-button-secondaryForeground, var(--texra-foreground));
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .provider-group-key-button:hover {
+    background: var(
+      --texra-button-secondaryHoverBackground,
+      var(--texra-list-hoverBackground)
+    );
+  }
+
+  .provider-group-key-button:focus-visible {
+    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline-offset: 1px;
   }
 
   .provider-group-content {
