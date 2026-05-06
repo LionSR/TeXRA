@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { platform } from '@platform/platform';
 import {
   DEFAULT_OAUTH_PROVIDER,
@@ -56,8 +58,8 @@ export interface DesktopSupabaseAuth {
 }
 
 export interface DesktopAuthCallbackState {
-  isAwaitingCallback(): boolean;
-  markAwaitingCallback(): void;
+  getExpectedState(): string | null;
+  beginAuthAttempt(state: string): void;
   clearAwaitingCallback(): void;
 }
 
@@ -79,7 +81,7 @@ export interface DesktopOAuthClient {
   auth: {
     signInWithOAuth(input: {
       provider: OAuthProvider;
-      options: { redirectTo: string };
+      options: { redirectTo: string; queryParams?: Record<string, string> };
     }): Promise<{
       data: { url?: string | null };
       error: { message: string } | null;
@@ -103,14 +105,14 @@ export interface DesktopAuthCoordinator {
 }
 
 export function createDesktopAuthCallbackState(): DesktopAuthCallbackState {
-  let isAwaitingCallback = false;
+  let expectedState: string | null = null;
   return {
-    isAwaitingCallback: () => isAwaitingCallback,
-    markAwaitingCallback: () => {
-      isAwaitingCallback = true;
+    getExpectedState: () => expectedState,
+    beginAuthAttempt: (state) => {
+      expectedState = state;
     },
     clearAwaitingCallback: () => {
-      isAwaitingCallback = false;
+      expectedState = null;
     },
   };
 }
@@ -148,12 +150,20 @@ export function createDesktopSupabaseAuth(
     }
   };
   const subscription = options.router.subscribe((callback) => {
-    if (!callbackState.isAwaitingCallback()) {
+    const expectedState = callbackState.getExpectedState();
+    if (!expectedState) {
       options.log?.debug?.(
         'Desktop auth callback ignored because no sign-in is in progress',
       );
       return;
     }
+    if (!isExpectedAuthCallback(callback, expectedState)) {
+      options.log?.debug?.(
+        'Desktop auth callback ignored because it does not match the active sign-in attempt',
+      );
+      return;
+    }
+    callbackState.clearAwaitingCallback();
     callbackQueue.push(callback);
     if (isProcessingCallbacks) {
       options.log?.debug?.(
@@ -171,9 +181,10 @@ export function createDesktopSupabaseAuth(
     async signIn(provider = DEFAULT_OAUTH_PROVIDER) {
       try {
         const redirectTo = getAuthCallbackUri(TEXRA_PROTOCOL);
+        const state = randomUUID();
         const { data, error } = await oauthClient.auth.signInWithOAuth({
           provider,
-          options: { redirectTo },
+          options: { redirectTo, queryParams: { state } },
         });
         if (error || !data.url) {
           throw new Error(
@@ -181,7 +192,7 @@ export function createDesktopSupabaseAuth(
           );
         }
 
-        callbackState.markAwaitingCallback();
+        callbackState.beginAuthAttempt(state);
         await options.openExternalUrl(data.url);
         await options.showInfoMessage?.(
           'Complete sign-in in your browser. TeXRA will update when the browser returns to the desktop app.',
@@ -263,6 +274,17 @@ function clearDesktopServerSideKeyCaches(
       `Desktop server-side key cache clear skipped: ${toErrorMessage(error)}`,
     );
   }
+}
+
+function isExpectedAuthCallback(
+  callback: DesktopProtocolCallback,
+  expectedState: string,
+): boolean {
+  const fragmentParams = new URLSearchParams(callback.fragment);
+  const queryParams = new URLSearchParams(callback.query);
+  return (
+    (fragmentParams.get('state') ?? queryParams.get('state')) === expectedState
+  );
 }
 
 async function processProtocolCallback(
