@@ -126,6 +126,20 @@ describe('formatProviderHttpError', () => {
     expect(formatted.requestId).toBe('req-anthropic');
   });
 
+  it('does not infer OpenAI from generic x-request-id headers', () => {
+    const err = new UnknownSdkApiError(
+      'openai-compatible gateway failed',
+    ) as APIError & {
+      headers: Headers;
+    };
+    err.headers = new Headers({ 'x-request-id': 'req-compatible' });
+
+    const formatted = formatProviderHttpError(err);
+
+    expect(formatted.provider).toBeUndefined();
+    expect(formatted.requestId).toBe('req-compatible');
+  });
+
   it('prefers SDK class provider hints over OpenAI-compatible request headers', () => {
     const err = new KimiAPIError('moonshot auth failed') as APIError & {
       headers: Headers;

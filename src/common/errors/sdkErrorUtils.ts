@@ -271,7 +271,7 @@ type HeaderBag =
       get?: (key: string) => string | null;
     }
   | Record<string, unknown>;
-type HeaderDetectedProvider = 'openai' | 'anthropic';
+type HeaderDetectedProvider = 'anthropic';
 
 function getHeaderValue(
   headers: HeaderBag | undefined,
@@ -290,7 +290,6 @@ function detectProviderFromHeaders(
   headers: HeaderBag | undefined,
 ): HeaderDetectedProvider | undefined {
   if (getHeaderValue(headers, 'request-id')) return 'anthropic';
-  if (getHeaderValue(headers, 'x-request-id')) return 'openai';
   return undefined;
 }
 
