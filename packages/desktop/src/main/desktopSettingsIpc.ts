@@ -666,8 +666,11 @@ export function createDesktopSettingsIpc(
   }
 
   async function signOut(): Promise<void> {
-    await options.signOut?.();
-    await postProfileData();
+    if (options.signOut) {
+      await options.signOut();
+    } else {
+      await postProfileData();
+    }
   }
 
   async function setApiAccessMode(

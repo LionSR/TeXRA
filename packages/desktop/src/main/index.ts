@@ -6,6 +6,7 @@ import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
@@ -135,6 +136,15 @@ function createWindow(options: {
     shell,
     showErrorMessage,
   });
+  const refreshDesktopAuthSurfaces = async () => {
+    const profile = await desktopAuth.getProfileData();
+    if (profile.authenticated) {
+      ipcRef.current?.postToRenderer({
+        command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+      });
+    }
+    await settingsIpcRef.current?.refreshProfileData();
+  };
   const desktopAuth = createDesktopSupabaseAuth({
     router: protocolLifecycle.router,
     coordinator: options.authCoordinator,
@@ -144,7 +154,7 @@ function createWindow(options: {
       await dialog.showMessageBox(window, { type: 'info', message });
     },
     showErrorMessage,
-    onSessionChanged: () => settingsIpcRef.current?.refreshProfileData(),
+    onSessionChanged: refreshDesktopAuthSurfaces,
     log: console,
     initializeServerSideAccess: false,
   });
@@ -264,6 +274,9 @@ function createWindow(options: {
     settings: settingsIpc,
     progress: progressIpc,
     shellActions,
+    getAuthStatus: async () => ({
+      authenticated: (await desktopAuth.getProfileData()).authenticated,
+    }),
     onAsyncError: reportAsyncError,
   });
   ipcRef.current = mainViewIpc;

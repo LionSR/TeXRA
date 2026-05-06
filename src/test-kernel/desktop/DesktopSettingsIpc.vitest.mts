@@ -887,6 +887,45 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
   });
 
+  it('does not duplicate profile refresh after delegated desktop sign-out', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+    let signOutCalls = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: (message) => posted.push(message),
+      signOut: async () => {
+        signOutCalls += 1;
+      },
+      getAuthProfileData: async () => ({
+        authenticated: false,
+        user: null,
+        tier: 'free',
+        permissions: [],
+        remoteAgents: [],
+        apiAccessMode: 'personal',
+        allowedModels: [],
+        accessExpiresAt: null,
+      }),
+    });
+
+    expect(
+      settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_OUT }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(signOutCalls).toBe(1);
+    expect(
+      posted.filter(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+      ),
+    ).toEqual([]);
+  });
+
   it('ignores unsupported or malformed settings messages', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const posted: unknown[] = [];
