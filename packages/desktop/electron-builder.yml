@@ -1,6 +1,10 @@
 appId: ai.texra.desktop
 productName: TeXRA
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+protocols:
+  - name: TeXRA
+    schemes:
+      - texra
 asar: true
 asarUnpack:
   - '**/node_modules/@openai/codex-*/**'

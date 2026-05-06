@@ -80,6 +80,37 @@ describe('desktop workspace path', () => {
     );
   });
 
+  it('does not treat desktop protocol callback URLs as workspace paths', () => {
+    assert.equal(
+      hasWorkspacePath({
+        argv: ['--texra-workspace', 'texra://auth-callback?code=1'],
+        env: {},
+      }),
+      false,
+    );
+    assert.equal(
+      resolveWorkspacePath({
+        argv: ['--texra-workspace', 'texra://auth-callback?code=1'],
+        env: {},
+      }),
+      undefined,
+    );
+    assert.equal(
+      hasWorkspacePath({
+        argv: ['--texra-workspace=texra://auth-callback?code=1'],
+        env: {},
+      }),
+      false,
+    );
+    assert.equal(
+      resolveWorkspacePath({
+        argv: ['--texra-workspace=texra://auth-callback?code=1'],
+        env: {},
+      }),
+      undefined,
+    );
+  });
+
   it('uses main-process workspace resolution when exposing renderer state', () => {
     assert.equal(
       hasResolvedWorkspacePath({
@@ -108,6 +139,7 @@ describe('desktop workspace path', () => {
           '--texra-workspace',
           'old-workspace',
           '--flag',
+          'texra://texra-ai.texra/auth-callback?state=old',
           '--texra-workspace=/tmp/other-workspace',
         ],
         '/Users/ray/paper',
