@@ -10,6 +10,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
+import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
@@ -192,6 +193,9 @@ function createWindow(options: {
   const agentExecution = createDesktopAgentExecution({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     opener: previewHost,
+    diff: createDesktopDiffHost({
+      openPath: previewHost.openPath,
+    }),
     confirmAcceptFile: async (message) => {
       const result = await dialog.showMessageBox(window, {
         type: 'warning',
