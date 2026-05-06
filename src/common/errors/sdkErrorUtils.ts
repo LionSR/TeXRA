@@ -240,24 +240,30 @@ function detectProvider(err: unknown): string | undefined {
     return candidate.provider;
   }
 
-  const lowered = candidate.constructor?.name?.toLowerCase();
-  if (lowered) {
-    // Match SDK class-name fragments, then normalize aliases to the
-    // canonical API-provider names used by SecretManager / model handlers.
-    // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
-    // (class name contains "kimi") maps to "moonshot".
-    const names = [
-      lowered,
-      ...getErrorClassNames(err).map((name) => name.toLowerCase()),
-    ];
-    const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
-      (provider) => names.some((name) => name.includes(provider)),
-    );
-    if (match === 'kimi') return 'moonshot';
-    if (match) return match;
-  }
+  const classNameProvider = detectProviderFromClassNames([
+    candidate.constructor?.name,
+    ...getErrorClassNames(err),
+  ]);
+  if (classNameProvider) return classNameProvider;
 
   return detectProviderFromHeaders(candidate.headers);
+}
+
+function detectProviderFromClassNames(
+  classNames: readonly (string | undefined)[],
+): string | undefined {
+  // Match SDK class-name fragments, then normalize aliases to the canonical
+  // API-provider names used by SecretManager / model handlers. This also covers
+  // no-response connection errors whose provider only appears on a base SDK
+  // class such as OpenAIError or AnthropicError.
+  const names = classNames
+    .filter((name): name is string => isString(name) && name.length > 0)
+    .map((name) => name.toLowerCase());
+  const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
+    (provider) => names.some((name) => name.includes(provider)),
+  );
+  if (match === 'kimi') return 'moonshot';
+  return match;
 }
 
 type HeaderBag =

@@ -1,9 +1,13 @@
 // Third-party imports
 import {
+  APIConnectionError as AnthropicAPIConnectionError,
+  APIConnectionTimeoutError as AnthropicAPIConnectionTimeoutError,
   APIUserAbortError as AnthropicAPIUserAbortError,
   AuthenticationError as AnthropicAuthenticationError,
 } from '@anthropic-ai/sdk';
 import {
+  APIConnectionError as OpenAIAPIConnectionError,
+  APIConnectionTimeoutError as OpenAIAPIConnectionTimeoutError,
   APIUserAbortError as OpenAIAPIUserAbortError,
   AuthenticationError as OpenAIAuthenticationError,
 } from 'openai';
@@ -55,6 +59,23 @@ describe('formatProviderHttpError', () => {
     expect(formatted.statusCode).toBe(401);
   });
 
+  it('preserves provider context for native OpenAI connection errors without response headers', () => {
+    const connectionError = formatProviderHttpError(
+      new OpenAIAPIConnectionError({
+        message: 'network unavailable',
+        cause: new Error('socket closed'),
+      }),
+    );
+    const timeoutError = formatProviderHttpError(
+      new OpenAIAPIConnectionTimeoutError({ message: 'timed out' }),
+    );
+
+    expect(connectionError.provider).toBe('openai');
+    expect(connectionError.retryable).toBe(true);
+    expect(timeoutError.provider).toBe('openai');
+    expect(timeoutError.retryable).toBe(true);
+  });
+
   it('preserves provider context for native Anthropic HTTP errors', () => {
     const formatted = formatProviderHttpError(
       new AnthropicAuthenticationError(
@@ -71,6 +92,23 @@ describe('formatProviderHttpError', () => {
     expect(formatted.provider).toBe('anthropic');
     expect(formatted.requestId).toBe('req-anthropic');
     expect(formatted.statusCode).toBe(401);
+  });
+
+  it('preserves provider context for native Anthropic connection errors without response headers', () => {
+    const connectionError = formatProviderHttpError(
+      new AnthropicAPIConnectionError({
+        message: 'network unavailable',
+        cause: new Error('socket closed'),
+      }),
+    );
+    const timeoutError = formatProviderHttpError(
+      new AnthropicAPIConnectionTimeoutError({ message: 'timed out' }),
+    );
+
+    expect(connectionError.provider).toBe('anthropic');
+    expect(connectionError.retryable).toBe(true);
+    expect(timeoutError.provider).toBe('anthropic');
+    expect(timeoutError.retryable).toBe(true);
   });
 
   it('prefers Anthropic request-id when response headers include both request id styles', () => {
