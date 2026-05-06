@@ -638,6 +638,34 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('passes remote agent launches to the shared runtime unchanged', async () => {
+    const request = {
+      agentName: 'remote:remoteWriter',
+      filePath: 'main.tex',
+      prompt: 'draft',
+    };
+    const runValidatedExecutionRequest = vi.fn(async () => {});
+    const execution = await createExecution({
+      runValidatedExecutionRequest,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: true,
+        request,
+      })),
+    });
+
+    try {
+      await execution.handleExecute({ command: 'execute' });
+      expect(runValidatedExecutionRequest).toHaveBeenCalledWith(
+        request,
+        expect.objectContaining({
+          openWorkflowOutput: expect.any(Function),
+        }),
+      );
+    } finally {
+      execution.dispose();
+    }
+  });
+
   it('opens workflow outputs through the desktop preview host', async () => {
     const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
     const runValidatedExecutionRequest = vi.fn(async (_request, options) => {

@@ -51,6 +51,7 @@
     "types": ["node", "mocha", "vscode"]
   },
   "include": [
+    "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "packages/extension/src/**/*.ts",

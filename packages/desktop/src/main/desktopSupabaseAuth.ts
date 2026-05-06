@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { platform } from '@platform/platform';
+import { getAgentsBySource, loadAgents } from '@agent/index/agentRegistry';
 import {
   DEFAULT_OAUTH_PROVIDER,
   DEFAULT_SESSION_EXPIRY_MS,
@@ -411,6 +412,17 @@ async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
     // Server-side key access is optional; personal provider keys still work.
   }
 
+  await loadAgents();
+  const remoteAgents: RemoteAgent[] = getAgentsBySource('remote').map(
+    (entry) => ({
+      name: entry.name,
+      description: entry.description ?? '',
+      visibility: entry.visibility ?? ['public'],
+      category: entry.category,
+      supportsMultipleOutput: entry.isMultiple ?? false,
+    }),
+  );
+
   return {
     authenticated: true,
     user: {
@@ -419,7 +431,7 @@ async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
     },
     tier: authContext.tier,
     permissions: authContext.permissions,
-    remoteAgents: [],
+    remoteAgents,
     apiAccessMode,
     allowedModels,
     accessExpiresAt,
