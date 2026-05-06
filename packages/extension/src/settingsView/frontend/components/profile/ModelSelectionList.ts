@@ -24,10 +24,12 @@ import {
 import {
   ReasoningLevelSchema,
   type ModelSelectionItem,
+  type ProviderKeyStatus,
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import { profileViewStyles } from './styles';
-import { ModelSelectionEvents } from './events';
+import { ModelSelectionEvents, ProviderKeyEvents } from './events';
+import { resolveProviderKeyRows } from './providerKeyRows';
 
 /** Display labels for reasoning level options. */
 const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
@@ -65,6 +67,7 @@ export class ModelSelectionList extends LitElement {
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
   @property({ attribute: false }) allowedModels: string[] | null = [];
+  @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
 
   @property({ type: Boolean, attribute: 'prefer-short-model-names' })
   preferShortModelNames = false;
@@ -90,6 +93,12 @@ export class ModelSelectionList extends LitElement {
           deprecated: models.filter((m) => m.deprecated),
         };
       },
+    );
+  }
+
+  private getProviderKeyStatus(provider: string): ProviderKeyStatus | undefined {
+    return resolveProviderKeyRows(this.providerKeyStatuses).find(
+      (entry) => entry.provider === provider,
     );
   }
 
@@ -245,23 +254,65 @@ export class ModelSelectionList extends LitElement {
     const isExpanded = this.expandedProvider === group.provider;
     const enabledCount = group.current.filter((m) => m.enabled).length;
     const totalCount = group.current.length;
+    const keyStatus = this.getProviderKeyStatus(group.provider);
+    const keyStatusLabel =
+      keyStatus?.status === 'set'
+        ? 'Key set'
+        : keyStatus?.status === 'env'
+          ? 'Env key'
+          : 'No key';
+    const providerKeyActions = keyStatus
+      ? html`
+          <span
+            class="provider-group-key-status key-status-badge ${keyStatus.status}"
+            >${keyStatusLabel}</span
+          >
+          <button
+            class="provider-group-key-button"
+            type="button"
+            title="Set ${group.displayName} API key"
+            @click=${() =>
+              this.dispatchEvent(
+                ProviderKeyEvents.setKey({ provider: group.provider }),
+              )}
+          >
+            <span class="codicon codicon-key"></span>
+            Set key
+          </button>
+          <button
+            class="provider-group-key-button"
+            type="button"
+            title="Get ${group.displayName} API key"
+            @click=${() =>
+              this.dispatchEvent(
+                ProviderKeyEvents.openKeyUrl({ provider: group.provider }),
+              )}
+          >
+            <span class="codicon codicon-link-external"></span>
+            Get key
+          </button>
+        `
+      : nothing;
 
     return html`
       <div class="provider-group">
-        <button
-          class="provider-group-header"
-          @click=${() => this.toggleProvider(group.provider)}
-        >
-          <span
-            class="provider-group-chevron codicon codicon-chevron-right ${isExpanded
-              ? 'expanded'
-              : ''}"
-          ></span>
-          <span class="provider-group-name">${group.displayName}</span>
-          <span class="provider-group-count">
-            ${enabledCount}/${totalCount} enabled
-          </span>
-        </button>
+        <div class="provider-group-header">
+          <button
+            class="provider-group-toggle"
+            @click=${() => this.toggleProvider(group.provider)}
+          >
+            <span
+              class="provider-group-chevron codicon codicon-chevron-right ${isExpanded
+                ? 'expanded'
+                : ''}"
+            ></span>
+            <span class="provider-group-name">${group.displayName}</span>
+            <span class="provider-group-count">
+              ${enabledCount}/${totalCount} enabled
+            </span>
+          </button>
+          <div class="provider-group-actions">${providerKeyActions}</div>
+        </div>
         ${isExpanded
           ? html`
               <div class="provider-group-content">
