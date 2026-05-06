@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ModelSelectionItem } from '@shared/schemas/settingsViewMessages';
+import type {
+  ModelSelectionItem,
+  ProviderKeyStatus,
+} from '@shared/schemas/settingsViewMessages';
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type ModelSelectionListElement = HTMLElement & {
   models: ModelSelectionItem[];
-  providerKeyStatuses: unknown[];
+  providerKeyStatuses: ProviderKeyStatus[];
   updateComplete: Promise<boolean>;
 };
 
