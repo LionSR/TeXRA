@@ -139,6 +139,7 @@ export interface DesktopSettingsIpcOptions {
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshProfileData(): Promise<void>;
+  refreshAuthDependentData(): Promise<void>;
 }
 
 const emptySecrets: PlatformSecrets = {
@@ -687,6 +688,16 @@ export function createDesktopSettingsIpc(
     await Promise.all([postProfileData(), postModelSelectionData()]);
   }
 
+  async function refreshAuthDependentData(): Promise<void> {
+    postModelSelectionData();
+    postMainModelOptionsData();
+    await Promise.all([
+      postProfileData(),
+      postAgentSelectionData(),
+      postMainAgentOptionsData(),
+    ]);
+  }
+
   async function updateCodexSetting(
     key: WorkspaceStateKey,
     value: string,
@@ -830,6 +841,7 @@ export function createDesktopSettingsIpc(
 
   return {
     refreshProfileData: postProfileData,
+    refreshAuthDependentData,
 
     handleMessage(message: DesktopCommandMessage) {
       const result = SettingsViewInboundMessageSchema.safeParse(message);

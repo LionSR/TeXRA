@@ -71,6 +71,7 @@ interface DesktopSettingsIpcModule {
     runInstallCommand?: (command: string) => Promise<void>;
     onError?: (error: unknown) => void;
   }): {
+    refreshAuthDependentData(): Promise<void>;
     handleMessage(
       message: { command: string } & Record<string, unknown>,
     ): boolean;
@@ -922,6 +923,50 @@ describe('desktop settings IPC', () => {
 
     expect(persistedModes).toEqual(['included']);
     expect(globalState.values.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
+  });
+
+  it('refreshes agent and model options after desktop auth changes', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+    let loadCount = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: (message) => posted.push(message),
+      loadAgents: async () => {
+        loadCount += 1;
+      },
+      loadAgentOptionsData: async () => ({
+        workflow: [{ name: 'remote-workflow' }],
+        toolUse: [{ name: 'remote-tool' }],
+      }),
+      getAuthProfileData: async () => ({
+        authenticated: true,
+        user: { email: 'user@example.com', id: 'user-1' },
+        tier: 'free',
+        permissions: [],
+        remoteAgents: [],
+        apiAccessMode: 'included',
+        allowedModels: [],
+        accessExpiresAt: null,
+      }),
+    });
+
+    await settings.refreshAuthDependentData();
+
+    expect(loadCount).toBe(1);
+    expect(
+      posted.map((message) => (message as { command?: string }).command),
+    ).toEqual(
+      expect.arrayContaining([
+        SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+        SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+        SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+        MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+        MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      ]),
+    );
   });
 
   it('does not duplicate profile refresh after delegated desktop sign-out', async () => {

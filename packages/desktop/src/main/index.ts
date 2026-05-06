@@ -151,7 +151,7 @@ function createWindow(options: {
         ? MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER
         : MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
     });
-    await settingsIpcRef.current?.refreshProfileData();
+    await settingsIpcRef.current?.refreshAuthDependentData();
   };
   const desktopAuth = createDesktopSupabaseAuth({
     router: protocolLifecycle.router,
