@@ -1,10 +1,12 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - controllers
+import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
+
 // Local imports
 import { setPendingState } from '@common/state';
 import { COMMON_COMMANDS } from '@common/webview/commands';
-import { buildMainViewState } from '@frontend/mainViewStateUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';

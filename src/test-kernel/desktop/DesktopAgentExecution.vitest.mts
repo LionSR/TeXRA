@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - progress schemas
+import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import {
   AGENT_CATEGORY,
@@ -10,9 +11,11 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { DESKTOP_SHELL_COMMANDS } from '../../../packages/desktop/src/desktopShellMessages';
 
 type Bridge = {
   openFileCompile(filePath: string): Promise<void>;
@@ -24,6 +27,11 @@ type TestableBridge = Bridge & {
   setActiveStream(streamId: StreamTabId): void;
   deleteStream(streamId: StreamTabId): Promise<void>;
   deleteAllStreams(): Promise<void>;
+  handleAgentProposalAction(message: {
+    command: typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION;
+    proposalId: string;
+    action: 'setup';
+  }): Promise<boolean>;
   streamLogs: {
     append(
       streamId: StreamTabId,
@@ -740,6 +748,60 @@ describe('DesktopProgressBridge', () => {
       );
     } finally {
       execution.dispose();
+    }
+  });
+
+  it('restores agent proposal setup into the desktop launcher', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('showAgentProposal', {
+        proposalId: 'proposal-1',
+        streamId: 'stream-1',
+        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agent: 'proofreader',
+        model: 'gemini31p',
+        instruction: 'Check this draft.',
+        inputFile: 'main.tex',
+        inputFiles: ['appendix.tex'],
+        referenceFile: null,
+        referenceFiles: [],
+        auxiliaryFile: null,
+        auxiliaryFiles: [],
+        mediaFile: null,
+        mediaFiles: [],
+        outputFiles: ['main.review.tex'],
+        useMultipleOutputs: false,
+        toolConfig: DEFAULT_TOOL_CONFIG,
+      });
+      messages.length = 0;
+
+      await expect(
+        bridge.handleAgentProposalAction({
+          command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+          proposalId: 'proposal-1',
+          action: 'setup',
+        }),
+      ).resolves.toBe(true);
+
+      expect(messages).toEqual([
+        { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route: 'main' },
+        expect.objectContaining({
+          command: COMMON_COMMANDS.STATE_RESTORE,
+          state: expect.objectContaining({
+            sessionType: 'workflow',
+            model: 'gemini31p',
+            instruction: 'Check this draft.',
+            inputFile: 'main.tex',
+            inputFiles: ['appendix.tex'],
+            outputFiles: ['main.review.tex'],
+            outputFilesVisible: true,
+          }),
+        }),
+      ]);
+    } finally {
+      bridge.dispose();
     }
   });
 });

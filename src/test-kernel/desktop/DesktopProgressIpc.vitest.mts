@@ -57,7 +57,7 @@ interface DesktopProgressIpcModule {
         feedback?: string;
         model?: string;
         agent?: string;
-      }): boolean;
+      }): Promise<boolean>;
     };
     onUnsupportedCommand?: (message: { command: string }) => void;
     onAsyncError?: (error: unknown) => void;
@@ -100,7 +100,7 @@ function createProgress() {
     handleToolEditApprovalAction: vi.fn(() => true),
     handleBashApprovalAction: vi.fn(async () => {}),
     handlePlanApprovalAction: vi.fn(),
-    handleAgentProposalAction: vi.fn(() => true),
+    handleAgentProposalAction: vi.fn(async () => true),
   };
 }
 
@@ -399,5 +399,32 @@ describe('desktop Progress IPC', () => {
       requestId: 'edit-2',
       action: 'openDiff',
     });
+  });
+
+  it('routes agent proposal setup through the desktop bridge', async () => {
+    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
+    const progress = createProgress();
+    const onUnsupportedCommand = vi.fn();
+    const ipc = createDesktopProgressIpc({
+      progress,
+      onUnsupportedCommand,
+    });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+        proposalId: 'proposal-1',
+        action: 'setup',
+      }),
+    ).toBe(true);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(progress.handleAgentProposalAction).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+      proposalId: 'proposal-1',
+      action: 'setup',
+    });
+    expect(onUnsupportedCommand).not.toHaveBeenCalled();
   });
 });
