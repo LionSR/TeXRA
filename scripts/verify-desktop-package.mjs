@@ -437,6 +437,15 @@ function codexBinaryPath(prefix, platformInfo) {
 function expectedCodexPlatformKeys(app) {
   const label = app.label.replaceAll('\\', '/').toLowerCase();
   if (label.includes('.app/contents/resources/app')) {
+    if (label.includes('mac-arm64') || label.includes('darwin-arm64')) {
+      return ['darwin-arm64'];
+    }
+    if (label.includes('mac-x64') || label.includes('darwin-x64')) {
+      return ['darwin-x64'];
+    }
+    if (label.includes('universal')) {
+      return ['darwin-x64', 'darwin-arm64'];
+    }
     return ['darwin-x64', 'darwin-arm64'];
   }
 
