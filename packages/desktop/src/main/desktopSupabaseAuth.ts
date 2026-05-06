@@ -31,6 +31,7 @@ import type { AuthCallbackUriParts } from '@auth/core/authCallback';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
 import { TEXRA_PROTOCOL } from '../desktopProtocol.js';
+import type { StateStore } from '@platform/interfaces/state';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
   DesktopProtocolCallback,
@@ -38,6 +39,7 @@ import type {
 } from './desktopProtocolCallbacks.js';
 
 const EDGE_FUNCTION_TIMEOUT_MS = 30000;
+const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
 
 export interface DesktopAuthProfileData {
   authenticated: boolean;
@@ -104,15 +106,28 @@ export interface DesktopAuthCoordinator {
   } | null>;
 }
 
-export function createDesktopAuthCallbackState(): DesktopAuthCallbackState {
-  let expectedState: string | null = null;
+export function createDesktopAuthCallbackState(
+  store?: Pick<StateStore, 'get' | 'update'>,
+): DesktopAuthCallbackState {
+  let expectedState =
+    store?.get<string | null>(DESKTOP_PENDING_OAUTH_STATE_KEY, null) ?? null;
+
+  const persistExpectedState = (state: string | null): void => {
+    if (!store) return;
+    void Promise.resolve(
+      store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state),
+    ).catch(() => {});
+  };
+
   return {
     getExpectedState: () => expectedState,
     beginAuthAttempt: (state) => {
       expectedState = state;
+      persistExpectedState(state);
     },
     clearAwaitingCallback: () => {
       expectedState = null;
+      persistExpectedState(null);
     },
   };
 }
@@ -205,6 +220,7 @@ export function createDesktopSupabaseAuth(
     },
 
     async signOut() {
+      callbackState.clearAwaitingCallback();
       await coordinator.clearSession();
       SupabaseClient.setTokenExpiry(null);
       clearDesktopServerSideKeyCaches(options.log);

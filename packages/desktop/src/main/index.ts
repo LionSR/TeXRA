@@ -28,6 +28,7 @@ import {
   createDesktopAuthCoordinator,
   createDesktopSupabaseAuth,
   initializeDesktopServerSideKeyAccess,
+  type DesktopAuthCallbackState,
   type DesktopAuthCoordinator,
 } from './desktopSupabaseAuth.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
@@ -42,7 +43,6 @@ const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const __dirname = findDesktopMainDir(moduleDirname);
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
-const desktopAuthCallbackState = createDesktopAuthCallbackState();
 
 function focusOrReopenMainWindow(): void {
   if (!mainWindow) {
@@ -112,6 +112,7 @@ function installContentSecurityPolicy(): void {
 function createWindow(options: {
   workspacePath: string | undefined;
   authCoordinator: DesktopAuthCoordinator;
+  authCallbackState: DesktopAuthCallbackState;
 }): void {
   const window = new BrowserWindow({
     width: 960,
@@ -164,7 +165,7 @@ function createWindow(options: {
     showErrorMessage,
     onSessionChanged: refreshDesktopAuthSurfaces,
     log: console,
-    callbackState: desktopAuthCallbackState,
+    callbackState: options.authCallbackState,
     initializeServerSideAccess: false,
   });
   setOpenBuildDisplay(previewHost.openBuildDisplay);
@@ -315,12 +316,16 @@ if (protocolLifecycle.shouldContinue) {
         secrets: platform().secrets,
         log: console,
       });
+      const authCallbackState = createDesktopAuthCallbackState(
+        platform().globalState,
+      );
       initializeDesktopServerSideKeyAccess(console);
       installContentSecurityPolicy();
       reopenMainWindow = () =>
         createWindow({
           workspacePath: platformInit.workspacePath,
           authCoordinator,
+          authCallbackState,
         });
       reopenMainWindow();
 

@@ -9,6 +9,7 @@ import {
   type DesktopOAuthClient,
   type DesktopAuthProfileData,
 } from '../../../packages/desktop/src/main/desktopSupabaseAuth';
+import type { StateStore } from '@platform/interfaces/state';
 
 function createCoordinator() {
   const storedSession: { current: SupabaseSession | null } = { current: null };
@@ -50,6 +51,22 @@ function createSecrets() {
     get: vi.fn(async () => undefined),
     set: vi.fn(async () => {}),
     delete: vi.fn(async () => {}),
+  };
+}
+
+function createStateStore(): Pick<StateStore, 'get' | 'update'> {
+  const state = new Map<string, unknown>();
+  return {
+    get<T>(key: string, defaultValue?: T): T {
+      return state.has(key) ? (state.get(key) as T) : (defaultValue as T);
+    },
+    async update(key: string, value: unknown): Promise<void> {
+      if (value == null) {
+        state.delete(key);
+      } else {
+        state.set(key, value);
+      }
+    },
   };
 }
 
@@ -207,7 +224,8 @@ describe('desktop Supabase auth', () => {
   it('preserves pending sign-in across desktop auth recreation', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
-    const callbackState = createDesktopAuthCallbackState();
+    const stateStore = createStateStore();
+    const callbackState = createDesktopAuthCallbackState(stateStore);
     const oauthClient = createOAuthClient();
     const auth = createDesktopSupabaseAuth({
       router,
@@ -222,6 +240,7 @@ describe('desktop Supabase auth', () => {
     await auth.signIn();
     const state = getOAuthState(oauthClient);
     auth.dispose();
+    const persistedCallbackState = createDesktopAuthCallbackState(stateStore);
     router.routeUrl(
       authCallbackUrl({
         accessToken: 'access-token',
@@ -236,7 +255,7 @@ describe('desktop Supabase auth', () => {
       oauthClient: createOAuthClient(),
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
-      callbackState,
+      callbackState: persistedCallbackState,
       initializeServerSideAccess: false,
     });
 
@@ -249,6 +268,49 @@ describe('desktop Supabase auth', () => {
       );
     });
     recreatedAuth.dispose();
+  });
+
+  it('cancels pending callback state on sign-out', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const callbackState = createDesktopAuthCallbackState();
+    const oauthClient = createOAuthClient();
+    const log = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient,
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      callbackState,
+      log,
+      initializeServerSideAccess: false,
+    });
+
+    await auth.signIn();
+    const state = getOAuthState(oauthClient);
+    await auth.signOut();
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        state,
+      }),
+    );
+
+    await Promise.resolve();
+
+    expect(callbackState.getExpectedState()).toBeNull();
+    expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
+    expect(log.debug).toHaveBeenCalledWith(
+      'Desktop auth callback ignored because no sign-in is in progress',
+    );
+    auth.dispose();
   });
 
   it('claims only the first matching callback for an OAuth attempt', async () => {
