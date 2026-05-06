@@ -7,7 +7,6 @@ import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
@@ -231,7 +230,6 @@ function createWindow(options: {
       await getServerSideKeyService().setUseIncludedModelAccess(
         mode === 'included',
       );
-      invalidateModelOptionsCache();
     },
     selectCustomAgentDirectory: async () => {
       const result = await dialog.showOpenDialog(window, {
