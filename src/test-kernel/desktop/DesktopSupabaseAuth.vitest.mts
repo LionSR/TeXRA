@@ -4,6 +4,7 @@ import type { SupabaseSession } from '@auth/SupabaseSession';
 import { setServerSideKeyService } from '@auth/serverKeys';
 import { createDesktopProtocolCallbackRouter } from '../../../packages/desktop/src/main/desktopProtocolCallbacks';
 import {
+  createDesktopAuthCallbackState,
   createDesktopSupabaseAuth,
   type DesktopAuthProfileData,
 } from '../../../packages/desktop/src/main/desktopSupabaseAuth';
@@ -159,6 +160,47 @@ describe('desktop Supabase auth', () => {
       'Desktop auth callback ignored because no sign-in is in progress',
     );
     auth.dispose();
+  });
+
+  it('preserves pending sign-in across desktop auth recreation', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const callbackState = createDesktopAuthCallbackState();
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      callbackState,
+      initializeServerSideAccess: false,
+    });
+
+    await auth.signIn();
+    auth.dispose();
+    router.routeUrl(
+      'texra://texra-ai.texra/auth-callback#access_token=access-token&refresh_token=refresh-token',
+    );
+
+    const recreatedAuth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      callbackState,
+      initializeServerSideAccess: false,
+    });
+
+    await vi.waitFor(() => {
+      expect(coordinator.storeSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+        }),
+      );
+    });
+    recreatedAuth.dispose();
   });
 
   it('processes routed callbacks sequentially when they are replayed together', async () => {

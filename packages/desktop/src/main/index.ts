@@ -24,6 +24,7 @@ import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import {
+  createDesktopAuthCallbackState,
   createDesktopAuthCoordinator,
   createDesktopSupabaseAuth,
   initializeDesktopServerSideKeyAccess,
@@ -41,6 +42,7 @@ const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const __dirname = findDesktopMainDir(moduleDirname);
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
+const desktopAuthCallbackState = createDesktopAuthCallbackState();
 
 function focusOrReopenMainWindow(): void {
   if (!mainWindow) {
@@ -162,6 +164,7 @@ function createWindow(options: {
     showErrorMessage,
     onSessionChanged: refreshDesktopAuthSurfaces,
     log: console,
+    callbackState: desktopAuthCallbackState,
     initializeServerSideAccess: false,
   });
   setOpenBuildDisplay(previewHost.openBuildDisplay);
