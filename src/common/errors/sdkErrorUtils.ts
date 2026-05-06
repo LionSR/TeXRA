@@ -1,5 +1,13 @@
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import {
+  APIError as AnthropicAPIError,
+  APIUserAbortError as AnthropicAPIUserAbortError,
+} from '@anthropic-ai/sdk';
+import {
+  APIError as OpenAIAPIError,
+  APIUserAbortError as OpenAIAPIUserAbortError,
+} from 'openai';
+import {
   type ErrorContext,
   type ErrorLogData,
   type ProviderError,
@@ -228,6 +236,13 @@ function detectStatusText(
 }
 
 function detectProvider(err: unknown): string | undefined {
+  if (err instanceof OpenAIAPIError) {
+    return 'openai';
+  }
+  if (err instanceof AnthropicAPIError) {
+    return 'anthropic';
+  }
+
   if (!isObject(err)) {
     return undefined;
   }
@@ -326,6 +341,12 @@ export function takeTail(text: string, maxChars: number): string {
 
 /** True if `err` is an SDK user-abort error (OpenAI or Anthropic). */
 export function isUserAbort(err: unknown): boolean {
+  if (
+    err instanceof OpenAIAPIUserAbortError ||
+    err instanceof AnthropicAPIUserAbortError
+  ) {
+    return true;
+  }
   return getErrorClassNames(err).includes('APIUserAbortError');
 }
 
