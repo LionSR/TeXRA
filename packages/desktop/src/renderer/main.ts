@@ -11,6 +11,7 @@ import {
 } from '@shared/schemas/commonViewMessages';
 import '@vscode-elements/elements/dist/bundled.js';
 import '@progressView/frontend';
+import '@progressView/frontend/components/TexraDiffView';
 import '@settingsView/frontend';
 import '@webview/frontend';
 

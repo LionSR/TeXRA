@@ -69,11 +69,29 @@ const rendererAssetsDir = path.join(desktopDir, 'dist', 'renderer', 'assets');
 const rendererAssets = fs.existsSync(rendererAssetsDir)
   ? collectFiles(rendererAssetsDir)
   : [];
+const requiredMonacoWorkers = [
+  'editor.worker',
+  'json.worker',
+  'css.worker',
+  'html.worker',
+  'ts.worker',
+];
 if (!rendererAssets.some((filePath) => filePath.endsWith('.js'))) {
   failures.push('Desktop renderer build did not emit a JavaScript asset.');
 }
 if (!rendererAssets.some((filePath) => filePath.endsWith('.css'))) {
   failures.push('Desktop renderer build did not emit a CSS asset.');
+}
+for (const workerName of requiredMonacoWorkers) {
+  if (
+    !rendererAssets.some((filePath) =>
+      path.basename(filePath).includes(workerName),
+    )
+  ) {
+    failures.push(
+      `Desktop renderer build did not emit Monaco worker asset: ${workerName}`,
+    );
+  }
 }
 if (
   fileExists(manifestMain) &&
@@ -128,3 +146,4 @@ const artifactList = [
 console.log('Desktop build artifact check passed:');
 for (const artifact of artifactList) console.log(`- ${artifact}`);
 console.log('- desktop-shared source avoids VS Code runtime imports');
+console.log('- Monaco worker assets are present');
