@@ -37,7 +37,8 @@ function isConsoleError(level) {
   return level === 'error' || level === 3;
 }
 
-async function waitForRenderedElement(window, tagName) {
+async function waitForRenderedElement(window, view) {
+  const { attributes = {}, seedMessages = [], tagName } = view;
   const missingElementMessage = `Missing rendered element: ${tagName}`;
   const timeoutMessage = `Timed out waiting for custom element: ${tagName}`;
   return window.webContents.executeJavaScript(
@@ -56,6 +57,10 @@ async function waitForRenderedElement(window, tagName) {
         if (!element) {
           throw new Error(${JSON.stringify(missingElementMessage)});
         }
+        const attributes = ${JSON.stringify(attributes)};
+        for (const [name, value] of Object.entries(attributes)) {
+          element.setAttribute(name, String(value));
+        }
         if (element.updateComplete && typeof element.updateComplete.then === 'function') {
           await Promise.race([
             element.updateComplete,
@@ -66,6 +71,28 @@ async function waitForRenderedElement(window, tagName) {
               ),
             ),
           ]);
+        }
+        const seedMessages = ${JSON.stringify(seedMessages)};
+        if (seedMessages.length > 0) {
+          if (typeof element.handleMessage !== 'function') {
+            throw new Error(${JSON.stringify(
+              `Cannot seed ${tagName}: handleMessage is unavailable.`,
+            )});
+          }
+          for (const message of seedMessages) {
+            element.handleMessage(message);
+            if (element.updateComplete && typeof element.updateComplete.then === 'function') {
+              await Promise.race([
+                element.updateComplete,
+                new Promise((_, reject) =>
+                  setTimeout(
+                    () => reject(new Error(${JSON.stringify(timeoutMessage)})),
+                    ${JSON.stringify(RENDER_TIMEOUT_MS)},
+                  ),
+                ),
+              ]);
+            }
+          }
         }
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const rect = element.getBoundingClientRect();
@@ -120,7 +147,7 @@ async function smokeView(window, view, outputDir, errors) {
   await window.loadFile(view.htmlPath);
   let result;
   try {
-    result = await waitForRenderedElement(window, view.tagName);
+    result = await waitForRenderedElement(window, view);
   } catch (error) {
     if (errors.length === 0) throw error;
     throw new Error(

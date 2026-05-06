@@ -3,6 +3,8 @@ import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -1919,18 +1921,28 @@ export class MainApp extends MainAppBase {
               Progress
             </vscode-tab-header>
           </vscode-tabs>
-          <vscode-toolbar-button
+          <wa-button
             class="header-action"
-            icon="gear"
+            appearance="plain"
+            size="s"
             title="Open dashboard"
             @click=${this.onOpenDashboard}
-          ></vscode-toolbar-button>
-          <vscode-toolbar-button
+          >
+            <wa-icon library="system" name="gear" variant="solid"></wa-icon>
+          </wa-button>
+          <wa-button
             class="header-action"
-            icon="link-external"
+            appearance="plain"
+            size="s"
             title="Open progress sessions in editor"
             @click=${this.onPopOutProgress}
-          ></vscode-toolbar-button>
+          >
+            <wa-icon
+              library="system"
+              name="picture-in-picture"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
         </div>
 
         <div class="main-content">

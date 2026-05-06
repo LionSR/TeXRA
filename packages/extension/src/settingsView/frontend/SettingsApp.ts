@@ -6,6 +6,8 @@
 // Third-party imports
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, query } from 'lit/decorators.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -616,11 +618,14 @@ export class SettingsApp extends SettingsAppBase {
 
   private renderHeader(): TemplateResult {
     const settingsButton = html`
-      <vscode-toolbar-button
-        icon="settings-gear"
+      <wa-button
+        appearance="plain"
+        size="s"
         title="Open VS Code Settings"
         @click=${this.handleOpenVscodeSettings}
-      ></vscode-toolbar-button>
+      >
+        <wa-icon library="system" name="gear" variant="solid"></wa-icon>
+      </wa-button>
     `;
 
     if (this.authenticated.get()) {
@@ -635,14 +640,22 @@ export class SettingsApp extends SettingsAppBase {
           </div>
           <div class="settings-header-actions">
             ${settingsButton}
-            <button
-              class="tab-action-btn settings-header-auth-button"
+            <wa-button
+              class="settings-header-auth-button"
+              appearance="outlined"
+              variant="neutral"
+              size="s"
               title="Sign out"
               @click=${this.handleSignOut}
             >
-              <span class="codicon codicon-sign-out"></span>
+              <wa-icon
+                slot="start"
+                library="system"
+                name="xmark"
+                variant="solid"
+              ></wa-icon>
               Sign out
-            </button>
+            </wa-button>
           </div>
         </div>
       `;
@@ -655,22 +668,38 @@ export class SettingsApp extends SettingsAppBase {
         </span>
         <div class="settings-header-actions">
           ${settingsButton}
-          <button
-            class="tab-action-btn settings-header-auth-button"
+          <wa-button
+            class="settings-header-auth-button"
+            appearance="outlined"
+            variant="neutral"
+            size="s"
             title="Set provider API key"
             @click=${this.handleSetDefaultProviderKey}
           >
-            <span class="codicon codicon-key"></span>
+            <wa-icon
+              slot="start"
+              library="system"
+              name="gear"
+              variant="solid"
+            ></wa-icon>
             Set API key
-          </button>
-          <button
-            class="tab-action-btn settings-header-auth-button"
+          </wa-button>
+          <wa-button
+            class="settings-header-auth-button"
+            appearance="filled"
+            variant="brand"
+            size="s"
             title="Sign in"
             @click=${this.handleSignIn}
           >
-            <span class="codicon codicon-sign-in"></span>
+            <wa-icon
+              slot="start"
+              library="system"
+              name="user"
+              variant="solid"
+            ></wa-icon>
             Sign in
-          </button>
+          </wa-button>
         </div>
       </div>
     `;

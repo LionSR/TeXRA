@@ -7,6 +7,8 @@ import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 import { z } from 'zod';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import {
@@ -35,8 +37,8 @@ import {
   select,
   combine,
 } from '@shared/signals';
+import { codiconStyles, designTokens } from '@shared/styles';
 import { isProcessAgent } from '@shared/streams/agentKind';
-import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view frontend
 import { webviewStorage } from './webviewStorage';
@@ -134,6 +136,7 @@ const ProgressAppBase = SignalWatcher(
 export class ProgressApp extends ProgressAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
   static styles = [
+    designTokens,
     codiconStyles,
     css`
       :host {
@@ -176,9 +179,78 @@ export class ProgressApp extends ProgressAppBase {
         flex-shrink: 0;
       }
 
+      .header-action::part(base) {
+        min-height: var(--height-control, 24px);
+      }
+
       .split-container {
         display: flex;
         flex: 1;
+        min-height: 0;
+      }
+
+      .progress-empty-state {
+        display: grid;
+        flex: 1;
+        min-height: 0;
+        place-items: start center;
+        padding: clamp(var(--spacing-large, 16px), 7vh, 72px)
+          var(--spacing-large, 16px);
+        overflow: auto;
+        font-family:
+          var(--texra-font-family, var(--vscode-font-family, system-ui)),
+          sans-serif;
+      }
+
+      .progress-empty-panel {
+        box-sizing: border-box;
+        width: min(720px, 100%);
+        padding: var(--spacing-xlarge, 24px);
+        border: var(--border-thin, 1px) solid
+          var(--color-border, var(--vscode-panel-border, #d0d7de));
+        border-radius: var(--border-radius, 6px);
+        background: var(--texra-editor-background, #fff);
+      }
+
+      .progress-empty-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-small, 8px);
+        margin-bottom: var(--spacing-medium, 12px);
+        color: var(--color-text-secondary, #57606a);
+        font-size: var(--font-size-sm, 13px);
+        font-weight: var(--font-weight-semibold, 600);
+      }
+
+      .progress-empty-panel h2 {
+        margin: 0 0 var(--spacing-small, 8px);
+        color: var(--texra-foreground, #24292f);
+        font-size: var(--font-size-xl, 22px);
+        line-height: 1.25;
+      }
+
+      .progress-empty-panel p {
+        margin: 0;
+        color: var(--color-text-secondary, #57606a);
+        line-height: var(--line-height-normal, 1.5);
+      }
+
+      .progress-empty-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-small, 8px);
+        margin-top: var(--spacing-large, 16px);
+      }
+
+      .progress-empty-actions wa-button::part(base) {
+        min-height: var(--height-button, 30px);
+      }
+
+      wa-icon {
+        font-size: 1em;
+      }
+
+      :host([data-desktop-view='progress']) .split-container {
         min-height: 0;
       }
 
@@ -334,6 +406,10 @@ export class ProgressApp extends ProgressAppBase {
     () => this.tabStreams$.get().length > 0,
   );
 
+  private hasAnyStreams$ = new Signal.Computed(
+    () => this.streams$.get().length > 0,
+  );
+
   /** Only changes when the ACTIVE stream's state changes, not any stream. */
   private activeStreamState$ = new Signal.Computed(() => {
     const info = this.activeStreamInfo$.get();
@@ -461,6 +537,9 @@ export class ProgressApp extends ProgressAppBase {
   render(): TemplateResult {
     const isEditorMode = this.placement.get() === 'editor';
     const compactTabs = this.narrowLayout.get() && !isEditorMode;
+    const hasAnyStreams = this.hasAnyStreams$.get();
+    const splitPosition =
+      this.getAttribute('data-desktop-view') === 'progress' ? '68%' : '80%';
 
     return html`
       <div
@@ -489,47 +568,111 @@ export class ProgressApp extends ProgressAppBase {
             </vscode-tab-header>
           </vscode-tabs>
 
-          <vscode-toolbar-button
+          <wa-button
             class="header-action"
-            icon="gear"
+            appearance="plain"
+            size="s"
             title="Open dashboard"
             @click=${this.onOpenDashboard}
-          ></vscode-toolbar-button>
-          <vscode-toolbar-button
+          >
+            <wa-icon library="system" name="gear" variant="solid"></wa-icon>
+          </wa-button>
+          <wa-button
             class="header-action"
-            icon=${isEditorMode ? 'layout-sidebar-right' : 'link-external'}
+            appearance="plain"
+            size="s"
             title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
             @click=${isEditorMode ? this.onPopBack : this.onPopOut}
-          ></vscode-toolbar-button>
+          >
+            <wa-icon
+              library="system"
+              name=${isEditorMode ? 'backward-step' : 'picture-in-picture'}
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
         </div>
 
-        <div class="split-container">
-          <vscode-split-layout initial-handle-position="80%">
-            <div
-              slot="start"
-              class="content-area"
-              @stream-switch=${this.onStreamSwitch}
-            >
-              ${this.renderStreamContent()}
-            </div>
+        ${hasAnyStreams
+          ? html`
+              <div class="split-container">
+                <vscode-split-layout initial-handle-position=${splitPosition}>
+                  <div
+                    slot="start"
+                    class="content-area"
+                    @stream-switch=${this.onStreamSwitch}
+                  >
+                    ${this.renderStreamContent()}
+                  </div>
 
-            <stream-tabs
-              slot="end"
-              .compact=${compactTabs}
-              .streams=${this.tabStreams$.get()}
-              .activeStreamId=${this.activeStreamId$.get()}
-              .filter=${this.streamFilter$.get()}
-              .streamStates=${this.streamStates$.get()}
-              .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
-              .childStreamsByParent=${this.childStreamsByParent$.get()}
-              @stream-switch=${this.onStreamSwitch}
-              @stream-delete=${this.onStreamDelete}
-              @filter-change=${this.onFilterChange}
-              @delete-all=${this.onDeleteAll}
-            ></stream-tabs>
-          </vscode-split-layout>
-        </div>
+                  <stream-tabs
+                    slot="end"
+                    .compact=${compactTabs}
+                    .streams=${this.tabStreams$.get()}
+                    .activeStreamId=${this.activeStreamId$.get()}
+                    .filter=${this.streamFilter$.get()}
+                    .streamStates=${this.streamStates$.get()}
+                    .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
+                    .childStreamsByParent=${this.childStreamsByParent$.get()}
+                    @stream-switch=${this.onStreamSwitch}
+                    @stream-delete=${this.onStreamDelete}
+                    @filter-change=${this.onFilterChange}
+                    @delete-all=${this.onDeleteAll}
+                  ></stream-tabs>
+                </vscode-split-layout>
+              </div>
+            `
+          : this.renderEmptyState()}
       </div>
+    `;
+  }
+
+  private renderEmptyState(): TemplateResult {
+    return html`
+      <section class="progress-empty-state">
+        <div class="progress-empty-panel">
+          <div class="progress-empty-kicker">
+            <span class="codicon codicon-server-process"></span>
+            Progress
+          </div>
+          <h2>No runs yet</h2>
+          <p>
+            Start an agent from the Launcher or Commands. New runs, streamed
+            logs, approvals, and follow-up controls will appear here.
+          </p>
+          <div class="progress-empty-actions">
+            <wa-button
+              appearance="filled"
+              variant="brand"
+              size="m"
+              type="button"
+              @click=${this.onOpenLauncher}
+            >
+              <wa-icon
+                slot="start"
+                library="system"
+                name="play"
+                variant="solid"
+              ></wa-icon>
+              Open Launcher
+            </wa-button>
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="m"
+              type="button"
+              @click=${this.onOpenDashboard}
+            >
+              <wa-icon
+                slot="start"
+                library="system"
+                name="gear"
+                variant="solid"
+              ></wa-icon>
+              Open Settings
+            </wa-button>
+          </div>
+        </div>
+      </section>
     `;
   }
 
@@ -679,6 +822,10 @@ export class ProgressApp extends ProgressAppBase {
       'vscode-tabs',
     ) as { selectedIndex?: number } | null;
     this.focusLauncherSidebar(tabs ?? undefined);
+  };
+
+  private onOpenLauncher = (): void => {
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'main' });
   };
 
   private focusLauncherSidebar(tabs?: { selectedIndex?: number }): void {

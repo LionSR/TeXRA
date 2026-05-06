@@ -20,6 +20,9 @@ const commonReplacements = {
   codiconUri: fileUri('node_modules/@vscode/codicons/dist/codicon.css'),
   commonStyleUri: fileUri('packages/extension/src/common/styles/common.css'),
   commonsBundleUri: fileUri('packages/extension/dist/shared/commons.js'),
+  desktopThemeTokensUri: fileUri(
+    'packages/desktop/src/renderer/themeTokens.css',
+  ),
   nonce,
   vscodeElementsBundleUri: fileUri(
     'node_modules/@vscode-elements/elements/dist/bundled.js',
@@ -40,6 +43,84 @@ const views = [
     name: 'progress',
     tagName: 'progress-app',
     templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
+    replacements: {
+      codiconsFontUri: fileUri(
+        'packages/extension/dist/progressView/codicon.ttf',
+      ),
+      progressBundleUri: fileUri(
+        'packages/extension/dist/progressView/bundle.js',
+      ),
+      progressStyleUri: fileUri(
+        'packages/extension/dist/progressView/index.css',
+      ),
+    },
+  },
+  {
+    name: 'progress-populated',
+    tagName: 'progress-app',
+    templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
+    attributes: {
+      'data-desktop-view': 'progress',
+    },
+    seedMessages: [
+      {
+        command: 'updateStreams',
+        streams: [
+          {
+            name: 'builtInToolUse:chat',
+            label: 'chat',
+            model: 'deepseekT',
+            modelLabel: 'DeepSeek V4 Flash',
+            agent: 'research',
+            agentCategory: 'toolUse',
+            creationTimestamp: 1_783_353_600_000,
+            description: 'Check citation coverage and suggest BibTeX entries.',
+          },
+        ],
+        activeStream: 'builtInToolUse:chat',
+        agentFilter: 'all',
+        streamStates: {
+          'builtInToolUse:chat': {
+            kind: 'toolUse',
+            status: 'running',
+            lastTimestamp: 1_783_353_600_000,
+            conversationProgress: {
+              conversationTurns: 1,
+              toolCallCount: 1,
+            },
+            activeSubagents: [],
+            finishedSubagentCount: 0,
+            activeProcesses: [],
+            finishedProcessCount: 0,
+          },
+        },
+      },
+      {
+        command: 'logDelta',
+        streamId: 'builtInToolUse:chat',
+        entries: [
+          {
+            seqNo: 1,
+            id: 'msg-1',
+            type: 'log',
+            level: 'info',
+            timestamp: 1_783_353_600_000,
+            messageType: 'userMessage',
+            text: 'hello world',
+          },
+          {
+            seqNo: 2,
+            id: 'msg-2',
+            type: 'log',
+            level: 'info',
+            timestamp: 1_783_353_601_000,
+            messageType: 'modelResponse',
+            text: 'I will inspect the manuscript and report missing citations.',
+          },
+        ],
+        updates: [],
+      },
+    ],
     replacements: {
       codiconsFontUri: fileUri(
         'packages/extension/dist/progressView/codicon.ttf',
@@ -110,10 +191,17 @@ function injectHostBridge(html) {
   );
 }
 
+function injectDesktopThemeTokens(html) {
+  return html.replace(
+    /<link rel="stylesheet" href="\$\{commonStyleUri\}" \/>/,
+    `$&\n    <link rel="stylesheet" href="\${desktopThemeTokensUri}" />`,
+  );
+}
+
 async function prepareViewHtml(view) {
   const template = await readFile(view.templatePath, 'utf8');
   const html = injectHostBridge(
-    applyReplacements(template, {
+    applyReplacements(injectDesktopThemeTokens(template), {
       ...commonReplacements,
       ...view.replacements,
     }),
@@ -121,8 +209,10 @@ async function prepareViewHtml(view) {
   const htmlPath = join(generatedHtmlDir, `${view.name}.html`);
   await writeFile(htmlPath, html);
   return {
+    attributes: view.attributes,
     htmlPath,
     name: view.name,
+    seedMessages: view.seedMessages,
     tagName: view.tagName,
   };
 }
