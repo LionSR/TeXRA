@@ -43,7 +43,6 @@ import {
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
-import { toolEditApprovalController } from '@tools/approval/toolEditApproval';
 import {
   createExternalLocation,
   pathToLocation,
@@ -51,6 +50,10 @@ import {
 } from '@utils/files';
 
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
+import {
+  createDesktopToolEditApprovalController,
+  type DesktopToolEditApprovalController,
+} from './desktopToolEditApproval.js';
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): void;
@@ -106,6 +109,7 @@ export class DesktopProgressBridge {
   private activeStream: StreamTabId | '' = '';
   private agentFilter: AgentCategoryFilter = 'all';
   private readonly unsubscribe: () => void;
+  private readonly toolEditApprovals: DesktopToolEditApprovalController;
 
   readonly runtimeHost: AgentRuntimeHost;
 
@@ -118,12 +122,18 @@ export class DesktopProgressBridge {
     this.unsubscribe = this.streamLogs.onChange((streamId) =>
       this.flushLogs(streamId),
     );
+    this.toolEditApprovals = createDesktopToolEditApprovalController({
+      openPath: options.openPath,
+      openBuildDisplay: options.openBuildDisplay,
+      showMessage: options.showMessage,
+    });
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
     };
   }
 
   dispose(): void {
+    this.toolEditApprovals.dispose();
     this.unsubscribe();
     this.cursors.clear();
     this.taskStates.clear();
@@ -770,18 +780,7 @@ export class DesktopProgressBridge {
       { command: typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION }
     >,
   ): boolean {
-    if (message.action !== 'approve' && message.action !== 'reject') {
-      return false;
-    }
-
-    const entry = toolEditApprovalController.getPending(message.requestId);
-    if (!entry || entry.isSettled()) return true;
-    entry.settle({
-      accepted: message.action === 'approve',
-      userMessage:
-        message.action === 'reject' ? message.feedback?.trim() : undefined,
-    });
-    return true;
+    return this.toolEditApprovals.handleAction(message);
   }
 
   handlePlanApprovalAction(
