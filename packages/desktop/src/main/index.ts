@@ -138,11 +138,11 @@ function createWindow(options: {
   });
   const refreshDesktopAuthSurfaces = async () => {
     const profile = await desktopAuth.getProfileData();
-    if (profile.authenticated) {
-      ipcRef.current?.postToRenderer({
-        command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-      });
-    }
+    ipcRef.current?.postToRenderer({
+      command: profile.authenticated
+        ? MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER
+        : MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
+    });
     await settingsIpcRef.current?.refreshProfileData();
   };
   const desktopAuth = createDesktopSupabaseAuth({
