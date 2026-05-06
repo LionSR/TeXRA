@@ -107,6 +107,7 @@ const extensionConfig = {
   format: 'cjs',
   sourcemap: production ? false : 'linked',
   minify: production,
+  keepNames: production,
   treeShaking: true,
   // Let esbuild resolve .ts files
   resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
