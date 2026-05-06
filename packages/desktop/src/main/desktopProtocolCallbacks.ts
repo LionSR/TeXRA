@@ -5,8 +5,6 @@ import {
   TEXRA_PROTOCOL_SCHEME,
 } from '../desktopProtocol.js';
 
-export { TEXRA_PROTOCOL };
-
 export interface DesktopProtocolCallback {
   rawUrl: string;
   path: string;

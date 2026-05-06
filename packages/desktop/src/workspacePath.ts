@@ -39,7 +39,7 @@ export function withWorkspacePathArg(
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg == null) continue;
-    if (isDesktopProtocolCallbackArg(arg)) continue;
+    if (isDesktopProtocolUrl(arg)) continue;
     if (arg === '--texra-workspace') {
       const value = argv[index + 1];
       if (value != null && !value.startsWith('--')) {
@@ -82,16 +82,8 @@ function getPositionalWorkspacePathArg(
   arg: string | undefined,
 ): string | undefined {
   const trimmed = arg?.trim();
-  if (
-    !trimmed ||
-    trimmed.startsWith('--') ||
-    isDesktopProtocolCallbackArg(trimmed)
-  ) {
+  if (!trimmed || trimmed.startsWith('--') || isDesktopProtocolUrl(trimmed)) {
     return undefined;
   }
   return trimmed;
-}
-
-function isDesktopProtocolCallbackArg(arg: string): boolean {
-  return isDesktopProtocolUrl(arg);
 }
