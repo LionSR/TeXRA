@@ -233,7 +233,6 @@ function detectProvider(err: unknown): string | undefined {
   }
 
   const candidate = err as { provider?: string; headers?: HeaderBag } & {
-    constructor?: { name?: string };
     stack?: string;
   };
 
@@ -241,10 +240,7 @@ function detectProvider(err: unknown): string | undefined {
     return candidate.provider;
   }
 
-  const classNameProvider = detectProviderFromClassNames([
-    candidate.constructor?.name,
-    ...getErrorClassNames(err),
-  ]);
+  const classNameProvider = detectProviderFromClassNames(getErrorClassNames(err));
   if (classNameProvider) return classNameProvider;
 
   const providerFromStack = detectProviderFromText(candidate.stack ?? '');
