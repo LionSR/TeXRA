@@ -88,6 +88,14 @@ function authCallbackUrl(input: {
   return `texra://texra-ai.texra/auth-callback#${fragment}`;
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 describe('desktop Supabase auth', () => {
   it('opens Supabase OAuth with the desktop texra callback URI', async () => {
     const router = createDesktopProtocolCallbackRouter();
@@ -316,6 +324,59 @@ describe('desktop Supabase auth', () => {
     expect(log.debug).toHaveBeenCalledWith(
       'Desktop auth callback ignored because it does not match the active sign-in attempt',
     );
+    auth.dispose();
+  });
+
+  it('does not clear a newer sign-in while a claimed callback finishes', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const callbackState = createDesktopAuthCallbackState();
+    const oauthClient = createOAuthClient();
+    const callbackProcessing = createDeferred<void>();
+    coordinator.createSessionFromCallback.mockImplementationOnce(async () => {
+      await callbackProcessing.promise;
+      return {
+        success: true as const,
+        session: {
+          id: 'user-1',
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+          account: { id: 'user-1', label: 'user@example.com' },
+          expiresAt: Date.now() + 60_000,
+        },
+      };
+    });
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient,
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      callbackState,
+      initializeServerSideAccess: false,
+    });
+
+    await auth.signIn();
+    const firstState = getOAuthState(oauthClient);
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        state: firstState,
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
+    });
+
+    await auth.signIn();
+    const secondState = getOAuthState(oauthClient);
+    callbackProcessing.resolve();
+
+    await vi.waitFor(() => {
+      expect(coordinator.storeSession).toHaveBeenCalledOnce();
+    });
+    expect(callbackState.getExpectedState()).toBe(secondState);
     auth.dispose();
   });
 

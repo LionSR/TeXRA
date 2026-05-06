@@ -140,8 +140,6 @@ export function createDesktopSupabaseAuth(
           const message = toErrorMessage(error);
           options.log?.error?.(`Desktop auth callback failed: ${message}`);
           await options.showErrorMessage?.(`Sign-in failed: ${message}`);
-        } finally {
-          callbackState.clearAwaitingCallback();
         }
       }
     } finally {
