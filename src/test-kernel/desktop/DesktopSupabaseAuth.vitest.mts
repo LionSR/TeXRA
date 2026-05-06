@@ -270,6 +270,58 @@ describe('desktop Supabase auth', () => {
     recreatedAuth.dispose();
   });
 
+  it('expires persisted pending sign-in state across recreation', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
+      const router = createDesktopProtocolCallbackRouter();
+      const coordinator = createCoordinator();
+      const stateStore = createStateStore();
+      const oauthClient = createOAuthClient();
+      const auth = createDesktopSupabaseAuth({
+        router,
+        coordinator,
+        oauthClient,
+        secrets: createSecrets(),
+        openExternalUrl: vi.fn(async () => {}),
+        callbackState: createDesktopAuthCallbackState(stateStore),
+        initializeServerSideAccess: false,
+      });
+
+      await auth.signIn();
+      const state = getOAuthState(oauthClient);
+      auth.dispose();
+
+      vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+      const expiredCallbackState =
+        createDesktopAuthCallbackState(stateStore);
+      const recreatedAuth = createDesktopSupabaseAuth({
+        router,
+        coordinator,
+        oauthClient: createOAuthClient(),
+        secrets: createSecrets(),
+        openExternalUrl: vi.fn(async () => {}),
+        callbackState: expiredCallbackState,
+        initializeServerSideAccess: false,
+      });
+
+      router.routeUrl(
+        authCallbackUrl({
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+          state,
+        }),
+      );
+      await Promise.resolve();
+
+      expect(expiredCallbackState.getExpectedState()).toBeNull();
+      expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
+      recreatedAuth.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('cancels pending callback state on sign-out', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();

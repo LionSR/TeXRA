@@ -481,6 +481,35 @@ describe('desktop settings IPC', () => {
     expect(secrets.values.get('apiKey.google')).toBe('sk-prompt');
   });
 
+  it('delegates desktop sign-in without posting stale profile data', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+    let signInCalls = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: (message) => posted.push(message),
+      signIn: async () => {
+        signInCalls += 1;
+      },
+    });
+
+    expect(
+      settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_IN }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(signInCalls).toBe(1);
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+      ),
+    ).toBe(false);
+  });
+
   it('round-trips LaTeX config writes through workspace state and refreshes the renderer', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();

@@ -40,6 +40,12 @@ import type {
 
 const EDGE_FUNCTION_TIMEOUT_MS = 30000;
 const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
+const DESKTOP_PENDING_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
+interface DesktopPendingOAuthState {
+  state: string;
+  createdAt: number;
+}
 
 export interface DesktopAuthProfileData {
   authenticated: boolean;
@@ -109,10 +115,9 @@ export interface DesktopAuthCoordinator {
 export function createDesktopAuthCallbackState(
   store?: Pick<StateStore, 'get' | 'update'>,
 ): DesktopAuthCallbackState {
-  let expectedState =
-    store?.get<string | null>(DESKTOP_PENDING_OAUTH_STATE_KEY, null) ?? null;
+  let pendingState = readPendingOAuthState(store);
 
-  const persistExpectedState = (state: string | null): void => {
+  const persistPendingState = (state: DesktopPendingOAuthState | null): void => {
     if (!store) return;
     void Promise.resolve(
       store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state),
@@ -120,16 +125,55 @@ export function createDesktopAuthCallbackState(
   };
 
   return {
-    getExpectedState: () => expectedState,
+    getExpectedState: () => {
+      if (!pendingState) return null;
+      if (isPendingOAuthStateExpired(pendingState)) {
+        pendingState = null;
+        persistPendingState(null);
+        return null;
+      }
+      return pendingState.state;
+    },
     beginAuthAttempt: (state) => {
-      expectedState = state;
-      persistExpectedState(state);
+      pendingState = { state, createdAt: Date.now() };
+      persistPendingState(pendingState);
     },
     clearAwaitingCallback: () => {
-      expectedState = null;
-      persistExpectedState(null);
+      pendingState = null;
+      persistPendingState(null);
     },
   };
+}
+
+function readPendingOAuthState(
+  store: Pick<StateStore, 'get' | 'update'> | undefined,
+): DesktopPendingOAuthState | null {
+  const persisted = store?.get<unknown>(DESKTOP_PENDING_OAUTH_STATE_KEY, null);
+  if (!isPendingOAuthState(persisted)) {
+    return null;
+  }
+  if (isPendingOAuthStateExpired(persisted)) {
+    void Promise.resolve(
+      store?.update(DESKTOP_PENDING_OAUTH_STATE_KEY, null),
+    ).catch(() => {});
+    return null;
+  }
+  return persisted;
+}
+
+function isPendingOAuthState(value: unknown): value is DesktopPendingOAuthState {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'state' in value &&
+    typeof value.state === 'string' &&
+    'createdAt' in value &&
+    typeof value.createdAt === 'number'
+  );
+}
+
+function isPendingOAuthStateExpired(state: DesktopPendingOAuthState): boolean {
+  return Date.now() - state.createdAt > DESKTOP_PENDING_OAUTH_STATE_TTL_MS;
 }
 
 export function createDesktopSupabaseAuth(

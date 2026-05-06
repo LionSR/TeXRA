@@ -658,6 +658,7 @@ export function createDesktopSettingsIpc(
   async function signIn(): Promise<void> {
     if (options.signIn) {
       await options.signIn();
+      return;
     } else {
       await options.showInfoMessage?.(
         'Researcher Access sign-in is not connected in this desktop build. Add a provider API key in Settings > Models to run agents with your own account.',
