@@ -94,6 +94,7 @@ export function createDesktopCommandPalette({
       const item = document.createElement('button');
       item.className = 'desktop-command-palette-item';
       item.type = 'button';
+      item.disabled = !entry.enabled;
       item.dataset.commandId = entry.id;
       item.setAttribute('role', 'option');
       item.setAttribute(
@@ -107,7 +108,8 @@ export function createDesktopCommandPalette({
 
       const meta = document.createElement('span');
       meta.className = 'desktop-command-palette-meta';
-      meta.textContent = entry.accelerator ?? entry.category;
+      meta.textContent =
+        entry.unavailableReason ?? entry.accelerator ?? entry.category;
 
       item.append(label, meta);
       item.addEventListener('mouseenter', () => {

@@ -206,6 +206,17 @@ const commandPalette = createDesktopCommandPalette({
     showFirstRunWalkthrough: () => {
       firstRunWalkthrough.show();
     },
+    resetMainView: () => {
+      setRoute('main');
+      window.postMessage(
+        {
+          command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
+          state: {},
+          isResetOperation: true,
+        },
+        getWindowTargetOrigin(),
+      );
+    },
   },
 });
 appRoot.append(commandPalette.element);

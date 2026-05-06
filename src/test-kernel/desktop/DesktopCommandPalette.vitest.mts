@@ -39,6 +39,8 @@ interface DesktopPaletteEntry {
   label: string;
   category: string;
   accelerator?: string;
+  enabled: boolean;
+  unavailableReason?: string;
 }
 
 async function loadDesktopCommandPalette(): Promise<DesktopCommandPaletteModule> {
@@ -54,17 +56,20 @@ describe('desktop command palette', () => {
       label: 'Show Launcher',
       category: 'TeXRA',
       accelerator: 'Command+Option+M',
+      enabled: true,
     },
     {
       id: 'texra.showProgressView',
       label: 'Show Progress',
       category: 'TeXRA',
       accelerator: 'Command+Option+P',
+      enabled: true,
     },
     {
       id: 'texra.showModels',
       label: 'Show Models',
       category: 'TeXRA',
+      enabled: true,
     },
   ];
 

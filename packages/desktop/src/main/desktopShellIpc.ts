@@ -128,12 +128,22 @@ export function createDesktopShellActions(
     void options.signIn().catch(reportAsyncError);
   }
 
+  function resetMainView() {
+    postRoute('main');
+    renderer.postToRenderer({
+      command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
+      state: {},
+      isResetOperation: true,
+    });
+  }
+
   return {
     signIn,
     openAgentDirectory,
     openDesktopDocs,
     openLogFolder,
     openWorkspaceFolder,
+    resetMainView,
     setRecentCommitsUnavailable: () => {
       renderer.postToRenderer({
         command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
