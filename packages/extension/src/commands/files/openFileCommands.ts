@@ -22,6 +22,10 @@ export const openFileCommands = {
   openLabel: 'texra.openLabel',
 };
 
+export interface OpenLabelOptions {
+  notifyNotFound?: boolean;
+}
+
 function revealPosition(editor: vscode.TextEditor, pos: vscode.Position): void {
   const range = new vscode.Range(pos, pos);
   editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
@@ -40,7 +44,10 @@ export async function openFile(file: string, line?: number): Promise<void> {
   }
 }
 
-export async function openLabel(label: string): Promise<boolean> {
+export async function openLabel(
+  label: string,
+  options: OpenLabelOptions = {},
+): Promise<boolean> {
   const escape = label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
   const candidates = new Set([
@@ -70,7 +77,9 @@ export async function openLabel(label: string): Promise<boolean> {
     }
   }
 
-  vscode.window.showInformationMessage(`Label "${label}" not found.`);
+  if (options.notifyNotFound ?? true) {
+    vscode.window.showInformationMessage(`Label "${label}" not found.`);
+  }
   return false;
 }
 

@@ -5,11 +5,8 @@ import {
   prepareMainViewExecutionRequest,
   type MainViewExecuteMessage,
 } from '@controllers/mainView/MainViewExecutionController';
-import {
-  emitAcceptedWorkspaceFile,
-  getAcceptedFileTarget,
-  ProgressWorkflowFileActionsController,
-} from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import { emitAcceptedWorkspaceFile } from '@controllers/progressView/workflowFileActionsEvents';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { tryPlatform } from '@platform/platform';
 import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
@@ -39,6 +36,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { ExternalOpener } from '@hosts/externalOpener';
+import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { AgentLogger } from '@logger/AgentLogger';

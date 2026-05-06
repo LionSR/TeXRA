@@ -450,6 +450,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             (await vscode.commands.executeCommand<boolean>(
               'texra.openLabel',
               label,
+              { notifyNotFound: false },
             )) ?? false
           );
         },

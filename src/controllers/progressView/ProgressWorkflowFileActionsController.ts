@@ -1,23 +1,10 @@
 import path from 'path';
 
-// Local imports - event bus
-import { bus } from '@eventBus/ProgressEventBus';
-
-// Local imports - latex
-import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
-
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - utilities
-import {
-  ensureRunDir,
-  getRunDir,
-  resolveRunDir,
-  type FileLocation,
-} from '@utils/files';
-
-export { getAcceptedFileTarget };
+import { ensureRunDir, getRunDir, resolveRunDir } from '@utils/files';
 
 export interface ProgressWorkflowFileActionsState {
   getActiveStream(): StreamTabId | '';
@@ -237,13 +224,5 @@ export class ProgressWorkflowFileActionsController {
       }
     }
     return undefined;
-  }
-}
-
-export function emitAcceptedWorkspaceFile(location: FileLocation): void {
-  if (location.kind === 'workspace') {
-    bus.emit('workspaceFilesWritten', {
-      absolutePaths: [location.absolutePath],
-    });
   }
 }
