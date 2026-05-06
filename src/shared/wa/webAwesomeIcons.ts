@@ -2,8 +2,10 @@
 import { faBackwardStep } from '@fortawesome/free-solid-svg-icons/faBackwardStep';
 import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
+import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
+import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
 import { faUser } from '@fortawesome/free-solid-svg-icons/faUser';
 import { faXmark } from '@fortawesome/free-solid-svg-icons/faXmark';
 import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon/library.js';
@@ -37,8 +39,10 @@ const icons = {
   'backward-step': faBackwardStep,
   gear: faGear,
   key: faKey,
+  pencil: faPencil,
   'picture-in-picture': faPictureInPicture,
   play: faPlay,
+  robot: faRobot,
   user: faUser,
   xmark: faXmark,
 } as const;

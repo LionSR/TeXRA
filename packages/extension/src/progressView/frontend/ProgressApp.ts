@@ -37,7 +37,7 @@ import {
   select,
   combine,
 } from '@shared/signals';
-import { codiconStyles, designTokens } from '@shared/styles';
+import { designTokens } from '@shared/styles';
 import {
   registerTeXRAWebAwesomeIcons,
   TEXRA_ICON_LIBRARY,
@@ -143,7 +143,6 @@ export class ProgressApp extends ProgressAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
   static styles = [
     designTokens,
-    codiconStyles,
     css`
       :host {
         display: flex;
@@ -561,11 +560,19 @@ export class ProgressApp extends ProgressAppBase {
               title=${isEditorMode ? 'Focus Launcher sidebar' : ''}
               @click=${this.onFocusLauncherTab}
             >
-              <span class="codicon codicon-edit"></span>
+              <wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="pencil"
+                variant="solid"
+              ></wa-icon>
               Launcher
             </vscode-tab-header>
             <vscode-tab-header slot="header">
-              <span class="codicon codicon-server-process"></span>
+              <wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="robot"
+                variant="solid"
+              ></wa-icon>
               Progress
             </vscode-tab-header>
           </vscode-tabs>
@@ -639,7 +646,11 @@ export class ProgressApp extends ProgressAppBase {
       <section class="progress-empty-state">
         <div class="progress-empty-panel">
           <div class="progress-empty-kicker">
-            <span class="codicon codicon-server-process"></span>
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="robot"
+              variant="solid"
+            ></wa-icon>
             Progress
           </div>
           <h2>No runs yet</h2>
@@ -833,7 +844,7 @@ export class ProgressApp extends ProgressAppBase {
   };
 
   private onOpenLauncher = (): void => {
-    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'main' });
+    this.focusLauncherSidebar();
   };
 
   private focusLauncherSidebar(tabs?: { selectedIndex?: number }): void {
