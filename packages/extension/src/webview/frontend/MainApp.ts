@@ -1931,7 +1931,7 @@ export class MainApp extends MainAppBase {
             class="header-action"
             aria-label="Open dashboard"
             appearance="plain"
-            size="s"
+            size="small"
             title="Open dashboard"
             @click=${this.onOpenDashboard}
           >
@@ -1945,7 +1945,7 @@ export class MainApp extends MainAppBase {
             class="header-action"
             aria-label="Open progress sessions in editor"
             appearance="plain"
-            size="s"
+            size="small"
             title="Open progress sessions in editor"
             @click=${this.onPopOutProgress}
           >

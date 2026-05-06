@@ -240,25 +240,24 @@ function detectProvider(err: unknown): string | undefined {
     return candidate.provider;
   }
 
-  const headerProvider = detectProviderFromHeaders(candidate.headers);
-  if (headerProvider) return headerProvider;
-
   const lowered = candidate.constructor?.name?.toLowerCase();
-  if (!lowered) return undefined;
+  if (lowered) {
+    // Match SDK class-name fragments, then normalize aliases to the
+    // canonical API-provider names used by SecretManager / model handlers.
+    // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
+    // (class name contains "kimi") maps to "moonshot".
+    const names = [
+      lowered,
+      ...getErrorClassNames(err).map((name) => name.toLowerCase()),
+    ];
+    const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
+      (provider) => names.some((name) => name.includes(provider)),
+    );
+    if (match === 'kimi') return 'moonshot';
+    if (match) return match;
+  }
 
-  // Match SDK class-name fragments, then normalize aliases to the
-  // canonical API-provider names used by SecretManager / model handlers.
-  // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
-  // (class name contains "kimi") maps to "moonshot".
-  const names = [
-    lowered,
-    ...getErrorClassNames(err).map((name) => name.toLowerCase()),
-  ];
-  const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
-    (provider) => names.some((name) => name.includes(provider)),
-  );
-  if (match === 'kimi') return 'moonshot';
-  return match;
+  return detectProviderFromHeaders(candidate.headers);
 }
 
 type HeaderBag =
@@ -284,8 +283,8 @@ function getHeaderValue(
 function detectProviderFromHeaders(
   headers: HeaderBag | undefined,
 ): HeaderDetectedProvider | undefined {
-  if (getHeaderValue(headers, 'x-request-id')) return 'openai';
   if (getHeaderValue(headers, 'request-id')) return 'anthropic';
+  if (getHeaderValue(headers, 'x-request-id')) return 'openai';
   return undefined;
 }
 

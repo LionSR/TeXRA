@@ -11,6 +11,7 @@ import {
 
 class APIError extends Error {}
 
+class KimiAPIError extends APIError {}
 class UnknownSdkApiError extends APIError {}
 class APIUserAbortError extends APIError {}
 
@@ -59,5 +60,32 @@ describe('formatProviderHttpError', () => {
     expect(formatted.provider).toBe('anthropic');
     expect(formatted.requestId).toBe('req-anthropic');
     expect(formatted.statusCode).toBe(401);
+  });
+
+  it('prefers Anthropic request-id when response headers include both request id styles', () => {
+    const err = new UnknownSdkApiError('upstream auth failed') as APIError & {
+      headers: Headers;
+    };
+    err.headers = new Headers({
+      'request-id': 'req-anthropic',
+      'x-request-id': 'req-openai-compatible',
+    });
+
+    const formatted = formatProviderHttpError(err);
+
+    expect(formatted.provider).toBe('anthropic');
+    expect(formatted.requestId).toBe('req-anthropic');
+  });
+
+  it('prefers SDK class provider hints over OpenAI-compatible request headers', () => {
+    const err = new KimiAPIError('moonshot auth failed') as APIError & {
+      headers: Headers;
+    };
+    err.headers = new Headers({ 'x-request-id': 'req-kimi' });
+
+    const formatted = formatProviderHttpError(err);
+
+    expect(formatted.provider).toBe('moonshot');
+    expect(formatted.requestId).toBe('req-kimi');
   });
 });

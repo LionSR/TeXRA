@@ -627,7 +627,7 @@ export class SettingsApp extends SettingsAppBase {
       <wa-button
         aria-label="Open VS Code Settings"
         appearance="plain"
-        size="s"
+        size="small"
         title="Open VS Code Settings"
         @click=${this.handleOpenVscodeSettings}
       >
@@ -655,7 +655,7 @@ export class SettingsApp extends SettingsAppBase {
               class="settings-header-auth-button"
               appearance="outlined"
               variant="neutral"
-              size="s"
+              size="small"
               title="Sign out"
               @click=${this.handleSignOut}
             >
@@ -683,7 +683,7 @@ export class SettingsApp extends SettingsAppBase {
             class="settings-header-auth-button"
             appearance="outlined"
             variant="neutral"
-            size="s"
+            size="small"
             title="Set provider API key"
             @click=${this.handleSetDefaultProviderKey}
           >
@@ -699,7 +699,7 @@ export class SettingsApp extends SettingsAppBase {
             class="settings-header-auth-button"
             appearance="filled"
             variant="brand"
-            size="s"
+            size="small"
             title="Sign in"
             @click=${this.handleSignIn}
           >

@@ -581,7 +581,7 @@ export class ProgressApp extends ProgressAppBase {
             class="header-action"
             aria-label="Open dashboard"
             appearance="plain"
-            size="s"
+            size="small"
             title="Open dashboard"
             @click=${this.onOpenDashboard}
           >
@@ -595,7 +595,7 @@ export class ProgressApp extends ProgressAppBase {
             class="header-action"
             aria-label=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
             appearance="plain"
-            size="s"
+            size="small"
             title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
             @click=${isEditorMode ? this.onPopBack : this.onPopOut}
           >
@@ -662,7 +662,7 @@ export class ProgressApp extends ProgressAppBase {
             <wa-button
               appearance="filled"
               variant="brand"
-              size="m"
+              size="medium"
               type="button"
               @click=${this.onOpenLauncher}
             >
@@ -677,7 +677,7 @@ export class ProgressApp extends ProgressAppBase {
             <wa-button
               appearance="outlined"
               variant="neutral"
-              size="m"
+              size="medium"
               type="button"
               @click=${this.onOpenDashboard}
             >
