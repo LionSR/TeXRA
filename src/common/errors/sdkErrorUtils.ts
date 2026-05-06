@@ -232,13 +232,16 @@ function detectProvider(err: unknown): string | undefined {
     return undefined;
   }
 
-  const candidate = err as { provider?: string } & {
+  const candidate = err as { provider?: string; headers?: HeaderBag } & {
     constructor?: { name?: string };
   };
 
   if (isString(candidate.provider)) {
     return candidate.provider;
   }
+
+  const headerProvider = detectProviderFromHeaders(candidate.headers);
+  if (headerProvider) return headerProvider;
 
   const lowered = candidate.constructor?.name?.toLowerCase();
   if (!lowered) return undefined;
@@ -258,6 +261,34 @@ function detectProvider(err: unknown): string | undefined {
   return match;
 }
 
+type HeaderBag =
+  | {
+      get?: (key: string) => string | null;
+    }
+  | Record<string, unknown>;
+type HeaderDetectedProvider = 'openai' | 'anthropic';
+
+function getHeaderValue(
+  headers: HeaderBag | undefined,
+  name: string,
+): string | undefined {
+  const maybeGet = isObject(headers) ? headers.get : undefined;
+  const direct =
+    typeof maybeGet === 'function' ? maybeGet.call(headers, name) : undefined;
+  if (isString(direct) && direct) return direct;
+
+  const indexed = (headers as Record<string, unknown> | undefined)?.[name];
+  return isString(indexed) && indexed ? indexed : undefined;
+}
+
+function detectProviderFromHeaders(
+  headers: HeaderBag | undefined,
+): HeaderDetectedProvider | undefined {
+  if (getHeaderValue(headers, 'x-request-id')) return 'openai';
+  if (getHeaderValue(headers, 'request-id')) return 'anthropic';
+  return undefined;
+}
+
 /** Extract request ID from SDK errors (property or headers). */
 function detectRequestId(err: unknown): string | undefined {
   if (!isObject(err)) return undefined;
@@ -265,10 +296,12 @@ function detectRequestId(err: unknown): string | undefined {
   const candidate = err as {
     request_id?: string;
     requestId?: string;
-    headers?: { get?: (key: string) => string | null };
+    requestID?: string;
+    headers?: HeaderBag;
   };
 
-  const directId = candidate.request_id ?? candidate.requestId;
+  const directId =
+    candidate.request_id ?? candidate.requestId ?? candidate.requestID;
   if (isString(directId) && directId) {
     return directId;
   }
@@ -276,8 +309,8 @@ function detectRequestId(err: unknown): string | undefined {
   // Try headers (Anthropic SDK uses 'request-id'; relay may use 'x-request-id')
   // ?? undefined converts null from headers.get() to undefined
   return (
-    candidate.headers?.get?.('request-id') ??
-    candidate.headers?.get?.('x-request-id') ??
+    getHeaderValue(candidate.headers, 'request-id') ??
+    getHeaderValue(candidate.headers, 'x-request-id') ??
     undefined
   );
 }
