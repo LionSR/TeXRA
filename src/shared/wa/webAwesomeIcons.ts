@@ -1,5 +1,8 @@
 // Third-party imports
 import { faBackwardStep } from '@fortawesome/free-solid-svg-icons/faBackwardStep';
+import { faChevronLeft } from '@fortawesome/free-solid-svg-icons/faChevronLeft';
+import { faChevronRight } from '@fortawesome/free-solid-svg-icons/faChevronRight';
+import { faForwardStep } from '@fortawesome/free-solid-svg-icons/faForwardStep';
 import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
@@ -37,6 +40,9 @@ function iconSvg(iconDefinition: FontAwesomeIconDefinition): string {
 const icons = {
   // Font Awesome Free icons; Web Awesome renders them from local data URIs.
   'backward-step': faBackwardStep,
+  'chevron-left': faChevronLeft,
+  'chevron-right': faChevronRight,
+  'forward-step': faForwardStep,
   gear: faGear,
   key: faKey,
   pencil: faPencil,

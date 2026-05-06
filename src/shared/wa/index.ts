@@ -9,3 +9,5 @@
 // component family they belong to — added in subsequent migration PRs.
 
 import '@awesome.me/webawesome/dist/styles/themes/default.css';
+
+export { TEXRA_ICON_LIBRARY } from './webAwesomeIcons';
