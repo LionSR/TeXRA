@@ -5,10 +5,6 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import {
-  registerTeXRAWebAwesomeIcons,
-  TEXRA_ICON_LIBRARY,
-} from '@common/webAwesomeIcons';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -51,6 +47,10 @@ import {
   type RemoveFileDetail,
   type SessionTypeChangeDetail,
 } from '@shared/schemas';
+import {
+  registerTeXRAWebAwesomeIcons,
+  TEXRA_ICON_LIBRARY,
+} from '@shared/wa/webAwesomeIcons';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { agentName } from '@shared/schemas/agent';
 import { capitalize } from '@shared/utils/string';

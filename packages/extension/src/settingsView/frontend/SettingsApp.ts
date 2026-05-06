@@ -10,10 +10,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
-import {
-  registerTeXRAWebAwesomeIcons,
-  TEXRA_ICON_LIBRARY,
-} from '@common/webAwesomeIcons';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
@@ -37,6 +33,10 @@ import {
   type ModelSelectionItem,
   SETTINGS_TAB,
 } from '@shared/schemas';
+import {
+  registerTeXRAWebAwesomeIcons,
+  TEXRA_ICON_LIBRARY,
+} from '@shared/wa/webAwesomeIcons';
 import {
   type AgentSelectionItem,
   type LatexConfigValues,

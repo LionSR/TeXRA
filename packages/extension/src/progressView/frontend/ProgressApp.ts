@@ -12,10 +12,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import {
-  registerTeXRAWebAwesomeIcons,
-  TEXRA_ICON_LIBRARY,
-} from '@common/webAwesomeIcons';
-import {
   COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview/commands';
@@ -42,6 +38,10 @@ import {
   combine,
 } from '@shared/signals';
 import { codiconStyles, designTokens } from '@shared/styles';
+import {
+  registerTeXRAWebAwesomeIcons,
+  TEXRA_ICON_LIBRARY,
+} from '@shared/wa/webAwesomeIcons';
 import { isProcessAgent } from '@shared/streams/agentKind';
 
 // Local imports - progress view frontend
