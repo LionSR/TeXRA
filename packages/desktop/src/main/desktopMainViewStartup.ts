@@ -10,14 +10,17 @@ import {
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
+import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 
 export interface DesktopMainViewStartupOptions {
   renderer: DesktopRenderer;
+  getAuthStatus?: () => Promise<MainViewAuthStatus>;
   onAsyncError?: (error: unknown) => void;
 }
 
 export function createDesktopMainViewStartup({
   renderer,
+  getAuthStatus,
   onAsyncError,
 }: DesktopMainViewStartupOptions): DesktopMessageHandler {
   const reportAsyncError = createDesktopErrorReporter(onAsyncError);
@@ -27,7 +30,7 @@ export function createDesktopMainViewStartup({
       agentOptions: await computeAgentOptionsData(),
       modelOptions: buildBasicModelOptionsData(),
     }),
-    getAuthStatus: async () => ({ authenticated: false }),
+    getAuthStatus: getAuthStatus ?? (async () => ({ authenticated: false })),
   });
 
   async function postStartupMessages(): Promise<void> {
