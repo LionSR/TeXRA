@@ -57,8 +57,6 @@ import {
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
 import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolicy';
 
-registerTeXRAWebAwesomeIcons();
-
 // Local imports - settings view
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
@@ -80,6 +78,8 @@ import './tabs/GitTab';
 import './tabs/LaTeXTab';
 import './components/profile/ProviderKeyModal';
 import type { HistoryTab } from './tabs/HistoryTab';
+
+registerTeXRAWebAwesomeIcons();
 
 const HISTORY_ACTION_COMMANDS: Record<string, string> = {
   delete: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
@@ -631,7 +631,11 @@ export class SettingsApp extends SettingsAppBase {
         title="Open VS Code Settings"
         @click=${this.handleOpenVscodeSettings}
       >
-        <wa-icon library="system" name="gear" variant="solid"></wa-icon>
+        <wa-icon
+          library=${TEXRA_ICON_LIBRARY}
+          name="gear"
+          variant="solid"
+        ></wa-icon>
       </wa-button>
     `;
 
@@ -657,7 +661,7 @@ export class SettingsApp extends SettingsAppBase {
             >
               <wa-icon
                 slot="start"
-                library="system"
+                library=${TEXRA_ICON_LIBRARY}
                 name="xmark"
                 variant="solid"
               ></wa-icon>
@@ -701,7 +705,7 @@ export class SettingsApp extends SettingsAppBase {
           >
             <wa-icon
               slot="start"
-              library="system"
+              library=${TEXRA_ICON_LIBRARY}
               name="user"
               variant="solid"
             ></wa-icon>

@@ -1,5 +1,8 @@
 // Third-party imports
-import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon/library.js';
+import {
+  getIconLibrary,
+  registerIconLibrary,
+} from '@awesome.me/webawesome/dist/components/icon/library.js';
 
 const TEXRA_ICON_LIBRARY = 'texra';
 
@@ -10,13 +13,20 @@ const iconSvgs = {
 
 let isRegistered = false;
 
+function dataUri(svg: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 export function registerTeXRAWebAwesomeIcons(): void {
   if (isRegistered) return;
 
+  const systemLibrary = getIconLibrary('system');
+
   registerIconLibrary(TEXRA_ICON_LIBRARY, {
-    resolver(name) {
+    resolver(name, family, variant, autoWidth) {
       const svg = iconSvgs[name as keyof typeof iconSvgs];
-      return svg ? `data:image/svg+xml,${encodeURIComponent(svg)}` : '';
+      if (svg) return dataUri(svg);
+      return systemLibrary?.resolver(name, family, variant, autoWidth) ?? '';
     },
   });
   isRegistered = true;

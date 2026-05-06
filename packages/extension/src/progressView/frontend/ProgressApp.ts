@@ -12,6 +12,10 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import {
+  registerTeXRAWebAwesomeIcons,
+  TEXRA_ICON_LIBRARY,
+} from '@common/webAwesomeIcons';
+import {
   COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@common/webview/commands';
@@ -116,6 +120,8 @@ import './components/ContextManagement';
 
 // Local imports - progress view component types
 import type { PermissionState } from './components/PermissionCard';
+
+registerTeXRAWebAwesomeIcons();
 
 // ---------------------------------------------------------------------------
 // Collection equality helpers — avoid allocating temporary arrays in
@@ -572,7 +578,11 @@ export class ProgressApp extends ProgressAppBase {
             title="Open dashboard"
             @click=${this.onOpenDashboard}
           >
-            <wa-icon library="system" name="gear" variant="solid"></wa-icon>
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="gear"
+              variant="solid"
+            ></wa-icon>
           </wa-button>
           <wa-button
             class="header-action"
@@ -583,7 +593,7 @@ export class ProgressApp extends ProgressAppBase {
             @click=${isEditorMode ? this.onPopBack : this.onPopOut}
           >
             <wa-icon
-              library="system"
+              library=${TEXRA_ICON_LIBRARY}
               name=${isEditorMode ? 'backward-step' : 'picture-in-picture'}
               variant="solid"
             ></wa-icon>
@@ -647,7 +657,7 @@ export class ProgressApp extends ProgressAppBase {
             >
               <wa-icon
                 slot="start"
-                library="system"
+                library=${TEXRA_ICON_LIBRARY}
                 name="play"
                 variant="solid"
               ></wa-icon>
@@ -662,7 +672,7 @@ export class ProgressApp extends ProgressAppBase {
             >
               <wa-icon
                 slot="start"
-                library="system"
+                library=${TEXRA_ICON_LIBRARY}
                 name="gear"
                 variant="solid"
               ></wa-icon>
