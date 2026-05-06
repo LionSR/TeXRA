@@ -7,30 +7,44 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 // Local imports - Web Awesome
 import { TEXRA_ICON_LIBRARY } from './webAwesomeIcons';
 
+type ActionButtonAppearance = 'filled' | 'outlined' | 'plain';
+type ActionButtonVariant = 'brand' | 'neutral';
+
 export interface IconActionButtonOptions {
   readonly icon: string;
   readonly label: string;
   readonly title?: string;
   readonly action?: string;
   readonly className?: string;
+  readonly appearance?: ActionButtonAppearance;
+  readonly variant?: ActionButtonVariant;
   readonly onClick?: (event: MouseEvent) => void;
 }
 
-export function renderIconActionButton({
+export interface LabeledActionButtonOptions extends IconActionButtonOptions {
+  readonly text: string;
+}
+
+function renderActionButtonBase({
   icon,
   label,
+  text,
   title,
   action,
   className,
+  appearance = 'outlined',
+  variant = 'neutral',
   onClick,
-}: IconActionButtonOptions): TemplateResult {
-  const classes = ['action-icon-button', className].filter(Boolean).join(' ');
+}: IconActionButtonOptions & { readonly text?: string }): TemplateResult {
+  const classes = [text ? 'action-button' : 'action-icon-button', className]
+    .filter(Boolean)
+    .join(' ');
 
   return html`
     <wa-button
       class=${classes}
-      appearance="outlined"
-      variant="neutral"
+      appearance=${appearance}
+      variant=${variant}
       size="small"
       type="button"
       aria-label=${label}
@@ -43,6 +57,19 @@ export function renderIconActionButton({
         name=${icon}
         variant="solid"
       ></wa-icon>
+      ${text}
     </wa-button>
   `;
+}
+
+export function renderIconActionButton(
+  options: IconActionButtonOptions,
+): TemplateResult {
+  return renderActionButtonBase(options);
+}
+
+export function renderLabeledActionButton(
+  options: LabeledActionButtonOptions,
+): TemplateResult {
+  return renderActionButtonBase(options);
 }
