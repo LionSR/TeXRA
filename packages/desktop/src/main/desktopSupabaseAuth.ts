@@ -100,24 +100,36 @@ export function createDesktopSupabaseAuth(
 ): DesktopSupabaseAuth {
   const coordinator = options.coordinator ?? createSessionCoordinator(options);
   const oauthClient = options.oauthClient ?? SupabaseClient.getClient();
-  let isProcessingCallback = false;
-  const subscription = options.router.subscribe(async (callback) => {
-    if (isProcessingCallback) {
-      options.log?.debug?.(
-        'Desktop auth callback ignored while another callback is being processed',
-      );
-      return;
-    }
-    isProcessingCallback = true;
+  const callbackQueue: DesktopProtocolCallback[] = [];
+  let isProcessingCallbacks = false;
+  const processCallbackQueue = async (): Promise<void> => {
+    if (isProcessingCallbacks) return;
+    isProcessingCallbacks = true;
     try {
-      await processProtocolCallback(coordinator, callback, options);
-    } catch (error) {
-      const message = toErrorMessage(error);
-      options.log?.error?.(`Desktop auth callback failed: ${message}`);
-      await options.showErrorMessage?.(`Sign-in failed: ${message}`);
+      while (callbackQueue.length > 0) {
+        const callback = callbackQueue.shift();
+        if (!callback) continue;
+        try {
+          await processProtocolCallback(coordinator, callback, options);
+        } catch (error) {
+          const message = toErrorMessage(error);
+          options.log?.error?.(`Desktop auth callback failed: ${message}`);
+          await options.showErrorMessage?.(`Sign-in failed: ${message}`);
+        }
+      }
     } finally {
-      isProcessingCallback = false;
+      isProcessingCallbacks = false;
+      if (callbackQueue.length > 0) void processCallbackQueue();
     }
+  };
+  const subscription = options.router.subscribe((callback) => {
+    callbackQueue.push(callback);
+    if (isProcessingCallbacks) {
+      options.log?.debug?.(
+        'Desktop auth callback queued while another callback is being processed',
+      );
+    }
+    void processCallbackQueue();
   });
 
   if (options.initializeServerSideAccess ?? true) {

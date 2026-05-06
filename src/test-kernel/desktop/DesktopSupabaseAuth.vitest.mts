@@ -122,6 +122,50 @@ describe('desktop Supabase auth', () => {
     auth.dispose();
   });
 
+  it('processes routed callbacks sequentially when they are replayed together', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const log = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient: {
+        auth: {
+          signInWithOAuth: vi.fn(async () => ({ data: {}, error: null })),
+        },
+      },
+      secrets: {
+        get: vi.fn(async () => undefined),
+        set: vi.fn(async () => {}),
+        delete: vi.fn(async () => {}),
+      },
+      openExternalUrl: vi.fn(async () => {}),
+      log,
+      initializeServerSideAccess: false,
+    });
+
+    router.routeUrl(
+      'texra://texra-ai.texra/auth-callback#access_token=first&refresh_token=first',
+    );
+    router.routeUrl(
+      'texra://texra-ai.texra/auth-callback#access_token=second&refresh_token=second',
+    );
+
+    await vi.waitFor(() => {
+      expect(coordinator.createSessionFromCallback).toHaveBeenCalledTimes(2);
+    });
+    expect(coordinator.storeSession).toHaveBeenCalledTimes(2);
+    expect(log.debug).toHaveBeenCalledWith(
+      'Desktop auth callback queued while another callback is being processed',
+    );
+    auth.dispose();
+  });
+
   it('surfaces rejected routed callback processing failures', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
