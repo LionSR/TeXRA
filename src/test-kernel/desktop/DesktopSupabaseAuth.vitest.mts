@@ -121,4 +121,52 @@ describe('desktop Supabase auth', () => {
     expect(profile.authenticated).toBe(false);
     auth.dispose();
   });
+
+  it('surfaces rejected routed callback processing failures', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    coordinator.createSessionFromCallback.mockRejectedValueOnce(
+      new Error('network down'),
+    );
+    const showErrorMessage = vi.fn(async () => {});
+    const log = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient: {
+        auth: {
+          signInWithOAuth: vi.fn(async () => ({ data: {}, error: null })),
+        },
+      },
+      secrets: {
+        get: vi.fn(async () => undefined),
+        set: vi.fn(async () => {}),
+        delete: vi.fn(async () => {}),
+      },
+      openExternalUrl: vi.fn(async () => {}),
+      showErrorMessage,
+      log,
+      initializeServerSideAccess: false,
+    });
+
+    router.routeUrl(
+      'texra://texra-ai.texra/auth-callback#access_token=access-token&refresh_token=refresh-token',
+    );
+
+    await vi.waitFor(() => {
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'Sign-in failed: network down',
+      );
+    });
+    expect(log.error).toHaveBeenCalledWith(
+      'Desktop auth callback failed: network down',
+    );
+    expect(coordinator.storeSession).not.toHaveBeenCalled();
+    auth.dispose();
+  });
 });

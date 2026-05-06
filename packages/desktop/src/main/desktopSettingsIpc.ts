@@ -18,7 +18,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { FREE_TIER, MAX_TIER, ULTRA_TIER } from '@auth/sharedConfig';
+import { MAX_TIER, ULTRA_TIER } from '@auth/sharedConfig';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
@@ -51,7 +51,6 @@ import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   SettingsViewInboundMessageSchema,
   type LatexSettingsStatus,
-  type RemoteAgent,
   type ProviderKeyStatus,
   type ReasoningLevel,
   type ToolDashboardItem,
@@ -83,6 +82,10 @@ import {
   setProviderStreaming,
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
+import {
+  unauthenticatedProfileData,
+  type DesktopAuthProfileData,
+} from './desktopSupabaseAuth.js';
 import type { ConfigProvider } from '@platform/interfaces/config';
 import type { StateStore } from '@platform/interfaces/state';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -94,17 +97,6 @@ import type {
 type ToolDashboardBuilder = (
   cachedResults?: ExternalToolCheckResult[],
 ) => Promise<ToolDashboardItem[]>;
-
-export interface DesktopAuthProfileData {
-  authenticated: boolean;
-  user: { email: string; id: string } | null;
-  tier: string;
-  permissions: string[];
-  remoteAgents: RemoteAgent[];
-  apiAccessMode: 'included' | 'personal';
-  allowedModels: string[] | null;
-  accessExpiresAt?: string | null;
-}
 
 export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
@@ -153,19 +145,6 @@ const emptySecrets: PlatformSecrets = {
   set: () => Promise.resolve(),
   delete: () => Promise.resolve(),
 };
-
-function defaultAuthProfileData(): DesktopAuthProfileData {
-  return {
-    authenticated: false,
-    user: null,
-    tier: FREE_TIER,
-    permissions: [],
-    remoteAgents: [],
-    apiAccessMode: 'personal',
-    allowedModels: [],
-    accessExpiresAt: null,
-  };
-}
 
 async function buildDefaultToolDashboardItems(
   cachedResults?: ExternalToolCheckResult[],
@@ -444,7 +423,7 @@ export function createDesktopSettingsIpc(
 
   async function postProfileData(): Promise<void> {
     const authProfile =
-      (await options.getAuthProfileData?.()) ?? defaultAuthProfileData();
+      (await options.getAuthProfileData?.()) ?? unauthenticatedProfileData();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       ...authProfile,

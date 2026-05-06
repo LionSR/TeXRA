@@ -20,15 +20,19 @@ import {
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
 import type { AuthServiceLogger } from '@auth/serviceLogger';
-import type { OAuthProvider, UserTier } from '@auth/sharedConfig';
+import {
+  FREE_TIER,
+  type OAuthProvider,
+  type UserTier,
+} from '@auth/sharedConfig';
 import type { AuthCallbackUriParts } from '@auth/core/authCallback';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
 import { TEXRA_PROTOCOL } from '../desktopProtocol.js';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
   DesktopProtocolCallback,
   DesktopProtocolCallbackRouter,
-  DesktopProtocolCallbackSubscription,
 } from './desktopProtocolCallbacks.js';
 
 const EDGE_FUNCTION_TIMEOUT_MS = 30000;
@@ -38,7 +42,7 @@ export interface DesktopAuthProfileData {
   user: { email: string; id: string } | null;
   tier: string;
   permissions: string[];
-  remoteAgents: [];
+  remoteAgents: RemoteAgent[];
   apiAccessMode: 'included' | 'personal';
   allowedModels: string[] | null;
   accessExpiresAt?: string | null;
@@ -97,18 +101,24 @@ export function createDesktopSupabaseAuth(
   const coordinator = options.coordinator ?? createSessionCoordinator(options);
   const oauthClient = options.oauthClient ?? SupabaseClient.getClient();
   let isProcessingCallback = false;
-  const subscription = subscribeToProtocolCallbacks(
-    options.router,
-    async (callback) => {
-      if (isProcessingCallback) return;
-      isProcessingCallback = true;
-      try {
-        await processProtocolCallback(coordinator, callback, options);
-      } finally {
-        isProcessingCallback = false;
-      }
-    },
-  );
+  const subscription = options.router.subscribe(async (callback) => {
+    if (isProcessingCallback) {
+      options.log?.debug?.(
+        'Desktop auth callback ignored while another callback is being processed',
+      );
+      return;
+    }
+    isProcessingCallback = true;
+    try {
+      await processProtocolCallback(coordinator, callback, options);
+    } catch (error) {
+      const message = toErrorMessage(error);
+      options.log?.error?.(`Desktop auth callback failed: ${message}`);
+      await options.showErrorMessage?.(`Sign-in failed: ${message}`);
+    } finally {
+      isProcessingCallback = false;
+    }
+  });
 
   if (options.initializeServerSideAccess ?? true) {
     initializeServerSideKeyAccess(
@@ -191,13 +201,6 @@ function createSessionCoordinator(
   return coordinator;
 }
 
-function subscribeToProtocolCallbacks(
-  router: DesktopProtocolCallbackRouter,
-  listener: (callback: DesktopProtocolCallback) => void,
-): DesktopProtocolCallbackSubscription {
-  return router.subscribe(listener);
-}
-
 async function processProtocolCallback(
   coordinator: DesktopAuthCoordinator,
   callback: DesktopProtocolCallback,
@@ -231,7 +234,7 @@ async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
 
   const user = await SupabaseClient.getUser();
   let authContext: { tier: string; permissions: string[] } = {
-    tier: 'free',
+    tier: FREE_TIER,
     permissions: [],
   };
   try {
@@ -276,7 +279,7 @@ export function unauthenticatedProfileData(): DesktopAuthProfileData {
   return {
     authenticated: false,
     user: null,
-    tier: 'free',
+    tier: FREE_TIER,
     permissions: [],
     remoteAgents: [],
     apiAccessMode: 'personal',
