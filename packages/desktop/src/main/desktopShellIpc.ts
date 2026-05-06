@@ -35,6 +35,7 @@ export interface DesktopShellActionFactoryOptions {
   openLogFolder?: () => Promise<void>;
   openPath?: (filePath: string) => Promise<void>;
   openWorkspaceFolder?: () => Promise<void>;
+  signIn?: () => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -46,6 +47,7 @@ export interface DesktopShellActionInstanceOptions {
 }
 
 export interface DesktopShellActions extends DesktopCommandActions {
+  signIn(): void;
   openAgentDirectory(customDirSet?: boolean): void;
   setRecentCommitsUnavailable(): void;
 }
@@ -111,7 +113,16 @@ export function createDesktopShellActions(
     void options.openWorkspaceFolder?.().catch(reportAsyncError);
   }
 
+  function signIn() {
+    if (!options.signIn) {
+      postSettingsRoute(SETTINGS_TAB.MODELS);
+      return;
+    }
+    void options.signIn().catch(reportAsyncError);
+  }
+
   return {
+    signIn,
     openAgentDirectory,
     openLogFolder,
     openWorkspaceFolder,
@@ -161,6 +172,8 @@ export function createDesktopShellIpc(
           actions.showSettings(SETTINGS_TAB.MODELS);
           return true;
         case MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER:
+          actions.signIn();
+          return true;
         case MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY:
         case MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY:
           actions.showSettings(SETTINGS_TAB.MODELS);

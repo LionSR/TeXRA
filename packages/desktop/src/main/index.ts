@@ -1,15 +1,18 @@
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
 import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
+import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import { createDesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import {
   attachRendererConsoleLog,
@@ -20,10 +23,16 @@ import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
+import {
+  createDesktopAuthCallbackState,
+  createDesktopAuthCoordinator,
+  createDesktopSupabaseAuth,
+  initializeDesktopServerSideKeyAccess,
+  type DesktopAuthCallbackState,
+  type DesktopAuthCoordinator,
+} from './desktopSupabaseAuth.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
-import { buildDesktopSettingsTabMessage } from '../desktopCommandSurface.js';
-import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
@@ -32,6 +41,27 @@ import {
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const __dirname = findDesktopMainDir(moduleDirname);
+let mainWindow: BrowserWindow | null = null;
+let reopenMainWindow: (() => void) | undefined;
+
+function focusOrReopenMainWindow(): void {
+  if (!mainWindow) {
+    reopenMainWindow?.();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
+  app,
+  argv: process.argv.slice(1),
+  execPath: process.execPath,
+  devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
+  focusMainWindow: focusOrReopenMainWindow,
+  log: console,
+});
 
 function findDesktopMainDir(startDir: string): string {
   let currentDir = startDir;
@@ -79,7 +109,11 @@ function installContentSecurityPolicy(): void {
   });
 }
 
-function createWindow(options: { workspacePath: string | undefined }): void {
+function createWindow(options: {
+  workspacePath: string | undefined;
+  authCoordinator: DesktopAuthCoordinator;
+  authCallbackState: DesktopAuthCallbackState;
+}): void {
   const window = new BrowserWindow({
     width: 960,
     height: 680,
@@ -96,9 +130,13 @@ function createWindow(options: { workspacePath: string | undefined }): void {
       ],
     },
   });
+  mainWindow = window;
   const reportAsyncError = (error: unknown) => console.error(error);
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
+  } = {};
+  const settingsIpcRef: {
+    current?: ReturnType<typeof createDesktopSettingsIpc>;
   } = {};
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
@@ -106,6 +144,29 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
+  });
+  const refreshDesktopAuthSurfaces = async () => {
+    const profile = await desktopAuth.getProfileData();
+    ipcRef.current?.postToRenderer({
+      command: profile.authenticated
+        ? MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER
+        : MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
+    });
+    await settingsIpcRef.current?.refreshAuthDependentData();
+  };
+  const desktopAuth = createDesktopSupabaseAuth({
+    router: protocolLifecycle.router,
+    coordinator: options.authCoordinator,
+    secrets: platform().secrets,
+    openExternalUrl: (url) => previewHost.openExternal(url),
+    showInfoMessage: async (message) => {
+      await dialog.showMessageBox(window, { type: 'info', message });
+    },
+    showErrorMessage,
+    onSessionChanged: refreshDesktopAuthSurfaces,
+    log: console,
+    callbackState: options.authCallbackState,
+    initializeServerSideAccess: false,
   });
   setOpenBuildDisplay(previewHost.openBuildDisplay);
   const openLogsFolder = async () =>
@@ -163,21 +224,14 @@ function createWindow(options: { workspacePath: string | undefined }): void {
     showErrorMessage: async (message) => {
       await dialog.showMessageBox(window, { type: 'error', message });
     },
-    signIn: async () => {
-      await dialog.showMessageBox(window, {
-        type: 'info',
-        message:
-          'Researcher Access sign-in is not connected in this desktop build',
-        detail:
-          'Use Settings > Models to add a provider API key, or use the TeXRA VS Code extension for included-access sign-in while desktop auth is completed.',
-      });
-      ipcRef.current?.postToRenderer({
-        command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-        route: 'settings',
-      });
-      ipcRef.current?.postToRenderer(
-        buildDesktopSettingsTabMessage(SETTINGS_TAB.MODELS),
+    signIn: () => desktopAuth.signIn(),
+    signOut: () => desktopAuth.signOut(),
+    getAuthProfileData: () => desktopAuth.getProfileData(),
+    setApiAccessMode: async (mode) => {
+      await getServerSideKeyService().setUseIncludedModelAccess(
+        mode === 'included',
       );
+      invalidateModelOptionsCache();
     },
     selectCustomAgentDirectory: async () => {
       const result = await dialog.showOpenDialog(window, {
@@ -208,6 +262,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
     },
     onError: reportAsyncError,
   });
+  settingsIpcRef.current = settingsIpc;
   const progressIpc = createDesktopProgressIpc({
     progress: agentExecution.progress,
     onAsyncError: reportAsyncError,
@@ -219,6 +274,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,
       openWorkspaceFolder,
+      signIn: () => desktopAuth.signIn(),
       onAsyncError: reportAsyncError,
     },
   );
@@ -229,11 +285,20 @@ function createWindow(options: { workspacePath: string | undefined }): void {
     settings: settingsIpc,
     progress: progressIpc,
     shellActions,
+    getAuthStatus: async () => ({
+      authenticated: (await desktopAuth.getProfileData()).authenticated,
+    }),
     onAsyncError: reportAsyncError,
   });
   ipcRef.current = mainViewIpc;
   installDesktopMenu(shellActions);
-  window.once('closed', () => agentExecution.dispose());
+  window.once('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = null;
+    }
+    agentExecution.dispose();
+    desktopAuth.dispose();
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -243,24 +308,40 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   void window.loadFile(join(__dirname, '../renderer/index.html'));
 }
 
-app
-  .whenReady()
-  .then(async () => {
-    const platformInit = await initializeElectronPlatform(__dirname);
-    installContentSecurityPolicy();
-    createWindow({ workspacePath: platformInit.workspacePath });
+if (protocolLifecycle.shouldContinue) {
+  app
+    .whenReady()
+    .then(async () => {
+      const platformInit = await initializeElectronPlatform(__dirname);
+      const authCoordinator = createDesktopAuthCoordinator({
+        secrets: platform().secrets,
+        log: console,
+      });
+      const authCallbackState = createDesktopAuthCallbackState(
+        platform().globalState,
+      );
+      initializeDesktopServerSideKeyAccess(console);
+      installContentSecurityPolicy();
+      reopenMainWindow = () =>
+        createWindow({
+          workspacePath: platformInit.workspacePath,
+          authCoordinator,
+          authCallbackState,
+        });
+      reopenMainWindow();
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow({ workspacePath: platformInit.workspacePath });
-      }
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          reopenMainWindow?.();
+        }
+      });
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Failed to start TeXRA desktop: ${message}`);
+      app.quit();
     });
-  })
-  .catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`Failed to start TeXRA desktop: ${message}`);
-    app.quit();
-  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
