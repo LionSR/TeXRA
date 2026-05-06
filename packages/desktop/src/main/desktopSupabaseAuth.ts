@@ -98,7 +98,8 @@ export interface DesktopAuthCoordinator {
 export function createDesktopSupabaseAuth(
   options: DesktopSupabaseAuthOptions,
 ): DesktopSupabaseAuth {
-  const coordinator = options.coordinator ?? createSessionCoordinator(options);
+  const coordinator =
+    options.coordinator ?? createDesktopAuthCoordinator(options);
   const oauthClient = options.oauthClient ?? SupabaseClient.getClient();
   const callbackQueue: DesktopProtocolCallback[] = [];
   let isProcessingCallbacks = false;
@@ -133,17 +134,7 @@ export function createDesktopSupabaseAuth(
   });
 
   if (options.initializeServerSideAccess ?? true) {
-    initializeServerSideKeyAccess(
-      {
-        state: platform().globalState,
-        logger: createAuthServiceLogger(options.log),
-      },
-      {
-        isAuthenticated: () => SupabaseClient.isAuthenticated(),
-        getUserTier: () => SupabaseClient.getUserTier() as Promise<UserTier>,
-        getAccessToken: () => SupabaseClient.getAccessToken(),
-      },
-    );
+    initializeDesktopServerSideKeyAccess(options.log);
   }
 
   return {
@@ -175,6 +166,7 @@ export function createDesktopSupabaseAuth(
     async signOut() {
       await coordinator.clearSession();
       SupabaseClient.setTokenExpiry(null);
+      clearDesktopServerSideKeyCaches(options.log);
       await options.onSessionChanged?.();
     },
 
@@ -188,7 +180,7 @@ export function createDesktopSupabaseAuth(
   };
 }
 
-function createSessionCoordinator(
+export function createDesktopAuthCoordinator(
   options: Pick<DesktopSupabaseAuthOptions, 'secrets' | 'log'>,
 ): DesktopAuthCoordinator {
   SupabaseClient.initialize(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publicKey);
@@ -213,6 +205,34 @@ function createSessionCoordinator(
   return coordinator;
 }
 
+export function initializeDesktopServerSideKeyAccess(
+  log: DesktopSupabaseAuthOptions['log'],
+): void {
+  initializeServerSideKeyAccess(
+    {
+      state: platform().globalState,
+      logger: createAuthServiceLogger(log),
+    },
+    {
+      isAuthenticated: () => SupabaseClient.isAuthenticated(),
+      getUserTier: () => SupabaseClient.getUserTier() as Promise<UserTier>,
+      getAccessToken: () => SupabaseClient.getAccessToken(),
+    },
+  );
+}
+
+function clearDesktopServerSideKeyCaches(
+  log: DesktopSupabaseAuthOptions['log'],
+): void {
+  try {
+    getServerSideKeyService().clearAllCaches();
+  } catch (error) {
+    log?.debug?.(
+      `Desktop server-side key cache clear skipped: ${toErrorMessage(error)}`,
+    );
+  }
+}
+
 async function processProtocolCallback(
   coordinator: DesktopAuthCoordinator,
   callback: DesktopProtocolCallback,
@@ -234,6 +254,7 @@ async function processProtocolCallback(
   }
 
   await coordinator.storeSession(result.session);
+  clearDesktopServerSideKeyCaches(options.log);
   await options.showInfoMessage?.(
     `Signed in as ${result.session.account.label}`,
   );

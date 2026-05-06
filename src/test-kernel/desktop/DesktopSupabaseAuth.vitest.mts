@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { SupabaseSession } from '@auth/SupabaseSession';
+import { setServerSideKeyService } from '@auth/serverKeys';
 import { createDesktopProtocolCallbackRouter } from '../../../packages/desktop/src/main/desktopProtocolCallbacks';
 import {
   createDesktopSupabaseAuth,
@@ -211,6 +212,35 @@ describe('desktop Supabase auth', () => {
       'Desktop auth callback failed: network down',
     );
     expect(coordinator.storeSession).not.toHaveBeenCalled();
+    auth.dispose();
+  });
+
+  it('clears included-access caches on sign-out', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const clearAllCaches = vi.fn();
+    setServerSideKeyService({ clearAllCaches } as never);
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient: {
+        auth: {
+          signInWithOAuth: vi.fn(async () => ({ data: {}, error: null })),
+        },
+      },
+      secrets: {
+        get: vi.fn(async () => undefined),
+        set: vi.fn(async () => {}),
+        delete: vi.fn(async () => {}),
+      },
+      openExternalUrl: vi.fn(async () => {}),
+      initializeServerSideAccess: false,
+    });
+
+    await auth.signOut();
+
+    expect(coordinator.clearSession).toHaveBeenCalled();
+    expect(clearAllCaches).toHaveBeenCalledOnce();
     auth.dispose();
   });
 });

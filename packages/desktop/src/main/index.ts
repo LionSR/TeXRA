@@ -5,6 +5,8 @@ import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
 import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
@@ -20,7 +22,12 @@ import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
-import { createDesktopSupabaseAuth } from './desktopSupabaseAuth.js';
+import {
+  createDesktopAuthCoordinator,
+  createDesktopSupabaseAuth,
+  initializeDesktopServerSideKeyAccess,
+  type DesktopAuthCoordinator,
+} from './desktopSupabaseAuth.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import {
@@ -93,7 +100,10 @@ function installContentSecurityPolicy(): void {
   });
 }
 
-function createWindow(options: { workspacePath: string | undefined }): void {
+function createWindow(options: {
+  workspacePath: string | undefined;
+  authCoordinator: DesktopAuthCoordinator;
+}): void {
   const window = new BrowserWindow({
     width: 960,
     height: 680,
@@ -127,6 +137,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   });
   const desktopAuth = createDesktopSupabaseAuth({
     router: protocolLifecycle.router,
+    coordinator: options.authCoordinator,
     secrets: platform().secrets,
     openExternalUrl: (url) => previewHost.openExternal(url),
     showInfoMessage: async (message) => {
@@ -135,6 +146,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
     showErrorMessage,
     onSessionChanged: () => settingsIpcRef.current?.refreshProfileData(),
     log: console,
+    initializeServerSideAccess: false,
   });
   setOpenBuildDisplay(previewHost.openBuildDisplay);
   const openLogsFolder = async () =>
@@ -195,6 +207,12 @@ function createWindow(options: { workspacePath: string | undefined }): void {
     signIn: () => desktopAuth.signIn(),
     signOut: () => desktopAuth.signOut(),
     getAuthProfileData: () => desktopAuth.getProfileData(),
+    setApiAccessMode: async (mode) => {
+      await getServerSideKeyService().setUseIncludedModelAccess(
+        mode === 'included',
+      );
+      invalidateModelOptionsCache();
+    },
     selectCustomAgentDirectory: async () => {
       const result = await dialog.showOpenDialog(window, {
         title: 'Select Custom Agents Folder',
@@ -271,12 +289,23 @@ if (protocolLifecycle.shouldContinue) {
     .whenReady()
     .then(async () => {
       const platformInit = await initializeElectronPlatform(__dirname);
+      const authCoordinator = createDesktopAuthCoordinator({
+        secrets: platform().secrets,
+        log: console,
+      });
+      initializeDesktopServerSideKeyAccess(console);
       installContentSecurityPolicy();
-      createWindow({ workspacePath: platformInit.workspacePath });
+      createWindow({
+        workspacePath: platformInit.workspacePath,
+        authCoordinator,
+      });
 
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-          createWindow({ workspacePath: platformInit.workspacePath });
+          createWindow({
+            workspacePath: platformInit.workspacePath,
+            authCoordinator,
+          });
         }
       });
     })

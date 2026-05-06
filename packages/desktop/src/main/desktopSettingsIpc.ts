@@ -125,6 +125,7 @@ export interface DesktopSettingsIpcOptions {
   signIn?: () => Promise<void>;
   signOut?: () => Promise<void>;
   getAuthProfileData?: () => Promise<DesktopAuthProfileData>;
+  setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
   secrets?: PlatformSecrets;
   detectLatexSettingsStatus?: () => Promise<LatexSettingsStatus>;
   runInstallCommand?: (command: string) => Promise<void>;
@@ -669,6 +670,13 @@ export function createDesktopSettingsIpc(
     await postProfileData();
   }
 
+  async function setApiAccessMode(
+    mode: 'included' | 'personal',
+  ): Promise<void> {
+    await options.setApiAccessMode?.(mode);
+    await Promise.all([postProfileData(), postModelSelectionData()]);
+  }
+
   async function updateCodexSetting(
     key: WorkspaceStateKey,
     value: string,
@@ -844,11 +852,7 @@ export function createDesktopSettingsIpc(
           runAsync(signOut());
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE:
-          runAsync(
-            result.data.mode === 'included'
-              ? signIn()
-              : Promise.resolve().then(postProfileData),
-          );
+          runAsync(setApiAccessMode(result.data.mode));
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY:
           runAsync(setProviderKey(result.data.provider, result.data.apiKey));

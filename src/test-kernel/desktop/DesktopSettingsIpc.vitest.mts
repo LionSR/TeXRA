@@ -59,6 +59,9 @@ interface DesktopSettingsIpcModule {
     showInfoMessage?: (message: string) => Promise<void>;
     showErrorMessage?: (message: string) => Promise<void>;
     signIn?: () => Promise<void>;
+    signOut?: () => Promise<void>;
+    getAuthProfileData?: () => Promise<Record<string, unknown>>;
+    setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
     secrets?: {
       get(key: string): Promise<string | undefined>;
       set(key: string, value: string): Promise<void>;
@@ -831,6 +834,55 @@ describe('desktop settings IPC', () => {
         (message) =>
           (message as { command?: string }).command ===
           MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      ),
+    ).toBe(true);
+  });
+
+  it('persists desktop API access mode changes before refreshing settings data', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+    const persistedModes: string[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: (message) => posted.push(message),
+      setApiAccessMode: async (mode) => {
+        persistedModes.push(mode);
+      },
+      getAuthProfileData: async () => ({
+        authenticated: false,
+        user: null,
+        tier: 'free',
+        permissions: [],
+        remoteAgents: [],
+        apiAccessMode: 'personal',
+        allowedModels: [],
+        accessExpiresAt: null,
+      }),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+        mode: 'personal',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(persistedModes).toEqual(['personal']);
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+      ),
+    ).toBe(true);
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       ),
     ).toBe(true);
   });
