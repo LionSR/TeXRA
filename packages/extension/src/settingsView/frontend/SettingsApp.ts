@@ -29,6 +29,7 @@ import {
   type HistoryItem,
   type ProviderKeyStatus,
   type ModelSelectionItem,
+  SETTINGS_TAB,
 } from '@shared/schemas';
 import {
   type AgentSelectionItem,
@@ -43,7 +44,11 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_MARK_COMMITS,
 } from '@shared/constants/git';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
+import {
+  DEFAULT_HELPER_MODEL,
+  PROVIDER_DISPLAY_NAMES,
+} from '@shared/constants/providers';
+import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
 import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolicy';
 
 // Local imports - settings view
@@ -75,6 +80,8 @@ const HISTORY_ACTION_COMMANDS: Record<string, string> = {
   'export-md': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
   'export-tex': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
 };
+
+const API_KEY_PROVIDER_SET = new Set<string>(API_KEY_PROVIDER_IDS);
 
 /** Create an event handler that forwards event.detail to a postMessage command. */
 function forwardDetail<T extends Record<string, unknown>>(
@@ -359,6 +366,45 @@ export class SettingsApp extends SettingsAppBase {
     this.providerKeyModal.set(null);
   };
 
+  private getDefaultProviderKeyTarget(): {
+    provider: string;
+    displayName: string;
+  } {
+    const helperProvider = this.modelSelectionItems
+      .get()
+      .find((model) => model.name === this.helperModel.get())?.provider;
+    const providerKeyStatuses = this.providerKeyStatuses.get();
+    const fallbackProvider =
+      providerKeyStatuses.find((entry) => entry.status === 'not-set')
+        ?.provider ?? API_KEY_PROVIDER_IDS[0];
+    const provider =
+      helperProvider && API_KEY_PROVIDER_SET.has(helperProvider)
+        ? helperProvider
+        : fallbackProvider;
+    const status = providerKeyStatuses.find(
+      (entry) => entry.provider === provider,
+    );
+    return {
+      provider,
+      displayName:
+        status?.displayName ?? PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+    };
+  }
+
+  private readonly handleSetDefaultProviderKey = (): void => {
+    const target = this.getDefaultProviderKeyTarget();
+    this.selectedTabIndex.set(SETTINGS_TAB.MODELS);
+
+    if (!this.isDesktopHost()) {
+      postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
+        provider: target.provider,
+      });
+      return;
+    }
+
+    this.providerKeyModal.set(target);
+  };
+
   private handleRemoveProviderKey = forwardDetail(
     SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
   );
@@ -609,6 +655,14 @@ export class SettingsApp extends SettingsAppBase {
         </span>
         <div class="settings-header-actions">
           ${settingsButton}
+          <button
+            class="tab-action-btn settings-header-auth-button"
+            title="Set provider API key"
+            @click=${this.handleSetDefaultProviderKey}
+          >
+            <span class="codicon codicon-key"></span>
+            Set API key
+          </button>
           <button
             class="tab-action-btn settings-header-auth-button"
             title="Sign in"

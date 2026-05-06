@@ -1,3 +1,5 @@
+import { isDesktopProtocolUrl } from './desktopProtocol.js';
+
 interface WorkspacePathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;
   argv?: readonly string[];
@@ -37,6 +39,7 @@ export function withWorkspacePathArg(
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg == null) continue;
+    if (isDesktopProtocolUrl(arg)) continue;
     if (arg === '--texra-workspace') {
       const value = argv[index + 1];
       if (value != null && !value.startsWith('--')) {
@@ -67,7 +70,9 @@ function getWorkspacePathArg(argv: readonly string[]): string | undefined {
       return getPositionalWorkspacePathArg(argv[index + 1]);
     }
     if (arg.startsWith('--texra-workspace=')) {
-      return arg.slice('--texra-workspace='.length).trim() || undefined;
+      return getPositionalWorkspacePathArg(
+        arg.slice('--texra-workspace='.length),
+      );
     }
   }
   return undefined;
@@ -77,6 +82,8 @@ function getPositionalWorkspacePathArg(
   arg: string | undefined,
 ): string | undefined {
   const trimmed = arg?.trim();
-  if (!trimmed || trimmed.startsWith('--')) return undefined;
+  if (!trimmed || trimmed.startsWith('--') || isDesktopProtocolUrl(trimmed)) {
+    return undefined;
+  }
   return trimmed;
 }

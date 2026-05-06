@@ -28,6 +28,7 @@ interface MainViewIpcModule {
       fileSelection?: { handleMessage(message: { command: string }): boolean };
       settings?: { handleMessage(message: { command: string }): boolean };
       progress?: { handleMessage(message: { command: string }): boolean };
+      getAuthStatus?: () => Promise<{ authenticated: boolean }>;
       executeAgent?: (message: unknown) => Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
@@ -73,9 +74,17 @@ async function loadDesktopMainViewIpcModule(electron: {
   return { ...mainViewIpc, ...hostBridge };
 }
 
+function flushAsyncWork(): Promise<void> {
+  return new Promise((resolve) =>
+    setImmediate(() => setImmediate(() => resolve())),
+  );
+}
+
 describe('desktop main-view IPC', () => {
   afterEach(() => {
     vi.doUnmock('electron');
+    vi.doUnmock('@agent/index/agentRegistry');
+    vi.doUnmock('@model/modelOptionsBasic');
   });
 
   it('pushes theme and debug state over the fixed host bridge channel', async () => {
@@ -371,5 +380,74 @@ describe('desktop main-view IPC', () => {
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
     closedListeners.forEach((listener) => listener());
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses desktop auth status when posting main-view startup login state', async () => {
+    let rendererListener:
+      | ((event: { sender: unknown }, message: unknown) => void)
+      | undefined;
+    const ipcMain = {
+      on: vi.fn((channel, listener) => {
+        rendererListener = listener;
+      }),
+      off: vi.fn(),
+    };
+    const nativeTheme = {
+      shouldUseDarkColors: false,
+      shouldUseHighContrastColors: false,
+      on: vi.fn(),
+      off: vi.fn(),
+    };
+    vi.doMock('@agent/index/agentRegistry', () => ({
+      computeAgentOptionsData: vi.fn(async () => ({
+        workflow: [],
+        toolUse: [],
+      })),
+    }));
+    vi.doMock('@model/modelOptionsBasic', () => ({
+      buildBasicModelOptionsData: vi.fn(() => []),
+    }));
+    const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
+      await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
+    const sends: Array<{ channel: string; message: unknown }> = [];
+    const webContents = {
+      isDestroyed: () => false,
+      send: vi.fn((channel, message) => sends.push({ channel, message })),
+    };
+    const window = {
+      isDestroyed: () => false,
+      once: vi.fn(),
+      webContents,
+    };
+
+    installDesktopMainViewIpc(window, {
+      getAuthStatus: async () => ({ authenticated: true }),
+    });
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'main' },
+    );
+    await flushAsyncWork();
+
+    await vi.waitFor(() =>
+      expect(
+        sends.filter(
+          ({ channel }) => channel === ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        ),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: { command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER },
+          }),
+        ]),
+      ),
+    );
+    expect(
+      sends.some(
+        ({ message }) =>
+          (message as { command?: string }).command ===
+          MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
+      ),
+    ).toBe(false);
   });
 });
