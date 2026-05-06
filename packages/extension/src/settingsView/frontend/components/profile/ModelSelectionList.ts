@@ -96,7 +96,9 @@ export class ModelSelectionList extends LitElement {
     );
   }
 
-  private getProviderKeyStatus(provider: string): ProviderKeyStatus | undefined {
+  private getProviderKeyStatus(
+    provider: string,
+  ): ProviderKeyStatus | undefined {
     return resolveProviderKeyRows(this.providerKeyStatuses).find(
       (entry) => entry.provider === provider,
     );

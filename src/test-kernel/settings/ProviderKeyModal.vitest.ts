@@ -9,8 +9,8 @@ type ProviderKeyModalElement = HTMLElement & {
 };
 
 describe('ProviderKeyModal', () => {
-  useLitComponentTestDom(() =>
-    import('@settingsView/frontend/components/profile/ProviderKeyModal'),
+  useLitComponentTestDom(
+    () => import('@settingsView/frontend/components/profile/ProviderKeyModal'),
   );
 
   it('emits the trimmed key on submit without rendering it back after save', async () => {

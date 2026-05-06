@@ -22,8 +22,9 @@ const deepseekModel: ModelSelectionItem = {
 };
 
 describe('ModelSelectionList provider key actions', () => {
-  useLitComponentTestDom(() =>
-    import('@settingsView/frontend/components/profile/ModelSelectionList'),
+  useLitComponentTestDom(
+    () =>
+      import('@settingsView/frontend/components/profile/ModelSelectionList'),
   );
 
   it('shows direct API-key actions in model provider groups before profile load', async () => {
