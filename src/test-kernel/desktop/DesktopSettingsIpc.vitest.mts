@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
@@ -46,6 +46,8 @@ interface DesktopSettingsIpcModule {
     refreshToolAvailability?: () => Promise<void>;
     getCustomAgentDirectory?: () => Promise<string>;
     selectCustomAgentDirectory?: () => Promise<string | undefined>;
+    openPath?: (filePath: string) => Promise<void>;
+    revealPath?: (filePath: string) => Promise<void>;
     openExternalUrl?: (url: string) => Promise<void>;
     installToolExtension?: (extensionId: string) => Promise<void>;
     promptSecret?: (input: {
@@ -866,6 +868,29 @@ describe('desktop settings IPC', () => {
           MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       ),
     ).toBe(true);
+  });
+
+  it('opens the desktop custom agent directory through the shell opener', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const openPath = vi.fn(async (_filePath: string) => undefined);
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      getCustomAgentDirectory: async () => '/agents/custom',
+      openPath,
+      postToRenderer: () => undefined,
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER,
+        folderType: 'custom',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(openPath).toHaveBeenCalledWith('/agents/custom');
   });
 
   it('persists desktop API access mode changes before refreshing settings data', async () => {

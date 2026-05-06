@@ -110,6 +110,8 @@ export interface DesktopSettingsIpcOptions {
   refreshToolAvailability?: () => Promise<void>;
   getCustomAgentDirectory?: () => Promise<string>;
   selectCustomAgentDirectory?: () => Promise<string | undefined>;
+  openPath?: (filePath: string) => Promise<void>;
+  revealPath?: (filePath: string) => Promise<void>;
   openExternalUrl?: (url: string) => Promise<void>;
   installToolExtension?: (extensionId: string) => Promise<void>;
   promptSecret?: (input: {
@@ -349,14 +351,13 @@ export function createDesktopSettingsIpc(
   }
 
   function getAgentDirectory(source: AgentSource): Promise<string | undefined> {
-    const directories = getAgentDirectories();
     switch (source) {
       case 'custom':
         return getCustomAgentDirectory();
       case 'builtInWorkflow':
-        return directories.builtIn();
+        return getAgentDirectories().builtIn();
       case 'builtInToolUse':
-        return directories.builtInToolUse();
+        return getAgentDirectories().builtInToolUse();
       case 'remote':
         return Promise.resolve(undefined);
     }
@@ -806,6 +807,48 @@ export function createDesktopSettingsIpc(
     ]);
   }
 
+  async function openAgentYaml(input: {
+    source: AgentSource;
+    name: string;
+    variant: 'base' | 'multiple';
+  }): Promise<void> {
+    const result = agentDirectoryController.planOpenAgentYaml(input);
+    if (!result.ok) {
+      await options.showErrorMessage?.(
+        result.reason === 'missingAgent'
+          ? `Agent not found: ${input.name}`
+          : `No configuration file found for agent: ${input.name}`,
+      );
+      return;
+    }
+    await options.openPath?.(result.path);
+  }
+
+  async function openAgentFolder(): Promise<void> {
+    const result = await agentDirectoryController.planOpenAgentFolder('custom');
+    if (!result.ok) {
+      await options.showErrorMessage?.(
+        'No custom agent directory is available',
+      );
+      return;
+    }
+    await options.openPath?.(result.path);
+  }
+
+  async function revealAgentFile(input: {
+    source: AgentSource;
+    name: string;
+  }): Promise<void> {
+    const result = agentDirectoryController.planRevealAgentFile(input);
+    if (!result.ok) {
+      await options.showErrorMessage?.(
+        `Agent not found or has no file: ${input.name}`,
+      );
+      return;
+    }
+    await (options.revealPath ?? options.openPath)?.(result.path);
+  }
+
   async function applyAgentModePreset(presetId: string): Promise<void> {
     await loadAgentRegistry();
     const result = await agentCatalogController.applyPreset(presetId);
@@ -1029,6 +1072,26 @@ export function createDesktopSettingsIpc(
               category: result.data.category,
               source: result.data.source,
               enabled: result.data.enabled,
+            }),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML:
+          runAsync(
+            openAgentYaml({
+              source: result.data.agentSource,
+              name: result.data.agentName,
+              variant: result.data.variant,
+            }),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER:
+          runAsync(openAgentFolder());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE:
+          runAsync(
+            revealAgentFile({
+              source: result.data.agentSource,
+              name: result.data.agentName,
             }),
           );
           return true;
