@@ -31,6 +31,15 @@ export interface DesktopToolEditApprovalOptions {
   tempRoot?: string;
 }
 
+export interface DesktopToolEditApprovalController {
+  handleAction(payload: {
+    requestId: string;
+    action: ToolEditApprovalAction;
+    feedback?: string;
+  }): boolean;
+  dispose(): void;
+}
+
 interface DesktopPendingToolEditApproval extends LatexPreviewEntry {
   requestId: string;
   request: ToolEditApprovalRequest;
@@ -44,7 +53,7 @@ interface DesktopPendingToolEditApproval extends LatexPreviewEntry {
 
 let approvalCounter = 0;
 
-export class DesktopToolEditApprovalController {
+class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalController {
   private readonly pending = new Map<string, DesktopPendingToolEditApproval>();
   private disposed = false;
 
@@ -253,5 +262,5 @@ export class DesktopToolEditApprovalController {
 export function createDesktopToolEditApprovalController(
   options: DesktopToolEditApprovalOptions = {},
 ): DesktopToolEditApprovalController {
-  return new DesktopToolEditApprovalController(options);
+  return new DesktopToolEditApprovalControllerImpl(options);
 }
