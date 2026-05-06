@@ -1,4 +1,6 @@
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
+import { APIUserAbortError as AnthropicAPIUserAbortError } from '@anthropic-ai/sdk';
+import { APIUserAbortError as OpenAIAPIUserAbortError } from 'openai';
 import {
   type ErrorContext,
   type ErrorLogData,
@@ -362,7 +364,11 @@ export function takeTail(text: string, maxChars: number): string {
 
 /** True if `err` is an SDK user-abort error (OpenAI or Anthropic). */
 export function isUserAbort(err: unknown): boolean {
-  return getErrorClassNames(err).includes('APIUserAbortError');
+  return (
+    err instanceof OpenAIAPIUserAbortError ||
+    err instanceof AnthropicAPIUserAbortError ||
+    getErrorClassNames(err).includes('APIUserAbortError')
+  );
 }
 
 /** Factory for symbol-keyed error metadata. Creates matched attach/detect

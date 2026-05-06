@@ -1,6 +1,12 @@
 // Third-party imports
-import { AuthenticationError as AnthropicAuthenticationError } from '@anthropic-ai/sdk';
-import { AuthenticationError as OpenAIAuthenticationError } from 'openai';
+import {
+  APIUserAbortError as AnthropicAPIUserAbortError,
+  AuthenticationError as AnthropicAuthenticationError,
+} from '@anthropic-ai/sdk';
+import {
+  APIUserAbortError as OpenAIAPIUserAbortError,
+  AuthenticationError as OpenAIAuthenticationError,
+} from 'openai';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - common errors
@@ -27,6 +33,11 @@ describe('formatProviderHttpError', () => {
 
   it('matches SDK abort errors through the prototype chain', () => {
     expect(isUserAbort(new APIUserAbortError('aborted'))).toBe(true);
+  });
+
+  it('preserves native SDK abort detection for packaged builds', () => {
+    expect(isUserAbort(new OpenAIAPIUserAbortError())).toBe(true);
+    expect(isUserAbort(new AnthropicAPIUserAbortError())).toBe(true);
   });
 
   it('preserves provider context for native OpenAI HTTP errors', () => {

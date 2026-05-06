@@ -244,8 +244,8 @@ async function prepareViewHtml(view) {
   return {
     htmlPath,
     name: view.name,
-    seedMessages: view.seedMessages,
     tagName: view.tagName,
+    seedMessages: view.seedMessages ?? [],
   };
 }
 
