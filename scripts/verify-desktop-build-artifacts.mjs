@@ -7,6 +7,7 @@ import {
   getDesktopSharedSourceDirs,
   getDesktopVscodeFreeSourceDirs,
   readJson,
+  requiredMonacoWorkers,
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
@@ -69,13 +70,6 @@ const rendererAssetsDir = path.join(desktopDir, 'dist', 'renderer', 'assets');
 const rendererAssets = fs.existsSync(rendererAssetsDir)
   ? collectFiles(rendererAssetsDir)
   : [];
-const requiredMonacoWorkers = [
-  'editor.worker',
-  'json.worker',
-  'css.worker',
-  'html.worker',
-  'ts.worker',
-];
 if (!rendererAssets.some((filePath) => filePath.endsWith('.js'))) {
   failures.push('Desktop renderer build did not emit a JavaScript asset.');
 }

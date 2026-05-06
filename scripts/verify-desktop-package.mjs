@@ -17,6 +17,7 @@ import {
 import {
   getDesktopSharedSourceDirs,
   getDesktopVscodeFreeSourceDirs,
+  requiredMonacoWorkers,
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
@@ -74,13 +75,6 @@ const desktopStartupImportKinds = new Set([
   'dynamic-import',
   'import-statement',
 ]);
-const requiredMonacoWorkers = [
-  'editor.worker',
-  'json.worker',
-  'css.worker',
-  'html.worker',
-  'ts.worker',
-];
 
 async function exists(path) {
   try {
