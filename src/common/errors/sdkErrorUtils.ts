@@ -232,9 +232,7 @@ function detectProvider(err: unknown): string | undefined {
     return undefined;
   }
 
-  const candidate = err as { provider?: string } & {
-    constructor?: { name?: string };
-  };
+  const candidate = err as { provider?: string };
 
   if (isString(candidate.provider)) {
     return candidate.provider;
@@ -243,9 +241,6 @@ function detectProvider(err: unknown): string | undefined {
   const loweredClassNames = getErrorClassNames(err).map((className) =>
     className.toLowerCase(),
   );
-  if (isString(candidate.constructor?.name)) {
-    loweredClassNames.push(candidate.constructor.name.toLowerCase());
-  }
 
   // Match SDK class-name fragments, then normalize aliases to the
   // canonical API-provider names used by SecretManager / model handlers.
