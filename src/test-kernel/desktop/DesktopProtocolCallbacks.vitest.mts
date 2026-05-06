@@ -79,6 +79,19 @@ describe('desktop protocol callbacks', () => {
     });
   });
 
+  it('accepts full callback URLs with a trailing slash', () => {
+    expect(
+      parseDesktopProtocolCallback(
+        'texra://texra-ai.texra/auth-callback/?state=abc',
+      ),
+    ).toEqual({
+      rawUrl: 'texra://texra-ai.texra/auth-callback/?state=abc',
+      path: '/auth-callback',
+      query: 'state=abc',
+      fragment: '',
+    });
+  });
+
   it('accepts extension-auth-callback URLs for shared auth parsing', () => {
     expect(
       parseDesktopProtocolCallback(
@@ -125,6 +138,21 @@ describe('desktop protocol callbacks', () => {
         path: '/auth-callback',
         query: 'state=startup',
       }),
+    );
+  });
+
+  it('routes argv callbacks when routeArgv is passed as a standalone function', () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const listener = vi.fn();
+    router.subscribe(listener);
+
+    const { routeArgv } = router;
+    expect(
+      routeArgv(['texra://texra-ai.texra/auth-callback?state=standalone']),
+    ).toBe(1);
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'state=standalone' }),
     );
   });
 

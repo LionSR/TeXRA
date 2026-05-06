@@ -1,6 +1,11 @@
 import { isAuthCallbackPath } from '@auth/core/authCallback';
+import {
+  isDesktopProtocolUrl,
+  TEXRA_PROTOCOL,
+  TEXRA_PROTOCOL_SCHEME,
+} from '../desktopProtocol.js';
 
-export const TEXRA_PROTOCOL = 'texra';
+export { TEXRA_PROTOCOL };
 
 export interface DesktopProtocolCallback {
   rawUrl: string;
@@ -73,7 +78,7 @@ export function parseDesktopProtocolCallback(
     return null;
   }
 
-  if (url.protocol !== `${TEXRA_PROTOCOL}:`) return null;
+  if (url.protocol !== TEXRA_PROTOCOL_SCHEME) return null;
 
   const path = normalizeProtocolPath(url);
   if (!isAuthCallbackPath(path)) return null;
@@ -109,24 +114,26 @@ export function createDesktopProtocolCallbackRouter(
     }
   }
 
-  return {
-    routeUrl(rawUrl) {
-      const callback = parseDesktopProtocolCallback(rawUrl);
-      if (!callback) {
-        options.log?.debug?.(
-          'Ignoring unsupported desktop protocol callback URL',
-        );
-        return false;
-      }
+  function routeUrl(rawUrl: string): boolean {
+    const callback = parseDesktopProtocolCallback(rawUrl);
+    if (!callback) {
+      options.log?.debug?.(
+        'Ignoring unsupported desktop protocol callback URL',
+      );
+      return false;
+    }
 
-      deliver(callback);
-      return true;
-    },
+    deliver(callback);
+    return true;
+  }
+
+  return {
+    routeUrl,
 
     routeArgv(argv) {
       let routedCount = 0;
       for (const rawUrl of findDesktopProtocolUrls(argv)) {
-        routedCount += this.routeUrl(rawUrl) ? 1 : 0;
+        routedCount += routeUrl(rawUrl) ? 1 : 0;
       }
       return routedCount;
     },
@@ -178,16 +185,15 @@ export function installDesktopProtocolCallbackLifecycle(
 }
 
 function normalizeProtocolPath(url: URL): string {
-  if (url.pathname && url.pathname !== '/') return url.pathname;
-  return url.hostname ? `/${url.hostname}` : '';
-}
-
-function isDesktopProtocolUrl(rawUrl: string): boolean {
-  try {
-    return new URL(rawUrl).protocol === `${TEXRA_PROTOCOL}:`;
-  } catch {
-    return false;
-  }
+  const rawPath =
+    url.pathname && url.pathname !== '/'
+      ? url.pathname
+      : url.hostname
+        ? `/${url.hostname}`
+        : '';
+  return rawPath.length > 1 && rawPath.endsWith('/')
+    ? rawPath.slice(0, -1)
+    : rawPath;
 }
 
 function registerProtocolClient(options: InstallDesktopProtocolOptions): void {

@@ -1,11 +1,10 @@
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, session, shell } from 'electron';
 
 import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
@@ -21,10 +20,9 @@ import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
+import { createDesktopSupabaseAuth } from './desktopSupabaseAuth.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeElectronPlatform } from './platform/index.js';
-import { buildDesktopSettingsTabMessage } from '../desktopCommandSurface.js';
-import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
@@ -39,7 +37,7 @@ const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
   app,
   argv: process.argv.slice(1),
   execPath: process.execPath,
-  devAppArg: process.argv[1],
+  devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
   focusMainWindow: () => {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -117,12 +115,26 @@ function createWindow(options: { workspacePath: string | undefined }): void {
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
+  const settingsIpcRef: {
+    current?: ReturnType<typeof createDesktopSettingsIpc>;
+  } = {};
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
   };
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
+  });
+  const desktopAuth = createDesktopSupabaseAuth({
+    router: protocolLifecycle.router,
+    secrets: platform().secrets,
+    openExternalUrl: (url) => previewHost.openExternal(url),
+    showInfoMessage: async (message) => {
+      await dialog.showMessageBox(window, { type: 'info', message });
+    },
+    showErrorMessage,
+    onSessionChanged: () => settingsIpcRef.current?.refreshProfileData(),
+    log: console,
   });
   setOpenBuildDisplay(previewHost.openBuildDisplay);
   const openLogsFolder = async () =>
@@ -180,22 +192,9 @@ function createWindow(options: { workspacePath: string | undefined }): void {
     showErrorMessage: async (message) => {
       await dialog.showMessageBox(window, { type: 'error', message });
     },
-    signIn: async () => {
-      await dialog.showMessageBox(window, {
-        type: 'info',
-        message:
-          'Researcher Access sign-in is not connected in this desktop build',
-        detail:
-          'Use Settings > Models to add a provider API key, or use the TeXRA VS Code extension for included-access sign-in while desktop auth is completed.',
-      });
-      ipcRef.current?.postToRenderer({
-        command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-        route: 'settings',
-      });
-      ipcRef.current?.postToRenderer(
-        buildDesktopSettingsTabMessage(SETTINGS_TAB.MODELS),
-      );
-    },
+    signIn: () => desktopAuth.signIn(),
+    signOut: () => desktopAuth.signOut(),
+    getAuthProfileData: () => desktopAuth.getProfileData(),
     selectCustomAgentDirectory: async () => {
       const result = await dialog.showOpenDialog(window, {
         title: 'Select Custom Agents Folder',
@@ -225,6 +224,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
     },
     onError: reportAsyncError,
   });
+  settingsIpcRef.current = settingsIpc;
   const progressIpc = createDesktopProgressIpc({
     progress: agentExecution.progress,
     onAsyncError: reportAsyncError,
@@ -255,6 +255,7 @@ function createWindow(options: { workspacePath: string | undefined }): void {
       mainWindow = null;
     }
     agentExecution.dispose();
+    desktopAuth.dispose();
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {

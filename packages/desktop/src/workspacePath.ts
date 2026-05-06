@@ -1,3 +1,5 @@
+import { isDesktopProtocolUrl } from './desktopProtocol.js';
+
 interface WorkspacePathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;
   argv?: readonly string[];
@@ -5,7 +7,6 @@ interface WorkspacePathOptions {
 }
 
 const WORKSPACE_PRESENT_ARG = '--texra-has-workspace=';
-const DESKTOP_PROTOCOL = 'texra:';
 export const DESKTOP_WORKSPACE_PATH_STATE_KEY = 'texra.desktop.workspacePath';
 
 export function getWorkspacePathInput(
@@ -92,9 +93,5 @@ function getPositionalWorkspacePathArg(
 }
 
 function isDesktopProtocolCallbackArg(arg: string): boolean {
-  try {
-    return new URL(arg).protocol === DESKTOP_PROTOCOL;
-  } catch {
-    return false;
-  }
+  return isDesktopProtocolUrl(arg);
 }

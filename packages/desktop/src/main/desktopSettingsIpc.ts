@@ -51,6 +51,7 @@ import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   SettingsViewInboundMessageSchema,
   type LatexSettingsStatus,
+  type RemoteAgent,
   type ProviderKeyStatus,
   type ReasoningLevel,
   type ToolDashboardItem,
@@ -94,6 +95,17 @@ type ToolDashboardBuilder = (
   cachedResults?: ExternalToolCheckResult[],
 ) => Promise<ToolDashboardItem[]>;
 
+export interface DesktopAuthProfileData {
+  authenticated: boolean;
+  user: { email: string; id: string } | null;
+  tier: string;
+  permissions: string[];
+  remoteAgents: RemoteAgent[];
+  apiAccessMode: 'included' | 'personal';
+  allowedModels: string[] | null;
+  accessExpiresAt?: string | null;
+}
+
 export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
   sendStartupCatalogData?: boolean;
@@ -120,6 +132,7 @@ export interface DesktopSettingsIpcOptions {
   showErrorMessage?: (message: string) => Promise<void>;
   signIn?: () => Promise<void>;
   signOut?: () => Promise<void>;
+  getAuthProfileData?: () => Promise<DesktopAuthProfileData>;
   secrets?: PlatformSecrets;
   detectLatexSettingsStatus?: () => Promise<LatexSettingsStatus>;
   runInstallCommand?: (command: string) => Promise<void>;
@@ -131,13 +144,28 @@ export interface DesktopSettingsIpcOptions {
   onError?: (error: unknown) => void;
 }
 
-export type DesktopSettingsIpc = DesktopMessageHandler;
+export interface DesktopSettingsIpc extends DesktopMessageHandler {
+  refreshProfileData(): Promise<void>;
+}
 
 const emptySecrets: PlatformSecrets = {
   get: () => Promise.resolve(undefined),
   set: () => Promise.resolve(),
   delete: () => Promise.resolve(),
 };
+
+function defaultAuthProfileData(): DesktopAuthProfileData {
+  return {
+    authenticated: false,
+    user: null,
+    tier: FREE_TIER,
+    permissions: [],
+    remoteAgents: [],
+    apiAccessMode: 'personal',
+    allowedModels: [],
+    accessExpiresAt: null,
+  };
+}
 
 async function buildDefaultToolDashboardItems(
   cachedResults?: ExternalToolCheckResult[],
@@ -415,15 +443,11 @@ export function createDesktopSettingsIpc(
   }
 
   async function postProfileData(): Promise<void> {
+    const authProfile =
+      (await options.getAuthProfileData?.()) ?? defaultAuthProfileData();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      authenticated: false,
-      user: null,
-      tier: FREE_TIER,
-      permissions: [],
-      remoteAgents: [],
-      apiAccessMode: 'personal',
-      allowedModels: [],
+      ...authProfile,
       tierConstants: { ultra: ULTRA_TIER, max: MAX_TIER },
       providerKeyStatuses: await getProviderKeyStatuses(),
       globalStreamingDefault: getGlobalStreaming(),
@@ -808,6 +832,8 @@ export function createDesktopSettingsIpc(
   applyCurrentGitAuthorSettings();
 
   return {
+    refreshProfileData: postProfileData,
+
     handleMessage(message: DesktopCommandMessage) {
       const result = SettingsViewInboundMessageSchema.safeParse(message);
       if (!result.success) return false;
