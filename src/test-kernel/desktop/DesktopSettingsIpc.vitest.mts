@@ -59,6 +59,9 @@ interface DesktopSettingsIpcModule {
     showInfoMessage?: (message: string) => Promise<void>;
     showErrorMessage?: (message: string) => Promise<void>;
     signIn?: () => Promise<void>;
+    signOut?: () => Promise<void>;
+    getAuthProfileData?: () => Promise<Record<string, unknown>>;
+    setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
     secrets?: {
       get(key: string): Promise<string | undefined>;
       set(key: string, value: string): Promise<void>;
@@ -68,6 +71,7 @@ interface DesktopSettingsIpcModule {
     runInstallCommand?: (command: string) => Promise<void>;
     onError?: (error: unknown) => void;
   }): {
+    refreshAuthDependentData(): Promise<void>;
     handleMessage(
       message: { command: string } & Record<string, unknown>,
     ): boolean;
@@ -477,6 +481,35 @@ describe('desktop settings IPC', () => {
     expect(secrets.values.get('apiKey.google')).toBe('sk-prompt');
   });
 
+  it('delegates desktop sign-in without posting stale profile data', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+    let signInCalls = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: (message) => posted.push(message),
+      signIn: async () => {
+        signInCalls += 1;
+      },
+    });
+
+    expect(
+      settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_IN }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(signInCalls).toBe(1);
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+      ),
+    ).toBe(false);
+  });
+
   it('round-trips LaTeX config writes through workspace state and refreshes the renderer', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();
@@ -833,6 +866,175 @@ describe('desktop settings IPC', () => {
           MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       ),
     ).toBe(true);
+  });
+
+  it('persists desktop API access mode changes before refreshing settings data', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+    const persistedModes: string[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: (message) => posted.push(message),
+      setApiAccessMode: async (mode) => {
+        persistedModes.push(mode);
+      },
+      getAuthProfileData: async () => ({
+        authenticated: false,
+        user: null,
+        tier: 'free',
+        permissions: [],
+        remoteAgents: [],
+        apiAccessMode: 'personal',
+        allowedModels: [],
+        accessExpiresAt: null,
+      }),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+        mode: 'personal',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(persistedModes).toEqual(['personal']);
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+      ),
+    ).toBe(true);
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ),
+    ).toBe(true);
+  });
+
+  it('clears OpenRouter routing when desktop users enable included access', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    globalState.values.set(GlobalStateKey.USE_OPENROUTER, true);
+    const persistedModes: string[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      postToRenderer: () => {},
+      setApiAccessMode: async (mode) => {
+        persistedModes.push(mode);
+      },
+      getAuthProfileData: async () => ({
+        authenticated: false,
+        user: null,
+        tier: 'free',
+        permissions: [],
+        remoteAgents: [],
+        apiAccessMode: 'personal',
+        allowedModels: [],
+        accessExpiresAt: null,
+      }),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+        mode: 'included',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(persistedModes).toEqual(['included']);
+    expect(globalState.values.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
+  });
+
+  it('refreshes agent and model options after desktop auth changes', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+    let loadCount = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: (message) => posted.push(message),
+      loadAgents: async () => {
+        loadCount += 1;
+      },
+      loadAgentOptionsData: async () => ({
+        workflow: [{ name: 'remote-workflow' }],
+        toolUse: [{ name: 'remote-tool' }],
+      }),
+      getAuthProfileData: async () => ({
+        authenticated: true,
+        user: { email: 'user@example.com', id: 'user-1' },
+        tier: 'free',
+        permissions: [],
+        remoteAgents: [],
+        apiAccessMode: 'included',
+        allowedModels: [],
+        accessExpiresAt: null,
+      }),
+    });
+
+    await settings.refreshAuthDependentData();
+
+    expect(loadCount).toBe(1);
+    expect(
+      posted.map((message) => (message as { command?: string }).command),
+    ).toEqual(
+      expect.arrayContaining([
+        SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+        SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+        SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+        MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+        MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      ]),
+    );
+  });
+
+  it('does not duplicate profile refresh after delegated desktop sign-out', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const posted: unknown[] = [];
+    let signOutCalls = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: (message) => posted.push(message),
+      signOut: async () => {
+        signOutCalls += 1;
+      },
+      getAuthProfileData: async () => ({
+        authenticated: false,
+        user: null,
+        tier: 'free',
+        permissions: [],
+        remoteAgents: [],
+        apiAccessMode: 'personal',
+        allowedModels: [],
+        accessExpiresAt: null,
+      }),
+    });
+
+    expect(
+      settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_OUT }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(signOutCalls).toBe(1);
+    expect(
+      posted.filter(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
+      ),
+    ).toEqual([]);
   });
 
   it('ignores unsupported or malformed settings messages', async () => {
