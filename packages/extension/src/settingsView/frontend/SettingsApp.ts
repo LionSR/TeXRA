@@ -619,6 +619,7 @@ export class SettingsApp extends SettingsAppBase {
   private renderHeader(): TemplateResult {
     const settingsButton = html`
       <wa-button
+        aria-label="Open VS Code Settings"
         appearance="plain"
         size="s"
         title="Open VS Code Settings"

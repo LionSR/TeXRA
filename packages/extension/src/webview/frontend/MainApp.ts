@@ -1923,6 +1923,7 @@ export class MainApp extends MainAppBase {
           </vscode-tabs>
           <wa-button
             class="header-action"
+            aria-label="Open dashboard"
             appearance="plain"
             size="s"
             title="Open dashboard"
@@ -1932,6 +1933,7 @@ export class MainApp extends MainAppBase {
           </wa-button>
           <wa-button
             class="header-action"
+            aria-label="Open progress sessions in editor"
             appearance="plain"
             size="s"
             title="Open progress sessions in editor"

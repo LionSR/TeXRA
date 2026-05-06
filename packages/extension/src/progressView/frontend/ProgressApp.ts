@@ -570,6 +570,7 @@ export class ProgressApp extends ProgressAppBase {
 
           <wa-button
             class="header-action"
+            aria-label="Open dashboard"
             appearance="plain"
             size="s"
             title="Open dashboard"
@@ -579,6 +580,7 @@ export class ProgressApp extends ProgressAppBase {
           </wa-button>
           <wa-button
             class="header-action"
+            aria-label=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
             appearance="plain"
             size="s"
             title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
