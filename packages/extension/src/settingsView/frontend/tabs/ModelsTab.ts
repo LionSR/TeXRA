@@ -120,6 +120,7 @@ export class ModelsTab extends LitElement {
           .authenticated=${this.authenticated}
           .apiAccessMode=${this.apiAccessMode}
           .allowedModels=${this.allowedModels}
+          .providerKeyStatuses=${this.providerKeyStatuses}
           .preferShortModelNames=${this.preferShortModelNames}
         ></model-selection-list>
       </div>

@@ -1,5 +1,6 @@
-import { JSDOM } from 'jsdom';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
+import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type ProviderKeyModalElement = HTMLElement & {
   provider: string;
@@ -7,79 +8,10 @@ type ProviderKeyModalElement = HTMLElement & {
   updateComplete: Promise<boolean>;
 };
 
-let dom: JSDOM;
-const domGlobalKeys = [
-  'window',
-  'document',
-  'Document',
-  'customElements',
-  'HTMLElement',
-  'HTMLInputElement',
-  'CustomEvent',
-  'Event',
-  'KeyboardEvent',
-  'MouseEvent',
-  'ShadowRoot',
-] as const;
-const previousGlobals = new Map<
-  (typeof domGlobalKeys)[number],
-  { hadValue: boolean; value: unknown }
->();
-
 describe('ProviderKeyModal', () => {
-  beforeAll(async () => {
-    dom = new JSDOM('<!doctype html><html><body></body></html>', {
-      url: 'https://texra.local',
-    });
-
-    const replacements = {
-      window: dom.window,
-      document: dom.window.document,
-      Document: dom.window.Document,
-      customElements: dom.window.customElements,
-      HTMLElement: dom.window.HTMLElement,
-      HTMLInputElement: dom.window.HTMLInputElement,
-      CustomEvent: dom.window.CustomEvent,
-      Event: dom.window.Event,
-      KeyboardEvent: dom.window.KeyboardEvent,
-      MouseEvent: dom.window.MouseEvent,
-      ShadowRoot: dom.window.ShadowRoot,
-    } satisfies Record<(typeof domGlobalKeys)[number], unknown>;
-
-    for (const key of domGlobalKeys) {
-      previousGlobals.set(key, {
-        hadValue: Object.hasOwn(globalThis, key),
-        value: globalThis[key as keyof typeof globalThis],
-      });
-      Object.defineProperty(globalThis, key, {
-        configurable: true,
-        writable: true,
-        value: replacements[key],
-      });
-    }
-
-    await import('@settingsView/frontend/components/profile/ProviderKeyModal');
-  });
-
-  beforeEach(() => {
-    document.body.replaceChildren();
-  });
-
-  afterAll(() => {
-    dom.window.close();
-    for (const key of domGlobalKeys) {
-      const previous = previousGlobals.get(key);
-      if (previous?.hadValue) {
-        Object.defineProperty(globalThis, key, {
-          configurable: true,
-          writable: true,
-          value: previous.value,
-        });
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
-  });
+  useLitComponentTestDom(
+    () => import('@settingsView/frontend/components/profile/ProviderKeyModal'),
+  );
 
   it('emits the trimmed key on submit without rendering it back after save', async () => {
     const modal = document.createElement(
