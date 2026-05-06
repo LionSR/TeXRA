@@ -1919,11 +1919,19 @@ export class MainApp extends MainAppBase {
             @vsc-tabs-select=${this.onViewTabSelect}
           >
             <vscode-tab-header slot="header">
-              <span class="codicon codicon-edit"></span>
+              <wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="pencil"
+                variant="solid"
+              ></wa-icon>
               Launcher
             </vscode-tab-header>
             <vscode-tab-header slot="header">
-              <span class="codicon codicon-server-process"></span>
+              <wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="robot"
+                variant="solid"
+              ></wa-icon>
               Progress
             </vscode-tab-header>
           </vscode-tabs>
