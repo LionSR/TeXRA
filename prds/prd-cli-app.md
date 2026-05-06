@@ -1275,7 +1275,7 @@ stdio JSON-RPC 2.0, one process per client connection, exactly the Claude Code /
 
 ### 24.4 Permission propagation
 
-The MCP client (Claude Code, Codex, etc.) is itself a permission boundary. TeXRA's MCP-server mode trusts the client to have already obtained user approval for the _call_ (e.g., Claude Code asked the user "let texra\_\_run_polish run?"). What TeXRA still owns is what the _agent inside_ TeXRA does — the bash and edit gates inside a `run_chat` orchestrator session.
+The MCP client (Claude Code, Codex, etc.) is itself a permission boundary. TeXRA's MCP-server mode trusts the client to have already obtained user approval for the _call_ (e.g., Claude Code asked the user "let texra\_\_run*polish run?"). What TeXRA still owns is what the \_agent inside* TeXRA does — the bash and edit gates inside a `run_chat` orchestrator session.
 
 Three policies for those inner gates, selected by tool argument:
 
