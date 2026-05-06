@@ -677,6 +677,13 @@ export function createDesktopSettingsIpc(
     mode: 'included' | 'personal',
   ): Promise<void> {
     await options.setApiAccessMode?.(mode);
+    if (
+      mode === 'included' &&
+      globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
+    ) {
+      await globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+      invalidateModelOptionsCache();
+    }
     await Promise.all([postProfileData(), postModelSelectionData()]);
   }
 

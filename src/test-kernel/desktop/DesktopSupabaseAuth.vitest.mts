@@ -43,31 +43,43 @@ function createCoordinator() {
   };
 }
 
+function createSecrets() {
+  return {
+    get: vi.fn(async () => undefined),
+    set: vi.fn(async () => {}),
+    delete: vi.fn(async () => {}),
+  };
+}
+
+function createOAuthClient() {
+  return {
+    auth: {
+      signInWithOAuth: vi.fn(async () => ({
+        data: { url: 'https://auth.example.test/start' },
+        error: null,
+      })),
+    },
+  };
+}
+
 describe('desktop Supabase auth', () => {
   it('opens Supabase OAuth with the desktop texra callback URI', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
-    const signInWithOAuth = vi.fn(async () => ({
-      data: { url: 'https://auth.example.test/start' },
-      error: null,
-    }));
+    const oauthClient = createOAuthClient();
     const openExternalUrl = vi.fn(async () => {});
     const auth = createDesktopSupabaseAuth({
       router,
       coordinator,
-      oauthClient: { auth: { signInWithOAuth } },
-      secrets: {
-        get: vi.fn(async () => undefined),
-        set: vi.fn(async () => {}),
-        delete: vi.fn(async () => {}),
-      },
+      oauthClient,
+      secrets: createSecrets(),
       openExternalUrl,
       initializeServerSideAccess: false,
     });
 
     await auth.signIn();
 
-    expect(signInWithOAuth).toHaveBeenCalledWith({
+    expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledWith({
       provider: 'github',
       options: { redirectTo: 'texra://texra-ai.texra/auth-callback' },
     });
@@ -84,21 +96,14 @@ describe('desktop Supabase auth', () => {
     const auth = createDesktopSupabaseAuth({
       router,
       coordinator,
-      oauthClient: {
-        auth: {
-          signInWithOAuth: vi.fn(async () => ({ data: {}, error: null })),
-        },
-      },
-      secrets: {
-        get: vi.fn(async () => undefined),
-        set: vi.fn(async () => {}),
-        delete: vi.fn(async () => {}),
-      },
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       onSessionChanged,
       initializeServerSideAccess: false,
     });
 
+    await auth.signIn();
     router.routeUrl(
       'texra://texra-ai.texra/auth-callback#access_token=access-token&refresh_token=refresh-token',
     );
@@ -123,6 +128,39 @@ describe('desktop Supabase auth', () => {
     auth.dispose();
   });
 
+  it('ignores routed callbacks until desktop sign-in starts', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    const log = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator,
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      log,
+      initializeServerSideAccess: false,
+    });
+
+    router.routeUrl(
+      'texra://texra-ai.texra/auth-callback#access_token=access-token&refresh_token=refresh-token',
+    );
+
+    await Promise.resolve();
+
+    expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
+    expect(coordinator.storeSession).not.toHaveBeenCalled();
+    expect(log.debug).toHaveBeenCalledWith(
+      'Desktop auth callback ignored because no sign-in is in progress',
+    );
+    auth.dispose();
+  });
+
   it('processes routed callbacks sequentially when they are replayed together', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
@@ -135,21 +173,14 @@ describe('desktop Supabase auth', () => {
     const auth = createDesktopSupabaseAuth({
       router,
       coordinator,
-      oauthClient: {
-        auth: {
-          signInWithOAuth: vi.fn(async () => ({ data: {}, error: null })),
-        },
-      },
-      secrets: {
-        get: vi.fn(async () => undefined),
-        set: vi.fn(async () => {}),
-        delete: vi.fn(async () => {}),
-      },
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       log,
       initializeServerSideAccess: false,
     });
 
+    await auth.signIn();
     router.routeUrl(
       'texra://texra-ai.texra/auth-callback#access_token=first&refresh_token=first',
     );
@@ -183,22 +214,15 @@ describe('desktop Supabase auth', () => {
     const auth = createDesktopSupabaseAuth({
       router,
       coordinator,
-      oauthClient: {
-        auth: {
-          signInWithOAuth: vi.fn(async () => ({ data: {}, error: null })),
-        },
-      },
-      secrets: {
-        get: vi.fn(async () => undefined),
-        set: vi.fn(async () => {}),
-        delete: vi.fn(async () => {}),
-      },
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       showErrorMessage,
       log,
       initializeServerSideAccess: false,
     });
 
+    await auth.signIn();
     router.routeUrl(
       'texra://texra-ai.texra/auth-callback#access_token=access-token&refresh_token=refresh-token',
     );
@@ -223,16 +247,8 @@ describe('desktop Supabase auth', () => {
     const auth = createDesktopSupabaseAuth({
       router,
       coordinator,
-      oauthClient: {
-        auth: {
-          signInWithOAuth: vi.fn(async () => ({ data: {}, error: null })),
-        },
-      },
-      secrets: {
-        get: vi.fn(async () => undefined),
-        set: vi.fn(async () => {}),
-        delete: vi.fn(async () => {}),
-      },
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       initializeServerSideAccess: false,
     });

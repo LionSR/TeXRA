@@ -103,6 +103,7 @@ export function createDesktopSupabaseAuth(
   const oauthClient = options.oauthClient ?? SupabaseClient.getClient();
   const callbackQueue: DesktopProtocolCallback[] = [];
   let isProcessingCallbacks = false;
+  let isAwaitingAuthCallback = false;
   const processCallbackQueue = async (): Promise<void> => {
     if (isProcessingCallbacks) return;
     isProcessingCallbacks = true;
@@ -116,6 +117,8 @@ export function createDesktopSupabaseAuth(
           const message = toErrorMessage(error);
           options.log?.error?.(`Desktop auth callback failed: ${message}`);
           await options.showErrorMessage?.(`Sign-in failed: ${message}`);
+        } finally {
+          isAwaitingAuthCallback = false;
         }
       }
     } finally {
@@ -124,6 +127,12 @@ export function createDesktopSupabaseAuth(
     }
   };
   const subscription = options.router.subscribe((callback) => {
+    if (!isAwaitingAuthCallback) {
+      options.log?.debug?.(
+        'Desktop auth callback ignored because no sign-in is in progress',
+      );
+      return;
+    }
     callbackQueue.push(callback);
     if (isProcessingCallbacks) {
       options.log?.debug?.(
@@ -151,11 +160,13 @@ export function createDesktopSupabaseAuth(
           );
         }
 
+        isAwaitingAuthCallback = true;
         await options.openExternalUrl(data.url);
         await options.showInfoMessage?.(
           'Complete sign-in in your browser. TeXRA will update when the browser returns to the desktop app.',
         );
       } catch (error) {
+        isAwaitingAuthCallback = false;
         await options.showErrorMessage?.(
           `Sign-in failed: ${toErrorMessage(error)}`,
         );

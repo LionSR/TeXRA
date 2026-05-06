@@ -887,6 +887,43 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
   });
 
+  it('clears OpenRouter routing when desktop users enable included access', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    globalState.values.set(GlobalStateKey.USE_OPENROUTER, true);
+    const persistedModes: string[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      postToRenderer: () => {},
+      setApiAccessMode: async (mode) => {
+        persistedModes.push(mode);
+      },
+      getAuthProfileData: async () => ({
+        authenticated: false,
+        user: null,
+        tier: 'free',
+        permissions: [],
+        remoteAgents: [],
+        apiAccessMode: 'personal',
+        allowedModels: [],
+        accessExpiresAt: null,
+      }),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+        mode: 'included',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(persistedModes).toEqual(['included']);
+    expect(globalState.values.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
+  });
+
   it('does not duplicate profile refresh after delegated desktop sign-out', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const posted: unknown[] = [];
