@@ -1,19 +1,24 @@
 // Third-party imports
+import { faArrowUpRightFromSquare } from '@fortawesome/free-solid-svg-icons/faArrowUpRightFromSquare';
 import { faBackwardStep } from '@fortawesome/free-solid-svg-icons/faBackwardStep';
+import { faChevronDown } from '@fortawesome/free-solid-svg-icons/faChevronDown';
 import { faChevronLeft } from '@fortawesome/free-solid-svg-icons/faChevronLeft';
 import { faChevronRight } from '@fortawesome/free-solid-svg-icons/faChevronRight';
+import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown';
 import { faForwardStep } from '@fortawesome/free-solid-svg-icons/faForwardStep';
 import { faGear } from '@fortawesome/free-solid-svg-icons/faGear';
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
+import { faRightToBracket } from '@fortawesome/free-solid-svg-icons/faRightToBracket';
 import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
+import { faTerminal } from '@fortawesome/free-solid-svg-icons/faTerminal';
 import { faUser } from '@fortawesome/free-solid-svg-icons/faUser';
 import { faXmark } from '@fortawesome/free-solid-svg-icons/faXmark';
 import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon/library.js';
 
-const TEXRA_ICON_LIBRARY = 'texra';
+export const TEXRA_ICON_LIBRARY = 'texra';
 
 type FontAwesomePathData = string | string[];
 
@@ -39,16 +44,21 @@ function iconSvg(iconDefinition: FontAwesomeIconDefinition): string {
 
 const icons = {
   // Font Awesome Free icons; Web Awesome renders them from local data URIs.
+  'arrow-up-right-from-square': faArrowUpRightFromSquare,
   'backward-step': faBackwardStep,
+  'chevron-down': faChevronDown,
   'chevron-left': faChevronLeft,
   'chevron-right': faChevronRight,
+  'cloud-arrow-down': faCloudArrowDown,
   'forward-step': faForwardStep,
   gear: faGear,
   key: faKey,
   pencil: faPencil,
   'picture-in-picture': faPictureInPicture,
   play: faPlay,
+  'right-to-bracket': faRightToBracket,
   robot: faRobot,
+  terminal: faTerminal,
   user: faUser,
   xmark: faXmark,
 } as const;
@@ -70,5 +80,3 @@ export function registerTeXRAWebAwesomeIcons(): void {
   });
   isRegistered = true;
 }
-
-export { TEXRA_ICON_LIBRARY };
