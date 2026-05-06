@@ -10,6 +10,10 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
+import {
+  registerTeXRAWebAwesomeIcons,
+  TEXRA_ICON_LIBRARY,
+} from '@common/webAwesomeIcons';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
@@ -52,6 +56,8 @@ import {
 } from '@shared/constants/providers';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
 import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolicy';
+
+registerTeXRAWebAwesomeIcons();
 
 // Local imports - settings view
 import type { AgentCategory } from '@shared/schemas/agent';
@@ -679,8 +685,8 @@ export class SettingsApp extends SettingsAppBase {
           >
             <wa-icon
               slot="start"
-              library="system"
-              name="gear"
+              library=${TEXRA_ICON_LIBRARY}
+              name="key"
               variant="solid"
             ></wa-icon>
             Set API key

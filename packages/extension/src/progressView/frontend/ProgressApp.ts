@@ -250,10 +250,6 @@ export class ProgressApp extends ProgressAppBase {
         font-size: 1em;
       }
 
-      :host([data-desktop-view='progress']) .split-container {
-        min-height: 0;
-      }
-
       vscode-split-layout {
         display: flex;
         width: 100%;
@@ -670,7 +666,7 @@ export class ProgressApp extends ProgressAppBase {
                 name="gear"
                 variant="solid"
               ></wa-icon>
-              Open Settings
+              Open Dashboard
             </wa-button>
           </div>
         </div>

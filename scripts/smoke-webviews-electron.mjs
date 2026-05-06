@@ -198,18 +198,50 @@ function injectDesktopThemeTokens(html) {
   );
 }
 
+function escapeAttributeValue(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function serializeAttributes(attributes = {}) {
+  return Object.entries(attributes)
+    .map(([name, value]) => {
+      if (!/^[A-Za-z_:][\w:.-]*$/.test(name)) {
+        throw new Error(`Invalid smoke attribute name: ${name}`);
+      }
+      return ` ${name}="${escapeAttributeValue(value)}"`;
+    })
+    .join('');
+}
+
+function injectViewAttributes(html, view) {
+  const attributes = serializeAttributes(view.attributes);
+  if (!attributes) return html;
+
+  const tagPattern = new RegExp(`<${view.tagName}(?=[\\s>])`, 'i');
+  if (!tagPattern.test(html)) {
+    throw new Error(`Webview template is missing <${view.tagName}>.`);
+  }
+  return html.replace(tagPattern, `$&${attributes}`);
+}
+
 async function prepareViewHtml(view) {
   const template = await readFile(view.templatePath, 'utf8');
-  const html = injectHostBridge(
-    applyReplacements(injectDesktopThemeTokens(template), {
-      ...commonReplacements,
-      ...view.replacements,
-    }),
+  const html = injectViewAttributes(
+    injectHostBridge(
+      applyReplacements(injectDesktopThemeTokens(template), {
+        ...commonReplacements,
+        ...view.replacements,
+      }),
+    ),
+    view,
   );
   const htmlPath = join(generatedHtmlDir, `${view.name}.html`);
   await writeFile(htmlPath, html);
   return {
-    attributes: view.attributes,
     htmlPath,
     name: view.name,
     seedMessages: view.seedMessages,

@@ -38,7 +38,7 @@ function isConsoleError(level) {
 }
 
 async function waitForRenderedElement(window, view) {
-  const { attributes = {}, seedMessages = [], tagName } = view;
+  const { seedMessages = [], tagName } = view;
   const missingElementMessage = `Missing rendered element: ${tagName}`;
   const timeoutMessage = `Timed out waiting for custom element: ${tagName}`;
   return window.webContents.executeJavaScript(
@@ -56,10 +56,6 @@ async function waitForRenderedElement(window, view) {
         const element = document.querySelector(${JSON.stringify(tagName)});
         if (!element) {
           throw new Error(${JSON.stringify(missingElementMessage)});
-        }
-        const attributes = ${JSON.stringify(attributes)};
-        for (const [name, value] of Object.entries(attributes)) {
-          element.setAttribute(name, String(value));
         }
         if (element.updateComplete && typeof element.updateComplete.then === 'function') {
           await Promise.race([
