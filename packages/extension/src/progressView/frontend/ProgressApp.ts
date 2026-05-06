@@ -161,6 +161,10 @@ export class ProgressApp extends ProgressAppBase {
         flex-shrink: 0;
       }
 
+      .main-container.desktop .view-header {
+        display: none;
+      }
+
       .view-header vscode-tabs {
         flex: 1;
         min-width: 0;
@@ -196,6 +200,11 @@ export class ProgressApp extends ProgressAppBase {
         min-width: 48px;
       }
 
+      .main-container.desktop stream-tabs {
+        min-width: 240px;
+        max-width: 360px;
+      }
+
       .content-area {
         display: flex;
         flex-direction: column;
@@ -210,6 +219,56 @@ export class ProgressApp extends ProgressAppBase {
       workflow-stream-content,
       process-stream-content {
         display: contents;
+      }
+
+      .desktop-empty-progress {
+        display: grid;
+        place-items: center;
+        flex: 1;
+        min-height: 0;
+        padding: clamp(32px, 8vh, 72px) 32px;
+        box-sizing: border-box;
+        background: var(--texra-editor-background, var(--background-color));
+      }
+
+      .desktop-empty-progress__body {
+        display: grid;
+        justify-items: center;
+        gap: var(--spacing-medium);
+        max-width: 560px;
+        text-align: center;
+        color: var(--texra-descriptionForeground, var(--color-text-secondary));
+      }
+
+      .desktop-empty-progress__icon {
+        color: var(--texra-button-background, var(--color-text-link));
+        font-size: 44px;
+      }
+
+      .desktop-empty-progress h1 {
+        margin: var(--spacing-small) 0 0;
+        color: var(--texra-foreground, var(--color-text-primary));
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: 0;
+      }
+
+      .desktop-empty-progress p {
+        margin: 0;
+        font-size: var(--font-size-md, 14px);
+        line-height: 1.5;
+      }
+
+      .desktop-empty-progress__actions {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: var(--spacing-medium);
+        margin-top: var(--spacing-small);
+      }
+
+      .desktop-empty-progress vscode-button::part(control) {
+        min-height: 32px;
       }
     `,
   ];
@@ -334,6 +393,11 @@ export class ProgressApp extends ProgressAppBase {
     () => this.tabStreams$.get().length > 0,
   );
 
+  /** True only when the backend knows no streams at all, independent of filter. */
+  private hasAnyStreams$ = new Signal.Computed(
+    () => this.streamById$.get().size > 0,
+  );
+
   /** Only changes when the ACTIVE stream's state changes, not any stream. */
   private activeStreamState$ = new Signal.Computed(() => {
     const info = this.activeStreamInfo$.get();
@@ -409,6 +473,7 @@ export class ProgressApp extends ProgressAppBase {
       isToolUse: this.activeIsToolUse$.get(),
       hasStreams,
       streamName: activeStreamInfo.name,
+      streamStatus: this.activeStreamState$.get()?.status ?? null,
       // Process agents emit raw stdout/stderr; render them terminal-style
       // (monospace, no timestamps, tight spacing) rather than logger entries.
       terminalMode: isProcessAgent(activeStreamInfo.agent),
@@ -460,76 +525,117 @@ export class ProgressApp extends ProgressAppBase {
 
   render(): TemplateResult {
     const isEditorMode = this.placement.get() === 'editor';
+    const isDesktopMode = this.hasAttribute('data-desktop-view');
     const compactTabs = this.narrowLayout.get() && !isEditorMode;
+    const splitHandlePosition = isDesktopMode ? '72%' : '80%';
 
     return html`
       <div
         class=${classMap({
           'main-container': true,
           narrow: compactTabs,
+          desktop: isDesktopMode,
         })}
       >
-        <div class="view-header">
-          <vscode-tabs
-            .selectedIndex=${1}
-            @vsc-tabs-select=${this.onViewTabSelect}
-          >
-            <vscode-tab-header
-              slot="header"
-              class=${isEditorMode ? 'focus-sidebar-tab' : ''}
-              title=${isEditorMode ? 'Focus Launcher sidebar' : ''}
-              @click=${this.onFocusLauncherTab}
-            >
-              <span class="codicon codicon-edit"></span>
-              Launcher
-            </vscode-tab-header>
-            <vscode-tab-header slot="header">
-              <span class="codicon codicon-server-process"></span>
-              Progress
-            </vscode-tab-header>
-          </vscode-tabs>
+        ${isDesktopMode && !this.hasAnyStreams$.get()
+          ? this.renderDesktopEmptyProgress()
+          : html`
+              <div class="view-header">
+                <vscode-tabs
+                  .selectedIndex=${1}
+                  @vsc-tabs-select=${this.onViewTabSelect}
+                >
+                  <vscode-tab-header
+                    slot="header"
+                    class=${isEditorMode ? 'focus-sidebar-tab' : ''}
+                    title=${isEditorMode ? 'Focus Launcher sidebar' : ''}
+                    @click=${this.onFocusLauncherTab}
+                  >
+                    <span class="codicon codicon-edit"></span>
+                    Launcher
+                  </vscode-tab-header>
+                  <vscode-tab-header slot="header">
+                    <span class="codicon codicon-server-process"></span>
+                    Progress
+                  </vscode-tab-header>
+                </vscode-tabs>
 
-          <vscode-toolbar-button
-            class="header-action"
-            icon="gear"
-            title="Open dashboard"
-            @click=${this.onOpenDashboard}
-          ></vscode-toolbar-button>
-          <vscode-toolbar-button
-            class="header-action"
-            icon=${isEditorMode ? 'layout-sidebar-right' : 'link-external'}
-            title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
-            @click=${isEditorMode ? this.onPopBack : this.onPopOut}
-          ></vscode-toolbar-button>
-        </div>
+                <vscode-toolbar-button
+                  class="header-action"
+                  icon="gear"
+                  title="Open dashboard"
+                  @click=${this.onOpenDashboard}
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  class="header-action"
+                  icon=${isEditorMode
+                    ? 'layout-sidebar-right'
+                    : 'link-external'}
+                  title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
+                  @click=${isEditorMode ? this.onPopBack : this.onPopOut}
+                ></vscode-toolbar-button>
+              </div>
 
-        <div class="split-container">
-          <vscode-split-layout initial-handle-position="80%">
-            <div
-              slot="start"
-              class="content-area"
-              @stream-switch=${this.onStreamSwitch}
-            >
-              ${this.renderStreamContent()}
-            </div>
+              <div class="split-container">
+                <vscode-split-layout
+                  initial-handle-position=${splitHandlePosition}
+                >
+                  <div
+                    slot="start"
+                    class="content-area"
+                    @stream-switch=${this.onStreamSwitch}
+                  >
+                    ${this.renderStreamContent()}
+                  </div>
 
-            <stream-tabs
-              slot="end"
-              .compact=${compactTabs}
-              .streams=${this.tabStreams$.get()}
-              .activeStreamId=${this.activeStreamId$.get()}
-              .filter=${this.streamFilter$.get()}
-              .streamStates=${this.streamStates$.get()}
-              .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
-              .childStreamsByParent=${this.childStreamsByParent$.get()}
-              @stream-switch=${this.onStreamSwitch}
-              @stream-delete=${this.onStreamDelete}
-              @filter-change=${this.onFilterChange}
-              @delete-all=${this.onDeleteAll}
-            ></stream-tabs>
-          </vscode-split-layout>
-        </div>
+                  <stream-tabs
+                    slot="end"
+                    .compact=${compactTabs}
+                    .streams=${this.tabStreams$.get()}
+                    .activeStreamId=${this.activeStreamId$.get()}
+                    .filter=${this.streamFilter$.get()}
+                    .streamStates=${this.streamStates$.get()}
+                    .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
+                    .childStreamsByParent=${this.childStreamsByParent$.get()}
+                    @stream-switch=${this.onStreamSwitch}
+                    @stream-delete=${this.onStreamDelete}
+                    @filter-change=${this.onFilterChange}
+                    @delete-all=${this.onDeleteAll}
+                  ></stream-tabs>
+                </vscode-split-layout>
+              </div>
+            `}
       </div>
+    `;
+  }
+
+  private renderDesktopEmptyProgress(): TemplateResult {
+    return html`
+      <section class="desktop-empty-progress" aria-label="Progress">
+        <div class="desktop-empty-progress__body">
+          <i
+            class="codicon codicon-server-process desktop-empty-progress__icon"
+          ></i>
+          <h1>No runs yet</h1>
+          <p>
+            Start a TeXRA run from the Launcher. Open Settings if agents or
+            models need configuration first.
+          </p>
+          <div class="desktop-empty-progress__actions">
+            <vscode-button @click=${this.onShowLauncher}>
+              <span slot="start" class="codicon codicon-edit"></span>
+              Launcher
+            </vscode-button>
+            <vscode-button
+              appearance="secondary"
+              @click=${this.onOpenDashboard}
+            >
+              <span slot="start" class="codicon codicon-gear"></span>
+              Settings
+            </vscode-button>
+          </div>
+        </div>
+      </section>
     `;
   }
 
@@ -691,6 +797,10 @@ export class ProgressApp extends ProgressAppBase {
 
   private onOpenDashboard = (): void => {
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'dashboard' });
+  };
+
+  private onShowLauncher = (): void => {
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'main' });
   };
 
   private onPopOut = (): void => {

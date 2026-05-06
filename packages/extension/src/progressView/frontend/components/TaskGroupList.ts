@@ -51,6 +51,13 @@ const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
 
+const ACTIVE_STREAM_STATUSES: ReadonlySet<string> = new Set([
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.RESUMING,
+  STREAM_STATUS.WAITING,
+]);
+
 const ESCAPE_CHARACTER = String.fromCharCode(27);
 // Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
 // Real null bytes in the input are stripped first so the sentinel is unambiguous.
@@ -125,6 +132,9 @@ export class TaskGroupList extends LitElement {
 
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
+
+  /** Status for the active stream, used while a run exists before logs arrive. */
+  @property({ attribute: false }) streamStatus: string | null = null;
 
   /** Toggle state store for persistence */
   @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
@@ -769,6 +779,29 @@ export class TaskGroupList extends LitElement {
           @vsc-scrollable-scroll=${this.handleVscScroll}
         >
           <div class="log-placeholder">${unsafeHTML(PLACEHOLDER_HTML)}</div>
+        </vscode-scrollable>
+      `;
+    }
+
+    if (
+      !this.terminal &&
+      this.messages.length === 0 &&
+      this.groups.length === 0
+    ) {
+      const active = this.streamStatus
+        ? ACTIVE_STREAM_STATUSES.has(this.streamStatus)
+        : false;
+      return html`
+        <vscode-scrollable
+          id=${ELEMENT_IDS.LOG_CONTENT}
+          class="log-container"
+          @vsc-scrollable-scroll=${this.handleVscScroll}
+        >
+          <div class="log-placeholder">
+            ${active
+              ? 'Run is starting. Progress updates will appear here.'
+              : 'No log output for this stream yet.'}
+          </div>
         </vscode-scrollable>
       `;
     }

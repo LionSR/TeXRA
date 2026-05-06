@@ -800,7 +800,7 @@ export class StreamTabs extends LitElement {
               </div>`,
           )}
         </div>
-        ${this.compact
+        ${this.compact || (this.streams.length === 0 && this.filter === 'all')
           ? nothing
           : html`<div class="stream-list-footer">
               <div class="stream-list-controls">
