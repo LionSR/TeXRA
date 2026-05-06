@@ -293,8 +293,7 @@ describe('desktop Supabase auth', () => {
       auth.dispose();
 
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
-      const expiredCallbackState =
-        createDesktopAuthCallbackState(stateStore);
+      const expiredCallbackState = createDesktopAuthCallbackState(stateStore);
       const recreatedAuth = createDesktopSupabaseAuth({
         router,
         coordinator,

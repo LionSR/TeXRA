@@ -117,7 +117,9 @@ export function createDesktopAuthCallbackState(
 ): DesktopAuthCallbackState {
   let pendingState = readPendingOAuthState(store);
 
-  const persistPendingState = (state: DesktopPendingOAuthState | null): void => {
+  const persistPendingState = (
+    state: DesktopPendingOAuthState | null,
+  ): void => {
     if (!store) return;
     void Promise.resolve(
       store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state),
@@ -161,7 +163,9 @@ function readPendingOAuthState(
   return persisted;
 }
 
-function isPendingOAuthState(value: unknown): value is DesktopPendingOAuthState {
+function isPendingOAuthState(
+  value: unknown,
+): value is DesktopPendingOAuthState {
   return (
     typeof value === 'object' &&
     value !== null &&
