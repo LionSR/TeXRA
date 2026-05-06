@@ -78,7 +78,7 @@ export class DesktopToolEditApprovalController {
       registerPendingApproval(requestId, {
         streamId: request.streamId,
         isSettled: () => settled,
-        settle: entry.settle,
+        settle: (value) => this.settle(requestId, value),
       });
       this.showProgressPermission(requestId, request, lineChanges);
     });
@@ -115,6 +115,8 @@ export class DesktopToolEditApprovalController {
           runLatexdiff(entry, { subtype: 'ONLYCHANGEDPAGE' }),
         );
         return true;
+      default:
+        return false;
     }
   }
 

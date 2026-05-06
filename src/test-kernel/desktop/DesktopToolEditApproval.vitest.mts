@@ -1,4 +1,4 @@
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -32,6 +32,13 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
+async function waitForEmptyDir(dir: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if ((await readdir(dir)).length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 async function loadApprovalModules() {
   vi.resetModules();
   vi.doMock('@agent/core/config', () => ({
@@ -55,15 +62,25 @@ async function loadApprovalModules() {
     };
   });
 
-  const [{ bus }, { requestToolEditApproval }, desktopModule] =
-    await Promise.all([
-      import('@eventBus/ProgressEventBus'),
-      import('@tools/approval/toolEditApproval'),
-      import(
-        moduleFileUrl(desktopSourcePath('main', 'desktopToolEditApproval.ts'))
-      ) as Promise<DesktopToolEditApprovalModule>,
-    ]);
-  return { bus, requestToolEditApproval, desktopModule };
+  const [
+    { bus },
+    { requestToolEditApproval },
+    { cleanupApprovalsForStream },
+    desktopModule,
+  ] = await Promise.all([
+    import('@eventBus/ProgressEventBus'),
+    import('@tools/approval/toolEditApproval'),
+    import('@tools/approval'),
+    import(
+      moduleFileUrl(desktopSourcePath('main', 'desktopToolEditApproval.ts'))
+    ) as Promise<DesktopToolEditApprovalModule>,
+  ]);
+  return {
+    bus,
+    requestToolEditApproval,
+    cleanupApprovalsForStream,
+    desktopModule,
+  };
 }
 
 describe('desktop tool edit approval', () => {
@@ -184,6 +201,87 @@ describe('desktop tool edit approval', () => {
         await expect(pathExists(opened[0])).resolves.toBe(false);
         await expect(pathExists(opened[1])).resolves.toBe(false);
       });
+    } finally {
+      offShow();
+      controller.dispose();
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('cleans pending entries and temp files when stream cleanup rejects a request', async () => {
+    const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+    const {
+      bus,
+      requestToolEditApproval,
+      cleanupApprovalsForStream,
+      desktopModule,
+    } = await loadApprovalModules();
+    const controller = desktopModule.createDesktopToolEditApprovalController({
+      tempRoot,
+    });
+    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
+    const resolved: ProgressEventPayloads['resolveToolEditPermission'][] = [];
+    const offShow = bus.on('showToolEditPermission', (payload) =>
+      shown.push(payload),
+    );
+    const offResolve = bus.on('resolveToolEditPermission', (payload) =>
+      resolved.push(payload),
+    );
+
+    try {
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/cleanup.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-cleanup',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+
+      cleanupApprovalsForStream('stream-cleanup');
+
+      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
+      expect(resolved).toEqual([{ requestId: shown[0].requestId }]);
+      await waitForEmptyDir(tempRoot);
+      expect(await readdir(tempRoot)).toEqual([]);
+    } finally {
+      offShow();
+      offResolve();
+      controller.dispose();
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('returns false for unknown approval actions', async () => {
+    const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+    const { bus, requestToolEditApproval, desktopModule } =
+      await loadApprovalModules();
+    const controller = desktopModule.createDesktopToolEditApprovalController({
+      tempRoot,
+    });
+    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
+    const offShow = bus.on('showToolEditPermission', (payload) =>
+      shown.push(payload),
+    );
+
+    try {
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/unknown-action.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+
+      expect(
+        controller.handleAction({
+          requestId: shown[0].requestId,
+          action: 'unexpected',
+        }),
+      ).toBe(false);
+
+      controller.dispose();
+      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
     } finally {
       offShow();
       controller.dispose();
