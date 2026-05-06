@@ -60,18 +60,23 @@ async function loadMonaco(): Promise<MonacoModule> {
     import('monaco-editor/esm/vs/language/css/css.worker?worker'),
     import('monaco-editor/esm/vs/language/html/html.worker?worker'),
     import('monaco-editor/esm/vs/language/typescript/ts.worker?worker'),
-  ]).then(
-    ([monaco, editorWorker, jsonWorker, cssWorker, htmlWorker, tsWorker]) => {
-      setupMonacoWorkers({
-        editor: (editorWorker as MonacoWorkerModule).default,
-        json: (jsonWorker as MonacoWorkerModule).default,
-        css: (cssWorker as MonacoWorkerModule).default,
-        html: (htmlWorker as MonacoWorkerModule).default,
-        ts: (tsWorker as MonacoWorkerModule).default,
-      });
-      return monaco;
-    },
-  );
+  ])
+    .then(
+      ([monaco, editorWorker, jsonWorker, cssWorker, htmlWorker, tsWorker]) => {
+        setupMonacoWorkers({
+          editor: (editorWorker as MonacoWorkerModule).default,
+          json: (jsonWorker as MonacoWorkerModule).default,
+          css: (cssWorker as MonacoWorkerModule).default,
+          html: (htmlWorker as MonacoWorkerModule).default,
+          ts: (tsWorker as MonacoWorkerModule).default,
+        });
+        return monaco;
+      },
+    )
+    .catch((error: unknown) => {
+      monacoLoad = undefined;
+      throw error;
+    });
   return monacoLoad;
 }
 
