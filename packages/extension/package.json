@@ -1653,7 +1653,7 @@
     "esbuild:ext:prod": "node esbuild.config.mjs --production",
     "vite:webviews": "corepack pnpm run clean:webview-dist && for v in progressView settingsView webview; do VITE_WEBVIEW=$v vite build; done",
     "vite:webviews:dev": "corepack pnpm run clean:webview-dist && for v in progressView settingsView webview; do VITE_WEBVIEW=$v vite build --mode development; done",
-    "vite:webviews:watch": "corepack pnpm run clean:webview-dist && VITE_WEBVIEW=progressView vite build --watch --mode development",
+    "vite:webviews:watch": "VITE_WEBVIEW=progressView vite build --watch --mode development",
     "typecheck": "tsc --noEmit",
     "compile:fast": "corepack pnpm run clean:dist && corepack pnpm run esbuild:ext && corepack pnpm run vite:webviews:dev",
     "compile:safe": "corepack pnpm run typecheck && corepack pnpm run compile:fast",
