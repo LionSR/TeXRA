@@ -1,5 +1,8 @@
 import path from 'path';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors';
+
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 
@@ -22,6 +25,7 @@ export interface ProgressWorkflowFileActionsHost {
   readFile(file: string): Promise<string>;
   showInfo(message: string): Promise<void>;
   showError(message: string): Promise<void>;
+  logError?(message: string, error: unknown): void;
 }
 
 export interface ProgressWorkflowFileActionsControllerDeps {
@@ -49,28 +53,35 @@ export class ProgressWorkflowFileActionsController {
   }
 
   async openTaskStorage(stream: StreamTabId): Promise<void> {
-    const executionId = this.deps.state.getExecutionId(stream);
-    const runOutputs = this.deps.state.getOutputFiles(stream);
-    let directoryToReveal: string | undefined;
+    try {
+      const executionId = this.deps.state.getExecutionId(stream);
+      const runOutputs = this.deps.state.getOutputFiles(stream);
+      let directoryToReveal: string | undefined;
 
-    if (executionId) {
-      directoryToReveal = await resolveRunDir(executionId);
-      if (!directoryToReveal) {
-        await ensureRunDir(executionId);
-        directoryToReveal = getRunDir(executionId);
+      if (executionId) {
+        directoryToReveal = await resolveRunDir(executionId);
+        if (!directoryToReveal) {
+          await ensureRunDir(executionId);
+          directoryToReveal = getRunDir(executionId);
+        }
+      } else if (runOutputs.size > 0) {
+        directoryToReveal = this.findOutputDirectory(runOutputs);
       }
-    } else if (runOutputs.size > 0) {
-      directoryToReveal = this.findOutputDirectory(runOutputs);
-    }
 
-    if (!directoryToReveal) {
-      await this.deps.host.showInfo(
-        'No task storage folder is available for this run yet.',
+      if (!directoryToReveal) {
+        await this.deps.host.showInfo(
+          'No task storage folder is available for this run yet.',
+        );
+        return;
+      }
+
+      await this.deps.host.openDirectory(directoryToReveal);
+    } catch (error) {
+      this.deps.host.logError?.('Failed to open task storage folder', error);
+      await this.deps.host.showError(
+        `Failed to open task storage folder: ${toErrorMessage(error)}`,
       );
-      return;
     }
-
-    await this.deps.host.openDirectory(directoryToReveal);
   }
 
   async compareOriginal(file: string, base?: string): Promise<void> {

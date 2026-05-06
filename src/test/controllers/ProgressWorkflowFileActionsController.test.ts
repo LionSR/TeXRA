@@ -11,10 +11,16 @@ function createDeps(
   overrides: Partial<ProgressWorkflowFileActionsControllerDeps['host']>,
 ): ProgressWorkflowFileActionsControllerDeps {
   const infos: string[] = [];
+  const errors: string[] = [];
+  const logs: { message: string; error: unknown }[] = [];
   const host: ProgressWorkflowFileActionsControllerDeps['host'] & {
     infos: string[];
+    errors: string[];
+    logs: { message: string; error: unknown }[];
   } = {
     infos,
+    errors,
+    logs,
     compareFiles: async () => {},
     acceptEditedFile: async () => {},
     mergeFile: async () => {},
@@ -25,7 +31,12 @@ function createDeps(
     showInfo: async (message) => {
       infos.push(message);
     },
-    showError: async () => {},
+    showError: async (message) => {
+      errors.push(message);
+    },
+    logError: (message, error) => {
+      logs.push({ message, error });
+    },
     ...overrides,
   };
 
@@ -57,5 +68,30 @@ describe('ProgressWorkflowFileActionsController', () => {
       ).infos,
       ['Label "missing-label" not found.'],
     );
+  });
+
+  it('reports task storage open failures', async () => {
+    const failure = new Error('cannot reveal folder');
+    const deps = createDeps({
+      openDirectory: async () => {
+        throw failure;
+      },
+    });
+    deps.state.getExecutionId = () => 'run-1';
+    const controller = new ProgressWorkflowFileActionsController(deps);
+
+    await controller.openTaskStorage('toolUse');
+
+    const host =
+      deps.host as ProgressWorkflowFileActionsControllerDeps['host'] & {
+        errors: string[];
+        logs: { message: string; error: unknown }[];
+      };
+    assert.deepEqual(host.errors, [
+      'Failed to open task storage folder: cannot reveal folder',
+    ]);
+    assert.deepEqual(host.logs, [
+      { message: 'Failed to open task storage folder', error: failure },
+    ]);
   });
 });

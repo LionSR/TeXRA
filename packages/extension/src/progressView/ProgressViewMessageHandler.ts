@@ -461,6 +461,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         showError: async (message) => {
           await vscode.window.showErrorMessage(message);
         },
+        logError: (message, error) => {
+          this.logger.error(this.channel, message, {
+            data: error instanceof Error ? error : undefined,
+          });
+        },
       },
       sendFollowUp: async (stream, text) => {
         await vscode.commands.executeCommand('texra.sendFollowUp', {
