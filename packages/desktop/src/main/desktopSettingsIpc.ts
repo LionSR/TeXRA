@@ -138,7 +138,6 @@ export interface DesktopSettingsIpcOptions {
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
-  refreshProfileData(): Promise<void>;
   refreshAuthDependentData(): Promise<void>;
 }
 
@@ -841,7 +840,6 @@ export function createDesktopSettingsIpc(
   applyCurrentGitAuthorSettings();
 
   return {
-    refreshProfileData: postProfileData,
     refreshAuthDependentData,
 
     handleMessage(message: DesktopCommandMessage) {

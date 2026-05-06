@@ -67,8 +67,8 @@ export interface DesktopSupabaseAuth {
 
 export interface DesktopAuthCallbackState {
   getExpectedState(): string | null;
-  beginAuthAttempt(state: string): void;
-  clearAwaitingCallback(): void;
+  beginAuthAttempt(state: string): Promise<void>;
+  clearAwaitingCallback(): Promise<void>;
 }
 
 export interface DesktopSupabaseAuthOptions {
@@ -117,13 +117,11 @@ export function createDesktopAuthCallbackState(
 ): DesktopAuthCallbackState {
   let pendingState = readPendingOAuthState(store);
 
-  const persistPendingState = (
+  const persistPendingState = async (
     state: DesktopPendingOAuthState | null,
-  ): void => {
+  ): Promise<void> => {
     if (!store) return;
-    void Promise.resolve(
-      store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state),
-    ).catch(() => {});
+    await store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state);
   };
 
   return {
@@ -131,18 +129,18 @@ export function createDesktopAuthCallbackState(
       if (!pendingState) return null;
       if (isPendingOAuthStateExpired(pendingState)) {
         pendingState = null;
-        persistPendingState(null);
+        void persistPendingState(null).catch(() => {});
         return null;
       }
       return pendingState.state;
     },
-    beginAuthAttempt: (state) => {
+    async beginAuthAttempt(state) {
       pendingState = { state, createdAt: Date.now() };
-      persistPendingState(pendingState);
+      await persistPendingState(pendingState);
     },
-    clearAwaitingCallback: () => {
+    async clearAwaitingCallback() {
       pendingState = null;
-      persistPendingState(null);
+      await persistPendingState(null);
     },
   };
 }
@@ -224,7 +222,11 @@ export function createDesktopSupabaseAuth(
       );
       return;
     }
-    callbackState.clearAwaitingCallback();
+    void callbackState.clearAwaitingCallback().catch((error: unknown) => {
+      options.log?.debug?.(
+        `Desktop auth callback state clear failed: ${toErrorMessage(error)}`,
+      );
+    });
     callbackQueue.push(callback);
     if (isProcessingCallbacks) {
       options.log?.debug?.(
@@ -253,13 +255,13 @@ export function createDesktopSupabaseAuth(
           );
         }
 
-        callbackState.beginAuthAttempt(state);
+        await callbackState.beginAuthAttempt(state);
         await options.openExternalUrl(data.url);
         await options.showInfoMessage?.(
           'Complete sign-in in your browser. TeXRA will update when the browser returns to the desktop app.',
         );
       } catch (error) {
-        callbackState.clearAwaitingCallback();
+        await callbackState.clearAwaitingCallback();
         await options.showErrorMessage?.(
           `Sign-in failed: ${toErrorMessage(error)}`,
         );
@@ -268,7 +270,7 @@ export function createDesktopSupabaseAuth(
     },
 
     async signOut() {
-      callbackState.clearAwaitingCallback();
+      await callbackState.clearAwaitingCallback();
       await coordinator.clearSession();
       SupabaseClient.setTokenExpiry(null);
       clearDesktopServerSideKeyCaches(options.log);
