@@ -192,6 +192,19 @@ function createWindow(options: {
   const agentExecution = createDesktopAgentExecution({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     opener: previewHost,
+    confirmAcceptFile: async (message) => {
+      const result = await dialog.showMessageBox(window, {
+        type: 'warning',
+        message,
+        buttons: ['Yes', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      return result.response === 0;
+    },
+    showInfoMessage: async (message) => {
+      await dialog.showMessageBox(window, { type: 'info', message });
+    },
     showErrorMessage,
   });
   const fileSelection = createDesktopFileSelection({

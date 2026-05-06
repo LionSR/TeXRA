@@ -1,4 +1,3 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { ProgressStreamLifecycleController } from '@controllers/progressView/ProgressStreamLifecycleController';
@@ -7,6 +6,7 @@ import {
   type ProgressFollowUpPlan,
 } from '@controllers/progressView/ProgressFollowUpController';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
+import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
@@ -33,7 +33,7 @@ import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nat
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { TaskState } from '@logger/TaskState';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type { AgentProposal } from '@shared/schemas/prompts';
 import {
   dispatchProgressViewInbound,
@@ -54,11 +54,6 @@ import {
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
-import {
-  resolveRunDir,
-  ensureRunDir,
-  getRunDir,
-} from '@utils/files/taskRunStorage';
 import {
   buildFileContextFromTaskState,
   polishTextWithAI,
@@ -85,6 +80,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly recordingManager: RecordingManager;
   private readonly streamLifecycleController: ProgressStreamLifecycleController;
   private readonly workflowActionsController: ProgressWorkflowActionsController;
+  private readonly workflowFileActionsController: ProgressWorkflowFileActionsController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly modelOutputBackups = new Map<
     StreamTabId,
@@ -119,6 +115,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.handlerRegistry = this.createHandlerRegistry();
     this.streamLifecycleController = this.createStreamLifecycleController();
     this.workflowActionsController = this.createWorkflowActionsController();
+    this.workflowFileActionsController =
+      this.createWorkflowFileActionsController();
     this.followUpController = this.createFollowUpController();
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
@@ -206,7 +204,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         });
       },
       [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
-        this.handleOpenTaskStorage(data),
+        this.workflowFileActionsController.openTaskStorage(data.stream),
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
         this.handlePolishFollowUp(data),
       [PROGRESS_VIEW_COMMANDS.START_RECORDING]: async () => {
@@ -282,16 +280,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: async (data) =>
         vscode.commands.executeCommand('texra.openFileCompile', data.file),
       [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (data) =>
-        this.handleCompareOriginal(data),
+        this.workflowFileActionsController.compareOriginal(
+          data.file,
+          data.base,
+        ),
       [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: (data) =>
-        this.handleComparePrevious(data),
+        this.workflowFileActionsController.comparePrevious(
+          data.file,
+          data.base,
+          data.prev,
+        ),
       [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: (data) =>
-        this.handleAcceptFile(data),
-      [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: (data) => this.handleMergeFile(data),
+        this.workflowFileActionsController.acceptFile(data.file, data.base),
+      [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: (data) =>
+        this.workflowFileActionsController.mergeFile(data.file, data.base),
       [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: (data) =>
-        this.handleLatexdiffFile(data),
+        this.workflowFileActionsController.latexdiffFile(data.file, data.base),
       [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: async (data) =>
-        vscode.commands.executeCommand('texra.openLabel', data.label),
+        this.workflowFileActionsController.openLabel(data.label),
     };
   }
 
@@ -389,6 +395,75 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       runFileOperation: async (operation, request) => {
         await vscode.commands.executeCommand(`texra.${operation}`, request);
       },
+    });
+  }
+
+  private createWorkflowFileActionsController(): ProgressWorkflowFileActionsController {
+    return new ProgressWorkflowFileActionsController({
+      state: {
+        getActiveStream: () => this.provider.state.activeStream,
+        getExecutionId: (stream) =>
+          this.provider.state.meta.getExecutionId(stream),
+        getOutputFiles: (stream) =>
+          this.provider.state.outputFiles.getFiles(stream),
+      },
+      host: {
+        compareFiles: async (baseFile, editedFile) => {
+          await vscode.commands.executeCommand(
+            'texra.compare',
+            pathToLocation(''), // inputFile unused
+            pathToLocation(baseFile),
+            pathToLocation(editedFile),
+          );
+        },
+        acceptEditedFile: async (baseFile, editedFile) => {
+          await vscode.commands.executeCommand(
+            'texra.acceptEdited',
+            pathToLocation(''), // inputFile unused
+            pathToLocation(baseFile),
+            pathToLocation(editedFile),
+          );
+        },
+        mergeFile: async (baseFile, editedFile) => {
+          await vscode.commands.executeCommand(
+            'texra.merge',
+            undefined,
+            baseFile,
+            editedFile,
+          );
+        },
+        latexdiffFile: async (baseFile, editedFile) => {
+          await vscode.commands.executeCommand(
+            'texra.latexdiff',
+            undefined,
+            baseFile,
+            editedFile,
+          );
+        },
+        openDirectory: async (directory) => {
+          await safeExecuteCommand('revealFileInOS', [
+            vscode.Uri.file(directory),
+          ]);
+        },
+        openLabel: async (label) => {
+          await vscode.commands.executeCommand('texra.openLabel', label);
+          return true;
+        },
+        readFile: (file) => flexibleFS.read(createExternalLocation(file)),
+        showInfo: async (message) => {
+          await vscode.window.showInformationMessage(message);
+        },
+        showError: async (message) => {
+          await vscode.window.showErrorMessage(message);
+        },
+      },
+      sendFollowUp: async (stream, text) => {
+        await vscode.commands.executeCommand('texra.sendFollowUp', {
+          stream,
+          text,
+        });
+      },
+      modelOutputBackups: this.modelOutputBackups,
     });
   }
 
@@ -717,216 +792,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return true;
   }
 
-  private async handleOpenTaskStorage(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE>,
-  ): Promise<void> {
-    const streamId = data.stream;
-    const runOutputs = this.provider.state.outputFiles.getFiles(streamId);
-
-    const executionId = this.provider.state.meta.getExecutionId(streamId);
-
-    try {
-      let directoryToReveal: string | undefined;
-
-      if (executionId) {
-        // Check existing locations (primary + legacy) first; create only if neither exists
-        directoryToReveal = await resolveRunDir(executionId);
-        if (!directoryToReveal) {
-          await ensureRunDir(executionId);
-          directoryToReveal = getRunDir(executionId);
-        }
-      } else if (runOutputs) {
-        directoryToReveal = this.findOutputDirectory(runOutputs);
-      }
-
-      if (!directoryToReveal) {
-        await vscode.window.showInformationMessage(
-          'No task storage folder is available for this run yet.',
-        );
-        return;
-      }
-
-      await safeExecuteCommand('revealFileInOS', [
-        vscode.Uri.file(directoryToReveal),
-      ]);
-    } catch (error) {
-      const errorMessage = toErrorMessage(error);
-      this.logger.error(
-        this.channel,
-        `Failed to open task storage for stream ${streamId}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
-        {
-          data: {
-            error: error instanceof Error ? error : undefined,
-            stream: streamId,
-            executionId,
-          },
-        },
-      );
-      await vscode.window.showErrorMessage(
-        'Unable to open the task storage folder for this run.',
-      );
-    }
-  }
-
-  // ============================================================
-  // File operation handlers
-  // ============================================================
-
-  private async handleCompareOriginal(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL>,
-  ): Promise<void> {
-    const { file, base } = data;
-    await this.executeWithBaseFile(
-      file,
-      base,
-      'Compare original',
-      async (targetFile, baseFile) => {
-        const streamId = this.provider.state.activeStream;
-        if (streamId && targetFile) {
-          try {
-            const fileLocation = createExternalLocation(targetFile);
-            const content = await flexibleFS.read(fileLocation);
-            const streamBackups =
-              this.modelOutputBackups.get(streamId) ?? new Map();
-            streamBackups.set(targetFile, { content, streamId });
-            this.modelOutputBackups.set(streamId, streamBackups);
-          } catch {
-            // Ignore backup errors
-          }
-        }
-
-        await vscode.commands.executeCommand(
-          'texra.compare',
-          pathToLocation(''), // inputFile unused
-          pathToLocation(baseFile),
-          pathToLocation(targetFile),
-        );
-      },
-    );
-  }
-
-  private async handleComparePrevious(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS>,
-  ): Promise<void> {
-    const { file, base, prev } = data;
-    const previousFile = prev ?? base;
-
-    if (!previousFile) {
-      this.logger.warn(
-        this.channel,
-        'Compare previous requested without base',
-        {
-          data: { file },
-        },
-      );
-      return;
-    }
-
-    await vscode.commands.executeCommand(
-      'texra.latexdiff',
-      undefined,
-      previousFile,
-      file,
-    );
-
-    await vscode.commands.executeCommand(
-      'texra.compare',
-      pathToLocation(''), // inputFile unused
-      pathToLocation(previousFile),
-      pathToLocation(file),
-    );
-  }
-
-  private async handleAcceptFile(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.ACCEPT_FILE>,
-  ): Promise<void> {
-    const { file, base } = data;
-    const streamId = this.provider.state.activeStream;
-    const backup =
-      file && streamId
-        ? this.modelOutputBackups.get(streamId)?.get(file)
-        : null;
-    let currentContent: string | null = null;
-
-    if (backup) {
-      try {
-        const fileLocation = createExternalLocation(file);
-        currentContent = await flexibleFS.read(fileLocation);
-      } catch {
-        // Ignore errors
-      }
-    }
-
-    await this.executeWithBaseFile(
-      file,
-      base,
-      'Accept',
-      (targetFile, baseFile) =>
-        vscode.commands.executeCommand(
-          'texra.acceptEdited',
-          pathToLocation(''), // inputFile unused
-          pathToLocation(baseFile),
-          pathToLocation(targetFile),
-        ),
-    );
-
-    // Inform the model about user modifications via follow-up
-    if (
-      backup &&
-      currentContent !== null &&
-      currentContent !== backup.content
-    ) {
-      const fileName = path.basename(file);
-      await vscode.commands.executeCommand('texra.sendFollowUp', {
-        stream: backup.streamId,
-        text: `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
-      });
-    }
-
-    // Clean up the backup entry for this file
-    if (backup && streamId) {
-      const streamBackups = this.modelOutputBackups.get(streamId);
-      streamBackups?.delete(file);
-      if (streamBackups?.size === 0) {
-        this.modelOutputBackups.delete(streamId);
-      }
-    }
-  }
-
-  private async handleMergeFile(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.MERGE_FILE>,
-  ): Promise<void> {
-    await this.executeWithBaseFile(
-      data.file,
-      data.base,
-      'Merge',
-      (targetFile, baseFile) =>
-        vscode.commands.executeCommand(
-          'texra.merge',
-          undefined,
-          baseFile,
-          targetFile,
-        ),
-    );
-  }
-
-  private async handleLatexdiffFile(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE>,
-  ): Promise<void> {
-    await this.executeWithBaseFile(
-      data.file,
-      data.base,
-      'Latexdiff',
-      (targetFile, baseFile) =>
-        vscode.commands.executeCommand(
-          'texra.latexdiff',
-          undefined,
-          baseFile,
-          targetFile,
-        ),
-    );
-  }
-
   // ============================================================
   // Helper methods
   // ============================================================
@@ -943,39 +808,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
     await safeExecuteCommand('texra.execute', [validation.request]);
     return true;
-  }
-
-  private async executeWithBaseFile(
-    file: string,
-    base: string | undefined,
-    actionName: string,
-    execute: (file: string, base: string) => Thenable<unknown>,
-  ): Promise<void> {
-    if (!base) {
-      this.logger.warn(
-        this.channel,
-        `${actionName} requested without a base path.`,
-        {
-          data: { file },
-        },
-      );
-      return;
-    }
-    await execute(file, base);
-  }
-
-  private findOutputDirectory(
-    runOutputs: Map<number, OutputFileInfo[]>,
-  ): string | undefined {
-    for (const infos of runOutputs.values()) {
-      for (const info of infos) {
-        const kind = info.location.kind;
-        if (kind === 'runStorage' || kind === 'workspace') {
-          return path.dirname(info.location.absolutePath);
-        }
-      }
-    }
-    return undefined;
   }
 
   private async handleGetFollowupOptions(streamId: StreamTabId): Promise<void> {
