@@ -2,6 +2,10 @@ import { nativeTheme } from 'electron';
 
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+import {
+  DESKTOP_THEME_KIND,
+  type DesktopThemeKind,
+} from '@shared/constants/desktopTheme';
 
 import type {
   DesktopCommandMessage,
@@ -9,20 +13,24 @@ import type {
   DesktopRenderer,
 } from './desktopIpcTypes.js';
 
-export type DesktopTheme = 'dark' | 'light' | 'high-contrast';
+export type DesktopTheme = DesktopThemeKind;
 
 export interface DesktopViewStateIpcOptions {
   debugMode?: boolean;
-  getTheme?: () => DesktopTheme;
+  getTheme?: () => DesktopThemeKind;
 }
 
 export interface DesktopViewStateIpc extends DesktopMessageHandler {
   dispose(): void;
 }
 
-function getNativeTheme(): DesktopTheme {
-  if (nativeTheme.shouldUseHighContrastColors) return 'high-contrast';
-  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+function getNativeTheme(): DesktopThemeKind {
+  if (nativeTheme.shouldUseHighContrastColors) {
+    return DESKTOP_THEME_KIND.HIGH_CONTRAST;
+  }
+  return nativeTheme.shouldUseDarkColors
+    ? DESKTOP_THEME_KIND.DARK
+    : DESKTOP_THEME_KIND.LIGHT;
 }
 
 export function createDesktopViewStateIpc(
