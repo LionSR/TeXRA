@@ -5,13 +5,13 @@ import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - Web Awesome
-import { TEXRA_ICON_LIBRARY } from './webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY, type TeXRAIconName } from './webAwesomeIcons';
 
 type ActionButtonAppearance = 'filled' | 'outlined' | 'plain';
 type ActionButtonVariant = 'brand' | 'neutral';
 
 export interface IconActionButtonOptions {
-  readonly icon: string;
+  readonly icon: TeXRAIconName;
   readonly label: string;
   readonly title?: string;
   readonly action?: string;
