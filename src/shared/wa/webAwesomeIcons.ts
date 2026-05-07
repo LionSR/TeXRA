@@ -98,6 +98,8 @@ import { faWindowMaximize } from '@fortawesome/free-solid-svg-icons/faWindowMaxi
 import { faWrench } from '@fortawesome/free-solid-svg-icons/faWrench';
 import { faXmark } from '@fortawesome/free-solid-svg-icons/faXmark';
 import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon/library.js';
+import { html, type TemplateResult } from 'lit';
+import { ifDefined } from 'lit/directives/if-defined.js';
 
 export const TEXRA_ICON_LIBRARY = 'texra';
 
@@ -324,3 +326,38 @@ export function registerTeXRAWebAwesomeIcons(): void {
 // Names accepted by <wa-icon library="texra" name="..."> — canonical names plus
 // the codicon-style aliases. Exported so callers can type-check icon usage.
 export type TeXRAIconName = keyof typeof icons | keyof typeof CODICON_ALIASES;
+
+interface WaIconOptions {
+  readonly slot?: 'start' | 'end';
+  readonly className?: string;
+  readonly variant?: 'solid' | 'regular';
+}
+
+// Lit template for <wa-icon>. Centralizes library + variant + aria-hidden so
+// callers don't repeat them. Prefer this over waIconHtml for new code.
+export function waIcon(
+  name: TeXRAIconName,
+  options: WaIconOptions = {},
+): TemplateResult {
+  return html`<wa-icon
+    library=${TEXRA_ICON_LIBRARY}
+    name=${name}
+    variant=${options.variant ?? 'solid'}
+    slot=${ifDefined(options.slot)}
+    class=${ifDefined(options.className)}
+    aria-hidden="true"
+  ></wa-icon>`;
+}
+
+// Inline <wa-icon> string for innerHTML / template strings. Use only where
+// a Lit template isn't viable. Safe for static `name` literals only — `name`
+// is not escaped because callers must pass typed TeXRAIconName values.
+export function waIconHtml(
+  name: TeXRAIconName,
+  options: WaIconOptions = {},
+): string {
+  const slot = options.slot ? ` slot="${options.slot}"` : '';
+  const cls = options.className ? ` class="${options.className}"` : '';
+  const variant = options.variant ?? 'solid';
+  return `<wa-icon library="${TEXRA_ICON_LIBRARY}" name="${name}" variant="${variant}"${slot}${cls} aria-hidden="true"></wa-icon>`;
+}

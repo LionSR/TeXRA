@@ -1,7 +1,8 @@
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { html, render } from 'lit';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-import type { DesktopRoute } from '../desktopShellMessages';
 import { isCommandPaletteShortcut } from './desktopCommandPalette';
+import type { DesktopRoute } from '../desktopShellMessages';
 
 export interface DesktopFirstRunWalkthroughOptions {
   document: Document;
@@ -17,7 +18,34 @@ export interface DesktopFirstRunWalkthrough {
 }
 
 const FOCUSABLE_SELECTOR =
-  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  'wa-button, button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+const ONBOARDING_STEPS: ReadonlyArray<{
+  readonly index: string;
+  readonly title: string;
+  readonly body: string;
+}> = [
+  {
+    index: '1',
+    title: 'Open a workspace',
+    body: 'Pick the folder that contains the paper or project files.',
+  },
+  {
+    index: '2',
+    title: 'Set up model access',
+    body: 'Sign in for included access or add provider keys in Settings.',
+  },
+  {
+    index: '3',
+    title: 'Choose an agent',
+    body: 'Select a workflow agent, direct agent, or tool-use agent.',
+  },
+  {
+    index: '4',
+    title: 'Start a run',
+    body: 'Use the launcher and follow live output in Progress.',
+  },
+];
 
 export function createFirstRunWalkthrough({
   document,
@@ -30,59 +58,69 @@ export function createFirstRunWalkthrough({
   element.setAttribute('role', 'dialog');
   element.setAttribute('aria-modal', 'true');
   element.setAttribute('aria-labelledby', 'desktop-onboarding-title');
-  element.innerHTML = `
-    <div class="desktop-onboarding-panel">
-      <header class="desktop-onboarding-header">
-        <wa-icon class="desktop-onboarding-icon" library="${TEXRA_ICON_LIBRARY}" name="circle-info" variant="solid" aria-hidden="true"></wa-icon>
-        <div>
-          <h1 id="desktop-onboarding-title">Welcome to TeXRA Desktop</h1>
-          <p>Start from a workspace, configure model access, choose an agent, and run without switching to VS Code.</p>
-        </div>
-      </header>
-      <ol class="desktop-onboarding-steps">
-        <li>
-          <span class="desktop-onboarding-step-index">1</span>
-          <div>
-            <strong>Open a workspace</strong>
-            <span>Pick the folder that contains the paper or project files.</span>
-          </div>
-        </li>
-        <li>
-          <span class="desktop-onboarding-step-index">2</span>
-          <div>
-            <strong>Set up model access</strong>
-            <span>Sign in for included access or add provider keys in Settings.</span>
-          </div>
-        </li>
-        <li>
-          <span class="desktop-onboarding-step-index">3</span>
-          <div>
-            <strong>Choose an agent</strong>
-            <span>Select a workflow agent, direct agent, or tool-use agent.</span>
-          </div>
-        </li>
-        <li>
-          <span class="desktop-onboarding-step-index">4</span>
-          <div>
-            <strong>Start a run</strong>
-            <span>Use the launcher and follow live output in Progress.</span>
-          </div>
-        </li>
-      </ol>
-      <footer class="desktop-onboarding-actions">
-        <wa-button class="desktop-secondary-button" appearance="outlined" data-onboarding-settings>
-          Open Settings
-        </wa-button>
-        <wa-button class="desktop-secondary-button" appearance="outlined" data-onboarding-launcher>
-          Go to Launcher
-        </wa-button>
-        <wa-button class="desktop-primary-button" appearance="filled" variant="brand" data-onboarding-dismiss>
-          Got it
-        </wa-button>
-      </footer>
-    </div>
-  `;
+
   let previousFocus: HTMLElement | null = null;
+
+  const dismissAndShowRoute = (route: DesktopRoute): void => {
+    dismiss();
+    setRoute(route);
+  };
+
+  render(
+    html`
+      <div class="desktop-onboarding-panel">
+        <header class="desktop-onboarding-header">
+          ${waIcon('circle-info', { className: 'desktop-onboarding-icon' })}
+          <div>
+            <h1 id="desktop-onboarding-title">Welcome to TeXRA Desktop</h1>
+            <p>
+              Start from a workspace, configure model access, choose an agent,
+              and run without switching to VS Code.
+            </p>
+          </div>
+        </header>
+        <ol class="desktop-onboarding-steps">
+          ${ONBOARDING_STEPS.map(
+            (step) => html`
+              <li>
+                <span class="desktop-onboarding-step-index">${step.index}</span>
+                <div>
+                  <strong>${step.title}</strong>
+                  <span>${step.body}</span>
+                </div>
+              </li>
+            `,
+          )}
+        </ol>
+        <footer class="desktop-onboarding-actions">
+          <wa-button
+            class="desktop-secondary-button"
+            appearance="outlined"
+            @click=${() => dismissAndShowRoute('settings')}
+          >
+            Open Settings
+          </wa-button>
+          <wa-button
+            class="desktop-secondary-button"
+            appearance="outlined"
+            @click=${() => dismissAndShowRoute('main')}
+          >
+            Go to Launcher
+          </wa-button>
+          <wa-button
+            class="desktop-primary-button"
+            appearance="filled"
+            variant="brand"
+            data-onboarding-dismiss
+            @click=${() => dismiss()}
+          >
+            Got it
+          </wa-button>
+        </footer>
+      </div>
+    `,
+    element,
+  );
 
   const getFocusableElements = (): HTMLElement[] =>
     [...element.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
@@ -113,23 +151,11 @@ export function createFirstRunWalkthrough({
     element.hidden = false;
     focusFirstControl();
   };
-  const dismiss = (): void => {
+  function dismiss(): void {
     hide();
     postDismissed();
-  };
-  const dismissAndShowRoute = (route: DesktopRoute): void => {
-    dismiss();
-    setRoute(route);
-  };
-  const onClick = (selector: string, handler: () => void): void => {
-    element
-      .querySelector<HTMLElement>(selector)
-      ?.addEventListener('click', handler);
-  };
+  }
 
-  onClick('[data-onboarding-settings]', () => dismissAndShowRoute('settings'));
-  onClick('[data-onboarding-launcher]', () => dismissAndShowRoute('main'));
-  onClick('[data-onboarding-dismiss]', dismiss);
   document.addEventListener('focusin', (event) => {
     if (element.hidden) return;
     if (event.target instanceof Node && element.contains(event.target)) return;
