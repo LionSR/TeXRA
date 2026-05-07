@@ -17,12 +17,13 @@ const nonce = 'texra-webview-smoke';
 
 const commonReplacements = {
   cspSource: 'file:',
-  codiconUri: fileUri('node_modules/@vscode/codicons/dist/codicon.css'),
+  codiconUri: fileUri('packages/extension/dist/shared/codicon.css'),
+  codiconsFontUri: fileUri('packages/extension/dist/shared/codicon.ttf'),
   commonStyleUri: fileUri('packages/extension/src/common/styles/common.css'),
   commonsBundleUri: fileUri('packages/extension/dist/shared/commons.js'),
   nonce,
   vscodeElementsBundleUri: fileUri(
-    'node_modules/@vscode-elements/elements/dist/bundled.js',
+    'packages/extension/dist/shared/vscode-elements-bundled.js',
   ),
 };
 
@@ -32,7 +33,6 @@ const views = [
     tagName: 'main-app',
     templatePath: join(extensionRoot, 'src', 'webview', 'index.html'),
     replacements: {
-      codiconsFontUri: fileUri('packages/extension/dist/webview/codicon.ttf'),
       mainViewBundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
     },
   },
@@ -41,9 +41,6 @@ const views = [
     tagName: 'progress-app',
     templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
     replacements: {
-      codiconsFontUri: fileUri(
-        'packages/extension/dist/progressView/codicon.ttf',
-      ),
       progressBundleUri: fileUri(
         'packages/extension/dist/progressView/bundle.js',
       ),
@@ -57,9 +54,6 @@ const views = [
     tagName: 'settings-app',
     templatePath: join(extensionRoot, 'src', 'settingsView', 'index.html'),
     replacements: {
-      codiconsFontUri: fileUri(
-        'packages/extension/dist/settingsView/codicon.ttf',
-      ),
       settingsBundleUri: fileUri(
         'packages/extension/dist/settingsView/bundle.js',
       ),

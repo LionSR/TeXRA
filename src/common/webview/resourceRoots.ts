@@ -16,20 +16,6 @@ export function getSharedLocalResourceRoots(
     vscode.Uri.joinPath(extensionUri, 'src', 'common', 'modules'),
     vscode.Uri.joinPath(extensionUri, 'src', 'common', 'webview'),
     vscode.Uri.joinPath(extensionUri, 'src', 'common', 'constants'),
-    vscode.Uri.joinPath(
-      extensionUri,
-      'node_modules',
-      '@vscode',
-      'codicons',
-      'dist',
-    ),
-    vscode.Uri.joinPath(
-      extensionUri,
-      'node_modules',
-      '@vscode-elements',
-      'elements',
-      'dist',
-    ),
   ];
 }
 

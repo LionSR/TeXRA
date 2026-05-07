@@ -68,6 +68,20 @@ async function waitForRenderedElement(window, tagName) {
           ]);
         }
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const unregisteredVscodeElements = [
+          ...document.querySelectorAll('*'),
+          ...[...document.querySelectorAll('*')]
+            .flatMap((node) => [...(node.shadowRoot?.querySelectorAll('*') ?? [])]),
+        ]
+          .map((node) => node.localName)
+          .filter((name) => name.startsWith('vscode-'))
+          .filter((name, index, names) => names.indexOf(name) === index)
+          .filter((name) => customElements.get(name) === undefined);
+        if (unregisteredVscodeElements.length > 0) {
+          throw new Error(
+            \`Unregistered VS Code webview elements: \${unregisteredVscodeElements.join(', ')}\`,
+          );
+        }
         const rect = element.getBoundingClientRect();
         const shadowText = element.shadowRoot?.textContent?.trim() ?? '';
         const lightText = element.textContent?.trim() ?? '';
