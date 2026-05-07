@@ -29,46 +29,41 @@ body {
   background: var(--texra-sideBar-background);
 }
 
-.desktop-nav-button {
+/* Top-nav wa-button overrides — shadow DOM tinting via ::part(base). */
+wa-button.desktop-nav-button::part(base) {
   height: 28px;
   padding: 0 10px;
-  border: 1px solid transparent;
+  border-color: transparent;
   border-radius: 4px;
   background: transparent;
   color: var(--texra-foreground);
-  font: inherit;
-  cursor: pointer;
 }
 
-.desktop-nav-button:hover {
+wa-button.desktop-nav-button::part(base):hover {
   background: var(--texra-toolbar-hoverBackground);
 }
 
-.desktop-nav-button[aria-pressed='true'] {
+wa-button.desktop-nav-button[aria-pressed='true']::part(base) {
   border-color: var(--texra-focusBorder);
   background: var(--texra-button-secondaryBackground);
 }
 
-.desktop-command-button,
-.desktop-log-button,
-.desktop-folder-button {
+wa-button.desktop-command-button::part(base),
+wa-button.desktop-folder-button::part(base) {
   height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--texra-panel-border);
+  border-color: var(--texra-panel-border);
   border-radius: 4px;
   background: var(--texra-button-secondaryBackground);
   color: var(--texra-foreground);
-  font: inherit;
-  cursor: pointer;
 }
 
-.desktop-command-button {
+wa-button.desktop-command-button {
   margin-left: auto;
 }
 
-.desktop-command-button:hover,
-.desktop-log-button:hover,
-.desktop-folder-button:hover {
+wa-button.desktop-command-button::part(base):hover,
+wa-button.desktop-folder-button::part(base):hover {
   background: var(--texra-toolbar-hoverBackground);
 }
 
@@ -117,22 +112,25 @@ body {
   text-transform: uppercase;
 }
 
-.desktop-explorer-icon-button {
+wa-button.desktop-explorer-icon-button {
   margin-left: auto;
+}
+
+wa-button.desktop-explorer-icon-button::part(base) {
   width: 24px;
   height: 24px;
+  padding: 0;
   border: 0;
   border-radius: 4px;
   background: transparent;
   color: var(--texra-foreground);
-  cursor: pointer;
 }
 
-.desktop-explorer-icon-button:hover {
+wa-button.desktop-explorer-icon-button::part(base):hover {
   background: var(--texra-toolbar-hoverBackground);
 }
 
-.desktop-explorer-icon-button:disabled {
+wa-button.desktop-explorer-icon-button[disabled]::part(base) {
   opacity: 0.5;
   cursor: default;
 }
@@ -261,7 +259,7 @@ body {
   text-align: center;
 }
 
-.desktop-explorer-empty .codicon {
+.desktop-explorer-empty wa-icon {
   color: var(--texra-button-background);
   font-size: 30px;
 }
@@ -477,28 +475,26 @@ body {
   white-space: pre-wrap;
 }
 
-.desktop-primary-button,
-.desktop-secondary-button {
+wa-button.desktop-primary-button::part(base),
+wa-button.desktop-secondary-button::part(base) {
   min-height: 34px;
   padding: 0 14px;
   border-radius: 6px;
-  font: inherit;
-  cursor: pointer;
 }
 
-.desktop-primary-button {
+wa-button.desktop-primary-button::part(base) {
   border: 1px solid var(--texra-button-background);
   background: var(--texra-button-background);
   color: var(--texra-button-foreground);
 }
 
-.desktop-secondary-button {
+wa-button.desktop-secondary-button::part(base) {
   border: 1px solid var(--texra-button-border);
   background: var(--texra-button-secondaryBackground);
   color: var(--texra-button-secondaryForeground);
 }
 
-.desktop-secondary-button:hover {
+wa-button.desktop-secondary-button::part(base):hover {
   background: var(--texra-button-secondaryHoverBackground);
 }
 

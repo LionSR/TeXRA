@@ -44,10 +44,11 @@ describe('desktop renderer shell', () => {
   it('provides persistent shell controls for returning between routes', () => {
     const rendererMain = readRendererMain();
 
-    expect(rendererMain).toContain('data-route-button="main"');
-    expect(rendererMain).toContain('data-route-button="progress"');
-    expect(rendererMain).toContain('data-route-button="settings"');
-    expect(rendererMain).toContain('data-route-button="logs"');
+    expect(rendererMain).toContain("{ route: 'main', label: 'Launcher' }");
+    expect(rendererMain).toContain("{ route: 'progress', label: 'Progress' }");
+    expect(rendererMain).toContain("{ route: 'settings', label: 'Settings' }");
+    expect(rendererMain).toContain("{ route: 'logs', label: 'Logs' }");
+    expect(rendererMain).toContain('data-route-button=${route}');
     expect(rendererMain).toContain("button.addEventListener('click'");
     expect(rendererMain).toContain("button.setAttribute('aria-pressed'");
   });
@@ -96,6 +97,6 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('DESKTOP_LOG_COMMANDS.COPY_LOG');
     expect(rendererMain).toContain('DESKTOP_LOG_COMMANDS.EXPORT_LOG');
     expect(rendererMain).toContain('DesktopSetLogMessageSchema.safeParse');
-    expect(rendererMain).toContain('data-log-output');
+    expect(rendererMain).toContain('logViewerTemplate');
   });
 });
