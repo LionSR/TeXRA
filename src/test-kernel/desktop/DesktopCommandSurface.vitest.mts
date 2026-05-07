@@ -17,6 +17,7 @@ import type { DesktopCommandActions } from '../../../packages/desktop/src/deskto
 
 interface DesktopCommandSurfaceModule {
   DESKTOP_LOCAL_COMMANDS: {
+    OPEN_DESKTOP_DOCS: string;
     SHOW_LOGS: string;
     OPEN_LOG_FOLDER: string;
     OPEN_WORKSPACE_FOLDER: string;
@@ -81,7 +82,7 @@ describe('desktop command surface', () => {
     for (const entry of entries) {
       const catalogEntry = commandCatalogById.get(entry.id as CommandId);
       if (!catalogEntry) {
-        expect(entry.category).toBe('TeXRA');
+        expect(['TeXRA', 'Help']).toContain(entry.category);
         continue;
       }
       expect(catalogEntry).toBeDefined();
@@ -99,6 +100,11 @@ describe('desktop command surface', () => {
       label: 'Show Progress',
       category: 'TeXRA',
       accelerator: 'Command+Option+P',
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+      label: 'Desktop Documentation',
+      category: 'Help',
     });
     expect(entries).toContainEqual({
       id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
@@ -128,6 +134,7 @@ describe('desktop command surface', () => {
     const { DESKTOP_LOCAL_COMMANDS, dispatchDesktopCommand } =
       await loadDesktopCommandSurface();
     const actions = {
+      openDesktopDocs: vi.fn(),
       openLogFolder: vi.fn(),
       openWorkspaceFolder: vi.fn(),
       showRoute: vi.fn(),
@@ -153,6 +160,9 @@ describe('desktop command surface', () => {
     expect(
       dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER, actions),
     ).toBe(true);
+    expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS, actions),
+    ).toBe(true);
 
     expect(actions.showRoute).toHaveBeenNthCalledWith(1, 'main');
     expect(actions.showRoute).toHaveBeenNthCalledWith(2, 'progress');
@@ -168,6 +178,7 @@ describe('desktop command surface', () => {
     );
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
+    expect(actions.openDesktopDocs).toHaveBeenCalledOnce();
   });
 
   it('builds settings-tab messages from one shared helper', async () => {
@@ -193,6 +204,7 @@ describe('desktop command surface', () => {
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
     const { buildDesktopMenuTemplate } = await loadDesktopCommandSurface();
     const actions = {
+      openDesktopDocs: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
@@ -205,7 +217,7 @@ describe('desktop command surface', () => {
       'editMenu',
       'viewMenu',
       'windowMenu',
-      'help',
+      'Help',
     ]);
     const texraMenu = menu.find((item) => item.label === 'TeXRA');
     const submenu = texraMenu?.submenu ?? [];
@@ -229,5 +241,13 @@ describe('desktop command surface', () => {
     submenu[9].click?.();
     expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
+
+    const helpMenu = menu.find((item) => item.label === 'Help');
+    const helpSubmenu = helpMenu?.submenu ?? [];
+    expect(helpSubmenu.map((item) => item.label)).toEqual([
+      'Desktop Documentation',
+    ]);
+    helpSubmenu[0].click?.();
+    expect(actions.openDesktopDocs).toHaveBeenCalledOnce();
   });
 });
