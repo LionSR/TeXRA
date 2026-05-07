@@ -220,17 +220,17 @@ export class DesktopProgressBridge {
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
-          `No pending agent proposal found for setup: ${proposalId}`,
+          `No pending desktop agent proposal found for setup: ${proposalId}`,
         );
       },
       onInvalidProposal: (issues) => {
-        this.logger.warn('Invalid proposal config', {
+        this.logger.warn('Invalid desktop agent proposal config', {
           data: { errors: issues },
         });
       },
       onSetupComplete: (proposal) => {
         this.logger.info(
-          `Agent proposal ${proposal.proposalId} set up in main view`,
+          `Desktop agent proposal ${proposal.proposalId} set up in main view`,
           {
             data: { agent: proposal.agent },
           },
