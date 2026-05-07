@@ -13,7 +13,7 @@ import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopRoute,
 } from '../desktopShellMessages.js';
-import { DESKTOP_ONBOARDING_COMMANDS } from '../desktopOnboardingMessages.js';
+import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import {
   createDesktopErrorReporter,
   type DesktopCommandMessage,
@@ -117,10 +117,7 @@ export function createDesktopShellActions(
   }
 
   function showFirstRunWalkthrough() {
-    renderer.postToRenderer({
-      command: DESKTOP_ONBOARDING_COMMANDS.SET_STATE,
-      shouldShow: true,
-    });
+    renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
   }
 
   function openDesktopDocs() {

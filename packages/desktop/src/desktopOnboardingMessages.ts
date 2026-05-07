@@ -17,3 +17,12 @@ export const DesktopOnboardingSetStateMessageSchema = z.object({
 export type DesktopOnboardingSetStateMessage = z.infer<
   typeof DesktopOnboardingSetStateMessageSchema
 >;
+
+export function buildDesktopOnboardingSetStateMessage(
+  shouldShow: boolean,
+): DesktopOnboardingSetStateMessage {
+  return {
+    command: DESKTOP_ONBOARDING_COMMANDS.SET_STATE,
+    shouldShow,
+  };
+}

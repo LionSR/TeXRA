@@ -1,8 +1,8 @@
 import { platform } from '@platform/platform';
 import {
+  buildDesktopOnboardingSetStateMessage,
   DESKTOP_ONBOARDING_COMMANDS,
   DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
-  type DesktopOnboardingSetStateMessage,
 } from '../desktopOnboardingMessages.js';
 import {
   createDesktopErrorReporter,
@@ -24,26 +24,17 @@ export function createDesktopOnboardingIpc(
   const state = options.state ?? platform().globalState;
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
-  function makeSetStateMessage(
-    shouldShow: boolean,
-  ): DesktopOnboardingSetStateMessage {
-    return {
-      command: DESKTOP_ONBOARDING_COMMANDS.SET_STATE,
-      shouldShow,
-    };
-  }
-
   function postCurrentState(): void {
     const dismissed = state.get<boolean>(
       DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
       false,
     );
-    renderer.postToRenderer(makeSetStateMessage(!dismissed));
+    renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(!dismissed));
   }
 
   async function dismiss(): Promise<void> {
     await state.update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true);
-    renderer.postToRenderer(makeSetStateMessage(false));
+    renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(false));
   }
 
   return {
