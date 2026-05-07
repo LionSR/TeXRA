@@ -1,4 +1,4 @@
-import { access, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { access, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -233,6 +233,61 @@ describe('desktop tool edit approval', () => {
       await vi.waitFor(async () => {
         await expect(pathExists(opened[0])).resolves.toBe(false);
         await expect(pathExists(opened[1])).resolves.toBe(false);
+      });
+    } finally {
+      offShow();
+      controller.dispose();
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('applies user edits made in the proposed preview file', async () => {
+    const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+    const { bus, requestToolEditApproval, desktopModule } =
+      await loadApprovalModules();
+    const opened: string[] = [];
+    const controller = desktopModule.createDesktopToolEditApprovalController({
+      tempRoot,
+      openPath: async (filePath) => {
+        opened.push(filePath);
+      },
+    });
+    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
+    const offShow = bus.on('showToolEditPermission', (payload) =>
+      shown.push(payload),
+    );
+
+    try {
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/notes.txt',
+        originalContent: 'alpha\n',
+        proposedContent: 'beta\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-edited-preview',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'previewProposed',
+      });
+      await vi.waitFor(() => expect(opened).toHaveLength(1));
+      await writeFile(opened[0], 'beta\nwith user edits\n', 'utf8');
+
+      expect(
+        controller.handleAction({
+          requestId: shown[0].requestId,
+          action: 'approve',
+        }),
+      ).toBe(true);
+
+      await expect(resultPromise).resolves.toMatchObject({
+        accepted: true,
+        appliedContent: 'beta\nwith user edits\n',
+        lineChanges: { added: 1, removed: 1 },
+      });
+      await vi.waitFor(async () => {
+        await expect(pathExists(opened[0])).resolves.toBe(false);
       });
     } finally {
       offShow();

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -103,7 +103,9 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
 
     switch (payload.action) {
       case 'approve':
-        this.settle(payload.requestId, { accepted: true });
+        this.runAction(payload.requestId, () =>
+          this.approveProposedEdit(payload.requestId, entry),
+        );
         return true;
       case 'reject':
         this.settle(payload.requestId, {
@@ -228,6 +230,14 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     }
 
     await this.options.openPath(entry.proposedUri.fsPath);
+  }
+
+  private async approveProposedEdit(
+    requestId: string,
+    entry: DesktopPendingToolEditApproval,
+  ): Promise<void> {
+    const appliedContent = await readFile(entry.proposedUri.fsPath, 'utf8');
+    this.settle(requestId, { accepted: true, appliedContent });
   }
 
   private async openDiffPatch(
