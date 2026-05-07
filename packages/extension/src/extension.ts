@@ -60,6 +60,7 @@ import { registerAgentEventListeners } from '@frontend/events/agentEventListener
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
 import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
+import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
 import { getLinterMessages } from '@frontend/latex/linter';
 import {
   pushManualCriticism,
@@ -149,6 +150,7 @@ export async function activate(context: vscode.ExtensionContext) {
     path: path.join(workspaceRoot, '.env'),
   });
   await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+  const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
   SecretManager.initialize(context);
   agentDirectories.initialize(context);
@@ -157,11 +159,11 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.createOutputChannel(name),
   );
   initializePolishModel(context.extensionPath);
-  initializeStateManagers(context);
+  initializeStateManagers(context, gitRepoRoot);
   initPlatform({
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
-    workspaceState: context.workspaceState,
+    workspaceState: workspaceSM,
     log: logger,
     fs: new VscodeFileSystem(),
     workspace: new VscodeWorkspace(),
