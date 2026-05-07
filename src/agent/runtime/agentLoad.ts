@@ -88,23 +88,6 @@ export function ensureAgentCategoryForSource<
   return settings;
 }
 
-export function ensureBundledWorkflowProtocol<
-  T extends {
-    agentCategory?: AgentCategory;
-    documentTag?: string;
-    endTag?: string;
-  },
->(settings: T, source: AgentSource): T {
-  if (
-    source === 'builtInWorkflow' &&
-    settings.agentCategory !== AgentCategory.ToolUse &&
-    !settings.documentTag
-  ) {
-    return { ...settings, documentTag: 'documents', endTag: '</documents>' };
-  }
-  return settings;
-}
-
 export async function loadAgentSettingAndPrompts(
   resolution: ResolvedAgent,
   options: AgentLoadOptions = {},
@@ -116,7 +99,7 @@ export async function loadAgentSettingAndPrompts(
     if (entry.source === 'remote') {
       const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
         resolution.resolvedName,
-        { preferMultiOutput: (options.outputFiles?.length ?? 0) > 0 },
+        { preferMultiOutput: (options.outputFiles?.length ?? 0) > 1 },
       );
 
       // Remote agents are already fully processed (tools resolved, validated)
@@ -153,7 +136,6 @@ export async function loadAgentSettingAndPrompts(
     }
 
     settings = ensureAgentCategoryForSource(settings, entry.source);
-    settings = ensureBundledWorkflowProtocol(settings, entry.source);
 
     // Resolve tool names to definitions using shared utility
     if (Array.isArray(settings.tools)) {

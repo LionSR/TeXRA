@@ -35,11 +35,20 @@ const NAMED_DOCUMENT_TAG_PATTERN = /<document\b[^>]*\bname\s*=/;
 async function shouldUseMultiDocumentPath(
   outputLocation: FileLocation,
   documentTag: string,
+  deps: OutputDependencies,
 ): Promise<boolean> {
   if (documentTag === 'documents') return true;
 
-  const outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
-  return NAMED_DOCUMENT_TAG_PATTERN.test(outputContent);
+  try {
+    const outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
+    return NAMED_DOCUMENT_TAG_PATTERN.test(outputContent);
+  } catch (error) {
+    deps.logger.debug(
+      `Unable to inspect XML output shape: ${toErrorMessage(error)}`,
+      { messageType: MESSAGE_TYPES.INTERNAL },
+    );
+    return false;
+  }
 }
 
 // ============================================================================
@@ -112,6 +121,7 @@ export async function extractFilesFromXml(
       const useMultiDocumentPath = await shouldUseMultiDocumentPath(
         outputLocation,
         deps.setting.documentTag,
+        deps,
       );
 
       if (useMultiDocumentPath) {
