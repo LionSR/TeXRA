@@ -79,16 +79,35 @@ jobs:
 
           echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout trusted automation
+        if: steps.tracker-gate.outputs.should_run == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          path: .trusted-actions
+          fetch-depth: 1
+
+      - name: Check trusted provider wrapper
+        if: steps.tracker-gate.outputs.should_run == 'true'
+        id: trusted-provider-wrapper
+        run: |
+          if [ -f .trusted-actions/.github/actions/claude-code-with-provider/action.yml ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping issue tracker: trusted base branch does not yet contain claude-code-with-provider."
+          fi
+
       - name: Run Claude Code
         id: claude
-        if: steps.tracker-gate.outputs.should_run == 'true'
-        uses: ./.github/actions/claude-code-with-provider
+        if: steps.tracker-gate.outputs.should_run == 'true' && steps.trusted-provider-wrapper.outputs.available == 'true'
+        uses: ./.trusted-actions/.github/actions/claude-code-with-provider
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
           model-tier: opus
           allowed-bots: 'dependabot[bot],github-actions[bot],Copilot,claude[bot],cursor[bot]'
           allowed-tools-preset: issue-tracker
-          claude-prompt-file: .github/prompts/issue-tracker-prompt.md
+          claude-prompt-file: .trusted-actions/.github/prompts/issue-tracker-prompt.md
           claude-prompt-context: |
             Event: ${{ github.event_name }} / ${{ github.event.action }}
             Repository: ${{ github.repository }}
