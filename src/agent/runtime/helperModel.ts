@@ -8,10 +8,10 @@
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import type { ModelHandler } from '@agent/modelHandlers';
+import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { getGlobalState } from '@agent/core/stateStore';
-import { GlobalStateKey } from '@common/state';
+import { GlobalStateKey } from '@common/state/stateKeys';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { isNonEmptyString } from '@utils/core';
@@ -74,7 +74,7 @@ export async function createHelperModelKit(): Promise<HelperModelResult> {
     return { kit: undefined, reason };
   }
 
-  const handler = createModelHandler(MODEL_CONFIGS[modelName]);
+  const handler = await createModelHandler(MODEL_CONFIGS[modelName]);
   handler.setOutputStreaming(false);
   handler.setProgressViewEnabled(false);
 

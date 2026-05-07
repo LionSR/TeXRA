@@ -7,8 +7,6 @@
  * 3. On resolution → emits 'resolvePlanApproval' to dismiss UI
  */
 
-// Local imports
-import { bus } from '@eventBus/ProgressEventBus';
 import type { Plan } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -44,7 +42,7 @@ interface PlanApprovalShowPayload extends Record<string, unknown> {
 // ============================================================================
 
 /** Manages pending plan approval requests. */
-class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
+export class PlanApprovalCoordinator extends BasePromiseCoordinator<
   PlanApprovalResult,
   PlanApprovalShowPayload
 > {
@@ -74,10 +72,10 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     this.approvalStreamMap.set(approvalId, streamId);
 
     // Request host to show progress view so user sees the approval prompt
-    bus.emit('requestEnsureProgressView', {});
+    this.runtimeHost.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    bus.emit('setActiveStream', { streamId });
+    this.runtimeHost.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       approvalId,
@@ -127,4 +125,4 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
 // ============================================================================
 
 /** Singleton coordinator instance. */
-export const planApprovalCoordinator = new PlanApprovalCoordinatorImpl();
+export const planApprovalCoordinator = new PlanApprovalCoordinator();

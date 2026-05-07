@@ -53,7 +53,7 @@ export class VerifySetupTool extends defineTool({
       }
       // First char must be alphanumeric — rejects punctuation-only
       // tokens like `"."` or `".."`, which would otherwise path-join
-      // through `findToolInCommonPaths` to existing directories (e.g.
+      // through BinaryResolver to existing directories (e.g.
       // `/usr/bin/.`) and produce a false "ok" verification result.
       if (!/^[A-Za-z0-9][A-Za-z0-9._+\-]*$/.test(name)) {
         throw new ToolError(

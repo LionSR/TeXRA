@@ -144,8 +144,6 @@ export const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
   hasPath: z.boolean(),
   filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),
-  hasMultiple: z.boolean(), // supports multiple outputs (informational)
-  hasMultiplePath: z.boolean(), // has openable _multiple YAML file
   enabled: z.boolean(),
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
@@ -182,6 +180,8 @@ export const ModelSelectionItemSchema = z.object({
   defaultReasoningLevel: ReasoningLevelSchema.optional(),
   /** The user's chosen reasoning level override (undefined = use default). */
   reasoningLevel: ReasoningLevelSchema.optional(),
+  /** Included access relay cap applied to the default xhigh effort, if any. */
+  includedAccessReasoningCap: ReasoningLevelSchema.optional(),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: z.boolean().optional(),
 });
@@ -329,12 +329,22 @@ export const CodexReasoningEffortSchema = z.enum([
 ]);
 export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>;
 
+/** Valid Codex approval policies (mirrors CODEX_APPROVAL_POLICIES in codexConfig.ts). */
+export const CodexApprovalPolicySchema = z.enum([
+  'never',
+  'on-request',
+  'on-failure',
+  'untrusted',
+]);
+export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
+
 /** Outbound: backend → frontend approval settings */
 export const UpdateApprovalSettingsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
   bashApprovalEnabled: z.boolean(),
   codexSandboxMode: CodexSandboxModeSchema,
   codexReasoningEffort: CodexReasoningEffortSchema,
+  codexApprovalPolicy: CodexApprovalPolicySchema,
 });
 export type UpdateApprovalSettingsMessage = z.infer<
   typeof UpdateApprovalSettingsMessageSchema
@@ -364,6 +374,16 @@ export const UpdateGitHubTokenStatusMessageSchema = z.object({
 });
 export type UpdateGitHubTokenStatusMessage = z.infer<
   typeof UpdateGitHubTokenStatusMessageSchema
+>;
+
+/** Outbound: backend → frontend desktop crash reporting status. */
+export const UpdateDesktopCrashReportingMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING),
+  enabled: z.boolean(),
+  configured: z.boolean(),
+});
+export type UpdateDesktopCrashReportingMessage = z.infer<
+  typeof UpdateDesktopCrashReportingMessageSchema
 >;
 
 export const PRSubscriptionOwnerSchema = z.object({
@@ -488,6 +508,15 @@ export type UpdateLatexConfigValuesMessage = z.infer<
   typeof UpdateLatexConfigValuesMessageSchema
 >;
 
+/** Outbound: backend → frontend inline criticism toggle state */
+export const UpdateInlineCriticismEnabledMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED),
+  enabled: z.boolean(),
+});
+export type UpdateInlineCriticismEnabledMessage = z.infer<
+  typeof UpdateInlineCriticismEnabledMessageSchema
+>;
+
 // ============================================================
 // Inbound message schemas (frontend → backend)
 // ============================================================
@@ -497,9 +526,19 @@ export type UpdateLatexConfigValuesMessage = z.infer<
 // to avoid duplicating definitions. The command literal strings are identical.
 
 // Provider key inbound messages (settings-only)
+// Keep the outer optional: callers may omit apiKey so the host can prompt.
+const SubmittedApiKeySchema = z
+  .preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().trim().min(1).optional(),
+  )
+  .optional();
+
 const SetProviderKeyMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_KEY),
   provider: z.string().min(1),
+  apiKey: SubmittedApiKeySchema,
 });
 
 const RemoveProviderKeyMessageSchema = z.object({
@@ -573,7 +612,6 @@ const OpenAgentYamlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_YAML),
   agentName: z.string().min(1),
   agentSource: AgentSourceSchema,
-  variant: z.enum(['base', 'multiple']),
 });
 
 const SetAgentEnabledMessageSchema = z.object({
@@ -748,6 +786,17 @@ const RemoveGitHubTokenMessageSchema = commandOnly(CMD.REMOVE_GITHUB_TOKEN);
 
 const OpenGitHubTokenUrlMessageSchema = commandOnly(CMD.OPEN_GITHUB_TOKEN_URL);
 
+const GetDesktopCrashReportingMessageSchema = commandOnly(
+  CMD.GET_DESKTOP_CRASH_REPORTING,
+);
+const SetDesktopCrashReportingEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_DESKTOP_CRASH_REPORTING_ENABLED),
+  enabled: z.boolean(),
+});
+const SetDesktopCrashReportingDsnMessageSchema = commandOnly(
+  CMD.SET_DESKTOP_CRASH_REPORTING_DSN,
+);
+
 const GetPRSubscriptionsMessageSchema = commandOnly(CMD.GET_PR_SUBSCRIPTIONS);
 
 const UnsubscribePRMessageSchema = z.object({
@@ -809,6 +858,15 @@ const SetLatexConfigValueMessageSchema = z.object({
   value: z.union([z.boolean(), z.number(), z.string(), z.null()]).optional(),
 });
 
+// Experimental settings inbound messages
+const GetInlineCriticismEnabledMessageSchema = commandOnly(
+  CMD.GET_INLINE_CRITICISM_ENABLED,
+);
+const SetInlineCriticismEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_INLINE_CRITICISM_ENABLED),
+  enabled: z.boolean(),
+});
+
 // Approval settings inbound messages
 const GetApprovalSettingsMessageSchema = commandOnly(CMD.GET_APPROVAL_SETTINGS);
 const SetBashApprovalEnabledMessageSchema = z.object({
@@ -822,6 +880,10 @@ const SetCodexSandboxModeMessageSchema = z.object({
 const SetCodexReasoningEffortMessageSchema = z.object({
   command: z.literal(CMD.SET_CODEX_REASONING_EFFORT),
   effort: CodexReasoningEffortSchema,
+});
+const SetCodexApprovalPolicyMessageSchema = z.object({
+  command: z.literal(CMD.SET_CODEX_APPROVAL_POLICY),
+  policy: CodexApprovalPolicySchema,
 });
 
 // Navigation inbound messages
@@ -852,6 +914,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     RunInstallCommandMessageSchema,
     GetLatexConfigValuesMessageSchema,
     SetLatexConfigValueMessageSchema,
+    GetInlineCriticismEnabledMessageSchema,
+    SetInlineCriticismEnabledMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,
@@ -921,6 +985,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetGitHubTokenMessageSchema,
     RemoveGitHubTokenMessageSchema,
     OpenGitHubTokenUrlMessageSchema,
+    GetDesktopCrashReportingMessageSchema,
+    SetDesktopCrashReportingEnabledMessageSchema,
+    SetDesktopCrashReportingDsnMessageSchema,
     GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,
@@ -929,6 +996,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetBashApprovalEnabledMessageSchema,
     SetCodexSandboxModeMessageSchema,
     SetCodexReasoningEffortMessageSchema,
+    SetCodexApprovalPolicyMessageSchema,
     // Agent team messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,

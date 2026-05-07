@@ -13,7 +13,7 @@
  */
 
 // Local imports
-import { bus } from '@eventBus/ProgressEventBus';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
@@ -207,7 +207,7 @@ export function getLastCheckResults(): ExternalToolCheckResult[] | null {
  */
 export async function refreshToolAvailability(): Promise<void> {
   await runExternalToolChecks();
-  bus.emit('toolAvailabilityChanged', undefined);
+  getAgentRuntimeHost().emit('toolAvailabilityChanged', undefined);
 }
 
 /**

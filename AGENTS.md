@@ -12,7 +12,7 @@ When updating CHANGELOG.md:
 
 ## Development workflow
 
-1. **Install dependencies**: run `npm install` if needed.
+1. **Install dependencies**: run `corepack pnpm install` if needed.
 2. **Run checks before committing**:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast` (recommended) or `npm run compile`.
@@ -44,6 +44,7 @@ The project has two build systems with different trade-offs:
 
 - Use `compile:fast` during development for speed
 - Use `compile:safe` before committing to catch type errors
+- Use `build:initial` when validating a full initial build because it builds the desktop app and VSIX artifacts
 - CI should always run `typecheck` or use safe variants
 
 ## Commit messages
@@ -54,7 +55,7 @@ The project has two build systems with different trade-offs:
 
 ## Coding style
 
-- All code in `src/` is written in TypeScript targeting ES2022.
+- TypeScript code in repo-root `src/` and `packages/*/src/` targets ES2022.
 - Use the provided ESLint configuration (`eslint.config.mjs`) and Prettier settings (`.prettierrc`). Run `npm run format` before committing.
 - Prefer `const` and `let` over `var`.
 - Group imports by source and prefix each block with a descriptive comment (e.g., `// Third-party imports`, `// Local imports - component`).
@@ -62,7 +63,7 @@ The project has two build systems with different trade-offs:
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
 - Keep the directory structure aligned among different webviews (webview, progressView, settingsView). Use the same folder names for modules of the same type and functionality but in different webviews.
-- Place view-specific manager classes under each view's `managers` folder. For example, `WebviewUpdater.ts` lives in `src/progressView/managers/`.
+- Place view-specific manager classes under each view's `managers` folder. For example, `WebviewUpdater.ts` lives in `packages/extension/src/progressView/managers/`.
 
 ### Naming conventions
 
@@ -73,7 +74,11 @@ The project has two build systems with different trade-offs:
 
 ### Directory organization
 
-- `src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
+This repository is a pnpm workspace. Repo-root `src/` contains shared core logic and host-neutral tests,
+`packages/extension/` contains the VS Code extension, `packages/desktop/` contains the Electron shell, and
+`packages/core/` exposes the shared package surface.
+
+- `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
   - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)
   - `frontend/ui/` - Dialog helpers, diff views, message utilities
   - `frontend/editor/` - Active file guards and editor utilities
@@ -92,8 +97,14 @@ The project has two build systems with different trade-offs:
   - `utils/system/` - Shell command execution (`execUtils`)
   - `utils/text/` - Text and XML processing utilities
   - `utils/prompt/` - Prompt builder utilities
-- `src/settingsView/` - Unified settings webview combining History, Memory, Models, Agents, Multi-Agent, LaTeX, and Tools tabs
+- `packages/extension/src/commands/` - VS Code commands grouped by domain
+- `packages/extension/src/settingsView/` - Unified settings webview combining History, Memory, Models, Agents, Multi-Agent, LaTeX, and Tools tabs
+- `packages/extension/src/progressView/` - Task tracking board webview
+- `packages/extension/src/webview/` - Main agent interaction webview
+- `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 - `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform`.
+- `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
+- `src/test-kernel/` - Vitest suites for host-neutral and Electron-facing behavior.
 
 ### Pragmatic implementations
 
@@ -239,7 +250,7 @@ Aim for code that looks like it was designed correctly from the start:
 
 For good separation of concerns and platform independence, core business logic should stay free of host-specific imports. This improves testability and keeps the door open for future reuse outside VS Code.
 
-1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of Concerns: VS Code Coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/shared/`.
+1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of Concerns: VS Code Coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`.
 
 2. **Use platform-agnostic helpers instead of VS Code types:**
    - `isFile(type)` / `isDirectory(type)` from `@common/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
@@ -259,7 +270,7 @@ For good separation of concerns and platform independence, core business logic s
 - Use `getConfig`, `updateConfig`, and `watchConfig` from `@utils/config` to read and react to settings changes.
 - Interact with the filesystem through `@utils/files` helpers (`WorkspaceFS`, `RelativeFS`, `StorageFS`, `GlobalStorageFS`, `AbsoluteFS`). They resolve workspace paths, manage global storage, and expose cleanup helpers like `RelativeFS.cleanupOldFiles`.
 - Generate and resolve pasted-image paths with `@utils/files/pastedImageUtils` so temporary assets map correctly back to storage.
-- Surface files and agent directories through the shared frontend utilities (`fileLister` in `src/frontend/files/fileLister.ts`, `agentDirectories` in `src/frontend/agents/AgentDirectoryManager.ts`) instead of duplicating discovery logic.
+- Surface files and agent directories through the shared frontend utilities (`fileLister` in `packages/extension/src/frontend/files/fileLister.ts`, `agentDirectories` in `packages/extension/src/frontend/agents/AgentDirectoryManager.ts`) instead of duplicating discovery logic.
 
 **Logging and telemetry**
 
@@ -292,14 +303,14 @@ See `docs/pocketflow/` for full framework documentation.
 
 **Webviews and UI**
 
-- Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
+- Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`packages/extension/src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
 - Use codicon-based controls and shared utilities from `@utils/text/stringUtils` and `@utils/files/pathUtils` for consistent interactions.
 - For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js, `@vscode/codicons`) local to reduce extension size.
 - Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `src/common/styles/common.css`) and use codicon chevrons (e.g., `<i class="codicon codicon-chevron-down"></i>`) for toggle affordances.
 
 **Progress view**
 
-- Extend the existing Lit components in `src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and managers in `src/progressView/managers/` (`OutputFilesManager`, `UsageStatsManager`, `WebviewUpdater`) — augment them rather than manipulating the DOM directly.
+- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and managers in `packages/extension/src/progressView/managers/` (`OutputFilesManager`, `UsageStatsManager`, `WebviewUpdater`) — augment them rather than manipulating the DOM directly.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
 
 **Error handling and types**
@@ -310,13 +321,13 @@ See `docs/pocketflow/` for full framework documentation.
 **Miscellaneous**
 
 - Maintain text cleanup rules in the `src/replacement` modules.
-- Execute VS Code commands with `safeExecuteCommand` from `src/frontend/system/commandUtils.ts` and shell commands with `executeCommand` from `src/utils/system/execUtils.ts` so logging and error handling stay uniform.
+- Execute VS Code commands with `safeExecuteCommand` from `packages/extension/src/frontend/system/commandUtils.ts` and shell commands with `executeCommand` from `src/utils/system/execUtils.ts` so logging and error handling stay uniform.
 - Retrieve included file extensions via `getIncludedExtensions` in `src/common/files/fileTypeUtils.ts`.
-- Initialize new agent YAML files from the templates in `resources/agents/` and `resources/tool_use_agents/`.
+- Initialize new agent YAML files from the templates in `packages/extension/resources/agents/` and `packages/extension/resources/tool_use_agents/`.
 - Dispose event listeners and watchers when webviews close to prevent leaks.
 - Prefer enums or discriminated unions over bare booleans in configuration objects.
 - Favor debug logs for routine events and reserve info/error levels for notable outcomes.
-- Use the helpers in `src/frontend/ui/dialogs.ts` and `src/frontend/ui/instruction.ts` for consistent notification primitives shared across the extension.
+- Use the helpers in `packages/extension/src/frontend/ui/dialogs.ts` and `packages/extension/src/frontend/ui/instruction.ts` for consistent notification primitives shared across the extension.
 
 ### Webview Consistency Patterns
 
@@ -333,7 +344,10 @@ See `docs/pocketflow/` for full framework documentation.
 
 ### Source Organization
 
-Commands live under `src/commands/` and are grouped by domain. Key folders include `agent/` for agent lifecycle and merge commands, `housekeeping/` for cleanup and packaging, `latex/` for LaTeX document tasks, `settings/` for settings view commands, and `system/` for editor helpers along with XML/YAML utilities. This structure keeps each area focused and aligns with the design philosophy of deep modules.
+VS Code commands live under `packages/extension/src/commands/` and are grouped by domain. Key folders include
+`agent/` for agent lifecycle and merge commands, `housekeeping/` for cleanup and packaging, `latex/` for
+LaTeX document tasks, `settings/` for settings view commands, and `system/` for editor helpers along with
+XML/YAML utilities. This structure keeps each area focused and aligns with the design philosophy of deep modules.
 
 ## Design and refactoring
 

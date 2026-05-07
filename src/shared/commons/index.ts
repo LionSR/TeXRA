@@ -71,8 +71,12 @@ export {
 // Shared: Base webview app
 export { BaseWebviewApp } from '@shared/BaseWebviewApp';
 
-// Shared: VS Code API
-export { vscode, postMessage, type VSCodeApi } from '@shared/vscode';
+// Shared: host bridge API
+export {
+  hostBridge,
+  postMessage,
+  type HostBridgeApi,
+} from '@shared/hostBridge';
 
 // Shared: Schemas (re-export everything)
 export * from '@shared/schemas';

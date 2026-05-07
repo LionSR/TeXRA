@@ -13,8 +13,8 @@ import { PromptBuilder } from '@utils/prompt';
 describe('PromptBuilder', () => {
   const baseSetting: AgentWorkflowSetting = {
     agentCategory: AgentCategory.Workflow,
-    documentTag: 'document',
-    endTag: '</document>',
+    documentTag: 'documents',
+    endTag: '</documents>',
     temperature: 1,
     isRewrite: true,
     rounds: 2,
@@ -23,7 +23,6 @@ describe('PromptBuilder', () => {
     defaultOutputFiles: [],
     requiredFiles: {},
     requiredFilesInternal: {},
-    isMultipleOutput: false,
     filePatternsContain: [],
     tools: [],
   };

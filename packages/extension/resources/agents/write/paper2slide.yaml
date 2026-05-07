@@ -1,0 +1,185 @@
+name: paper2slide
+settings:
+  agentCategory: workflow
+  documentTag: documents
+  endTag: </documents>
+  outputExt: tex
+  prefills:
+    - 'Here is the Beamer presentation. <documents>'
+    - ''
+  requiredFilesInternal:
+    TEMPLATE_SLIDE: template_slide.tex
+
+prompts:
+  systemPrompt: |
+    You are an expert scientist and scientific presenter. Your task is to create a professional LaTeX Beamer presentation based on a given research paper. The presentation should be tailored for a scientific audience, highlighting the key points, methodology, results, and conclusions of the paper.
+
+    When creating the presentation:
+    - Use LaTeX Beamer syntax and commands
+    - Structure the presentation with a clear introduction, body, and conclusion
+    - Include appropriate equations, figures, and tables from the paper
+    - Use condensed bullet points to convey information effectively
+    - Maintain a professional and scientifically rigorous tone throughout the presentation
+    - Use appropriate notation and terminology consistently
+    - Prioritize visual representations and key takeaways over verbose descriptions
+    - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
+    - Output a complete, self-contained LaTeX file that can be compiled directly
+    - The document must be self-contained: write as if the reader is a third party who has never read and will never read our conversations --- they should be able to understand and follow the presentation on its own. Define all notations, abbreviations, and terminology before first use.
+
+  userPrefix: |
+    You are tasked with creating a LaTeX Beamer presentation based on the following research paper:
+
+    <documents>
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
+    {{ ADDITIONAL_INPUTS }}
+
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
+    </documents>
+
+    Please carefully review the provided research paper before creating the presentation.
+  userRequest:
+    - |
+      Your task is to create a professional LaTeX Beamer presentation for a scientific audience.
+
+      When creating the presentation, please follow these guidelines:
+      \begin{enumerate}
+          \item Use LaTeX Beamer syntax and commands correctly.
+          \item Structure the presentation with a clear introduction, body, and conclusion.
+          \item Include 10-15 slides, covering the main points of the paper.
+          \item Use appropriate equations, figures, and tables from the original paper.
+          \item Write condensed bullet points to convey information effectively.
+          \item Maintain a professional and scientifically rigorous tone throughout the presentation.
+          \item Use appropriate notation and terminology consistently.
+          \item Prioritize visual representations and key takeaways over verbose descriptions.
+          \item Include slide numbers for easy reference.
+          \item End with a conclusion slide summarizing the main findings and potential future work.
+      \end{enumerate}
+
+
+      {% if INSTRUCTION %}
+      Focus solely on the following specific instruction:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+      {% endif %}
+
+      Create a complete, self-contained LaTeX Beamer presentation that effectively communicates the paper's key findings in 10-15 slides. The presentation should be professional, condensed, and highlight the main aspects of the research paper. Use the following format:
+
+      {% if OUTPUT_FILES_ORDER %}
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      \documentclass{beamer}
+
+      \usetheme{metropolis}
+
+      \setbeamertemplate{navigation symbols}{}
+
+      \AtBeginSection[]
+      {
+      \begin{frame}<beamer>
+      \frametitle{Outline}
+      \tableofcontents[currentsection]
+      \end{frame}
+      }
+
+      \usepackage{amsmath}
+      \usepackage{amssymb}
+      \usepackage{graphicx}
+      \usepackage{physics}
+      \usepackage{hyperref}
+      \usepackage{natbib}
+
+      % Add any additional packages needed
+
+      % Title information
+      \title{...}
+      \author{...}
+      \institute{...}
+      \date{\today}
+
+      \begin{document}
+
+      % SLIDE CONTENT HERE
+
+      \begin{frame}[allowframebreaks]{References}
+          \bibliography{...}
+      \end{frame}
+
+      \end{document}
+      </document>
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      \documentclass{beamer}
+
+      \usetheme{metropolis}
+
+      \setbeamertemplate{navigation symbols}{}
+
+      \AtBeginSection[]
+      {
+      \begin{frame}<beamer>
+      \frametitle{Outline}
+      \tableofcontents[currentsection]
+      \end{frame}
+      }
+
+      \usepackage{amsmath}
+      \usepackage{amssymb}
+      \usepackage{graphicx}
+      \usepackage{physics}
+      \usepackage{hyperref}
+      \usepackage{natbib}
+
+      % Add any additional packages needed
+
+      % Title information
+      \title{...}
+      \author{...}
+      \institute{...}
+      \date{\today}
+
+      \begin{document}
+
+      % SLIDE CONTENT HERE
+
+      \begin{frame}[allowframebreaks]{References}
+          \bibliography{...}
+      \end{frame}
+
+      \end{document}
+      </document>
+      </documents>
+      {% endif %}
+    - |
+      Critically review your draft and output a revised version. Check these aspects and fix any issues found:
+      \begin{enumerate}
+          \item Does the presentation effectively communicate the key findings and methodology?
+          \item Are the slides well-organized and logically structured?
+          \item Is the content appropriate for the target audience?
+          \item Are equations and mathematical content properly formatted and explained?
+          \item Are visual elements (figures, tables, diagrams) effectively used?
+          \item Is the text concise and focused, avoiding unnecessary details?
+          \item Are transitions between slides smooth and logical?
+          \item Is the overall presentation visually appealing and professional?
+      \end{enumerate}
+
+      Output the complete, self-contained revised version based on the previous version, maintaining its professional quality and technical accuracy. Use the following format:
+
+      {% if OUTPUT_FILES_ORDER %}
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % Complete revised LaTeX Beamer presentation here
+      </document>
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      % Complete revised LaTeX Beamer presentation here
+      </document>
+      </documents>
+      {% endif %}
