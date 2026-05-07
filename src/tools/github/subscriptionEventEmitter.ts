@@ -7,7 +7,10 @@ import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 export type GitHubSubscriptionChangedEvent =
   | 'prSubscriptionsChanged'
   | 'repoSubscriptionsChanged'
-  | 'issueSubscriptionsChanged';
+  | 'issueSubscriptionsChanged'
+  | 'prSubscriptionBindingsChanged'
+  | 'repoSubscriptionBindingsChanged'
+  | 'issueSubscriptionBindingsChanged';
 
 export function emitGitHubSubscriptionChanged<
   K extends GitHubSubscriptionChangedEvent,

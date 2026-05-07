@@ -18,6 +18,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId } from '@shared/schemas';
 
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import type { Disposable } from './PollingSourceBase';
 
 export interface SubscriptionBinding<K extends string> {
@@ -194,6 +195,6 @@ export class SubscriptionBinder<K extends string, Input> {
   }
 
   private emitBindingsChanged(): void {
-    getAgentRuntimeHost().emit(this.opts.bindingsChangedEvent, undefined);
+    emitGitHubSubscriptionChanged(this.opts.bindingsChangedEvent, undefined);
   }
 }
