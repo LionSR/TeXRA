@@ -498,9 +498,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       getPendingProposal: (proposalId) =>
         this.provider.getPendingAgentProposal(proposalId),
       restoreTaskState: async (taskState) => {
-        await vscode.commands.executeCommand('texra.showMainView');
-        await vscode.commands.executeCommand('texra.restoreState', taskState);
-        return true;
+        return (
+          (await vscode.commands.executeCommand<boolean>(
+            'texra.restoreState',
+            taskState,
+          )) === true
+        );
       },
       resolveProposal: (proposalId, result) => {
         proposalCoordinator.resolveRequest(proposalId, result);

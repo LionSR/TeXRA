@@ -427,4 +427,32 @@ describe('desktop Progress IPC', () => {
     });
     expect(onUnsupportedCommand).not.toHaveBeenCalled();
   });
+
+  it('does not report failed agent proposal setup as unsupported', async () => {
+    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
+    const progress = createProgress();
+    progress.handleAgentProposalAction.mockResolvedValueOnce(false);
+    const onUnsupportedCommand = vi.fn();
+    const ipc = createDesktopProgressIpc({
+      progress,
+      onUnsupportedCommand,
+    });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+        proposalId: 'proposal-1',
+        action: 'setup',
+      }),
+    ).toBe(true);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(progress.handleAgentProposalAction).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+      proposalId: 'proposal-1',
+      action: 'setup',
+    });
+    expect(onUnsupportedCommand).not.toHaveBeenCalled();
+  });
 });

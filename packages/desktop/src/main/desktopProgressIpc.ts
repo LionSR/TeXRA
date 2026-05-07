@@ -90,9 +90,7 @@ export function createDesktopProgressIpc(
           runAsync(
             options.progress
               .handleAgentProposalAction(result.data)
-              .then((handled) => {
-                if (!handled) onUnsupportedCommand(result.data);
-              }),
+              .then(() => {}),
           );
           return true;
         case PROGRESS_VIEW_COMMANDS.OPEN_FILE:

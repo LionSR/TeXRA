@@ -8,14 +8,12 @@ import type { TaskState } from '@logger/TaskState';
 
 // Local imports - shared
 import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';
+import type { ProgressAgentProposalActionMessage } from '@shared/schemas/progressView';
 
-interface AgentProposalActionInput {
-  proposalId: string;
-  action: 'approve' | 'reject' | 'setup';
-  feedback?: string;
-  model?: string;
-  agent?: string;
-}
+type AgentProposalActionInput = Omit<
+  ProgressAgentProposalActionMessage,
+  'command'
+>;
 
 export interface ProgressAgentProposalControllerDeps {
   getPendingProposal(proposalId: string): AgentProposalPermission | undefined;
@@ -46,6 +44,8 @@ export class ProgressAgentProposalController {
           feedback: input.feedback,
         });
         return true;
+      default:
+        return false;
     }
   }
 
