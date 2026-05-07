@@ -273,13 +273,23 @@ function normalizePlatform(platform, normalizedPath) {
   if (platform === 'win32' || platform === 'win') return 'win32';
 
   if (normalizedPath.includes('.app/contents/resources')) return 'darwin';
-  if (normalizedPath.includes('/mac') || normalizedPath.includes('\\mac')) {
+  if (hasPathToken(normalizedPath, 'mac', 'darwin')) {
     return 'darwin';
   }
-  if (normalizedPath.includes('linux')) return 'linux';
-  if (normalizedPath.includes('win')) return 'win32';
+  if (hasPathToken(normalizedPath, 'linux')) return 'linux';
+  if (hasPathToken(normalizedPath, 'win', 'win32', 'windows')) return 'win32';
 
   return null;
+}
+
+function hasPathToken(normalizedPath, ...tokens) {
+  return normalizedPath
+    .split('/')
+    .some((segment) =>
+      tokens.some((token) =>
+        new RegExp(`(^|[-_])${token}($|[-_])`).test(segment),
+      ),
+    );
 }
 
 function normalizeArch(arch, normalizedPath, normalizedPlatform) {

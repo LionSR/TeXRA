@@ -18,6 +18,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { repoPath } from './desktopTestPaths.mjs';
 
 const verifierPath = repoPath('scripts/verify-desktop-package.mjs');
+const payloadUrl = pathToFileURL(
+  repoPath('scripts/desktop-codex-payload.mjs'),
+).href;
 const pruneHookUrl = pathToFileURL(
   repoPath('scripts/prune-desktop-codex-payload.mjs'),
 ).href;
@@ -82,6 +85,18 @@ describe('desktop Codex package payload', () => {
     expect(output).toContain('@openai/codex-darwin-arm64');
     expect(output).not.toContain('@openai/codex-darwin-x64');
     expect(output).toContain('Codex CLI payload size');
+  });
+
+  it('does not infer Windows from a darwin path segment', async () => {
+    const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
+      inferCodexPlatformKeys: (input: { appPath: string }) => string[];
+    };
+
+    expect(
+      inferCodexPlatformKeys({
+        appPath: '/tmp/TeXRA-darwin-arm64/TeXRA.app',
+      }),
+    ).toEqual(['darwin-arm64']);
   });
 });
 
