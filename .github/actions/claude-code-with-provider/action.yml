@@ -166,6 +166,37 @@ runs:
             printf '%s\n' "$delimiter"
           } >> "$GITHUB_OUTPUT"
         }
+        shell_quote() {
+          local value="$1"
+          value="${value//\'/\'\\\'\'}"
+          printf "'%s'" "$value"
+        }
+        append_arg_line() {
+          local value="$1"
+          if [ -n "$claude_args" ]; then
+            claude_args="${claude_args}"$'\n'
+          fi
+          claude_args="${claude_args}${value}"
+        }
+        trim_tool_name() {
+          local value="$1"
+          value="${value#"${value%%[![:space:]]*}"}"
+          value="${value%"${value##*[![:space:]]}"}"
+          printf '%s' "$value"
+        }
+        format_allowed_tools_args() {
+          local tools_csv="$1"
+          local result=''
+          local tool=''
+          while IFS= read -r tool; do
+            tool="$(trim_tool_name "$tool")"
+            if [ -z "$tool" ]; then
+              continue
+            fi
+            result="${result} $(shell_quote "$tool")"
+          done < <(printf '%s' "$tools_csv" | tr ',' '\n')
+          printf '%s' "$result"
+        }
 
         provider="$INPUT_PROVIDER"
         provider="${provider,,}"
@@ -323,19 +354,12 @@ runs:
         fi
 
         claude_args="$INPUT_CLAUDE_ARGS"
-        append_system_prompt=''
         if [ -n "$system_prompt" ] && ! printf '%s\n' "$claude_args" | grep -q -- '--append-system-prompt'; then
-          append_system_prompt="$system_prompt"
-          if [ -n "$claude_args" ]; then
-            claude_args="${claude_args}"$'\n'
-          fi
-          claude_args="${claude_args}--append-system-prompt \"${append_system_prompt}\""
+          append_arg_line "--append-system-prompt $(shell_quote "$system_prompt")"
         fi
         if [ -n "$allowed_tools" ] && ! printf '%s\n' "$claude_args" | grep -q -- '--allowedTools'; then
-          if [ -n "$claude_args" ]; then
-            claude_args="${claude_args}"$'\n'
-          fi
-          claude_args="${claude_args}--allowedTools \"${allowed_tools}\""
+          claude_args_allowed_tools="$(format_allowed_tools_args "$allowed_tools")"
+          append_arg_line "--allowedTools${claude_args_allowed_tools}"
         fi
 
         case "$model_tier" in
