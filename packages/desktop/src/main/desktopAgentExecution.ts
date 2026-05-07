@@ -762,7 +762,9 @@ export class DesktopProgressBridge {
       await this.options.openBuildDisplay(toFileLocation(filePath));
       return;
     }
-    await this.openFile(filePath);
+    await this.options.showMessage?.(
+      'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
+    );
   }
 
   async handleBashApprovalAction(
