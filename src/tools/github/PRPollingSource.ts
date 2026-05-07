@@ -11,8 +11,6 @@
  * layer above.
  */
 
-import { bus } from '@eventBus/ProgressEventBus';
-
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatCheckAnnotations,
@@ -54,6 +52,7 @@ import {
   type GhReview,
   type GhReviewComment,
 } from './prTypes';
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 function createInitialState(pr: PRKey): SubscriptionState {
   return {
@@ -202,7 +201,7 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedBusEvent(keys: readonly string[]): void {
-    bus.emit('prSubscriptionsChanged', { keys });
+    emitGitHubSubscriptionChanged('prSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(

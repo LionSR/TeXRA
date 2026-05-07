@@ -1,11 +1,11 @@
 /** Per-stream bypass state for agent delegation proposals. */
-import { bus } from '@eventBus/ProgressEventBus';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
 const bypassedByStream = new Map<StreamTabId, boolean>();
 
 function notifyBypassState(streamId: StreamTabId): void {
-  bus.emit('updateSuperYoloBypassState', {
+  getAgentRuntimeHost().emit('updateSuperYoloBypassState', {
     streamId,
     bypassActive: bypassedByStream.get(streamId) ?? false,
   });
