@@ -24,7 +24,6 @@ import {
   normalizeMetafilePath,
   resolveMetafileImportPath,
 } from './desktop-package-metafile-paths.mjs';
-import { expectedCodexPlatformKeysFromLabel } from './desktop-package-targets.mjs';
 
 const require = createRequire(import.meta.url);
 const { extractFile, listPackage, statFile } = require('@electron/asar');

@@ -116,6 +116,23 @@ describe('desktop Codex package payload', () => {
     ).toEqual(['darwin-arm64']);
   });
 
+  it('defaults Linux and Windows package paths without architecture tokens to x64', async () => {
+    const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
+      inferCodexPlatformKeys: (input: { appPath: string }) => string[];
+    };
+
+    expect(
+      inferCodexPlatformKeys({
+        appPath: '/tmp/dist/linux-unpacked/resources/app.asar',
+      }),
+    ).toEqual(['linux-x64']);
+    expect(
+      inferCodexPlatformKeys({
+        appPath: '/tmp/dist/win-unpacked/resources/app.asar',
+      }),
+    ).toEqual(['win32-x64']);
+  });
+
   it('uses the universal Codex payload budget only for universal builds', async () => {
     const { expectedCodexPayloadBudgetBytes, inferCodexPlatformKeys } =
       (await import(payloadUrl)) as {

@@ -320,5 +320,9 @@ function normalizeArch(arch, normalizedPath, normalizedPlatform) {
     return process.arch === 'arm64' ? 'arm64' : 'x64';
   }
 
+  if (normalizedPlatform === 'linux' || normalizedPlatform === 'win32') {
+    return 'x64';
+  }
+
   return null;
 }
