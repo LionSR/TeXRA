@@ -29,14 +29,10 @@ const CleanParamsSchema = z.object({
 
 const CleanConfigSchema = CleanParamsSchema.extend({
   outputFiles: z.array(z.string()).prefault([]),
-  useMultipleOutputs: z.boolean().optional(),
   streamId: z.string().optional(),
   executionId: ExecutionIdSchema.optional(),
   skipProgressViewClear: z.boolean().optional(),
-}).transform((c) => ({
-  ...c,
-  useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 0,
-}));
+});
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
@@ -87,7 +83,7 @@ async function handleCleanSingle(
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
-      useMultipleOutputs: false,
+      outputFiles: [],
     },
   });
 }
@@ -120,7 +116,7 @@ async function handleCleanMultiple(
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
-      useMultipleOutputs: true,
+      outputFiles,
     },
   });
 }
@@ -139,7 +135,6 @@ export async function handleClean(config: unknown): Promise<void> {
     model,
     inputFile,
     outputFiles,
-    useMultipleOutputs,
     streamId,
     executionId,
     skipProgressViewClear,
@@ -157,7 +152,7 @@ export async function handleClean(config: unknown): Promise<void> {
   // produce a runDir via `ensureRunDir`, so keying solely off
   // `runCleanRunDir` returning `success` leaves the real artifacts behind.
   const runWorkspaceClean = (): Promise<FileOpResult> =>
-    useMultipleOutputs && outputFiles.length > 0
+    outputFiles.length > 0
       ? runCleanMultiple(model, inputFile, agent, outputFiles)
       : runCleanSingle(model, inputFile, agent);
 
@@ -191,7 +186,7 @@ export async function handleClean(config: unknown): Promise<void> {
               agent,
               model,
               inputFile,
-              useMultipleOutputs,
+              outputFiles,
             },
           },
     );

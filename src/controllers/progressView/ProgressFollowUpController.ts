@@ -111,7 +111,6 @@ export class ProgressFollowUpController {
         input.executionId,
       ),
       outputFiles: [],
-      useMultipleOutputs: false,
       editedFile: null,
       editedFiles: [],
     }) as AgentConfig & { agentCategory: AgentCategory.ToolUse };
@@ -277,7 +276,6 @@ export class ProgressFollowUpController {
       inputFile,
       inputFiles,
       outputFiles: [],
-      useMultipleOutputs: false,
       editedFile: null,
       editedFiles: [],
     };

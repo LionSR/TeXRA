@@ -144,8 +144,6 @@ export const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
   hasPath: z.boolean(),
   filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),
-  hasMultiple: z.boolean(), // supports multiple outputs (informational)
-  hasMultiplePath: z.boolean(), // has openable _multiple YAML file
   enabled: z.boolean(),
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
@@ -605,7 +603,6 @@ const OpenAgentYamlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_YAML),
   agentName: z.string().min(1),
   agentSource: AgentSourceSchema,
-  variant: z.enum(['base', 'multiple']),
 });
 
 const SetAgentEnabledMessageSchema = z.object({

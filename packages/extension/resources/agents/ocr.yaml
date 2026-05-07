@@ -3,9 +3,12 @@ description: Converts handwritten mathematical content from images into LaTeX.
 
 settings:
   agentCategory: workflow
-  documentTag: latex_document
-  endTag: </latex_document>
+  documentTag: documents
+  endTag: </documents>
   outputExt: tex
+  prefills:
+    - "Here is the \\LaTeX OCR output. <documents>"
+    - ''
 
 prompts:
   systemPrompt: |
@@ -46,12 +49,21 @@ prompts:
       {{ INSTRUCTION }}
       </instruction>
 
-      Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Ensure it integrates seamlessly with the existing document --- match notation, mathematical environments, and symbol usage:
+      Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Ensure it integrates seamlessly with the existing document --- match notation, mathematical environments, and symbol usage. Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalone file can be compiled.
 
-      <latex_document>
+      {% if OUTPUT_FILES_ORDER %}
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       {LATEX_OCR_CONTENT}
-      </latex_document>
-      Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalonefile can be compiled.
+      </document>
+      </documents>
+      {% else %}
+      <documents>
+      <document name="ocr_result.tex">
+      {LATEX_OCR_CONTENT}
+      </document>
+      </documents>
+      {% endif %}
     - |
       Critically review the OCR conversion and output a refined version. Find the three most likely OCR errors or misinterpretations and check the following, fixing any issues found:
       \begin{itemize}
@@ -63,6 +75,16 @@ prompts:
 
       Output the refined LaTeX content with improved notation consistency and integration:
 
-      <latex_document>
+      {% if OUTPUT_FILES_ORDER %}
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       {REFINED_LATEX_OCR_CONTENT}
-      </latex_document>
+      </document>
+      </documents>
+      {% else %}
+      <documents>
+      <document name="ocr_result.tex">
+      {REFINED_LATEX_OCR_CONTENT}
+      </document>
+      </documents>
+      {% endif %}

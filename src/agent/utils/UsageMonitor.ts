@@ -25,8 +25,6 @@ export interface UsageMonitorMetadata {
   agentName?: string;
   /** Agent category: workflow or toolUse */
   agentCategory?: AgentCategory;
-  /** Whether this is a multiple-output workflow agent */
-  isMultipleOutput?: boolean;
 }
 
 /**
@@ -236,7 +234,6 @@ export class UsageMonitor {
         provider,
         agentName: this.metadata?.agentName,
         agentCategory: this.metadata?.agentCategory,
-        isMultipleOutput: this.metadata?.isMultipleOutput,
         inputTokens: cacheMissInputTokens,
         outputTokens: usage.outputTokens,
         cost: Number(usage.cost.toFixed(6)),
