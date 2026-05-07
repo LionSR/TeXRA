@@ -56,6 +56,22 @@ interface DesktopExecutionIpcModule {
   };
 }
 
+interface DesktopOnboardingIpcModule {
+  DESKTOP_ONBOARDING_DISMISSED_STATE_KEY: string;
+  createDesktopOnboardingIpc(
+    renderer: DesktopRenderer,
+    options?: {
+      state?: {
+        get<T>(key: string, defaultValue?: T): T;
+        update(key: string, value: unknown): PromiseLike<void>;
+      };
+      onAsyncError?: (error: unknown) => void;
+    },
+  ): {
+    handleMessage(message: { command: string }): boolean;
+  };
+}
+
 interface DesktopViewStateIpcModule {
   createDesktopViewStateIpc(
     renderer: DesktopRenderer,
@@ -79,6 +95,18 @@ async function loadDesktopExecutionIpc(): Promise<DesktopExecutionIpcModule> {
   return import(
     moduleFileUrl(desktopSourcePath('main', 'desktopExecutionIpc.ts'))
   ) as Promise<DesktopExecutionIpcModule>;
+}
+
+async function loadDesktopOnboardingIpc(): Promise<DesktopOnboardingIpcModule> {
+  const [onboardingIpc, onboardingMessages] = await Promise.all([
+    import(
+      moduleFileUrl(desktopSourcePath('main', 'desktopOnboardingIpc.ts'))
+    ) as Promise<DesktopOnboardingIpcModule>,
+    import(
+      moduleFileUrl(desktopSourcePath('desktopOnboardingMessages.ts'))
+    ) as Promise<{ DESKTOP_ONBOARDING_DISMISSED_STATE_KEY: string }>,
+  ]);
+  return { ...onboardingIpc, ...onboardingMessages };
 }
 
 async function loadDesktopLogIpc(): Promise<DesktopLogIpcModule> {
@@ -263,6 +291,61 @@ describe('desktop IPC adapters', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(onAsyncError).toHaveBeenCalledWith(error);
+  });
+
+  it('persists first-run walkthrough dismissal in the onboarding adapter', async () => {
+    const {
+      DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
+      createDesktopOnboardingIpc,
+    } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    const update = vi.fn(async (key: string, value: unknown) => {
+      values.set(key, value);
+    });
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update,
+    };
+    const postToRenderer = vi.fn();
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      { state },
+    );
+
+    expect(
+      onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
+    ).toBe(true);
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: 'desktop:setOnboarding',
+      shouldShow: true,
+    });
+
+    expect(
+      onboarding.handleMessage({ command: 'desktop:dismissOnboarding' }),
+    ).toBe(true);
+    await Promise.resolve();
+    expect(update).toHaveBeenCalledWith(
+      DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
+      true,
+    );
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: 'desktop:setOnboarding',
+      shouldShow: false,
+    });
+
+    expect(
+      onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
+    ).toBe(true);
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: 'desktop:setOnboarding',
+      shouldShow: false,
+    });
+
+    expect(
+      onboarding.handleMessage({ command: 'desktop:showOnboarding' }),
+    ).toBe(false);
   });
 
   it('serves desktop log snapshots and copy/export actions', async () => {
