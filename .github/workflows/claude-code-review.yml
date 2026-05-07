@@ -92,7 +92,7 @@ jobs:
         with:
           provider: ${{ matrix.provider }}
           model-tier: opus
-          allowed-bots: 'claude,cursor[bot],cursor,copilot-pull-request-reviewer'
+          allowed-bots: 'claude[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
           plugin-marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           claude-prompt-file: .trusted-actions/.github/prompts/claude-code-review-prompt.md

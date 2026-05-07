@@ -17,6 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  BOT_PAT: ${{ secrets.BOT_PAT }}
   GH_TOKEN: ${{ secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
 
 jobs:
@@ -58,7 +59,7 @@ jobs:
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
           model-tier: opus
-          allowed-bots: 'claude,cursor[bot],cursor,copilot-pull-request-reviewer'
+          allowed-bots: 'claude[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
           branch-name-template: '{{prefix}}{{entityType}}-{{entityNumber}}-{{description}}'
           allowed-tools-preset: claude-interactive
           additional-permissions: |
@@ -69,6 +70,7 @@ jobs:
         if: |
           !cancelled() &&
           steps.claude.outcome == 'success' &&
+          env.BOT_PAT != '' &&
           (github.event_name == 'issues' ||
            (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
         uses: ./.github/actions/auto-create-issue-pr
@@ -77,4 +79,4 @@ jobs:
           repo: ${{ github.repository }}
           branch-prefix: 'claude/issue-'
           creator-name: 'Claude Code action'
-          gh-token: ${{ env.GH_TOKEN }}
+          gh-token: ${{ env.BOT_PAT }}
