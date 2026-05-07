@@ -1,7 +1,15 @@
 import { existsSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  session,
+  shell,
+} from 'electron';
 
 import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
@@ -17,6 +25,7 @@ import { createDesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import {
   attachRendererConsoleLog,
   getDesktopLogDirectory,
+  readDesktopLogSnapshot,
 } from './desktopAppLog.js';
 import { installDesktopMenu } from './desktopMenu.js';
 import { promptInRenderer } from './desktopPrompt.js';
@@ -284,6 +293,22 @@ function createWindow(options: {
     workspaceExplorer,
     settings: settingsIpc,
     progress: progressIpc,
+    logs: {
+      readLog: () =>
+        readDesktopLogSnapshot({ workspacePath: options.workspacePath }),
+      copyLog: async (text) => {
+        clipboard.writeText(text);
+      },
+      exportLog: async (text) => {
+        const result = await dialog.showSaveDialog(window, {
+          title: 'Export TeXRA Desktop Log',
+          defaultPath: 'texra-desktop-log.txt',
+          filters: [{ name: 'Text Logs', extensions: ['txt', 'log'] }],
+        });
+        if (result.canceled || !result.filePath) return;
+        await writeFile(result.filePath, text, 'utf8');
+      },
+    },
     shellActions,
     getAuthStatus: async () => ({
       authenticated: (await desktopAuth.getProfileData()).authenticated,

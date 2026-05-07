@@ -4,7 +4,12 @@ export const DESKTOP_SHELL_COMMANDS = {
   SET_ROUTE: 'desktop:setRoute',
 } as const;
 
-export const DesktopRouteSchema = z.enum(['main', 'progress', 'settings']);
+export const DesktopRouteSchema = z.enum([
+  'main',
+  'progress',
+  'settings',
+  'logs',
+]);
 export type DesktopRoute = z.infer<typeof DesktopRouteSchema>;
 
 export const DesktopSetRouteMessageSchema = z.object({

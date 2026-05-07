@@ -17,6 +17,11 @@ import {
   type DesktopSetRouteMessage,
 } from '../desktopShellMessages';
 import {
+  DESKTOP_LOG_COMMANDS,
+  DesktopSetLogMessageSchema,
+  type DesktopSetLogMessage,
+} from '../desktopLogMessages';
+import {
   buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
 } from '../desktopCommandSurface';
@@ -35,6 +40,8 @@ interface WorkspaceTreeNode {
   children?: WorkspaceTreeNode[];
   categories?: string[];
 }
+
+const DESKTOP_ROUTES = ['main', 'progress', 'settings', 'logs'] as const;
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -56,11 +63,11 @@ appRoot.innerHTML = `
       <button class="desktop-nav-button" type="button" data-route-button="settings" aria-pressed="false">
         Settings
       </button>
+      <button class="desktop-nav-button" type="button" data-route-button="logs" aria-pressed="false">
+        Logs
+      </button>
       <button class="desktop-command-button" type="button" data-command-palette-button aria-haspopup="dialog">
         Commands
-      </button>
-      <button class="desktop-log-button" type="button" data-open-log-button>
-        Logs
       </button>
       <button class="desktop-folder-button" type="button" data-open-workspace-button>
         Open Folder
@@ -72,6 +79,7 @@ appRoot.innerHTML = `
         <section class="desktop-route" data-route="main"></section>
         <section class="desktop-route" data-route="progress" hidden></section>
         <section class="desktop-route" data-route="settings" hidden></section>
+        <section class="desktop-route" data-route="logs" hidden></section>
       </main>
     </div>
   </section>
@@ -91,7 +99,7 @@ if (workspaceExplorerElement == null) {
 const workspaceExplorerContainer: HTMLElement = workspaceExplorerElement;
 
 const routeContainers = new Map<DesktopRoute, HTMLElement>();
-for (const route of ['main', 'progress', 'settings'] as const) {
+for (const route of DESKTOP_ROUTES) {
   const container = desktopViewContainer.querySelector<HTMLElement>(
     `[data-route="${route}"]`,
   );
@@ -102,7 +110,7 @@ for (const route of ['main', 'progress', 'settings'] as const) {
 }
 
 const routeButtons = new Map<DesktopRoute, HTMLButtonElement>();
-for (const route of ['main', 'progress', 'settings'] as const) {
+for (const route of DESKTOP_ROUTES) {
   const button = appRoot.querySelector<HTMLButtonElement>(
     `[data-route-button="${route}"]`,
   );
@@ -140,6 +148,7 @@ if (hasWorkspace) {
 const settingsApp = document.createElement('settings-app');
 settingsApp.setAttribute('data-desktop-view', 'settings');
 routeContainers.get('settings')?.replaceChildren(settingsApp);
+routeContainers.get('logs')?.replaceChildren(createLogViewer());
 
 const commandPaletteButton = appRoot.querySelector<HTMLButtonElement>(
   '[data-command-palette-button]',
@@ -153,13 +162,6 @@ const openWorkspaceButton = appRoot.querySelector<HTMLButtonElement>(
 );
 if (openWorkspaceButton == null) {
   throw new Error('TeXRA desktop open workspace button was not found.');
-}
-
-const openLogButton = appRoot.querySelector<HTMLButtonElement>(
-  '[data-open-log-button]',
-);
-if (openLogButton == null) {
-  throw new Error('TeXRA desktop open log button was not found.');
 }
 
 const commandPalette = createDesktopCommandPalette({
@@ -187,9 +189,6 @@ commandPaletteButton.addEventListener('click', commandPalette.open);
 openWorkspaceButton.addEventListener('click', () =>
   postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
 );
-openLogButton.addEventListener('click', () =>
-  postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
-);
 requestWorkspaceTree();
 
 function isDesktopSetRouteMessage(
@@ -204,6 +203,12 @@ function isThemeMessage(
   return SetThemeMessageSchema.safeParse(message).success;
 }
 
+function isDesktopSetLogMessage(
+  message: unknown,
+): message is DesktopSetLogMessage {
+  return DesktopSetLogMessageSchema.safeParse(message).success;
+}
+
 function setRoute(route: DesktopRoute): void {
   for (const [candidate, container] of routeContainers) {
     container.hidden = candidate !== route;
@@ -212,6 +217,7 @@ function setRoute(route: DesktopRoute): void {
     button.setAttribute('aria-pressed', candidate === route ? 'true' : 'false');
   }
   document.body.dataset.desktopRoute = route;
+  if (route === 'logs') requestLogSnapshot();
 }
 
 window.addEventListener('message', (event) => {
@@ -221,6 +227,8 @@ window.addEventListener('message', (event) => {
     applyDesktopTheme(event.data.theme);
   } else if (isWorkspaceTreeMessage(event.data)) {
     renderWorkspaceExplorer(event.data);
+  } else if (isDesktopSetLogMessage(event.data)) {
+    renderLogSnapshot(event.data);
   }
 });
 
@@ -282,6 +290,62 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
     );
   return container;
+}
+
+function createLogViewer(): HTMLElement {
+  const container = document.createElement('section');
+  container.className = 'desktop-log-viewer';
+  container.innerHTML = `
+    <header class="desktop-log-viewer-header">
+      <div>
+        <h2>Desktop Logs</h2>
+        <p data-log-meta>Recent redacted log entries appear here.</p>
+      </div>
+      <div class="desktop-log-viewer-actions">
+        <button class="desktop-secondary-button" type="button" data-log-refresh>Refresh</button>
+        <button class="desktop-secondary-button" type="button" data-log-copy>Copy</button>
+        <button class="desktop-secondary-button" type="button" data-log-export>Export</button>
+        <button class="desktop-secondary-button" type="button" data-log-folder>Open Folder</button>
+      </div>
+    </header>
+    <pre class="desktop-log-viewer-output" data-log-output>Open Logs to load recent entries.</pre>
+  `;
+  container
+    .querySelector<HTMLButtonElement>('[data-log-refresh]')
+    ?.addEventListener('click', requestLogSnapshot);
+  container
+    .querySelector<HTMLButtonElement>('[data-log-copy]')
+    ?.addEventListener('click', () =>
+      postMessage(DESKTOP_LOG_COMMANDS.COPY_LOG),
+    );
+  container
+    .querySelector<HTMLButtonElement>('[data-log-export]')
+    ?.addEventListener('click', () =>
+      postMessage(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
+    );
+  container
+    .querySelector<HTMLButtonElement>('[data-log-folder]')
+    ?.addEventListener('click', () =>
+      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
+    );
+  return container;
+}
+
+function requestLogSnapshot(): void {
+  postMessage(DESKTOP_LOG_COMMANDS.REQUEST_LOG);
+}
+
+function renderLogSnapshot(message: DesktopSetLogMessage): void {
+  const container = routeContainers.get('logs');
+  const output = container?.querySelector<HTMLElement>('[data-log-output]');
+  const meta = container?.querySelector<HTMLElement>('[data-log-meta]');
+  if (output == null || meta == null) return;
+
+  output.textContent = message.log.text || 'No desktop log entries yet.';
+  const path = message.log.path ?? 'desktop log file';
+  meta.textContent = message.log.truncated
+    ? `Showing the most recent redacted entries from ${path}.`
+    : `Showing redacted entries from ${path}.`;
 }
 
 function isWorkspaceTreeMessage(

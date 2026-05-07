@@ -2,9 +2,11 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   renameSync,
   statSync,
 } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { format } from 'node:util';
 
@@ -15,6 +17,9 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
+import { redactDesktopLog } from './desktopLogRedaction.js';
+import type { DesktopLogSnapshot } from '../desktopLogMessages.js';
+
 type ConsoleLevel = 'debug' | 'error' | 'info' | 'log' | 'warn';
 type RendererConsoleMessage = Pick<
   WebContentsConsoleMessageEventParams,
@@ -23,6 +28,7 @@ type RendererConsoleMessage = Pick<
 
 const LOG_FILE_NAME = 'texra-desktop.log';
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
+const MAX_VIEWER_LOG_BYTES = 160 * 1024;
 const CONSOLE_LEVELS = ['debug', 'error', 'info', 'log', 'warn'] as const;
 
 let logFilePath: string | undefined;
@@ -51,6 +57,42 @@ export function getDesktopLogDirectory(): string {
 
 export function getDesktopLogFilePath(): string {
   return logFilePath ?? join(getDesktopLogDirectory(), LOG_FILE_NAME);
+}
+
+export function readDesktopLogSnapshot(options: {
+  workspacePath?: string | undefined;
+  maxBytes?: number | undefined;
+}): DesktopLogSnapshot {
+  const path = getDesktopLogFilePath();
+  const maxBytes = options.maxBytes ?? MAX_VIEWER_LOG_BYTES;
+  try {
+    const stats = statSync(path);
+    const text = readFileSync(path, 'utf8');
+    const excerpt =
+      stats.size > maxBytes
+        ? text.slice(Math.max(0, text.length - maxBytes))
+        : text;
+    return {
+      path,
+      truncated: stats.size > maxBytes,
+      text: redactDesktopLog(excerpt, {
+        homeDir: homedir(),
+        workspacePath: options.workspacePath,
+      }),
+    };
+  } catch (error) {
+    return {
+      path,
+      truncated: false,
+      text: redactDesktopLog(
+        format('Desktop log is not available: %s', error),
+        {
+          homeDir: homedir(),
+          workspacePath: options.workspacePath,
+        },
+      ),
+    };
+  }
 }
 
 export function attachRendererConsoleLog(webContents: WebContents): void {

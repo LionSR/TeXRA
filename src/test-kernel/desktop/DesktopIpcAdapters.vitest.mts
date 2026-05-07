@@ -31,6 +31,20 @@ interface DesktopShellIpcModule {
   };
 }
 
+interface DesktopLogIpcModule {
+  createDesktopLogIpc(
+    renderer: DesktopRenderer,
+    options?: {
+      readLog?: () => { text: string; truncated: boolean; path?: string };
+      copyLog?: (text: string) => Promise<void>;
+      exportLog?: (text: string) => Promise<void>;
+      onAsyncError?: (error: unknown) => void;
+    },
+  ): {
+    handleMessage(message: { command: string }): boolean;
+  };
+}
+
 interface DesktopExecutionIpcModule {
   createDesktopExecutionIpc(options?: {
     executeAgent?: (message: unknown) => Promise<void>;
@@ -65,6 +79,12 @@ async function loadDesktopExecutionIpc(): Promise<DesktopExecutionIpcModule> {
   return import(
     moduleFileUrl(desktopSourcePath('main', 'desktopExecutionIpc.ts'))
   ) as Promise<DesktopExecutionIpcModule>;
+}
+
+async function loadDesktopLogIpc(): Promise<DesktopLogIpcModule> {
+  return import(
+    moduleFileUrl(desktopSourcePath('main', 'desktopLogIpc.ts'))
+  ) as Promise<DesktopLogIpcModule>;
 }
 
 async function loadDesktopViewStateIpc(nativeTheme: {
@@ -243,5 +263,43 @@ describe('desktop IPC adapters', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(onAsyncError).toHaveBeenCalledWith(error);
+  });
+
+  it('serves desktop log snapshots and copy/export actions', async () => {
+    const { createDesktopLogIpc } = await loadDesktopLogIpc();
+    const postToRenderer = vi.fn();
+    const copyLog = vi.fn(async (_text: string) => {});
+    const exportLog = vi.fn(async (_text: string) => {});
+    const readLog = vi.fn(() => ({
+      path: '/logs/texra-desktop.log',
+      text: '2026-05-07T00:00:00.000Z [info] safe log line',
+      truncated: false,
+    }));
+    const logs = createDesktopLogIpc(
+      { postToRenderer },
+      { readLog, copyLog, exportLog },
+    );
+
+    expect(logs.handleMessage({ command: 'desktop:requestLog' })).toBe(true);
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: 'desktop:setLog',
+      log: {
+        path: '/logs/texra-desktop.log',
+        text: '2026-05-07T00:00:00.000Z [info] safe log line',
+        truncated: false,
+      },
+    });
+
+    expect(logs.handleMessage({ command: 'desktop:copyLog' })).toBe(true);
+    await Promise.resolve();
+    expect(copyLog).toHaveBeenCalledWith(
+      '2026-05-07T00:00:00.000Z [info] safe log line',
+    );
+
+    expect(logs.handleMessage({ command: 'desktop:exportLog' })).toBe(true);
+    await Promise.resolve();
+    expect(exportLog).toHaveBeenCalledWith(
+      '2026-05-07T00:00:00.000Z [info] safe log line',
+    );
   });
 });
