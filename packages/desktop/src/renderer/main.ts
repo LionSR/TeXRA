@@ -450,31 +450,35 @@ function createFirstRunWalkthrough(): {
     if (event.target instanceof Node && element.contains(event.target)) return;
     focusFirstControl();
   });
-  document.addEventListener('keydown', (event) => {
-    if (element.hidden) return;
-    if (event.key === 'Escape') {
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (element.hidden) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        dismiss();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const focusedIndex = focusable.indexOf(
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : focusable[0],
+      );
+      const currentIndex = focusedIndex === -1 ? 0 : focusedIndex;
+      const nextIndex = event.shiftKey
+        ? (currentIndex - 1 + focusable.length) % focusable.length
+        : (currentIndex + 1) % focusable.length;
       event.preventDefault();
-      dismiss();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const focusable = getFocusableElements();
-    if (focusable.length === 0) {
-      event.preventDefault();
-      return;
-    }
-    const focusedIndex = focusable.indexOf(
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : focusable[0],
-    );
-    const currentIndex = focusedIndex === -1 ? 0 : focusedIndex;
-    const nextIndex = event.shiftKey
-      ? (currentIndex - 1 + focusable.length) % focusable.length
-      : (currentIndex + 1) % focusable.length;
-    event.preventDefault();
-    focusable[nextIndex]?.focus();
-  }, true);
+      focusable[nextIndex]?.focus();
+    },
+    true,
+  );
 
   return { element, isVisible: () => !element.hidden, show, hide };
 }
