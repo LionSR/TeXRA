@@ -55,6 +55,15 @@ export { LatexMediaManager } from './LatexMediaManager';
 export { ArxivSourceProcessor, arxivProcessor } from './arxivProcessor';
 
 // -----------------------------------------------------------------------------
+// Criticism Annotations
+// -----------------------------------------------------------------------------
+
+export {
+  parseCriticismAnnotations,
+  type CriticismAnnotation,
+} from './criticismParser';
+
+// -----------------------------------------------------------------------------
 // Core Utilities
 // -----------------------------------------------------------------------------
 
