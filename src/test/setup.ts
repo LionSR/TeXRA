@@ -9,10 +9,28 @@ import * as path from 'path';
 import { register } from 'tsconfig-paths';
 
 // Register tsconfig paths with correct base URL for compiled files
-// The compiled output is in 'out/', but .js source files remain in 'src/'
+// The compiled output is in 'out/src' for root sources; package sources emit
+// under their workspace path.
 // so we need to check both locations
 const outDir = path.resolve(__dirname, '..');
 const srcDir = path.resolve(__dirname, '..', '..', 'src');
+const extensionOutDir = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  'packages',
+  'extension',
+  'src',
+);
+const extensionSrcDir = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'packages',
+  'extension',
+  'src',
+);
 
 // Only stub 'vscode' when the real module is not available.
 // Probing with require.resolve() works correctly in all environments:
@@ -33,23 +51,50 @@ register({
   baseUrl: outDir,
   paths: {
     ...extraPaths,
-    '@/*': ['*', path.join(srcDir, '*')],
-    '~/*': ['*', path.join(srcDir, '*')],
+    '@/*': [path.join(extensionOutDir, '*'), path.join(extensionSrcDir, '*')],
+    '~/*': [path.join(extensionOutDir, '*'), path.join(extensionSrcDir, '*')],
     '@common/*': ['common/*', path.join(srcDir, 'common/*')],
-    '@webview/*': ['webview/*', path.join(srcDir, 'webview/*')],
+    '@webview/*': [
+      path.join(extensionOutDir, 'webview/*'),
+      path.join(extensionSrcDir, 'webview/*'),
+    ],
     '@agent/*': ['agent/*', path.join(srcDir, 'agent/*')],
-    '@frontend/*': ['frontend/*', path.join(srcDir, 'frontend/*')],
+    '@frontend/*': [
+      path.join(extensionOutDir, 'frontend/*'),
+      path.join(extensionSrcDir, 'frontend/*'),
+    ],
     '@utils/*': ['utils/*', path.join(srcDir, 'utils/*')],
     '@logger/*': ['logger/*', path.join(srcDir, 'logger/*')],
     '@latex': ['latex', path.join(srcDir, 'latex')],
     '@latex/*': ['latex/*', path.join(srcDir, 'latex/*')],
-    '@commands/*': ['commands/*', path.join(srcDir, 'commands/*')],
+    '@commands/*': [
+      path.join(extensionOutDir, 'commands/*'),
+      path.join(extensionSrcDir, 'commands/*'),
+    ],
+    '@resources/*': [
+      path.join(__dirname, '..', '..', 'packages', 'extension', 'resources/*'),
+      path.join(
+        __dirname,
+        '..',
+        '..',
+        '..',
+        'packages',
+        'extension',
+        'resources/*',
+      ),
+    ],
     '@model': ['model', path.join(srcDir, 'model')],
     '@model/*': ['model/*', path.join(srcDir, 'model/*')],
     '@housekeeping': ['housekeeping', path.join(srcDir, 'housekeeping')],
     '@housekeeping/*': ['housekeeping/*', path.join(srcDir, 'housekeeping/*')],
-    '@progressView/*': ['progressView/*', path.join(srcDir, 'progressView/*')],
-    '@settingsView/*': ['settingsView/*', path.join(srcDir, 'settingsView/*')],
+    '@progressView/*': [
+      path.join(extensionOutDir, 'progressView/*'),
+      path.join(extensionSrcDir, 'progressView/*'),
+    ],
+    '@settingsView/*': [
+      path.join(extensionOutDir, 'settingsView/*'),
+      path.join(extensionSrcDir, 'settingsView/*'),
+    ],
     '@replacement/*': ['replacement/*', path.join(srcDir, 'replacement/*')],
     '@tools/*': ['tools/*', path.join(srcDir, 'tools/*')],
     '@types/*': ['types/*', path.join(srcDir, 'types/*')],
@@ -58,6 +103,8 @@ register({
     '@auth/*': ['auth/*', path.join(srcDir, 'auth/*')],
     '@platform': ['platform', path.join(srcDir, 'platform')],
     '@platform/*': ['platform/*', path.join(srcDir, 'platform/*')],
+    '@controllers/*': ['controllers/*', path.join(srcDir, 'controllers/*')],
+    '@test/*': ['test/*', path.join(srcDir, 'test/*')],
   },
 });
 

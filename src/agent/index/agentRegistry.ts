@@ -9,37 +9,17 @@ import {
   AgentSource,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as logger from '@agent/core/logger';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
-import { GlobalStateKey, WorkspaceStateKey } from '@common/state';
+import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentKey as createKey, agentName } from '@shared/schemas/agent';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
-
-/** Injectable provider for agent directory paths. */
-export interface AgentDirectories {
-  custom(): Promise<string>;
-  builtIn(): Promise<string>;
-  builtInToolUse(): Promise<string>;
-}
-
-let agentDirectories: AgentDirectories | null = null;
-
-/** Inject the agent directory provider. Called from extension.ts at activation. */
-export function setAgentDirectories(dirs: AgentDirectories): void {
-  agentDirectories = dirs;
-}
-
-function getAgentDirectories(): AgentDirectories {
-  if (!agentDirectories) {
-    throw new Error(
-      'Agent directories not initialized — call setAgentDirectories() first.',
-    );
-  }
-  return agentDirectories;
-}
+import {
+  getAgentDirectories,
+  type AgentDirectories,
+} from './agentDirectoriesRegistry';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
@@ -89,8 +69,6 @@ export interface AgentEntry {
   name: string;
   source: AgentSource;
   path: string; // absolute path to YAML (empty for remote)
-  multiplePath?: string; // absolute path to _multiple YAML (local agents only)
-  isMultiple?: boolean; // remote only: true if agent has a _multiple variant
   category: AgentCategory;
   description?: string;
   tools?: string[]; // tool names for tool-use agents
@@ -108,18 +86,13 @@ export interface ResolvedAgent {
   entry: AgentEntry;
   /** Absolute path to the YAML definition (empty for remote). */
   definitionPath: string;
-  /** Agent name (may include _multiple suffix if that variant was resolved). */
+  /** Agent name as resolved. */
   resolvedName: string;
-  /** True if _multiple was requested but not available. */
-  usedFallback: boolean;
 }
 
 // =============================================================================
 // CONSTANTS
 // =============================================================================
-
-/** Suffix for multiple-output agent variants. */
-const MULTIPLE_SUFFIX = '_multiple';
 
 /** Source priority for lookups (higher priority first). */
 const LOOKUP_PRIORITY: AgentSource[] = [
@@ -312,43 +285,16 @@ export function updateAgentDefaultOutputFiles(
 }
 
 /**
- * Resolve an agent to its definition path, handling _multiple variant logic.
+ * Resolve an agent to its definition path.
  */
-export function resolveAgent(
-  identifier: string,
-  preferMultiple = false,
-): ResolvedAgent | undefined {
+export function resolveAgent(identifier: string): ResolvedAgent | undefined {
   const entry = getAgent(identifier);
   if (!entry) return undefined;
 
-  // Remote agents have no local path - variant resolution is handled by RemoteAgentLoader.
-  // RemoteAgentLoader.loadRemoteAgent() handles the preferMultiple logic internally.
-  if (entry.source === 'remote') {
-    return {
-      entry,
-      definitionPath: '',
-      resolvedName: entry.name,
-      usedFallback: false,
-    };
-  }
-
-  // Handle _multiple variant for local agents
-  if (preferMultiple && entry.multiplePath) {
-    return {
-      entry,
-      definitionPath: entry.multiplePath,
-      resolvedName: `${entry.name}${MULTIPLE_SUFFIX}`,
-      usedFallback: false,
-    };
-  }
-
-  // Fallback: requested _multiple but not available
-  const usedFallback = preferMultiple && !entry.multiplePath;
   return {
     entry,
     definitionPath: entry.path,
     resolvedName: entry.name,
-    usedFallback,
   };
 }
 
@@ -412,72 +358,27 @@ async function scanDirectory(
       absolute: true,
       nodir: true,
     });
-    const grouped = groupByBaseName(files);
-    const entries: AgentEntry[] = [];
+    const entries = await Promise.all(
+      files.map((f) => {
+        const name = path.basename(f, '.yaml');
+        return scanYaml(name, f, source);
+      }),
+    );
 
-    for (const [name, paths] of grouped) {
-      const entry = await scanYaml(name, paths.base, paths.multiple, source);
-      if (entry) entries.push(entry);
-    }
-
-    logger.debug(CHANNEL, `Scanned ${entries.length} agents from ${source}`);
-    return entries;
+    const result = entries.filter((e): e is AgentEntry => e !== null);
+    logger.debug(CHANNEL, `Scanned ${result.length} agents from ${source}`);
+    return result;
   } catch (err) {
     logger.error(CHANNEL, `Failed to scan ${dir}: ${err}`);
     return [];
   }
 }
 
-/**
- * Generic helper to group items by base name, separating base vs _multiple variants.
- */
-function groupByVariants<T>(
-  items: T[],
-  getName: (item: T) => string,
-): Map<string, { base?: T; multiple?: T }> {
-  const groups = new Map<string, { base?: T; multiple?: T }>();
-
-  for (const item of items) {
-    const name = getName(item);
-    const isMultiple = name.endsWith(MULTIPLE_SUFFIX);
-    const baseName = isMultiple ? name.slice(0, -MULTIPLE_SUFFIX.length) : name;
-
-    const group = groups.get(baseName) ?? {};
-    group[isMultiple ? 'multiple' : 'base'] = item;
-    groups.set(baseName, group);
-  }
-
-  return groups;
-}
-
-function groupByBaseName(
-  files: string[],
-): Map<string, { base?: string; multiple?: string }> {
-  const groups = groupByVariants(files, (f) => path.basename(f, '.yaml'));
-
-  // Filter: must have base, or promote _multiple-only to base
-  const result = new Map<string, { base?: string; multiple?: string }>();
-  for (const [name, { base, multiple }] of groups) {
-    if (base) {
-      result.set(name, { base, multiple });
-    } else if (multiple) {
-      // Only _multiple exists, use it as base
-      result.set(`${name}${MULTIPLE_SUFFIX}`, { base: multiple });
-    }
-  }
-
-  return result;
-}
-
 async function scanYaml(
   name: string,
-  basePath: string | undefined,
-  multiplePath: string | undefined,
+  yamlPath: string,
   source: AgentSource,
 ): Promise<AgentEntry | null> {
-  const yamlPath = basePath || multiplePath;
-  if (!yamlPath) return null;
-
   try {
     const content = await AbsoluteFS.read(yamlPath);
     const parsed = yaml.parse(content);
@@ -508,7 +409,6 @@ async function scanYaml(
       name,
       source,
       path: yamlPath,
-      multiplePath,
       category,
       description: validated.description,
       tools: tools?.length ? tools : undefined,
@@ -564,37 +464,26 @@ function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
 
 async function loadRemoteAgents(): Promise<AgentEntry[]> {
   try {
+    const { RemoteAgentLoader } =
+      await import('@agent/remote/RemoteAgentLoader');
     const remotes = await RemoteAgentLoader.listRemoteAgents();
-    const grouped = groupByVariants(remotes, (r) => r.name);
     const metaCache = getPersistedRemoteAgentMeta();
 
-    // Build entries from grouped agents
-    const entries: AgentEntry[] = [];
-    for (const [baseName, { base, multiple }] of grouped) {
-      const primary = base || multiple;
-      if (!primary) continue;
-
-      const name = base ? baseName : primary.name;
-      const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
-      const cached = metaCache[name];
-
-      // Tools: prefer DB column (authoritative), fall back to persistent cache.
-      // defaultOutputFiles: from persistent cache (no DB column yet).
-      const dbTools = primary.tools?.length ? primary.tools : undefined;
-      entries.push({
-        name,
-        source: 'remote',
+    return remotes.map((remote) => {
+      const isToolUse = remote.agentCategory === AgentCategory.ToolUse;
+      const cached = metaCache[remote.name];
+      const dbTools = remote.tools?.length ? remote.tools : undefined;
+      return {
+        name: remote.name,
+        source: 'remote' as const,
         path: '',
-        isMultiple: Boolean(multiple),
         category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
-        description: primary.description ?? undefined,
-        visibility: primary.visibility ?? undefined,
+        description: remote.description ?? undefined,
+        visibility: remote.visibility ?? undefined,
         tools: dbTools ?? cached?.tools,
         defaultOutputFiles: cached?.defaultOutputFiles,
-      });
-    }
-
-    return entries;
+      };
+    });
   } catch (err) {
     logger.warn(CHANNEL, `Failed to load remote agents: ${err}`);
     return [];
@@ -635,22 +524,6 @@ export function getCleanAgentName(agentIdentifier: string): string {
   if (!AgentSource.safeParse(source).success) return agentIdentifier;
 
   return agentName(agentIdentifier);
-}
-
-// =============================================================================
-// _MULTIPLE VARIANT HELPERS
-// =============================================================================
-
-/** Get base name (strips _multiple suffix if present). */
-export function getBaseName(name: string): string {
-  return name.endsWith(MULTIPLE_SUFFIX)
-    ? name.slice(0, -MULTIPLE_SUFFIX.length)
-    : name;
-}
-
-/** Get _multiple variant name (adds suffix if not present). */
-export function getMultipleName(name: string): string {
-  return name.endsWith(MULTIPLE_SUFFIX) ? name : `${name}${MULTIPLE_SUFFIX}`;
 }
 
 // =============================================================================
@@ -741,7 +614,6 @@ function entryToOptionData(entry: AgentEntry): AgentOptionData {
   return {
     value: key,
     label: entry.name,
-    isMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
     isToolUse: entry.category === AgentCategory.ToolUse,
     isOrchestrator: entry.tools?.some((t) => DELEGATION_TOOLS.has(t)),
     isRemote: entry.source === 'remote',

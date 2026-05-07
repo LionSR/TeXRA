@@ -1,6 +1,8 @@
 // Third-party imports
 import { FinishReason } from '@google/genai';
 import type { StopReason as AnthropicSDKStopReason } from '@anthropic-ai/sdk/resources/messages';
+import type { ChatCompletion } from 'openai/resources/chat/completions';
+import type { CompletionChoice } from 'openai/resources/completions';
 
 /**
  * Finish reasons returned by the OpenAI Chat Completion API.
@@ -12,11 +14,8 @@ export const OPENAI_CHAT_FINISH = {
   TOOL_CALLS: 'tool_calls',
   CONTENT_FILTER: 'content_filter',
   FUNCTION_CALL: 'function_call',
-} as const;
-export const OPENAI_CHAT_FINISH_REASONS = Object.values(OPENAI_CHAT_FINISH);
-export type OpenAIChatFinishReason =
-  | (typeof OPENAI_CHAT_FINISH_REASONS)[number]
-  | null;
+} as const satisfies Record<string, NonNullable<OpenAIChatFinishReason>>;
+export type OpenAIChatFinishReason = ChatCompletion.Choice['finish_reason'];
 
 /**
  * Finish reasons for the legacy OpenAI text completion API.
@@ -26,12 +25,8 @@ export const OPENAI_COMPLETION_FINISH = {
   STOP: 'stop',
   LENGTH: 'length',
   CONTENT_FILTER: 'content_filter',
-} as const;
-export const OPENAI_COMPLETION_FINISH_REASONS = Object.values(
-  OPENAI_COMPLETION_FINISH,
-);
-export type OpenAICompletionFinishReason =
-  (typeof OPENAI_COMPLETION_FINISH_REASONS)[number];
+} as const satisfies Record<string, NonNullable<OpenAICompletionFinishReason>>;
+export type OpenAICompletionFinishReason = CompletionChoice['finish_reason'];
 
 /** Stop reasons defined in the Model Context Protocol SDK. */
 export const MCP_STOP = {
@@ -39,8 +34,7 @@ export const MCP_STOP = {
   STOP_SEQUENCE: 'stopSequence',
   MAX_TOKENS: 'maxTokens',
 } as const;
-export const MCP_STOP_REASONS = Object.values(MCP_STOP);
-export type MCPStopReason = (typeof MCP_STOP_REASONS)[number];
+export type MCPStopReason = (typeof MCP_STOP)[keyof typeof MCP_STOP];
 
 /**
  * Stop reasons for Anthropic models.

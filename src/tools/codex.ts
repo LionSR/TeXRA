@@ -27,9 +27,13 @@ import {
   writeTerminalStatus,
 } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import {
+  getCurrentToolFileInteractionContext,
+  getCurrentToolRuntimeHost,
+} from '@agent/toolUse/ToolFileInteractionContext';
 import {
   getInterruptible,
   registerInterruptible,
@@ -39,9 +43,14 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
+import type {
+  StreamTabId,
+  ExecutionId,
+  StorageKey,
+  TodoItem,
+  TokenUsageStats,
+} from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -73,6 +82,7 @@ import type {
   SandboxMode,
   Thread,
   ThreadItem,
+  ThreadOptions,
   TodoListItem,
   WebSearchItem,
 } from '@openai/codex-sdk';
@@ -173,10 +183,12 @@ export function interruptAllCodexSessions(): void {
 class CodexFollowUpSession implements IInterruptible {
   private interrupted = false;
   private queue: FollowUpQueue | null = null;
+  private turnAbortController: AbortController | null = null;
 
   interrupt(): void {
     this.interrupted = true;
     this.queue?.cancelWait();
+    this.turnAbortController?.abort();
   }
 
   setQueue(q: FollowUpQueue): void {
@@ -186,6 +198,27 @@ class CodexFollowUpSession implements IInterruptible {
   isInterrupted(): boolean {
     return this.interrupted;
   }
+
+  startTurn(): AbortSignal {
+    this.turnAbortController = new AbortController();
+    return this.turnAbortController.signal;
+  }
+
+  finishTurn(): void {
+    this.turnAbortController = null;
+  }
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError';
+}
+
+function isCleanCodexInterruption(
+  err: unknown,
+  signal: AbortSignal,
+  session: CodexFollowUpSession,
+): boolean {
+  return signal.aborted || session.isInterrupted() || isAbortError(err);
 }
 
 // ============================================================================
@@ -235,11 +268,34 @@ function formatCodexError(
 // Stream tab helpers
 // ============================================================================
 
+export function publishCodexTodos(
+  childStreamId: StreamTabId,
+  todos: TodoItem[],
+  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+): void {
+  runtimeHost.emit('updateTodos', { streamId: childStreamId, todos });
+}
+
+export function publishCodexStreamUsage(
+  childStreamId: StreamTabId,
+  executionId: ExecutionId,
+  usage: TokenUsageStats,
+  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+): void {
+  runtimeHost.emit('updateStreamUsage', {
+    streamId: childStreamId,
+    storageKey: executionId as StorageKey,
+    executionId,
+    usage,
+  });
+}
+
 /** Log a completed codex thread item to the child stream's logger. */
 function logCodexItem(
   item: ThreadItem,
   childStreamId: StreamTabId,
   logger: AgentLogger,
+  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
 ): void {
   switch (item.type) {
     case 'command_execution': {
@@ -272,7 +328,7 @@ function logCodexItem(
         status: t.completed ? ('completed' as const) : ('pending' as const),
         activeForm: t.text,
       }));
-      bus.emit('updateTodos', { streamId: childStreamId, todos });
+      publishCodexTodos(childStreamId, todos, runtimeHost);
       break;
     }
     case 'error':
@@ -305,9 +361,11 @@ async function runStreamedTurn(
   prompt: string,
   childStreamId: StreamTabId,
   logger: AgentLogger,
+  runtimeHost: AgentRuntimeHost,
+  signal?: AbortSignal,
 ): Promise<RunResult> {
   logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
-  const { events } = await thread.runStreamed(prompt);
+  const { events } = await thread.runStreamed(prompt, { signal });
   const responseParts: string[] = [];
   let usage: RunResult['usage'] = null;
 
@@ -315,7 +373,7 @@ async function runStreamedTurn(
     switch (event.type) {
       case 'item.completed': {
         const { item } = event;
-        logCodexItem(item, childStreamId, logger);
+        logCodexItem(item, childStreamId, logger, runtimeHost);
         if (item.type === 'agent_message') {
           responseParts.push(item.text);
         }
@@ -367,6 +425,7 @@ function startCodexLoop(params: {
 
   const session = new CodexFollowUpSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
+  const runtimeHost = getCurrentToolRuntimeHost();
   session.setQueue(queue);
   registerInterruptible(childStreamId, session);
 
@@ -402,15 +461,26 @@ function startCodexLoop(params: {
         const prompt = messages.join('\n\n');
         StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
         const startedAt = Date.now();
+        const signal = session.startTurn();
 
         let turn: RunResult | null = null;
         let err: unknown = null;
         try {
-          turn = await runStreamedTurn(thread, prompt, childStreamId, logger);
+          turn = await runStreamedTurn(
+            thread,
+            prompt,
+            childStreamId,
+            logger,
+            runtimeHost,
+            signal,
+          );
           logTurnSummary(logger, Date.now() - startedAt, turn.usage);
         } catch (caught) {
+          if (isCleanCodexInterruption(caught, signal, session)) break;
           err = caught;
           logger.error(toErrorMessage(caught));
+        } finally {
+          session.finishTurn();
         }
 
         const wallTimeMs = Date.now() - startedAt;
@@ -425,12 +495,12 @@ function startCodexLoop(params: {
         }
 
         if (turn?.usage) {
-          bus.emit('updateStreamUsage', {
-            streamId: childStreamId,
-            storageKey: executionId as StorageKey,
+          publishCodexStreamUsage(
+            childStreamId,
             executionId,
-            usage: buildCodexUsageStats(turn.usage),
-          });
+            buildCodexUsageStats(turn.usage),
+            runtimeHost,
+          );
         }
 
         const msg =
@@ -483,15 +553,16 @@ async function createCodexThread(
   const CodexClass = await importCodexClass();
   const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
   const config = await getCodexConfig();
-  const sandboxMode = input.sandbox_mode;
+  const sandboxMode = input.sandbox_mode ?? undefined;
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =
     workingDir || !input.thread_id
       ? config.buildCodexWorkspaceOptions(workingDir)
       : {};
-  const threadOptions = {
+  const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
+    approvalPolicy: config.getCodexApprovalPolicy(),
     model: config.CODEX_CLI_MODEL,
     modelReasoningEffort: config.getCodexCliReasoningEffort(),
     skipGitRepoCheck: true as const,

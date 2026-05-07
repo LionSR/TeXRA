@@ -77,6 +77,7 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
+import { tagAnthropicSdkError } from './support/sdkErrorAdapters';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -542,6 +543,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async createResponse(
     requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
   ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
+    try {
+      return await this.createResponseImpl(requestOptions);
+    } catch (err) {
+      tagAnthropicSdkError(err, this.config.provider);
+      throw err;
+    }
+  }
+
+  /** Creates an Anthropic response after SDK-boundary error tagging is installed. */
+  private async createResponseImpl(
+    requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
+  ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
     const {
       client,
       messages,
@@ -769,6 +782,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             }
           }
         } catch (err) {
+          tagAnthropicSdkError(err, this.config.provider);
           // Re-throw context window violations - these are intentional validation errors
           // that should fail fast, not be swallowed by soft failure
           if (isContextWindowError(err)) {
@@ -862,6 +876,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } catch (streamError) {
+        tagAnthropicSdkError(streamError, this.config.provider);
+
         const diagnostics = streamHandler.getDiagnostics();
         const partialText = extractPartialTextTail(
           stream.currentMessage,

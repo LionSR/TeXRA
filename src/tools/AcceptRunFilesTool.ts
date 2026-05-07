@@ -15,14 +15,16 @@ import * as path from 'path';
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - shared
+// Local imports - agent
 import { getExecutionStore } from '@agent/storage';
+import { getCurrentToolRuntimeHost } from '@agent/toolUse/ToolFileInteractionContext';
+
+// Local imports - shared
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 // Local imports - tools
-import { bus } from '@eventBus/ProgressEventBus';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatResultCount, pluralize } from '@tools/formatting';
@@ -251,7 +253,7 @@ Optional:
 
     // Badge all accepted workspace files
     if (acceptedEntries.length > 0) {
-      bus.emit('workspaceFilesWritten', {
+      getCurrentToolRuntimeHost().emit('workspaceFilesWritten', {
         absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
       });
     }

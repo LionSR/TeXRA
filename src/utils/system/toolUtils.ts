@@ -26,11 +26,8 @@ import {
 } from '@shared/constants/latex';
 
 // Local file imports
-import {
-  IS_WINDOWS,
-  extendEnvPath,
-  findToolInCommonPaths,
-} from './platformPaths';
+import { IS_WINDOWS, extendEnvPath } from './platformPaths';
+import { BinaryResolver } from './binaryResolver';
 import { executeCommand } from './execUtils';
 
 const CHANNEL = 'toolUtils';
@@ -274,28 +271,23 @@ export async function checkToolInstalled(
         return true;
       }
 
-      const fallback = findToolInCommonPaths(cmd);
+      const fallback = BinaryResolver.resolveOptionalCommand(cmd, args);
       logger.debug(
         CHANNEL,
-        `Fallback search for '${cmd}': ${fallback || 'not found'}`,
+        `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
       );
 
       if (fallback) {
-        const needsPerl =
-          fallback.toLowerCase().endsWith('.pl') ||
-          (IS_WINDOWS && path.extname(fallback) === '');
         logger.debug(
           CHANNEL,
-          `Running fallback '${fallback}' (needsPerl=${needsPerl})`,
+          `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
         );
         try {
-          result = needsPerl
-            ? await execa('perl', [fallback, ...args], execOptions)
-            : await execa(fallback, args, execOptions);
+          result = await execa(fallback.command, fallback.args, execOptions);
         } catch (fallbackErr) {
           logger.info(
             CHANNEL,
-            `Exception executing fallback '${fallback}': ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+            `Exception executing fallback '${fallback.command}': ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
           );
           return false;
         }

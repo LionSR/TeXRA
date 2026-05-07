@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node", "electron"]
+  },
+  "include": ["src/preload/**/*.ts", "../../src/types/**/*.d.ts"]
+}

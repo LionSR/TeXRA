@@ -1,5 +1,5 @@
-import { KVStore } from '@common/storage';
-import { WorkspaceStateKey } from '@common/state';
+import { KVStore } from '@common/storage/KVStore';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
   PersistedStreamLogEntrySchema,
