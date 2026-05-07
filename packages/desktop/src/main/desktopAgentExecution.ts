@@ -11,8 +11,6 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { tryPlatform } from '@platform/platform';
 import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
 import { getWorkspaceProvider } from '@agent/core/workspace';
-import { executeMergeAgent } from '@agent/runtime/executeAgent';
-import { getHelperModelName } from '@agent/runtime/helperModel';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
@@ -162,7 +160,7 @@ export class DesktopProgressBridge {
         acceptEditedFile: (baseFile, editedFile) =>
           this.acceptEditedFile(baseFile, editedFile),
         mergeFile: (baseFile, editedFile) =>
-          executeMergeAgent(getHelperModelName(), baseFile, editedFile),
+          this.runMergeFile(baseFile, editedFile),
         latexdiffFile: (baseFile, editedFile) =>
           this.runLatexdiffFile(baseFile, editedFile),
         openDirectory: async (directory) => {
@@ -944,6 +942,17 @@ export class DesktopProgressBridge {
       { filePath: editedFile },
       `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
     );
+  }
+
+  private async runMergeFile(
+    baseFile: string,
+    editedFile: string,
+  ): Promise<void> {
+    const [{ executeMergeAgent }, { getHelperModelName }] = await Promise.all([
+      import('@agent/runtime/executeAgent'),
+      import('@agent/runtime/helperModel'),
+    ]);
+    await executeMergeAgent(getHelperModelName(), baseFile, editedFile);
   }
 
   private async acceptEditedFile(
