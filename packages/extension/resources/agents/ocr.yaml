@@ -8,6 +8,7 @@ settings:
   outputExt: tex
   prefills:
     - "Here is the \\LaTeX OCR output. <documents>"
+    - ''
 
 prompts:
   systemPrompt: |
