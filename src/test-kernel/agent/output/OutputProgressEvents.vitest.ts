@@ -11,9 +11,7 @@ import {
   type ProcessingContext,
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { normalizeRunId } from '@common/constants/runIds';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type {
   AgentFileLocation,
@@ -22,24 +20,7 @@ import type {
   OutputXmlSummary,
   RoundOutput,
 } from '@shared/schemas';
-
-type RecordedEvent = {
-  event: keyof ProgressEventPayloads;
-  payload: ProgressEventPayloads[keyof ProgressEventPayloads];
-};
-
-function createRecordingHost(): {
-  events: RecordedEvent[];
-  host: AgentRuntimeHost;
-} {
-  const events: RecordedEvent[] = [];
-  return {
-    events,
-    host: {
-      emit: (event, payload) => events.push({ event, payload }),
-    },
-  };
-}
+import { createRecordingHost } from '../progressTestUtils';
 
 function createLocation(path: string): FileLocation {
   return { kind: 'external', absolutePath: path };

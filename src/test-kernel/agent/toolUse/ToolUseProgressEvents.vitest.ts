@@ -6,27 +6,8 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolUseCycleNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseCycleNode';
 import type { CyclePrepResult } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { Plan, TodoItem } from '@shared/schemas';
-
-type RecordedEvent = {
-  event: keyof ProgressEventPayloads;
-  payload: ProgressEventPayloads[keyof ProgressEventPayloads];
-};
-
-function createRecordingHost(): {
-  events: RecordedEvent[];
-  host: AgentRuntimeHost;
-} {
-  const events: RecordedEvent[] = [];
-  return {
-    events,
-    host: {
-      emit: (event, payload) => events.push({ event, payload }),
-    },
-  };
-}
+import { createRecordingHost } from '../progressTestUtils';
 
 const todo: TodoItem = {
   content: 'Wire progress events through runtime host',
