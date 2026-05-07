@@ -17,6 +17,11 @@ on:
         required: false
         default: false
         type: boolean
+      require_desktop_signing:
+        description: 'Fail desktop installer jobs unless signing secrets are complete'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -149,8 +154,46 @@ jobs:
       - name: Build desktop app
         run: pnpm run desktop:build
 
+      - name: Prepare macOS notarization API key
+        env:
+          DESKTOP_MACOS_APPLE_API_KEY: ${{ secrets.DESKTOP_MACOS_APPLE_API_KEY }}
+          DESKTOP_MACOS_APPLE_API_KEY_ID: ${{ secrets.DESKTOP_MACOS_APPLE_API_KEY_ID }}
+        run: |
+          if [ -n "$DESKTOP_MACOS_APPLE_API_KEY" ]; then
+            key_id="${DESKTOP_MACOS_APPLE_API_KEY_ID:-texra}"
+            key_path="$RUNNER_TEMP/AuthKey_${key_id}.p8"
+            printf '%s' "$DESKTOP_MACOS_APPLE_API_KEY" > "$key_path"
+            chmod 600 "$key_path"
+            echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify macOS signing secrets
+        id: desktop-signing
+        env:
+          TEXRA_REQUIRE_DESKTOP_SIGNING: ${{ github.event_name == 'workflow_dispatch' && inputs.require_desktop_signing && '1' || '0' }}
+          CSC_LINK: ${{ secrets.DESKTOP_MACOS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_MACOS_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.DESKTOP_MACOS_APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.DESKTOP_MACOS_APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.DESKTOP_MACOS_APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_MACOS_APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.DESKTOP_MACOS_APPLE_TEAM_ID }}
+          APPLE_KEYCHAIN: ${{ secrets.DESKTOP_MACOS_APPLE_KEYCHAIN }}
+          APPLE_KEYCHAIN_PROFILE: ${{ secrets.DESKTOP_MACOS_APPLE_KEYCHAIN_PROFILE }}
+        run: node scripts/verify-desktop-signing-env.mjs mac
+
       - name: Package macOS desktop installers
-        run: pnpm --filter @texra/desktop package:dist
+        env:
+          CSC_LINK: ${{ secrets.DESKTOP_MACOS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_MACOS_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.DESKTOP_MACOS_APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.DESKTOP_MACOS_APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.DESKTOP_MACOS_APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_MACOS_APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.DESKTOP_MACOS_APPLE_TEAM_ID }}
+          APPLE_KEYCHAIN: ${{ secrets.DESKTOP_MACOS_APPLE_KEYCHAIN }}
+          APPLE_KEYCHAIN_PROFILE: ${{ secrets.DESKTOP_MACOS_APPLE_KEYCHAIN_PROFILE }}
+        run: pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
 
       - name: Check macOS packaged desktop app contents
         run: pnpm run check:desktop-package
@@ -251,8 +294,29 @@ jobs:
       - name: Check desktop build artifacts
         run: pnpm run check:desktop-build-artifacts
 
+      - name: Verify Windows signing secrets
+        id: desktop-signing
+        env:
+          TEXRA_REQUIRE_DESKTOP_SIGNING: ${{ github.event_name == 'workflow_dispatch' && inputs.require_desktop_signing && '1' || '0' }}
+          TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+          TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          AZURE_TENANT_ID: ${{ secrets.DESKTOP_WINDOWS_AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.DESKTOP_WINDOWS_AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.DESKTOP_WINDOWS_AZURE_CLIENT_SECRET }}
+        run: node scripts/verify-desktop-signing-env.mjs win
+
       - name: Package Windows desktop installer
-        run: pnpm --filter @texra/desktop package:dist
+        env:
+          TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+          TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          TEXRA_WINDOWS_AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.DESKTOP_WINDOWS_AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          AZURE_TENANT_ID: ${{ secrets.DESKTOP_WINDOWS_AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.DESKTOP_WINDOWS_AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.DESKTOP_WINDOWS_AZURE_CLIENT_SECRET }}
+        run: pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
 
       - name: Check Windows packaged desktop app contents
         run: pnpm run check:desktop-package

@@ -442,10 +442,11 @@ packages/desktop/dist-packaged/
 ```
 
 For macOS, the distributable targets are a DMG and ZIP. Windows release builds use NSIS, and Linux
-release builds use AppImage and deb. These local artifacts are unsigned and not notarized until the
-signing jobs are wired. Local smoke tests should continue using
-`npm run desktop:package:local` because the unpacked directory target launches faster and keeps
-startup regression coverage separate from installer generation.
+release builds use AppImage and deb. CI release installer jobs can sign and notarize macOS artifacts
+and sign Windows artifacts when the repository secrets in `docs/desktop-signing-ci.md` are
+configured. Local smoke tests should continue using `npm run desktop:package:local` because the
+unpacked directory target launches faster and keeps startup regression coverage separate from
+installer generation.
 
 ---
 
