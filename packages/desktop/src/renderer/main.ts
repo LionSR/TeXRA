@@ -2,6 +2,12 @@ import './styles.css';
 import './themeTokens.css';
 import './codiconStylesheet';
 
+import '@shared/wa';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { postMessage } from '@shared/hostBridge';
@@ -67,24 +73,25 @@ const appRoot = root;
 appRoot.innerHTML = `
   <section class="desktop-shell">
     <nav class="desktop-nav" aria-label="Desktop views">
-      <button class="desktop-nav-button" type="button" data-route-button="main" aria-pressed="true">
+      <wa-button class="desktop-nav-button" appearance="plain" size="small" data-route-button="main" aria-pressed="true">
         Launcher
-      </button>
-      <button class="desktop-nav-button" type="button" data-route-button="progress" aria-pressed="false">
+      </wa-button>
+      <wa-button class="desktop-nav-button" appearance="plain" size="small" data-route-button="progress" aria-pressed="false">
         Progress
-      </button>
-      <button class="desktop-nav-button" type="button" data-route-button="settings" aria-pressed="false">
+      </wa-button>
+      <wa-button class="desktop-nav-button" appearance="plain" size="small" data-route-button="settings" aria-pressed="false">
         Settings
-      </button>
-      <button class="desktop-nav-button" type="button" data-route-button="logs" aria-pressed="false">
+      </wa-button>
+      <wa-button class="desktop-nav-button" appearance="plain" size="small" data-route-button="logs" aria-pressed="false">
         Logs
-      </button>
-      <button class="desktop-command-button" type="button" data-command-palette-button aria-haspopup="dialog">
+      </wa-button>
+      <wa-button class="desktop-command-button" appearance="outlined" size="small" data-command-palette-button aria-haspopup="dialog">
         Commands
-      </button>
-      <button class="desktop-folder-button" type="button" data-open-workspace-button>
+      </wa-button>
+      <wa-button class="desktop-folder-button" appearance="outlined" size="small" data-open-workspace-button>
+        <wa-icon slot="start" library="${TEXRA_ICON_LIBRARY}" name="folder-open" variant="solid"></wa-icon>
         Open Folder
-      </button>
+      </wa-button>
     </nav>
     <div class="desktop-workbench">
       <aside class="desktop-explorer" id="desktop-explorer" aria-label="Workspace Explorer"></aside>
@@ -122,9 +129,9 @@ for (const route of DESKTOP_ROUTES) {
   routeContainers.set(route, container);
 }
 
-const routeButtons = new Map<DesktopRoute, HTMLButtonElement>();
+const routeButtons = new Map<DesktopRoute, HTMLElement>();
 for (const route of DESKTOP_ROUTES) {
-  const button = appRoot.querySelector<HTMLButtonElement>(
+  const button = appRoot.querySelector<HTMLElement>(
     `[data-route-button="${route}"]`,
   );
   if (button == null) {
@@ -163,14 +170,14 @@ settingsApp.setAttribute('data-desktop-view', 'settings');
 routeContainers.get('settings')?.replaceChildren(settingsApp);
 routeContainers.get('logs')?.replaceChildren(createLogViewer());
 
-const commandPaletteButton = appRoot.querySelector<HTMLButtonElement>(
+const commandPaletteButton = appRoot.querySelector<HTMLElement>(
   '[data-command-palette-button]',
 );
 if (commandPaletteButton == null) {
   throw new Error('TeXRA desktop command palette button was not found.');
 }
 
-const openWorkspaceButton = appRoot.querySelector<HTMLButtonElement>(
+const openWorkspaceButton = appRoot.querySelector<HTMLElement>(
   '[data-open-workspace-button]',
 );
 if (openWorkspaceButton == null) {
@@ -311,26 +318,26 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
 
   container.innerHTML = `
     <div class="desktop-empty-workspace-panel">
-      <span class="codicon codicon-folder-opened desktop-empty-workspace-icon" aria-hidden="true"></span>
+      <wa-icon class="desktop-empty-workspace-icon" library="${TEXRA_ICON_LIBRARY}" name="folder-open" variant="solid" aria-hidden="true"></wa-icon>
       <h1>${title}</h1>
       <p>${body}</p>
       <div class="desktop-empty-workspace-actions">
-        <button class="desktop-primary-button" type="button" data-empty-open-folder>
+        <wa-button class="desktop-primary-button" appearance="filled" variant="brand" data-empty-open-folder>
           Open Folder
-        </button>
-        <button class="desktop-secondary-button" type="button" data-empty-open-logs>
+        </wa-button>
+        <wa-button class="desktop-secondary-button" appearance="outlined" data-empty-open-logs>
           Logs
-        </button>
+        </wa-button>
       </div>
     </div>
   `;
   container
-    .querySelector<HTMLButtonElement>('[data-empty-open-folder]')
+    .querySelector<HTMLElement>('[data-empty-open-folder]')
     ?.addEventListener('click', () =>
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
     );
   container
-    .querySelector<HTMLButtonElement>('[data-empty-open-logs]')
+    .querySelector<HTMLElement>('[data-empty-open-logs]')
     ?.addEventListener('click', () =>
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
     );
@@ -347,29 +354,41 @@ function createLogViewer(): HTMLElement {
         <p data-log-meta>Recent redacted log entries appear here.</p>
       </div>
       <div class="desktop-log-viewer-actions">
-        <button class="desktop-secondary-button" type="button" data-log-refresh>Refresh</button>
-        <button class="desktop-secondary-button" type="button" data-log-copy>Copy</button>
-        <button class="desktop-secondary-button" type="button" data-log-export>Export</button>
-        <button class="desktop-secondary-button" type="button" data-log-folder>Open Folder</button>
+        <wa-button class="desktop-secondary-button" appearance="outlined" size="small" data-log-refresh>
+          <wa-icon slot="start" library="${TEXRA_ICON_LIBRARY}" name="rotate-right" variant="solid"></wa-icon>
+          Refresh
+        </wa-button>
+        <wa-button class="desktop-secondary-button" appearance="outlined" size="small" data-log-copy>
+          <wa-icon slot="start" library="${TEXRA_ICON_LIBRARY}" name="copy" variant="solid"></wa-icon>
+          Copy
+        </wa-button>
+        <wa-button class="desktop-secondary-button" appearance="outlined" size="small" data-log-export>
+          <wa-icon slot="start" library="${TEXRA_ICON_LIBRARY}" name="download" variant="solid"></wa-icon>
+          Export
+        </wa-button>
+        <wa-button class="desktop-secondary-button" appearance="outlined" size="small" data-log-folder>
+          <wa-icon slot="start" library="${TEXRA_ICON_LIBRARY}" name="folder-open" variant="solid"></wa-icon>
+          Open Folder
+        </wa-button>
       </div>
     </header>
     <pre class="desktop-log-viewer-output" data-log-output>Open Logs to load recent entries.</pre>
   `;
   container
-    .querySelector<HTMLButtonElement>('[data-log-refresh]')
+    .querySelector<HTMLElement>('[data-log-refresh]')
     ?.addEventListener('click', requestLogSnapshot);
   container
-    .querySelector<HTMLButtonElement>('[data-log-copy]')
+    .querySelector<HTMLElement>('[data-log-copy]')
     ?.addEventListener('click', () =>
       postMessage(DESKTOP_LOG_COMMANDS.COPY_LOG),
     );
   container
-    .querySelector<HTMLButtonElement>('[data-log-export]')
+    .querySelector<HTMLElement>('[data-log-export]')
     ?.addEventListener('click', () =>
       postMessage(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
     );
   container
-    .querySelector<HTMLButtonElement>('[data-log-folder]')
+    .querySelector<HTMLElement>('[data-log-folder]')
     ?.addEventListener('click', () =>
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
     );
@@ -420,15 +439,15 @@ function renderWorkspaceExplorerNoWorkspace(): void {
   const prompt = document.createElement('section');
   prompt.className = 'desktop-explorer-empty';
   prompt.innerHTML = `
-    <span class="codicon codicon-folder-opened" aria-hidden="true"></span>
+    <wa-icon library="${TEXRA_ICON_LIBRARY}" name="folder-open" variant="solid" aria-hidden="true"></wa-icon>
     <h2>No workspace</h2>
     <p>Open a folder before selecting files for agents.</p>
-    <button class="desktop-primary-button" type="button" data-explorer-open-folder>
+    <wa-button class="desktop-primary-button" appearance="filled" variant="brand" data-explorer-open-folder>
       Open Folder
-    </button>
+    </wa-button>
   `;
   prompt
-    .querySelector<HTMLButtonElement>('[data-explorer-open-folder]')
+    .querySelector<HTMLElement>('[data-explorer-open-folder]')
     ?.addEventListener('click', () =>
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
     );
@@ -469,12 +488,14 @@ function createExplorerHeader(title: string, loading = false): HTMLElement {
   const label = document.createElement('span');
   label.className = 'desktop-explorer-title';
   label.textContent = title;
-  const refresh = document.createElement('button');
-  refresh.className = 'desktop-explorer-icon-button codicon codicon-refresh';
-  refresh.type = 'button';
+  const refresh = document.createElement('wa-button');
+  refresh.className = 'desktop-explorer-icon-button';
+  refresh.setAttribute('appearance', 'plain');
+  refresh.setAttribute('size', 'small');
   refresh.title = 'Refresh workspace files';
   refresh.setAttribute('aria-label', 'Refresh workspace files');
-  refresh.disabled = loading || !hasWorkspace;
+  if (loading || !hasWorkspace) refresh.setAttribute('disabled', '');
+  refresh.innerHTML = `<wa-icon library="${TEXRA_ICON_LIBRARY}" name="rotate-right" variant="solid"></wa-icon>`;
   refresh.addEventListener('click', requestWorkspaceTree);
   header.append(label, refresh);
   return header;
@@ -503,8 +524,8 @@ function renderTreeNodes(
       summary.className = 'desktop-explorer-row desktop-explorer-folder-row';
       summary.setAttribute('role', 'treeitem');
       summary.innerHTML = `
-        <span class="codicon codicon-chevron-right desktop-explorer-chevron" aria-hidden="true"></span>
-        <span class="codicon codicon-folder" aria-hidden="true"></span>
+        <wa-icon class="desktop-explorer-chevron" library="${TEXRA_ICON_LIBRARY}" name="chevron-right" variant="solid" aria-hidden="true"></wa-icon>
+        <wa-icon library="${TEXRA_ICON_LIBRARY}" name="folder" variant="solid" aria-hidden="true"></wa-icon>
         <span class="desktop-explorer-name"></span>
       `;
       summary.querySelector('.desktop-explorer-name')!.textContent = node.name;
@@ -526,7 +547,7 @@ function renderTreeNodes(
     row.setAttribute('role', 'treeitem');
     row.title = node.path;
     row.innerHTML = `
-      <span class="codicon codicon-file" aria-hidden="true"></span>
+      <wa-icon library="${TEXRA_ICON_LIBRARY}" name="file-lines" variant="solid" aria-hidden="true"></wa-icon>
       <span class="desktop-explorer-name"></span>
       <span class="desktop-explorer-category-strip"></span>
     `;
@@ -583,9 +604,10 @@ function updateExplorerSelectionPanel(
   const actions = document.createElement('div');
   actions.className = 'desktop-explorer-selection-actions';
 
-  const open = document.createElement('button');
-  open.type = 'button';
+  const open = document.createElement('wa-button');
   open.className = 'desktop-secondary-button';
+  open.setAttribute('appearance', 'outlined');
+  open.setAttribute('size', 'small');
   open.textContent = 'Open';
   open.addEventListener('click', () => openWorkspaceFile(node.path));
   actions.append(open);
@@ -593,9 +615,10 @@ function updateExplorerSelectionPanel(
   for (const category of node.categories ?? []) {
     const typedCategory = parseExplorerCategory(category);
     if (!typedCategory) continue;
-    const select = document.createElement('button');
-    select.type = 'button';
+    const select = document.createElement('wa-button');
     select.className = 'desktop-secondary-button';
+    select.setAttribute('appearance', 'outlined');
+    select.setAttribute('size', 'small');
     select.textContent = `Use as ${typedCategory}`;
     select.addEventListener('click', () =>
       selectWorkspaceFile(typedCategory, node.path),

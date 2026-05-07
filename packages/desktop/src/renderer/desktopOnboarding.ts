@@ -1,3 +1,5 @@
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+
 import type { DesktopRoute } from '../desktopShellMessages';
 import { isCommandPaletteShortcut } from './desktopCommandPalette';
 
@@ -31,7 +33,7 @@ export function createFirstRunWalkthrough({
   element.innerHTML = `
     <div class="desktop-onboarding-panel">
       <header class="desktop-onboarding-header">
-        <span class="codicon codicon-info desktop-onboarding-icon" aria-hidden="true"></span>
+        <wa-icon class="desktop-onboarding-icon" library="${TEXRA_ICON_LIBRARY}" name="circle-info" variant="solid" aria-hidden="true"></wa-icon>
         <div>
           <h1 id="desktop-onboarding-title">Welcome to TeXRA Desktop</h1>
           <p>Start from a workspace, configure model access, choose an agent, and run without switching to VS Code.</p>
@@ -68,15 +70,15 @@ export function createFirstRunWalkthrough({
         </li>
       </ol>
       <footer class="desktop-onboarding-actions">
-        <button class="desktop-secondary-button" type="button" data-onboarding-settings>
+        <wa-button class="desktop-secondary-button" appearance="outlined" data-onboarding-settings>
           Open Settings
-        </button>
-        <button class="desktop-secondary-button" type="button" data-onboarding-launcher>
+        </wa-button>
+        <wa-button class="desktop-secondary-button" appearance="outlined" data-onboarding-launcher>
           Go to Launcher
-        </button>
-        <button class="desktop-primary-button" type="button" data-onboarding-dismiss>
+        </wa-button>
+        <wa-button class="desktop-primary-button" appearance="filled" variant="brand" data-onboarding-dismiss>
           Got it
-        </button>
+        </wa-button>
       </footer>
     </div>
   `;
@@ -96,7 +98,7 @@ export function createFirstRunWalkthrough({
     restoreFocus?.focus();
   };
   const focusFirstControl = (): void => {
-    const dismissButton = element.querySelector<HTMLButtonElement>(
+    const dismissButton = element.querySelector<HTMLElement>(
       '[data-onboarding-dismiss]',
     );
     (dismissButton ?? getFocusableElements()[0])?.focus();
@@ -121,7 +123,7 @@ export function createFirstRunWalkthrough({
   };
   const onClick = (selector: string, handler: () => void): void => {
     element
-      .querySelector<HTMLButtonElement>(selector)
+      .querySelector<HTMLElement>(selector)
       ?.addEventListener('click', handler);
   };
 
