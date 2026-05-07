@@ -158,6 +158,12 @@ function normalizeAsarPath(path) {
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
 }
 
+function mergeDirectoryEntries(...entryGroups) {
+  return [...new Set(entryGroups.flat())].sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
+
 function createAsarAppReader(asarPath) {
   const entryPathByNormalizedPath = new Map(
     listPackage(asarPath).map((entry) => [normalizeAsarPath(entry), entry]),
@@ -244,11 +250,11 @@ function createAsarAppReader(asarPath) {
         .map((entry) => entry.slice(prefix.length))
         .filter((entry) => entry && !entry.includes('/'))
         .map((entry) => basename(entry));
-      if (asarEntries.length > 0) return asarEntries;
       try {
-        return await readdir(join(resourceRoot, path));
+        const resourceEntries = await readdir(join(resourceRoot, path));
+        return mergeDirectoryEntries(asarEntries, resourceEntries);
       } catch (error) {
-        if (error?.code === 'ENOENT') return [];
+        if (error?.code === 'ENOENT') return mergeDirectoryEntries(asarEntries);
         throw error;
       }
     },
