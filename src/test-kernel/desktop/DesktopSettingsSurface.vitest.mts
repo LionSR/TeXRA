@@ -18,7 +18,9 @@ describe('desktop settings surface', () => {
     expect(settingsApp).toContain('SETTINGS_TAB.MODELS');
     expect(settingsApp).toContain('Memory is not available in desktop yet');
     expect(settingsApp).toContain('History is not available in desktop yet');
-    expect(settingsApp).toContain('SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS');
+    expect(settingsApp).toContain(
+      'SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS',
+    );
     expect(settingsApp).toContain('renderDesktopUnavailablePanel');
   });
 
