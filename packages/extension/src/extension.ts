@@ -90,7 +90,7 @@ import { setAddCriticismSink } from '@tools/AddCriticismTool';
 import { setLinterProvider } from '@tools/DiagnosticsTool';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
-import { StorageFS, WorkspaceFS } from '@utils/files';
+import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { setToolMissingHandler } from '@utils/system';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
@@ -465,20 +465,14 @@ export async function activate(context: vscode.ExtensionContext) {
   setOpenBuildDisplay(openBuildDisplayIfTex);
   registerInlineCriticism(context);
   setAddCriticismSink((payload) => {
-    let resolvedPath = payload.path;
-    try {
-      resolvedPath = WorkspaceFS.toAbsolute(payload.path);
-    } catch {
-      // No workspace open — fall back to the raw path.
-    }
     const accepted = pushManualCriticism({
-      absolutePath: resolvedPath,
+      absolutePath: payload.absolutePath,
       line: payload.line,
       message: payload.message,
       severity: payload.severity,
       confidence: payload.confidence,
     });
-    return { accepted, resolvedPath };
+    return { accepted, resolvedPath: payload.absolutePath };
   });
   applyGitAuthorConfig();
 

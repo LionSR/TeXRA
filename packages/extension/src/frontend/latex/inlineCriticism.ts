@@ -19,7 +19,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { globalSM, GlobalStateKey } from '@common/state';
-import { bus } from '@eventBus/ProgressEventBus';
+import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo } from '@shared/schemas';
@@ -36,7 +36,7 @@ let collection: vscode.DiagnosticCollection | undefined;
 let busUnsubscribe: (() => void) | undefined;
 let extensionContext: vscode.ExtensionContext | undefined;
 
-/** Criticism severity (1–5) → VS Code DiagnosticSeverity. */
+/** Criticism severity (0–5) → VS Code DiagnosticSeverity. */
 function mapSeverity(severity: number): vscode.DiagnosticSeverity {
   if (severity >= 5) return vscode.DiagnosticSeverity.Error;
   if (severity >= 4) return vscode.DiagnosticSeverity.Warning;
@@ -45,8 +45,10 @@ function mapSeverity(severity: number): vscode.DiagnosticSeverity {
 }
 
 export function isInlineCriticismEnabled(): boolean {
-  return globalSM?.get<boolean>(GlobalStateKey.INLINE_CRITICISM_ENABLED, false)
-    === true;
+  return (
+    globalSM?.get<boolean>(GlobalStateKey.INLINE_CRITICISM_ENABLED, false) ===
+    true
+  );
 }
 
 function buildDiagnostic(
@@ -66,8 +68,15 @@ function buildDiagnostic(
   return diag;
 }
 
+function keepToolDiagnostics(
+  diagnostics: readonly vscode.Diagnostic[],
+): vscode.Diagnostic[] {
+  return diagnostics.filter((diag) => diag.code === CODE_TOOL);
+}
+
 async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
-  if (!collection) return;
+  const activeCollection = collection;
+  if (!activeCollection) return;
   const absolutePath = file.location.absolutePath;
   if (!absolutePath.toLowerCase().endsWith('.tex')) return;
 
@@ -82,17 +91,26 @@ async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
     return;
   }
 
+  if (collection !== activeCollection) return;
+
   const annotations = parseCriticismAnnotations(text);
   const uri = vscode.Uri.file(absolutePath);
+  const manualDiagnostics = keepToolDiagnostics(
+    activeCollection.get(uri) ?? [],
+  );
 
   if (annotations.length === 0) {
-    collection.delete(uri);
+    if (manualDiagnostics.length > 0) {
+      activeCollection.set(uri, manualDiagnostics);
+    } else {
+      activeCollection.delete(uri);
+    }
     return;
   }
 
-  collection.set(
-    uri,
-    annotations.map((a) =>
+  activeCollection.set(uri, [
+    ...manualDiagnostics,
+    ...annotations.map((a) =>
       buildDiagnostic(
         new vscode.Range(a.line, a.column, a.line, a.column + a.length),
         a.message,
@@ -101,12 +119,12 @@ async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
         CODE_PARSED,
       ),
     ),
-  );
+  ]);
 }
 
-function handleAddOutputFiles(payload: {
-  filesByRound: { [key: number]: OutputFileInfo[] };
-}): void {
+function handleAddOutputFiles(
+  payload: ProgressEventPayloads['addOutputFiles'],
+): void {
   if (!collection) return;
   const allFiles = Object.values(payload.filesByRound).flat();
   void Promise.all(allFiles.map((f) => refreshFileDiagnostics(f))).catch(

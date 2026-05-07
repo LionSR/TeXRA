@@ -2,8 +2,10 @@
 import { z } from 'zod';
 
 // Internal imports
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors';
+import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -13,9 +15,9 @@ const CHANNEL = 'AddCriticismTool';
 logger.initialize(CHANNEL);
 
 /**
- * Shared shape for a single criticism entry. The tool emits this with `path`
- * (which the host resolves to `absolutePath`) and the host re-emits the same
- * shape into the diagnostic collection.
+ * Host-resolved shape for a single criticism entry. Tool input uses `path`;
+ * `execute` resolves it against the active working directory before handing the
+ * entry to the extension host as `absolutePath`.
  */
 export interface ManualCriticismEntry {
   /** Absolute path resolved by the host. */
@@ -23,7 +25,7 @@ export interface ManualCriticismEntry {
   /** 1-based line number. */
   line: number;
   message: string;
-  /** 1–5; mapped to DiagnosticSeverity. */
+  /** 0–5; mapped to DiagnosticSeverity. */
   severity: number;
   /** 1–5; appended to the message as `(S/C)`. */
   confidence: number;
@@ -34,7 +36,7 @@ export interface ManualCriticismEntry {
  * experimental setting is disabled so the tool can surface that to the agent.
  */
 export type AddCriticismSink = (input: {
-  path: string;
+  absolutePath: string;
   line: number;
   message: string;
   severity: number;
@@ -50,6 +52,8 @@ export function setAddCriticismSink(provider: AddCriticismSink): void {
 export const AddCriticismInputSchema = z.strictObject({
   path: z
     .string()
+    .trim()
+    .min(1)
     .describe(
       'Absolute or workspace-relative path to the file the criticism applies to.',
     ),
@@ -62,10 +66,10 @@ export const AddCriticismInputSchema = z.strictObject({
   severity: z
     .number()
     .int()
-    .min(1)
+    .min(0)
     .max(5)
     .describe(
-      'Severity 1–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic.',
+      'Severity 0–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic, 0=verified/correct.',
     ),
   confidence: z
     .number()
@@ -87,7 +91,13 @@ export class AddCriticismTool extends defineTool({
 }) {
   protected async execute(input: AddCriticismInput): Promise<ToolResult> {
     try {
-      const result = sink(input);
+      const workingDirectory =
+        getCurrentToolFileInteractionContext()?.workingDirectory;
+      const resolved = resolveWorkspaceRelativePath(
+        input.path,
+        workingDirectory,
+      );
+      const result = sink({ ...input, absolutePath: resolved.absolute });
       if (!result.accepted) {
         return {
           summary: 'Criticism not accepted',
@@ -95,7 +105,7 @@ export class AddCriticismTool extends defineTool({
             'Inline criticism diagnostics are disabled. Enable "texra.inlineCriticism.enabled" in settings to surface critiques as diagnostics.',
         };
       }
-      const where = result.resolvedPath || input.path;
+      const where = result.resolvedPath || resolved.absolute;
       const summary = `Added criticism for ${where}:${input.line} (S${input.severity}/C${input.confidence})`;
       return { summary, output: summary };
     } catch (error) {

@@ -21,6 +21,7 @@ export interface CriticismAnnotation {
 }
 
 const MACRO = '\\criticize';
+const INTEGER = /^\d+$/;
 
 function readBraceGroup(
   source: string,
@@ -46,6 +47,12 @@ function readBraceGroup(
     i++;
   }
   return null;
+}
+
+function skipWhitespace(source: string, index: number): number {
+  let i = index;
+  while (i < source.length && /\s/.test(source[i])) i++;
+  return i;
 }
 
 /**
@@ -82,35 +89,45 @@ export function parseCriticismAnnotations(
     const macroAt = source.indexOf(MACRO, searchFrom);
     if (macroAt === -1) break;
 
+    const afterMacro = source[macroAt + MACRO.length];
     // Guard against partial matches like `\criticizeFoo`.
-    if (source[macroAt + MACRO.length] !== '{') {
+    if (afterMacro && /[A-Za-z]/.test(afterMacro)) {
       searchFrom = macroAt + MACRO.length;
       continue;
     }
 
-    const arg1 = readBraceGroup(source, macroAt + MACRO.length);
+    const arg1Start = skipWhitespace(source, macroAt + MACRO.length);
+    const arg1 = readBraceGroup(source, arg1Start);
     if (!arg1) {
       searchFrom = macroAt + MACRO.length;
       continue;
     }
-    const arg2 = readBraceGroup(source, arg1.end);
+    const arg2 = readBraceGroup(source, skipWhitespace(source, arg1.end));
     if (!arg2) {
       searchFrom = arg1.end;
       continue;
     }
-    const arg3 = readBraceGroup(source, arg2.end);
+    const arg3 = readBraceGroup(source, skipWhitespace(source, arg2.end));
     if (!arg3) {
       searchFrom = arg2.end;
       continue;
     }
 
-    const severity = Number.parseInt(arg2.content.trim(), 10);
-    const confidence = Number.parseInt(arg3.content.trim(), 10);
+    const severityText = arg2.content.trim();
+    const confidenceText = arg3.content.trim();
+    const severity = INTEGER.test(severityText)
+      ? Number.parseInt(severityText, 10)
+      : NaN;
+    const confidence = INTEGER.test(confidenceText)
+      ? Number.parseInt(confidenceText, 10)
+      : NaN;
     if (
       Number.isFinite(severity) &&
       Number.isFinite(confidence) &&
-      severity >= 1 &&
-      severity <= 5
+      severity >= 0 &&
+      severity <= 5 &&
+      confidence >= 1 &&
+      confidence <= 5
     ) {
       const { line, column } = cursor.advanceTo(macroAt);
       out.push({
