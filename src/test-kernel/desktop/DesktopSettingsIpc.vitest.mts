@@ -74,6 +74,7 @@ interface DesktopSettingsIpcModule {
     refreshToolAvailability?: () => Promise<void>;
     getCustomAgentDirectory?: () => Promise<string>;
     selectCustomAgentDirectory?: () => Promise<string | undefined>;
+    openPath?: (filePath: string) => Promise<void>;
     openExternalUrl?: (url: string) => Promise<void>;
     installToolExtension?: (extensionId: string) => Promise<void>;
     promptSecret?: (input: {
@@ -964,6 +965,29 @@ describe('desktop settings IPC', () => {
           MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       ),
     ).toBe(true);
+  });
+
+  it('opens the desktop custom agent directory through the shell opener', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const openPath = vi.fn(async (_filePath: string) => undefined);
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      getCustomAgentDirectory: async () => '/agents/custom',
+      openPath,
+      postToRenderer: () => undefined,
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER,
+        folderType: 'custom',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(openPath).toHaveBeenCalledWith('/agents/custom');
   });
 
   it('applies desktop team presets and refreshes settings plus launcher options', async () => {
