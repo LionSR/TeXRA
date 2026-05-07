@@ -28,9 +28,7 @@ const extensionPackageUtilsUrl = pathToFileURL(
   repoPath('scripts/extension-package-utils.mjs'),
 ).href;
 
-const { requiredMonacoWorkers } = (await import(
-  extensionPackageUtilsUrl
-)) as {
+const { requiredMonacoWorkers } = (await import(extensionPackageUtilsUrl)) as {
   requiredMonacoWorkers: string[];
 };
 
