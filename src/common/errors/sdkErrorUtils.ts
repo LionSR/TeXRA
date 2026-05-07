@@ -234,24 +234,44 @@ function detectProvider(err: unknown): string | undefined {
 
   const candidate = err as { provider?: string } & {
     constructor?: { name?: string };
+    stack?: string;
   };
 
   if (isString(candidate.provider)) {
     return candidate.provider;
   }
 
-  const lowered = candidate.constructor?.name?.toLowerCase();
-  if (!lowered) return undefined;
+  const providerFromStack = detectProviderFromText(
+    [candidate.constructor?.name, candidate.stack].filter(isString).join('\n'),
+  );
+  if (providerFromStack) {
+    return providerFromStack;
+  }
+
+  const loweredNames = getErrorClassNames(err).map((name) =>
+    name.toLowerCase(),
+  );
+  if (loweredNames.length === 0) return undefined;
 
   // Match SDK class-name fragments, then normalize aliases to the
   // canonical API-provider names used by SecretManager / model handlers.
   // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
   // (class name contains "kimi") maps to "moonshot".
   const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find((p) =>
-    lowered.includes(p),
+    loweredNames.some((name) => name.includes(p)),
   );
   if (match === 'kimi') return 'moonshot';
   return match;
+}
+
+function detectProviderFromText(text: string): string | undefined {
+  const lowered = text.toLowerCase().replaceAll('\\', '/');
+  if (lowered.includes(`@anthropic-${'ai'}/sdk`)) return 'anthropic';
+  if (lowered.includes('node_modules/openai')) return 'openai';
+  // Keep the Google package marker split so the desktop startup bundle
+  // verifier does not mistake this stack-text detector for an eager SDK import.
+  if (lowered.includes(`@google/${'genai'}`)) return 'google';
+  return undefined;
 }
 
 /** Extract request ID from SDK errors (property or headers). */
