@@ -261,20 +261,19 @@ export class ProgressEventHandler {
   private async handleSetActiveStream(
     payload: ProgressEventPayloads['setActiveStream'],
   ): Promise<void> {
-    const { streamId, isRemote, hasMultipleOutputs } = payload;
+    const { streamId, isRemote } = payload;
     if (!streamId) return;
 
     const wasKnownStream = this.state.streamLogs.has(streamId);
     const previousFilter = this.state.agentCategoryFilter;
     this.state.streamLogs.ensureStream(streamId);
     // Only pass defined hint fields — spreading {key: undefined} over existing
-    // hints would clear previously-set values (isRemote, hasMultipleOutputs).
+    // hints would clear previously-set values (isRemote).
     const hints = {
       ...(payload.agentCategory !== undefined && {
         agentCategory: payload.agentCategory,
       }),
       ...(isRemote !== undefined && { isRemote }),
-      ...(hasMultipleOutputs !== undefined && { hasMultipleOutputs }),
     };
     if (Object.keys(hints).length > 0) {
       this.state.updateStreamHints(streamId, hints);

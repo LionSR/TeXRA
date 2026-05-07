@@ -12,17 +12,16 @@ import * as configModule from '@utils/config';
 
 const baseSetting: AgentSetting = {
   agentCategory: AgentCategory.Workflow,
-  documentTag: 'document',
+  documentTag: 'documents',
   temperature: 1,
   isRewrite: true,
   rounds: 1,
   prefills: [],
   outputExt: 'tex',
-  endTag: '</latex_document>',
+  endTag: '</documents>',
   requiredFiles: {},
   requiredFilesInternal: {},
   defaultOutputFiles: [],
-  isMultipleOutput: false,
   filePatternsContain: [],
   tools: [],
 };
@@ -37,7 +36,6 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
   model: 'test',
   agent: 'agent',
   instruction: '',
-  useMultipleOutputs: false,
   inputFile: 'input.tex',
   toolConfig: {
     autoExtractFigure: false,
