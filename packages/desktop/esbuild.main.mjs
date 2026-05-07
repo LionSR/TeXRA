@@ -4,12 +4,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const outdir = resolve(__dirname, 'dist/main');
+const outdir = 'dist/main';
+const outdirPath = resolve(__dirname, outdir);
 
-await rm(outdir, { force: true, recursive: true });
+await rm(outdirPath, { force: true, recursive: true });
 
 const result = await esbuild.build({
-  entryPoints: { index: resolve(__dirname, 'src/main/bootstrap.ts') },
+  absWorkingDir: __dirname,
+  entryPoints: { index: 'src/main/bootstrap.ts' },
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -18,7 +20,7 @@ const result = await esbuild.build({
   outdir,
   chunkNames: 'chunks/[name]-[hash]',
   external: ['electron', 'fsevents'],
-  tsconfig: resolve(__dirname, 'tsconfig.main.json'),
+  tsconfig: 'tsconfig.main.json',
   target: 'node22',
   banner: {
     js:
@@ -27,8 +29,8 @@ const result = await esbuild.build({
   },
 });
 
-await mkdir(outdir, { recursive: true });
+await mkdir(outdirPath, { recursive: true });
 await writeFile(
-  resolve(outdir, 'metafile.json'),
+  resolve(outdirPath, 'metafile.json'),
   `${JSON.stringify(result.metafile, null, 2)}\n`,
 );

@@ -18,7 +18,6 @@ import {
 } from '@agent/output/roundSummary';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
 import type { CompileFailure, RoundOutput } from '@shared/schemas';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
@@ -218,18 +217,18 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { streamId, logger, outputState } = this.services;
+    const { streamId, logger, outputState, runtimeHost } = this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary, roundOutput } = execRes;
 
     // Emit output files event
-    bus.emit('addOutputFiles', {
+    runtimeHost.emit('addOutputFiles', {
       streamId,
       filesByRound: { [currentRound]: summary.fileInfos },
     });
 
     if (execRes.emitCompileFailures) {
-      bus.emit('updateCompileFailures', {
+      runtimeHost.emit('updateCompileFailures', {
         streamId,
         filesByRound: { [currentRound]: execRes.compileFailures },
       });
@@ -237,7 +236,7 @@ export class OutputNode<C = unknown> extends Node<
 
     // Open files that haven't been opened yet
     for (const location of summary.filesToOpen) {
-      bus.emit('requestOpenFile', { location, preserveFocus: true });
+      runtimeHost.emit('requestOpenFile', { location, preserveFocus: true });
     }
 
     // Validate expected outputs if turn ended
@@ -253,13 +252,13 @@ export class OutputNode<C = unknown> extends Node<
             summary.stage,
           );
 
-          bus.emit('updateMissingOutputs', {
+          runtimeHost.emit('updateMissingOutputs', {
             streamId,
             filesByRound: { [currentRound]: validationResult.missing },
           });
 
           if (validationResult.missing.length > 0) {
-            bus.emit('requestShowInstruction', {
+            runtimeHost.emit('requestShowInstruction', {
               key: 'missingOutputsInfo',
               message: 'Missing output files detected',
             });
