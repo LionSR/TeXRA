@@ -26,6 +26,7 @@ import {
   type DesktopSetLogMessage,
 } from '../desktopLogMessages';
 import {
+  buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
 } from '../desktopCommandSurface';
@@ -205,6 +206,13 @@ const commandPalette = createDesktopCommandPalette({
     },
     showFirstRunWalkthrough: () => {
       firstRunWalkthrough.show();
+    },
+    resetMainView: () => {
+      setRoute('main');
+      window.postMessage(
+        buildDesktopMainViewResetMessage(),
+        getWindowTargetOrigin(),
+      );
     },
   },
 });
