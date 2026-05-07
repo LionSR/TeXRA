@@ -45,7 +45,6 @@ import {
 export const StreamHintsSchema = z.object({
   agentCategory: z.enum(AgentCategory).optional(),
   isRemote: z.boolean().optional(),
-  hasMultipleOutputs: z.boolean().optional(),
   creationTimestamp: z.number().optional(),
 });
 

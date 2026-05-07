@@ -17,8 +17,6 @@ export interface SettingsAgentCatalogEntry {
   category: AgentCategory;
   description?: string;
   path?: string;
-  multiplePath?: string;
-  isMultiple?: boolean;
   tools?: string[];
 }
 
@@ -142,8 +140,6 @@ export class SettingsAgentCatalogController {
       hasPath: Boolean(entry.path),
       filePath: entry.path || undefined,
       tools: entry.tools,
-      hasMultiple: entry.isMultiple ?? Boolean(entry.multiplePath),
-      hasMultiplePath: Boolean(entry.multiplePath),
       // undefined = never configured -> all enabled; [] = explicitly none enabled.
       enabled:
         enabledKeys === undefined ||

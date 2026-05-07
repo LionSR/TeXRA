@@ -4,7 +4,6 @@ export {
   agentDirectories,
 } from './AgentDirectoryManager';
 export {
-  AgentVariantMetadata,
   AgentRegistrationSkipReason,
   getAgentRegistrationSkipReason,
   promptToAddAgentToConfig,

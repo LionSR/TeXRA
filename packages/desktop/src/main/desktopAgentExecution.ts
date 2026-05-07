@@ -306,7 +306,6 @@ export class DesktopProgressBridge {
       modelLabel: config?.model,
       agent: config?.agent,
       agentCategory: category,
-      hasMultipleOutputs: config?.useMultipleOutputs ?? false,
       inputFile,
       creationTimestamp: this.getCreationTimestamp(streamId),
       executionId: this.executionIds.get(streamId),

@@ -3,7 +3,6 @@ import type { AgentSource } from '@shared/schemas/agent';
 
 export interface SettingsAgentDirectoryEntry {
   path?: string;
-  multiplePath?: string;
 }
 
 export interface SettingsAgentDirectoryState {
@@ -61,16 +60,13 @@ export class SettingsAgentDirectoryController {
   planOpenAgentYaml(input: {
     source: AgentSource;
     name: string;
-    variant: 'base' | 'multiple';
   }): SettingsOpenAgentYamlResult {
     const entry = this.deps.state.getAgent(input.source, input.name);
     if (!entry) return { ok: false, reason: 'missingAgent' };
 
-    const selectedPath =
-      input.variant === 'multiple' ? entry.multiplePath : entry.path;
-    if (!selectedPath) return { ok: false, reason: 'missingPath' };
+    if (!entry.path) return { ok: false, reason: 'missingPath' };
 
-    return { ok: true, path: selectedPath };
+    return { ok: true, path: entry.path };
   }
 
   planRevealAgentFile(input: {
