@@ -2,9 +2,14 @@
  * Constants and configuration for progress view formatters.
  */
 
+// Local imports - progress view helpers
+import {
+  languageForPath,
+  SPECIAL_BASENAME_LANGUAGES,
+} from '@progressView/frontend/languageForPath';
+
 // Local imports - shared schemas
 import type { LogLevel } from '@shared/schemas';
-import { getBasename } from '@shared/utils/path';
 
 export const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
   error: '🔴',
@@ -105,24 +110,12 @@ const EXTENSION_ALIASES = new Map<string, string>([
 
 /** Get highlight.js language from file path based on extension. Uses alias map for non-standard extensions, otherwise tries the extension directly. */
 export function getLanguageFromPath(filePath: string): string {
-  if (!filePath) return 'plaintext';
-
-  const fileName = getBasename(filePath) || filePath;
-  const lowerFileName = fileName.toLowerCase();
-
-  // Handle special filenames
-  if (lowerFileName === 'dockerfile') return 'dockerfile';
-  if (lowerFileName === 'makefile') return 'makefile';
-
-  const lastDot = fileName.lastIndexOf('.');
-  if (lastDot === -1 || lastDot === fileName.length - 1) {
-    return 'plaintext';
-  }
-
-  const ext = fileName.slice(lastDot + 1).toLowerCase();
-
-  // Check alias map first, then use extension directly
-  return EXTENSION_ALIASES.get(ext) || ext;
+  return languageForPath(filePath, {
+    basenameLanguages: SPECIAL_BASENAME_LANGUAGES,
+    extensionLanguages: EXTENSION_ALIASES,
+    fallbackLanguage: 'plaintext',
+    unknownExtensionLanguage: (extension) => extension,
+  });
 }
 
 // Threshold constants for diff detection heuristics

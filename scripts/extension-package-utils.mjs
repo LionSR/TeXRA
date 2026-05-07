@@ -7,6 +7,14 @@ export const vscodeRuntimeImportPattern =
 export const vscodeBackedStateImportPattern =
   /(?:^\s*(?:(?:import(?:\s+type)?(?:\s+[^;]*?\s+from)?)|(?:export(?:\s+type)?\s+[^;]*?\s+from))\s+['"]@common\/state(?:\/stateManager)?['"])|(?:\bimport\s*\(\s*['"]@common\/state(?:\/stateManager)?['"]\s*\))/m;
 
+export const requiredMonacoWorkers = [
+  'editor.worker',
+  'json.worker',
+  'css.worker',
+  'html.worker',
+  'ts.worker',
+];
+
 const desktopSharedSourceDirSegments = [
   ['packages', 'desktop', 'src'],
   ['src', 'agent'],
