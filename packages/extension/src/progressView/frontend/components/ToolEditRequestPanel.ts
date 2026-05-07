@@ -21,11 +21,14 @@ import {
   requestPanelStyles,
 } from '@shared/styles';
 
-// Local imports - base class
+// Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
+
+// Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
-// Local imports - shared schemas
+// Local imports - helpers
+import { monacoLanguageForPath } from './monacoLanguage';
 
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseFeedbackPanel {
@@ -165,7 +168,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
         class="approval-request__inline-diff"
         .originalText=${data.originalContent ?? ''}
         .proposedText=${data.proposedContent ?? ''}
-        .language=${data.isLatex ? 'latex' : 'plaintext'}
+        .language=${monacoLanguageForPath(data.path)}
       ></texra-diff-view>
     `;
   }
