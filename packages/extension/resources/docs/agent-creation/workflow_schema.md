@@ -70,7 +70,9 @@ Workflow agent prompts receive:
 - `{{ AUXILIARY_CONTENT }}` — content of auxiliary files
 - `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames; empty/falsy
   when the user has not selected output files (use `{% if OUTPUT_FILES_ORDER %}`
-  to branch between multi-file and single-file output formats)
+  to branch between multi-file and single-file output formats). Use
+  `{{ OUTPUT_FILES_ORDER[0] }}` for a specific filename and
+  `{{ OUTPUT_FILES_ORDER | join(", ") }}` for a human-readable list.
 
 Both categories support `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
 for model-specific instructions.

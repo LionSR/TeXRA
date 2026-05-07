@@ -458,7 +458,7 @@ async function getAttachedMemories(
   return `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`;
 }
 
-function getOutputFilesOrder(
+export function getOutputFilesOrder(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
 ): UserVars {

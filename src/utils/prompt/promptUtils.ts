@@ -46,6 +46,9 @@ async function resolveValue(value: unknown): Promise<unknown> {
   if (typeof value !== 'object' || value === null || value instanceof Promise) {
     return value;
   }
+  if (Array.isArray(value)) {
+    return Promise.all(value.map(resolveValue));
+  }
 
   // Recursively resolve all values in the object
   const entries = await Promise.all(
