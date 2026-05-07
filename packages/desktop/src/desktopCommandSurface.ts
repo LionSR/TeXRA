@@ -13,6 +13,7 @@ import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopRoute } from './desktopShellMessages.js';
 
 export const DESKTOP_LOCAL_COMMANDS = {
+  SHOW_LOGS: 'texra.desktop.showLogs',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
 } as const;
@@ -23,6 +24,7 @@ type DesktopLocalCommandId =
 export const DESKTOP_COMMAND_IDS = [
   'texra.showMainView',
   'texra.showProgressView',
+  DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
   'texra.openSettings',
@@ -60,6 +62,7 @@ const DESKTOP_MENU_GROUPS = [
   [
     'texra.showMainView',
     'texra.showProgressView',
+    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
     DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     'texra.openSettings',
@@ -78,6 +81,14 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
   DesktopCommandMenuEntry
 >([
+  [
+    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+      label: 'Show Logs',
+      category: 'TeXRA',
+    },
+  ],
   [
     DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
     {
@@ -153,6 +164,9 @@ export function dispatchDesktopCommand(
       return true;
     case 'texra.showProgressView':
       actions.showRoute('progress');
+      return true;
+    case DESKTOP_LOCAL_COMMANDS.SHOW_LOGS:
+      actions.showRoute('logs');
       return true;
     case 'texra.openSettings':
       actions.showSettings();
