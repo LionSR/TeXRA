@@ -86,7 +86,6 @@ export interface DesktopSupabaseAuthOptions {
   coordinator?: DesktopAuthCoordinator;
   oauthClient?: DesktopOAuthClient;
   callbackState?: DesktopAuthCallbackState;
-  initializeServerSideAccess?: boolean;
 }
 
 export interface DesktopOAuthClient {

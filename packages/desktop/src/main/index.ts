@@ -28,6 +28,7 @@ import {
   readDesktopLogSnapshot,
 } from './desktopAppLog.js';
 import { installDesktopMenu } from './desktopMenu.js';
+import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
@@ -299,6 +300,10 @@ function createWindow(options: {
     progress: agentExecution.progress,
     onAsyncError: reportAsyncError,
   });
+  const onboardingIpc = createDesktopOnboardingIpc(
+    { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
+    { onAsyncError: reportAsyncError },
+  );
   const shellActions = createDesktopShellActions(
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
@@ -317,6 +322,7 @@ function createWindow(options: {
     workspaceExplorer,
     settings: settingsIpc,
     progress: progressIpc,
+    onboarding: onboardingIpc,
     logs: {
       readLog: () =>
         readDesktopLogSnapshot({ workspacePath: options.workspacePath }),

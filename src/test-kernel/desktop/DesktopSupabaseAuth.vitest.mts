@@ -601,7 +601,6 @@ describe('desktop Supabase auth', () => {
       oauthClient: createOAuthClient(),
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
-      initializeServerSideAccess: false,
     });
 
     const profile = await auth.getProfileData();
@@ -641,7 +640,6 @@ describe('desktop Supabase auth', () => {
       oauthClient: createOAuthClient(),
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
-      initializeServerSideAccess: false,
     });
 
     const profile = await auth.getProfileData();

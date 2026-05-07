@@ -158,22 +158,6 @@ function normalizeAsarPath(path) {
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
 }
 
-function normalizeMetafilePath(path) {
-  return path.replaceAll('\\', '/').replace(/^\.\//, '');
-}
-
-function resolveMetafileImportPath(outputPath, importPath) {
-  const normalizedImportPath = normalizeMetafilePath(importPath);
-  if (normalizedImportPath.startsWith('.')) {
-    return normalizeMetafilePath(
-      posix.normalize(
-        posix.join(posix.dirname(outputPath), normalizedImportPath),
-      ),
-    );
-  }
-  return posix.normalize(normalizedImportPath);
-}
-
 function createAsarAppReader(asarPath) {
   const entryPathByNormalizedPath = new Map(
     listPackage(asarPath).map((entry) => [normalizeAsarPath(entry), entry]),
