@@ -1,8 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
 import {
   isWorktreeSupportEnabled,
@@ -11,6 +13,12 @@ import {
 import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+
+const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
+
+vi.mock('@model/computeModelOptions', () => ({
+  invalidateModelOptionsCache,
+}));
 
 interface StateStore {
   get<T>(key: string, defaultValue?: T): T;
@@ -42,10 +50,31 @@ interface DesktopSettingsIpcModule {
       workflow: unknown[];
       toolUse: unknown[];
     }>;
+    getAgents?: (category: 'workflow' | 'toolUse') => Array<{
+      name: string;
+      source: 'builtInWorkflow' | 'builtInToolUse' | 'custom' | 'remote';
+      category: 'workflow' | 'toolUse';
+      description?: string;
+      path?: string;
+      multiplePath?: string;
+      isMultiple?: boolean;
+      tools?: string[];
+    }>;
+    getVisibleAgents?: (category: 'workflow' | 'toolUse') => Array<{
+      name: string;
+      source: 'builtInWorkflow' | 'builtInToolUse' | 'custom' | 'remote';
+      category: 'workflow' | 'toolUse';
+      description?: string;
+      path?: string;
+      multiplePath?: string;
+      isMultiple?: boolean;
+      tools?: string[];
+    }>;
     buildToolDashboardItems?: (cachedResults?: unknown[]) => Promise<unknown[]>;
     refreshToolAvailability?: () => Promise<void>;
     getCustomAgentDirectory?: () => Promise<string>;
     selectCustomAgentDirectory?: () => Promise<string | undefined>;
+    openPath?: (filePath: string) => Promise<void>;
     openExternalUrl?: (url: string) => Promise<void>;
     installToolExtension?: (extensionId: string) => Promise<void>;
     promptSecret?: (input: {
@@ -62,6 +91,7 @@ interface DesktopSettingsIpcModule {
     signOut?: () => Promise<void>;
     getAuthProfileData?: () => Promise<Record<string, unknown>>;
     setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
+    initializeCrashReporting?: () => Promise<void>;
     secrets?: {
       get(key: string): Promise<string | undefined>;
       set(key: string, value: string): Promise<void>;
@@ -70,6 +100,7 @@ interface DesktopSettingsIpcModule {
     detectLatexSettingsStatus?: () => Promise<unknown>;
     runInstallCommand?: (command: string) => Promise<void>;
     onError?: (error: unknown) => void;
+    modelListRefresh?: PromiseLike<void>;
   }): {
     refreshAuthDependentData(): Promise<void>;
     handleMessage(
@@ -154,8 +185,20 @@ function flushAsyncWork(): Promise<void> {
   );
 }
 
+function createDeferred(): {
+  promise: Promise<void>;
+  resolve(): void;
+} {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe('desktop settings IPC', () => {
   afterEach(() => {
+    vi.clearAllMocks();
     setGitAuthorEnv({});
     setWorktreeSupportEnabled(false);
   });
@@ -298,6 +341,88 @@ describe('desktop settings IPC', () => {
       GIT_COMMITTER_NAME: 'Applied',
       GIT_COMMITTER_EMAIL: 'applied@example.com',
     });
+  });
+
+  it('round-trips desktop crash reporting settings through global state and secrets', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    const secrets = new MemorySecrets();
+    const posted: unknown[] = [];
+    let initializeCalls = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      secrets,
+      postToRenderer: (message) => posted.push(message),
+      promptSecret: async () => ' https://example.invalid/123 ',
+      initializeCrashReporting: async () => {
+        initializeCalls += 1;
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
+        enabled: true,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(
+      globalState.values.get(GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED),
+    ).toBe(true);
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
+      enabled: true,
+      configured: false,
+    });
+    expect(initializeCalls).toBe(0);
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
+      enabled: true,
+      configured: true,
+    });
+    expect(initializeCalls).toBe(1);
+  });
+
+  it('initializes desktop crash reporting when users enable an existing DSN', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    const secrets = new MemorySecrets();
+    await secrets.set(
+      'texra.desktop.crashReporting.dsn',
+      'https://example.invalid/123',
+    );
+    let initializeCalls = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      secrets,
+      postToRenderer: () => undefined,
+      initializeCrashReporting: async () => {
+        initializeCalls += 1;
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
+        enabled: true,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(initializeCalls).toBe(1);
   });
 
   it('serves storage-backed LaTeX config reads through workspace state', async () => {
@@ -601,6 +726,10 @@ describe('desktop settings IPC', () => {
       'gpt55',
       'sonnet46T',
     ]);
+    globalState.values.set(
+      GlobalStateKey.MODEL_LIST_VERSION,
+      MODEL_LIST_VERSION,
+    );
     globalState.values.set(GlobalStateKey.HELPER_MODEL, 'gpt55');
     const posted: unknown[] = [];
     const errors: unknown[] = [];
@@ -748,6 +877,59 @@ describe('desktop settings IPC', () => {
     });
   });
 
+  it('does not delay unrelated startup settings behind model-list refresh', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const modelListRefresh = createDeferred();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      config: new MemoryConfigStore(),
+      sendStartupCatalogData: true,
+      modelListRefresh: modelListRefresh.promise,
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'settings',
+      }),
+    ).toBe(false);
+    await flushAsyncWork();
+
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ),
+    ).toBe(false);
+    expect(
+      posted.find(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+    });
+
+    modelListRefresh.resolve();
+    await flushAsyncWork();
+
+    expect(
+      posted.find(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+    });
+  });
+
   it('handles desktop tool dashboard refreshes and toggles', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const globalState = new MemoryStateStore();
@@ -868,6 +1050,302 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
   });
 
+  it('opens the desktop custom agent directory through the shell opener', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const openPath = vi.fn(async (_filePath: string) => undefined);
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      getCustomAgentDirectory: async () => '/agents/custom',
+      openPath,
+      postToRenderer: () => undefined,
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER,
+        folderType: 'custom',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(openPath).toHaveBeenCalledWith('/agents/custom');
+  });
+
+  it('applies desktop team presets and refreshes settings plus launcher options', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const posted: unknown[] = [];
+    const infoMessages: string[] = [];
+    const errorMessages: string[] = [];
+    let loadCount = 0;
+
+    const catalog = {
+      workflow: [
+        {
+          source: 'builtInWorkflow' as const,
+          name: 'criticize',
+          category: 'workflow' as const,
+        },
+        {
+          source: 'custom' as const,
+          name: 'generic',
+          category: 'workflow' as const,
+        },
+      ],
+      toolUse: [
+        {
+          source: 'builtInToolUse' as const,
+          name: 'orchestrator',
+          category: 'toolUse' as const,
+          tools: ['delegate'],
+        },
+        {
+          source: 'custom' as const,
+          name: 'research',
+          category: 'toolUse' as const,
+        },
+      ],
+    };
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      globalState: new MemoryStateStore(),
+      loadAgents: async () => {
+        loadCount += 1;
+      },
+      loadAgentOptionsData: async () => ({
+        workflow: [{ value: 'builtInWorkflow:criticize', label: 'criticize' }],
+        toolUse: [
+          { value: 'builtInToolUse:orchestrator', label: 'orchestrator' },
+        ],
+      }),
+      getAgents: (category) => catalog[category],
+      getVisibleAgents: (category) => catalog[category],
+      showInfoMessage: async (message) => {
+        infoMessages.push(message);
+      },
+      showErrorMessage: async (message) => {
+        errorMessages.push(message);
+      },
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
+        presetId: 'physicist',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(loadCount).toBeGreaterThanOrEqual(1);
+    expect(workspaceState.values.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
+      ['builtInWorkflow:criticize', 'custom:generic'],
+    );
+    expect(
+      workspaceState.values.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
+    ).toEqual(['builtInToolUse:orchestrator', 'custom:research']);
+    expect(errorMessages).toEqual([]);
+    expect(infoMessages).toEqual(['Applied "Physicist" team']);
+
+    expect(
+      posted.find(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      workflow: expect.arrayContaining([
+        expect.objectContaining({ name: 'criticize', enabled: true }),
+        expect.objectContaining({ name: 'generic', enabled: true }),
+      ]),
+      toolUse: expect.arrayContaining([
+        expect.objectContaining({ name: 'orchestrator', enabled: true }),
+        expect.objectContaining({ name: 'research', enabled: true }),
+      ]),
+    });
+    expect(
+      posted.find(
+        (message) =>
+          (message as { command?: string }).command ===
+          MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      ),
+    ).toMatchObject({
+      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      optionsData: {
+        workflow: [
+          expect.objectContaining({ value: 'builtInWorkflow:criticize' }),
+        ],
+        toolUse: [
+          expect.objectContaining({ value: 'builtInToolUse:orchestrator' }),
+        ],
+      },
+    });
+  });
+
+  it('saves desktop team presets from currently visible agents', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const posted: unknown[] = [];
+    const infoMessages: string[] = [];
+    const catalog = {
+      workflow: [
+        {
+          source: 'builtInWorkflow' as const,
+          name: 'correct',
+          category: 'workflow' as const,
+        },
+        {
+          source: 'builtInWorkflow' as const,
+          name: 'polish',
+          category: 'workflow' as const,
+        },
+      ],
+      toolUse: [
+        {
+          source: 'builtInToolUse' as const,
+          name: 'review',
+          category: 'toolUse' as const,
+        },
+        {
+          source: 'builtInToolUse' as const,
+          name: 'latexFixer',
+          category: 'toolUse' as const,
+        },
+      ],
+    };
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      globalState: new MemoryStateStore(),
+      loadAgents: async () => undefined,
+      getAgents: (category) => catalog[category],
+      getVisibleAgents: (category) =>
+        category === 'workflow' ? [catalog.workflow[0]] : [catalog.toolUse[0]],
+      promptText: async () => '  Paper Team  ',
+      showInfoMessage: async (message) => {
+        infoMessages.push(message);
+      },
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(
+      workspaceState.values.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+    ).toEqual([
+      expect.objectContaining({
+        id: expect.stringMatching(/^custom-/),
+        name: 'Paper Team',
+        workflowAgents: ['correct'],
+        toolUseAgents: ['review'],
+      }),
+    ]);
+    expect(infoMessages).toEqual(['Saved team "Paper Team"']);
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+      customPresets: [
+        expect.objectContaining({
+          name: 'Paper Team',
+          workflowAgents: ['correct'],
+          toolUseAgents: ['review'],
+        }),
+      ],
+    });
+  });
+
+  it('deletes desktop custom team presets and reports unknown team ids', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const posted: unknown[] = [];
+    const errorMessages: string[] = [];
+    workspaceState.values.set(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
+      {
+        id: 'custom-team',
+        name: 'Custom Team',
+        description: 'test',
+        icon: 'codicon-bookmark',
+        workflowAgents: ['correct'],
+        toolUseAgents: ['review'],
+      },
+    ]);
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      globalState: new MemoryStateStore(),
+      showErrorMessage: async (message) => {
+        errorMessages.push(message);
+      },
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
+        presetId: 'custom-team',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(
+      workspaceState.values.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+    ).toEqual([]);
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+      customPresets: [],
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
+        presetId: 'missing-team',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(errorMessages).toEqual(['Unknown custom team: missing-team']);
+  });
+
+  it('surfaces a visible desktop error for unknown team presets', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const workspaceState = new MemoryStateStore();
+    const errorMessages: string[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState,
+      globalState: new MemoryStateStore(),
+      loadAgents: async () => undefined,
+      showErrorMessage: async (message) => {
+        errorMessages.push(message);
+      },
+      postToRenderer: () => {},
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
+        presetId: 'missing-team',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(errorMessages).toEqual(['Unknown team: missing-team']);
+    expect(workspaceState.values.has(WorkspaceStateKey.ENABLED_AGENTS)).toBe(
+      false,
+    );
+    expect(
+      workspaceState.values.has(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
+    ).toBe(false);
+  });
+
   it('persists desktop API access mode changes before refreshing settings data', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const posted: unknown[] = [];
@@ -901,6 +1379,7 @@ describe('desktop settings IPC', () => {
     await flushAsyncWork();
 
     expect(persistedModes).toEqual(['personal']);
+    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
     expect(
       posted.some(
         (message) =>
@@ -952,6 +1431,7 @@ describe('desktop settings IPC', () => {
 
     expect(persistedModes).toEqual(['included']);
     expect(globalState.values.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
+    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes agent and model options after desktop auth changes', async () => {
@@ -994,6 +1474,87 @@ describe('desktop settings IPC', () => {
         SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
         MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
         MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      ]),
+    );
+  });
+
+  it('refreshes persisted model list on desktop startup', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 12);
+    globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
+      'custom-model',
+      'gpt54pro',
+      'opus46T',
+    ]);
+    const errors: unknown[] = [];
+
+    createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      postToRenderer: () => {},
+      onError: (error) => errors.push(error),
+    });
+    await flushAsyncWork();
+
+    expect(errors).toEqual([]);
+    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
+      MODEL_LIST_VERSION,
+    );
+    const expectedDefaults = DEFAULT_MODELS.filter(
+      (model) => !(MODEL_CONFIGS[model]?.deprecated ?? false),
+    );
+    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+      'custom-model',
+      ...expectedDefaults,
+    ]);
+  });
+
+  it('waits for desktop model-list refresh before serving model selection', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const refreshGate = createDeferred();
+    const globalState = new (class extends MemoryStateStore {
+      override async update(key: string, value: unknown): Promise<void> {
+        if (key === GlobalStateKey.ENABLED_MODELS) {
+          await refreshGate.promise;
+        }
+        await super.update(key, value);
+      }
+    })();
+    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 12);
+    globalState.values.set(GlobalStateKey.ENABLED_MODELS, ['custom-model']);
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION,
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+
+    expect(posted).toEqual([]);
+
+    refreshGate.resolve();
+    await flushAsyncWork();
+
+    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
+      MODEL_LIST_VERSION,
+    );
+    expect(
+      (posted.at(-1) as { command?: string; models?: Array<{ name: string }> })
+        .command,
+    ).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION);
+    expect(
+      (posted.at(-1) as { models?: Array<{ name: string }> }).models,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: DEFAULT_MODELS[0] }),
       ]),
     );
   });

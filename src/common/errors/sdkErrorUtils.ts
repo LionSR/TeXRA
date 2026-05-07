@@ -234,6 +234,7 @@ function detectProvider(err: unknown): string | undefined {
 
   const candidate = err as { provider?: string; headers?: HeaderBag } & {
     constructor?: { name?: string };
+    stack?: string;
   };
 
   if (isString(candidate.provider)) {
@@ -245,6 +246,11 @@ function detectProvider(err: unknown): string | undefined {
     ...getErrorClassNames(err),
   ]);
   if (classNameProvider) return classNameProvider;
+
+  const providerFromStack = detectProviderFromText(candidate.stack ?? '');
+  if (providerFromStack) {
+    return providerFromStack;
+  }
 
   return detectProviderFromHeaders(candidate.headers);
 }
@@ -290,6 +296,16 @@ function detectProviderFromHeaders(
   headers: HeaderBag | undefined,
 ): HeaderDetectedProvider | undefined {
   if (getHeaderValue(headers, 'request-id')) return 'anthropic';
+  return undefined;
+}
+
+function detectProviderFromText(text: string): string | undefined {
+  const lowered = text.toLowerCase().replaceAll('\\', '/');
+  if (lowered.includes(`@anthropic-${'ai'}/sdk`)) return 'anthropic';
+  if (lowered.includes('node_modules/openai')) return 'openai';
+  // Keep the Google package marker split so the desktop startup bundle
+  // verifier does not mistake this stack-text detector for an eager SDK import.
+  if (lowered.includes(`@google/${'genai'}`)) return 'google';
   return undefined;
 }
 

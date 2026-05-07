@@ -97,6 +97,8 @@ API keys are stored in VS Code's built-in Secret Storage.
 ## Next steps
 
 - [Installation](/guide/installation) — set up TeXRA and its dependencies
+- [Desktop App](/guide/desktop) — install and configure the standalone desktop beta
+- [Desktop Migration](/guide/desktop-migration) — move from the VS Code extension to the desktop app
 - [Quick Start](/guide/quick-start) — your first agent run in under five minutes
 - [Built-in Agents](/guide/built-in-agents) — the full catalog of available agents
 - [Agent Architecture](/guide/agent-architecture) — how the multi-agent system works under the hood

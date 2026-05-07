@@ -28,7 +28,12 @@ interface MainViewIpcModule {
       fileSelection?: { handleMessage(message: { command: string }): boolean };
       settings?: { handleMessage(message: { command: string }): boolean };
       progress?: { handleMessage(message: { command: string }): boolean };
+      modelListRefresh?: PromiseLike<void>;
       getAuthStatus?: () => Promise<{ authenticated: boolean }>;
+      loadStartupOptions?: () => Promise<{
+        agentOptions: { workflow: unknown[]; toolUse: unknown[] };
+        modelOptions: unknown[];
+      }>;
       executeAgent?: (message: unknown) => Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
@@ -63,14 +68,12 @@ async function loadDesktopMainViewIpcModule(electron: {
 }): Promise<MainViewIpcModule & HostBridgeModule> {
   vi.resetModules();
   vi.doMock('electron', () => electron);
-  const [mainViewIpc, hostBridge] = await Promise.all([
-    import(
-      moduleFileUrl(desktopSourcePath('main', 'mainViewIpc.ts'))
-    ) as Promise<MainViewIpcModule>,
-    import(
-      moduleFileUrl(desktopSourcePath('preload', 'hostBridge.ts'))
-    ) as Promise<HostBridgeModule>,
-  ]);
+  const hostBridge = (await import(
+    moduleFileUrl(desktopSourcePath('hostBridgeChannels.ts'))
+  )) as HostBridgeModule;
+  const mainViewIpc = (await import(
+    moduleFileUrl(desktopSourcePath('main', 'mainViewIpc.ts'))
+  )) as MainViewIpcModule;
   return { ...mainViewIpc, ...hostBridge };
 }
 
@@ -78,6 +81,17 @@ function flushAsyncWork(): Promise<void> {
   return new Promise((resolve) =>
     setImmediate(() => setImmediate(() => resolve())),
   );
+}
+
+function createDeferred(): {
+  promise: Promise<void>;
+  resolve(): void;
+} {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 describe('desktop main-view IPC', () => {
@@ -398,15 +412,6 @@ describe('desktop main-view IPC', () => {
       on: vi.fn(),
       off: vi.fn(),
     };
-    vi.doMock('@agent/index/agentRegistry', () => ({
-      computeAgentOptionsData: vi.fn(async () => ({
-        workflow: [],
-        toolUse: [],
-      })),
-    }));
-    vi.doMock('@model/modelOptionsBasic', () => ({
-      buildBasicModelOptionsData: vi.fn(() => []),
-    }));
     const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
       await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
     const sends: Array<{ channel: string; message: unknown }> = [];
@@ -422,6 +427,13 @@ describe('desktop main-view IPC', () => {
 
     installDesktopMainViewIpc(window, {
       getAuthStatus: async () => ({ authenticated: true }),
+      loadStartupOptions: async () => ({
+        agentOptions: {
+          workflow: [],
+          toolUse: [],
+        },
+        modelOptions: [],
+      }),
     });
     rendererListener?.(
       { sender: webContents },
@@ -454,5 +466,79 @@ describe('desktop main-view IPC', () => {
           MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
       ),
     ).toBe(false);
+  });
+
+  it('waits for desktop model-list refresh before posting main-view model options', async () => {
+    let rendererListener:
+      | ((event: { sender: unknown }, message: unknown) => void)
+      | undefined;
+    const ipcMain = {
+      on: vi.fn((channel, listener) => {
+        rendererListener = listener;
+      }),
+      off: vi.fn(),
+    };
+    const nativeTheme = {
+      shouldUseDarkColors: false,
+      shouldUseHighContrastColors: false,
+      on: vi.fn(),
+      off: vi.fn(),
+    };
+    const modelListRefresh = createDeferred();
+    vi.doMock('@agent/index/agentRegistry', () => ({
+      computeAgentOptionsData: vi.fn(async () => ({
+        workflow: [],
+        toolUse: [],
+      })),
+    }));
+    vi.doMock('@model/modelOptionsBasic', () => ({
+      buildBasicModelOptionsData: vi.fn(() => [{ value: 'fresh-model' }]),
+    }));
+    const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
+      await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
+    const sends: Array<{ channel: string; message: unknown }> = [];
+    const webContents = {
+      isDestroyed: () => false,
+      send: vi.fn((channel, message) => sends.push({ channel, message })),
+    };
+    const window = {
+      isDestroyed: () => false,
+      once: vi.fn(),
+      webContents,
+    };
+
+    installDesktopMainViewIpc(window, {
+      modelListRefresh: modelListRefresh.promise,
+    });
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'main' },
+    );
+    await flushAsyncWork();
+
+    expect(
+      sends.some(
+        ({ message }) =>
+          (message as { command?: string }).command ===
+          MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      ),
+    ).toBe(false);
+
+    modelListRefresh.resolve();
+    await flushAsyncWork();
+
+    expect(
+      sends.find(
+        ({ channel, message }) =>
+          channel === ELECTRON_WEBVIEW_PUSH_CHANNEL &&
+          (message as { command?: string }).command ===
+            MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      ),
+    ).toMatchObject({
+      message: {
+        command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+        optionsData: [{ value: 'fresh-model' }],
+      },
+    });
   });
 });

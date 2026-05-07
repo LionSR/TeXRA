@@ -141,6 +141,22 @@ export class SettingsApp extends SettingsAppBase {
         overflow: auto;
         padding: var(--spacing-large);
       }
+
+      .settings-unavailable {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-small);
+        max-width: 640px;
+        color: var(--color-text-secondary);
+      }
+
+      .settings-unavailable-title {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        color: var(--text-color);
+        font-weight: var(--font-weight-medium);
+      }
     `,
   ];
 
@@ -215,6 +231,8 @@ export class SettingsApp extends SettingsAppBase {
   private readonly githubTokenStatus = signal<'secret' | 'env' | 'none'>(
     'none',
   );
+  private readonly desktopCrashReportingEnabled = signal(false);
+  private readonly desktopCrashReportingConfigured = signal(false);
   private readonly prSubscriptions = signal<readonly PRSubscriptionEntry[]>([]);
 
   // LaTeX settings state
@@ -266,6 +284,8 @@ export class SettingsApp extends SettingsAppBase {
       gitWorktreeSupport: this.gitWorktreeSupport,
       gitSettingsLoaded: this.gitSettingsLoaded,
       githubTokenStatus: this.githubTokenStatus,
+      desktopCrashReportingEnabled: this.desktopCrashReportingEnabled,
+      desktopCrashReportingConfigured: this.desktopCrashReportingConfigured,
       prSubscriptions: this.prSubscriptions,
       latexSettingsStatus: this.latexSettingsStatus,
       latexSettingsLoaded: this.latexSettingsLoaded,
@@ -278,6 +298,13 @@ export class SettingsApp extends SettingsAppBase {
 
   protected override handleMessage(raw: unknown): void {
     dispatchSettingsViewMessage(raw, this.getMessageHandlerContext());
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    if (this.isDesktopHost() && this.selectedTabIndex.get() === 0) {
+      this.selectedTabIndex.set(SETTINGS_TAB.MODELS);
+    }
   }
 
   private handleTabSelect(event: VscTabsSelectEvent): void {
@@ -593,6 +620,14 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
   );
 
+  private handleDesktopCrashReportingToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
+  );
+
+  private handleDesktopCrashReportingDsnSet = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN,
+  );
+
   private handleUnsubscribePR = forwardDetail(
     SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR,
   );
@@ -623,21 +658,23 @@ export class SettingsApp extends SettingsAppBase {
   );
 
   private renderHeader(): TemplateResult {
-    const settingsButton = html`
-      <wa-button
-        aria-label="Open VS Code Settings"
-        appearance="plain"
-        size="small"
-        title="Open VS Code Settings"
-        @click=${this.handleOpenVscodeSettings}
-      >
-        <wa-icon
-          library=${TEXRA_ICON_LIBRARY}
-          name="gear"
-          variant="solid"
-        ></wa-icon>
-      </wa-button>
-    `;
+    const settingsButton = this.isDesktopHost()
+      ? nothing
+      : html`
+          <wa-button
+            aria-label="Open VS Code Settings"
+            appearance="plain"
+            size="small"
+            title="Open VS Code Settings"
+            @click=${this.handleOpenVscodeSettings}
+          >
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="gear"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
+        `;
 
     if (this.authenticated.get()) {
       return html`
@@ -732,7 +769,26 @@ export class SettingsApp extends SettingsAppBase {
     `;
   }
 
+  private renderDesktopUnavailablePanel(
+    title: string,
+    description: string,
+  ): TemplateResult {
+    return html`
+      <div class="tab-content-container">
+        <div class="settings-unavailable">
+          <div class="settings-unavailable-title">
+            <span class="codicon codicon-circle-slash"></span>
+            ${title}
+          </div>
+          <div>${description}</div>
+        </div>
+      </div>
+    `;
+  }
+
   override render(): TemplateResult {
+    const desktopHost = this.isDesktopHost();
+
     return html`
       <div class="settings-container">
         ${this.renderHeader()}
@@ -775,26 +831,40 @@ export class SettingsApp extends SettingsAppBase {
           >
 
           <vscode-tab-panel>
-            <memory-tab
-              .items=${this.memoryItems.get()}
-              .enabled=${this.memoryEnabled.get()}
-              .toggleDisabled=${this.memoryToggleDisabled.get()}
-              @memory-refresh=${this.handleMemoryRefresh}
-              @memory-open-folder=${this.handleMemoryOpenFolder}
-              @memory-toggle-enabled=${this.handleMemoryToggleEnabled}
-              @memory-open-item=${this.handleMemoryOpenItem}
-              @memory-delete-item=${this.handleMemoryDeleteItem}
-              @memory-pin-item=${this.handleMemoryPinItem}
-              @memory-unpin-item=${this.handleMemoryUnpinItem}
-            ></memory-tab>
+            ${desktopHost
+              ? this.renderDesktopUnavailablePanel(
+                  'Memory is not available in desktop yet',
+                  'Memory files and pinning are currently managed by the VS Code extension.',
+                )
+              : html`
+                  <memory-tab
+                    .items=${this.memoryItems.get()}
+                    .enabled=${this.memoryEnabled.get()}
+                    .toggleDisabled=${this.memoryToggleDisabled.get()}
+                    @memory-refresh=${this.handleMemoryRefresh}
+                    @memory-open-folder=${this.handleMemoryOpenFolder}
+                    @memory-toggle-enabled=${this.handleMemoryToggleEnabled}
+                    @memory-open-item=${this.handleMemoryOpenItem}
+                    @memory-delete-item=${this.handleMemoryDeleteItem}
+                    @memory-pin-item=${this.handleMemoryPinItem}
+                    @memory-unpin-item=${this.handleMemoryUnpinItem}
+                  ></memory-tab>
+                `}
           </vscode-tab-panel>
 
           <vscode-tab-panel>
-            <history-tab
-              .items=${this.historyItems.get()}
-              @history-action=${this.handleHistoryAction}
-              @history-clear=${this.handleClearHistory}
-            ></history-tab>
+            ${desktopHost
+              ? this.renderDesktopUnavailablePanel(
+                  'History is not available in desktop yet',
+                  'Desktop agent run history is not connected to the shared settings history controls.',
+                )
+              : html`
+                  <history-tab
+                    .items=${this.historyItems.get()}
+                    @history-action=${this.handleHistoryAction}
+                    @history-clear=${this.handleClearHistory}
+                  ></history-tab>
+                `}
           </vscode-tab-panel>
 
           <vscode-tab-panel>
@@ -833,6 +903,7 @@ export class SettingsApp extends SettingsAppBase {
               .customAgentDirIsDefault=${this.customAgentDirIsDefault.get()}
               .initialSubTab=${this.agentSubTab.get()}
               .userTier=${this.tier.get()}
+              .desktopHost=${desktopHost}
               @agent-open-yaml=${this.handleOpenAgentYaml}
               @agent-enabled-set=${this.handleSetAgentEnabled}
               @agent-all-enabled-set=${this.handleSetAllAgentsEnabled}
@@ -877,6 +948,9 @@ export class SettingsApp extends SettingsAppBase {
               .codexSandboxMode=${this.codexSandboxMode.get()}
               .codexReasoningEffort=${this.codexReasoningEffort.get()}
               .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
+              .showDesktopCrashReporting=${this.isDesktopHost()}
+              .desktopCrashReportingEnabled=${this.desktopCrashReportingEnabled.get()}
+              .desktopCrashReportingConfigured=${this.desktopCrashReportingConfigured.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-run-command=${this.handleToolRunCommand}
@@ -888,6 +962,10 @@ export class SettingsApp extends SettingsAppBase {
                 .handleCodexReasoningEffortChange}
               @codex-approval-policy-change=${this
                 .handleCodexApprovalPolicyChange}
+              @desktop-crash-reporting-toggle=${this
+                .handleDesktopCrashReportingToggle}
+              @desktop-crash-reporting-dsn-set=${this
+                .handleDesktopCrashReportingDsnSet}
             ></tools-tab>
           </vscode-tab-panel>
 
@@ -897,6 +975,7 @@ export class SettingsApp extends SettingsAppBase {
               .authorName=${this.gitAuthorName.get()}
               .authorEmail=${this.gitAuthorEmail.get()}
               .toggleDisabled=${!this.gitSettingsLoaded.get()}
+              .desktopHost=${desktopHost}
               @git-mark-commits-toggle=${this.handleGitMarkCommitsToggle}
               @git-author-name-change=${this.handleGitAuthorNameChange}
               @git-author-email-change=${this.handleGitAuthorEmailChange}
@@ -917,6 +996,7 @@ export class SettingsApp extends SettingsAppBase {
               .loaded=${this.latexSettingsLoaded.get()}
               .configValues=${this.latexConfigValues.get()}
               .configLoaded=${this.latexConfigValuesLoaded.get()}
+              .desktopHost=${desktopHost}
               @latex-apply-settings=${this.handleApplyLatexSettings}
               @latex-install-workshop=${this.handleInstallLatexWorkshop}
               @latex-run-install-command=${this.handleRunInstallCommand}

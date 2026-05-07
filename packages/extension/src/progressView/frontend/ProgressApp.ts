@@ -169,6 +169,10 @@ export class ProgressApp extends ProgressAppBase {
         flex-shrink: 0;
       }
 
+      .main-container.desktop .view-header {
+        display: none;
+      }
+
       .view-header vscode-tabs {
         flex: 1;
         min-width: 0;
@@ -269,6 +273,11 @@ export class ProgressApp extends ProgressAppBase {
         min-width: 48px;
       }
 
+      .main-container.desktop stream-tabs {
+        min-width: 240px;
+        max-width: 360px;
+      }
+
       .content-area {
         display: flex;
         flex-direction: column;
@@ -283,6 +292,56 @@ export class ProgressApp extends ProgressAppBase {
       workflow-stream-content,
       process-stream-content {
         display: contents;
+      }
+
+      .desktop-empty-progress {
+        display: grid;
+        place-items: center;
+        flex: 1;
+        min-height: 0;
+        padding: clamp(32px, 8vh, 72px) 32px;
+        box-sizing: border-box;
+        background: var(--texra-editor-background, var(--background-color));
+      }
+
+      .desktop-empty-progress__body {
+        display: grid;
+        justify-items: center;
+        gap: var(--spacing-medium);
+        max-width: 560px;
+        text-align: center;
+        color: var(--texra-descriptionForeground, var(--color-text-secondary));
+      }
+
+      .desktop-empty-progress__icon {
+        color: var(--texra-button-background, var(--color-text-link));
+        font-size: 44px;
+      }
+
+      .desktop-empty-progress h1 {
+        margin: var(--spacing-small) 0 0;
+        color: var(--texra-foreground);
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: 0;
+      }
+
+      .desktop-empty-progress p {
+        margin: 0;
+        font-size: var(--font-size-md, 14px);
+        line-height: 1.5;
+      }
+
+      .desktop-empty-progress__actions {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: var(--spacing-medium);
+        margin-top: var(--spacing-small);
+      }
+
+      .desktop-empty-progress vscode-button::part(control) {
+        min-height: 32px;
       }
     `,
   ];
@@ -407,8 +466,9 @@ export class ProgressApp extends ProgressAppBase {
     () => this.tabStreams$.get().length > 0,
   );
 
+  /** True only when the backend knows no streams at all, independent of filter. */
   private hasAnyStreams$ = new Signal.Computed(
-    () => this.streams$.get().length > 0,
+    () => this.streamById$.get().size > 0,
   );
 
   /** Only changes when the ACTIVE stream's state changes, not any stream. */
@@ -486,6 +546,7 @@ export class ProgressApp extends ProgressAppBase {
       isToolUse: this.activeIsToolUse$.get(),
       hasStreams,
       streamName: activeStreamInfo.name,
+      streamStatus: this.activeStreamState$.get()?.status ?? null,
       // Process agents emit raw stdout/stderr; render them terminal-style
       // (monospace, no timestamps, tight spacing) rather than logger entries.
       terminalMode: isProcessAgent(activeStreamInfo.agent),
@@ -537,6 +598,7 @@ export class ProgressApp extends ProgressAppBase {
 
   render(): TemplateResult {
     const isEditorMode = this.placement.get() === 'editor';
+    const isDesktopMode = this.hasAttribute('data-desktop-view');
     const compactTabs = this.narrowLayout.get() && !isEditorMode;
     const hasAnyStreams = this.hasAnyStreams$.get();
     const splitPosition =
@@ -547,6 +609,7 @@ export class ProgressApp extends ProgressAppBase {
         class=${classMap({
           'main-container': true,
           narrow: compactTabs,
+          desktop: isDesktopMode,
         })}
       >
         <div class="view-header">

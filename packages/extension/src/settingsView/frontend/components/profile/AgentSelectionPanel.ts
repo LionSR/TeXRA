@@ -382,6 +382,7 @@ export class AgentSelectionPanel extends LitElement {
   @property({ attribute: false }) agents: AgentSelectionItem[] = [];
   @property({ attribute: false }) category: AgentCategory = 'workflow';
   @property({ attribute: false }) userTier = 'free';
+  @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   @state() private selectedKey: string | null = null;
 
@@ -733,7 +734,8 @@ export class AgentSelectionPanel extends LitElement {
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE &&
           this.userTier === 'Ultra' &&
-          !agent.hasPath
+          !agent.hasPath &&
+          !this.desktopHost
             ? html`
                 <button
                   class="agent-action-btn"
@@ -769,7 +771,7 @@ export class AgentSelectionPanel extends LitElement {
                 </button>
               `
             : nothing}
-          ${builtIn
+          ${builtIn && !this.desktopHost
             ? html`
                 <button
                   class="agent-action-btn agent-action-btn--primary"
@@ -781,7 +783,7 @@ export class AgentSelectionPanel extends LitElement {
                 </button>
               `
             : nothing}
-          ${isCustom
+          ${isCustom && !this.desktopHost
             ? html`
                 <button
                   class="agent-action-btn agent-action-btn--danger"

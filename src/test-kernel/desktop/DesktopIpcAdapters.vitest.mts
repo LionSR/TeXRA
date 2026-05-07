@@ -31,6 +31,20 @@ interface DesktopShellIpcModule {
   };
 }
 
+interface DesktopLogIpcModule {
+  createDesktopLogIpc(
+    renderer: DesktopRenderer,
+    options?: {
+      readLog?: () => { text: string; truncated: boolean; path?: string };
+      copyLog?: (text: string) => Promise<void>;
+      exportLog?: (text: string) => Promise<void>;
+      onAsyncError?: (error: unknown) => void;
+    },
+  ): {
+    handleMessage(message: { command: string }): boolean;
+  };
+}
+
 interface DesktopExecutionIpcModule {
   createDesktopExecutionIpc(options?: {
     executeAgent?: (message: unknown) => Promise<void>;
@@ -39,6 +53,22 @@ interface DesktopExecutionIpcModule {
     handleMessage(
       message: { command: string } & Record<string, unknown>,
     ): boolean;
+  };
+}
+
+interface DesktopOnboardingIpcModule {
+  DESKTOP_ONBOARDING_DISMISSED_STATE_KEY: string;
+  createDesktopOnboardingIpc(
+    renderer: DesktopRenderer,
+    options?: {
+      state?: {
+        get<T>(key: string, defaultValue?: T): T;
+        update(key: string, value: unknown): PromiseLike<void>;
+      };
+      onAsyncError?: (error: unknown) => void;
+    },
+  ): {
+    handleMessage(message: { command: string }): boolean;
   };
 }
 
@@ -65,6 +95,24 @@ async function loadDesktopExecutionIpc(): Promise<DesktopExecutionIpcModule> {
   return import(
     moduleFileUrl(desktopSourcePath('main', 'desktopExecutionIpc.ts'))
   ) as Promise<DesktopExecutionIpcModule>;
+}
+
+async function loadDesktopOnboardingIpc(): Promise<DesktopOnboardingIpcModule> {
+  const [onboardingIpc, onboardingMessages] = await Promise.all([
+    import(
+      moduleFileUrl(desktopSourcePath('main', 'desktopOnboardingIpc.ts'))
+    ) as Promise<DesktopOnboardingIpcModule>,
+    import(
+      moduleFileUrl(desktopSourcePath('desktopOnboardingMessages.ts'))
+    ) as Promise<{ DESKTOP_ONBOARDING_DISMISSED_STATE_KEY: string }>,
+  ]);
+  return { ...onboardingIpc, ...onboardingMessages };
+}
+
+async function loadDesktopLogIpc(): Promise<DesktopLogIpcModule> {
+  return import(
+    moduleFileUrl(desktopSourcePath('main', 'desktopLogIpc.ts'))
+  ) as Promise<DesktopLogIpcModule>;
 }
 
 async function loadDesktopViewStateIpc(nativeTheme: {
@@ -243,5 +291,98 @@ describe('desktop IPC adapters', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(onAsyncError).toHaveBeenCalledWith(error);
+  });
+
+  it('persists first-run walkthrough dismissal in the onboarding adapter', async () => {
+    const {
+      DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
+      createDesktopOnboardingIpc,
+    } = await loadDesktopOnboardingIpc();
+    const values = new Map<string, unknown>();
+    const update = vi.fn(async (key: string, value: unknown) => {
+      values.set(key, value);
+    });
+    const state = {
+      get<T>(key: string, defaultValue?: T): T {
+        return (values.has(key) ? values.get(key) : defaultValue) as T;
+      },
+      update,
+    };
+    const postToRenderer = vi.fn();
+    const onboarding = createDesktopOnboardingIpc(
+      { postToRenderer },
+      { state },
+    );
+
+    expect(
+      onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
+    ).toBe(true);
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: 'desktop:setOnboarding',
+      shouldShow: true,
+    });
+
+    expect(
+      onboarding.handleMessage({ command: 'desktop:dismissOnboarding' }),
+    ).toBe(true);
+    await Promise.resolve();
+    expect(update).toHaveBeenCalledWith(
+      DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
+      true,
+    );
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: 'desktop:setOnboarding',
+      shouldShow: false,
+    });
+
+    expect(
+      onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
+    ).toBe(true);
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: 'desktop:setOnboarding',
+      shouldShow: false,
+    });
+
+    expect(
+      onboarding.handleMessage({ command: 'desktop:showOnboarding' }),
+    ).toBe(false);
+  });
+
+  it('serves desktop log snapshots and copy/export actions', async () => {
+    const { createDesktopLogIpc } = await loadDesktopLogIpc();
+    const postToRenderer = vi.fn();
+    const copyLog = vi.fn(async (_text: string) => {});
+    const exportLog = vi.fn(async (_text: string) => {});
+    const readLog = vi.fn(() => ({
+      path: '/logs/texra-desktop.log',
+      text: '2026-05-07T00:00:00.000Z [info] safe log line',
+      truncated: false,
+    }));
+    const logs = createDesktopLogIpc(
+      { postToRenderer },
+      { readLog, copyLog, exportLog },
+    );
+
+    expect(logs.handleMessage({ command: 'desktop:requestLog' })).toBe(true);
+    expect(postToRenderer).toHaveBeenLastCalledWith({
+      command: 'desktop:setLog',
+      log: {
+        path: '/logs/texra-desktop.log',
+        text: '2026-05-07T00:00:00.000Z [info] safe log line',
+        truncated: false,
+      },
+    });
+
+    expect(logs.handleMessage({ command: 'desktop:copyLog' })).toBe(true);
+    await Promise.resolve();
+    expect(copyLog).toHaveBeenCalledWith(
+      '2026-05-07T00:00:00.000Z [info] safe log line',
+    );
+
+    expect(logs.handleMessage({ command: 'desktop:exportLog' })).toBe(true);
+    await Promise.resolve();
+    expect(exportLog).toHaveBeenCalledWith(
+      '2026-05-07T00:00:00.000Z [info] safe log line',
+    );
   });
 });

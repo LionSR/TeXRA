@@ -1,3 +1,5 @@
+# ci-sync-version: claude-provider-deepseek-v1
+# ci-sync-source: shared bot automation, prompts externalized under .github/prompts
 name: Issue Tree
 
 on:
@@ -11,7 +13,18 @@ concurrency:
 
 jobs:
   tend:
+    # Repository variable kill switch:
+    #   ISSUE_TREE_ENABLED=false disables scheduled issue-tree maintenance.
+    #   unset or any other value preserves the default enabled behavior.
+    if: vars.ISSUE_TREE_ENABLED != 'false'
     runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_PROVIDER: ${{ vars.CLAUDE_CODE_PROVIDER || 'anthropic' }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
+      CLAUDE_OPUS_MODEL: ${{ vars.CLAUDE_OPUS_MODEL }}
+      CLAUDE_SONNET_MODEL: ${{ vars.CLAUDE_SONNET_MODEL }}
     permissions:
       contents: read
       issues: write
@@ -21,85 +34,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: anthropics/claude-code-action@v1
+      - uses: ./.github/actions/claude-code-with-provider
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          allowed_bots: 'github-actions[bot]'
-          claude_args: |
-            --model claude-sonnet-4-6
-            --allowedTools "mcp__github__*"
-
-          prompt: |
-            You maintain the issue tree for ${{ github.repository }}. Daily,
-            cluster orphan issues into parents, then close completed trackers.
-            Run both phases in this order.
-
-            Use the GitHub MCP tools (not gh CLI) for all GitHub operations.
-
-            ## Phase A — Cluster orphan issues into parents
-
-            1. List up to 100 open issues without a parent. Drop any item that
-               has a `pull_request` field — GitHub's issues endpoint returns PRs
-               alongside issues, and PRs must never be clustered or linked as
-               sub-issues. Then exclude issues labeled `tracking` or with titles
-               starting `Tracking:` / `[Parent]` / `Epic:` / `Meta:` (matching
-               this repo's tracker convention from `issue-tracker.yml`).
-            2. Find clusters of **5 or more** orphans sharing a clear theme — a
-               common `area:*` label is the strongest signal; root-cause overlap
-               or feature decomposition also count.
-            3. Skip a cluster if the cluster's **theme** is already covered by
-               an existing open tracker. Match on either:
-               - title prefix `Tracking:` / `[Parent]` / `Epic:` / `Meta:` whose
-                 wording overlaps the cluster theme, OR
-               - an open issue labeled `tracking` whose `area:*` labels overlap
-                 the cluster's `area:*` labels and whose body or title indicates
-                 the same theme.
-               Do NOT skip merely because some unrelated tracker exists in the
-               repo — the check is theme-scoped, not global.
-            4. From the `list_issues` response, capture each child's integer `id`
-               (the REST database id, NOT the issue `number` and NOT the GraphQL
-               `node_id` string).
-            5. For each surviving cluster:
-               - Create the parent via `mcp__github__issue_write` (method=create):
-                 - Title: `Tracking: <theme>`
-                 - Labels: `tracking` + the cluster's `area:*` labels
-                 - Body: one-paragraph theme + checklist of `- [ ] #N — title` rows
-                 - Capture both `number` AND integer `id` from the response.
-               - Link each child as a native sub-issue:
-                 `mcp__github__sub_issue_write` with method=`add`,
-                 `issue_number=<parent-number>`,
-                 `sub_issue_id=<child-id>`.
-                 Note: `sub_issue_id` is the child's numeric REST `id` (integer),
-                 NOT its issue `number` and NOT its `node_id`.
-
-            ### Phase A caps
-
-            - Max 5 new parents per run
-            - Max 50 sub-issue links per run
-            - Precision over recall: only link if the relationship is unambiguous
-
-            ## Phase B — Close completed trackers
-
-            For each open issue labeled `tracking` in ${{ github.repository }}
-            (excluding any parent created in Phase A this run):
-
-            - Read its sub-issues via `mcp__github__issue_read`.
-            - Qualifies for close ONLY if it has ≥1 sub-issue AND every sub-issue
-              is `closed` with `state_reason=completed` (skip if any are
-              `not_planned` or `duplicate`).
-            - Skip parents created less than 24 hours ago.
-            - Process leaf-up: close inner trackers first, then re-check outer
-              ones in the same run.
-
-            To close: comment
-            `✅ All N sub-issues closed as completed. Auto-closing this tracker.`,
-            then `mcp__github__issue_write` (method=update) with `state=closed`,
-            `state_reason=completed`.
-
-            ### Phase B caps
-
-            - Max 20 closures per run
-
-            ## Final report
-
-            One-line summary per phase. Skip silently when nothing matches.
+          provider: ${{ env.CLAUDE_CODE_PROVIDER }}
+          model-tier: sonnet
+          allowed-bots: 'github-actions[bot]'
+          allowed-tools-preset: issue-tree
+          claude-prompt-file: .github/prompts/issue-tree-prompt.md
+          claude-prompt-context: |
+            Repository: ${{ github.repository }}
