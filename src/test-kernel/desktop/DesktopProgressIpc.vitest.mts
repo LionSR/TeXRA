@@ -19,7 +19,7 @@ interface DesktopProgressIpcModule {
       resumeStream(stream: string): Promise<void>;
       runNewStream(stream: string): Promise<void>;
       sendFollowUp(stream: string, text: string): Promise<void>;
-      openFile(file: string): Promise<void>;
+      openFile(file: string, line?: number): Promise<void>;
       openFileCompile(file: string): Promise<void>;
       openTaskStorage(stream: string): Promise<void>;
       compareOriginal(file: string, base?: string): Promise<void>;
@@ -86,7 +86,7 @@ function createProgress() {
     resumeStream: vi.fn(async (_stream: string) => {}),
     runNewStream: vi.fn(async (_stream: string) => {}),
     sendFollowUp: vi.fn(async (_stream: string, _text: string) => {}),
-    openFile: vi.fn(async (_file: string) => {}),
+    openFile: vi.fn(async (_file: string, _line?: number) => {}),
     openFileCompile: vi.fn(async (_file: string) => {}),
     openTaskStorage: vi.fn(async (_stream: string) => {}),
     compareOriginal: vi.fn(async (_file: string, _base?: string) => {}),
@@ -165,7 +165,10 @@ describe('desktop Progress IPC', () => {
       }),
     ).toBe(true);
     await Promise.resolve();
-    expect(progress.openFile).toHaveBeenCalledWith('/tmp/output.pdf');
+    expect(progress.openFile).toHaveBeenCalledWith(
+      '/tmp/output.pdf',
+      undefined,
+    );
 
     expect(
       ipc.handleMessage({
@@ -329,7 +332,7 @@ describe('desktop Progress IPC', () => {
       'run-1',
       'continue please',
     );
-    expect(progress.openFile).toHaveBeenCalledWith('/tmp/out.tex');
+    expect(progress.openFile).toHaveBeenCalledWith('/tmp/out.tex', 4);
     expect(progress.openFileCompile).toHaveBeenCalledWith('/tmp/out.pdf');
   });
 

@@ -101,7 +101,7 @@ type StreamBadgeSnapshot = {
 
 export interface DesktopProgressBridgeOptions {
   detachSubagentsOnStop?: boolean;
-  openPath?: (filePath: string) => Promise<void>;
+  openPath?: (filePath: string, line?: number) => Promise<void>;
   openBuildDisplay?: BuildDisplayFn;
   openDiff?: DiffViewHost['openDiff'];
   confirmAcceptFile?: (message: string) => Promise<boolean>;
@@ -810,8 +810,8 @@ export class DesktopProgressBridge {
     );
   }
 
-  async openFile(filePath: string): Promise<void> {
-    await this.options.openPath?.(filePath);
+  async openFile(filePath: string, line?: number): Promise<void> {
+    await this.options.openPath?.(filePath, line);
   }
 
   async openFileCompile(filePath: string): Promise<void> {
