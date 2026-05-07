@@ -165,6 +165,8 @@ jobs:
           path: |
             packages/desktop/dist-packaged/*.dmg
             packages/desktop/dist-packaged/*.zip
+            packages/desktop/dist-packaged/*.blockmap
+            packages/desktop/dist-packaged/latest-mac.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -213,6 +215,8 @@ jobs:
           path: |
             packages/desktop/dist-packaged/*.AppImage
             packages/desktop/dist-packaged/*.deb
+            packages/desktop/dist-packaged/*.blockmap
+            packages/desktop/dist-packaged/latest-linux.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -263,8 +267,11 @@ jobs:
       - name: Upload Windows desktop installer
         uses: actions/upload-artifact@v7
         with:
-          name: texra-desktop-installer-Windows
-          path: packages/desktop/dist-packaged/*.exe
+          name: texra-desktop-installers-Windows
+          path: |
+            packages/desktop/dist-packaged/*.exe
+            packages/desktop/dist-packaged/*.blockmap
+            packages/desktop/dist-packaged/latest.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -276,6 +283,82 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  publish-desktop-release-artifacts:
+    name: publish desktop release artifacts
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - desktop-macos-installer
+      - desktop-linux-installer
+      - desktop-windows-artifact
+    permissions:
+      contents: read
+    env:
+      DESKTOP_RELEASE_REPO: texra-ai/texra-desktop-releases
+      GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download desktop installer artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: texra-desktop-installers-*
+          path: artifacts/desktop-release
+          merge-multiple: true
+
+      - name: Verify downloaded desktop release artifacts
+        env:
+          TEXRA_DESKTOP_INSTALLER_PLATFORM: all
+          TEXRA_DESKTOP_INSTALLER_ROOT: artifacts/desktop-release
+        run: node scripts/verify-desktop-installer-artifacts.mjs
+
+      - name: Publish desktop artifacts to public release repository
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo 'Missing DESKTOP_RELEASES_TOKEN secret for publishing desktop updates.'
+            exit 1
+          fi
+
+          actual_repo="$(gh repo view "$DESKTOP_RELEASE_REPO" --json nameWithOwner --jq .nameWithOwner)"
+          visibility="$(gh repo view "$DESKTOP_RELEASE_REPO" --json visibility --jq .visibility)"
+
+          if [ "$actual_repo" != "$DESKTOP_RELEASE_REPO" ]; then
+            echo "Desktop release repo target mismatch: expected $DESKTOP_RELEASE_REPO, got $actual_repo"
+            exit 1
+          fi
+
+          if [ "$visibility" != 'PUBLIC' ]; then
+            echo "Desktop release repo must be public for token-free clients; got visibility $visibility"
+            exit 1
+          fi
+
+          version="$(node -p "require('./packages/desktop/package.json').version")"
+          tag="v${version}"
+          notes_file="$(mktemp)"
+          printf 'TeXRA desktop %s update artifacts.\n\nSource run: %s/%s/actions/runs/%s\nSource commit: %s\n' \
+            "$version" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
+            > "$notes_file"
+
+          assets=(artifacts/desktop-release/*)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo 'No downloaded desktop release assets found.'
+            exit 1
+          fi
+
+          if gh release view "$tag" --repo "$DESKTOP_RELEASE_REPO" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --repo "$DESKTOP_RELEASE_REPO" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --repo "$DESKTOP_RELEASE_REPO" \
+              --title "TeXRA Desktop ${version}" \
+              --notes-file "$notes_file"
+          fi
+
   validate-status:
     name: validate
     runs-on: ubuntu-latest
@@ -284,6 +367,7 @@ jobs:
       - desktop-macos-installer
       - desktop-linux-installer
       - desktop-windows-artifact
+      - publish-desktop-release-artifacts
     if: always()
 
     steps:
@@ -303,5 +387,9 @@ jobs:
           fi
           if [ '${{ needs.desktop-windows-artifact.result }}' != 'success' ] && [ '${{ needs.desktop-windows-artifact.result }}' != 'skipped' ]; then
             echo 'Windows desktop artifact result: ${{ needs.desktop-windows-artifact.result }}'
+            exit 1
+          fi
+          if [ '${{ needs.publish-desktop-release-artifacts.result }}' != 'success' ] && [ '${{ needs.publish-desktop-release-artifacts.result }}' != 'skipped' ]; then
+            echo 'Desktop release publish result: ${{ needs.publish-desktop-release-artifacts.result }}'
             exit 1
           fi
