@@ -204,8 +204,6 @@ commandPaletteButton.addEventListener('click', commandPalette.open);
 openWorkspaceButton.addEventListener('click', () =>
   postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
 );
-requestWorkspaceTree();
-postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
 
 function isDesktopSetRouteMessage(
   message: unknown,
@@ -259,6 +257,8 @@ window.addEventListener('message', (event) => {
     renderLogSnapshot(event.data);
   }
 });
+requestWorkspaceTree();
+postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
 
 function applyDesktopTheme(theme: string): void {
   document.body.classList.remove(
@@ -383,15 +383,37 @@ function createFirstRunWalkthrough(): {
       </footer>
     </div>
   `;
+  let previousFocus: HTMLElement | null = null;
+
+  const getFocusableElements = (): HTMLElement[] =>
+    [
+      ...element.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ].filter(
+      (candidate) =>
+        !candidate.hasAttribute('disabled') &&
+        candidate.getAttribute('aria-hidden') !== 'true',
+    );
 
   const hide = (): void => {
+    const restoreFocus = previousFocus;
     element.hidden = true;
+    previousFocus = null;
+    restoreFocus?.focus();
   };
   const show = (): void => {
+    if (element.hidden) {
+      previousFocus =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+    }
     element.hidden = false;
-    element
-      .querySelector<HTMLButtonElement>('[data-onboarding-dismiss]')
-      ?.focus();
+    const dismissButton = element.querySelector<HTMLButtonElement>(
+      '[data-onboarding-dismiss]',
+    );
+    (dismissButton ?? getFocusableElements()[0])?.focus();
   };
   const dismiss = (): void => {
     hide();
@@ -412,9 +434,28 @@ function createFirstRunWalkthrough(): {
     .querySelector<HTMLButtonElement>('[data-onboarding-dismiss]')
     ?.addEventListener('click', dismiss);
   element.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      dismiss();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = getFocusableElements();
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const focusedIndex = focusable.indexOf(
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : focusable[0],
+    );
+    const currentIndex = focusedIndex === -1 ? 0 : focusedIndex;
+    const nextIndex = event.shiftKey
+      ? (currentIndex - 1 + focusable.length) % focusable.length
+      : (currentIndex + 1) % focusable.length;
     event.preventDefault();
-    dismiss();
+    focusable[nextIndex]?.focus();
   });
 
   return { element, show, hide };
