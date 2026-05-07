@@ -8,7 +8,8 @@ import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { historyViewStyles } from './styles';
 
 // Local imports - history view events
@@ -16,7 +17,7 @@ import { HistoryViewEvents } from './events';
 
 @customElement('history-search-bar')
 export class SearchBar extends LitElement {
-  static override styles = [designTokens, codiconStyles, historyViewStyles];
+  static override styles = [designTokens, commonViewStyles, historyViewStyles];
 
   @property({ attribute: false }) searchTerm = '';
   @property({ attribute: false }) matchCount = '';
@@ -76,32 +77,28 @@ export class SearchBar extends LitElement {
           @input=${this.handleInput}
           @keydown=${this.handleKeydown}
         ></vscode-textfield>
-        <vscode-toolbar-container class="search-controls">
-          <vscode-toolbar-button
-            class="search-nav-btn"
-            icon="chevron-up"
-            label="Previous match"
-            title="Previous match"
-            @click=${this.handlePrev}
-          ></vscode-toolbar-button>
-          <vscode-toolbar-button
-            class="search-nav-btn"
-            icon="chevron-down"
-            label="Next match"
-            title="Next match"
-            @click=${this.handleNext}
-          ></vscode-toolbar-button>
+        <div class="search-controls action-button-group">
+          ${renderIconActionButton({
+            icon: 'chevron-up',
+            label: 'Previous match',
+            onClick: this.handlePrev,
+          })}
+          ${renderIconActionButton({
+            icon: 'chevron-down',
+            label: 'Next match',
+            onClick: this.handleNext,
+          })}
           <span class="match-count">${this.matchCount}</span>
           ${this.canClearHistory
-            ? html`<vscode-toolbar-button
-                class="history-clear-btn"
-                icon="trash"
-                label="Clear history"
-                title="Clear all history"
-                @click=${this.handleClearHistory}
-              ></vscode-toolbar-button>`
+            ? renderIconActionButton({
+                icon: 'trash',
+                label: 'Clear history',
+                title: 'Clear all history',
+                action: 'clear-history',
+                onClick: this.handleClearHistory,
+              })
             : ''}
-        </vscode-toolbar-container>
+        </div>
       </div>
     `;
   }
