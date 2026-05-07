@@ -5,19 +5,30 @@ import {
   APIUserAbortError as AnthropicAPIUserAbortError,
   AuthenticationError as AnthropicAuthenticationError,
 } from '@anthropic-ai/sdk';
+import { ApiError as GoogleApiError } from '@google/genai';
 import {
   APIConnectionError as OpenAIAPIConnectionError,
   APIConnectionTimeoutError as OpenAIAPIConnectionTimeoutError,
   APIUserAbortError as OpenAIAPIUserAbortError,
   AuthenticationError as OpenAIAuthenticationError,
+  BadRequestError as OpenAIBadRequestError,
   RateLimitError as OpenAIRateLimitError,
 } from 'openai';
 import { describe, expect, it } from 'vitest';
 
+// Local imports - agent model handlers
+import {
+  tagAnthropicSdkError,
+  tagGoogleSdkError,
+  tagOpenAISdkError,
+} from '@agent/modelHandlers/support/sdkErrorAdapters';
+
 // Local imports - common errors
 import {
+  attachSdkErrorMetadata,
   formatProviderHttpError,
   isUserAbort,
+  sdkErrorKindFromStatusCode,
 } from '@common/errors/sdkErrorUtils';
 
 class APIError extends Error {}
@@ -221,5 +232,96 @@ describe('formatProviderHttpError', () => {
     expect(formatted.message).toBe('Request aborted');
     expect(formatted.provider).toBe('openai');
     expect(formatted.retryable).toBe(false);
+  });
+
+  it('formats symbol-tagged SDK errors without SDK prototype matching', () => {
+    const error = new Error('provider quota');
+    attachSdkErrorMetadata(error, {
+      provider: 'fixture',
+      kind: 'rate_limit',
+      statusCode: 429,
+    });
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('fixture');
+    expect(formatted.statusCode).toBe(429);
+    expect(formatted.message).toBe(
+      'HTTP 429 Too Many Requests – provider quota',
+    );
+    expect(formatted.retryable).toBe(true);
+  });
+
+  it('formats tagged OpenAI connection errors with existing retry behavior', () => {
+    const error = new OpenAIAPIConnectionTimeoutError();
+    tagOpenAISdkError(error, 'openai');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('openai');
+    expect(formatted.statusCode).toBeUndefined();
+    expect(formatted.message).toBe('Connection timed out');
+    expect(formatted.retryable).toBe(true);
+  });
+
+  it('formats tagged OpenAI HTTP errors with status metadata', () => {
+    const error = new OpenAIBadRequestError(
+      400,
+      { message: 'bad payload' },
+      'bad payload',
+      new Headers([['x-request-id', 'req_123']]),
+    );
+    tagOpenAISdkError(error, 'openai');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('openai');
+    expect(formatted.statusCode).toBe(400);
+    expect(formatted.statusText).toBe('Bad Request');
+    expect(formatted.message).toContain('HTTP 400 Bad Request');
+    expect(formatted.message).toContain('bad payload');
+    expect(formatted.requestId).toBe('req_123');
+    expect(formatted.retryable).toBe(false);
+  });
+
+  it('formats tagged Anthropic user abort errors', () => {
+    const error = new AnthropicAPIUserAbortError();
+    tagAnthropicSdkError(error, 'anthropic');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('anthropic');
+    expect(formatted.message).toBe('Request aborted');
+    expect(formatted.retryable).toBe(false);
+  });
+
+  it('formats tagged Google API errors with inferred kind from status', () => {
+    const error = new GoogleApiError({
+      message: 'quota exceeded',
+      status: 429,
+    });
+    tagGoogleSdkError(error, 'google');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('google');
+    expect(formatted.statusCode).toBe(429);
+    expect(formatted.message).toBe(
+      'HTTP 429 Too Many Requests – quota exceeded',
+    );
+    expect(formatted.retryable).toBe(true);
+  });
+
+  it('derives SDK error kinds from the shared status mapping', () => {
+    expect(sdkErrorKindFromStatusCode(400)).toBe('bad_request');
+    expect(sdkErrorKindFromStatusCode(401)).toBe('authentication');
+    expect(sdkErrorKindFromStatusCode(403)).toBe('permission_denied');
+    expect(sdkErrorKindFromStatusCode(404)).toBe('not_found');
+    expect(sdkErrorKindFromStatusCode(409)).toBe('conflict');
+    expect(sdkErrorKindFromStatusCode(422)).toBe('unprocessable_entity');
+    expect(sdkErrorKindFromStatusCode(429)).toBe('rate_limit');
+    expect(sdkErrorKindFromStatusCode(500)).toBe('internal_server');
+    expect(sdkErrorKindFromStatusCode(418)).toBe('api_error');
+    expect(sdkErrorKindFromStatusCode(undefined)).toBe('api_error');
   });
 });

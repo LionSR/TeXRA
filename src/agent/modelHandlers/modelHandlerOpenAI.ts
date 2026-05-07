@@ -50,6 +50,7 @@ import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { tagOpenAISdkError } from './support/sdkErrorAdapters';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -615,6 +616,18 @@ export class ModelHandlerOpenAI<
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
+    try {
+      return await this.createResponseImpl(options);
+    } catch (err) {
+      tagOpenAISdkError(err, this.config.provider);
+      throw err;
+    }
+  }
+
+  /** Creates a chat completion after SDK-boundary error tagging is installed. */
+  private async createResponseImpl(
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const {
       client,
       messages: rawMessages,
@@ -724,6 +737,7 @@ export class ModelHandlerOpenAI<
           }
         }
       } catch (err) {
+        tagOpenAISdkError(err, this.config.provider);
         if (isContextWindowError(err)) throw err;
         this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
