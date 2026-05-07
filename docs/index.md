@@ -178,6 +178,7 @@ features:
   <div class="cta-buttons">
     <a href="/guide/quick-start" class="cta-button cta-primary">Quick Start Guide</a>
     <a href="/guide/built-in-agents" class="cta-button cta-secondary">Browse All Agents</a>
+    <a href="/guide/desktop" class="cta-button cta-secondary">Desktop Beta</a>
   </div>
 </section>
 
@@ -207,6 +208,11 @@ features:
   <details>
     <summary>Can I build custom agents?</summary>
     <p>Yes — agents are YAML files you can modify or create from scratch. See <a href="/guide/custom-agents">Custom Agents</a>.</p>
+  </details>
+
+  <details>
+    <summary>Is there a standalone desktop app?</summary>
+    <p>The desktop app is in beta development. See the <a href="/guide/desktop">Desktop App guide</a> for platform, setup, log, and update notes.</p>
   </details>
 
   <details>

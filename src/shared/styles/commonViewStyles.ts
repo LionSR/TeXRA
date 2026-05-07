@@ -18,18 +18,18 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .list-item {
-    border: var(--border-thin) solid var(--vscode-panelSection-border);
+    border: var(--border-thin) solid var(--texra-panelSection-border);
     border-radius: var(--border-radius-large);
     padding: var(--spacing-medium);
-    background-color: var(--vscode-editor-background);
+    background-color: var(--texra-editor-background);
   }
 
   .list-item:hover {
-    background-color: var(--vscode-list-hoverBackground);
+    background-color: var(--texra-list-hoverBackground);
   }
 
   .list-item:focus-within {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
   }
 
   .list-item-header {
@@ -60,11 +60,8 @@ export const commonViewStyles: CSSResult = css`
 
   .panel-collapsible::part(header) {
     padding: var(--spacing-small) var(--spacing-medium);
-    background-color: var(
-      --vscode-sideBarSectionHeader-background,
-      transparent
-    );
-    color: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground));
+    background-color: var(--texra-sideBarSectionHeader-background, transparent);
+    color: var(--texra-sideBarTitle-foreground, var(--texra-foreground));
   }
 
   .panel-collapsible::part(body) {
@@ -82,6 +79,33 @@ export const commonViewStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
+  .action-button-group {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    flex-wrap: nowrap;
+  }
+
+  .action-icon-button {
+    flex-shrink: 0;
+  }
+
+  .action-button::part(base) {
+    gap: var(--spacing-small);
+  }
+
+  .action-button wa-icon {
+    font-size: var(--font-size-sm);
+  }
+
+  .action-icon-button::part(base) {
+    width: var(--height-button);
+    min-width: var(--height-button);
+    height: var(--height-button);
+    min-height: var(--height-button);
+    padding: 0;
+  }
+
   .clickable-link {
     cursor: pointer;
     color: var(--color-text-link);
@@ -95,7 +119,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .clickable-link:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -136,7 +160,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .details-summary:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -194,7 +218,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .btn-secondary:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -224,19 +248,16 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .tab-action-btn:hover {
-    color: var(--vscode-foreground);
-    border-color: var(--vscode-focusBorder);
+    color: var(--texra-foreground);
+    border-color: var(--texra-focusBorder);
   }
 
   .tab-action-btn:active {
-    background: var(
-      --vscode-toolbar-activeBackground,
-      rgba(99, 102, 103, 0.31)
-    );
+    background: var(--texra-toolbar-activeBackground, rgba(99, 102, 103, 0.31));
   }
 
   .tab-action-btn:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
   }
 
@@ -248,21 +269,21 @@ export const commonViewStyles: CSSResult = css`
     row-gap: var(--spacing-small);
     padding: var(--spacing-medium);
     margin-bottom: var(--spacing-large);
-    border: var(--border-thin) solid var(--vscode-focusBorder);
+    border: var(--border-thin) solid var(--texra-focusBorder);
     border-radius: var(--border-radius);
-    background: var(--vscode-editor-background);
+    background: var(--texra-editor-background);
   }
 
   .settings-reminder-icon {
     grid-row: 1 / -1;
     margin-top: 2px;
     font-size: var(--font-size-lg);
-    color: var(--vscode-focusBorder);
+    color: var(--texra-focusBorder);
   }
 
   .settings-reminder-title {
     font-weight: var(--font-weight-medium);
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
   }
 
   .settings-reminder-description {
@@ -308,8 +329,8 @@ export const commonViewStyles: CSSResult = css`
     height: 18px;
     flex: 0 0 18px;
     border-radius: 50%;
-    color: var(--vscode-editor-background);
-    background: var(--vscode-focusBorder);
+    color: var(--texra-editor-background);
+    background: var(--texra-focusBorder);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-bold);
     line-height: var(--line-height-tight);
@@ -345,7 +366,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .icon-btn-reset:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -366,13 +387,13 @@ export const commonViewStyles: CSSResult = css`
  */
 export const focusRingStyles: CSSResult = css`
   .focus-ring:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
 
   .focus-ring--inset:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: -1px;
     border-radius: var(--border-radius-small);
   }
@@ -399,9 +420,9 @@ export const filledButtonStyles: CSSResult = css`
     padding: var(--spacing-small) var(--spacing-medium);
     font-size: var(--font-size);
     font-family: inherit;
-    color: var(--vscode-button-foreground);
-    background: var(--vscode-button-background);
-    border: var(--border-thin) solid var(--vscode-button-border, transparent);
+    color: var(--texra-button-foreground);
+    background: var(--texra-button-background);
+    border: var(--border-thin) solid var(--texra-button-border, transparent);
     border-radius: var(--border-radius);
     cursor: pointer;
     transition:
@@ -410,7 +431,7 @@ export const filledButtonStyles: CSSResult = css`
   }
 
   .filled-button:hover {
-    background: var(--vscode-button-hoverBackground);
+    background: var(--texra-button-hoverBackground);
   }
 
   .filled-button:active {
@@ -418,16 +439,16 @@ export const filledButtonStyles: CSSResult = css`
   }
 
   .filled-button:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--texra-focusBorder);
     outline-offset: 1px;
   }
 
   .filled-button--secondary {
-    color: var(--vscode-button-secondaryForeground, inherit);
-    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--texra-button-secondaryForeground, inherit);
+    background: var(--texra-button-secondaryBackground, transparent);
   }
 
   .filled-button--secondary:hover {
-    background: var(--vscode-button-secondaryHoverBackground, transparent);
+    background: var(--texra-button-secondaryHoverBackground, transparent);
   }
 `;

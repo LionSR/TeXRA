@@ -29,13 +29,6 @@ export const searchStyles: CSSResult = css`
     margin-left: auto;
   }
 
-  .search-nav-btn {
-    min-width: var(--height-button);
-    height: var(--height-button);
-    padding: 0;
-    font-size: var(--font-size);
-  }
-
   .match-count {
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
@@ -43,16 +36,16 @@ export const searchStyles: CSSResult = css`
     text-align: center;
   }
 
-  .history-clear-btn {
+  .action-icon-button[data-action='clear-history'] {
     color: var(--color-text-secondary);
     margin-left: var(--spacing-small);
   }
 
-  .history-clear-btn::part(control) {
+  .action-icon-button[data-action='clear-history']::part(base) {
     border-radius: var(--border-radius-medium);
   }
 
-  .history-clear-btn:hover {
+  .action-icon-button[data-action='clear-history']:hover {
     color: var(--color-removed);
   }
 `;
@@ -76,11 +69,11 @@ export const historyListStyles: CSSResult = css`
 
   .history-label {
     font-weight: var(--font-weight-bold);
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
   }
 
   .history-value {
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
     padding: var(--spacing-small) 0;
     word-break: break-word;
   }
@@ -101,7 +94,7 @@ export const historyListStyles: CSSResult = css`
 
   .history-description {
     font-size: var(--font-size-sm);
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     font-style: italic;
     margin-top: var(--spacing-small);
     line-height: var(--line-height-normal);
@@ -111,7 +104,7 @@ export const historyListStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: var(--spacing-small);
-    background-color: var(--vscode-editor-inactiveSelectionBackground);
+    background-color: var(--texra-editor-inactiveSelectionBackground);
     padding: var(--spacing-medium);
     border-radius: var(--border-radius);
     margin: var(--spacing-medium) 0;
@@ -125,14 +118,14 @@ export const historyListStyles: CSSResult = css`
 
   .config-key {
     font-weight: var(--font-weight-medium);
-    color: var(--vscode-editorInfo-foreground);
+    color: var(--texra-editorInfo-foreground);
     min-width: calc(
       var(--width-button-min) + var(--spacing-xlarge) + var(--spacing-xlarge)
     );
   }
 
   .config-value {
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     word-break: break-word;
   }
 `;

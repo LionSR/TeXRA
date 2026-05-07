@@ -10,8 +10,11 @@
 
 import { z } from 'zod';
 
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ExternalInquiryAction, StreamTabId } from '@shared/schemas';
 import {
@@ -133,6 +136,7 @@ async function awaitExternalInquiryResponse(params: {
   input: ExternalInquiryInput;
   streamId?: StreamTabId;
   existingThread: ExternalInquiryThreadManifest | null;
+  runtimeHost: AgentRuntimeHost;
 }): Promise<ExternalInquiryResult> {
   return new Promise<ExternalInquiryResult>((resolve) => {
     let settled = false;
@@ -148,13 +152,13 @@ async function awaitExternalInquiryResponse(params: {
       isSettled: () => settled,
     });
 
-    bus.emit('requestEnsureProgressView', {});
+    params.runtimeHost.emit('requestEnsureProgressView', {});
 
     if (params.streamId) {
-      bus.emit('setActiveStream', { streamId: params.streamId });
+      params.runtimeHost.emit('setActiveStream', { streamId: params.streamId });
     }
 
-    bus.emit('showExternalInquiry', {
+    params.runtimeHost.emit('showExternalInquiry', {
       requestId: params.requestId,
       question: params.input.question,
       threadId: params.input.thread_id ?? undefined,
@@ -246,6 +250,7 @@ When you have multiple independent questions for external models, you can call e
     const context = getCurrentToolFileInteractionContext();
     const streamId = context?.streamId;
     const executionId = context?.executionId;
+    const runtimeHost = context?.runtimeHost ?? getAgentRuntimeHost();
 
     const requestId = `inquiry-${Date.now().toString(36)}-${++inquiryCounter}`;
     const threadLabel = input.thread_id ?? 'new';
@@ -262,6 +267,7 @@ When you have multiple independent questions for external models, you can call e
         input,
         streamId,
         existingThread,
+        runtimeHost,
       });
 
       if (!result.submitted) {
@@ -297,7 +303,7 @@ When you have multiple independent questions for external models, you can call e
       });
     } finally {
       pendingInquiries.delete(requestId);
-      bus.emit('resolveExternalInquiry', { requestId });
+      runtimeHost.emit('resolveExternalInquiry', { requestId });
     }
   }
 }

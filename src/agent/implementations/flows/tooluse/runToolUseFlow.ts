@@ -15,8 +15,9 @@ import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { getGlobalState } from '@agent/core/stateStore';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
-import { GlobalStateKey } from '@common/state';
+import { GlobalStateKey } from '@common/state/stateKeys';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import {
@@ -74,6 +75,7 @@ export interface RunToolUseFlowResult {
 export interface ToolUseFlowContext {
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: ToolUseServices['modelHandler'];
+  readonly runtimeHost: ToolUseServices['runtimeHost'];
   interrupt(): void;
 }
 
@@ -140,6 +142,7 @@ export async function runToolUseFlow<C = unknown>(
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
   const { logger, streamId, executionId, setting, onInterrupt } = input;
+  const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const delegationDepth = input.delegationDepth ?? 0;
@@ -159,6 +162,7 @@ export async function runToolUseFlow<C = unknown>(
 
   const services: ToolUseServices<C> = {
     ...input,
+    runtimeHost,
     session: sessionLifecycle,
     resolvedTools,
     toolRegistry: registry,
@@ -173,6 +177,7 @@ export async function runToolUseFlow<C = unknown>(
   const flowContext: ToolUseFlowContext = {
     session: sessionLifecycle,
     modelHandler: input.modelHandler,
+    runtimeHost,
     interrupt(): void {
       onInterrupt?.();
       retryCoordinator.clearRequest(streamId);

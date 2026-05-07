@@ -3,10 +3,27 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { bus } from '@eventBus/ProgressEventBus';
+import {
+  runWithAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ExtendedTokenUsageStats, StorageKey } from '@shared/schemas';
 import { AgentUsageReporter } from '@/logger/AgentUsageReporter';
+
+function createUsageHost(): { events: unknown[]; host: AgentRuntimeHost } {
+  const events: unknown[] = [];
+  return {
+    events,
+    host: {
+      emit: (event, payload) => {
+        if (event === 'updateStreamUsage') {
+          events.push(payload);
+        }
+      },
+    },
+  };
+}
 
 describe('AgentUsageReporter', () => {
   /**
@@ -16,10 +33,7 @@ describe('AgentUsageReporter', () => {
   it('trusts storageKey as single source of truth (no round-trip to logger)', () => {
     const streamId = 'stream:test';
     const storageKey = 'task-group-123' as StorageKey;
-    const streamEvents: unknown[] = [];
-    const disposeStream = bus.on('updateStreamUsage', (payload) => {
-      streamEvents.push(payload);
-    });
+    const { events, host } = createUsageHost();
 
     let recordedStats: ExtendedTokenUsageStats | undefined;
     let recordedStorageKey: string | undefined;
@@ -40,6 +54,7 @@ describe('AgentUsageReporter', () => {
       loggerStub,
       streamId,
       AgentCategory.Workflow,
+      host,
     );
     const stats: ExtendedTokenUsageStats = {
       inputTokens: 10,
@@ -48,37 +63,30 @@ describe('AgentUsageReporter', () => {
       cacheCreationInputTokens: 4,
     };
 
-    try {
-      reporter.report(stats, storageKey);
+    reporter.report(stats, storageKey);
 
-      assert.equal(streamEvents.length, 1);
-      // storageKey is THE single source of truth - no runId needed
-      // Cache tokens are passed through for display
-      assert.deepEqual(streamEvents[0], {
-        stream: streamId,
-        storageKey,
-        usage: {
-          inputTokens: 10,
-          outputTokens: 5,
-          cost: 0.25,
-          cacheCreationInputTokens: 4,
-        },
-      });
-      // Verify statistics were logged with storageKey
-      assert.strictEqual(recordedStats, stats);
-      assert.strictEqual(recordedStorageKey, storageKey);
-    } finally {
-      disposeStream();
-    }
+    assert.equal(events.length, 1);
+    // storageKey is THE single source of truth - no runId needed
+    // Cache tokens are passed through for display
+    assert.deepEqual(events[0], {
+      streamId,
+      storageKey,
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        cost: 0.25,
+        cacheCreationInputTokens: 4,
+      },
+    });
+    // Verify statistics were logged with storageKey
+    assert.strictEqual(recordedStats, stats);
+    assert.strictEqual(recordedStorageKey, storageKey);
   });
 
   it('skips statistics logging for tool-use sessions', () => {
     const streamId = 'stream:test';
     const storageKey = 'execution-id-456' as StorageKey;
-    const streamEvents: unknown[] = [];
-    const disposeStream = bus.on('updateStreamUsage', (payload) => {
-      streamEvents.push(payload);
-    });
+    const { events, host } = createUsageHost();
 
     const loggerStub = {
       withCurrentGroup: <T>(_: (groupId: string) => T): T | undefined => {
@@ -93,6 +101,7 @@ describe('AgentUsageReporter', () => {
       loggerStub,
       streamId,
       AgentCategory.ToolUse,
+      host,
     );
 
     const stats: ExtendedTokenUsageStats = {
@@ -102,33 +111,26 @@ describe('AgentUsageReporter', () => {
       cacheCreationInputTokens: 1,
     };
 
-    try {
-      reporter.report(stats, storageKey);
+    reporter.report(stats, storageKey);
 
-      assert.equal(streamEvents.length, 1);
-      // Cache tokens are passed through for display
-      assert.deepEqual(streamEvents[0], {
-        stream: streamId,
-        storageKey,
-        usage: {
-          inputTokens: 6,
-          outputTokens: 2,
-          cost: 0.1,
-          cacheCreationInputTokens: 1,
-        },
-      });
-    } finally {
-      disposeStream();
-    }
+    assert.equal(events.length, 1);
+    // Cache tokens are passed through for display
+    assert.deepEqual(events[0], {
+      streamId,
+      storageKey,
+      usage: {
+        inputTokens: 6,
+        outputTokens: 2,
+        cost: 0.1,
+        cacheCreationInputTokens: 1,
+      },
+    });
   });
 
   it('passes through both cacheRead and cacheCreation tokens', () => {
     const streamId = 'stream:test';
     const storageKey = 'task-group-789' as StorageKey;
-    const streamEvents: unknown[] = [];
-    const disposeStream = bus.on('updateStreamUsage', (payload) => {
-      streamEvents.push(payload);
-    });
+    const { events, host } = createUsageHost();
 
     const loggerStub = {
       statistics: () => {
@@ -140,6 +142,7 @@ describe('AgentUsageReporter', () => {
       loggerStub,
       streamId,
       AgentCategory.Workflow,
+      host,
     );
 
     const stats: ExtendedTokenUsageStats = {
@@ -151,35 +154,28 @@ describe('AgentUsageReporter', () => {
       cacheCreationInputTokens: 20, // Cache writes (1.25x for Anthropic)
     };
 
-    try {
-      reporter.report(stats, storageKey);
+    reporter.report(stats, storageKey);
 
-      assert.equal(streamEvents.length, 1);
-      // Both cache token types should be passed through
-      assert.deepEqual(streamEvents[0], {
-        stream: streamId,
-        storageKey,
-        usage: {
-          inputTokens: 100,
-          outputTokens: 50,
-          cost: 1.5,
-          cacheReadInputTokens: 80,
-          cacheMissInputTokens: 20,
-          cacheCreationInputTokens: 20,
-        },
-      });
-    } finally {
-      disposeStream();
-    }
+    assert.equal(events.length, 1);
+    // Both cache token types should be passed through
+    assert.deepEqual(events[0], {
+      streamId,
+      storageKey,
+      usage: {
+        inputTokens: 100,
+        outputTokens: 50,
+        cost: 1.5,
+        cacheReadInputTokens: 80,
+        cacheMissInputTokens: 20,
+        cacheCreationInputTokens: 20,
+      },
+    });
   });
 
   it('omits cache tokens when zero or undefined', () => {
     const streamId = 'stream:test';
     const storageKey = 'task-group-000' as StorageKey;
-    const streamEvents: unknown[] = [];
-    const disposeStream = bus.on('updateStreamUsage', (payload) => {
-      streamEvents.push(payload);
-    });
+    const { events, host } = createUsageHost();
 
     const loggerStub = {
       statistics: () => {
@@ -191,6 +187,7 @@ describe('AgentUsageReporter', () => {
       loggerStub,
       streamId,
       AgentCategory.Workflow,
+      host,
     );
 
     // No cache tokens in stats
@@ -200,22 +197,58 @@ describe('AgentUsageReporter', () => {
       cost: 0.1,
     };
 
-    try {
-      reporter.report(stats, storageKey);
+    reporter.report(stats, storageKey);
 
-      assert.equal(streamEvents.length, 1);
-      // Cache tokens should be omitted when not present
-      assert.deepEqual(streamEvents[0], {
-        stream: streamId,
+    assert.equal(events.length, 1);
+    // Cache tokens should be omitted when not present
+    assert.deepEqual(events[0], {
+      streamId,
+      storageKey,
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        cost: 0.1,
+      },
+    });
+  });
+
+  it('uses the scoped runtime host when no host is passed', () => {
+    const streamId = 'stream:test';
+    const storageKey = 'task-group-scoped' as StorageKey;
+    const { events, host } = createUsageHost();
+
+    const loggerStub = {
+      statistics: () => {
+        /* no-op */
+      },
+    } as unknown as AgentLogger;
+
+    runWithAgentRuntimeHost(host, () => {
+      const reporter = new AgentUsageReporter(
+        loggerStub,
+        streamId,
+        AgentCategory.Workflow,
+      );
+      reporter.report(
+        {
+          inputTokens: 1,
+          outputTokens: 2,
+          cost: 0.03,
+        },
+        storageKey,
+      );
+    });
+
+    assert.deepEqual(events, [
+      {
+        streamId,
         storageKey,
         usage: {
-          inputTokens: 10,
-          outputTokens: 5,
-          cost: 0.1,
+          inputTokens: 1,
+          outputTokens: 2,
+          cost: 0.03,
         },
-      });
-    } finally {
-      disposeStream();
-    }
+      },
+    ]);
   });
 });

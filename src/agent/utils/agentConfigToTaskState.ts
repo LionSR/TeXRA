@@ -11,7 +11,6 @@ import { FILE_TYPES, type FileType } from '@utils/config/constants';
 function isFileTypeActive(
   config: Record<string, unknown>,
   type: FileType,
-  useMultipleOutputs: boolean,
 ): boolean {
   const filesField = `${type}Files`;
   const flagField = `${filesField}Active`;
@@ -19,7 +18,6 @@ function isFileTypeActive(
 
   if (Array.isArray(files) && files.length > 0) return true;
   if (config[flagField]) return true;
-  if (type === 'output' && useMultipleOutputs) return true;
   return false;
 }
 
@@ -35,15 +33,10 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
       };
     case AgentCategory.Workflow: {
       const configRecord = config as Record<string, unknown>;
-      const useMultipleOutputs = Boolean(configRecord.useMultipleOutputs);
       const activeFiles = {} as Record<FileType, boolean>;
 
       for (const type of FILE_TYPES) {
-        activeFiles[type] = isFileTypeActive(
-          configRecord,
-          type,
-          useMultipleOutputs,
-        );
+        activeFiles[type] = isFileTypeActive(configRecord, type);
       }
 
       return {
