@@ -14,6 +14,7 @@ import {
   normalizeMetafilePath,
   resolveMetafileImportPath,
 } from './desktop-package-metafile-paths.mjs';
+import { expectedCodexPlatformKeysFromLabel } from './desktop-package-targets.mjs';
 
 const require = createRequire(import.meta.url);
 const { extractFile, listPackage, statFile } = require('@electron/asar');
@@ -467,37 +468,7 @@ function codexBinaryPath(prefix, platformInfo) {
 }
 
 function expectedCodexPlatformKeys(app) {
-  const label = app.label.replaceAll('\\', '/').toLowerCase();
-  if (label.includes('.app/contents/resources/app')) {
-    if (label.includes('mac-arm64') || label.includes('darwin-arm64')) {
-      return ['darwin-arm64'];
-    }
-    if (label.includes('mac-x64') || label.includes('darwin-x64')) {
-      return ['darwin-x64'];
-    }
-    if (label.includes('universal')) {
-      return ['darwin-x64', 'darwin-arm64'];
-    }
-    return ['darwin-x64', 'darwin-arm64'];
-  }
-
-  if (label.includes('linux')) {
-    return [
-      label.includes('arm64') || label.includes('aarch64')
-        ? 'linux-arm64'
-        : 'linux-x64',
-    ];
-  }
-
-  if (label.includes('win')) {
-    return [
-      label.includes('arm64') || label.includes('aarch64')
-        ? 'win32-arm64'
-        : 'win32-x64',
-    ];
-  }
-
-  return [];
+  return expectedCodexPlatformKeysFromLabel(app.label);
 }
 
 async function checkCodexUnpackedBinaries(app, failures) {
