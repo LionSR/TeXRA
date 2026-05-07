@@ -29,13 +29,6 @@ export const searchStyles: CSSResult = css`
     margin-left: auto;
   }
 
-  .search-nav-btn {
-    min-width: var(--height-button);
-    height: var(--height-button);
-    padding: 0;
-    font-size: var(--font-size);
-  }
-
   .match-count {
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
@@ -43,16 +36,16 @@ export const searchStyles: CSSResult = css`
     text-align: center;
   }
 
-  .history-clear-btn {
+  .action-icon-button[data-action='clear-history'] {
     color: var(--color-text-secondary);
     margin-left: var(--spacing-small);
   }
 
-  .history-clear-btn::part(control) {
+  .action-icon-button[data-action='clear-history']::part(base) {
     border-radius: var(--border-radius-medium);
   }
 
-  .history-clear-btn:hover {
+  .action-icon-button[data-action='clear-history']:hover {
     color: var(--color-removed);
   }
 `;

@@ -8,7 +8,13 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { badgeStyles, codiconStyles, designTokens } from '@shared/styles';
+import {
+  badgeStyles,
+  codiconStyles,
+  commonViewStyles,
+  designTokens,
+} from '@shared/styles';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - profile view styles and events
 import type {
@@ -30,6 +36,7 @@ export class ProviderKeyList extends LitElement {
   static override styles = [
     designTokens,
     codiconStyles,
+    commonViewStyles,
     ...badgeStyles,
     profileViewStyles,
   ];
@@ -50,31 +57,31 @@ export class ProviderKeyList extends LitElement {
     const { provider } = entry;
     const removeButton =
       entry.status === 'set'
-        ? html`<vscode-toolbar-button
-            icon="trash"
-            label="Remove"
-            title="Remove key"
-            @click=${() =>
-              this.dispatchEvent(ProviderKeyEvents.removeKey({ provider }))}
-          ></vscode-toolbar-button>`
+        ? renderIconActionButton({
+            icon: 'trash',
+            label: 'Remove',
+            title: 'Remove key',
+            onClick: () =>
+              this.dispatchEvent(ProviderKeyEvents.removeKey({ provider })),
+          })
         : nothing;
 
     return html`
-      <div class="provider-actions">
-        <vscode-toolbar-button
-          icon="key"
-          label="Set"
-          title="Set API key"
-          @click=${() =>
-            this.dispatchEvent(ProviderKeyEvents.setKey({ provider }))}
-        ></vscode-toolbar-button>
-        <vscode-toolbar-button
-          icon="link-external"
-          label="Get"
-          title="Get API key from provider"
-          @click=${() =>
-            this.dispatchEvent(ProviderKeyEvents.openKeyUrl({ provider }))}
-        ></vscode-toolbar-button>
+      <div class="provider-actions action-button-group">
+        ${renderIconActionButton({
+          icon: 'key',
+          label: 'Set',
+          title: 'Set API key',
+          onClick: () =>
+            this.dispatchEvent(ProviderKeyEvents.setKey({ provider })),
+        })}
+        ${renderIconActionButton({
+          icon: 'arrow-up-right-from-square',
+          label: 'Get',
+          title: 'Get API key from provider',
+          onClick: () =>
+            this.dispatchEvent(ProviderKeyEvents.openKeyUrl({ provider })),
+        })}
         ${removeButton}
       </div>
     `;
