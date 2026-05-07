@@ -133,6 +133,9 @@ export enum GlobalStateKey {
 
   // Desktop-only crash reporting
   DESKTOP_CRASH_REPORTING_ENABLED = 'texra.desktop.crashReporting.enabled',
+
+  // Experimental
+  INLINE_CRITICISM_ENABLED = 'texra.inlineCriticism.enabled',
 }
 
 /** Prefix used for per-instruction suppression flags */

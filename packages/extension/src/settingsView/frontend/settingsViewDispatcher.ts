@@ -11,6 +11,7 @@ import {
   UpdateGitHubTokenStatusMessageSchema,
   UpdateHistoryMessageSchema,
   UpdateLatexConfigValuesMessageSchema,
+  UpdateInlineCriticismEnabledMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
   UpdateMemoryEnabledMessageSchema,
   UpdateMemoryMessageSchema,
@@ -90,6 +91,7 @@ export interface SettingsMessageHandlerContext {
   latexSettingsLoaded: WritableSignal<boolean>;
   latexConfigValues: WritableSignal<LatexConfigValues>;
   latexConfigValuesLoaded: WritableSignal<boolean>;
+  inlineCriticismEnabled: WritableSignal<boolean>;
   clearHistorySearch(): void;
   logSchemaError(message: string, error: unknown): void;
 }
@@ -282,6 +284,17 @@ export function dispatchSettingsViewMessage(
       if (!data) return false;
       ctx.latexConfigValues.set(data.values);
       ctx.latexConfigValuesLoaded.set(true);
+      return true;
+    }
+
+    case SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED: {
+      const data = parseMessage(
+        raw,
+        UpdateInlineCriticismEnabledMessageSchema,
+        ctx,
+      );
+      if (!data) return false;
+      ctx.inlineCriticismEnabled.set(data.enabled);
       return true;
     }
 
