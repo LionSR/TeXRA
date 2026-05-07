@@ -290,6 +290,11 @@ function isThemeMessage(message: unknown): message is SetThemeMessage {
 }
 
 function setRoute(route: DesktopRoute): void {
+  // The shell template is rendered once at startup; aria-pressed/hidden are
+  // mutated imperatively here. If a caller ever re-renders the shell, those
+  // runtime mutations will be reset to the template defaults — convert this
+  // function to update module-level route state and trigger a shell re-render
+  // before doing that.
   for (const [candidate, container] of routeContainers) {
     container.hidden = candidate !== route;
   }
@@ -468,14 +473,15 @@ function requestWorkspaceTree(): void {
 }
 
 type ExplorerState =
-  | { kind: 'loading' }
+  | { kind: 'loading'; title: string }
   | { kind: 'no-workspace' }
   | { kind: 'tree'; title: string; tree: readonly WorkspaceTreeNode[] };
 
-let explorerState: ExplorerState = { kind: 'loading' };
+let explorerState: ExplorerState = { kind: 'loading', title: 'Workspace' };
 
 function renderWorkspaceExplorerLoading(): void {
-  explorerState = { kind: 'loading' };
+  const title = 'title' in explorerState ? explorerState.title : 'Workspace';
+  explorerState = { kind: 'loading', title };
   renderExplorer();
 }
 
@@ -502,7 +508,7 @@ function explorerTemplate(): TemplateResult {
     return explorerNoWorkspaceTemplate();
   if (explorerState.kind === 'loading') {
     return html`
-      ${explorerHeaderTemplate('Workspace', true)}
+      ${explorerHeaderTemplate(explorerState.title, true)}
       <p class="desktop-explorer-status">Loading workspace files...</p>
     `;
   }

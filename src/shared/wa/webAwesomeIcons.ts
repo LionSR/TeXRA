@@ -334,7 +334,7 @@ interface WaIconOptions {
 }
 
 // Lit template for <wa-icon>. Centralizes library + variant + aria-hidden so
-// callers don't repeat them. Prefer this over waIconHtml for new code.
+// callers don't repeat them.
 export function waIcon(
   name: TeXRAIconName,
   options: WaIconOptions = {},
@@ -347,17 +347,4 @@ export function waIcon(
     class=${ifDefined(options.className)}
     aria-hidden="true"
   ></wa-icon>`;
-}
-
-// Inline <wa-icon> string for innerHTML / template strings. Use only where
-// a Lit template isn't viable. Safe for static `name` literals only — `name`
-// is not escaped because callers must pass typed TeXRAIconName values.
-export function waIconHtml(
-  name: TeXRAIconName,
-  options: WaIconOptions = {},
-): string {
-  const slot = options.slot ? ` slot="${options.slot}"` : '';
-  const cls = options.className ? ` class="${options.className}"` : '';
-  const variant = options.variant ?? 'solid';
-  return `<wa-icon library="${TEXRA_ICON_LIBRARY}" name="${name}" variant="${variant}"${slot}${cls} aria-hidden="true"></wa-icon>`;
 }
