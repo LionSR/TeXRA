@@ -13,6 +13,10 @@ concurrency:
 
 jobs:
   tend:
+    # Repository variable kill switch:
+    #   ISSUE_TREE_ENABLED=false disables scheduled issue-tree maintenance.
+    #   unset or any other value preserves the default enabled behavior.
+    if: vars.ISSUE_TREE_ENABLED != 'false'
     runs-on: ubuntu-latest
     env:
       CLAUDE_CODE_PROVIDER: ${{ vars.CLAUDE_CODE_PROVIDER || 'anthropic' }}

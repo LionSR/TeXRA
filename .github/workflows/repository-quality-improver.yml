@@ -13,6 +13,10 @@ concurrency:
 
 jobs:
   scan:
+    # Repository variable kill switch:
+    #   REPOSITORY_QUALITY_IMPROVER_ENABLED=false disables scheduled quality scans.
+    #   unset or any other value preserves the default enabled behavior.
+    if: vars.REPOSITORY_QUALITY_IMPROVER_ENABLED != 'false'
     runs-on: ubuntu-latest
     env:
       CLAUDE_CODE_PROVIDER: ${{ vars.CLAUDE_CODE_PROVIDER || 'anthropic' }}

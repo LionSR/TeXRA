@@ -23,15 +23,21 @@ jobs:
     # Skip automated review summaries: the Claude action cannot exchange their
     # OIDC token for a repo-writing app token, and Playbook C has no useful
     # tracking action for bot-submitted review events.
+    # Repository variable kill switch:
+    #   ISSUE_TRACKER_ENABLED=false disables tracking issue updates.
+    #   unset or any other value preserves the default enabled behavior.
     if: |
-      (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
-      (github.event_name == 'pull_request' &&
-       (github.event.action == 'opened' ||
-        (github.event.action == 'closed' && github.event.pull_request.merged == true))) ||
-      (github.event_name == 'pull_request_review' &&
-       github.event.review.user.type != 'Bot' &&
-       !endsWith(github.event.review.user.login, '[bot]') &&
-       github.actor != 'Copilot')
+      vars.ISSUE_TRACKER_ENABLED != 'false' &&
+      (
+        (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
+        (github.event_name == 'pull_request' &&
+         (github.event.action == 'opened' ||
+          (github.event.action == 'closed' && github.event.pull_request.merged == true))) ||
+        (github.event_name == 'pull_request_review' &&
+         github.event.review.user.type != 'Bot' &&
+         !endsWith(github.event.review.user.login, '[bot]') &&
+         github.actor != 'Copilot')
+      )
     runs-on: ubuntu-latest
     env:
       CLAUDE_CODE_PROVIDER: ${{ vars.CLAUDE_CODE_PROVIDER || 'anthropic' }}
