@@ -12,7 +12,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of Concerns: VS Code Cou
 - **`vscode.FileType.File` / `.Directory`** → `isFile()` / `isDirectory()` from `@common/files/fsEntryType`.
 - **`vscode.window.show*Message()` in business logic** → return error results; let the command/frontend layer handle UI.
 - **`process.env`, `os.homedir()`, raw `fs/promises`, `child_process.exec`** in agnostic zones → platform interfaces or `executeCommand` from `@utils/system/execUtils`.
-- **`initPlatform()`** called outside the host entry point (`src/extension.ts`) → bug. Read access uses `platform()`; module-init facades use `tryPlatform()`.
+- **`initPlatform()`** called outside the host entry point (`packages/extension/src/extension.ts`) → bug. Read access uses `platform()`; module-init facades use `tryPlatform()`.
 
 ## 2. Zod v4 schema correctness
 
