@@ -1,6 +1,7 @@
 // Node imports
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -16,6 +17,10 @@ import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 interface DesktopAppLogModule {
   installDesktopAppLog(): string | undefined;
+  readDesktopLogSnapshot(options: {
+    workspacePath?: string | undefined;
+    maxBytes?: number | undefined;
+  }): { path: string; text: string; truncated: boolean };
 }
 
 async function loadDesktopAppLogModule(): Promise<DesktopAppLogModule> {
@@ -57,5 +62,26 @@ describe('desktop app log', () => {
       'TeXRA desktop file logging is disabled.',
       expect.anything(),
     );
+  });
+
+  it('truncates viewer snapshots by bytes and redacts log paths', async () => {
+    const root = await makeTempDir('texra-electron-log-');
+    const userDataPath = join(root, 'userData');
+    const logsPath = join(userDataPath, 'logs');
+    const logPath = join(logsPath, 'texra-desktop.log');
+    await mkdir(logsPath, { recursive: true });
+    await writeFile(logPath, `${'🙂'.repeat(8)}tail`);
+    configureElectronTestStub({ userDataPath });
+    const { readDesktopLogSnapshot } = await loadDesktopAppLogModule();
+
+    const snapshot = readDesktopLogSnapshot({
+      workspacePath: root,
+      maxBytes: 12,
+    });
+
+    expect(snapshot.truncated).toBe(true);
+    expect(snapshot.text).toBe('🙂🙂tail');
+    expect(Buffer.byteLength(snapshot.text)).toBe(12);
+    expect(snapshot.path).toBe('[path]/userData/logs/texra-desktop.log');
   });
 });
