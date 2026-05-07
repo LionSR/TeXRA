@@ -9,6 +9,7 @@ export interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
   platform?: NodeJS.Platform;
+  canOpen?: () => boolean;
 }
 
 export interface DesktopCommandPaletteController {
@@ -48,6 +49,7 @@ export function createDesktopCommandPalette({
   document,
   actions,
   platform = getRendererPlatform(document.defaultView),
+  canOpen,
 }: DesktopCommandPaletteOptions): DesktopCommandPaletteController {
   const view = document.defaultView;
   const entries = getDesktopCommandMenuEntries(undefined, platform);
@@ -139,6 +141,7 @@ export function createDesktopCommandPalette({
   };
 
   const open = (): void => {
+    if (canOpen?.() === false) return;
     if (element.hidden) {
       previouslyFocusedElement = isHTMLElement(view, document.activeElement)
         ? document.activeElement
