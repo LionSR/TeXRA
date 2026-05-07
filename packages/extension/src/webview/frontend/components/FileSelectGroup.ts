@@ -9,6 +9,7 @@ import { SortableController } from '@shared/controllers';
 import { designTokens, codiconStyles } from '@shared/styles';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 import { ensureContextMenuUsesSlot } from '@shared/utils/dom';
+import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
 import { SESSION_DEFAULTS } from '../sessionDefaults';
@@ -396,19 +397,43 @@ export class FileSelectGroup extends LitElement {
       ${repeat(
         this.currentFiles,
         (file) => file,
-        (file) => html`
-          <div class="file-item" data-path=${file}>
-            <span class="file-name">${file}</span>
-            <button
-              class="remove-button codicon codicon-trash"
-              type="button"
-              aria-label="Remove file"
-              data-remove-file=${file}
-            ></button>
-          </div>
-        `,
+        (file) => {
+          const display = this.formatFilePath(file);
+          return html`
+            <div class="file-item" data-path=${file} title=${file}>
+              <span class="file-name">
+                <span class="file-name-main">${display.name}</span>
+                ${display.folder
+                  ? html`<span class="file-folder">
+                      <i class="codicon codicon-folder" aria-hidden="true"></i>
+                      ${display.folder}
+                    </span>`
+                  : nothing}
+              </span>
+              <button
+                class="remove-button codicon codicon-trash"
+                type="button"
+                aria-label="Remove file"
+                data-remove-file=${file}
+              ></button>
+            </div>
+          `;
+        },
       )}
     </div>`;
+  }
+
+  private formatFilePath(file: string): { name: string; folder: string } {
+    const normalized = normalizeFilePath(file);
+    const name = getBasename(normalized) || normalized;
+    const folder = normalized.slice(
+      0,
+      Math.max(0, normalized.length - name.length),
+    );
+    return {
+      name,
+      folder: folder.replace(/\/$/, ''),
+    };
   }
 
   override render(): TemplateResult {

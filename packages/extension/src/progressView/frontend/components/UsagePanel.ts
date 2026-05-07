@@ -171,7 +171,7 @@ export class UsagePanel extends LitElement {
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
     return html`
-      <i class="codicon codicon-meter"></i>
+      <i class="codicon codicon-pie-chart"></i>
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
         <i class="codicon codicon-arrow-up" title="Input tokens"></i

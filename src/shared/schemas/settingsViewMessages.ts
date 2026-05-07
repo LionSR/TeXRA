@@ -378,6 +378,16 @@ export type UpdateGitHubTokenStatusMessage = z.infer<
   typeof UpdateGitHubTokenStatusMessageSchema
 >;
 
+/** Outbound: backend → frontend desktop crash reporting status. */
+export const UpdateDesktopCrashReportingMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING),
+  enabled: z.boolean(),
+  configured: z.boolean(),
+});
+export type UpdateDesktopCrashReportingMessage = z.infer<
+  typeof UpdateDesktopCrashReportingMessageSchema
+>;
+
 export const PRSubscriptionOwnerSchema = z.object({
   streamId: StreamTabIdSchema,
   label: z.string(),
@@ -770,6 +780,17 @@ const RemoveGitHubTokenMessageSchema = commandOnly(CMD.REMOVE_GITHUB_TOKEN);
 
 const OpenGitHubTokenUrlMessageSchema = commandOnly(CMD.OPEN_GITHUB_TOKEN_URL);
 
+const GetDesktopCrashReportingMessageSchema = commandOnly(
+  CMD.GET_DESKTOP_CRASH_REPORTING,
+);
+const SetDesktopCrashReportingEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_DESKTOP_CRASH_REPORTING_ENABLED),
+  enabled: z.boolean(),
+});
+const SetDesktopCrashReportingDsnMessageSchema = commandOnly(
+  CMD.SET_DESKTOP_CRASH_REPORTING_DSN,
+);
+
 const GetPRSubscriptionsMessageSchema = commandOnly(CMD.GET_PR_SUBSCRIPTIONS);
 
 const UnsubscribePRMessageSchema = z.object({
@@ -947,6 +968,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetGitHubTokenMessageSchema,
     RemoveGitHubTokenMessageSchema,
     OpenGitHubTokenUrlMessageSchema,
+    GetDesktopCrashReportingMessageSchema,
+    SetDesktopCrashReportingEnabledMessageSchema,
+    SetDesktopCrashReportingDsnMessageSchema,
     GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,
