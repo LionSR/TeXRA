@@ -911,40 +911,26 @@ export class SettingsApp extends SettingsAppBase {
           >
 
           <wa-tab-panel name="memory">
-            ${desktopHost
-              ? this.renderDesktopUnavailablePanel(
-                  'Memory is not available in desktop yet',
-                  'Memory files and pinning are currently managed by the VS Code extension.',
-                )
-              : html`
-                  <memory-tab
-                    .items=${this.memoryItems.get()}
-                    .enabled=${this.memoryEnabled.get()}
-                    .toggleDisabled=${this.memoryToggleDisabled.get()}
-                    @memory-refresh=${this.handleMemoryRefresh}
-                    @memory-open-folder=${this.handleMemoryOpenFolder}
-                    @memory-toggle-enabled=${this.handleMemoryToggleEnabled}
-                    @memory-open-item=${this.handleMemoryOpenItem}
-                    @memory-delete-item=${this.handleMemoryDeleteItem}
-                    @memory-pin-item=${this.handleMemoryPinItem}
-                    @memory-unpin-item=${this.handleMemoryUnpinItem}
-                  ></memory-tab>
-                `}
+            <memory-tab
+              .items=${this.memoryItems.get()}
+              .enabled=${this.memoryEnabled.get()}
+              .toggleDisabled=${this.memoryToggleDisabled.get()}
+              @memory-refresh=${this.handleMemoryRefresh}
+              @memory-open-folder=${this.handleMemoryOpenFolder}
+              @memory-toggle-enabled=${this.handleMemoryToggleEnabled}
+              @memory-open-item=${this.handleMemoryOpenItem}
+              @memory-delete-item=${this.handleMemoryDeleteItem}
+              @memory-pin-item=${this.handleMemoryPinItem}
+              @memory-unpin-item=${this.handleMemoryUnpinItem}
+            ></memory-tab>
           </wa-tab-panel>
 
           <wa-tab-panel name="history">
-            ${desktopHost
-              ? this.renderDesktopUnavailablePanel(
-                  'History is not available in desktop yet',
-                  'Desktop agent run history is not connected to the shared settings history controls.',
-                )
-              : html`
-                  <history-tab
-                    .items=${this.historyItems.get()}
-                    @history-action=${this.handleHistoryAction}
-                    @history-clear=${this.handleClearHistory}
-                  ></history-tab>
-                `}
+            <history-tab
+              .items=${this.historyItems.get()}
+              @history-action=${this.handleHistoryAction}
+              @history-clear=${this.handleClearHistory}
+            ></history-tab>
           </wa-tab-panel>
 
           <wa-tab-panel name="models">
