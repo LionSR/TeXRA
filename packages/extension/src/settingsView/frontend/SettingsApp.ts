@@ -267,6 +267,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly latexSettingsLoaded = signal(false);
   private readonly latexConfigValues = signal<LatexConfigValues>({});
   private readonly latexConfigValuesLoaded = signal(false);
+  private readonly inlineCriticismEnabled = signal(false);
 
   private getMessageHandlerContext(): SettingsMessageHandlerContext {
     return {
@@ -316,6 +317,7 @@ export class SettingsApp extends SettingsAppBase {
       latexSettingsLoaded: this.latexSettingsLoaded,
       latexConfigValues: this.latexConfigValues,
       latexConfigValuesLoaded: this.latexConfigValuesLoaded,
+      inlineCriticismEnabled: this.inlineCriticismEnabled,
       clearHistorySearch: () => this.historyTab?.clearSearch(),
       logSchemaError: (message, error) => this.logSchemaError(message, error),
     };
@@ -675,6 +677,10 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleSetLatexConfigValue = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
+  );
+
+  private handleSetInlineCriticismEnabled = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_INLINE_CRITICISM_ENABLED,
   );
 
   private handleRunInstallCommand = forwardDetail(
@@ -1062,11 +1068,13 @@ export class SettingsApp extends SettingsAppBase {
               .loaded=${this.latexSettingsLoaded.get()}
               .configValues=${this.latexConfigValues.get()}
               .configLoaded=${this.latexConfigValuesLoaded.get()}
+              .inlineCriticismEnabled=${this.inlineCriticismEnabled.get()}
               .desktopHost=${desktopHost}
               @latex-apply-settings=${this.handleApplyLatexSettings}
               @latex-install-workshop=${this.handleInstallLatexWorkshop}
               @latex-run-install-command=${this.handleRunInstallCommand}
               @latex-set-config-value=${this.handleSetLatexConfigValue}
+              @inline-criticism-toggle=${this.handleSetInlineCriticismEnabled}
             ></latex-tab>
           </wa-tab-panel>
         </wa-tab-group>

@@ -61,6 +61,10 @@ import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgent
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
 import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import { getLinterMessages } from '@frontend/latex/linter';
+import {
+  pushManualCriticism,
+  registerInlineCriticism,
+} from '@frontend/latex/inlineCriticism';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
 import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
@@ -82,6 +86,7 @@ import {
   issuePollingSource,
 } from '@tools/github';
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
+import { setAddCriticismSink } from '@tools/AddCriticismTool';
 import { setLinterProvider } from '@tools/DiagnosticsTool';
 import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
@@ -458,6 +463,17 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push({ dispose: disposeGitHubAuthListener });
   setLinterProvider(getLinterMessages);
   setOpenBuildDisplay(openBuildDisplayIfTex);
+  registerInlineCriticism(context);
+  setAddCriticismSink((payload) => {
+    const accepted = pushManualCriticism({
+      absolutePath: payload.absolutePath,
+      line: payload.line,
+      message: payload.message,
+      severity: payload.severity,
+      confidence: payload.confidence,
+    });
+    return { accepted, resolvedPath: payload.absolutePath };
+  });
   applyGitAuthorConfig();
 
   setToolNotificationHandler((message, actionCommand, actionLabel) => {
