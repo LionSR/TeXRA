@@ -743,6 +743,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.clearPendingBackgroundResponse();
         throw err;
       }
+      tagOpenAISdkError(err, this.config.provider);
       // Transient failures (no status / 5xx / 429 / 408) — the background
       // response is likely still alive server-side, so retain the ID and
       // rethrow so the outer retry resumes the same ID. Definitive failures
@@ -1798,6 +1799,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           maxOutputTokens = validation.adjustedMaxTokens;
         }
       } catch (err) {
+        tagOpenAISdkError(err, this.config.provider);
         if (isContextWindowError(err)) throw err;
         this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Applying fallback cap.`,

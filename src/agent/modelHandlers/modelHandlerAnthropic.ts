@@ -782,6 +782,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             }
           }
         } catch (err) {
+          tagAnthropicSdkError(err, this.config.provider);
           // Re-throw context window violations - these are intentional validation errors
           // that should fail fast, not be swallowed by soft failure
           if (isContextWindowError(err)) {

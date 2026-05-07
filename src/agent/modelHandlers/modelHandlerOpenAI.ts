@@ -737,6 +737,7 @@ export class ModelHandlerOpenAI<
           }
         }
       } catch (err) {
+        tagOpenAISdkError(err, this.config.provider);
         if (isContextWindowError(err)) throw err;
         this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
