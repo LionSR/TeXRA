@@ -340,9 +340,6 @@ function detectStatusText(
 }
 
 function detectProvider(err: unknown): string | undefined {
-  const metadata = detectSdkErrorMetadata(err);
-  if (metadata) return metadata.provider;
-
   if (!isObject(err)) {
     return undefined;
   }
