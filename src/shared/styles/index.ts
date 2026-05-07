@@ -12,6 +12,7 @@ export { selectStyles } from './selectStyles';
 export { statusIndicatorStyles } from './statusIndicatorStyles';
 export { permissionCardStyles } from './permissionCardStyles';
 export { requestPanelStyles } from './requestPanelStyles';
+export { viewTabStyles, waTabThemeTokenStyles } from './viewTabStyles';
 
 // Badge styles (combined array used by multiple views)
 export { badgeStyles, tintedBadgeStyles } from './badgeStyles';

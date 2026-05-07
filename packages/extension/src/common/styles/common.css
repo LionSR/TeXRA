@@ -51,8 +51,16 @@
   --texra-editor-findMatchHighlightForeground: var(
     --vscode-editor-findMatchHighlightForeground
   );
-  --texra-editor-font-family: var(--vscode-editor-font-family);
-  --texra-editor-font-size: var(--vscode-editor-font-size);
+  --texra-editor-font-family: var(
+    --vscode-editor-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace
+  );
+  --texra-editor-font-size: var(--vscode-editor-font-size, 13px);
   --texra-editor-foreground: var(--vscode-editor-foreground);
   --texra-editor-inactiveSelectionBackground: var(
     --vscode-editor-inactiveSelectionBackground
@@ -83,9 +91,15 @@
   --texra-editorWidget-border: var(--vscode-editorWidget-border);
   --texra-errorForeground: var(--vscode-errorForeground);
   --texra-focusBorder: var(--vscode-focusBorder);
-  --texra-font-family: var(--vscode-font-family);
-  --texra-font-size: var(--vscode-font-size);
-  --texra-font-weight: var(--vscode-font-weight);
+  --texra-font-family: var(
+    --vscode-font-family,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif
+  );
+  --texra-font-size: var(--vscode-font-size, 13px);
+  --texra-font-weight: var(--vscode-font-weight, 400);
   --texra-foreground: var(--vscode-foreground);
   --texra-gitDecoration-addedResourceForeground: var(
     --vscode-gitDecoration-addedResourceForeground
@@ -203,29 +217,30 @@
 /*
  * Web Awesome design-token bridge.
  *
- * WA components read --wa-*. The host (VS Code webview) supplies --vscode-*.
- * This block links the two so --vscode-* is the only host token the rest of
- * the codebase ever sees through this adapter.
+ * WA components read --wa-*. The host (VS Code webview) supplies --vscode-*,
+ * which is normalized once into --texra-* above. This block keeps Web Awesome
+ * dependent on that TeXRA token contract rather than reading host tokens
+ * directly.
  */
 :root {
-  --wa-font-family-body: var(--vscode-font-family);
-  --wa-font-family-heading: var(--vscode-font-family);
-  --wa-font-size-m: var(--vscode-font-size);
-  --wa-font-weight-normal: var(--vscode-font-weight);
+  --wa-font-family-body: var(--texra-font-family);
+  --wa-font-family-heading: var(--texra-font-family);
+  --wa-font-size-m: var(--texra-font-size);
+  --wa-font-weight-normal: var(--texra-font-weight);
 
-  --wa-color-text-normal: var(--vscode-foreground);
-  --wa-color-text-quiet: var(--vscode-descriptionForeground);
-  --wa-color-text-link: var(--vscode-textLink-foreground);
-  --wa-color-surface-default: var(--vscode-editor-background);
-  --wa-color-surface-raised: var(--vscode-editorWidget-background);
-  --wa-color-surface-lowered: var(--vscode-sideBar-background);
-  --wa-color-surface-border: var(--vscode-panel-border);
+  --wa-color-text-normal: var(--texra-foreground);
+  --wa-color-text-quiet: var(--texra-descriptionForeground);
+  --wa-color-text-link: var(--texra-textLink-foreground);
+  --wa-color-surface-default: var(--texra-editor-background);
+  --wa-color-surface-raised: var(--texra-editorWidget-background);
+  --wa-color-surface-lowered: var(--texra-sideBar-background);
+  --wa-color-surface-border: var(--texra-panel-border);
 
-  --wa-color-focus: var(--vscode-focusBorder);
+  --wa-color-focus: var(--texra-focusBorder);
 
-  --wa-color-brand-fill-loud: var(--vscode-button-background);
-  --wa-color-brand-on-loud: var(--vscode-button-foreground);
-  --wa-color-brand-border-loud: var(--vscode-button-border);
+  --wa-color-brand-fill-loud: var(--texra-button-background);
+  --wa-color-brand-on-loud: var(--texra-button-foreground);
+  --wa-color-brand-border-loud: var(--texra-button-border);
 }
 
 body {
