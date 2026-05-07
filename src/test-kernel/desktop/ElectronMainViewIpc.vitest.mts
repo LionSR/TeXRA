@@ -28,6 +28,10 @@ interface MainViewIpcModule {
       fileSelection?: { handleMessage(message: { command: string }): boolean };
       settings?: { handleMessage(message: { command: string }): boolean };
       progress?: { handleMessage(message: { command: string }): boolean };
+      loadStartupOptions?: () => Promise<{
+        modelOptions: unknown[];
+        agentOptions: { workflow?: unknown[]; toolUse?: unknown[] };
+      }>;
       getAuthStatus?: () => Promise<{ authenticated: boolean }>;
       executeAgent?: (message: unknown) => Promise<void>;
       onAsyncError?: (error: unknown) => void;
@@ -83,8 +87,6 @@ function flushAsyncWork(): Promise<void> {
 describe('desktop main-view IPC', () => {
   afterEach(() => {
     vi.doUnmock('electron');
-    vi.doUnmock('@agent/index/agentRegistry');
-    vi.doUnmock('@model/modelOptionsBasic');
   });
 
   it('pushes theme and debug state over the fixed host bridge channel', async () => {
@@ -398,15 +400,6 @@ describe('desktop main-view IPC', () => {
       on: vi.fn(),
       off: vi.fn(),
     };
-    vi.doMock('@agent/index/agentRegistry', () => ({
-      computeAgentOptionsData: vi.fn(async () => ({
-        workflow: [],
-        toolUse: [],
-      })),
-    }));
-    vi.doMock('@model/modelOptionsBasic', () => ({
-      buildBasicModelOptionsData: vi.fn(() => []),
-    }));
     const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
       await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
     const sends: Array<{ channel: string; message: unknown }> = [];
@@ -421,6 +414,10 @@ describe('desktop main-view IPC', () => {
     };
 
     installDesktopMainViewIpc(window, {
+      loadStartupOptions: async () => ({
+        modelOptions: [],
+        agentOptions: { workflow: [], toolUse: [] },
+      }),
       getAuthStatus: async () => ({ authenticated: true }),
     });
     rendererListener?.(
