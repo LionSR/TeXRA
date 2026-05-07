@@ -115,6 +115,7 @@ function toFileLocation(filePath: string): FileLocation {
 
 export class DesktopProgressBridge {
   private readonly streamLogs = new StreamLogStore();
+  private readonly logger = new AgentLogger('DesktopProgressBridge');
   private readonly workflowFileActions: ProgressWorkflowFileActionsController;
   private readonly cursors = new Map<StreamTabId, number>();
   private readonly taskStates = new Map<StreamTabId, TaskState>();
@@ -170,6 +171,11 @@ export class DesktopProgressBridge {
         readFile: (file) => readFile(file, 'utf8'),
         showInfo: (message) => this.showInfoMessage(message),
         showError: (message) => this.showErrorMessage(message),
+        logError: (message, error) => {
+          this.logger.error(message, {
+            data: error instanceof Error ? error : { error },
+          });
+        },
       },
       sendFollowUp: async (stream, text) => {
         await this.sendFollowUp(stream, text);
@@ -963,7 +969,7 @@ export class DesktopProgressBridge {
     const editedLocation = pathToLocation(editedFile);
     const { targetLocation, targetFileName, isNewFile } = getAcceptedFileTarget(
       baseLocation,
-      editedFile,
+      editedLocation.absolutePath,
     );
     const targetExists =
       isNewFile && (await fileExists(targetLocation.absolutePath));
