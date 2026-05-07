@@ -247,7 +247,7 @@ export class ProgressApp extends ProgressAppBase {
 
       .desktop-empty-progress h1 {
         margin: var(--spacing-small) 0 0;
-        color: var(--texra-foreground, var(--color-text-primary));
+        color: var(--texra-foreground);
         font-size: 24px;
         font-weight: 600;
         letter-spacing: 0;
