@@ -3,6 +3,7 @@ import * as path from 'path';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { hasLatexCompiler } from '@latex/latexToolchain';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
@@ -17,7 +18,6 @@ import {
   pathToLocation,
   type TaskRunFileService,
 } from '@utils/files';
-import { checkToolInstalled } from '@utils/system';
 
 import { getOutputFilesByRound, type OutputState } from './outputState';
 
@@ -81,10 +81,7 @@ export async function runCompileCheck(
   // Skip gracefully when no LaTeX toolchain is installed so the run doesn't
   // leave stray `compile/<name>.log` artifacts that the orchestrator would
   // misread as real compile failures.
-  const hasToolchain =
-    (await checkToolInstalled('latexmk', false)) ||
-    (await checkToolInstalled('pdflatex', false));
-  if (!hasToolchain) {
+  if (!(await hasLatexCompiler())) {
     ctx.logger.debug(
       'Compile check skipped: neither latexmk nor pdflatex is installed',
     );
