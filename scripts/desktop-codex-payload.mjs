@@ -3,8 +3,8 @@ import { join, relative } from 'node:path';
 
 const MEBIBYTE = 1024 * 1024;
 
-export const CODEX_SINGLE_PLATFORM_PAYLOAD_BUDGET_BYTES = 325 * MEBIBYTE;
-export const CODEX_UNIVERSAL_PAYLOAD_BUDGET_BYTES = 625 * MEBIBYTE;
+const CODEX_SINGLE_PLATFORM_PAYLOAD_BUDGET_BYTES = 325 * MEBIBYTE;
+const CODEX_UNIVERSAL_PAYLOAD_BUDGET_BYTES = 625 * MEBIBYTE;
 
 export const codexPlatformInfoByKey = {
   'linux-x64': {
@@ -285,33 +285,33 @@ function normalizePlatform(platform, normalizedPath) {
 function hasPathToken(normalizedPath, ...tokens) {
   return normalizedPath
     .split('/')
-    .some((segment) =>
-      tokens.some((token) =>
-        new RegExp(`(^|[-_])${token}($|[-_])`).test(segment),
-      ),
-    );
+    .some((segment) => hasSegmentToken(segment, ...tokens));
+}
+
+function hasSegmentToken(segment, ...tokens) {
+  return tokens.some((token) =>
+    new RegExp(`(^|[-_])${token}($|[-_])`).test(segment),
+  );
+}
+
+function archFromPathToken(normalizedPath) {
+  const segments = normalizedPath.split('/').reverse();
+  for (const segment of segments) {
+    if (hasSegmentToken(segment, 'universal')) return 'universal';
+    if (hasSegmentToken(segment, 'arm64', 'aarch64')) return 'arm64';
+    if (hasSegmentToken(segment, 'x64', 'x86_64', 'amd64')) return 'x64';
+  }
+  return null;
 }
 
 function normalizeArch(arch, normalizedPath, normalizedPlatform) {
   const archName = archNameByElectronBuilderArch[arch] ?? arch;
-  if (archName === 'universal' || normalizedPath.includes('universal')) {
-    return 'universal';
-  }
-  if (
-    archName === 'arm64' ||
-    normalizedPath.includes('arm64') ||
-    normalizedPath.includes('aarch64')
-  ) {
-    return 'arm64';
-  }
-  if (
-    archName === 'x64' ||
-    normalizedPath.includes('x64') ||
-    normalizedPath.includes('x86_64') ||
-    normalizedPath.includes('amd64')
-  ) {
-    return 'x64';
-  }
+  if (archName === 'universal') return 'universal';
+  if (archName === 'arm64') return 'arm64';
+  if (archName === 'x64') return 'x64';
+
+  const pathArch = archFromPathToken(normalizedPath);
+  if (pathArch != null) return pathArch;
 
   if (
     normalizedPlatform != null &&

@@ -99,6 +99,44 @@ describe('desktop Codex package payload', () => {
     ).toEqual(['darwin-arm64']);
   });
 
+  it('infers architecture from path tokens nearest the app bundle', async () => {
+    const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
+      inferCodexPlatformKeys: (input: { appPath: string }) => string[];
+    };
+
+    expect(
+      inferCodexPlatformKeys({
+        appPath: '/tmp/arm64-compat-lib/dist/mac-x64/TeXRA.app',
+      }),
+    ).toEqual(['darwin-x64']);
+    expect(
+      inferCodexPlatformKeys({
+        appPath: '/tmp/universal-cache/dist/mac-arm64/TeXRA.app',
+      }),
+    ).toEqual(['darwin-arm64']);
+  });
+
+  it('uses the universal Codex payload budget only for universal builds', async () => {
+    const { expectedCodexPayloadBudgetBytes, inferCodexPlatformKeys } =
+      (await import(payloadUrl)) as {
+        expectedCodexPayloadBudgetBytes: (platformKeys: string[]) => number;
+        inferCodexPlatformKeys: (input: { appPath: string }) => string[];
+      };
+
+    const singlePlatformBudget = expectedCodexPayloadBudgetBytes(
+      inferCodexPlatformKeys({
+        appPath: '/tmp/universal-cache/dist/mac-arm64/TeXRA.app',
+      }),
+    );
+    const universalBudget = expectedCodexPayloadBudgetBytes(
+      inferCodexPlatformKeys({
+        appPath: '/tmp/dist/mac-universal/TeXRA.app',
+      }),
+    );
+
+    expect(universalBudget).toBeGreaterThan(singlePlatformBudget);
+  });
+
   it('resolves relative metafile imports from the importing output directory', () => {
     const { packageRoot } = createFakeDesktopPackage(['darwin-arm64'], {
       startupImportPath: './bootstrap.js',
