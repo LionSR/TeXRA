@@ -75,6 +75,7 @@ export interface RunToolUseFlowResult {
 export interface ToolUseFlowContext {
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: ToolUseServices['modelHandler'];
+  readonly runtimeHost: ToolUseServices['runtimeHost'];
   interrupt(): void;
 }
 
@@ -176,6 +177,7 @@ export async function runToolUseFlow<C = unknown>(
   const flowContext: ToolUseFlowContext = {
     session: sessionLifecycle,
     modelHandler: input.modelHandler,
+    runtimeHost,
     interrupt(): void {
       onInterrupt?.();
       retryCoordinator.clearRequest(streamId);
