@@ -337,14 +337,9 @@ export class ToolsTab extends LitElement {
     this.emitSelect('codex-approval-policy-change', 'policy', e);
   };
 
-  private handleDesktopCrashReportingToggle(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
-    this.dispatchEvent(
-      createEvent('desktop-crash-reporting-toggle', {
-        enabled: Boolean(target?.checked),
-      }),
-    );
-  }
+  private handleDesktopCrashReportingToggle = (e: Event): void => {
+    this.emitToggle('desktop-crash-reporting-toggle', e);
+  };
 
   private handleSetDesktopCrashReportingDsn(): void {
     this.dispatchEvent(createEvent('desktop-crash-reporting-dsn-set', {}));
