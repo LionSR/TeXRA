@@ -8,7 +8,8 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, designTokens } from '@shared/styles';
+import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - shared constants
 import {
@@ -59,7 +60,12 @@ function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
 
 @customElement('model-selection-list')
 export class ModelSelectionList extends LitElement {
-  static override styles = [designTokens, codiconStyles, profileViewStyles];
+  static override styles = [
+    designTokens,
+    codiconStyles,
+    commonViewStyles,
+    profileViewStyles,
+  ];
 
   @property({ attribute: false }) models: ModelSelectionItem[] = [];
   @property({ attribute: false }) helperModel = '';
@@ -269,30 +275,26 @@ export class ModelSelectionList extends LitElement {
             class="provider-group-key-status key-status-badge ${keyStatus.status}"
             >${keyStatusLabel}</span
           >
-          <button
-            class="provider-group-key-button"
-            type="button"
-            title="Set ${group.displayName} API key"
-            @click=${() =>
+          ${renderLabeledActionButton({
+            icon: 'key',
+            text: 'Set key',
+            label: `Set ${group.displayName} API key`,
+            className: 'provider-group-key-button',
+            onClick: () =>
               this.dispatchEvent(
                 ProviderKeyEvents.setKey({ provider: group.provider }),
-              )}
-          >
-            <span class="codicon codicon-key"></span>
-            Set key
-          </button>
-          <button
-            class="provider-group-key-button"
-            type="button"
-            title="Get ${group.displayName} API key"
-            @click=${() =>
+              ),
+          })}
+          ${renderLabeledActionButton({
+            icon: 'arrow-up-right-from-square',
+            text: 'Get key',
+            label: `Get ${group.displayName} API key`,
+            className: 'provider-group-key-button',
+            onClick: () =>
               this.dispatchEvent(
                 ProviderKeyEvents.openKeyUrl({ provider: group.provider }),
-              )}
-          >
-            <span class="codicon codicon-link-external"></span>
-            Get key
-          </button>
+              ),
+          })}
         `
       : nothing;
 
