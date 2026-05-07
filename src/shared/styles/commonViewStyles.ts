@@ -90,6 +90,14 @@ export const commonViewStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
+  .action-button::part(base) {
+    gap: var(--spacing-small);
+  }
+
+  .action-button wa-icon {
+    font-size: var(--font-size-sm);
+  }
+
   .action-icon-button::part(base) {
     width: var(--height-button);
     min-width: var(--height-button);
