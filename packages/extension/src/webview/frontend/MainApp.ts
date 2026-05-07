@@ -10,7 +10,12 @@ import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import { PersistedState, createWebviewStorage } from '@shared/state';
-import { designTokens, commonViewStyles, codiconStyles } from '@shared/styles';
+import {
+  designTokens,
+  commonViewStyles,
+  codiconStyles,
+  viewTabStyles,
+} from '@shared/styles';
 import {
   mainViewMessages,
   MainViewPersistedStateSchema,
@@ -54,6 +59,8 @@ import {
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { agentName } from '@shared/schemas/agent';
 import { capitalize } from '@shared/utils/string';
+import '@shared/wa/tabs';
+import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
 import './components/FileSelectGroup';
 import './components/BannerGroup';
@@ -99,7 +106,6 @@ import {
   FILE_SELECT_CONFIGS,
 } from './store';
 import { mainViewStyles } from './styles';
-import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
 registerTeXRAWebAwesomeIcons();
 
@@ -143,6 +149,7 @@ export class MainApp extends MainAppBase {
     designTokens,
     commonViewStyles,
     codiconStyles,
+    viewTabStyles,
     mainViewStyles,
   ];
 
@@ -1842,17 +1849,13 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS);
   }
 
-  private onViewTabSelect = (event: VscTabsSelectEvent): void => {
-    const view = event.detail.selectedIndex === 0 ? 'main' : 'progress';
-    if (view === 'progress') {
-      postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
-      const tabs = event.currentTarget as { selectedIndex?: number };
-      requestAnimationFrame(() => {
-        tabs.selectedIndex = 0;
-      });
-      return;
-    }
-    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
+  private onViewTabShow = (event: WaTabShowEvent): void => {
+    if (event.detail.name !== 'progress') return;
+    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'progress' });
+    const tabs = event.currentTarget as MutableWaTabGroup;
+    requestAnimationFrame(() => {
+      tabs.active = 'launcher';
+    });
   };
 
   private onOpenDashboard = (): void => {
@@ -1914,27 +1917,31 @@ export class MainApp extends MainAppBase {
     return html`
       <div class="content-wrapper">
         <div class="view-header">
-          <vscode-tabs
-            .selectedIndex=${0}
-            @vsc-tabs-select=${this.onViewTabSelect}
+          <wa-tab-group
+            class="view-tabs"
+            active="launcher"
+            without-scroll-controls
+            @wa-tab-show=${this.onViewTabShow}
           >
-            <vscode-tab-header slot="header">
+            <wa-tab panel="launcher">
               <wa-icon
                 library=${TEXRA_ICON_LIBRARY}
                 name="pencil"
                 variant="solid"
               ></wa-icon>
               Launcher
-            </vscode-tab-header>
-            <vscode-tab-header slot="header">
+            </wa-tab>
+            <wa-tab panel="progress">
               <wa-icon
                 library=${TEXRA_ICON_LIBRARY}
                 name="robot"
                 variant="solid"
               ></wa-icon>
               Progress
-            </vscode-tab-header>
-          </vscode-tabs>
+            </wa-tab>
+            <wa-tab-panel name="launcher"></wa-tab-panel>
+            <wa-tab-panel name="progress"></wa-tab-panel>
+          </wa-tab-group>
           <wa-button
             class="header-action"
             aria-label="Open dashboard"
