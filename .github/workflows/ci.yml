@@ -344,6 +344,7 @@ jobs:
             "$version" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
             > "$notes_file"
 
+          shopt -s nullglob
           assets=(artifacts/desktop-release/*)
           if [ "${#assets[@]}" -eq 0 ]; then
             echo 'No downloaded desktop release assets found.'

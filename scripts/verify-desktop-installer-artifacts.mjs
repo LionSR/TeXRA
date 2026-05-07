@@ -94,7 +94,7 @@ try {
 
 function getTopLevelYamlBlock(source, key) {
   const lines = source.split(/\r?\n/);
-  const startIndex = lines.findIndex((line) => line.trim() === `${key}:`);
+  const startIndex = lines.findIndex((line) => line.startsWith(`${key}:`));
   if (startIndex === -1) return '';
 
   const block = [];
