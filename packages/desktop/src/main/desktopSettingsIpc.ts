@@ -84,6 +84,7 @@ import {
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import {
+  type DesktopCrashReportingStatus,
   getDesktopCrashReportingStatus,
   setDesktopCrashReportingDsn,
   setDesktopCrashReportingEnabled,
@@ -480,17 +481,26 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  async function postDesktopCrashReportingStatus(): Promise<void> {
+  function postDesktopCrashReportingStatusMessage(
+    status: DesktopCrashReportingStatus,
+  ): void {
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
-      ...(await getDesktopCrashReportingStatus(globalState, secrets)),
+      ...status,
     });
   }
 
-  async function initializeConfiguredDesktopCrashReporting(): Promise<void> {
+  async function postDesktopCrashReportingStatus(): Promise<void> {
     const status = await getDesktopCrashReportingStatus(globalState, secrets);
-    if (!status.enabled || !status.configured) return;
-    await options.initializeCrashReporting?.();
+    postDesktopCrashReportingStatusMessage(status);
+  }
+
+  async function finishDesktopCrashReportingSettingsChange(): Promise<void> {
+    const status = await getDesktopCrashReportingStatus(globalState, secrets);
+    if (status.enabled && status.configured) {
+      await options.initializeCrashReporting?.();
+    }
+    postDesktopCrashReportingStatusMessage(status);
   }
 
   function postSuperYoloEnabled(): void {
@@ -729,8 +739,7 @@ export function createDesktopSettingsIpc(
     enabled: boolean,
   ): Promise<void> {
     await setDesktopCrashReportingEnabled(globalState, enabled);
-    await initializeConfiguredDesktopCrashReporting();
-    await postDesktopCrashReportingStatus();
+    await finishDesktopCrashReportingSettingsChange();
   }
 
   async function updateDesktopCrashReportingDsn(): Promise<void> {
@@ -740,8 +749,7 @@ export function createDesktopSettingsIpc(
     });
     if (dsn == null) return;
     await setDesktopCrashReportingDsn(secrets, dsn);
-    await initializeConfiguredDesktopCrashReporting();
-    await postDesktopCrashReportingStatus();
+    await finishDesktopCrashReportingSettingsChange();
   }
 
   async function refreshAuthDependentData(): Promise<void> {
