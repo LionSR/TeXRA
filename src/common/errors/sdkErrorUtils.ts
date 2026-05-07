@@ -232,35 +232,70 @@ function detectProvider(err: unknown): string | undefined {
     return undefined;
   }
 
-  const candidate = err as { provider?: string; stack?: string };
+  const candidate = err as { provider?: string; headers?: HeaderBag } & {
+    constructor?: { name?: string };
+    stack?: string;
+  };
 
   if (isString(candidate.provider)) {
     return candidate.provider;
   }
 
-  const providerFromClassNames = detectProviderFromClassNames(
+  const classNameProvider = detectProviderFromClassNames(
     getErrorClassNames(err),
   );
-  if (providerFromClassNames) return providerFromClassNames;
+  if (classNameProvider) return classNameProvider;
 
-  return detectProviderFromText(candidate.stack ?? '');
+  const providerFromStack = detectProviderFromText(candidate.stack ?? '');
+  if (providerFromStack) {
+    return providerFromStack;
+  }
+
+  return detectProviderFromHeaders(candidate.headers);
 }
 
 function detectProviderFromClassNames(
-  classNames: readonly string[],
+  classNames: readonly (string | undefined)[],
 ): string | undefined {
-  // Match SDK class-name fragments, then normalize aliases to the
-  // canonical API-provider names used by SecretManager / model handlers.
-  // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
-  // (class name contains "kimi") maps to "moonshot".
-  const loweredClassNames = classNames.map((className) =>
-    className.toLowerCase(),
-  );
-  const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find((p) =>
-    loweredClassNames.some((className) => className.includes(p)),
+  // Match SDK class-name fragments, then normalize aliases to the canonical
+  // API-provider names used by SecretManager / model handlers. This also covers
+  // no-response connection errors whose provider only appears on a base SDK
+  // class such as OpenAIError or AnthropicError.
+  const names = classNames
+    .filter((name): name is string => isString(name) && name.length > 0)
+    .map((name) => name.toLowerCase());
+  const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
+    (provider) => names.some((name) => name.includes(provider)),
   );
   if (match === 'kimi') return 'moonshot';
   return match;
+}
+
+type HeaderBag =
+  | {
+      get?: (key: string) => string | null;
+    }
+  | Record<string, unknown>;
+type HeaderDetectedProvider = 'anthropic';
+
+function getHeaderValue(
+  headers: HeaderBag | undefined,
+  name: string,
+): string | undefined {
+  const maybeGet = isObject(headers) ? headers.get : undefined;
+  const direct =
+    typeof maybeGet === 'function' ? maybeGet.call(headers, name) : undefined;
+  if (isString(direct) && direct) return direct;
+
+  const indexed = (headers as Record<string, unknown> | undefined)?.[name];
+  return isString(indexed) && indexed ? indexed : undefined;
+}
+
+function detectProviderFromHeaders(
+  headers: HeaderBag | undefined,
+): HeaderDetectedProvider | undefined {
+  if (getHeaderValue(headers, 'request-id')) return 'anthropic';
+  return undefined;
 }
 
 function detectProviderFromText(text: string): string | undefined {
@@ -280,10 +315,12 @@ function detectRequestId(err: unknown): string | undefined {
   const candidate = err as {
     request_id?: string;
     requestId?: string;
-    headers?: { get?: (key: string) => string | null };
+    requestID?: string;
+    headers?: HeaderBag;
   };
 
-  const directId = candidate.request_id ?? candidate.requestId;
+  const directId =
+    candidate.request_id ?? candidate.requestId ?? candidate.requestID;
   if (isString(directId) && directId) {
     return directId;
   }
@@ -291,8 +328,8 @@ function detectRequestId(err: unknown): string | undefined {
   // Try headers (Anthropic SDK uses 'request-id'; relay may use 'x-request-id')
   // ?? undefined converts null from headers.get() to undefined
   return (
-    candidate.headers?.get?.('request-id') ??
-    candidate.headers?.get?.('x-request-id') ??
+    getHeaderValue(candidate.headers, 'request-id') ??
+    getHeaderValue(candidate.headers, 'x-request-id') ??
     undefined
   );
 }
@@ -343,7 +380,7 @@ export function takeTail(text: string, maxChars: number): string {
   return text.length <= maxChars ? text : text.slice(text.length - maxChars);
 }
 
-/** True if `err` is an SDK user-abort error (OpenAI or Anthropic). */
+/** True if `err` is an SDK user-abort error by prototype class name. */
 export function isUserAbort(err: unknown): boolean {
   return getErrorClassNames(err).includes('APIUserAbortError');
 }
