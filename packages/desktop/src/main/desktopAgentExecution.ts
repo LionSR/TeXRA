@@ -5,6 +5,8 @@ import {
   prepareMainViewExecutionRequest,
   type MainViewExecuteMessage,
 } from '@controllers/mainView/MainViewExecutionController';
+import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
+import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { emitAcceptedWorkspaceFile } from '@controllers/progressView/workflowFileActionsEvents';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -30,6 +32,7 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
+import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost } from '@hosts/diffViewHost';
@@ -42,6 +45,7 @@ import { StreamLogStore } from '@logger/StreamLogStore';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
+  type AgentProposalPermission,
   type AgentCategory,
   type AgentCategoryFilter,
   type ConversationProgress,
@@ -119,9 +123,11 @@ function toFileLocation(filePath: string): FileLocation {
 export class DesktopProgressBridge {
   private readonly streamLogs = new StreamLogStore();
   private readonly logger = new AgentLogger('DesktopProgressBridge');
+  private readonly agentProposalController: ProgressAgentProposalController;
   private readonly workflowFileActions: ProgressWorkflowFileActionsController;
   private readonly cursors = new Map<StreamTabId, number>();
   private readonly taskStates = new Map<StreamTabId, TaskState>();
+  private readonly agentProposals = new Map<string, AgentProposalPermission>();
   private readonly outputFiles = new Map<StreamTabId, OutputFilesByRound>();
   private readonly statuses = new Map<StreamTabId, StreamStatus>();
   private readonly categories = new Map<StreamTabId, AgentCategory>();
@@ -190,11 +196,53 @@ export class DesktopProgressBridge {
         await this.sendFollowUp(stream, text);
       },
     });
+    this.agentProposalController = new ProgressAgentProposalController({
+      getPendingProposal: (proposalId) => this.agentProposals.get(proposalId),
+      restoreTaskState: async (taskState) => {
+        let state: ReturnType<typeof buildMainViewState>;
+        try {
+          state = buildMainViewState(taskState);
+        } catch {
+          return false;
+        }
+        this.postToRenderer({
+          command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+          route: 'main',
+        });
+        this.postToRenderer({
+          command: COMMON_COMMANDS.STATE_RESTORE,
+          state,
+        });
+        return true;
+      },
+      resolveProposal: (proposalId, result) => {
+        proposalCoordinator.resolveRequest(proposalId, result);
+      },
+      onMissingProposal: (proposalId) => {
+        this.logger.warn(
+          `No pending desktop agent proposal found for setup: ${proposalId}`,
+        );
+      },
+      onInvalidProposal: (issues) => {
+        this.logger.warn('Invalid desktop agent proposal config', {
+          data: { errors: issues },
+        });
+      },
+      onSetupComplete: (proposal) => {
+        this.logger.info(
+          `Desktop agent proposal ${proposal.proposalId} set up in main view`,
+          {
+            data: { agent: proposal.agent },
+          },
+        );
+      },
+    });
   }
 
   dispose(): void {
     this.toolEditApprovals.dispose();
     this.unsubscribe();
+    this.agentProposals.clear();
     this.cursors.clear();
     this.taskStates.clear();
     this.outputFiles.clear();
@@ -602,18 +650,21 @@ export class DesktopProgressBridge {
         break;
       }
       case 'showAgentProposal': {
+        const data = payload as ProgressEventPayloads['showAgentProposal'];
+        this.agentProposals.set(data.proposalId, data);
         this.send({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
           action: 'show',
           permission: {
             kind: 'proposal',
-            data: payload as ProgressEventPayloads['showAgentProposal'],
+            data,
           },
         });
         break;
       }
       case 'resolveAgentProposal': {
         const data = payload as ProgressEventPayloads['resolveAgentProposal'];
+        this.agentProposals.delete(data.proposalId);
         this.send({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
           action: 'resolve',
@@ -730,6 +781,7 @@ export class DesktopProgressBridge {
     this.statuses.delete(streamId);
     this.categories.delete(streamId);
     this.executionIds.delete(streamId);
+    this.deleteAgentProposalsForStream(streamId);
     this.descriptions.delete(streamId);
     this.parentStreams.delete(streamId);
     this.creationTimestamps.delete(streamId);
@@ -770,6 +822,7 @@ export class DesktopProgressBridge {
     this.statuses.clear();
     this.categories.clear();
     this.executionIds.clear();
+    this.agentProposals.clear();
     this.descriptions.clear();
     this.parentStreams.clear();
     this.creationTimestamps.clear();
@@ -900,23 +953,13 @@ export class DesktopProgressBridge {
     });
   }
 
-  handleAgentProposalAction(
+  async handleAgentProposalAction(
     message: Extract<
       ProgressViewInboundMessage,
       { command: typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION }
     >,
-  ): boolean {
-    if (message.action === 'setup') return false;
-
-    proposalCoordinator.resolveRequest(message.proposalId, {
-      action: message.action,
-      ...(message.action === 'approve' && {
-        model: message.model,
-        agent: message.agent,
-      }),
-      ...(message.action === 'reject' && { feedback: message.feedback }),
-    });
-    return true;
+  ): Promise<boolean> {
+    return this.agentProposalController.handleAction(message);
   }
 
   async runExecution(request: ValidatedExecutionRequest): Promise<void> {
@@ -1055,6 +1098,14 @@ export class DesktopProgressBridge {
     }
 
     return false;
+  }
+
+  private deleteAgentProposalsForStream(streamId: StreamTabId): void {
+    for (const [proposalId, proposal] of this.agentProposals.entries()) {
+      if (proposal.streamId === streamId) {
+        this.agentProposals.delete(proposalId);
+      }
+    }
   }
 
   private async listWorkspaceFiles(

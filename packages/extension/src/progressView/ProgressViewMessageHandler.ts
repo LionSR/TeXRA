@@ -5,11 +5,10 @@ import {
   ProgressFollowUpController,
   type ProgressFollowUpPlan,
 } from '@controllers/progressView/ProgressFollowUpController';
+import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
@@ -31,10 +30,8 @@ import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import type { TaskState } from '@logger/TaskState';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StreamTabId } from '@shared/schemas';
-import type { AgentProposal } from '@shared/schemas/prompts';
 import {
   dispatchProgressViewInbound,
   type ProgressViewInboundHandlerRegistry,
@@ -81,6 +78,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly streamLifecycleController: ProgressStreamLifecycleController;
   private readonly workflowActionsController: ProgressWorkflowActionsController;
   private readonly workflowFileActionsController: ProgressWorkflowFileActionsController;
+  private readonly agentProposalController: ProgressAgentProposalController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly modelOutputBackups = new Map<
     StreamTabId,
@@ -117,6 +115,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.workflowActionsController = this.createWorkflowActionsController();
     this.workflowFileActionsController =
       this.createWorkflowFileActionsController();
+    this.agentProposalController = this.createAgentProposalController();
     this.followUpController = this.createFollowUpController();
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
@@ -245,10 +244,27 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           : 'Delegated task auto-approval disabled for this stream.';
         await vscode.window.showInformationMessage(msg);
       },
-      [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: (data) =>
-        this.handleAgentProposalAction(data),
-      [PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG]: (data) =>
-        this.handleRestoreProposalConfig(data),
+      [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: async (data) => {
+        await this.agentProposalController.handleAction(data);
+      },
+      [PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG]: async (data) => {
+        const restored =
+          await this.agentProposalController.restoreProposalConfig(
+            data.proposal,
+          );
+        if (restored) {
+          this.logger.info(
+            this.channel,
+            'Restored proposal config to main view',
+            {
+              data: {
+                agent: data.proposal.agent,
+                agentCategory: data.proposal.agentCategory,
+              },
+            },
+          );
+        }
+      },
       [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (data) =>
         handleProgressViewBashApprovalAction(data),
       [PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION]: (data) =>
@@ -477,6 +493,44 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
+  private createAgentProposalController(): ProgressAgentProposalController {
+    return new ProgressAgentProposalController({
+      getPendingProposal: (proposalId) =>
+        this.provider.getPendingAgentProposal(proposalId),
+      restoreTaskState: async (taskState) => {
+        return (
+          (await vscode.commands.executeCommand<boolean>(
+            'texra.restoreState',
+            taskState,
+          )) === true
+        );
+      },
+      resolveProposal: (proposalId, result) => {
+        proposalCoordinator.resolveRequest(proposalId, result);
+      },
+      onMissingProposal: (proposalId) => {
+        this.logger.warn(
+          this.channel,
+          `No pending agent proposal found for setup: ${proposalId}`,
+        );
+      },
+      onInvalidProposal: (issues) => {
+        this.logger.warn(this.channel, 'Invalid proposal config', {
+          data: { errors: issues },
+        });
+      },
+      onSetupComplete: (proposal) => {
+        this.logger.info(
+          this.channel,
+          `Agent proposal ${proposal.proposalId} set up in main view`,
+          {
+            data: { agent: proposal.agent },
+          },
+        );
+      },
+    });
+  }
+
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
       getAgentCategory: (agent) => getAgent(agent, true)?.category,
@@ -667,30 +721,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  private async handleAgentProposalAction(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION>,
-  ): Promise<void> {
-    const { proposalId, action } = data;
-    switch (action) {
-      case 'setup':
-        await this.handleAgentProposalSetup(proposalId);
-        break;
-      case 'approve':
-        proposalCoordinator.resolveRequest(proposalId, {
-          action: 'approve',
-          model: data.model,
-          agent: data.agent,
-        });
-        break;
-      case 'reject':
-        proposalCoordinator.resolveRequest(proposalId, {
-          action: 'reject',
-          feedback: data.feedback,
-        });
-        break;
-    }
-  }
-
   private handlePlanApprovalAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION>,
   ): void {
@@ -708,98 +738,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         });
         break;
     }
-  }
-
-  private async handleAgentProposalSetup(proposalId: string): Promise<void> {
-    const proposal = this.provider.getPendingAgentProposal(proposalId);
-    if (!proposal) {
-      this.logger.warn(
-        this.channel,
-        `No pending agent proposal found for setup: ${proposalId}`,
-      );
-      return;
-    }
-
-    const success = await this.restoreProposalToMainView(proposal);
-    if (!success) return;
-
-    proposalCoordinator.resolveRequest(proposalId, { action: 'setup' });
-
-    this.logger.info(
-      this.channel,
-      `Agent proposal ${proposalId} set up in main view`,
-      {
-        data: { agent: proposal.agent },
-      },
-    );
-  }
-
-  private async handleRestoreProposalConfig(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG>,
-  ): Promise<void> {
-    const { proposal } = data;
-    const success = await this.restoreProposalToMainView(proposal);
-    if (success) {
-      this.logger.info(this.channel, `Restored proposal config to main view`, {
-        data: {
-          agent: proposal.agent,
-          agentCategory: proposal.agentCategory,
-        },
-      });
-    }
-  }
-
-  /** Build TaskState from proposal fields and restore to main view. */
-  private async restoreProposalToMainView(
-    proposal: AgentProposal,
-  ): Promise<boolean> {
-    const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
-
-    // Use discriminant directly so TypeScript narrows to WorkflowAgentProposal
-    const activeFiles =
-      proposal.agentCategory === AgentCategory.Workflow
-        ? {
-            input: proposal.inputFiles.length > 0,
-            reference: proposal.referenceFiles.length > 0,
-            auxiliary: proposal.auxiliaryFiles.length > 0,
-            media: proposal.mediaFiles.length > 0,
-            output: proposal.outputFiles.length > 0,
-          }
-        : {
-            input: false,
-            reference: false,
-            auxiliary: false,
-            media: false,
-            output: false,
-          };
-
-    const result = AgentConfigSchema.safeParse({
-      ...proposal,
-      ...(isWorkflow && {
-        inputFilesActive: activeFiles.input,
-        referenceFilesActive: activeFiles.reference,
-        auxiliaryFilesActive: activeFiles.auxiliary,
-        mediaFilesActive: activeFiles.media,
-        outputFilesActive: activeFiles.output,
-      }),
-    });
-
-    if (!result.success) {
-      this.logger.warn(this.channel, 'Invalid proposal config', {
-        data: { errors: result.error.issues },
-      });
-      return false;
-    }
-
-    const taskState = (
-      isWorkflow
-        ? { agentConfig: result.data, activeFiles }
-        : { agentConfig: result.data }
-    ) as TaskState;
-
-    await vscode.commands.executeCommand('texra.showMainView');
-    await vscode.commands.executeCommand('texra.restoreState', taskState);
-    return true;
   }
 
   // ============================================================

@@ -642,6 +642,9 @@ const AgentProposalActionMessageSchema = z.object({
   model: z.string().optional(),
   agent: z.string().optional(),
 });
+export type ProgressAgentProposalActionMessage = z.infer<
+  typeof AgentProposalActionMessageSchema
+>;
 
 const PlanApprovalActionMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION),
