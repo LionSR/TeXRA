@@ -85,11 +85,13 @@ describe('desktop renderer shell', () => {
     );
     // wa-dialog handles focus trap, escape, and modal backdrop natively.
     // Assert the dialog wiring + the one custom keydown interceptor.
+    expect(rendererOnboarding).toContain("document.createElement('wa-dialog')");
     expect(rendererOnboarding).toContain(
-      "document.createElement('wa-dialog')",
+      "dialog.addEventListener('wa-after-show'",
     );
-    expect(rendererOnboarding).toContain("dialog.addEventListener('wa-after-show'");
-    expect(rendererOnboarding).toContain("dialog.addEventListener('wa-after-hide'");
+    expect(rendererOnboarding).toContain(
+      "dialog.addEventListener('wa-after-hide'",
+    );
     expect(rendererOnboarding).toContain("dialog.addEventListener('keydown'");
     expect(rendererOnboarding).toContain('isCommandPaletteShortcut(event)');
   });
