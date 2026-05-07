@@ -9,6 +9,12 @@ import {
 import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
+import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
+import {
+  deleteAllExecutions,
+  deleteExecution,
+  listExecutions,
+} from '@agent/storage';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -19,6 +25,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { MAX_TIER, ULTRA_TIER } from '@auth/sharedConfig';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
@@ -35,6 +42,8 @@ import {
   buildBasicModelOptionsData,
 } from '@model/modelOptionsBasic';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { loadMemoryItems } from '@settingsView/utils/memoryFileSystem';
+import type { ExecutionId } from '@shared/schemas';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -52,6 +61,7 @@ import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   SettingsViewInboundMessageSchema,
   type LatexSettingsStatus,
+  type HistoryItem,
   type ProviderKeyStatus,
   type ReasoningLevel,
   type ToolDashboardItem,
@@ -63,6 +73,18 @@ import {
   parseCodexSandboxMode,
 } from '@tools/codexConfig';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
+import {
+  MEMORY_STORAGE_ROOT,
+  MAX_PINNED_MEMORIES,
+} from '@tools/memory/constants';
+import {
+  buildFile,
+  countPinnedMemories,
+  parseFrontmatter,
+  setPinnedMeta,
+} from '@tools/memory/memoryMeta';
+import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
+import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
   readGitAuthorSettingsFromState,
@@ -134,6 +156,7 @@ export interface DesktopSettingsIpcOptions {
   }) => Promise<string | undefined>;
   showInfoMessage?: (message: string) => Promise<void>;
   showErrorMessage?: (message: string) => Promise<void>;
+  confirmAction?: (message: string, confirmLabel?: string) => Promise<boolean>;
   signIn?: () => Promise<void>;
   signOut?: () => Promise<void>;
   getAuthProfileData?: () => Promise<DesktopAuthProfileData>;
@@ -322,6 +345,29 @@ export function createDesktopSettingsIpc(
       globalState,
       onError,
     });
+  const memoryController = new SettingsMemoryController({
+    prompt: {
+      confirm: (message, promptOptions) =>
+        options.confirmAction?.(message, promptOptions?.confirmLabel) ??
+        Promise.resolve(true),
+      warning: async (message) => {
+        await options.showInfoMessage?.(message);
+      },
+    },
+    loadMemoryItems,
+    isMemoryEnabled: () =>
+      globalState.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true,
+    setMemoryEnabled: async (enabled) => {
+      await globalState.update(GlobalStateKey.MEMORY_ENABLED, enabled);
+    },
+    resolveStoragePath: resolveMemoryStoragePath,
+    storage: StorageFS,
+    maxPinnedMemories: MAX_PINNED_MEMORIES,
+    parseMemoryFile: parseFrontmatter,
+    buildMemoryFile: buildFile,
+    setPinnedMeta,
+    countPinnedMemories,
+  });
 
   function readCurrentGitAuthorSettings() {
     return readGitAuthorSettingsFromState(workspaceState);
@@ -457,6 +503,124 @@ export function createDesktopSettingsIpc(
     });
   }
 
+  async function postMemoryData(): Promise<void> {
+    options.postToRenderer(await memoryController.getMemoryDataMessage());
+  }
+
+  function postMemoryEnabled(): void {
+    options.postToRenderer(memoryController.getMemoryEnabledMessage());
+  }
+
+  async function postSettingsMemoryMessage(
+    message: Awaited<ReturnType<SettingsMemoryController['deleteMemory']>>,
+  ): Promise<void> {
+    if (!message) return;
+    options.postToRenderer(message);
+  }
+
+  async function openMemoryFile(input: { storagePath: string }): Promise<void> {
+    const resolvedPath = resolveMemoryStoragePath(input.storagePath);
+    await options.openPath?.(StorageFS.fullPath(resolvedPath));
+  }
+
+  async function openMemoryFolder(): Promise<void> {
+    await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
+    await options.openPath?.(StorageFS.fullPath(MEMORY_STORAGE_ROOT));
+  }
+
+  async function deleteMemory(input: {
+    storagePath: string;
+    displayPath: string;
+  }): Promise<void> {
+    await postSettingsMemoryMessage(await memoryController.deleteMemory(input));
+  }
+
+  async function setMemoryEnabled(enabled: boolean): Promise<void> {
+    await postSettingsMemoryMessage(
+      await memoryController.setMemoryEnabled(enabled),
+    );
+  }
+
+  async function setMemoryPinned(
+    storagePath: string,
+    pinned: boolean,
+  ): Promise<void> {
+    await postSettingsMemoryMessage(
+      pinned
+        ? await memoryController.pinMemory(storagePath)
+        : await memoryController.unpinMemory(storagePath),
+    );
+  }
+
+  async function postHistoryData(): Promise<void> {
+    const entries = await listExecutions();
+    const historyItems = entries
+      .filter(
+        (entry) => entry.agentConfig !== null && entry.category !== 'process',
+      )
+      .map((entry): HistoryItem => {
+        const cfg = entry.agentConfig!;
+        const base = {
+          agent: cfg.agent,
+          model: cfg.model,
+          instruction: cfg.instruction,
+        };
+        return {
+          id: entry.id,
+          timestamp: entry.timestamp,
+          agentConfig:
+            cfg.agentCategory === 'toolUse'
+              ? { agentCategory: 'toolUse' as const, ...base }
+              : {
+                  agentCategory: 'workflow' as const,
+                  ...base,
+                  inputFile: cfg.inputFile,
+                  inputFiles: cfg.inputFiles,
+                  mediaFile: cfg.mediaFile,
+                  mediaFiles: cfg.mediaFiles,
+                  referenceFile: cfg.referenceFile,
+                  referenceFiles: cfg.referenceFiles,
+                  auxiliaryFile: cfg.auxiliaryFile,
+                  auxiliaryFiles: cfg.auxiliaryFiles,
+                  outputFiles: cfg.outputFiles,
+                  toolConfig: cfg.toolConfig,
+                },
+          description: entry.description,
+        };
+      });
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
+      historyItems,
+    });
+  }
+
+  async function deleteHistoryItem(historyId: string): Promise<void> {
+    if (getActiveExecutionIds().includes(historyId)) {
+      await options.showInfoMessage?.('Cannot delete a running execution');
+      return;
+    }
+
+    const deleted = await deleteExecution(historyId as ExecutionId);
+    if (!deleted) {
+      await options.showInfoMessage?.(`History item not found: ${historyId}`);
+      return;
+    }
+    await postHistoryData();
+  }
+
+  async function clearHistory(): Promise<void> {
+    await deleteAllExecutions(new Set(getActiveExecutionIds()));
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
+    });
+  }
+
+  async function showUnsupportedHistoryAction(action: string): Promise<void> {
+    await options.showInfoMessage?.(
+      `${action} from history is not available in the desktop app yet.`,
+    );
+  }
+
   async function postToolDashboardData(postOptions?: {
     skipChecks?: boolean;
   }): Promise<void> {
@@ -563,11 +727,14 @@ export function createDesktopSettingsIpc(
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
+    postMemoryEnabled();
     const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
     postAgentModePresets();
     postApprovalSettings();
     await Promise.all([
+      postMemoryData(),
+      postHistoryData(),
       modelSelectionDataPosted,
       postProfileData(),
       postLatexSettingsStatus(),
@@ -973,6 +1140,51 @@ export function createDesktopSettingsIpc(
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION:
           runAsync(postModelSelectionData());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA:
+          runAsync(postMemoryData());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED:
+          postMemoryEnabled();
+          return true;
+        case SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE:
+          runAsync(openMemoryFile(result.data));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER:
+          runAsync(openMemoryFolder());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.DELETE_MEMORY:
+          runAsync(deleteMemory(result.data));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED:
+          runAsync(setMemoryEnabled(result.data.enabled));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.PIN_MEMORY:
+          runAsync(setMemoryPinned(result.data.storagePath, true));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY:
+          runAsync(setMemoryPinned(result.data.storagePath, false));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA:
+          runAsync(postHistoryData());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.DELETE_AGENT:
+          runAsync(deleteHistoryItem(result.data.historyId));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY:
+          runAsync(clearHistory());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.RERUN_AGENT:
+          runAsync(showUnsupportedHistoryAction('Rerun'));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.RESTORE_AGENT:
+          runAsync(showUnsupportedHistoryAction('Setup'));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD:
+          runAsync(showUnsupportedHistoryAction('Markdown export'));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX:
+          runAsync(showUnsupportedHistoryAction('LaTeX export'));
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA:
           runAsync(postProfileData());
