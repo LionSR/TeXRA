@@ -27,9 +27,13 @@ import {
   writeTerminalStatus,
 } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import {
+  getCurrentToolFileInteractionContext,
+  getCurrentToolRuntimeHost,
+} from '@agent/toolUse/ToolFileInteractionContext';
 import {
   getInterruptible,
   registerInterruptible,
@@ -39,9 +43,14 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
-import type { StreamTabId, ExecutionId, StorageKey } from '@shared/schemas';
+import type {
+  StreamTabId,
+  ExecutionId,
+  StorageKey,
+  TodoItem,
+  TokenUsageStats,
+} from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -259,11 +268,34 @@ function formatCodexError(
 // Stream tab helpers
 // ============================================================================
 
+export function publishCodexTodos(
+  childStreamId: StreamTabId,
+  todos: TodoItem[],
+  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+): void {
+  runtimeHost.emit('updateTodos', { streamId: childStreamId, todos });
+}
+
+export function publishCodexStreamUsage(
+  childStreamId: StreamTabId,
+  executionId: ExecutionId,
+  usage: TokenUsageStats,
+  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+): void {
+  runtimeHost.emit('updateStreamUsage', {
+    streamId: childStreamId,
+    storageKey: executionId as StorageKey,
+    executionId,
+    usage,
+  });
+}
+
 /** Log a completed codex thread item to the child stream's logger. */
 function logCodexItem(
   item: ThreadItem,
   childStreamId: StreamTabId,
   logger: AgentLogger,
+  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
 ): void {
   switch (item.type) {
     case 'command_execution': {
@@ -296,7 +328,7 @@ function logCodexItem(
         status: t.completed ? ('completed' as const) : ('pending' as const),
         activeForm: t.text,
       }));
-      bus.emit('updateTodos', { streamId: childStreamId, todos });
+      publishCodexTodos(childStreamId, todos, runtimeHost);
       break;
     }
     case 'error':
@@ -329,6 +361,7 @@ async function runStreamedTurn(
   prompt: string,
   childStreamId: StreamTabId,
   logger: AgentLogger,
+  runtimeHost: AgentRuntimeHost,
   signal?: AbortSignal,
 ): Promise<RunResult> {
   logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
@@ -340,7 +373,7 @@ async function runStreamedTurn(
     switch (event.type) {
       case 'item.completed': {
         const { item } = event;
-        logCodexItem(item, childStreamId, logger);
+        logCodexItem(item, childStreamId, logger, runtimeHost);
         if (item.type === 'agent_message') {
           responseParts.push(item.text);
         }
@@ -392,6 +425,7 @@ function startCodexLoop(params: {
 
   const session = new CodexFollowUpSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
+  const runtimeHost = getCurrentToolRuntimeHost();
   session.setQueue(queue);
   registerInterruptible(childStreamId, session);
 
@@ -437,6 +471,7 @@ function startCodexLoop(params: {
             prompt,
             childStreamId,
             logger,
+            runtimeHost,
             signal,
           );
           logTurnSummary(logger, Date.now() - startedAt, turn.usage);
@@ -460,12 +495,12 @@ function startCodexLoop(params: {
         }
 
         if (turn?.usage) {
-          bus.emit('updateStreamUsage', {
-            streamId: childStreamId,
-            storageKey: executionId as StorageKey,
+          publishCodexStreamUsage(
+            childStreamId,
             executionId,
-            usage: buildCodexUsageStats(turn.usage),
-          });
+            buildCodexUsageStats(turn.usage),
+            runtimeHost,
+          );
         }
 
         const msg =

@@ -39,6 +39,12 @@ describe('desktop package verifier metafile paths', () => {
       ),
     ).toBe('dist/main/chunks/provider.js');
   });
+
+  it('does not treat package-like dot-prefixed paths as relative imports', () => {
+    expect(
+      resolveMetafileImportPath('dist/main/index.js', '.pnpm/chunk.js'),
+    ).toBe('.pnpm/chunk.js');
+  });
 });
 
 describe('desktop package verifier target inference', () => {
