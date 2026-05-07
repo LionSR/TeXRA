@@ -28,6 +28,7 @@ import {
   readDesktopLogSnapshot,
 } from './desktopAppLog.js';
 import { installDesktopMenu } from './desktopMenu.js';
+import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
@@ -141,6 +142,9 @@ function createWindow(options: {
   });
   mainWindow = window;
   const reportAsyncError = (error: unknown) => console.error(error);
+  const modelListRefresh = refreshDesktopModelListStateIfNeeded({
+    onError: reportAsyncError,
+  });
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
@@ -239,6 +243,7 @@ function createWindow(options: {
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     sendStartupCatalogData: true,
+    modelListRefresh,
     promptSecret: (input) =>
       promptInRenderer(window, { ...input, password: true }),
     promptText: (input) => promptInRenderer(window, input),
@@ -325,6 +330,7 @@ function createWindow(options: {
       },
     },
     shellActions,
+    modelListRefresh,
     getAuthStatus: async () => ({
       authenticated: (await desktopAuth.getProfileData()).authenticated,
     }),
