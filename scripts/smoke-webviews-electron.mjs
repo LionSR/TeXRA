@@ -35,6 +35,39 @@ const views = [
     replacements: {
       mainViewBundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
     },
+    fixtureMessages: [
+      {
+        command: 'setInputFile',
+        files: ['appendix.tex', 'coverLetter.tex', 'main.tex'],
+      },
+      {
+        command: 'inputFileSelected',
+        filePath: 'main.tex',
+      },
+      {
+        command: 'setInputFiles',
+        files: ['appendix.tex', 'References/2509.24978/main.tex'],
+      },
+      {
+        command: 'setReferenceFile',
+        files: ['refs.bib', 'References/2509.24978/main.bbl'],
+      },
+      {
+        command: 'setReferenceFiles',
+        files: ['refs.bib', 'References/2509.24978/only_supplement.tex'],
+      },
+      {
+        command: 'setAuxiliaryFiles',
+        files: ['ltxfront.sty', 'References/2509.24978/revtex4-2.cls'],
+      },
+      {
+        command: 'setMediaFiles',
+        files: [
+          'Fig.1.pdf',
+          'References/2509.24978/summary_figure_arbitrary1d_6.jpg',
+        ],
+      },
+    ],
   },
   {
     name: 'progress',
@@ -115,6 +148,7 @@ async function prepareViewHtml(view) {
   const htmlPath = join(generatedHtmlDir, `${view.name}.html`);
   await writeFile(htmlPath, html);
   return {
+    fixtureMessages: view.fixtureMessages ?? [],
     htmlPath,
     name: view.name,
     tagName: view.tagName,

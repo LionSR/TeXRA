@@ -97,6 +97,156 @@ async function waitForRenderedElement(window, tagName) {
   );
 }
 
+async function assertWebviewRuntime(window, view) {
+  return window.webContents.executeJavaScript(
+    `
+      (async () => {
+        function collectElements(root) {
+          const elements = [];
+          const visit = (node) => {
+            if (!node) return;
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              elements.push(node);
+              if (node.shadowRoot) {
+                for (const child of node.shadowRoot.children) visit(child);
+              }
+            }
+            for (const child of node.children ?? []) visit(child);
+          };
+          visit(root.documentElement ?? root);
+          return elements;
+        }
+
+        function collectCodiconNames() {
+          const names = new Set();
+          for (const sheet of document.styleSheets) {
+            let rules;
+            try {
+              rules = sheet.cssRules;
+            } catch {
+              continue;
+            }
+            for (const rule of rules) {
+              const selectorText = rule.selectorText ?? '';
+              for (const match of selectorText.matchAll(/\\.codicon-([a-z0-9-]+)(?=[:\\s,.#\\[]|$)/g)) {
+                names.add(match[1]);
+              }
+            }
+          }
+          return names;
+        }
+
+        const codiconFonts = await document.fonts.load('16px "codicon"');
+        if (codiconFonts.length === 0) {
+          throw new Error('Codicon font is not available to the webview.');
+        }
+
+        const codiconNames = collectCodiconNames();
+        if (codiconNames.size === 0) {
+          throw new Error('No codicon CSS rules were loaded.');
+        }
+
+        const elements = collectElements(document);
+        const invalidClasses = new Set();
+        const invalidIconAttrs = new Set();
+        for (const element of elements) {
+          for (const className of element.classList ?? []) {
+            if (!className.startsWith('codicon-')) continue;
+            if (className === 'codicon-modifier-spin') continue;
+            const iconName = className.replace(/^codicon-/, '');
+            if (!codiconNames.has(iconName)) invalidClasses.add(className);
+          }
+
+          const iconAttr = element.getAttribute?.('icon');
+          if (iconAttr && /^[a-z0-9-]+$/.test(iconAttr)) {
+            const iconName = iconAttr.replace(/^codicon-/, '');
+            if (!codiconNames.has(iconName)) invalidIconAttrs.add(iconAttr);
+          }
+        }
+
+        if (invalidClasses.size > 0 || invalidIconAttrs.size > 0) {
+          throw new Error(
+            [
+              invalidClasses.size > 0
+                ? \`Unknown codicon classes: \${[...invalidClasses].sort().join(', ')}\`
+                : '',
+              invalidIconAttrs.size > 0
+                ? \`Unknown icon attributes: \${[...invalidIconAttrs].sort().join(', ')}\`
+                : '',
+            ].filter(Boolean).join('; '),
+          );
+        }
+
+        return {
+          codiconCount: codiconNames.size,
+          iconAttributeCount: elements.filter((element) => element.hasAttribute?.('icon')).length,
+        };
+      })();
+    `,
+    true,
+  );
+}
+
+async function applyViewFixture(window, view) {
+  const fixtureMessages = Array.isArray(view.fixtureMessages)
+    ? view.fixtureMessages
+    : [];
+  if (fixtureMessages.length === 0) return null;
+
+  return window.webContents.executeJavaScript(
+    `
+      (async () => {
+        const messages = ${JSON.stringify(fixtureMessages)};
+        for (const message of messages) {
+          window.postMessage(message, '*');
+        }
+
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const app = document.querySelector(${JSON.stringify(view.tagName)});
+        if (app?.updateComplete && typeof app.updateComplete.then === 'function') {
+          await app.updateComplete;
+        }
+
+        const fileGroups = [...(app?.shadowRoot?.querySelectorAll('file-select-group') ?? [])];
+        for (const group of fileGroups) {
+          if (group.updateComplete && typeof group.updateComplete.then === 'function') {
+            await group.updateComplete;
+          }
+        }
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        if (${JSON.stringify(view.name)} !== 'main') {
+          return { fixtureMessages: messages.length };
+        }
+
+        const fileItems = fileGroups.flatMap((group) => [
+          ...(group.shadowRoot?.querySelectorAll('.file-item') ?? []),
+        ]);
+        const folderLabels = fileGroups.flatMap((group) => [
+          ...(group.shadowRoot?.querySelectorAll('.file-folder') ?? []),
+        ]);
+        const rawText = document.body.innerText.replace(/\\s+/g, ' ');
+        if (rawText.includes('None appendix.tex coverLetter.tex main.tex')) {
+          throw new Error('Main view file select options are visible as raw fallback text.');
+        }
+        if (fileItems.length < 8) {
+          throw new Error(\`Main view fixture rendered too few file rows: \${fileItems.length}\`);
+        }
+        if (folderLabels.length < 4) {
+          throw new Error(\`Main view fixture did not render folder labels: \${folderLabels.length}\`);
+        }
+
+        return {
+          fileGroupCount: fileGroups.length,
+          fileItemCount: fileItems.length,
+          folderLabelCount: folderLabels.length,
+        };
+      })();
+    `,
+    true,
+  );
+}
+
 function createSmokeWindow(errors) {
   const window = new BrowserWindow({
     width: 1280,
@@ -154,12 +304,16 @@ async function smokeView(window, view, outputDir, errors) {
   if (errors.length > 0) {
     throw new Error(`${view.name} console errors:\n${errors.join('\n')}`);
   }
+  await assertWebviewRuntime(window, view);
+  const fixtureResult = await applyViewFixture(window, view);
 
   const screenshotPath = path.join(outputDir, `${view.name}.png`);
   const image = await window.webContents.capturePage();
   await writeFile(screenshotPath, image.toPNG());
   console.log(
-    `Rendered ${view.name}: ${result.width}x${result.height}, screenshot ${screenshotPath}`,
+    `Rendered ${view.name}: ${result.width}x${result.height}, screenshot ${screenshotPath}${
+      fixtureResult ? `, fixture ${JSON.stringify(fixtureResult)}` : ''
+    }`,
   );
 }
 
