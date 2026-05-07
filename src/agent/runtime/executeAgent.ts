@@ -220,7 +220,9 @@ async function assembleAgentLaunchContext(
     agentCategory: setting.agentCategory,
   };
 
-  const modelHandler = createModelHandler(MODEL_CONFIGS[fullConfig.model]);
+  const modelHandler = await createModelHandler(
+    MODEL_CONFIGS[fullConfig.model],
+  );
 
   const streamId =
     input.streamTabIdOverride ??
