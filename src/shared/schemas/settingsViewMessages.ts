@@ -508,6 +508,15 @@ export type UpdateLatexConfigValuesMessage = z.infer<
   typeof UpdateLatexConfigValuesMessageSchema
 >;
 
+/** Outbound: backend → frontend inline criticism toggle state */
+export const UpdateInlineCriticismEnabledMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED),
+  enabled: z.boolean(),
+});
+export type UpdateInlineCriticismEnabledMessage = z.infer<
+  typeof UpdateInlineCriticismEnabledMessageSchema
+>;
+
 // ============================================================
 // Inbound message schemas (frontend → backend)
 // ============================================================
@@ -849,6 +858,15 @@ const SetLatexConfigValueMessageSchema = z.object({
   value: z.union([z.boolean(), z.number(), z.string(), z.null()]).optional(),
 });
 
+// Experimental settings inbound messages
+const GetInlineCriticismEnabledMessageSchema = commandOnly(
+  CMD.GET_INLINE_CRITICISM_ENABLED,
+);
+const SetInlineCriticismEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_INLINE_CRITICISM_ENABLED),
+  enabled: z.boolean(),
+});
+
 // Approval settings inbound messages
 const GetApprovalSettingsMessageSchema = commandOnly(CMD.GET_APPROVAL_SETTINGS);
 const SetBashApprovalEnabledMessageSchema = z.object({
@@ -896,6 +914,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     RunInstallCommandMessageSchema,
     GetLatexConfigValuesMessageSchema,
     SetLatexConfigValueMessageSchema,
+    GetInlineCriticismEnabledMessageSchema,
+    SetInlineCriticismEnabledMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,
