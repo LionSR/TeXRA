@@ -22,6 +22,7 @@ import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - history view styles
 import { historyViewStyles } from './styles';
@@ -268,45 +269,42 @@ export class HistoryItem extends LitElement {
       <div class="list-item history-item">
         <div class="list-item-header">
           <div class="text-secondary history-timestamp">${timestamp}</div>
-          <vscode-toolbar-container
-            class="history-actions"
+          <div
+            class="history-actions action-button-group"
             @click=${this.handleActionClick}
           >
-            <vscode-toolbar-button
-              icon="trash"
-              label="Delete"
-              title="Delete"
-              data-action="delete"
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              icon="reply"
-              label="Setup"
-              title="Setup"
-              data-action="restore"
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              icon="debug-rerun"
-              label="Rerun"
-              title="Rerun"
-              data-action="rerun"
-            ></vscode-toolbar-button>
+            ${renderIconActionButton({
+              icon: 'trash',
+              label: 'Delete',
+              action: 'delete',
+            })}
+            ${renderIconActionButton({
+              icon: 'reply',
+              label: 'Setup',
+              action: 'restore',
+            })}
+            ${renderIconActionButton({
+              icon: 'rotate-right',
+              label: 'Rerun',
+              action: 'rerun',
+            })}
             ${isToolUse
               ? html`
-                  <vscode-toolbar-button
-                    icon="markdown"
-                    label="Export MD"
-                    title="Export as Markdown"
-                    data-action="export-md"
-                  ></vscode-toolbar-button>
-                  <vscode-toolbar-button
-                    icon="file-pdf"
-                    label="Export PDF"
-                    title="Export as LaTeX/PDF"
-                    data-action="export-tex"
-                  ></vscode-toolbar-button>
+                  ${renderIconActionButton({
+                    icon: 'file-lines',
+                    label: 'Export Markdown',
+                    title: 'Export as Markdown',
+                    action: 'export-md',
+                  })}
+                  ${renderIconActionButton({
+                    icon: 'file-pdf',
+                    label: 'Export PDF',
+                    title: 'Export as LaTeX/PDF',
+                    action: 'export-tex',
+                  })}
                 `
               : nothing}
-          </vscode-toolbar-container>
+          </div>
         </div>
         ${descriptionText
           ? html`<div class="history-description">${descriptionText}</div>`

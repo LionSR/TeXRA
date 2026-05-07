@@ -20,7 +20,6 @@ import { SignalWatcher, signal } from '@shared/signals';
 // Local imports - shared styles
 import {
   badgeStyles,
-  codiconStyles,
   commonViewStyles,
   designTokens,
   waTabThemeTokenStyles,
@@ -123,7 +122,6 @@ export class SettingsApp extends SettingsAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
   static styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     ...badgeStyles,
     settingsViewStyles,
@@ -172,6 +170,17 @@ export class SettingsApp extends SettingsAppBase {
         gap: var(--spacing-small);
         color: var(--text-color);
         font-weight: var(--font-weight-medium);
+      }
+
+      .settings-unavailable-icon,
+      .settings-tab-icon {
+        width: 1em;
+        height: 1em;
+        flex: 0 0 auto;
+      }
+
+      wa-tab .settings-tab-icon {
+        margin-inline-end: var(--spacing-xsmall);
       }
     `,
   ];
@@ -699,7 +708,12 @@ export class SettingsApp extends SettingsAppBase {
       return html`
         <div class="settings-header">
           <div class="settings-header-user">
-            <span class="codicon codicon-account"></span>
+            <wa-icon
+              class="settings-header-user-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="circle-user"
+              variant="solid"
+            ></wa-icon>
             <div class="settings-header-info">
               <span class="settings-header-email">${this.userEmail.get()}</span>
               <span class="settings-header-tier">${this.tier.get()} Plan</span>
@@ -796,7 +810,12 @@ export class SettingsApp extends SettingsAppBase {
       <div class="tab-content-container">
         <div class="settings-unavailable">
           <div class="settings-unavailable-title">
-            <span class="codicon codicon-circle-slash"></span>
+            <wa-icon
+              class="settings-unavailable-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="ban"
+              variant="solid"
+            ></wa-icon>
             ${title}
           </div>
           <div>${description}</div>
@@ -819,29 +838,76 @@ export class SettingsApp extends SettingsAppBase {
           @wa-tab-show=${this.handleTabShow}
         >
           <wa-tab panel="memory"
-            ><span class="codicon codicon-database"></span> Memory</wa-tab
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="database"
+              variant="solid"
+            ></wa-icon>
+            Memory</wa-tab
           >
           <wa-tab panel="history"
-            ><span class="codicon codicon-history"></span> History</wa-tab
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="clock-rotate-left"
+              variant="solid"
+            ></wa-icon>
+            History</wa-tab
           >
           <wa-tab panel="models"
-            ><span class="codicon codicon-server"></span> Models</wa-tab
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="server"
+              variant="solid"
+            ></wa-icon>
+            Models</wa-tab
           >
           <wa-tab panel="agents"
-            ><span class="codicon codicon-robot"></span> Agents</wa-tab
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="robot"
+              variant="solid"
+            ></wa-icon>
+            Agents</wa-tab
           >
           <wa-tab panel="multi-agent"
-            ><span class="codicon codicon-organization"></span>
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="users"
+              variant="solid"
+            ></wa-icon>
             Multi-Agent</wa-tab
           >
           <wa-tab panel="tools"
-            ><span class="codicon codicon-tools"></span> Tools</wa-tab
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="screwdriver-wrench"
+              variant="solid"
+            ></wa-icon>
+            Tools</wa-tab
           >
           <wa-tab panel="git"
-            ><span class="codicon codicon-git-commit"></span> Git</wa-tab
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="code-branch"
+              variant="solid"
+            ></wa-icon>
+            Git</wa-tab
           >
           <wa-tab panel="latex"
-            ><span class="codicon codicon-file-code"></span> LaTeX</wa-tab
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="file-code"
+              variant="solid"
+            ></wa-icon>
+            LaTeX</wa-tab
           >
 
           <wa-tab-panel name="memory">

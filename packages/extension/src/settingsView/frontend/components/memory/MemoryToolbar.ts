@@ -7,7 +7,8 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - memory view events
 import { MemoryViewEvents } from './events';
@@ -16,7 +17,6 @@ import { MemoryViewEvents } from './events';
 export class MemoryToolbar extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     css`
       :host {
@@ -40,20 +40,19 @@ export class MemoryToolbar extends LitElement {
   override render(): TemplateResult {
     return html`
       <header class="view-header">
-        <vscode-toolbar-container>
-          <vscode-toolbar-button
-            icon="refresh"
-            label="Refresh"
-            title="Refresh"
-            @click=${this.handleRefresh}
-          ></vscode-toolbar-button>
-          <vscode-toolbar-button
-            icon="folder-opened"
-            label="Open Folder"
-            title="Open in file explorer"
-            @click=${this.handleOpenFolder}
-          ></vscode-toolbar-button>
-        </vscode-toolbar-container>
+        <div class="action-button-group">
+          ${renderIconActionButton({
+            icon: 'rotate-right',
+            label: 'Refresh',
+            onClick: this.handleRefresh,
+          })}
+          ${renderIconActionButton({
+            icon: 'folder-open',
+            label: 'Open Folder',
+            title: 'Open in file explorer',
+            onClick: this.handleOpenFolder,
+          })}
+        </div>
       </header>
     `;
   }
