@@ -949,7 +949,7 @@ export class DesktopProgressBridge {
   private async acceptEditedFile(
     baseFile: string,
     editedFile: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const baseLocation = pathToLocation(baseFile);
     const editedLocation = pathToLocation(editedFile);
     const { targetLocation, targetFileName, isNewFile } = getAcceptedFileTarget(
@@ -970,7 +970,7 @@ export class DesktopProgressBridge {
 
     if (this.options.confirmAcceptFile) {
       const confirmed = await this.options.confirmAcceptFile(confirmMessage);
-      if (!confirmed) return;
+      if (!confirmed) return false;
     }
 
     const editedContent = await readFile(editedLocation.absolutePath, 'utf8');
@@ -981,6 +981,7 @@ export class DesktopProgressBridge {
     await this.showInfoMessage(
       `Successfully ${operation} '${targetFileName}' with content from '${path.basename(editedFile)}'`,
     );
+    return true;
   }
 
   private async runLatexdiffFile(

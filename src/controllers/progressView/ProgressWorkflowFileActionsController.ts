@@ -17,7 +17,10 @@ export interface ProgressWorkflowFileActionsState {
 
 export interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): Promise<void>;
-  acceptEditedFile(baseFile: string, editedFile: string): Promise<void>;
+  acceptEditedFile(
+    baseFile: string,
+    editedFile: string,
+  ): Promise<boolean | void>;
   mergeFile(baseFile: string, editedFile: string): Promise<void>;
   latexdiffFile(baseFile: string, editedFile: string): Promise<void>;
   openDirectory(directory: string): Promise<void>;
@@ -132,7 +135,7 @@ export class ProgressWorkflowFileActionsController {
       base,
       'Accept',
       async (targetFile, baseFile) => {
-        await this.deps.host.acceptEditedFile(baseFile, targetFile);
+        return this.deps.host.acceptEditedFile(baseFile, targetFile);
       },
     );
     if (!accepted) return;
@@ -199,14 +202,13 @@ export class ProgressWorkflowFileActionsController {
     file: string,
     base: string | undefined,
     actionName: string,
-    execute: (file: string, base: string) => Promise<void>,
+    execute: (file: string, base: string) => Promise<boolean | void>,
   ): Promise<boolean> {
     if (!base) {
       await this.deps.host.showInfo(`${actionName} needs a base file.`);
       return false;
     }
-    await execute(file, base);
-    return true;
+    return (await execute(file, base)) !== false;
   }
 
   private async backupModelOutput(file: string): Promise<void> {

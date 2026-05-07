@@ -94,4 +94,39 @@ describe('ProgressWorkflowFileActionsController', () => {
       { message: 'Failed to open task storage folder', error: failure },
     ]);
   });
+
+  it('does not send accept follow-up when the host cancels acceptance', async () => {
+    const backups = new Map([
+      [
+        'workflow',
+        new Map([
+          [
+            '/workspace/edited.tex',
+            {
+              content: 'original model output',
+              streamId: 'workflow' as const,
+            },
+          ],
+        ]),
+      ],
+    ]);
+    const followUps: string[] = [];
+    const deps = createDeps({
+      acceptEditedFile: async () => false,
+      readFile: async () => 'user edited output',
+    });
+    deps.state.getActiveStream = () => 'workflow';
+    deps.sendFollowUp = async (_stream, text) => {
+      followUps.push(text);
+    };
+    const controller = new ProgressWorkflowFileActionsController({
+      ...deps,
+      modelOutputBackups: backups,
+    });
+
+    await controller.acceptFile('/workspace/edited.tex', '/workspace/base.tex');
+
+    assert.deepEqual(followUps, []);
+    assert.equal(backups.get('workflow')?.has('/workspace/edited.tex'), true);
+  });
 });
