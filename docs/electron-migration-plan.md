@@ -450,6 +450,25 @@ configured. Local smoke tests should continue using `npm run desktop:package:loc
 unpacked directory target launches faster and keeps startup regression coverage separate from
 installer generation.
 
+### Desktop Update Artifact Publishing
+
+Electron Builder is configured to generate public GitHub update metadata for
+`texra-ai/texra-desktop-releases`. Local distributable builds still pass `--publish never`, so
+running `npm run desktop:package:dist` produces unsigned local artifacts without uploading them.
+
+On pushes to `main`, CI collects the per-OS installer outputs and update metadata:
+
+- macOS: DMG, ZIP, ZIP blockmap, and `latest-mac.yml`
+- Windows: NSIS executable, blockmap, and `latest.yml`
+- Linux: AppImage, deb, blockmap, and `latest-linux.yml`
+
+The `publish desktop release artifacts` job downloads those workflow artifacts, verifies that the
+Electron Builder publish target is still the public `texra-ai/texra-desktop-releases` repository,
+checks that update metadata exists and points at a generated update-capable installer, and then
+uploads the files to the matching public GitHub release. The GitHub credential is confined to CI via
+the `DESKTOP_RELEASES_TOKEN` secret; installed desktop clients should read the public update metadata
+and artifacts without a client-side `GH_TOKEN`.
+
 ---
 
 ## What Stays the Same
