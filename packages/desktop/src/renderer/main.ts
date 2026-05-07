@@ -438,16 +438,15 @@ function createFirstRunWalkthrough(): {
     dismiss();
     setRoute(route);
   };
+  const onClick = (selector: string, handler: () => void): void => {
+    element
+      .querySelector<HTMLButtonElement>(selector)
+      ?.addEventListener('click', handler);
+  };
 
-  element
-    .querySelector<HTMLButtonElement>('[data-onboarding-settings]')
-    ?.addEventListener('click', () => dismissAndShowRoute('settings'));
-  element
-    .querySelector<HTMLButtonElement>('[data-onboarding-launcher]')
-    ?.addEventListener('click', () => dismissAndShowRoute('main'));
-  element
-    .querySelector<HTMLButtonElement>('[data-onboarding-dismiss]')
-    ?.addEventListener('click', dismiss);
+  onClick('[data-onboarding-settings]', () => dismissAndShowRoute('settings'));
+  onClick('[data-onboarding-launcher]', () => dismissAndShowRoute('main'));
+  onClick('[data-onboarding-dismiss]', dismiss);
   document.addEventListener('focusin', (event) => {
     if (element.hidden) return;
     if (event.target instanceof Node && element.contains(event.target)) return;
