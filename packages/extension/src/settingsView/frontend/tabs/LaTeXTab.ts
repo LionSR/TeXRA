@@ -442,6 +442,7 @@ export class LaTeXTab extends LitElement {
   configValues: LatexConfigValues = {};
 
   @property({ type: Boolean, attribute: 'config-loaded' }) configLoaded = false;
+  @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   @state() private expandedGuides = new Set<string>();
 
@@ -655,7 +656,9 @@ export class LaTeXTab extends LitElement {
             </button>
             <button
               class="tab-action-btn"
-              title="Run ${pmName} installer in VS Code terminal"
+              title=${this.desktopHost
+                ? `Run ${pmName} installer`
+                : `Run ${pmName} installer in VS Code terminal`}
               @click=${() => this.handleRunInTerminal(installCommand)}
             >
               <span class="codicon codicon-terminal"></span>
@@ -668,13 +671,17 @@ export class LaTeXTab extends LitElement {
   }
 
   private renderDependencies(): TemplateResult {
+    const dependencies = this.desktopHost
+      ? DEPENDENCIES.filter((dep) => dep.key !== 'latexWorkshopInstalled')
+      : DEPENDENCIES;
+
     return html`
       <div class="section-header">
         <span class="codicon codicon-package"></span>
         Dependencies
       </div>
       ${this.renderPrerequisiteHint()}
-      ${DEPENDENCIES.map((dep) => this.renderDependencyCard(dep))}
+      ${dependencies.map((dep) => this.renderDependencyCard(dep))}
     `;
   }
 
@@ -734,7 +741,7 @@ export class LaTeXTab extends LitElement {
 
     return html`
       <div class="tab-content-container">
-        ${!this.allSettingsSet()
+        ${!this.desktopHost && !this.allSettingsSet()
           ? html`
               <div class="latex-header">
                 <button
@@ -749,19 +756,27 @@ export class LaTeXTab extends LitElement {
             `
           : nothing}
         ${this.renderDependencies()}
+        ${this.desktopHost
+          ? nothing
+          : html`
+              <div
+                class="section-header"
+                style="margin-top:var(--spacing-large)"
+              >
+                <span class="codicon codicon-settings-gear"></span>
+                Recommended Settings
+              </div>
 
-        <div class="section-header" style="margin-top:var(--spacing-large)">
-          <span class="codicon codicon-settings-gear"></span>
-          Recommended Settings
-        </div>
+              <div class="latex-description">
+                Agents create temporary files during compilation. The following
+                VS Code settings are recommended to keep your workspace tidy and
+                avoid distracting sidebar activity.
+              </div>
 
-        <div class="latex-description">
-          Agents create temporary files during compilation. The following VS
-          Code settings are recommended to keep your workspace tidy and avoid
-          distracting sidebar activity.
-        </div>
-
-        ${RECOMMENDED_SETTINGS.map((info) => this.renderSettingCard(info))}
+              ${RECOMMENDED_SETTINGS.map((info) =>
+                this.renderSettingCard(info),
+              )}
+            `}
         ${this.renderCompileDiffSettings()}
       </div>
     `;
