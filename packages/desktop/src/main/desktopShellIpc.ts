@@ -21,6 +21,7 @@ import {
 } from './desktopIpcTypes.js';
 import {
   buildDesktopSettingsTabMessage,
+  DESKTOP_DOCS_URL,
   DESKTOP_LOCAL_COMMANDS,
   type DesktopCommandActions,
 } from '../desktopCommandSurface.js';
@@ -32,6 +33,7 @@ export type DesktopShellIpcOptions =
 export interface DesktopShellActionFactoryOptions {
   actions?: never;
   getCustomAgentDirectory?: () => Promise<string>;
+  openExternalUrl?: (url: string) => Promise<void>;
   openLogFolder?: () => Promise<void>;
   openPath?: (filePath: string) => Promise<void>;
   openWorkspaceFolder?: () => Promise<void>;
@@ -113,6 +115,10 @@ export function createDesktopShellActions(
     void options.openWorkspaceFolder?.().catch(reportAsyncError);
   }
 
+  function openDesktopDocs() {
+    void options.openExternalUrl?.(DESKTOP_DOCS_URL).catch(reportAsyncError);
+  }
+
   function signIn() {
     if (!options.signIn) {
       postSettingsRoute(SETTINGS_TAB.MODELS);
@@ -124,6 +130,7 @@ export function createDesktopShellActions(
   return {
     signIn,
     openAgentDirectory,
+    openDesktopDocs,
     openLogFolder,
     openWorkspaceFolder,
     setRecentCommitsUnavailable: () => {
@@ -192,6 +199,9 @@ export function createDesktopShellIpc(
           return true;
         case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
           actions.openWorkspaceFolder?.();
+          return true;
+        case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
+          actions.openDesktopDocs?.();
           return true;
         default:
           return false;
