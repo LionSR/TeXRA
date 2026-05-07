@@ -23,19 +23,15 @@ import {
 } from '@shared/utils/icons';
 import { formatRelativeTime } from '@shared/utils/string';
 import { layoutStyles } from '../styles/logStyles';
-import { ELEMENT_IDS, FILTER_BUTTONS } from '../constants';
+import {
+  ACTIVE_STREAM_STATUSES,
+  ELEMENT_IDS,
+  FILTER_BUTTONS,
+} from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement, getRadioValue, setsEqual } from '../utils';
 import type { StreamState } from '../store';
 import type { StreamFilter } from '../store';
-
-/** Stream statuses considered active (non-terminal) for child stream display. */
-const ACTIVE_CHILD_STATUSES: ReadonlySet<string> = new Set([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.WAITING,
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.RESUMING,
-]);
 
 type ChildActivity = 'active' | 'finished' | 'unknown';
 
@@ -51,7 +47,7 @@ function classifyChild(
 ): ChildActivity {
   const status = streamStates.get(name)?.status;
   if (status === undefined) return 'unknown';
-  return ACTIVE_CHILD_STATUSES.has(status) ? 'active' : 'finished';
+  return ACTIVE_STREAM_STATUSES.has(status) ? 'active' : 'finished';
 }
 
 function buildTooltip(

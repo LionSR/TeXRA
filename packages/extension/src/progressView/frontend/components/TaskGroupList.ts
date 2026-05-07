@@ -29,7 +29,11 @@ import { formatDuration } from '@utils/core';
 // Local imports - shared styles
 
 // Local imports - progress view constants
-import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
+import {
+  ACTIVE_STREAM_STATUSES,
+  ELEMENT_IDS,
+  GROUP_DOM_IDS,
+} from '../constants';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
@@ -50,13 +54,6 @@ interface GroupTree {
 const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
-
-const ACTIVE_STREAM_STATUSES: ReadonlySet<string> = new Set([
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.RESUMING,
-  STREAM_STATUS.WAITING,
-]);
 
 const ESCAPE_CHARACTER = String.fromCharCode(27);
 // Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
