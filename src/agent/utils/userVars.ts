@@ -467,13 +467,13 @@ function getOutputFilesOrder(
     Array.isArray(agentConfig.outputFiles) &&
     agentConfig.outputFiles.length > 0
   ) {
-    userVars.OUTPUT_FILES_ORDER = agentConfig.outputFiles.join(', ');
+    userVars.OUTPUT_FILES_ORDER = agentConfig.outputFiles;
   } else if (
     Array.isArray(agentSetting.defaultOutputFiles) &&
     agentSetting.defaultOutputFiles.length > 0
   ) {
     agentConfig.outputFiles = agentSetting.defaultOutputFiles;
-    userVars.OUTPUT_FILES_ORDER = agentSetting.defaultOutputFiles.join(', ');
+    userVars.OUTPUT_FILES_ORDER = agentSetting.defaultOutputFiles;
   }
   return userVars;
 }
