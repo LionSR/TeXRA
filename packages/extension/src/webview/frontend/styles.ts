@@ -34,12 +34,6 @@ export const mainViewStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
-  .view-header vscode-tabs {
-    flex: 1;
-    min-width: 0;
-    --panel-display: none;
-  }
-
   .header-action {
     flex-shrink: 0;
   }

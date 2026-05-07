@@ -23,6 +23,7 @@ import {
   codiconStyles,
   commonViewStyles,
   designTokens,
+  waTabThemeTokenStyles,
 } from '@shared/styles';
 
 // Local imports - shared schemas and constants
@@ -32,6 +33,7 @@ import {
   type ProviderKeyStatus,
   type ModelSelectionItem,
   SETTINGS_TAB,
+  SETTINGS_TAB_ORDER,
 } from '@shared/schemas';
 import {
   registerTeXRAWebAwesomeIcons,
@@ -60,12 +62,13 @@ import { NESTED_DELEGATION_DEPTH_RANGE } from '@shared/constants/delegationPolic
 // Local imports - settings view
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import '@shared/wa/tabs';
+import type { WaTabShowEvent } from '@shared/wa/tabs';
 import { settingsViewStyles } from './styles';
 import {
   dispatchSettingsViewMessage,
   type SettingsMessageHandlerContext,
 } from './settingsViewDispatcher';
-import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
 
 // Side-effect: register tab components
 import './tabs/MemoryTab';
@@ -90,6 +93,12 @@ const HISTORY_ACTION_COMMANDS: Record<string, string> = {
 };
 
 const API_KEY_PROVIDER_SET = new Set<string>(API_KEY_PROVIDER_IDS);
+
+function toSettingsTabPanelName(name: string): string {
+  return name.toLowerCase().replaceAll('_', '-');
+}
+
+const SETTINGS_TAB_PANEL_NAMES = SETTINGS_TAB_ORDER.map(toSettingsTabPanelName);
 
 /** Create an event handler that forwards event.detail to a postMessage command. */
 function forwardDetail<T extends Record<string, unknown>>(
@@ -130,16 +139,23 @@ export class SettingsApp extends SettingsAppBase {
         height: 100%;
       }
 
-      vscode-tabs {
+      wa-tab-group.settings-tabs {
         flex: 1;
         display: flex;
         flex-direction: column;
+        min-height: 0;
+        ${waTabThemeTokenStyles}
       }
 
-      vscode-tab-panel {
+      wa-tab-group.settings-tabs::part(body) {
+        flex: 1;
+        min-height: 0;
+      }
+
+      wa-tab-panel {
         flex: 1;
         overflow: auto;
-        padding: var(--spacing-large);
+        --padding: var(--spacing-large);
       }
 
       .settings-unavailable {
@@ -307,8 +323,11 @@ export class SettingsApp extends SettingsAppBase {
     }
   }
 
-  private handleTabSelect(event: VscTabsSelectEvent): void {
-    this.selectedTabIndex.set(event.detail.selectedIndex);
+  private handleTabShow(event: WaTabShowEvent): void {
+    const selectedIndex = SETTINGS_TAB_PANEL_NAMES.indexOf(event.detail.name);
+    if (selectedIndex >= 0) {
+      this.selectedTabIndex.set(selectedIndex);
+    }
   }
 
   // Memory event handlers
@@ -793,44 +812,39 @@ export class SettingsApp extends SettingsAppBase {
       <div class="settings-container">
         ${this.renderHeader()}
 
-        <vscode-tabs
-          .selectedIndex=${this.selectedTabIndex.get()}
-          @vsc-tabs-select=${this.handleTabSelect}
+        <wa-tab-group
+          class="settings-tabs"
+          .active=${SETTINGS_TAB_PANEL_NAMES[this.selectedTabIndex.get()] ??
+          'memory'}
+          @wa-tab-show=${this.handleTabShow}
         >
-          <vscode-tab-header slot="header"
-            ><span class="codicon codicon-database"></span>
-            Memory</vscode-tab-header
+          <wa-tab panel="memory"
+            ><span class="codicon codicon-database"></span> Memory</wa-tab
           >
-          <vscode-tab-header slot="header"
-            ><span class="codicon codicon-history"></span>
-            History</vscode-tab-header
+          <wa-tab panel="history"
+            ><span class="codicon codicon-history"></span> History</wa-tab
           >
-          <vscode-tab-header slot="header"
-            ><span class="codicon codicon-server"></span>
-            Models</vscode-tab-header
+          <wa-tab panel="models"
+            ><span class="codicon codicon-server"></span> Models</wa-tab
           >
-          <vscode-tab-header slot="header"
-            ><span class="codicon codicon-robot"></span>
-            Agents</vscode-tab-header
+          <wa-tab panel="agents"
+            ><span class="codicon codicon-robot"></span> Agents</wa-tab
           >
-          <vscode-tab-header slot="header"
+          <wa-tab panel="multi-agent"
             ><span class="codicon codicon-organization"></span>
-            Multi-Agent</vscode-tab-header
+            Multi-Agent</wa-tab
           >
-          <vscode-tab-header slot="header"
-            ><span class="codicon codicon-tools"></span>
-            Tools</vscode-tab-header
+          <wa-tab panel="tools"
+            ><span class="codicon codicon-tools"></span> Tools</wa-tab
           >
-          <vscode-tab-header slot="header"
-            ><span class="codicon codicon-git-commit"></span>
-            Git</vscode-tab-header
+          <wa-tab panel="git"
+            ><span class="codicon codicon-git-commit"></span> Git</wa-tab
           >
-          <vscode-tab-header slot="header"
-            ><span class="codicon codicon-file-code"></span>
-            LaTeX</vscode-tab-header
+          <wa-tab panel="latex"
+            ><span class="codicon codicon-file-code"></span> LaTeX</wa-tab
           >
 
-          <vscode-tab-panel>
+          <wa-tab-panel name="memory">
             ${desktopHost
               ? this.renderDesktopUnavailablePanel(
                   'Memory is not available in desktop yet',
@@ -850,9 +864,9 @@ export class SettingsApp extends SettingsAppBase {
                     @memory-unpin-item=${this.handleMemoryUnpinItem}
                   ></memory-tab>
                 `}
-          </vscode-tab-panel>
+          </wa-tab-panel>
 
-          <vscode-tab-panel>
+          <wa-tab-panel name="history">
             ${desktopHost
               ? this.renderDesktopUnavailablePanel(
                   'History is not available in desktop yet',
@@ -865,9 +879,9 @@ export class SettingsApp extends SettingsAppBase {
                     @history-clear=${this.handleClearHistory}
                   ></history-tab>
                 `}
-          </vscode-tab-panel>
+          </wa-tab-panel>
 
-          <vscode-tab-panel>
+          <wa-tab-panel name="models">
             <models-tab
               .authenticated=${this.authenticated.get()}
               .apiAccessMode=${this.apiAccessMode.get()}
@@ -893,9 +907,9 @@ export class SettingsApp extends SettingsAppBase {
               @prefer-short-model-names-set=${this
                 .handleSetPreferShortModelNames}
             ></models-tab>
-          </vscode-tab-panel>
+          </wa-tab-panel>
 
-          <vscode-tab-panel>
+          <wa-tab-panel name="agents">
             <agents-tab
               .workflowAgents=${this.workflowAgents.get()}
               .toolUseAgents=${this.toolUseAgents.get()}
@@ -917,9 +931,9 @@ export class SettingsApp extends SettingsAppBase {
               @save-agent-mode-preset=${this.handleSaveAgentModePreset}
               @agent-view-remote-prompt=${this.handleViewRemoteAgentPrompt}
             ></agents-tab>
-          </vscode-tab-panel>
+          </wa-tab-panel>
 
-          <vscode-tab-panel>
+          <wa-tab-panel name="multi-agent">
             <multi-agent-tab
               .reliabilitySettings=${this.reliabilitySettings.get()}
               .customPresets=${this.customPresets.get()}
@@ -938,9 +952,9 @@ export class SettingsApp extends SettingsAppBase {
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
             ></multi-agent-tab>
-          </vscode-tab-panel>
+          </wa-tab-panel>
 
-          <vscode-tab-panel>
+          <wa-tab-panel name="tools">
             <tools-tab
               .items=${this.toolDashboardItems.get()}
               .loaded=${this.toolDashboardLoaded.get()}
@@ -967,9 +981,9 @@ export class SettingsApp extends SettingsAppBase {
               @desktop-crash-reporting-dsn-set=${this
                 .handleDesktopCrashReportingDsnSet}
             ></tools-tab>
-          </vscode-tab-panel>
+          </wa-tab-panel>
 
-          <vscode-tab-panel>
+          <wa-tab-panel name="git">
             <git-tab
               .markCommits=${this.gitMarkCommits.get()}
               .authorName=${this.gitAuthorName.get()}
@@ -988,9 +1002,9 @@ export class SettingsApp extends SettingsAppBase {
               .githubTokenStatus=${this.githubTokenStatus.get()}
               .prSubscriptions=${this.prSubscriptions.get()}
             ></git-tab>
-          </vscode-tab-panel>
+          </wa-tab-panel>
 
-          <vscode-tab-panel>
+          <wa-tab-panel name="latex">
             <latex-tab
               .settings=${this.latexSettingsStatus.get()}
               .loaded=${this.latexSettingsLoaded.get()}
@@ -1002,8 +1016,8 @@ export class SettingsApp extends SettingsAppBase {
               @latex-run-install-command=${this.handleRunInstallCommand}
               @latex-set-config-value=${this.handleSetLatexConfigValue}
             ></latex-tab>
-          </vscode-tab-panel>
-        </vscode-tabs>
+          </wa-tab-panel>
+        </wa-tab-group>
         ${this.renderProviderKeyModal()}
       </div>
     `;
