@@ -258,6 +258,16 @@ function createWindow(options: {
     showErrorMessage: async (message) => {
       await dialog.showMessageBox(window, { type: 'error', message });
     },
+    confirmAction: async (message, confirmLabel = 'OK') => {
+      const result = await dialog.showMessageBox(window, {
+        type: 'warning',
+        message,
+        buttons: [confirmLabel, 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      return result.response === 0;
+    },
     signIn: () => desktopAuth.signIn(),
     signOut: () => desktopAuth.signOut(),
     getAuthProfileData: () => desktopAuth.getProfileData(),
