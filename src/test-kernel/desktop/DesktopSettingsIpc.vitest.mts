@@ -87,6 +87,10 @@ interface DesktopSettingsIpcModule {
     }) => Promise<string | undefined>;
     showInfoMessage?: (message: string) => Promise<void>;
     showErrorMessage?: (message: string) => Promise<void>;
+    confirmAction?: (
+      message: string,
+      confirmLabel?: string,
+    ) => Promise<boolean>;
     signIn?: () => Promise<void>;
     signOut?: () => Promise<void>;
     getAuthProfileData?: () => Promise<Record<string, unknown>>;
@@ -1596,6 +1600,67 @@ describe('desktop settings IPC', () => {
           SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       ),
     ).toEqual([]);
+  });
+
+  it('handles desktop memory toggle messages', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED,
+      }),
+    ).toBe(true);
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
+      enabled: true,
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
+        enabled: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(globalState.values.get(GlobalStateKey.MEMORY_ENABLED)).toBe(false);
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
+      enabled: false,
+    });
+  });
+
+  it('surfaces unsupported desktop history actions instead of dropping them', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const messages: string[] = [];
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      showInfoMessage: async (message) => {
+        messages.push(message);
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+        historyId: 'abcdef',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(messages).toEqual([
+      'Rerun from history is not available in the desktop app yet.',
+    ]);
   });
 
   it('ignores unsupported or malformed settings messages', async () => {
