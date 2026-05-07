@@ -24,6 +24,15 @@ const payloadUrl = pathToFileURL(
 const pruneHookUrl = pathToFileURL(
   repoPath('scripts/prune-desktop-codex-payload.mjs'),
 ).href;
+const extensionPackageUtilsUrl = pathToFileURL(
+  repoPath('scripts/extension-package-utils.mjs'),
+).href;
+
+const { requiredMonacoWorkers } = (await import(
+  extensionPackageUtilsUrl
+)) as {
+  requiredMonacoWorkers: string[];
+};
 
 const codexPlatforms = {
   'darwin-arm64': {
@@ -227,6 +236,12 @@ function createFakeDesktopPackage(
   writeText(join(appRoot, 'dist/renderer/index.html'), '<!doctype html>\n');
   writeText(join(appRoot, 'dist/renderer/assets/app.js'), 'export {};\n');
   writeText(join(appRoot, 'dist/renderer/assets/app.css'), ':root {}\n');
+  for (const workerName of requiredMonacoWorkers) {
+    writeText(
+      join(appRoot, 'dist/renderer/assets', `${workerName}-fake.js`),
+      'self.onmessage = () => {};\n',
+    );
+  }
   writeText(join(appRoot, 'resources/agents/example.yaml'), 'name: example\n');
   writeText(
     join(appRoot, 'resources/tool_use_agents/example.yaml'),
