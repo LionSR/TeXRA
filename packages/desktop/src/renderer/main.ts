@@ -175,6 +175,7 @@ appRoot.append(firstRunWalkthrough.element);
 
 const commandPalette = createDesktopCommandPalette({
   document,
+  canOpen: () => !firstRunWalkthrough.isVisible(),
   actions: {
     showRoute: setRoute,
     showSettings: (tabIndex, agentSubTab) => {
@@ -322,6 +323,7 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
 
 function createFirstRunWalkthrough(): {
   element: HTMLElement;
+  isVisible(): boolean;
   show(): void;
   hide(): void;
 } {
@@ -458,7 +460,7 @@ function createFirstRunWalkthrough(): {
     focusable[nextIndex]?.focus();
   });
 
-  return { element, show, hide };
+  return { element, isVisible: () => !element.hidden, show, hide };
 }
 
 function createLogViewer(): HTMLElement {
