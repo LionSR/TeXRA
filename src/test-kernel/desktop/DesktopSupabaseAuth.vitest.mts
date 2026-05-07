@@ -1,5 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import * as agentRegistry from '@agent/index/agentRegistry';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { setServerSideKeyService } from '@auth/serverKeys';
 import { createDesktopProtocolCallbackRouter } from '../../../packages/desktop/src/main/desktopProtocolCallbacks';
@@ -113,7 +116,34 @@ function createDeferred<T>() {
   return { promise, resolve };
 }
 
+function installAuthenticatedSupabaseProvider() {
+  const ensureFreshToken = vi.fn(async () => 'fresh-access-token');
+  SupabaseClient.initialize('https://example.supabase.co', 'public-key');
+  SupabaseClient.setAuthProvider({
+    whenReady: vi.fn(async () => {}),
+    ensureFreshToken,
+    getSessionTokens: vi.fn(async () => ({
+      accessToken: 'fresh-access-token',
+      refreshToken: 'refresh-token',
+    })),
+  });
+  vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
+    id: 'user-1',
+    email: 'user@example.com',
+  } as never);
+  vi.spyOn(SupabaseClient, 'getUserAuthContext').mockResolvedValue({
+    tier: 'free',
+    permissions: ['public'],
+  });
+  return { ensureFreshToken };
+}
+
 describe('desktop Supabase auth', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    SupabaseClient.resetForTests();
+  });
+
   it('opens Supabase OAuth with the desktop texra callback URI', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
@@ -545,6 +575,83 @@ describe('desktop Supabase auth', () => {
 
     expect(coordinator.clearSession).toHaveBeenCalled();
     expect(clearAllCaches).toHaveBeenCalledOnce();
+    auth.dispose();
+  });
+
+  it('refreshes desktop session state and exposes remote agents in profile data', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const { ensureFreshToken } = installAuthenticatedSupabaseProvider();
+    const loadAgents = vi
+      .spyOn(agentRegistry, 'loadAgents')
+      .mockResolvedValue(undefined);
+    vi.spyOn(agentRegistry, 'getAgentsBySource').mockReturnValue([
+      {
+        name: 'remoteWriter',
+        source: 'remote',
+        path: '',
+        isMultiple: true,
+        category: AgentCategory.Workflow,
+        description: 'Remote writer',
+        visibility: ['public', 'researcher'],
+      },
+    ]);
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator: createCoordinator(),
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      initializeServerSideAccess: false,
+    });
+
+    const profile = await auth.getProfileData();
+
+    expect(ensureFreshToken).toHaveBeenCalled();
+    expect(loadAgents).toHaveBeenCalled();
+    expect(profile).toMatchObject({
+      authenticated: true,
+      user: { email: 'user@example.com', id: 'user-1' },
+      tier: 'free',
+      permissions: ['public'],
+      remoteAgents: [
+        {
+          name: 'remoteWriter',
+          description: 'Remote writer',
+          visibility: ['public', 'researcher'],
+          category: 'workflow',
+          supportsMultipleOutput: true,
+        },
+      ],
+    });
+    auth.dispose();
+  });
+
+  it('keeps authenticated profile data when remote agent refresh fails', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    installAuthenticatedSupabaseProvider();
+    vi.spyOn(agentRegistry, 'loadAgents').mockRejectedValue(
+      new Error('agent directory unavailable'),
+    );
+    const getAgentsBySource = vi
+      .spyOn(agentRegistry, 'getAgentsBySource')
+      .mockReturnValue([]);
+    const auth = createDesktopSupabaseAuth({
+      router,
+      coordinator: createCoordinator(),
+      oauthClient: createOAuthClient(),
+      secrets: createSecrets(),
+      openExternalUrl: vi.fn(async () => {}),
+      initializeServerSideAccess: false,
+    });
+
+    const profile = await auth.getProfileData();
+
+    expect(profile).toMatchObject({
+      authenticated: true,
+      user: { email: 'user@example.com', id: 'user-1' },
+      remoteAgents: [],
+    });
+    expect(getAgentsBySource).not.toHaveBeenCalled();
     auth.dispose();
   });
 });
