@@ -1,4 +1,5 @@
 import { GlobalStateKey } from '@common/state/stateKeys';
+import { escapeRegExp } from '@utils/core/stringCore';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { StateStore } from '@platform/interfaces/state';
 
@@ -39,10 +40,6 @@ function pathVariants(path: string): string[] {
   const forward = trimmed.replaceAll('\\', '/');
   const backward = forward.replaceAll('/', '\\');
   return [...new Set([trimmed, forward, backward])];
-}
-
-function escapeRegExp(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function buildPathScrubbers(paths: readonly (string | undefined)[]): RegExp[] {
