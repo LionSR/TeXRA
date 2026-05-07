@@ -17,12 +17,13 @@ const nonce = 'texra-webview-smoke';
 
 const commonReplacements = {
   cspSource: 'file:',
-  codiconUri: fileUri('node_modules/@vscode/codicons/dist/codicon.css'),
+  codiconUri: fileUri('packages/extension/dist/shared/codicon.css'),
+  codiconsFontUri: fileUri('packages/extension/dist/shared/codicon.ttf'),
   commonStyleUri: fileUri('packages/extension/src/common/styles/common.css'),
   commonsBundleUri: fileUri('packages/extension/dist/shared/commons.js'),
   nonce,
   vscodeElementsBundleUri: fileUri(
-    'node_modules/@vscode-elements/elements/dist/bundled.js',
+    'packages/extension/dist/shared/vscode-elements-bundled.js',
   ),
 };
 
@@ -32,18 +33,47 @@ const views = [
     tagName: 'main-app',
     templatePath: join(extensionRoot, 'src', 'webview', 'index.html'),
     replacements: {
-      codiconsFontUri: fileUri('packages/extension/dist/webview/codicon.ttf'),
       mainViewBundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
     },
+    fixtureMessages: [
+      {
+        command: 'setInputFile',
+        files: ['appendix.tex', 'coverLetter.tex', 'main.tex'],
+      },
+      {
+        command: 'inputFileSelected',
+        filePath: 'main.tex',
+      },
+      {
+        command: 'setInputFiles',
+        files: ['appendix.tex', 'References/2509.24978/main.tex'],
+      },
+      {
+        command: 'setReferenceFile',
+        files: ['refs.bib', 'References/2509.24978/main.bbl'],
+      },
+      {
+        command: 'setReferenceFiles',
+        files: ['refs.bib', 'References/2509.24978/only_supplement.tex'],
+      },
+      {
+        command: 'setAuxiliaryFiles',
+        files: ['ltxfront.sty', 'References/2509.24978/revtex4-2.cls'],
+      },
+      {
+        command: 'setMediaFiles',
+        files: [
+          'Fig.1.pdf',
+          'References/2509.24978/summary_figure_arbitrary1d_6.jpg',
+        ],
+      },
+    ],
   },
   {
     name: 'progress',
     tagName: 'progress-app',
     templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
     replacements: {
-      codiconsFontUri: fileUri(
-        'packages/extension/dist/progressView/codicon.ttf',
-      ),
       progressBundleUri: fileUri(
         'packages/extension/dist/progressView/bundle.js',
       ),
@@ -57,9 +87,6 @@ const views = [
     tagName: 'settings-app',
     templatePath: join(extensionRoot, 'src', 'settingsView', 'index.html'),
     replacements: {
-      codiconsFontUri: fileUri(
-        'packages/extension/dist/settingsView/codicon.ttf',
-      ),
       settingsBundleUri: fileUri(
         'packages/extension/dist/settingsView/bundle.js',
       ),
@@ -121,6 +148,7 @@ async function prepareViewHtml(view) {
   const htmlPath = join(generatedHtmlDir, `${view.name}.html`);
   await writeFile(htmlPath, html);
   return {
+    fixtureMessages: view.fixtureMessages ?? [],
     htmlPath,
     name: view.name,
     tagName: view.tagName,
