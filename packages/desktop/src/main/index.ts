@@ -269,6 +269,10 @@ function createWindow(options: {
       });
       return result.canceled ? undefined : result.filePaths[0];
     },
+    openPath: previewHost.openPath,
+    revealPath: async (filePath) => {
+      shell.showItemInFolder(filePath);
+    },
     openExternalUrl: (url) => previewHost.openExternal(url),
     installToolExtension: async (extensionId) => {
       await previewHost.openExternal(

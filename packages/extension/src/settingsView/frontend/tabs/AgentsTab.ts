@@ -184,6 +184,7 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) customAgentDirIsDefault = true;
   @property({ attribute: false }) initialSubTab?: AgentCategory;
   @property({ attribute: false }) userTier = 'free';
+  @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   @state() private activeSubTab: AgentCategory = 'workflow';
 
@@ -271,22 +272,26 @@ export class AgentsTab extends LitElement {
               <span class="codicon codicon-save"></span>
               Save Team
             </button>
-            <button
-              class="tab-action-btn"
-              @click=${this.handleCreateFromTemplate}
-              title="Create a new agent from a blank YAML template"
-            >
-              <span class="codicon codicon-new-file"></span>
-              From Template
-            </button>
-            <button
-              class="tab-action-btn agents-create-btn"
-              @click=${this.handleCreateAgent}
-              title="Create a new agent with AI"
-            >
-              <span class="codicon codicon-add"></span>
-              New Agent
-            </button>
+            ${this.desktopHost
+              ? nothing
+              : html`
+                  <button
+                    class="tab-action-btn"
+                    @click=${this.handleCreateFromTemplate}
+                    title="Create a new agent from a blank YAML template"
+                  >
+                    <span class="codicon codicon-new-file"></span>
+                    From Template
+                  </button>
+                  <button
+                    class="tab-action-btn agents-create-btn"
+                    @click=${this.handleCreateAgent}
+                    title="Create a new agent with AI"
+                  >
+                    <span class="codicon codicon-add"></span>
+                    New Agent
+                  </button>
+                `}
           </div>
         </div>
 
@@ -331,6 +336,7 @@ export class AgentsTab extends LitElement {
           .agents=${activeAgents}
           .category=${this.activeSubTab}
           .userTier=${this.userTier}
+          .desktopHost=${this.desktopHost}
         ></agent-selection-panel>
       </div>
     `;
