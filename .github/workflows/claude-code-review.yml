@@ -33,7 +33,7 @@ jobs:
       CLAUDE_OPUS_MODEL: ${{ vars.CLAUDE_OPUS_MODEL }}
       CLAUDE_SONNET_MODEL: ${{ vars.CLAUDE_SONNET_MODEL }}
       DEEPSEEK_BASE_URL: https://api.deepseek.com/anthropic
-      CLAUDE_ALLOWED_TOOLS: >
+      CLAUDE_ALLOWED_TOOLS: >-
         Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api graphql:*),Bash(git diff:*),Bash(git log:*),mcp__github_inline_comment__create_inline_comment,mcp__github__*
 
     steps:

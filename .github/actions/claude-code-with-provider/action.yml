@@ -279,6 +279,9 @@ runs:
         if [ -z "$allowed_tools" ]; then
           allowed_tools="${CLAUDE_ALLOWED_TOOLS-}"
         fi
+        if [ -n "$allowed_tools" ]; then
+          allowed_tools="$(printf '%s' "$allowed_tools")"
+        fi
 
         system_prompt="$INPUT_SYSTEM_PROMPT"
         system_prompt_path=""
@@ -348,7 +351,6 @@ runs:
         write_output anthropic_api_key "$anthropic_api_key"
         write_output base_url "$base_url"
         write_output model "$model"
-        write_output provider "$provider"
         write_output allowed_bots "$allowed_bots"
         write_output branch_name_template "$branch_name_template"
         write_output bot_id "$bot_id"
@@ -358,7 +360,6 @@ runs:
         write_output plugins "$plugins"
         write_output prompt "$prompt"
         write_output claude_args "$claude_args"
-        write_output append_system_prompt "$append_system_prompt"
 
     - name: Run Claude Code
       uses: anthropics/claude-code-action@v1
