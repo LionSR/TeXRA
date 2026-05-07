@@ -192,6 +192,7 @@ export class GitTab extends LitElement {
     'none';
   @property({ attribute: false })
   prSubscriptions: readonly PRSubscriptionEntry[] = [];
+  @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   private handleMarkCommitsToggle(event: Event): void {
     const target = event.target as HTMLInputElement | null;
@@ -254,73 +255,76 @@ export class GitTab extends LitElement {
     const tokenIsSet = this.githubTokenStatus !== 'none';
     return html`
       <div class="git-container">
-        <div class="setting-block">
-          <p class="section-title">GitHub personal access token</p>
-          <p class="setting-description">
-            Used to poll GitHub for pull request events (comments, reviews,
-            failed CI) when you subscribe to a PR.
-          </p>
-          <div class="token-row">
-            <span class="token-row-label">Status:</span>
-            ${this.renderTokenStatusBadge()}
-            <span class="token-actions">
-              <button
-                class="tab-action-btn"
-                @click=${this.handleSetGitHubToken}
-              >
-                <span class="codicon codicon-key"></span>
-                ${tokenIsSet ? 'Replace token' : 'Set token'}
-              </button>
-              ${this.githubTokenStatus === 'secret'
-                ? html`<button
-                    class="tab-action-btn token-remove-btn"
-                    @click=${this.handleRemoveGitHubToken}
-                  >
-                    <span class="codicon codicon-trash"></span>
-                    Remove
-                  </button>`
-                : nothing}
-              <button
-                class="tab-action-btn"
-                @click=${this.handleOpenGitHubTokenUrl}
-              >
-                <span class="codicon codicon-github"></span>
-                Create on GitHub…
-              </button>
-            </span>
-          </div>
-          <div class="instructions">
-            <strong>How to get a token:</strong>
-            <ol>
-              <li>
-                Click <em>Create on GitHub…</em> to open the token-creation page
-                in your browser.
-              </li>
-              <li>
-                Choose scopes: <code>repo</code> for private repos or
-                <code>public_repo</code> for public only. Read-only usage; no
-                write scopes needed.
-              </li>
-              <li>
-                Pick an expiration (90 days is common) and click
-                <em>Generate token</em>.
-              </li>
-              <li>
-                Copy the token (shown only once) and paste it here via
-                <em>Set token</em>.
-              </li>
-            </ol>
-            ${this.githubTokenStatus === 'env'
-              ? html`<p>
-                  A token is currently being read from the
-                  <code>GITHUB_TOKEN</code> environment variable. Setting one
-                  above will override it.
-                </p>`
-              : nothing}
-          </div>
-        </div>
-
-        ${this.prSubscriptions.length > 0
+        ${this.desktopHost
+          ? nothing
+          : html`
+              <div class="setting-block">
+                <p class="section-title">GitHub personal access token</p>
+                <p class="setting-description">
+                  Used to poll GitHub for pull request events (comments,
+                  reviews, failed CI) when you subscribe to a PR.
+                </p>
+                <div class="token-row">
+                  <span class="token-row-label">Status:</span>
+                  ${this.renderTokenStatusBadge()}
+                  <span class="token-actions">
+                    <button
+                      class="tab-action-btn"
+                      @click=${this.handleSetGitHubToken}
+                    >
+                      <span class="codicon codicon-key"></span>
+                      ${tokenIsSet ? 'Replace token' : 'Set token'}
+                    </button>
+                    ${this.githubTokenStatus === 'secret'
+                      ? html`<button
+                          class="tab-action-btn token-remove-btn"
+                          @click=${this.handleRemoveGitHubToken}
+                        >
+                          <span class="codicon codicon-trash"></span>
+                          Remove
+                        </button>`
+                      : nothing}
+                    <button
+                      class="tab-action-btn"
+                      @click=${this.handleOpenGitHubTokenUrl}
+                    >
+                      <span class="codicon codicon-github"></span>
+                      Create on GitHub…
+                    </button>
+                  </span>
+                </div>
+                <div class="instructions">
+                  <strong>How to get a token:</strong>
+                  <ol>
+                    <li>
+                      Click <em>Create on GitHub…</em> to open the
+                      token-creation page in your browser.
+                    </li>
+                    <li>
+                      Choose scopes: <code>repo</code> for private repos or
+                      <code>public_repo</code> for public only. Read-only usage;
+                      no write scopes needed.
+                    </li>
+                    <li>
+                      Pick an expiration (90 days is common) and click
+                      <em>Generate token</em>.
+                    </li>
+                    <li>
+                      Copy the token (shown only once) and paste it here via
+                      <em>Set token</em>.
+                    </li>
+                  </ol>
+                  ${this.githubTokenStatus === 'env'
+                    ? html`<p>
+                        A token is currently being read from the
+                        <code>GITHUB_TOKEN</code> environment variable. Setting
+                        one above will override it.
+                      </p>`
+                    : nothing}
+                </div>
+              </div>
+            `}
+        ${!this.desktopHost && this.prSubscriptions.length > 0
           ? html`
               <div class="setting-block">
                 <p class="section-title">Active GitHub subscriptions</p>
