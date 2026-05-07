@@ -39,7 +39,6 @@ const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
   mediaFile: z.string().nullable().prefault(null),
   mediaFiles: z.array(z.string()).prefault([]),
   outputFiles: z.array(z.string()).prefault([]),
-  useMultipleOutputs: z.boolean().prefault(false),
   toolConfig: ToolConfigSchema,
 });
 

@@ -83,7 +83,6 @@ const WORKFLOW_ONLY_FIELDS = new Set([
   'outputFiles',
   'editedFile',
   'editedFiles',
-  'useMultipleOutputs',
 ]);
 
 /** Config fields only relevant to toolUse agents — hidden for workflow. */

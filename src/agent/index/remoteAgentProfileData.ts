@@ -7,6 +7,6 @@ export function toRemoteAgentProfileData(entry: AgentEntry): RemoteAgent {
     description: entry.description ?? '',
     visibility: entry.visibility ?? ['public'],
     category: entry.category,
-    supportsMultipleOutput: entry.isMultiple ?? false,
+    supportsMultipleOutput: (entry.defaultOutputFiles?.length ?? 0) > 0,
   };
 }

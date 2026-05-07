@@ -45,7 +45,6 @@ describe('MainViewExecutionController', () => {
       model: 'gpt-5.4',
       inputFile: 'paper/main.tex',
       outputFiles: ['paper/revised.tex'],
-      useMultipleOutputs: true,
       agentCategory: AgentCategory.Workflow,
       mediaFiles: ['diagram.png'],
       editedFile: null,

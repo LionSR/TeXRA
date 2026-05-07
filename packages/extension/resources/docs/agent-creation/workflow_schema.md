@@ -17,8 +17,8 @@ settings:
   rounds: 2 # 1 or 2 (default 2)
   temperature: 0.1 # 0.1 for editing, 0.5-0.8 for creative tasks
   outputExt: tex # MUST be "tex" — TeXRA is a LaTeX tool
-  documentTag: latex_document
-  endTag: '</latex_document>'
+  documentTag: documents
+  endTag: '</documents>'
   prefills: # MUST have exactly `rounds` entries
     - '<scratchpad>'
     - '<scratchpad>'
@@ -38,9 +38,9 @@ prompts:
     <instruction>{{ INSTRUCTION }}</instruction>
   userRequest: # MUST be an array with exactly `rounds` entries
     - |
-      [Round 1: plan in <scratchpad>, then emit output wrapped in <latex_document>]
+      [Round 1: plan in <scratchpad>, then emit output as <documents><document name="output.tex">...</document></documents>]
     - |
-      [Round 2: reflect in <scratchpad>, then emit the refined <latex_document>]
+      [Round 2: reflect in <scratchpad>, then emit the refined <documents><document name="output.tex">...</document></documents>]
 ```
 
 ## Critical rules
@@ -68,8 +68,11 @@ Workflow agent prompts receive:
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
 - `{{ REFERENCE_CONTENT }}` — content of reference files
 - `{{ AUXILIARY_CONTENT }}` — content of auxiliary files
-- `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames (multiple-
-  output agents only)
+- `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames; empty/falsy
+  when the user has not selected output files (use `{% if OUTPUT_FILES_ORDER %}`
+  to branch between multi-file and single-file output formats). Use
+  `{{ OUTPUT_FILES_ORDER[0] }}` for a specific filename and
+  `{{ OUTPUT_FILES_ORDER | join(", ") }}` for a human-readable list.
 
 Both categories support `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
 for model-specific instructions.
@@ -85,15 +88,38 @@ for model-specific instructions.
 
 ## Multiple-output agents
 
-For agents producing several files at once, ship a separate `_multiple`
-variant alongside the single-output file:
+All workflow agents use the same unified output protocol regardless of whether
+they produce one file or many. No separate `_multiple` variant is needed.
 
-- Set `isMultipleOutput: true`.
-- Use `documentTag: latex_documents` (plural) and `endTag: "</latex_documents>"`.
-- Add `defaultOutputFiles` with the list of files.
-- Instruct the model to wrap each file in `<document name="...">` blocks
-  inside `<latex_documents>`.
-- Name the file `<agent_name>_multiple.yaml` next to `<agent_name>.yaml`.
+- Use `documentTag: documents` (the default). Omit it unless you need a custom
+  tag for a legacy single-output agent.
+- Add `defaultOutputFiles` with the list of expected filenames when the agent
+  produces a fixed set of outputs.
+- In `userRequest`, branch on `{% if OUTPUT_FILES_ORDER %}` to cover both the
+  multi-file case (user selects multiple outputs) and the single-file fallback.
+  Each output file goes in a separate `<document name="filename.tex">` block
+  inside `<documents>`.
+
+Example output format in `userRequest`:
+
+```
+{% if OUTPUT_FILES_ORDER %}
+<documents>
+<document name="{{ OUTPUT_FILES_ORDER[0] }}">
+% content for first output
+</document>
+<document name="{{ OUTPUT_FILES_ORDER[1] }}">
+% content for second output
+</document>
+</documents>
+{% else %}
+<documents>
+<document name="output.tex">
+% single output content
+</document>
+</documents>
+{% endif %}
+```
 
 ## Inheritance
 
@@ -108,8 +134,8 @@ description: Improves writing quality and clarity based on your instructions.
 
 settings:
   agentCategory: workflow
-  documentTag: latex_document
-  endTag: '</latex_document>'
+  documentTag: documents
+  endTag: '</documents>'
   outputExt: tex
   prefills:
     - '<scratchpad>'
@@ -144,7 +170,8 @@ prompts:
   userRequest:
     - |
       Brainstorm in <scratchpad>, then output the revised LaTeX inside
-      <latex_document> tags.
+      <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
     - |
-      Reflect in <scratchpad>, then emit the improved <latex_document>.
+      Reflect in <scratchpad>, then emit the improved
+      <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
 ```
