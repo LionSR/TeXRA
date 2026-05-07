@@ -23,9 +23,13 @@ interface DesktopPreviewHostModule {
 async function loadDesktopPreviewHost(
   compileLatex2Pdf = vi.fn(async () => true),
   access?: (filePath: string) => Promise<void>,
+  checkToolInstalled = vi.fn(async () => true),
 ): Promise<DesktopPreviewHostModule> {
   vi.resetModules();
   vi.doMock('@latex/texTools', () => ({ compileLatex2Pdf }));
+  vi.doMock('@latex/latexToolchain', () => ({
+    hasLatexCompiler: checkToolInstalled,
+  }));
   if (access != null) {
     vi.doMock('node:fs/promises', async (importOriginal) => ({
       ...(await importOriginal<typeof import('node:fs/promises')>()),
@@ -42,6 +46,7 @@ describe('desktop preview host', () => {
 
   afterEach(async () => {
     vi.doUnmock('@latex/texTools');
+    vi.doUnmock('@latex/latexToolchain');
     vi.doUnmock('node:fs/promises');
     vi.restoreAllMocks();
     const dirs = tempDirs.splice(0);
@@ -168,6 +173,87 @@ describe('desktop preview host', () => {
       { outputDirectory: dir },
     );
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
+  });
+
+  it('opens compile-preview PDF targets without running LaTeX', async () => {
+    const compileLatex2Pdf = vi.fn(async () => true);
+    const checkToolInstalled = vi.fn(async () => true);
+    const { createDesktopPreviewHost } = await loadDesktopPreviewHost(
+      compileLatex2Pdf,
+      undefined,
+      checkToolInstalled,
+    );
+    const dir = await makeTempDir();
+    const pdfPath = path.join(dir, 'preview.pdf');
+    await writeFile(pdfPath, 'pdf');
+    const shell = {
+      openExternal: vi.fn(async (_url: string) => {}),
+      openPath: vi.fn(async (_path: string) => ''),
+    };
+
+    const host = createDesktopPreviewHost({ shell });
+
+    await host.openBuildDisplay({ absolutePath: pdfPath });
+    expect(compileLatex2Pdf).not.toHaveBeenCalled();
+    expect(checkToolInstalled).not.toHaveBeenCalled();
+    expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
+  });
+
+  it('reports missing LaTeX toolchains before compiling preview sources', async () => {
+    const compileLatex2Pdf = vi.fn(async () => true);
+    const checkToolInstalled = vi.fn(async () => false);
+    const { createDesktopPreviewHost } = await loadDesktopPreviewHost(
+      compileLatex2Pdf,
+      undefined,
+      checkToolInstalled,
+    );
+    const dir = await makeTempDir();
+    const texPath = path.join(dir, 'preview.tex');
+    await writeFile(
+      texPath,
+      '\\documentclass{article}\\begin{document}x\\end{document}',
+    );
+    const showErrorMessage = vi.fn();
+    const shell = {
+      openExternal: vi.fn(async (_url: string) => {}),
+      openPath: vi.fn(async (_path: string) => ''),
+    };
+
+    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+
+    const message = `No LaTeX compiler found for ${texPath}. Install latexmk or pdflatex to compile and preview this file.`;
+    await expect(
+      host.openBuildDisplay({ absolutePath: texPath }),
+    ).rejects.toThrow(message);
+    expect(showErrorMessage).toHaveBeenCalledWith(message);
+    expect(compileLatex2Pdf).not.toHaveBeenCalled();
+    expect(shell.openPath).not.toHaveBeenCalled();
+  });
+
+  it('reports LaTeX build failures without opening stale PDFs', async () => {
+    const compileLatex2Pdf = vi.fn(async () => false);
+    const { createDesktopPreviewHost } =
+      await loadDesktopPreviewHost(compileLatex2Pdf);
+    const dir = await makeTempDir();
+    const texPath = path.join(dir, 'preview.tex');
+    await writeFile(
+      texPath,
+      '\\documentclass{article}\\begin{document}x\\end{document}',
+    );
+    const showErrorMessage = vi.fn();
+    const shell = {
+      openExternal: vi.fn(async (_url: string) => {}),
+      openPath: vi.fn(async (_path: string) => ''),
+    };
+
+    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+
+    const message = `LaTeX build failed for ${texPath}. See the LaTeX log next to the source for details.`;
+    await expect(
+      host.openBuildDisplay({ absolutePath: texPath }),
+    ).rejects.toThrow(message);
+    expect(showErrorMessage).toHaveBeenCalledWith(message);
+    expect(shell.openPath).not.toHaveBeenCalled();
   });
 
   it('opens external URLs through Electron shell.openExternal', async () => {
