@@ -188,6 +188,32 @@ export const multiFilesStyles = css`
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .file-name-main,
+  .file-folder {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-name-main {
+    color: var(--texra-foreground);
+  }
+
+  .file-folder {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+  }
+
+  .file-folder .codicon {
+    font-size: var(--font-size-xs);
+    margin-right: var(--spacing-tiny);
   }
 
   .remove-button {

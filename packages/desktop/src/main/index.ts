@@ -43,6 +43,7 @@ import {
   type DesktopAuthCoordinator,
 } from './desktopSupabaseAuth.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
+import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
@@ -124,6 +125,7 @@ function createWindow(options: {
   workspacePath: string | undefined;
   authCoordinator: DesktopAuthCoordinator;
   authCallbackState: DesktopAuthCallbackState;
+  initializeCrashReporting: () => Promise<void>;
 }): void {
   const window = new BrowserWindow({
     width: 960,
@@ -262,6 +264,7 @@ function createWindow(options: {
         mode === 'included',
       );
     },
+    initializeCrashReporting: options.initializeCrashReporting,
     selectCustomAgentDirectory: async () => {
       const result = await dialog.showOpenDialog(window, {
         title: 'Select Custom Agents Folder',
@@ -369,6 +372,30 @@ if (protocolLifecycle.shouldContinue) {
     .whenReady()
     .then(async () => {
       const platformInit = await initializeElectronPlatform(__dirname);
+      let crashReportingInitialized = false;
+      let crashReportingInitialization: Promise<void> | undefined;
+      const initializeCrashReporting = async (): Promise<void> => {
+        if (crashReportingInitialized) return;
+        crashReportingInitialization ??= (async () => {
+          try {
+            crashReportingInitialized = await initializeDesktopCrashReporting({
+              globalState: platform().globalState,
+              secrets: platform().secrets,
+              sensitivePaths: [
+                platformInit.workspacePath,
+                app.getPath('userData'),
+              ],
+              log: console,
+            });
+          } finally {
+            if (!crashReportingInitialized) {
+              crashReportingInitialization = undefined;
+            }
+          }
+        })();
+        await crashReportingInitialization;
+      };
+      await initializeCrashReporting();
       const authCoordinator = createDesktopAuthCoordinator({
         secrets: platform().secrets,
         log: console,
@@ -383,6 +410,7 @@ if (protocolLifecycle.shouldContinue) {
           workspacePath: platformInit.workspacePath,
           authCoordinator,
           authCallbackState,
+          initializeCrashReporting,
         });
       reopenMainWindow();
 
