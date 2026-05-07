@@ -73,7 +73,10 @@ if (root == null) {
 
 const appRoot = root;
 
-const NAV_ROUTES: ReadonlyArray<{ readonly route: DesktopRoute; readonly label: string }> = [
+const NAV_ROUTES: ReadonlyArray<{
+  readonly route: DesktopRoute;
+  readonly label: string;
+}> = [
   { route: 'main', label: 'Launcher' },
   { route: 'progress', label: 'Progress' },
   { route: 'settings', label: 'Settings' },
@@ -371,8 +374,7 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
           <wa-button
             class="desktop-secondary-button"
             appearance="outlined"
-            @click=${() =>
-              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER)}
+            @click=${() => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER)}
           >
             Logs
           </wa-button>
@@ -496,7 +498,8 @@ function renderExplorer(): void {
 }
 
 function explorerTemplate(): TemplateResult {
-  if (explorerState.kind === 'no-workspace') return explorerNoWorkspaceTemplate();
+  if (explorerState.kind === 'no-workspace')
+    return explorerNoWorkspaceTemplate();
   if (explorerState.kind === 'loading') {
     return html`
       ${explorerHeaderTemplate('Workspace', true)}
@@ -541,7 +544,10 @@ function explorerNoWorkspaceTemplate(): TemplateResult {
   `;
 }
 
-function explorerHeaderTemplate(title: string, loading = false): TemplateResult {
+function explorerHeaderTemplate(
+  title: string,
+  loading = false,
+): TemplateResult {
   return html`
     <header class="desktop-explorer-header">
       <span class="desktop-explorer-title">${title}</span>
