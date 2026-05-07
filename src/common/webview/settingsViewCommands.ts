@@ -115,6 +115,9 @@ export const SETTINGS_VIEW_CMD = {
   // LaTeX/compile/diff config (storage-backed, migrated from VS Code config)
   GET_LATEX_CONFIG_VALUES: 'getLatexConfigValues',
   SET_LATEX_CONFIG_VALUE: 'setLatexConfigValue',
+  // Experimental settings
+  GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
+  SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -138,4 +141,5 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
   UPDATE_LATEX_CONFIG_VALUES: 'updateLatexConfigValues',
+  UPDATE_INLINE_CRITICISM_ENABLED: 'updateInlineCriticismEnabled',
 } as const;
