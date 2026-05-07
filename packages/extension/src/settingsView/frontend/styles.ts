@@ -54,15 +54,11 @@ const settingsHeaderStyles: CSSResult = css`
   }
 
   .settings-header-auth-button {
-    min-height: var(--height-control);
-    color: var(--texra-foreground);
-    background: var(--texra-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
-    border-color: var(--color-border);
+    flex-shrink: 0;
   }
 
-  .settings-header-auth-button:hover {
-    border-color: var(--texra-focusBorder);
-    background: var(--texra-toolbar-activeBackground, rgba(99, 102, 103, 0.31));
+  .settings-header-auth-button::part(base) {
+    min-height: var(--height-control);
   }
 `;
 

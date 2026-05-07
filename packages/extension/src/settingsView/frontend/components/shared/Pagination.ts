@@ -8,11 +8,14 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa';
 import { createEvent } from '@shared/utils/events';
 
 /** Detail payload for the `page-change` custom event. */
@@ -72,45 +75,9 @@ export class Pagination extends LitElement {
         gap: var(--spacing-small);
       }
 
-      .page-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+      .pagination-controls wa-button::part(base) {
         min-width: var(--height-control);
-        height: var(--height-control);
-        padding: 0 var(--spacing-small);
-        font-size: var(--font-size-xs);
-        font-family: var(--texra-editor-font-family, monospace), monospace;
-        color: var(--color-text-secondary);
-        background: none;
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius);
-        cursor: pointer;
-        transition:
-          color var(--transition-fast),
-          border-color var(--transition-fast);
-      }
-
-      .page-btn:hover:not(:disabled) {
-        color: var(--texra-foreground);
-        border-color: var(--texra-focusBorder);
-      }
-
-      .page-btn:active:not(:disabled) {
-        background: var(
-          --texra-toolbar-activeBackground,
-          rgba(99, 102, 103, 0.31)
-        );
-      }
-
-      .page-btn:disabled {
-        opacity: var(--opacity-disabled);
-        cursor: default;
-      }
-
-      .page-btn:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
-        outline-offset: 1px;
+        min-height: var(--height-control);
       }
     `,
   ];
@@ -169,41 +136,69 @@ export class Pagination extends LitElement {
           ${this.rangeStart}–${this.rangeEnd} of ${this.totalItems}
         </span>
         <div class="pagination-controls">
-          <button
-            class="page-btn"
+          <wa-button
+            appearance="outlined"
+            variant="neutral"
+            size="small"
+            aria-label="First page"
             title="First page"
             ?disabled=${atFirst}
             @click=${this.goFirst}
           >
-            «
-          </button>
-          <button
-            class="page-btn"
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="backward-step"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
+          <wa-button
+            appearance="outlined"
+            variant="neutral"
+            size="small"
+            aria-label="Previous page"
             title="Previous page"
             ?disabled=${atFirst}
             @click=${this.goPrev}
           >
-            ‹
-          </button>
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="chevron-left"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
           <span class="pagination-status">
             ${this.page + 1}/${this.totalPages}
           </span>
-          <button
-            class="page-btn"
+          <wa-button
+            appearance="outlined"
+            variant="neutral"
+            size="small"
+            aria-label="Next page"
             title="Next page"
             ?disabled=${atLast}
             @click=${this.goNext}
           >
-            ›
-          </button>
-          <button
-            class="page-btn"
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="chevron-right"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
+          <wa-button
+            appearance="outlined"
+            variant="neutral"
+            size="small"
+            aria-label="Last page"
             title="Last page"
             ?disabled=${atLast}
             @click=${this.goLast}
           >
-            »
-          </button>
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="forward-step"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
         </div>
       </div>
     `;
