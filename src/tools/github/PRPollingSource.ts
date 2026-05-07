@@ -11,7 +11,7 @@
  * layer above.
  */
 
-import { bus } from '@eventBus/ProgressEventBus';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -202,7 +202,7 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedBusEvent(keys: readonly string[]): void {
-    bus.emit('prSubscriptionsChanged', { keys });
+    getAgentRuntimeHost().emit('prSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(

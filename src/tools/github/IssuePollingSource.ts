@@ -14,7 +14,7 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
-import { bus } from '@eventBus/ProgressEventBus';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -98,7 +98,7 @@ export class IssuePollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedBusEvent(keys: readonly string[]): void {
-    bus.emit('issueSubscriptionsChanged', { keys });
+    getAgentRuntimeHost().emit('issueSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(

@@ -34,7 +34,7 @@
  * - **CI / check-run status and inline annotations.** Per-PR by design.
  */
 
-import { bus } from '@eventBus/ProgressEventBus';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -178,7 +178,7 @@ export class RepoPollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedBusEvent(keys: readonly RepoKey[]): void {
-    bus.emit('repoSubscriptionsChanged', { keys });
+    getAgentRuntimeHost().emit('repoSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(
