@@ -18,8 +18,8 @@ describe('desktop settings surface', () => {
     expect(settingsApp).toContain('SETTINGS_TAB.MODELS');
     expect(settingsApp).toContain('Memory is not available in desktop yet');
     expect(settingsApp).toContain('History is not available in desktop yet');
-    expect(settingsApp).toContain('title="Open VS Code Settings"');
-    expect(settingsApp).toContain('? nothing');
+    expect(settingsApp).toContain('SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS');
+    expect(settingsApp).toContain('renderDesktopUnavailablePanel');
   });
 
   it('marks desktop-specific tab capabilities before rendering child controls', () => {
@@ -41,7 +41,8 @@ describe('desktop settings surface', () => {
     const desktopMain = readSource('packages/desktop/src/main/index.ts');
 
     expect(agentsTab).toContain('desktopHost');
-    expect(agentsTab).toContain('? nothing');
+    expect(agentsTab).toContain('AgentSelectionEvents.createAgent');
+    expect(agentsTab).toContain('AgentSelectionEvents.openFolder');
     expect(agentSelectionPanel).toContain('builtIn && !this.desktopHost');
     expect(agentSelectionPanel).toContain('isCustom && !this.desktopHost');
     expect(gitTab).toContain('this.desktopHost');
