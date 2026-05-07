@@ -1,59 +1,10 @@
-import { app, dialog } from 'electron';
-
 import { installDesktopAppLog } from './desktopAppLog.js';
-
-let fatalStartupErrorReported = false;
+import {
+  installFatalStartupHandlers,
+  reportFatalStartupError,
+} from './fatalStartupError.js';
 
 installDesktopAppLog();
-
-function formatFatalStartupError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.stack ?? error.message;
-  }
-  return String(error);
-}
-
-function reportFatalStartupError(error: unknown): void {
-  if (fatalStartupErrorReported) return;
-  fatalStartupErrorReported = true;
-
-  const detail = formatFatalStartupError(error);
-  console.error(`Fatal TeXRA desktop error:\n${detail}`);
-
-  const showFailureDialog = () => {
-    dialog.showErrorBox(
-      'TeXRA failed to start',
-      [
-        'TeXRA hit a startup error before the desktop window was ready.',
-        '',
-        detail,
-      ].join('\n'),
-    );
-    app.quit();
-  };
-
-  if (app.isReady()) {
-    showFailureDialog();
-    return;
-  }
-
-  app.once('ready', showFailureDialog);
-}
-
-function installFatalStartupHandlers(): () => void {
-  const onUncaughtException = (error: unknown) =>
-    reportFatalStartupError(error);
-  const onUnhandledRejection = (error: unknown) =>
-    reportFatalStartupError(error);
-
-  process.on('uncaughtException', onUncaughtException);
-  process.on('unhandledRejection', onUnhandledRejection);
-
-  return () => {
-    process.off('uncaughtException', onUncaughtException);
-    process.off('unhandledRejection', onUnhandledRejection);
-  };
-}
 
 const removeFatalStartupHandlers = installFatalStartupHandlers();
 try {
