@@ -156,8 +156,11 @@ function readSnapshot() {
 function verifyDistEntrypoints(entries, failures) {
   for (const entryPath of [
     'extension/dist/extension.js',
+    'extension/dist/shared/codicon.css',
+    'extension/dist/shared/codicon.ttf',
     'extension/dist/progressView/bundle.js',
     'extension/dist/progressView/codicon.ttf',
+    'extension/dist/shared/vscode-elements-bundled.js',
     'extension/dist/settingsView/bundle.js',
     'extension/dist/settingsView/codicon.ttf',
     'extension/dist/webview/bundle.js',
