@@ -120,9 +120,9 @@ describe('desktop command surface', () => {
       (entry) => entry.category === 'Help',
     );
     expect(firstHelpIndex).toBe(entries.length - 2);
-    expect(entries.slice(firstHelpIndex).map((entry) => entry.category)).toEqual(
-      ['Help', 'Help'],
-    );
+    expect(
+      entries.slice(firstHelpIndex).map((entry) => entry.category),
+    ).toEqual(['Help', 'Help']);
   });
 
   it('normalizes catalog keybindings to Electron accelerators', async () => {
