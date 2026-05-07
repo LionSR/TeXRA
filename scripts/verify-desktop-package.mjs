@@ -67,6 +67,13 @@ const desktopStartupEntryPoints = new Set([
   'src/main/bootstrap.ts',
   'src/main/index.ts',
 ]);
+const desktopStartupDynamicImportEntryPoints = new Set([
+  'src/main/bootstrap.ts',
+]);
+const desktopStartupImportKinds = new Set([
+  'dynamic-import',
+  'import-statement',
+]);
 
 async function exists(path) {
   try {
@@ -140,6 +147,40 @@ function normalizeAsarPath(path) {
 function mergeDirectoryEntries(...entryGroups) {
   return [...new Set(entryGroups.flat())].sort((left, right) =>
     left.localeCompare(right),
+  );
+}
+
+function isDesktopStartupEntryPoint(entryPoint) {
+  const normalizedEntryPoint = normalizeMetafilePath(entryPoint);
+  return hasMetafileEntryPointSuffix(
+    normalizedEntryPoint,
+    desktopStartupEntryPoints,
+  );
+}
+
+function hasMetafileEntryPointSuffix(
+  normalizedEntryPoint,
+  expectedEntryPoints,
+) {
+  for (const expectedEntryPoint of expectedEntryPoints) {
+    if (
+      normalizedEntryPoint === expectedEntryPoint ||
+      normalizedEntryPoint.endsWith(`/${expectedEntryPoint}`)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldTraverseStartupImport(output, importedOutput) {
+  if (importedOutput.external) return false;
+  if (importedOutput.kind === 'import-statement') return true;
+  if (importedOutput.kind !== 'dynamic-import') return false;
+
+  return hasMetafileEntryPointSuffix(
+    normalizeMetafilePath(output.entryPoint ?? ''),
+    desktopStartupDynamicImportEntryPoints,
   );
 }
 
@@ -344,8 +385,9 @@ async function checkDesktopStartupBundles(app, failures) {
 
   const pending = [];
   for (const [outputPath, output] of outputByPath) {
-    const entryPoint = normalizeMetafilePath(output.entryPoint ?? '');
-    if (desktopStartupEntryPoints.has(entryPoint)) pending.push(outputPath);
+    if (isDesktopStartupEntryPoint(output.entryPoint ?? '')) {
+      pending.push(outputPath);
+    }
   }
   if (pending.length === 0) {
     failures.push(
@@ -384,8 +426,8 @@ async function checkDesktopStartupBundles(app, failures) {
     }
 
     for (const importedOutput of output.imports ?? []) {
-      if (importedOutput.external) continue;
-      if (importedOutput.kind !== 'import-statement') continue;
+      if (!desktopStartupImportKinds.has(importedOutput.kind)) continue;
+      if (!shouldTraverseStartupImport(output, importedOutput)) continue;
       const importedPath = resolveMetafileImportPath(
         outputPath,
         importedOutput.path,
