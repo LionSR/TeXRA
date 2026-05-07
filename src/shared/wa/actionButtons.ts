@@ -5,7 +5,7 @@ import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - Web Awesome
-import { TEXRA_ICON_LIBRARY, type TeXRAIconName } from './webAwesomeIcons';
+import { type TeXRAIconName, waIcon } from './webAwesomeIcons';
 
 type ActionButtonAppearance = 'filled' | 'outlined' | 'plain';
 type ActionButtonVariant = 'brand' | 'neutral';
@@ -39,7 +39,6 @@ function renderActionButtonBase({
   const classes = [text ? 'action-button' : 'action-icon-button', className]
     .filter(Boolean)
     .join(' ');
-  const iconSlot = text ? 'start' : undefined;
 
   return html`
     <wa-button
@@ -53,13 +52,7 @@ function renderActionButtonBase({
       data-action=${ifDefined(action)}
       @click=${onClick}
     >
-      <wa-icon
-        slot=${ifDefined(iconSlot)}
-        library=${TEXRA_ICON_LIBRARY}
-        name=${icon}
-        variant="solid"
-      ></wa-icon>
-      ${text}
+      ${waIcon(icon, { slot: text ? 'start' : undefined })} ${text}
     </wa-button>
   `;
 }
