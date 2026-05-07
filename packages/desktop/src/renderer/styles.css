@@ -259,19 +259,19 @@ wa-button.desktop-explorer-icon-button[disabled]::part(base) {
   text-align: center;
 }
 
-.desktop-explorer-empty wa-icon {
+.desktop-explorer-empty .empty-state-icon {
   color: var(--texra-button-background);
   font-size: 30px;
 }
 
-.desktop-explorer-empty h2 {
+.desktop-explorer-empty .empty-state-title {
   margin: 12px 0 6px;
   color: var(--texra-foreground);
   font-size: 16px;
   font-weight: 600;
 }
 
-.desktop-explorer-empty p {
+.desktop-explorer-empty .empty-state-body {
   margin: 0 0 14px;
 }
 
@@ -396,26 +396,26 @@ wa-button.desktop-explorer-icon-button[disabled]::part(base) {
   text-align: center;
 }
 
-.desktop-empty-workspace-icon {
+.desktop-empty-workspace-panel .empty-state-icon {
   color: var(--texra-button-background);
   font-size: 44px;
 }
 
-.desktop-empty-workspace h1 {
+.desktop-empty-workspace-panel .empty-state-title {
   margin: 20px 0 10px;
   color: var(--texra-foreground);
   font-size: 24px;
   font-weight: 600;
 }
 
-.desktop-empty-workspace p {
+.desktop-empty-workspace-panel .empty-state-body {
   margin: 0;
   color: var(--texra-descriptionForeground);
   font-size: 15px;
   line-height: 1.5;
 }
 
-.desktop-empty-workspace-actions {
+.desktop-empty-workspace-panel .empty-state-actions {
   display: flex;
   justify-content: center;
   gap: 10px;
@@ -498,36 +498,18 @@ wa-button.desktop-secondary-button::part(base):hover {
   background: var(--texra-button-secondaryHoverBackground);
 }
 
-.desktop-onboarding {
-  position: fixed;
-  inset: 0;
-  z-index: 1100;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  box-sizing: border-box;
-  background: rgb(0 0 0 / 40%);
-}
-
-.desktop-onboarding[hidden] {
-  display: none;
-}
-
-.desktop-onboarding-panel {
-  width: min(640px, 100%);
-  max-height: min(720px, calc(100vh - 48px));
-  overflow: auto;
-  border: 1px solid var(--texra-panel-border);
-  border-radius: 6px;
-  background: var(--texra-editor-background);
-  box-shadow: 0 18px 46px rgb(0 0 0 / 34%);
+/* wa-dialog supplies the backdrop, modal positioning, focus trap, and panel
+   chrome; only the body content layout lives here. */
+wa-dialog.desktop-onboarding {
+  --width: min(640px, calc(100vw - 32px));
 }
 
 .desktop-onboarding-header {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 14px;
-  padding: 22px 24px 18px;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
   border-bottom: 1px solid var(--texra-panel-border);
 }
 
@@ -560,7 +542,7 @@ wa-button.desktop-secondary-button::part(base):hover {
   display: grid;
   gap: 0;
   margin: 0;
-  padding: 8px 24px 4px;
+  padding: 0;
   list-style: none;
 }
 
@@ -612,21 +594,9 @@ wa-button.desktop-secondary-button::part(base):hover {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-  padding: 16px 24px 22px;
 }
 
 @media (max-width: 560px) {
-  .desktop-onboarding {
-    padding: 12px;
-  }
-
-  .desktop-onboarding-header,
-  .desktop-onboarding-steps,
-  .desktop-onboarding-actions {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
   .desktop-onboarding-actions {
     justify-content: stretch;
   }
