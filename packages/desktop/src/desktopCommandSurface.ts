@@ -31,7 +31,6 @@ export const DESKTOP_COMMAND_IDS = [
   DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
-  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   'texra.openSettings',
   'texra.showMemory',
   'texra.showAgentHistory',
@@ -39,6 +38,7 @@ export const DESKTOP_COMMAND_IDS = [
   'texra.showAgents',
   'texra.showTools',
   'texra.showMultiAgent',
+  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly (CommandId | DesktopLocalCommandId)[];
 
