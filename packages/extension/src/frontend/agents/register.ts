@@ -7,8 +7,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { AgentCategory, type AgentWorkflowSetting } from '@agent/core';
-import { getBaseName, getMultipleName } from '@agent/index';
+import { AgentCategory } from '@agent/core';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import * as logger from '@logger/logUtils';
@@ -16,45 +15,21 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'AgentRegister';
 logger.initialize(CHANNEL);
 
-/**
- * Prompt to add a newly created agent to the visible agents list. When
- * `autoAdd` is true, the agent is added without prompting.
- */
-export interface AgentVariantMetadata {
-  isMultipleOutput?: boolean;
-  baseAgentName?: string;
-  multipleAgentName?: string;
-}
-
-export type AgentRegistrationSkipReason =
-  | 'alreadyRegistered'
-  | 'baseRegistered'
-  | 'multipleRegistered';
+export type AgentRegistrationSkipReason = 'alreadyRegistered';
 
 export function getAgentRegistrationSkipReason(
   agentName: string,
   configuredAgents: string[],
-  variant: AgentVariantMetadata = {},
 ): AgentRegistrationSkipReason | undefined {
   if (configuredAgents.includes(agentName)) {
     return 'alreadyRegistered';
   }
-
-  const relatedAgent = variant.isMultipleOutput
-    ? variant.baseAgentName
-    : variant.multipleAgentName;
-
-  if (relatedAgent && configuredAgents.includes(relatedAgent)) {
-    return variant.isMultipleOutput ? 'baseRegistered' : 'multipleRegistered';
-  }
-
   return undefined;
 }
 
 export async function promptToAddAgentToConfig(
   agentName: string,
   autoAdd = false,
-  variant: AgentVariantMetadata = {},
   category: 'workflow' | 'toolUse' = 'workflow',
 ): Promise<void> {
   const stateKey =
@@ -63,18 +38,9 @@ export async function promptToAddAgentToConfig(
       : WorkspaceStateKey.ENABLED_AGENTS;
   const current = workspaceSM.get<string[]>(stateKey, []);
 
-  const skipReason = getAgentRegistrationSkipReason(
-    agentName,
-    current,
-    variant,
-  );
+  const skipReason = getAgentRegistrationSkipReason(agentName, current);
   if (skipReason) {
-    const messages: Record<AgentRegistrationSkipReason, string> = {
-      alreadyRegistered: `Agent "${agentName}" already in configuration`,
-      baseRegistered: `Base agent "${variant.baseAgentName}" already in configuration, skipping "${agentName}"`,
-      multipleRegistered: `Multiple variant "${variant.multipleAgentName}" already in configuration, skipping "${agentName}"`,
-    };
-    logger.debug(CHANNEL, messages[skipReason]);
+    logger.debug(CHANNEL, `Agent "${agentName}" already in configuration`);
     return;
   }
 
@@ -138,20 +104,7 @@ export async function validateYamlAndPromptAdd(
 
   const { settings } = validationResult;
   const isWorkflow = settings.agentCategory !== AgentCategory.ToolUse;
-  const workflowSettings = isWorkflow
-    ? (settings as AgentWorkflowSetting)
-    : undefined;
-  const hasMultipleDefaults = settings.defaultOutputFiles.length > 1;
-  const isMultipleOutput =
-    workflowSettings?.isMultipleOutput ?? (isWorkflow && hasMultipleDefaults);
+  const category = isWorkflow ? 'workflow' : 'toolUse';
 
-  const metadata: AgentVariantMetadata = {
-    isMultipleOutput,
-    baseAgentName: isMultipleOutput ? getBaseName(internalName) : undefined,
-    multipleAgentName: isMultipleOutput
-      ? undefined
-      : getMultipleName(internalName),
-  };
-
-  await promptToAddAgentToConfig(filenameBase, !prompt, metadata);
+  await promptToAddAgentToConfig(filenameBase, !prompt, category);
 }

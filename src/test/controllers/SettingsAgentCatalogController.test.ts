@@ -18,14 +18,12 @@ const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
       name: 'writer',
       category: 'workflow',
       description: 'Remote writer',
-      isMultiple: true,
     },
     {
       source: 'builtInWorkflow',
       name: 'correct',
       category: 'workflow',
       path: '/agents/correct.yaml',
-      multiplePath: '/agents/correct_multiple.yaml',
     },
   ],
   toolUse: [

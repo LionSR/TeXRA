@@ -101,19 +101,18 @@ export class StreamMetaManager {
    * Both sides are canonicalized: agent names are stripped of source
    * prefixes (`builtin:polish` → `polish`) and input-file paths are
    * normalized to forward slashes so Windows `\\` vs `/` disagreements
-   * don't cause the match to miss. `useMultipleOutputs` (optional) further
-   * narrows matches so tabs with different output shapes on the same
-   * input aren't cleared together.
+   * don't cause the match to miss.
    */
   findWorkflowStreamsMatching(match: {
     agent: string;
     model: string;
     inputFile: string;
-    useMultipleOutputs?: boolean;
+    outputFiles?: readonly string[];
   }): StreamTabId[] {
     const wantAgent = getCleanAgentName(match.agent);
     const wantModel = match.model;
     const wantFile = match.inputFile.replaceAll('\\', '/');
+    const wantOutputFiles = normalizeOutputFiles(match.outputFiles);
     const result: StreamTabId[] = [];
     for (const [stream, state] of this.taskStates) {
       if (!isWorkflowTaskState(state)) continue;
@@ -121,13 +120,8 @@ export class StreamMetaManager {
       if (
         getCleanAgentName(cfg.agent) !== wantAgent ||
         cfg.model !== wantModel ||
-        cfg.inputFile.replaceAll('\\', '/') !== wantFile
-      ) {
-        continue;
-      }
-      if (
-        match.useMultipleOutputs !== undefined &&
-        Boolean(cfg.useMultipleOutputs) !== match.useMultipleOutputs
+        cfg.inputFile.replaceAll('\\', '/') !== wantFile ||
+        !sameOutputFiles(normalizeOutputFiles(cfg.outputFiles), wantOutputFiles)
       ) {
         continue;
       }
@@ -292,4 +286,16 @@ export class StreamMetaManager {
       ...(description && { description }),
     };
   }
+}
+
+function normalizeOutputFiles(outputFiles?: readonly string[]): string[] {
+  return (outputFiles ?? [])
+    .map((file) => file.replaceAll('\\', '/'))
+    .filter((file) => file.length > 0)
+    .sort();
+}
+
+function sameOutputFiles(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((file, index) => file === right[index]);
 }

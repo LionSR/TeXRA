@@ -30,7 +30,6 @@ function createWorkflowProposal(
     mediaFile: null,
     mediaFiles: [],
     outputFiles: ['main.review.tex'],
-    useMultipleOutputs: false,
     toolConfig: DEFAULT_TOOL_CONFIG,
     ...overrides,
   } as AgentProposalPermission;
@@ -78,7 +77,6 @@ describe('ProgressAgentProposalController', () => {
         mediaFile: null,
         mediaFiles: [],
         outputFiles: ['main.review.tex'],
-        useMultipleOutputs: false,
         toolConfig: DEFAULT_TOOL_CONFIG,
         editedFile: null,
         editedFiles: [],

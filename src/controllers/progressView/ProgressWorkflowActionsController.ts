@@ -30,7 +30,6 @@ export interface WorkflowFileOperationRequest {
   model: string;
   inputFile: string;
   outputFiles: string[];
-  useMultipleOutputs: boolean;
   executionId?: string;
   skipProgressViewClear: boolean;
 }
@@ -102,10 +101,6 @@ export class ProgressWorkflowActionsController {
   ): Promise<void> {
     await this.withWorkflowTaskState(stream, async (taskState) => {
       const outputFiles = this.resolveOutputFiles(stream, taskState);
-      const useMultipleOutputs =
-        taskState.agentConfig.useMultipleOutputs ??
-        taskState.activeFiles.output ??
-        outputFiles.length > 1;
       const executionId = this.deps.state.getExecutionId(stream);
 
       await this.deps.runFileOperation(operation, {
@@ -113,8 +108,7 @@ export class ProgressWorkflowActionsController {
         agent: taskState.agentConfig.agent,
         model: taskState.agentConfig.model,
         inputFile: taskState.agentConfig.inputFile,
-        outputFiles: useMultipleOutputs ? outputFiles : [],
-        useMultipleOutputs,
+        outputFiles,
         ...(executionId && { executionId }),
         skipProgressViewClear: true,
       });

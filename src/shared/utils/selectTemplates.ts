@@ -19,7 +19,6 @@ function buildAgentTooltip(opt: AgentOptionData): string {
   if (opt.isRemote) hints.push(properties.remote.hint);
   if (opt.isCustom) hints.push(properties.custom.hint);
   if (opt.description) hints.push(opt.description);
-  if (opt.isMultiple) hints.push(properties.multipleOutputs.hint);
   if (opt.isToolUse) hints.push('Can execute tools and code');
 
   return hints.join('\n');
@@ -39,7 +38,6 @@ function renderAgentOption(
       ?selected=${opt.value === selectedValue}
       title=${tooltip || nothing}
       data-label=${opt.label}
-      data-multiple=${opt.isMultiple ? 'true' : nothing}
       data-tool-use=${opt.isToolUse ? 'true' : nothing}
       data-remote=${opt.isRemote ? 'true' : nothing}
       data-custom=${opt.isCustom ? 'true' : nothing}
@@ -48,11 +46,6 @@ function renderAgentOption(
       ${isOrch
         ? html`<span class="agent-icon">🎯 </span>`
         : nothing}${opt.label}
-      ${opt.isMultiple
-        ? html`<span class="agent-icon">
-            ${properties.multipleOutputs.unicode}</span
-          >`
-        : nothing}
       ${opt.isRemote
         ? html`<span class="agent-icon"> ${properties.remote.unicode}</span>`
         : nothing}
