@@ -76,7 +76,8 @@ describe('desktop renderer shell', () => {
     );
     expect(rendererMain).toContain('previousFocus');
     expect(rendererMain).toContain("document.addEventListener('focusin'");
-    expect(rendererMain).toContain("document.addEventListener('keydown'");
+    expect(rendererMain).toContain("'keydown'");
+    expect(rendererMain).toContain('isCommandPaletteShortcut(event)');
     expect(rendererMain).toContain("event.key !== 'Tab'");
   });
 

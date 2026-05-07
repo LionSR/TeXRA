@@ -40,7 +40,10 @@ import {
   type DesktopWorkspaceFileCategory,
   type DesktopWorkspaceTreeMessage,
 } from '../desktopWorkspaceExplorerMessages';
-import { createDesktopCommandPalette } from './desktopCommandPalette';
+import {
+  createDesktopCommandPalette,
+  isCommandPaletteShortcut,
+} from './desktopCommandPalette';
 
 interface WorkspaceTreeNode {
   name: string;
@@ -454,6 +457,11 @@ function createFirstRunWalkthrough(): {
     'keydown',
     (event) => {
       if (element.hidden) return;
+      if (isCommandPaletteShortcut(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (event.key === 'Escape') {
         event.preventDefault();
         dismiss();
