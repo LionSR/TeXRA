@@ -5,10 +5,10 @@ import './codiconStylesheet';
 import '@shared/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaButton from '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { COMMON_COMMANDS } from '@common/webview/commands';
@@ -361,44 +361,42 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
   container.className = 'desktop-empty-workspace';
   const { title, body } = EMPTY_WORKSPACE_COPY[kind];
   render(
-    html`
-      <div class="desktop-empty-workspace-panel">
-        ${waIcon('folder-open', { className: 'desktop-empty-workspace-icon' })}
-        <h1>${title}</h1>
-        <p>${body}</p>
-        <div class="desktop-empty-workspace-actions">
-          <wa-button
-            class="desktop-primary-button"
-            appearance="filled"
-            variant="brand"
-            @click=${() =>
-              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER)}
-          >
-            Open Folder
-          </wa-button>
-          <wa-button
-            class="desktop-secondary-button"
-            appearance="outlined"
-            @click=${() => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER)}
-          >
-            Logs
-          </wa-button>
-        </div>
-      </div>
-    `,
+    renderEmptyState({
+      className: 'desktop-empty-workspace-panel',
+      icon: 'folder-open',
+      title,
+      body,
+      actions: [
+        {
+          label: 'Open Folder',
+          appearance: 'filled',
+          variant: 'brand',
+          onClick: () =>
+            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+        },
+        {
+          label: 'Logs',
+          appearance: 'outlined',
+          onClick: () => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
+        },
+      ],
+    }),
     container,
   );
   return container;
 }
 
-const LOG_VIEWER_DEFAULTS = {
+interface LogViewerState {
+  meta: string;
+  text: string;
+}
+
+let logViewerState: LogViewerState = {
   meta: 'Recent redacted log entries appear here.',
   text: 'Open Logs to load recent entries.',
 };
 
-let logViewerState = { ...LOG_VIEWER_DEFAULTS };
-
-function logViewerTemplate(state: typeof logViewerState): TemplateResult {
+function logViewerTemplate(state: LogViewerState): TemplateResult {
   const action = (
     icon: 'rotate-right' | 'copy' | 'download' | 'folder-open',
     label: string,
@@ -532,22 +530,21 @@ function explorerTemplate(): TemplateResult {
 }
 
 function explorerNoWorkspaceTemplate(): TemplateResult {
-  return html`
-    <section class="desktop-explorer-empty">
-      ${waIcon('folder-open')}
-      <h2>No workspace</h2>
-      <p>Open a folder before selecting files for agents.</p>
-      <wa-button
-        class="desktop-primary-button"
-        appearance="filled"
-        variant="brand"
-        @click=${() =>
-          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER)}
-      >
-        Open Folder
-      </wa-button>
-    </section>
-  `;
+  return renderEmptyState({
+    className: 'desktop-explorer-empty',
+    icon: 'folder-open',
+    title: 'No workspace',
+    body: 'Open a folder before selecting files for agents.',
+    actions: [
+      {
+        label: 'Open Folder',
+        appearance: 'filled',
+        variant: 'brand',
+        onClick: () =>
+          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+      },
+    ],
+  });
 }
 
 function explorerHeaderTemplate(
@@ -617,7 +614,7 @@ function treeNodeTemplate(
       role="treeitem"
       title=${node.path}
       data-file-path=${node.path}
-      data-selected=${selectedExplorerFile === node.path ? 'true' : 'false'}
+      data-selected=${selectedExplorerFile === node.path}
       style=${`--tree-depth: ${depth}`}
       @click=${() => selectExplorerFile(node.path)}
       @dblclick=${() => openWorkspaceFile(node.path)}

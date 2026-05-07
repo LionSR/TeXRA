@@ -45,12 +45,12 @@ import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload';
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons/faEllipsis';
 import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
 import { faFile } from '@fortawesome/free-solid-svg-icons/faFile';
-import { faFlask } from '@fortawesome/free-solid-svg-icons/faFlask';
 import { faFileCirclePlus } from '@fortawesome/free-solid-svg-icons/faFileCirclePlus';
 import { faFileCode } from '@fortawesome/free-solid-svg-icons/faFileCode';
 import { faFileExport } from '@fortawesome/free-solid-svg-icons/faFileExport';
 import { faFileLines } from '@fortawesome/free-solid-svg-icons/faFileLines';
 import { faFilePdf } from '@fortawesome/free-solid-svg-icons/faFilePdf';
+import { faFlask } from '@fortawesome/free-solid-svg-icons/faFlask';
 import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk';
 import { faFolder } from '@fortawesome/free-solid-svg-icons/faFolder';
 import { faFolderOpen } from '@fortawesome/free-solid-svg-icons/faFolderOpen';
@@ -173,12 +173,12 @@ const icons = {
   ellipsis: faEllipsis,
   eye: faEye,
   file: faFile,
-  flask: faFlask,
   'file-circle-plus': faFileCirclePlus,
   'file-code': faFileCode,
   'file-export': faFileExport,
   'file-lines': faFileLines,
   'file-pdf': faFilePdf,
+  flask: faFlask,
   'floppy-disk': faFloppyDisk,
   folder: faFolder,
   'folder-open': faFolderOpen,
