@@ -1,14 +1,31 @@
 import { defineConfig, type Plugin } from 'vite';
 import { resolve } from 'path';
-import { mkdirSync, writeFileSync, existsSync } from 'fs';
+import { createRequire } from 'module';
+import { copyFileSync, mkdirSync, writeFileSync, existsSync } from 'fs';
 
 // Shared path aliases from tsconfig.json (single source of truth)
 import { aliases } from '../../scripts/aliases.mjs';
 
 const webviews = ['progressView', 'settingsView', 'webview'] as const;
+const require = createRequire(import.meta.url);
+
+function copySharedWebviewRuntimeAssets(sharedDir: string): void {
+  copyFileSync(
+    require.resolve('@vscode-elements/elements/dist/bundled.js'),
+    resolve(sharedDir, 'vscode-elements-bundled.js'),
+  );
+  copyFileSync(
+    require.resolve('@vscode/codicons/dist/codicon.css'),
+    resolve(sharedDir, 'codicon.css'),
+  );
+  copyFileSync(
+    require.resolve('@vscode/codicons/dist/codicon.ttf'),
+    resolve(sharedDir, 'codicon.ttf'),
+  );
+}
 
 /**
- * Plugin to generate a stub commons.js for Vite builds.
+ * Plugin to generate shared webview runtime assets for Vite builds.
  *
  * Webpack builds use a shared UMD bundle (WebviewCommons) that all webviews
  * reference via externals. Vite builds inline all dependencies directly into
@@ -21,14 +38,16 @@ const webviews = ['progressView', 'settingsView', 'webview'] as const;
  */
 function commonsStubPlugin(): Plugin {
   return {
-    name: 'commons-stub',
+    name: 'webview-shared-runtime-assets',
     buildStart() {
       const sharedDir = resolve(__dirname, 'dist/shared');
       const commonsPath = resolve(sharedDir, 'commons.js');
 
+      mkdirSync(sharedDir, { recursive: true });
+      copySharedWebviewRuntimeAssets(sharedDir);
+
       // Only create stub if commons.js doesn't exist (i.e., webpack hasn't run)
       if (!existsSync(commonsPath)) {
-        mkdirSync(sharedDir, { recursive: true });
         writeFileSync(
           commonsPath,
           '// Vite stub - dependencies are bundled inline\nwindow.WebviewCommons = {};\n',
