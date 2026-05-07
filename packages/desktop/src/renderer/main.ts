@@ -2,6 +2,15 @@ import './styles.css';
 import './themeTokens.css';
 import './codiconStylesheet';
 
+import '@shared/wa';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaButton from '@awesome.me/webawesome/dist/components/button/button.js';
+import { html, nothing, render, type TemplateResult } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
+
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { postMessage } from '@shared/hostBridge';
@@ -64,39 +73,74 @@ if (root == null) {
 
 const appRoot = root;
 
-appRoot.innerHTML = `
-  <section class="desktop-shell">
-    <nav class="desktop-nav" aria-label="Desktop views">
-      <button class="desktop-nav-button" type="button" data-route-button="main" aria-pressed="true">
-        Launcher
-      </button>
-      <button class="desktop-nav-button" type="button" data-route-button="progress" aria-pressed="false">
-        Progress
-      </button>
-      <button class="desktop-nav-button" type="button" data-route-button="settings" aria-pressed="false">
-        Settings
-      </button>
-      <button class="desktop-nav-button" type="button" data-route-button="logs" aria-pressed="false">
-        Logs
-      </button>
-      <button class="desktop-command-button" type="button" data-command-palette-button aria-haspopup="dialog">
-        Commands
-      </button>
-      <button class="desktop-folder-button" type="button" data-open-workspace-button>
-        Open Folder
-      </button>
-    </nav>
-    <div class="desktop-workbench">
-      <aside class="desktop-explorer" id="desktop-explorer" aria-label="Workspace Explorer"></aside>
-      <main class="desktop-view" id="desktop-view">
-        <section class="desktop-route" data-route="main"></section>
-        <section class="desktop-route" data-route="progress" hidden></section>
-        <section class="desktop-route" data-route="settings" hidden></section>
-        <section class="desktop-route" data-route="logs" hidden></section>
-      </main>
-    </div>
-  </section>
-`;
+const NAV_ROUTES: ReadonlyArray<{
+  readonly route: DesktopRoute;
+  readonly label: string;
+}> = [
+  { route: 'main', label: 'Launcher' },
+  { route: 'progress', label: 'Progress' },
+  { route: 'settings', label: 'Settings' },
+  { route: 'logs', label: 'Logs' },
+];
+
+render(
+  html`
+    <section class="desktop-shell">
+      <nav class="desktop-nav" aria-label="Desktop views">
+        ${NAV_ROUTES.map(
+          ({ route, label }) => html`
+            <wa-button
+              class="desktop-nav-button"
+              appearance="plain"
+              size="small"
+              role="button"
+              data-route-button=${route}
+              aria-pressed=${route === 'main' ? 'true' : 'false'}
+            >
+              ${label}
+            </wa-button>
+          `,
+        )}
+        <wa-button
+          class="desktop-command-button"
+          appearance="outlined"
+          size="small"
+          data-command-palette-button
+          aria-haspopup="dialog"
+        >
+          Commands
+        </wa-button>
+        <wa-button
+          class="desktop-folder-button"
+          appearance="outlined"
+          size="small"
+          data-open-workspace-button
+        >
+          ${waIcon('folder-open', { slot: 'start' })} Open Folder
+        </wa-button>
+      </nav>
+      <div class="desktop-workbench">
+        <aside
+          class="desktop-explorer"
+          id="desktop-explorer"
+          aria-label="Workspace Explorer"
+        ></aside>
+        <main class="desktop-view" id="desktop-view">
+          ${DESKTOP_ROUTES.map(
+            (route) => html`
+              <section
+                class="desktop-route"
+                data-route=${route}
+                ?hidden=${route !== 'main'}
+              ></section>
+            `,
+          )}
+        </main>
+      </div>
+    </section>
+  `,
+  appRoot,
+);
 
 const desktopViewContainer =
   appRoot.querySelector<HTMLElement>('#desktop-view');
@@ -122,9 +166,9 @@ for (const route of DESKTOP_ROUTES) {
   routeContainers.set(route, container);
 }
 
-const routeButtons = new Map<DesktopRoute, HTMLButtonElement>();
+const routeButtons = new Map<DesktopRoute, WaButton>();
 for (const route of DESKTOP_ROUTES) {
-  const button = appRoot.querySelector<HTMLButtonElement>(
+  const button = appRoot.querySelector<WaButton>(
     `[data-route-button="${route}"]`,
   );
   if (button == null) {
@@ -136,7 +180,6 @@ for (const route of DESKTOP_ROUTES) {
 
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 let selectedExplorerFile = '';
-let currentExplorerTree: WorkspaceTreeNode[] = [];
 
 renderWorkspaceExplorerLoading();
 
@@ -161,16 +204,16 @@ if (hasWorkspace) {
 const settingsApp = document.createElement('settings-app');
 settingsApp.setAttribute('data-desktop-view', 'settings');
 routeContainers.get('settings')?.replaceChildren(settingsApp);
-routeContainers.get('logs')?.replaceChildren(createLogViewer());
+renderLogViewer(routeContainers.get('logs'));
 
-const commandPaletteButton = appRoot.querySelector<HTMLButtonElement>(
+const commandPaletteButton = appRoot.querySelector<WaButton>(
   '[data-command-palette-button]',
 );
 if (commandPaletteButton == null) {
   throw new Error('TeXRA desktop command palette button was not found.');
 }
 
-const openWorkspaceButton = appRoot.querySelector<HTMLButtonElement>(
+const openWorkspaceButton = appRoot.querySelector<WaButton>(
   '[data-open-workspace-button]',
 );
 if (openWorkspaceButton == null) {
@@ -247,6 +290,11 @@ function isThemeMessage(message: unknown): message is SetThemeMessage {
 }
 
 function setRoute(route: DesktopRoute): void {
+  // The shell template is rendered once at startup; aria-pressed/hidden are
+  // mutated imperatively here. If a caller ever re-renders the shell, those
+  // runtime mutations will be reset to the template defaults — convert this
+  // function to update module-level route state and trigger a shell re-render
+  // before doing that.
   for (const [candidate, container] of routeContainers) {
     container.hidden = candidate !== route;
   }
@@ -297,83 +345,102 @@ function getWindowTargetOrigin(): string {
     : '*';
 }
 
+const EMPTY_WORKSPACE_COPY = {
+  launcher: {
+    title: 'Open a folder to use the launcher',
+    body: 'TeXRA desktop needs a workspace before it can discover files, run agents, and place outputs.',
+  },
+  progress: {
+    title: 'Open a folder to view workspace progress',
+    body: 'Progress details are tied to workspace runs. Start from a workspace to restore and follow sessions here.',
+  },
+} as const;
+
 function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
   const container = document.createElement('section');
   container.className = 'desktop-empty-workspace';
-  const title =
-    kind === 'launcher'
-      ? 'Open a folder to use the launcher'
-      : 'Open a folder to view workspace progress';
-  const body =
-    kind === 'launcher'
-      ? 'TeXRA desktop needs a workspace before it can discover files, run agents, and place outputs.'
-      : 'Progress details are tied to workspace runs. Start from a workspace to restore and follow sessions here.';
-
-  container.innerHTML = `
-    <div class="desktop-empty-workspace-panel">
-      <span class="codicon codicon-folder-opened desktop-empty-workspace-icon" aria-hidden="true"></span>
-      <h1>${title}</h1>
-      <p>${body}</p>
-      <div class="desktop-empty-workspace-actions">
-        <button class="desktop-primary-button" type="button" data-empty-open-folder>
-          Open Folder
-        </button>
-        <button class="desktop-secondary-button" type="button" data-empty-open-logs>
-          Logs
-        </button>
+  const { title, body } = EMPTY_WORKSPACE_COPY[kind];
+  render(
+    html`
+      <div class="desktop-empty-workspace-panel">
+        ${waIcon('folder-open', { className: 'desktop-empty-workspace-icon' })}
+        <h1>${title}</h1>
+        <p>${body}</p>
+        <div class="desktop-empty-workspace-actions">
+          <wa-button
+            class="desktop-primary-button"
+            appearance="filled"
+            variant="brand"
+            @click=${() =>
+              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER)}
+          >
+            Open Folder
+          </wa-button>
+          <wa-button
+            class="desktop-secondary-button"
+            appearance="outlined"
+            @click=${() => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER)}
+          >
+            Logs
+          </wa-button>
+        </div>
       </div>
-    </div>
-  `;
-  container
-    .querySelector<HTMLButtonElement>('[data-empty-open-folder]')
-    ?.addEventListener('click', () =>
-      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-    );
-  container
-    .querySelector<HTMLButtonElement>('[data-empty-open-logs]')
-    ?.addEventListener('click', () =>
-      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
-    );
+    `,
+    container,
+  );
   return container;
 }
 
-function createLogViewer(): HTMLElement {
-  const container = document.createElement('section');
-  container.className = 'desktop-log-viewer';
-  container.innerHTML = `
-    <header class="desktop-log-viewer-header">
-      <div>
-        <h2>Desktop Logs</h2>
-        <p data-log-meta>Recent redacted log entries appear here.</p>
-      </div>
-      <div class="desktop-log-viewer-actions">
-        <button class="desktop-secondary-button" type="button" data-log-refresh>Refresh</button>
-        <button class="desktop-secondary-button" type="button" data-log-copy>Copy</button>
-        <button class="desktop-secondary-button" type="button" data-log-export>Export</button>
-        <button class="desktop-secondary-button" type="button" data-log-folder>Open Folder</button>
-      </div>
-    </header>
-    <pre class="desktop-log-viewer-output" data-log-output>Open Logs to load recent entries.</pre>
+const LOG_VIEWER_DEFAULTS = {
+  meta: 'Recent redacted log entries appear here.',
+  text: 'Open Logs to load recent entries.',
+};
+
+let logViewerState = { ...LOG_VIEWER_DEFAULTS };
+
+function logViewerTemplate(state: typeof logViewerState): TemplateResult {
+  const action = (
+    icon: 'rotate-right' | 'copy' | 'download' | 'folder-open',
+    label: string,
+    onClick: () => void,
+  ): TemplateResult => html`
+    <wa-button
+      class="desktop-secondary-button"
+      appearance="outlined"
+      size="small"
+      @click=${onClick}
+    >
+      ${waIcon(icon, { slot: 'start' })} ${label}
+    </wa-button>
   `;
-  container
-    .querySelector<HTMLButtonElement>('[data-log-refresh]')
-    ?.addEventListener('click', requestLogSnapshot);
-  container
-    .querySelector<HTMLButtonElement>('[data-log-copy]')
-    ?.addEventListener('click', () =>
-      postMessage(DESKTOP_LOG_COMMANDS.COPY_LOG),
-    );
-  container
-    .querySelector<HTMLButtonElement>('[data-log-export]')
-    ?.addEventListener('click', () =>
-      postMessage(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
-    );
-  container
-    .querySelector<HTMLButtonElement>('[data-log-folder]')
-    ?.addEventListener('click', () =>
-      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
-    );
-  return container;
+  return html`
+    <section class="desktop-log-viewer">
+      <header class="desktop-log-viewer-header">
+        <div>
+          <h2>Desktop Logs</h2>
+          <p>${state.meta}</p>
+        </div>
+        <div class="desktop-log-viewer-actions">
+          ${action('rotate-right', 'Refresh', requestLogSnapshot)}
+          ${action('copy', 'Copy', () =>
+            postMessage(DESKTOP_LOG_COMMANDS.COPY_LOG),
+          )}
+          ${action('download', 'Export', () =>
+            postMessage(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
+          )}
+          ${action('folder-open', 'Open Folder', () =>
+            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
+          )}
+        </div>
+      </header>
+      <pre class="desktop-log-viewer-output">${state.text}</pre>
+    </section>
+  `;
+}
+
+function renderLogViewer(target: HTMLElement | undefined): void {
+  if (target == null) return;
+  render(logViewerTemplate(logViewerState), target);
 }
 
 function requestLogSnapshot(): void {
@@ -381,16 +448,14 @@ function requestLogSnapshot(): void {
 }
 
 function renderLogSnapshot(message: DesktopSetLogMessage): void {
-  const container = routeContainers.get('logs');
-  const output = container?.querySelector<HTMLElement>('[data-log-output]');
-  const meta = container?.querySelector<HTMLElement>('[data-log-meta]');
-  if (output == null || meta == null) return;
-
-  output.textContent = message.log.text || 'No desktop log entries yet.';
   const path = message.log.path ?? 'desktop log file';
-  meta.textContent = message.log.truncated
-    ? `Showing the most recent redacted entries from ${path}.`
-    : `Showing redacted entries from ${path}.`;
+  logViewerState = {
+    text: message.log.text || 'No desktop log entries yet.',
+    meta: message.log.truncated
+      ? `Showing the most recent redacted entries from ${path}.`
+      : `Showing redacted entries from ${path}.`,
+  };
+  renderLogViewer(routeContainers.get('logs'));
 }
 
 function isWorkspaceTreeMessage(
@@ -407,203 +472,217 @@ function requestWorkspaceTree(): void {
   postMessage(DESKTOP_WORKSPACE_EXPLORER_COMMANDS.REQUEST_TREE);
 }
 
+type ExplorerState =
+  | { kind: 'loading'; title: string }
+  | { kind: 'no-workspace' }
+  | { kind: 'tree'; title: string; tree: readonly WorkspaceTreeNode[] };
+
+let explorerState: ExplorerState = { kind: 'loading', title: 'Workspace' };
+
 function renderWorkspaceExplorerLoading(): void {
-  workspaceExplorerContainer.replaceChildren();
-  workspaceExplorerContainer.append(
-    createExplorerHeader('Workspace', true),
-    createExplorerStatus('Loading workspace files...'),
-  );
+  const title = 'title' in explorerState ? explorerState.title : 'Workspace';
+  explorerState = { kind: 'loading', title };
+  renderExplorer();
 }
 
 function renderWorkspaceExplorerNoWorkspace(): void {
-  workspaceExplorerContainer.replaceChildren();
-  const prompt = document.createElement('section');
-  prompt.className = 'desktop-explorer-empty';
-  prompt.innerHTML = `
-    <span class="codicon codicon-folder-opened" aria-hidden="true"></span>
-    <h2>No workspace</h2>
-    <p>Open a folder before selecting files for agents.</p>
-    <button class="desktop-primary-button" type="button" data-explorer-open-folder>
-      Open Folder
-    </button>
-  `;
-  prompt
-    .querySelector<HTMLButtonElement>('[data-explorer-open-folder]')
-    ?.addEventListener('click', () =>
-      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-    );
-  workspaceExplorerContainer.append(prompt);
+  explorerState = { kind: 'no-workspace' };
+  renderExplorer();
 }
 
 function renderWorkspaceExplorer(message: DesktopWorkspaceTreeMessage): void {
-  currentExplorerTree = message.tree;
-  workspaceExplorerContainer.replaceChildren();
-  workspaceExplorerContainer.append(
-    createExplorerHeader(message.workspaceName ?? 'Workspace'),
-  );
+  explorerState = {
+    kind: 'tree',
+    title: message.workspaceName ?? 'Workspace',
+    tree: message.tree,
+  };
+  renderExplorer();
+}
 
-  if (message.tree.length === 0) {
-    workspaceExplorerContainer.append(
-      createExplorerStatus('No selectable workspace files found.'),
-    );
-    return;
+function renderExplorer(): void {
+  render(explorerTemplate(), workspaceExplorerContainer);
+}
+
+function explorerTemplate(): TemplateResult {
+  if (explorerState.kind === 'no-workspace')
+    return explorerNoWorkspaceTemplate();
+  if (explorerState.kind === 'loading') {
+    return html`
+      ${explorerHeaderTemplate(explorerState.title, true)}
+      <p class="desktop-explorer-status">Loading workspace files...</p>
+    `;
   }
-
-  const tree = document.createElement('div');
-  tree.className = 'desktop-explorer-tree';
-  tree.setAttribute('role', 'tree');
-  renderTreeNodes(tree, message.tree, 0);
-
-  const selection = document.createElement('section');
-  selection.className = 'desktop-explorer-selection';
-  selection.setAttribute('aria-live', 'polite');
-  selection.dataset.selectionPanel = 'true';
-
-  workspaceExplorerContainer.append(tree, selection);
-  updateExplorerSelectionPanel(message.tree);
+  if (explorerState.tree.length === 0) {
+    return html`
+      ${explorerHeaderTemplate(explorerState.title)}
+      <p class="desktop-explorer-status">
+        No selectable workspace files found.
+      </p>
+    `;
+  }
+  return html`
+    ${explorerHeaderTemplate(explorerState.title)}
+    <div class="desktop-explorer-tree" role="tree">
+      ${treeNodesTemplate(explorerState.tree, 0)}
+    </div>
+    <section class="desktop-explorer-selection" aria-live="polite">
+      ${selectionPanelTemplate(explorerState.tree)}
+    </section>
+  `;
 }
 
-function createExplorerHeader(title: string, loading = false): HTMLElement {
-  const header = document.createElement('header');
-  header.className = 'desktop-explorer-header';
-  const label = document.createElement('span');
-  label.className = 'desktop-explorer-title';
-  label.textContent = title;
-  const refresh = document.createElement('button');
-  refresh.className = 'desktop-explorer-icon-button codicon codicon-refresh';
-  refresh.type = 'button';
-  refresh.title = 'Refresh workspace files';
-  refresh.setAttribute('aria-label', 'Refresh workspace files');
-  refresh.disabled = loading || !hasWorkspace;
-  refresh.addEventListener('click', requestWorkspaceTree);
-  header.append(label, refresh);
-  return header;
+function explorerNoWorkspaceTemplate(): TemplateResult {
+  return html`
+    <section class="desktop-explorer-empty">
+      ${waIcon('folder-open')}
+      <h2>No workspace</h2>
+      <p>Open a folder before selecting files for agents.</p>
+      <wa-button
+        class="desktop-primary-button"
+        appearance="filled"
+        variant="brand"
+        @click=${() =>
+          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER)}
+      >
+        Open Folder
+      </wa-button>
+    </section>
+  `;
 }
 
-function createExplorerStatus(text: string): HTMLElement {
-  const status = document.createElement('p');
-  status.className = 'desktop-explorer-status';
-  status.textContent = text;
-  return status;
+function explorerHeaderTemplate(
+  title: string,
+  loading = false,
+): TemplateResult {
+  return html`
+    <header class="desktop-explorer-header">
+      <span class="desktop-explorer-title">${title}</span>
+      <wa-button
+        class="desktop-explorer-icon-button"
+        appearance="plain"
+        size="small"
+        title="Refresh workspace files"
+        aria-label="Refresh workspace files"
+        ?disabled=${loading || !hasWorkspace}
+        @click=${requestWorkspaceTree}
+      >
+        ${waIcon('rotate-right')}
+      </wa-button>
+    </header>
+  `;
 }
 
-function renderTreeNodes(
-  container: HTMLElement,
+function treeNodesTemplate(
   nodes: readonly WorkspaceTreeNode[],
   depth: number,
-): void {
-  for (const node of nodes) {
-    if (node.type === 'directory') {
-      const details = document.createElement('details');
-      details.className = 'desktop-explorer-directory';
-      details.open = depth < 2;
-      details.style.setProperty('--tree-depth', String(depth));
+): TemplateResult {
+  return html`
+    ${repeat(
+      nodes,
+      (node) => node.path,
+      (node) => treeNodeTemplate(node, depth),
+    )}
+  `;
+}
 
-      const summary = document.createElement('summary');
-      summary.className = 'desktop-explorer-row desktop-explorer-folder-row';
-      summary.setAttribute('role', 'treeitem');
-      summary.innerHTML = `
-        <span class="codicon codicon-chevron-right desktop-explorer-chevron" aria-hidden="true"></span>
-        <span class="codicon codicon-folder" aria-hidden="true"></span>
-        <span class="desktop-explorer-name"></span>
-      `;
-      summary.querySelector('.desktop-explorer-name')!.textContent = node.name;
-      details.append(summary);
-
-      const group = document.createElement('div');
-      group.setAttribute('role', 'group');
-      renderTreeNodes(group, node.children ?? [], depth + 1);
-      details.append(group);
-      container.append(details);
-      continue;
-    }
-
-    const row = document.createElement('button');
-    row.className = 'desktop-explorer-row desktop-explorer-file-row';
-    row.type = 'button';
-    row.dataset.filePath = node.path;
-    row.style.setProperty('--tree-depth', String(depth));
-    row.setAttribute('role', 'treeitem');
-    row.title = node.path;
-    row.innerHTML = `
-      <span class="codicon codicon-file" aria-hidden="true"></span>
-      <span class="desktop-explorer-name"></span>
-      <span class="desktop-explorer-category-strip"></span>
+function treeNodeTemplate(
+  node: WorkspaceTreeNode,
+  depth: number,
+): TemplateResult {
+  if (node.type === 'directory') {
+    return html`
+      <details
+        class="desktop-explorer-directory"
+        ?open=${depth < 2}
+        style=${`--tree-depth: ${depth}`}
+      >
+        <summary
+          class="desktop-explorer-row desktop-explorer-folder-row"
+          role="treeitem"
+        >
+          ${waIcon('chevron-right', { className: 'desktop-explorer-chevron' })}
+          ${waIcon('folder')}
+          <span class="desktop-explorer-name">${node.name}</span>
+        </summary>
+        <div role="group">
+          ${treeNodesTemplate(node.children ?? [], depth + 1)}
+        </div>
+      </details>
     `;
-    row.querySelector('.desktop-explorer-name')!.textContent = node.name;
-    row
-      .querySelector('.desktop-explorer-category-strip')
-      ?.replaceChildren(...createCategoryDots(node.categories ?? []));
-    row.addEventListener('click', () => selectExplorerFile(node.path));
-    row.addEventListener('dblclick', () => openWorkspaceFile(node.path));
-    container.append(row);
   }
+  return html`
+    <button
+      class="desktop-explorer-row desktop-explorer-file-row"
+      type="button"
+      role="treeitem"
+      title=${node.path}
+      data-file-path=${node.path}
+      data-selected=${selectedExplorerFile === node.path ? 'true' : 'false'}
+      style=${`--tree-depth: ${depth}`}
+      @click=${() => selectExplorerFile(node.path)}
+      @dblclick=${() => openWorkspaceFile(node.path)}
+    >
+      ${waIcon('file-lines')}
+      <span class="desktop-explorer-name">${node.name}</span>
+      <span class="desktop-explorer-category-strip">
+        ${(node.categories ?? []).map(
+          (category) => html`
+            <span
+              class="desktop-explorer-category-dot"
+              title=${category}
+              data-category=${category}
+            ></span>
+          `,
+        )}
+      </span>
+    </button>
+  `;
 }
 
-function createCategoryDots(categories: readonly string[]): HTMLElement[] {
-  return categories.map((category) => {
-    const dot = document.createElement('span');
-    dot.className = 'desktop-explorer-category-dot';
-    dot.title = category;
-    dot.dataset.category = category;
-    return dot;
-  });
-}
-
-function selectExplorerFile(filePath: string): void {
-  selectedExplorerFile = filePath;
-  for (const row of workspaceExplorerContainer.querySelectorAll<HTMLElement>(
-    '.desktop-explorer-file-row',
-  )) {
-    row.dataset.selected = String(row.dataset.filePath === filePath);
-  }
-  updateExplorerSelectionPanel(currentExplorerTree);
-}
-
-function updateExplorerSelectionPanel(
+function selectionPanelTemplate(
   tree: readonly WorkspaceTreeNode[],
-): void {
-  const panel = workspaceExplorerContainer.querySelector<HTMLElement>(
-    '[data-selection-panel]',
-  );
-  if (!panel) return;
+): TemplateResult | string {
   const node = selectedExplorerFile
     ? findFileNode(tree, selectedExplorerFile)
     : undefined;
   if (!node) {
-    panel.textContent =
-      'Select a file to open it or attach it to the launcher.';
-    return;
+    return 'Select a file to open it or attach it to the launcher.';
   }
+  return html`
+    <div class="desktop-explorer-selected-path">${node.path}</div>
+    <div class="desktop-explorer-selection-actions">
+      ${selectionActionTemplate('Open', () => openWorkspaceFile(node.path))}
+      ${(node.categories ?? []).map((category) => {
+        const typedCategory = parseExplorerCategory(category);
+        return typedCategory
+          ? selectionActionTemplate(`Use as ${typedCategory}`, () =>
+              selectWorkspaceFile(typedCategory, node.path),
+            )
+          : nothing;
+      })}
+    </div>
+  `;
+}
 
-  panel.replaceChildren();
-  const path = document.createElement('div');
-  path.className = 'desktop-explorer-selected-path';
-  path.textContent = node.path;
-  const actions = document.createElement('div');
-  actions.className = 'desktop-explorer-selection-actions';
+function selectionActionTemplate(
+  label: string,
+  onClick: () => void,
+): TemplateResult {
+  return html`
+    <wa-button
+      class="desktop-secondary-button"
+      appearance="outlined"
+      size="small"
+      @click=${onClick}
+    >
+      ${label}
+    </wa-button>
+  `;
+}
 
-  const open = document.createElement('button');
-  open.type = 'button';
-  open.className = 'desktop-secondary-button';
-  open.textContent = 'Open';
-  open.addEventListener('click', () => openWorkspaceFile(node.path));
-  actions.append(open);
-
-  for (const category of node.categories ?? []) {
-    const typedCategory = parseExplorerCategory(category);
-    if (!typedCategory) continue;
-    const select = document.createElement('button');
-    select.type = 'button';
-    select.className = 'desktop-secondary-button';
-    select.textContent = `Use as ${typedCategory}`;
-    select.addEventListener('click', () =>
-      selectWorkspaceFile(typedCategory, node.path),
-    );
-    actions.append(select);
-  }
-
-  panel.append(path, actions);
+function selectExplorerFile(filePath: string): void {
+  selectedExplorerFile = filePath;
+  renderExplorer();
 }
 
 function findFileNode(
