@@ -7,6 +7,8 @@ import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 import { z } from 'zod';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import {
@@ -35,8 +37,12 @@ import {
   select,
   combine,
 } from '@shared/signals';
+import { designTokens } from '@shared/styles';
+import {
+  registerTeXRAWebAwesomeIcons,
+  TEXRA_ICON_LIBRARY,
+} from '@shared/wa/webAwesomeIcons';
 import { isProcessAgent } from '@shared/streams/agentKind';
-import { codiconStyles } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view frontend
 import { webviewStorage } from './webviewStorage';
@@ -115,6 +121,8 @@ import './components/ContextManagement';
 // Local imports - progress view component types
 import type { PermissionState } from './components/PermissionCard';
 
+registerTeXRAWebAwesomeIcons();
+
 // ---------------------------------------------------------------------------
 // Collection equality helpers — avoid allocating temporary arrays in
 // Signal.Computed evaluations that run on every state change.
@@ -134,7 +142,7 @@ const ProgressAppBase = SignalWatcher(
 export class ProgressApp extends ProgressAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
   static styles = [
-    codiconStyles,
+    designTokens,
     css`
       :host {
         display: flex;
@@ -180,10 +188,75 @@ export class ProgressApp extends ProgressAppBase {
         flex-shrink: 0;
       }
 
+      .header-action::part(base) {
+        min-height: var(--height-control, 24px);
+      }
+
       .split-container {
         display: flex;
         flex: 1;
         min-height: 0;
+      }
+
+      .progress-empty-state {
+        display: grid;
+        flex: 1;
+        min-height: 0;
+        place-items: start center;
+        padding: clamp(var(--spacing-large, 16px), 7vh, 72px)
+          var(--spacing-large, 16px);
+        overflow: auto;
+        font-family:
+          var(--texra-font-family, var(--vscode-font-family, system-ui)),
+          sans-serif;
+      }
+
+      .progress-empty-panel {
+        box-sizing: border-box;
+        width: min(720px, 100%);
+        padding: var(--spacing-xlarge, 24px);
+        border: var(--border-thin, 1px) solid
+          var(--color-border, var(--vscode-panel-border, #d0d7de));
+        border-radius: var(--border-radius, 6px);
+        background: var(--texra-editor-background, #fff);
+      }
+
+      .progress-empty-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-small, 8px);
+        margin-bottom: var(--spacing-medium, 12px);
+        color: var(--color-text-secondary, #57606a);
+        font-size: var(--font-size-sm, 13px);
+        font-weight: var(--font-weight-semibold, 600);
+      }
+
+      .progress-empty-panel h2 {
+        margin: 0 0 var(--spacing-small, 8px);
+        color: var(--texra-foreground, #24292f);
+        font-size: var(--font-size-xl, 22px);
+        line-height: 1.25;
+      }
+
+      .progress-empty-panel p {
+        margin: 0;
+        color: var(--color-text-secondary, #57606a);
+        line-height: var(--line-height-normal, 1.5);
+      }
+
+      .progress-empty-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-small, 8px);
+        margin-top: var(--spacing-large, 16px);
+      }
+
+      .progress-empty-actions wa-button::part(base) {
+        min-height: var(--height-button, 30px);
+      }
+
+      wa-icon {
+        font-size: 1em;
       }
 
       vscode-split-layout {
@@ -527,7 +600,9 @@ export class ProgressApp extends ProgressAppBase {
     const isEditorMode = this.placement.get() === 'editor';
     const isDesktopMode = this.hasAttribute('data-desktop-view');
     const compactTabs = this.narrowLayout.get() && !isEditorMode;
-    const splitHandlePosition = isDesktopMode ? '72%' : '80%';
+    const hasAnyStreams = this.hasAnyStreams$.get();
+    const splitPosition =
+      this.getAttribute('data-desktop-view') === 'progress' ? '68%' : '80%';
 
     return html`
       <div
@@ -537,49 +612,68 @@ export class ProgressApp extends ProgressAppBase {
           desktop: isDesktopMode,
         })}
       >
-        ${isDesktopMode && !this.hasAnyStreams$.get()
-          ? this.renderDesktopEmptyProgress()
-          : html`
-              <div class="view-header">
-                <vscode-tabs
-                  .selectedIndex=${1}
-                  @vsc-tabs-select=${this.onViewTabSelect}
-                >
-                  <vscode-tab-header
-                    slot="header"
-                    class=${isEditorMode ? 'focus-sidebar-tab' : ''}
-                    title=${isEditorMode ? 'Focus Launcher sidebar' : ''}
-                    @click=${this.onFocusLauncherTab}
-                  >
-                    <span class="codicon codicon-edit"></span>
-                    Launcher
-                  </vscode-tab-header>
-                  <vscode-tab-header slot="header">
-                    <span class="codicon codicon-server-process"></span>
-                    Progress
-                  </vscode-tab-header>
-                </vscode-tabs>
+        <div class="view-header">
+          <vscode-tabs
+            .selectedIndex=${1}
+            @vsc-tabs-select=${this.onViewTabSelect}
+          >
+            <vscode-tab-header
+              slot="header"
+              class=${isEditorMode ? 'focus-sidebar-tab' : ''}
+              title=${isEditorMode ? 'Focus Launcher sidebar' : ''}
+              @click=${this.onFocusLauncherTab}
+            >
+              <wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="pencil"
+                variant="solid"
+              ></wa-icon>
+              Launcher
+            </vscode-tab-header>
+            <vscode-tab-header slot="header">
+              <wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="robot"
+                variant="solid"
+              ></wa-icon>
+              Progress
+            </vscode-tab-header>
+          </vscode-tabs>
 
-                <vscode-toolbar-button
-                  class="header-action"
-                  icon="gear"
-                  title="Open dashboard"
-                  @click=${this.onOpenDashboard}
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  class="header-action"
-                  icon=${isEditorMode
-                    ? 'layout-sidebar-right'
-                    : 'link-external'}
-                  title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
-                  @click=${isEditorMode ? this.onPopBack : this.onPopOut}
-                ></vscode-toolbar-button>
-              </div>
+          <wa-button
+            class="header-action"
+            aria-label="Open dashboard"
+            appearance="plain"
+            size="small"
+            title="Open dashboard"
+            @click=${this.onOpenDashboard}
+          >
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="gear"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
+          <wa-button
+            class="header-action"
+            aria-label=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
+            appearance="plain"
+            size="small"
+            title=${isEditorMode ? 'Back to sidebar' : 'Open in editor'}
+            @click=${isEditorMode ? this.onPopBack : this.onPopOut}
+          >
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name=${isEditorMode ? 'backward-step' : 'picture-in-picture'}
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
+        </div>
 
+        ${hasAnyStreams
+          ? html`
               <div class="split-container">
-                <vscode-split-layout
-                  initial-handle-position=${splitHandlePosition}
-                >
+                <vscode-split-layout initial-handle-position=${splitPosition}>
                   <div
                     slot="start"
                     class="content-area"
@@ -604,35 +698,60 @@ export class ProgressApp extends ProgressAppBase {
                   ></stream-tabs>
                 </vscode-split-layout>
               </div>
-            `}
+            `
+          : this.renderEmptyState()}
       </div>
     `;
   }
 
-  private renderDesktopEmptyProgress(): TemplateResult {
+  private renderEmptyState(): TemplateResult {
     return html`
-      <section class="desktop-empty-progress" aria-label="Progress">
-        <div class="desktop-empty-progress__body">
-          <i
-            class="codicon codicon-server-process desktop-empty-progress__icon"
-          ></i>
-          <h1>No runs yet</h1>
+      <section class="progress-empty-state">
+        <div class="progress-empty-panel">
+          <div class="progress-empty-kicker">
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="robot"
+              variant="solid"
+            ></wa-icon>
+            Progress
+          </div>
+          <h2>No runs yet</h2>
           <p>
-            Start a TeXRA run from the Launcher. Open Settings if agents or
-            models need configuration first.
+            Start an agent from the Launcher or Commands. New runs, streamed
+            logs, approvals, and follow-up controls will appear here.
           </p>
-          <div class="desktop-empty-progress__actions">
-            <vscode-button @click=${this.onShowLauncher}>
-              <span slot="start" class="codicon codicon-edit"></span>
-              Launcher
-            </vscode-button>
-            <vscode-button
-              appearance="secondary"
+          <div class="progress-empty-actions">
+            <wa-button
+              appearance="filled"
+              variant="brand"
+              size="medium"
+              type="button"
+              @click=${this.onOpenLauncher}
+            >
+              <wa-icon
+                slot="start"
+                library=${TEXRA_ICON_LIBRARY}
+                name="play"
+                variant="solid"
+              ></wa-icon>
+              Open Launcher
+            </wa-button>
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="medium"
+              type="button"
               @click=${this.onOpenDashboard}
             >
-              <span slot="start" class="codicon codicon-gear"></span>
-              Settings
-            </vscode-button>
+              <wa-icon
+                slot="start"
+                library=${TEXRA_ICON_LIBRARY}
+                name="gear"
+                variant="solid"
+              ></wa-icon>
+              Open Dashboard
+            </wa-button>
           </div>
         </div>
       </section>
@@ -787,6 +906,10 @@ export class ProgressApp extends ProgressAppBase {
     this.focusLauncherSidebar(tabs ?? undefined);
   };
 
+  private onOpenLauncher = (): void => {
+    this.focusLauncherSidebar();
+  };
+
   private focusLauncherSidebar(tabs?: { selectedIndex?: number }): void {
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'main' });
     if (!tabs) return;
@@ -797,10 +920,6 @@ export class ProgressApp extends ProgressAppBase {
 
   private onOpenDashboard = (): void => {
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'dashboard' });
-  };
-
-  private onShowLauncher = (): void => {
-    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'main' });
   };
 
   private onPopOut = (): void => {

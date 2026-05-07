@@ -44,6 +44,10 @@ export const mainViewStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
+  .header-action::part(base) {
+    min-height: var(--height-control, 24px);
+  }
+
   .main-content {
     flex: 1;
     display: flex;

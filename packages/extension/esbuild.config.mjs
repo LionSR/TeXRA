@@ -107,6 +107,8 @@ const extensionConfig = {
   format: 'cjs',
   sourcemap: production ? false : 'linked',
   minify: production,
+  // sdkErrorUtils relies on SDK error class/prototype names after bundling.
+  keepNames: production,
   treeShaking: true,
   // Let esbuild resolve .ts files
   resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
