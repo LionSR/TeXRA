@@ -23,8 +23,6 @@ import {
   getVisibleModels,
 } from './modelOptionsBasic';
 
-export { isDeprecatedModel } from './modelOptionsBasic';
-
 /** Check if a model is available via personal API keys. */
 async function hasPersonalKeyForModel(
   config: ModelConfig,
