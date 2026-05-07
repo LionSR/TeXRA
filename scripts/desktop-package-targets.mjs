@@ -1,3 +1,9 @@
+function hasLabelToken(label, tokens) {
+  return tokens.some((token) => {
+    return new RegExp(`(^|[^a-z0-9])${token}([^a-z0-9]|$)`).test(label);
+  });
+}
+
 export function expectedCodexPlatformKeysFromLabel(label) {
   const normalizedLabel = label.replaceAll('\\', '/').toLowerCase();
   if (normalizedLabel.includes('.app/contents/resources/app')) {
@@ -19,17 +25,17 @@ export function expectedCodexPlatformKeysFromLabel(label) {
     return ['darwin-x64', 'darwin-arm64'];
   }
 
-  if (normalizedLabel.includes('linux')) {
+  if (hasLabelToken(normalizedLabel, ['linux'])) {
     return [
-      normalizedLabel.includes('arm64') || normalizedLabel.includes('aarch64')
+      hasLabelToken(normalizedLabel, ['arm64', 'aarch64'])
         ? 'linux-arm64'
         : 'linux-x64',
     ];
   }
 
-  if (normalizedLabel.includes('win')) {
+  if (hasLabelToken(normalizedLabel, ['win', 'win32', 'windows'])) {
     return [
-      normalizedLabel.includes('arm64') || normalizedLabel.includes('aarch64')
+      hasLabelToken(normalizedLabel, ['arm64', 'aarch64'])
         ? 'win32-arm64'
         : 'win32-x64',
     ];
