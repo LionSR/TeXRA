@@ -45,6 +45,7 @@ import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload';
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons/faEllipsis';
 import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
 import { faFile } from '@fortawesome/free-solid-svg-icons/faFile';
+import { faFlask } from '@fortawesome/free-solid-svg-icons/faFlask';
 import { faFileCirclePlus } from '@fortawesome/free-solid-svg-icons/faFileCirclePlus';
 import { faFileCode } from '@fortawesome/free-solid-svg-icons/faFileCode';
 import { faFileExport } from '@fortawesome/free-solid-svg-icons/faFileExport';
@@ -65,6 +66,7 @@ import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
 import { faLightbulb } from '@fortawesome/free-solid-svg-icons/faLightbulb';
 import { faLink } from '@fortawesome/free-solid-svg-icons/faLink';
 import { faListCheck } from '@fortawesome/free-solid-svg-icons/faListCheck';
+import { faListUl } from '@fortawesome/free-solid-svg-icons/faListUl';
 import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
 import { faMagnifyingGlassChart } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlassChart';
 import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
@@ -169,6 +171,7 @@ const icons = {
   ellipsis: faEllipsis,
   eye: faEye,
   file: faFile,
+  flask: faFlask,
   'file-circle-plus': faFileCirclePlus,
   'file-code': faFileCode,
   'file-export': faFileExport,
@@ -189,6 +192,7 @@ const icons = {
   lightbulb: faLightbulb,
   link: faLink,
   'list-check': faListCheck,
+  'list-ul': faListUl,
   'magnifying-glass': faMagnifyingGlass,
   'magnifying-glass-chart': faMagnifyingGlassChart,
   minus: faMinus,
@@ -228,7 +232,7 @@ const CODICON_ALIASES: Readonly<Record<string, string>> = {
   account: 'circle-user',
   add: 'plus',
   'arrow-small-down': 'caret-down',
-  beaker: 'magnifying-glass-chart',
+  beaker: 'flask',
   'check-all': 'check-double',
   checklist: 'list-check',
   'circle-large-outline': 'circle',
@@ -257,6 +261,7 @@ const CODICON_ALIASES: Readonly<Record<string, string>> = {
   info: 'circle-info',
   inspect: 'magnifying-glass-chart',
   library: 'book',
+  'list-tree': 'list-ul',
   loading: 'spinner',
   'mortar-board': 'graduation-cap',
   'new-file': 'file-circle-plus',
@@ -269,6 +274,8 @@ const CODICON_ALIASES: Readonly<Record<string, string>> = {
   question: 'circle-question',
   references: 'link',
   refresh: 'rotate-right',
+  save: 'floppy-disk',
+  search: 'magnifying-glass',
   'server-process': 'server',
   'settings-gear': 'gear',
   'sign-in': 'right-to-bracket',
@@ -279,7 +286,7 @@ const CODICON_ALIASES: Readonly<Record<string, string>> = {
   'symbol-method': 'cube',
   'symbol-number': 'hashtag',
   'symbol-numeric': 'hashtag',
-  'symbol-operator': 'code-branch',
+  'symbol-operator': 'cube',
   'symbol-structure': 'diagram-project',
   sync: 'arrows-rotate',
   tasklist: 'list-check',
