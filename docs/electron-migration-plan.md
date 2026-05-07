@@ -381,7 +381,9 @@ Shared config:
 
 The monorepo now has a local unsigned package rehearsal for the Electron desktop app. It produces a
 macOS `.app` bundle from the built desktop main, preload, and renderer artifacts, then verifies the
-packaged `app.asar` contains the expected runtime files.
+packaged `app.asar` contains the expected runtime files. The package verifier also reads the
+desktop main esbuild metafile and checks that the startup import graph does not eagerly pull in
+provider SDKs that should remain behind lazy agent-execution imports.
 
 From the repository root:
 
