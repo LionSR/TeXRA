@@ -27,7 +27,7 @@ import { WorkspaceFS } from '@utils/files';
 export interface DesktopToolEditApprovalOptions {
   openPath?: (filePath: string) => Promise<void>;
   openBuildDisplay?: BuildDisplayFn;
-  showMessage?: (message: string) => Promise<void> | void;
+  showErrorMessage?: (message: string) => Promise<void> | void;
   tempRoot?: string;
 }
 
@@ -90,6 +90,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       this.showProgressPermission(requestId, request, lineChanges);
     });
 
+    if (result.accepted && result.appliedContent != null) return result;
     return { ...result, lineChanges: result.lineChanges ?? lineChanges };
   }
 
@@ -267,7 +268,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   }
 
   private async report(message: string): Promise<void> {
-    await this.options.showMessage?.(message);
+    await this.options.showErrorMessage?.(message);
   }
 }
 

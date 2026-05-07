@@ -153,7 +153,7 @@ export class DesktopProgressBridge {
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       openPath: options.openPath,
       openBuildDisplay: options.openBuildDisplay,
-      showMessage: (message) => this.showErrorMessage(message),
+      showErrorMessage: (message) => this.showErrorMessage(message),
     });
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),

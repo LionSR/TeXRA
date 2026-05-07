@@ -15,7 +15,7 @@ interface DesktopToolEditApprovalModule {
       location: { absolutePath: string },
       options?: { preserveFocus?: boolean },
     ) => Promise<void>;
-    showMessage?: (message: string) => Promise<void> | void;
+    showErrorMessage?: (message: string) => Promise<void> | void;
     tempRoot?: string;
   }): {
     handleAction(payload: {
@@ -272,7 +272,7 @@ describe('desktop tool edit approval', () => {
         action: 'previewProposed',
       });
       await vi.waitFor(() => expect(opened).toHaveLength(1));
-      await writeFile(opened[0], 'beta\nwith user edits\n', 'utf8');
+      await writeFile(opened[0], 'beta\nwith user edits\nand more\n', 'utf8');
 
       expect(
         controller.handleAction({
@@ -283,8 +283,8 @@ describe('desktop tool edit approval', () => {
 
       await expect(resultPromise).resolves.toMatchObject({
         accepted: true,
-        appliedContent: 'beta\nwith user edits\n',
-        lineChanges: { added: 1, removed: 1 },
+        appliedContent: 'beta\nwith user edits\nand more\n',
+        lineChanges: { added: 3, removed: 1 },
       });
       await vi.waitFor(async () => {
         await expect(pathExists(opened[0])).resolves.toBe(false);
@@ -313,7 +313,7 @@ describe('desktop tool edit approval', () => {
       openBuildDisplay: async (location, options) => {
         displayed.push({ absolutePath: location.absolutePath, options });
       },
-      showMessage: (message) => {
+      showErrorMessage: (message) => {
         messages.push(message);
       },
     });
