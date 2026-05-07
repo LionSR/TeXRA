@@ -3,6 +3,7 @@ import {
   type CommandId,
   type CommandKeybinding,
 } from '@commands/catalog';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { type AgentCategory } from '@shared/schemas/agent';
 import {
@@ -91,6 +92,12 @@ export interface DesktopSettingsTabMessage {
   command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
   tabIndex: SettingsTab;
   agentSubTab?: AgentCategory;
+}
+
+export interface DesktopMainViewResetMessage {
+  command: typeof MAIN_VIEW_COMMANDS.STATE_RESTORE;
+  state: Record<string, never>;
+  isResetOperation: true;
 }
 
 const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
@@ -310,6 +317,14 @@ export function buildDesktopSettingsTabMessage(
     command: SETTINGS_VIEW_COMMANDS.SET_TAB,
     tabIndex,
     ...(agentSubTab && { agentSubTab }),
+  };
+}
+
+export function buildDesktopMainViewResetMessage(): DesktopMainViewResetMessage {
+  return {
+    command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
+    state: {},
+    isResetOperation: true,
   };
 }
 

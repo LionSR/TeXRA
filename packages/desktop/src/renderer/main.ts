@@ -26,6 +26,7 @@ import {
   type DesktopSetLogMessage,
 } from '../desktopLogMessages';
 import {
+  buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
 } from '../desktopCommandSurface';
@@ -209,11 +210,7 @@ const commandPalette = createDesktopCommandPalette({
     resetMainView: () => {
       setRoute('main');
       window.postMessage(
-        {
-          command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-          state: {},
-          isResetOperation: true,
-        },
+        buildDesktopMainViewResetMessage(),
         getWindowTargetOrigin(),
       );
     },

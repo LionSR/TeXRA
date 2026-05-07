@@ -21,6 +21,7 @@ import {
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
 import {
+  buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
   DESKTOP_DOCS_URL,
   DESKTOP_LOCAL_COMMANDS,
@@ -130,11 +131,7 @@ export function createDesktopShellActions(
 
   function resetMainView() {
     postRoute('main');
-    renderer.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-      state: {},
-      isResetOperation: true,
-    });
+    renderer.postToRenderer(buildDesktopMainViewResetMessage());
   }
 
   return {
