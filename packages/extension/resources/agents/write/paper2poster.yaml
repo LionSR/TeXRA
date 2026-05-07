@@ -1,6 +1,8 @@
 name: paper2poster
 settings:
   agentCategory: workflow
+  documentTag: documents
+  endTag: </documents>
   outputExt: tex
   isRewrite: False
   prefills:

@@ -3,6 +3,8 @@ description: Fixes typos, grammar, and LaTeX formatting without changing your wr
 
 settings:
   agentCategory: workflow
+  documentTag: documents
+  endTag: </documents>
   rounds: 1
   outputExt: tex
   prefills:

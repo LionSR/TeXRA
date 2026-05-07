@@ -3,6 +3,8 @@ description: Rewrites and restructures text to improve clarity, flow, and readab
 
 settings:
   agentCategory: workflow
+  documentTag: documents
+  endTag: </documents>
   outputExt: tex
 
 prompts:
