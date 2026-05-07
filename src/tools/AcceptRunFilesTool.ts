@@ -17,11 +17,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage';
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolRuntimeHost } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - shared
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
@@ -94,12 +90,6 @@ const AcceptRunFilesInputSchema = z.strictObject({
 });
 
 export type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
-
-function getToolRuntimeHost(): AgentRuntimeHost {
-  return (
-    getCurrentToolFileInteractionContext()?.runtimeHost ?? getAgentRuntimeHost()
-  );
-}
 
 // ============================================================================
 // Tool Implementation
@@ -263,7 +253,7 @@ Optional:
 
     // Badge all accepted workspace files
     if (acceptedEntries.length > 0) {
-      getToolRuntimeHost().emit('workspaceFilesWritten', {
+      getCurrentToolRuntimeHost().emit('workspaceFilesWritten', {
         absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
       });
     }
