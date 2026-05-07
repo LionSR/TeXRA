@@ -42,6 +42,7 @@ import {
   type DesktopAuthCallbackState,
   type DesktopAuthCoordinator,
 } from './desktopSupabaseAuth.js';
+import { reportFatalStartupError } from './fatalStartupError.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
@@ -422,9 +423,7 @@ if (protocolLifecycle.shouldContinue) {
       });
     })
     .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to start TeXRA desktop: ${message}`);
-      app.quit();
+      reportFatalStartupError(error);
     });
 }
 
