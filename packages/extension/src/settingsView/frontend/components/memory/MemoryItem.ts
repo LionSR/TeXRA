@@ -8,7 +8,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import type { MemoryViewItem } from '@shared/schemas';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import {
@@ -26,7 +26,6 @@ import { MemoryViewEvents } from './events';
 export class MemoryItem extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     markdownStyles,
     css`
@@ -148,21 +147,18 @@ export class MemoryItem extends LitElement {
               title: this.item.pinned
                 ? 'Unpin this memory'
                 : 'Pin as core long-term memory',
-              className: 'pin-memory-btn',
               onClick: this.handleTogglePin,
             })}
             ${renderIconActionButton({
               icon: 'file-export',
               label: 'Open',
               title: 'Open in editor',
-              className: 'open-memory-btn',
               onClick: this.handleOpen,
             })}
             ${renderIconActionButton({
               icon: 'trash',
               label: 'Delete',
               title: 'Delete this memory',
-              className: 'delete-memory-btn',
               onClick: this.handleDelete,
             })}
           </div>
