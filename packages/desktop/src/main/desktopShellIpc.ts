@@ -21,6 +21,7 @@ import {
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
 import {
+  buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
   DESKTOP_DOCS_URL,
   DESKTOP_LOCAL_COMMANDS,
@@ -128,12 +129,18 @@ export function createDesktopShellActions(
     void options.signIn().catch(reportAsyncError);
   }
 
+  function resetMainView() {
+    postRoute('main');
+    renderer.postToRenderer(buildDesktopMainViewResetMessage());
+  }
+
   return {
     signIn,
     openAgentDirectory,
     openDesktopDocs,
     openLogFolder,
     openWorkspaceFolder,
+    resetMainView,
     setRecentCommitsUnavailable: () => {
       renderer.postToRenderer({
         command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,

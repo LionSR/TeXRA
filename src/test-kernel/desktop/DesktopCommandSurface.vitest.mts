@@ -41,6 +41,8 @@ interface DesktopCommandSurfaceModule {
     label: string;
     category: string;
     accelerator?: string;
+    enabled: boolean;
+    unavailableReason?: string;
   }>;
   toElectronAccelerator(
     keybinding: { key: string; mac?: string },
@@ -59,6 +61,8 @@ interface DesktopCommandSurfaceModule {
 interface DesktopMenuItem {
   label?: string;
   accelerator?: string;
+  enabled?: boolean;
+  toolTip?: string;
   submenu?: DesktopMenuItem[];
   type?: 'separator';
   click?: () => void;
@@ -99,22 +103,26 @@ describe('desktop command surface', () => {
       label: 'Show Launcher',
       category: 'TeXRA',
       accelerator: 'Command+Option+M',
+      enabled: true,
     });
     expect(entries).toContainEqual({
       id: 'texra.showProgressView',
       label: 'Show Progress',
       category: 'TeXRA',
       accelerator: 'Command+Option+P',
+      enabled: true,
     });
     expect(entries).toContainEqual({
       id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
       label: 'Desktop Documentation',
       category: 'Help',
+      enabled: true,
     });
     expect(entries).toContainEqual({
       id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
       label: 'Show Logs',
       category: 'TeXRA',
+      enabled: true,
     });
     const firstHelpIndex = entries.findIndex(
       (entry) => entry.category === 'Help',
@@ -150,6 +158,7 @@ describe('desktop command surface', () => {
       openLogFolder: vi.fn(),
       openWorkspaceFolder: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
+      resetMainView: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
@@ -162,6 +171,7 @@ describe('desktop command surface', () => {
       dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS, actions),
     ).toBe(true);
     expect(dispatchDesktopCommand('texra.openSettings', actions)).toBe(true);
+    expect(dispatchDesktopCommand('texra.mainView.reset', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showModels', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showAgents', actions)).toBe(true);
     expect(
@@ -195,6 +205,7 @@ describe('desktop command surface', () => {
       3,
       SETTINGS_TAB.AGENTS,
     );
+    expect(actions.resetMainView).toHaveBeenCalledOnce();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
     expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
@@ -204,6 +215,26 @@ describe('desktop command surface', () => {
       ),
     ).toBe(false);
     expect(actions.openDesktopDocs).toHaveBeenCalledOnce();
+  });
+
+  it('marks VS Code-only commands as unavailable instead of clickable no-ops', async () => {
+    const { dispatchDesktopCommand, getDesktopCommandMenuEntries } =
+      await loadDesktopCommandSurface();
+    const actions = {
+      showRoute: vi.fn(),
+      showSettings: vi.fn(),
+    };
+    const entries = getDesktopCommandMenuEntries();
+    const executeEntry = entries.find((entry) => entry.id === 'texra.execute');
+
+    expect(executeEntry).toMatchObject({
+      enabled: false,
+      unavailableReason:
+        'Use the Launcher execute button after choosing an agent and files.',
+    });
+    expect(dispatchDesktopCommand('texra.execute', actions)).toBe(false);
+    expect(actions.showRoute).not.toHaveBeenCalled();
+    expect(actions.showSettings).not.toHaveBeenCalled();
   });
 
   it('builds settings-tab messages from one shared helper', async () => {
@@ -227,9 +258,11 @@ describe('desktop command surface', () => {
   });
 
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
-    const { buildDesktopMenuTemplate } = await loadDesktopCommandSurface();
+    const { buildDesktopMenuTemplate, getDesktopCommandMenuEntries } =
+      await loadDesktopCommandSurface();
     const actions = {
       openDesktopDocs: vi.fn(),
+      resetMainView: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
@@ -254,19 +287,41 @@ describe('desktop command surface', () => {
       'Open Folder',
       'Open Logs Folder',
       'Open TeXRA Settings',
+      'New',
       'separator',
+      'Execute Agent',
+      'Run Setup Assistant Agent (Setup Wizard)',
+      'Import or Create LaTeX Project',
       'Show Memory',
       'Show Agent Execution History',
       'Show Models',
       'Show Agents',
       'Show Tool Dashboard',
       'Show Multi-Agent Settings',
+      'Open Getting Started Walkthrough',
+      'Clean LLM Outputs',
+      'Clean Build Files',
     ]);
+    expect(
+      submenu
+        .filter((item) => item.type !== 'separator')
+        .map((item) => item.label),
+    ).toEqual(
+      getDesktopCommandMenuEntries(undefined, 'darwin')
+        .filter((entry) => entry.category !== 'Help')
+        .map((entry) => entry.label),
+    );
 
     submenu[0].click?.();
-    submenu[9].click?.();
+    submenu[8].click?.();
+    submenu[13].click?.();
     expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
+    expect(submenu[8]).toMatchObject({
+      enabled: false,
+      toolTip:
+        'Use the Launcher execute button after choosing an agent and files.',
+    });
 
     const helpMenu = menu.find((item) => item.label === 'Help');
     expect(helpMenu?.submenu?.map((item) => item.label)).toEqual([
