@@ -63,6 +63,10 @@ import {
 } from '@frontend/git/gitAuthorSetup';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
+import {
+  isInlineCriticismEnabled,
+  setInlineCriticismEnabled,
+} from '@frontend/latex/inlineCriticism';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
@@ -555,6 +559,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         ),
       [SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE]: (data) =>
         this.latexHandlers.handleSetLatexConfigValue(data),
+      [SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED]: () =>
+        this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
+      [SETTINGS_VIEW_COMMANDS.SET_INLINE_CRITICISM_ENABLED]: (data) =>
+        this.handleSetInlineCriticismEnabled(data.enabled),
 
       // Approval settings handlers
       [SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS]: () =>
@@ -698,6 +706,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendApprovalSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.latexHandlers.sendLatexConfigValues(webview),
+      this.sendInlineCriticismEnabled(webview),
     ]);
   }
 
@@ -709,6 +718,22 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(this.memoryController.getMemoryEnabledMessage());
+  }
+
+  public async sendInlineCriticismEnabled(
+    webview: vscode.Webview,
+  ): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED,
+      enabled: isInlineCriticismEnabled(),
+    });
+  }
+
+  private async handleSetInlineCriticismEnabled(
+    enabled: boolean,
+  ): Promise<void> {
+    await setInlineCriticismEnabled(enabled);
+    await this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w));
   }
 
   public async sendHistoryData(webview: vscode.Webview): Promise<void> {

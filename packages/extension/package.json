@@ -45,6 +45,13 @@
             "description": "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
             "scope": "resource",
             "order": 51
+          },
+          "texra.inlineCriticism.enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.",
+            "scope": "resource",
+            "order": 52
           }
         }
       },

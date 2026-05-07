@@ -9,6 +9,7 @@ import {
 } from '@model/ToolDefinition';
 
 // Local imports - tools
+import { AddCriticismTool } from './AddCriticismTool';
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { ApplyPathTool } from './applyPath';
@@ -82,6 +83,7 @@ function createDefaultTools() {
   return {
     str_replace_editor: new TextEditorTool(),
     diagnostics: new DiagnosticsTool(),
+    add_criticism: new AddCriticismTool(),
     bash: new BashTool(),
     read_file: new ReadFileTool(),
     write_file: new WriteFileTool(),
