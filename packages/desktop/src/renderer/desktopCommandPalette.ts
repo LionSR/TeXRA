@@ -45,6 +45,14 @@ export function getNextDesktopCommandPaletteIndex(
   return (currentIndex + delta + itemCount) % itemCount;
 }
 
+export function executeDesktopCommandPaletteEntry(
+  entry: DesktopCommandMenuEntry | undefined,
+  actions: DesktopCommandActions,
+): boolean {
+  if (!entry?.enabled) return false;
+  return dispatchDesktopCommand(entry.id, actions);
+}
+
 export function createDesktopCommandPalette({
   document,
   actions,
@@ -84,8 +92,7 @@ export function createDesktopCommandPalette({
 
   const executeActiveCommand = (): void => {
     const entry = visibleEntries[activeIndex];
-    if (!entry) return;
-    if (dispatchDesktopCommand(entry.id, actions)) close();
+    if (executeDesktopCommandPaletteEntry(entry, actions)) close();
   };
 
   const renderEntries = (): void => {
@@ -94,6 +101,7 @@ export function createDesktopCommandPalette({
       const item = document.createElement('button');
       item.className = 'desktop-command-palette-item';
       item.type = 'button';
+      item.disabled = !entry.enabled;
       item.dataset.commandId = entry.id;
       item.setAttribute('role', 'option');
       item.setAttribute(
@@ -107,7 +115,8 @@ export function createDesktopCommandPalette({
 
       const meta = document.createElement('span');
       meta.className = 'desktop-command-palette-meta';
-      meta.textContent = entry.accelerator ?? entry.category;
+      meta.textContent =
+        entry.unavailableReason ?? entry.accelerator ?? entry.category;
 
       item.append(label, meta);
       item.addEventListener('mouseenter', () => {
@@ -115,7 +124,7 @@ export function createDesktopCommandPalette({
         syncActiveItem();
       });
       item.addEventListener('click', () => {
-        if (dispatchDesktopCommand(entry.id, actions)) close();
+        if (executeDesktopCommandPaletteEntry(entry, actions)) close();
       });
       list.append(item);
     });

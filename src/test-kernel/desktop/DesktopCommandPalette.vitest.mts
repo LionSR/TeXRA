@@ -31,6 +31,13 @@ interface DesktopCommandPaletteModule {
     itemCount: number,
     delta: number,
   ): number;
+  executeDesktopCommandPaletteEntry(
+    entry: DesktopPaletteEntry | undefined,
+    actions: {
+      showRoute(route: string): void;
+      showSettings(tabIndex?: number): void;
+    },
+  ): boolean;
   isCommandPaletteShortcut(event: KeyboardEvent): boolean;
 }
 
@@ -39,6 +46,8 @@ interface DesktopPaletteEntry {
   label: string;
   category: string;
   accelerator?: string;
+  enabled: boolean;
+  unavailableReason?: string;
 }
 
 async function loadDesktopCommandPalette(): Promise<DesktopCommandPaletteModule> {
@@ -54,17 +63,20 @@ describe('desktop command palette', () => {
       label: 'Show Launcher',
       category: 'TeXRA',
       accelerator: 'Command+Option+M',
+      enabled: true,
     },
     {
       id: 'texra.showProgressView',
       label: 'Show Progress',
       category: 'TeXRA',
       accelerator: 'Command+Option+P',
+      enabled: true,
     },
     {
       id: 'texra.showModels',
       label: 'Show Models',
       category: 'TeXRA',
+      enabled: true,
     },
   ];
 
@@ -95,6 +107,28 @@ describe('desktop command palette', () => {
     expect(getNextDesktopCommandPaletteIndex(2, 3, 1)).toBe(0);
     expect(getNextDesktopCommandPaletteIndex(0, 3, -1)).toBe(2);
     expect(getNextDesktopCommandPaletteIndex(0, 0, 1)).toBe(-1);
+  });
+
+  it('does not dispatch disabled command palette entries', async () => {
+    const { executeDesktopCommandPaletteEntry } =
+      await loadDesktopCommandPalette();
+    const actions = {
+      showRoute: vi.fn(),
+      showSettings: vi.fn(),
+    };
+
+    expect(
+      executeDesktopCommandPaletteEntry(
+        {
+          id: 'texra.showModels',
+          label: 'Show Models',
+          category: 'TeXRA',
+          enabled: false,
+        },
+        actions,
+      ),
+    ).toBe(false);
+    expect(actions.showSettings).not.toHaveBeenCalled();
   });
 
   it('uses the native command palette shortcut shape', async () => {
