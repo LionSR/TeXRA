@@ -11,10 +11,9 @@
  * layer above.
  */
 
-import { bus } from '@eventBus/ProgressEventBus';
-
 import { shouldDropBotEvent } from './botFilter';
 import {
+  formatCheckAnnotations,
   formatCheckFailure,
   formatCheckFailureSummary,
   formatCIComplete,
@@ -29,7 +28,12 @@ import {
   isPassingConclusion,
 } from './formatPREvent';
 import { getNewestTimestamp, trimSet } from './formatUtils';
-import { type ConditionalResponse, ghGet } from './githubClient';
+import {
+  type ConditionalResponse,
+  ghGet,
+  GitHubAuthError,
+  GitHubPermanentError,
+} from './githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
@@ -41,12 +45,14 @@ import {
 } from './prSubscriptionConstants';
 import {
   isDefiniteMergeableState,
+  type GhCheckAnnotation,
   type GhCheckRun,
   type GhIssueComment,
   type GhPullRequest,
   type GhReview,
   type GhReviewComment,
 } from './prTypes';
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 function createInitialState(pr: PRKey): SubscriptionState {
   return {
@@ -58,6 +64,8 @@ function createInitialState(pr: PRKey): SubscriptionState {
     seenReviewCommentIds: new Set(),
     seenReviewIds: new Set(),
     lastFailedCheckKeys: new Set(),
+    lastAnnotationKeys: new Set(),
+    pendingAnnotationRuns: [],
     ciCompleteSha: undefined,
     ciPassedSha: undefined,
     headSha: undefined,
@@ -84,6 +92,15 @@ const CHECK_RUNS_PAGE_SIZE = 100;
 // Without a cap a malformed/runaway `total_count` could fan out into
 // hundreds of GETs per tick.
 const MAX_CHECK_RUNS_PAGES = 50;
+// Matches the formatter's per-run display cap so we don't pay for annotations
+// we'd only truncate; remaining count is sourced from `annotations_count`.
+const ANNOTATIONS_PAGE_SIZE = 20;
+// Bound the per-tick fan-out across runs (e.g. a matrix build lighting up a
+// fleet of checks). Excess candidates land in `pendingAnnotationRuns` and are
+// drained on subsequent ticks (including 304 ticks where check-runs haven't
+// changed). The cap is per-PR; the PollingSourceBase rate-limit handler is
+// the process-wide safety net via GitHubRateLimitError + skipPollUntilMs.
+const MAX_ANNOTATION_FETCHES_PER_TICK = 3;
 
 export interface PRKey {
   owner: string;
@@ -110,6 +127,20 @@ interface SubscriptionState extends BasePollSubscriptionState {
   seenReviewCommentIds: Set<number>;
   seenReviewIds: Set<number>;
   lastFailedCheckKeys: Set<string>;
+  /**
+   * `${id}:${completed_at}` for runs observed (with annotations) on the most
+   * recent 200 tick. Replaced wholesale every 200 tick (mirrors
+   * `lastFailedCheckKeys`) so it can't grow unboundedly and FIFO eviction
+   * can't mistake a still-present run for a new one.
+   */
+  lastAnnotationKeys: Set<string>;
+  /**
+   * Annotated runs awaiting an annotations-endpoint fetch. Populated by the
+   * 200 branch (newly-seen keys), drained on every tick (200 OR 304) so a
+   * burst that overflows `MAX_ANNOTATION_FETCHES_PER_TICK` isn't stranded
+   * once the check-runs cache stabilizes.
+   */
+  pendingAnnotationRuns: GhCheckRun[];
   /** Head SHA for which the one-shot "CI complete" event has been emitted. */
   ciCompleteSha: string | undefined;
   /** Head SHA for which the one-shot "CI passed" event has been emitted. */
@@ -170,7 +201,7 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedBusEvent(keys: readonly string[]): void {
-    bus.emit('prSubscriptionsChanged', { keys });
+    emitGitHubSubscriptionChanged('prSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(
@@ -219,6 +250,9 @@ export class PRPollingSource extends PollingSourceBase<
         state.ciCompleteSha = undefined;
         state.ciPassedSha = undefined;
         state.checkRunsCache = undefined;
+        // Old SHA's deferred annotations are no longer the user's focus; the
+        // new SHA's runs will re-enqueue from the next 200 tick.
+        state.pendingAnnotationRuns = [];
       }
       state.headSha = newHead;
 
@@ -336,6 +370,14 @@ export class PRPollingSource extends PollingSourceBase<
         for (const r of runs) {
           if (this.isCheckFailure(r)) {
             state.lastFailedCheckKeys.add(this.checkKey(r));
+          }
+          // Seed annotation keys so pre-subscription annotations don't
+          // replay; the timestamp in the key lets re-runs re-emit.
+          if (
+            r.status === 'completed' &&
+            (r.output?.annotations_count ?? 0) > 0
+          ) {
+            state.lastAnnotationKeys.add(this.checkKey(r));
           }
         }
         // Seed so pre-existing terminal CI doesn't fire on the next tick —
@@ -481,7 +523,18 @@ export class PRPollingSource extends PollingSourceBase<
           );
         }
       }
+
+      // Annotations are emitted independently of failures: they also surface
+      // on passing checks (lint suggestions, custom workflow advisories).
+      // Enqueue here, drain below — the drain runs on every tick (including
+      // 304) so excess candidates aren't stranded once check-runs settle.
+      this.enqueueAnnotationCandidates(state, runs);
     }
+
+    // Always drain pending annotation fetches, even on a 304 check-runs tick.
+    // The 200 branch enqueues; this is what unblocks the queue when the
+    // check-runs response stops changing but candidates remain unfetched.
+    await this.drainAnnotationQueue(state);
 
     // Commit the deferred check-runs cache only after successfully consuming
     // the response (including the diff branch above). See `fetchAllCheckRuns`
@@ -753,6 +806,140 @@ export class PRPollingSource extends PollingSourceBase<
 
   private checkKey(r: GhCheckRun): string {
     return `${r.id}:${r.completed_at ?? ''}`;
+  }
+
+  /**
+   * Replace `lastAnnotationKeys` with this tick's set and enqueue any newly-
+   * appeared annotated runs. Replace-each-tick semantics (mirroring
+   * `lastFailedCheckKeys`) keep the set bounded by the head SHA's check-run
+   * count — no FIFO eviction, no risk of an evicted-then-rediscovered run
+   * re-emitting duplicates against an unchanged check-runs response.
+   */
+  private enqueueAnnotationCandidates(
+    state: SubscriptionState,
+    runs: ReadonlyArray<GhCheckRun>,
+  ): void {
+    const currentKeys = new Set<string>();
+    // Enforce at most one queue entry per check id. The annotations endpoint
+    // always returns the current state for a given id (there's no historical
+    // form), so queueing both A:T1 and A:T2 would produce two identical API
+    // calls and two events with mismatched headline `annotations_count`.
+    // Instead: on a rerun (new `completed_at` for an already-pending id),
+    // REPLACE the queued entry's run reference so the headline metadata
+    // matches what the fetch will actually return. `lastAnnotationKeys`
+    // still keys by full `checkKey`, so a rerun's new key always re-enters
+    // this loop rather than being silently skipped.
+    const pendingIndexById = new Map<number, number>();
+    for (let i = 0; i < state.pendingAnnotationRuns.length; i += 1) {
+      pendingIndexById.set(state.pendingAnnotationRuns[i].id, i);
+    }
+    for (const run of runs) {
+      if (run.status !== 'completed') continue;
+      if ((run.output?.annotations_count ?? 0) <= 0) continue;
+      const key = this.checkKey(run);
+      currentKeys.add(key);
+      if (state.lastAnnotationKeys.has(key)) continue;
+      const existingIdx = pendingIndexById.get(run.id);
+      if (existingIdx !== undefined) {
+        state.pendingAnnotationRuns[existingIdx] = run;
+        continue;
+      }
+      state.pendingAnnotationRuns.push(run);
+    }
+    state.lastAnnotationKeys = currentKeys;
+  }
+
+  /**
+   * Drain up to `MAX_ANNOTATION_FETCHES_PER_TICK` queued runs by hitting the
+   * annotations endpoint. Errors are isolated per-fetch — annotations are
+   * best-effort, so a single bad check (e.g. 404 on a deleted run, or a
+   * permission-scoped token) must not propagate to `handleFailure` and
+   * detach the whole PR subscription.
+   *
+   * - Success: emit, remove from queue.
+   * - `GitHubPermanentError` (404/410/422): log + drop. Retrying won't help.
+   * - `GitHubAuthError` (401/403): log + drop. Almost always a permission-
+   *   scoped token (the main poll's other ghGet calls succeeded, else we
+   *   wouldn't be here). If the token is genuinely bad, the main poll path
+   *   will detach the subscription via its own ghGet failure.
+   * - Anything else (network, timeout, rate-limit): rotate to the BACK of
+   *   the queue. Without rotation, a persistently-failing head entry would
+   *   starve every other queued run forever.
+   */
+  private async drainAnnotationQueue(state: SubscriptionState): Promise<void> {
+    if (state.pendingAnnotationRuns.length === 0) return;
+    const candidates = state.pendingAnnotationRuns.slice(
+      0,
+      MAX_ANNOTATION_FETCHES_PER_TICK,
+    );
+    const { pr } = state;
+    const settled = await Promise.allSettled(
+      candidates.map((run) => this.fetchAnnotations(pr.owner, pr.repo, run.id)),
+    );
+
+    // Dedupe by `id` here: enqueue enforces at most one queue entry per
+    // check id (replacing on rerun), so id is sufficient to identify the
+    // entry to drop or rotate. A rerun arriving DURING this drain wouldn't
+    // observe the queue mid-mutation (ticks don't overlap, see
+    // PollingSourceBase.tickInFlight).
+    const dropIds = new Set<number>();
+    const rotateIds = new Set<number>();
+    for (let i = 0; i < settled.length; i += 1) {
+      const run = candidates[i];
+      const result = settled[i];
+      if (result.status === 'fulfilled') {
+        dropIds.add(run.id);
+        if (result.value.length > 0) {
+          this.emit(
+            state,
+            formatCheckAnnotations(
+              state.slug,
+              pr.pullNumber,
+              run,
+              result.value,
+            ),
+          );
+        }
+        continue;
+      }
+      const err = result.reason;
+      if (err instanceof GitHubPermanentError) {
+        this.logger.warn(
+          `Annotations for check ${run.id} unavailable (HTTP ${err.status}); dropping.`,
+        );
+        dropIds.add(run.id);
+        continue;
+      }
+      if (err instanceof GitHubAuthError) {
+        this.logger.warn(
+          `Annotations for check ${run.id} forbidden (${err.message}); dropping.`,
+        );
+        dropIds.add(run.id);
+        continue;
+      }
+      rotateIds.add(run.id);
+      this.logger.warn(
+        `Annotation fetch for check ${run.id} failed; rotating to back of queue: ${String(err)}`,
+      );
+    }
+
+    const rotated = state.pendingAnnotationRuns.filter((p) =>
+      rotateIds.has(p.id),
+    );
+    state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
+      (p) => !dropIds.has(p.id) && !rotateIds.has(p.id),
+    );
+    state.pendingAnnotationRuns.push(...rotated);
+  }
+
+  private async fetchAnnotations(
+    owner: string,
+    repo: string,
+    checkRunId: number,
+  ): Promise<GhCheckAnnotation[]> {
+    const path = `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations?per_page=${ANNOTATIONS_PAGE_SIZE}`;
+    const res = await ghGet<GhCheckAnnotation[]>(path);
+    return res.status === 200 ? res.data : [];
   }
 }
 

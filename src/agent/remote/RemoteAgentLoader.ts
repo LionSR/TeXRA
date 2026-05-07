@@ -8,19 +8,16 @@ import {
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
 import {
-  getMultipleName,
-  getBaseName,
   getAgent,
   extractToolNames,
   updateAgentDescription,
   updateAgentTools,
   updateAgentDefaultOutputFiles,
 } from '@agent/index/agentRegistry';
-import type { AgentLoadOptions } from '@agent/runtime/agentLoad';
 import * as logger from '@agent/core/logger';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { resolveToolDefinitions } from '@tools/registry';
 
 import {
@@ -37,8 +34,6 @@ logger.initialize(CHANNEL);
 function mapHttpError(
   status: number,
   agentName: string,
-  candidateName: string,
-  isLastCandidate: boolean,
   errorText: string,
 ): string {
   switch (status) {
@@ -49,13 +44,6 @@ function mapHttpError(
       return `Access denied to agent "${agentName}". Upgrade your account for access.`;
 
     case StatusCodes.NOT_FOUND:
-      if (!isLastCandidate) {
-        logger.debug(
-          CHANNEL,
-          `Agent variant "${candidateName}" not found, trying next candidate`,
-        );
-        return `Agent variant "${candidateName}" not found`;
-      }
       return `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`;
 
     case StatusCodes.INTERNAL_SERVER_ERROR:
@@ -104,13 +92,10 @@ function parseListItemRow(row: {
 
 /** Loader for remote agents stored in Supabase. */
 export class RemoteAgentLoader {
-  /**
-   * Load a remote agent configuration by name.
-   * When preferMultiple is set, tries _multiple variant first, then falls back to base.
-   */
+  /** Load a remote agent configuration by name. */
   static async loadRemoteAgent(
     agentName: string,
-    options?: AgentLoadOptions,
+    options: { preferMultiOutput?: boolean } = {},
   ): Promise<RemoteAgentConfig> {
     if (!(await SupabaseClient.isAuthenticated())) {
       throw new Error(
@@ -118,73 +103,36 @@ export class RemoteAgentLoader {
       );
     }
 
-    const candidateNames = buildCandidateNames(
-      agentName,
-      options?.preferMultiple ?? false,
-    );
+    logger.info(CHANNEL, `Loading remote agent: ${agentName}`);
 
-    logger.info(
-      CHANNEL,
-      `Loading remote agent: ${agentName} (candidates: ${candidateNames.join(', ')})`,
-    );
+    try {
+      const config = await fetchAgentConfigWithLegacyFallback(
+        agentName,
+        options,
+      );
 
-    let lastError: Error | null = null;
-
-    for (const candidateName of candidateNames) {
-      const isLastCandidate = candidateName === candidateNames.at(-1);
-
-      try {
-        const config = await fetchAgentConfig(
-          agentName,
-          candidateName,
-          isLastCandidate,
-        );
-
-        // Update registry cache with metadata from YAML.
-        // Try base name first (normal case), then full name (_multiple-only agents
-        // are registered under their full name, not the stripped base).
-        const baseName = getBaseName(agentName);
-        const registryId = getAgent(`remote:${baseName}`)
-          ? `remote:${baseName}`
-          : `remote:${agentName}`;
-        if (config.description) {
-          updateAgentDescription(registryId, config.description);
-        }
-        updateAgentTools(registryId, config.tools);
-        updateAgentDefaultOutputFiles(registryId, config.defaultOutputFiles);
-
-        logger.info(
-          CHANNEL,
-          `Successfully loaded remote agent: ${agentName} (resolved to ${candidateName})`,
-        );
-
-        return {
-          settings: config.settings,
-          prompts: config.prompts,
-        };
-      } catch (error) {
-        lastError =
-          error instanceof Error ? error : new Error(toErrorMessage(error));
-
-        if (isLastCandidate) {
-          logger.error(
-            CHANNEL,
-            `Failed to load remote agent "${agentName}": ${lastError.message}`,
-          );
-          throw lastError;
-        }
-
-        logger.debug(
-          CHANNEL,
-          `Failed to load candidate "${candidateName}", trying next: ${lastError.message}`,
-        );
+      const registryId = `remote:${agentName}`;
+      if (config.description) {
+        updateAgentDescription(registryId, config.description);
       }
-    }
+      updateAgentTools(registryId, config.tools);
+      updateAgentDefaultOutputFiles(registryId, config.defaultOutputFiles);
 
-    throw (
-      lastError ||
-      new Error(`Failed to load remote agent "${agentName}" after all attempts`)
-    );
+      logger.info(CHANNEL, `Successfully loaded remote agent: ${agentName}`);
+
+      return {
+        settings: config.settings,
+        prompts: config.prompts,
+      };
+    } catch (error) {
+      const lastError =
+        error instanceof Error ? error : new Error(toErrorMessage(error));
+      logger.error(
+        CHANNEL,
+        `Failed to load remote agent "${agentName}": ${lastError.message}`,
+      );
+      throw lastError;
+    }
   }
 
   /** List all available remote agents for the current user. */
@@ -239,27 +187,42 @@ export class RemoteAgentLoader {
   }
 }
 
-/** Build candidate names for loading (multiple variant first if preferred). */
-function buildCandidateNames(
+async function fetchAgentConfigWithLegacyFallback(
   agentName: string,
-  preferMultiple: boolean,
-): string[] {
-  if (!preferMultiple) {
-    return [agentName];
+  options: { preferMultiOutput?: boolean },
+): Promise<{
+  settings: RemoteAgentConfig['settings'];
+  prompts: RemoteAgentConfig['prompts'];
+  description?: string;
+  tools?: string[];
+  defaultOutputFiles?: string[];
+}> {
+  const candidates =
+    options.preferMultiOutput && !agentName.endsWith('_multiple')
+      ? [`${agentName}_multiple`, agentName]
+      : [agentName];
+  let lastError: unknown;
+
+  for (const candidate of candidates) {
+    try {
+      return await fetchAgentConfig(candidate);
+    } catch (error) {
+      lastError = error;
+      if (candidate === agentName) break;
+      logger.debug(
+        CHANNEL,
+        `Legacy remote multi-output agent "${candidate}" unavailable; falling back to "${agentName}": ${toErrorMessage(error)}`,
+      );
+    }
   }
 
-  const multipleName = getMultipleName(agentName);
-  const baseName = getBaseName(agentName);
-
-  return baseName !== multipleName ? [multipleName, baseName] : [multipleName];
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(toErrorMessage(lastError));
 }
 
 /** Fetch and parse agent config from edge function. */
-async function fetchAgentConfig(
-  agentName: string,
-  candidateName: string,
-  isLastCandidate: boolean,
-): Promise<{
+async function fetchAgentConfig(agentName: string): Promise<{
   settings: RemoteAgentConfig['settings'];
   prompts: RemoteAgentConfig['prompts'];
   description?: string;
@@ -277,24 +240,18 @@ async function fetchAgentConfig(
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ agentName: candidateName }),
+    body: JSON.stringify({ agentName }),
   });
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
-    const message = mapHttpError(
-      response.status,
-      agentName,
-      candidateName,
-      isLastCandidate,
-      errorText,
-    );
+    const message = mapHttpError(response.status, agentName, errorText);
     throw new Error(message);
   }
 
   const responseData = EdgeFunctionResponseSchema.parse(await response.json());
 
-  logger.debug(CHANNEL, `Parsing YAML for remote agent: ${candidateName}`);
+  logger.debug(CHANNEL, `Parsing YAML for remote agent: ${agentName}`);
   const validated = AgentDefinitionSchema.parse(
     yaml.parse(responseData.config),
   );

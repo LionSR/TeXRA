@@ -1,9 +1,11 @@
 node_modules/
 dist/
+dist-packaged/
 out/
 .env
 .aider*
 releases/
+artifacts/
 
 .DS_Store
 .cursor

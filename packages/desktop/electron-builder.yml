@@ -1,0 +1,60 @@
+appId: ai.texra.desktop
+productName: TeXRA
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+publish:
+  provider: github
+  owner: texra-ai
+  repo: texra-desktop-releases
+  private: false
+  releaseType: release
+protocols:
+  - name: TeXRA
+    schemes:
+      - texra
+asar: true
+asarUnpack:
+  - '**/node_modules/@openai/codex-*/**'
+npmRebuild: false
+afterPack: ../../scripts/prune-desktop-codex-payload.mjs
+directories:
+  output: dist-packaged
+  buildResources: build
+files:
+  - from: dist
+    to: dist
+    filter:
+      - '**/*'
+  - package.json
+extraResources:
+  - from: ../extension/resources
+    to: resources
+    filter:
+      - '**/*'
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.icns
+  x64ArchFiles: '**/app.asar.unpacked/node_modules/@openai/codex-*/vendor/**'
+  target:
+    - target: dmg
+      arch:
+        - universal
+    - target: zip
+      arch:
+        - universal
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+linux:
+  category: Office
+  icon: build/icon.png
+  maintainer: TeXRA.ai <contact@texra.ai>
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64

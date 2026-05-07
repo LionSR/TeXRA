@@ -79,6 +79,7 @@ export const SETTINGS_VIEW_CMD = {
   SET_BASH_APPROVAL_ENABLED: 'setBashApprovalEnabled',
   SET_CODEX_SANDBOX_MODE: 'setCodexSandboxMode',
   SET_CODEX_REASONING_EFFORT: 'setCodexReasoningEffort',
+  SET_CODEX_APPROVAL_POLICY: 'setCodexApprovalPolicy',
   // Tool dashboard commands
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
@@ -98,6 +99,10 @@ export const SETTINGS_VIEW_CMD = {
   SET_GITHUB_TOKEN: 'setGitHubToken',
   REMOVE_GITHUB_TOKEN: 'removeGitHubToken',
   OPEN_GITHUB_TOKEN_URL: 'openGitHubTokenUrl',
+  GET_DESKTOP_CRASH_REPORTING: 'getDesktopCrashReporting',
+  UPDATE_DESKTOP_CRASH_REPORTING: 'updateDesktopCrashReporting',
+  SET_DESKTOP_CRASH_REPORTING_ENABLED: 'setDesktopCrashReportingEnabled',
+  SET_DESKTOP_CRASH_REPORTING_DSN: 'setDesktopCrashReportingDsn',
   GET_PR_SUBSCRIPTIONS: 'getPRSubscriptions',
   UPDATE_PR_SUBSCRIPTIONS: 'updatePRSubscriptions',
   UNSUBSCRIBE_PR: 'unsubscribePR',
@@ -110,6 +115,9 @@ export const SETTINGS_VIEW_CMD = {
   // LaTeX/compile/diff config (storage-backed, migrated from VS Code config)
   GET_LATEX_CONFIG_VALUES: 'getLatexConfigValues',
   SET_LATEX_CONFIG_VALUE: 'setLatexConfigValue',
+  // Experimental settings
+  GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
+  SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -133,4 +141,5 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
   UPDATE_LATEX_CONFIG_VALUES: 'updateLatexConfigValues',
+  UPDATE_INLINE_CRITICISM_ENABLED: 'updateInlineCriticismEnabled',
 } as const;

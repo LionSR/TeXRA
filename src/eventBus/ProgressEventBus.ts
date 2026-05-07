@@ -41,8 +41,6 @@ interface SetActiveStreamPayload {
   agentCategory?: AgentCategory;
   /** Hint whether this is a remote agent (for UI display before TaskState is set) */
   isRemote?: boolean;
-  /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
-  hasMultipleOutputs?: boolean;
 }
 
 interface SetTaskStatePayload {
@@ -74,9 +72,7 @@ export interface ProgressEventPayloads {
    * Clear the "missing outputs" marker. Either target a specific tab via
    * `streamId`, or clear every workflow tab whose taskState matches the
    * given `streamConfig` (for command-palette pack/clean which has no
-   * stream context). `useMultipleOutputs`, when specified, narrows the
-   * match so single- vs multi-output tabs on the same input aren't cleared
-   * together.
+   * stream context).
    */
   clearMissingOutputs:
     | { streamId: StreamTabId; streamConfig?: undefined }
@@ -86,7 +82,7 @@ export interface ProgressEventPayloads {
           agent: string;
           model: string;
           inputFile: string;
-          useMultipleOutputs?: boolean;
+          outputFiles?: readonly string[];
         };
       };
   setTaskState: SetTaskStatePayload;

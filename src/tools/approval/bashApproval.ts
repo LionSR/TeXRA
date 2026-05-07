@@ -1,8 +1,11 @@
 import { z } from 'zod';
 
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getConfig } from '@agent/core/config';
-import { bus } from '@eventBus/ProgressEventBus';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@tools/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -42,6 +45,7 @@ export async function requestBashApproval(
 
   const context = getCurrentToolFileInteractionContext();
   const streamId = request.streamId ?? context?.streamId;
+  const runtimeHost = context?.runtimeHost ?? getAgentRuntimeHost();
 
   if (
     !approvalsEnabled ||
@@ -51,13 +55,14 @@ export async function requestBashApproval(
   }
 
   return bashApprovalController.enqueue(() =>
-    showApprovalPrompt(request, streamId),
+    showApprovalPrompt(request, streamId, runtimeHost),
   );
 }
 
 async function showApprovalPrompt(
   request: BashApprovalRequest,
   streamId?: StreamTabId,
+  runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
 ): Promise<BashApprovalResult> {
   if (streamId && isApprovalBypassedForStream(streamId)) {
     return { accepted: true };
@@ -80,14 +85,14 @@ async function showApprovalPrompt(
         isSettled: () => settled,
       });
 
-      bus.emit('requestEnsureProgressView', {});
+      runtimeHost.emit('requestEnsureProgressView', {});
 
       // Activate the stream that needs approval so user sees the prompt immediately
       if (streamId) {
-        bus.emit('setActiveStream', { streamId });
+        runtimeHost.emit('setActiveStream', { streamId });
       }
 
-      bus.emit('showBashPermission', {
+      runtimeHost.emit('showBashPermission', {
         requestId,
         command: request.command,
         allowBypass: true,
@@ -96,7 +101,7 @@ async function showApprovalPrompt(
     });
   } finally {
     bashApprovalController.unregisterPending(requestId);
-    bus.emit('resolveBashPermission', { requestId });
+    runtimeHost.emit('resolveBashPermission', { requestId });
   }
 }
 

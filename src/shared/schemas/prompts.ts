@@ -30,6 +30,8 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.extend({
   addedLines: z.int().nonnegative(),
   removedLines: z.int().nonnegative(),
   isLatex: z.boolean(),
+  originalContent: z.string().optional(),
+  proposedContent: z.string().optional(),
 });
 export type ToolEditPermission = z.infer<typeof ToolEditPermissionSchema>;
 

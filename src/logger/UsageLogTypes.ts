@@ -8,7 +8,6 @@ export const UsageLogMetadataSchema = z.object({
   provider: UsageProviderSchema,
   agentName: z.string().optional(),
   agentCategory: z.enum(AgentCategory).optional(),
-  isMultipleOutput: z.boolean().optional(),
   usedRelay: z.boolean().optional(),
   streamId: z.string().optional(),
 });

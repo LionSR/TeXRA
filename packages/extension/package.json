@@ -1,0 +1,1675 @@
+{
+  "name": "texra",
+  "displayName": "TeXRA",
+  "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
+  "version": "0.37.8",
+  "publisher": "texra-ai",
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Chat",
+    "Machine Learning",
+    "Linters",
+    "Formatters",
+    "AI",
+    "Education",
+    "Data Science"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onColorTheme"
+  ],
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "TeXRA runs AI agents that read workspace files and execute shell commands (LaTeX compilation, bash tools, external MCP tools). Open trusted workspaces only."
+    }
+  },
+  "contributes": {
+    "authentication": [
+      {
+        "id": "texra-supabase",
+        "label": "TeXRA"
+      }
+    ],
+    "configuration": [
+      {
+        "title": "TeXRA",
+        "properties": {
+          "texra.agentOutputs.autoOpenFinal": {
+            "type": "boolean",
+            "default": true,
+            "description": "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
+            "scope": "resource",
+            "order": 51
+          },
+          "texra.inlineCriticism.enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.",
+            "scope": "resource",
+            "order": 52
+          }
+        }
+      },
+      {
+        "title": "User Interface",
+        "properties": {
+          "texra.ui.showApiKeyReminders": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show API key reminders in the status bar and main view when no API keys are configured",
+            "scope": "resource"
+          },
+          "texra.ui.showLoginBanner": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show login banner prompting users to sign in for access to remote agents",
+            "scope": "resource"
+          },
+          "texra.ui.showGettingStartedBanner": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show getting started banner with import options when no LaTeX files are found",
+            "scope": "resource"
+          },
+          "texra.ui.showOrchestratorBanner": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show orchestrator and session reminder text in the main view",
+            "scope": "resource"
+          },
+          "texra.auth.enableVSCodeGitHub": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable VS Code native GitHub authentication (experimental)",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "Model Settings",
+        "properties": {
+          "texra.model.useImprovedConnection": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use improved connection for API requests",
+            "scope": "resource"
+          },
+          "texra.model.improvedConnectionDomain": {
+            "type": "string",
+            "description": "Domain to use when using improved connection",
+            "default": "proxy.texra.ai",
+            "scope": "resource"
+          },
+          "texra.model.useOpenAIResponsesAPI": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
+            "scope": "resource"
+          },
+          "texra.model.useBackgroundResponses": {
+            "type": "boolean",
+            "default": true,
+            "description": "Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.",
+            "scope": "resource"
+          },
+          "texra.model.openaiParallelToolCalls": {
+            "type": "boolean",
+            "default": false,
+            "description": "Let OpenAI models use multiple tools at the same time for faster results. Disabled by default for more predictable behavior.",
+            "scope": "resource"
+          },
+          "texra.model.compactionThresholdPercent": {
+            "type": "number",
+            "default": 75,
+            "minimum": 0,
+            "maximum": 100,
+            "description": "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
+            "scope": "resource"
+          },
+          "texra.model.gpt5ReasoningSummary": {
+            "type": "boolean",
+            "default": false,
+            "description": "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "File Handling",
+        "properties": {
+          "texra.files.included.mediaExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".png",
+              ".pdf",
+              ".jpeg",
+              ".jpg",
+              ".gif",
+              ".heic",
+              ".heif",
+              ".webp",
+              ".wav",
+              ".m4a",
+              ".mp3",
+              ".aiff",
+              ".aac",
+              ".opus",
+              ".l16",
+              ".alaw",
+              ".mulaw",
+              ".ogg",
+              ".flac"
+            ],
+            "description": "File extensions to include when searching for media files",
+            "editPresentation": "multilineText",
+            "order": 4
+          },
+          "texra.files.included.inputExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".txt",
+              ".tex",
+              ".md"
+            ],
+            "description": "File extensions to include when searching for input files",
+            "editPresentation": "multilineText",
+            "order": 5
+          },
+          "texra.files.included.referenceExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".txt",
+              ".tex",
+              ".md",
+              ".bib",
+              ".bbl"
+            ],
+            "description": "File extensions to include when searching for reference files",
+            "editPresentation": "multilineText",
+            "order": 6
+          },
+          "texra.files.included.auxiliaryExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".txt",
+              ".tex",
+              ".cls",
+              ".md",
+              ".sty"
+            ],
+            "description": "File extensions to include when searching for auxiliary files",
+            "editPresentation": "multilineText",
+            "order": 7
+          },
+          "texra.files.included.editedExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".txt",
+              ".tex"
+            ],
+            "description": "File extensions to include when searching for edited files",
+            "editPresentation": "multilineText",
+            "order": 8
+          },
+          "texra.files.ignored.fileExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".pdf",
+              ".bst",
+              ".json",
+              ".py",
+              ".ipynb",
+              ".png",
+              ".vsix",
+              ".ts",
+              ".js",
+              ".yaml"
+            ],
+            "description": "File extensions to ignore when listing text files",
+            "editPresentation": "multilineText",
+            "order": 9
+          },
+          "texra.files.ignored.inputFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "command.tex",
+              "commands.tex",
+              "preamble.tex",
+              "yaml"
+            ],
+            "description": "Files to ignore when listing input, sample, and edited files, but not auxiliary files",
+            "editPresentation": "multilineText",
+            "order": 10
+          },
+          "texra.files.ignored.inputDirectories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Additional directories to ignore when listing input and edited files",
+            "editPresentation": "multilineText",
+            "order": 11
+          },
+          "texra.files.ignored.auxiliaryKeywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "o1",
+              "o3",
+              "o4",
+              "gpt",
+              "sonnet",
+              "haiku",
+              "opus",
+              "gemini",
+              "grok",
+              "deepseek",
+              "qwen",
+              "kimi",
+              "llama",
+              "egg-info",
+              "yaml"
+            ],
+            "description": "Additional keywords to ignore when listing auxiliary files, including model names",
+            "editPresentation": "multilineText",
+            "order": 12
+          },
+          "texra.files.ignored.mediaDirectories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "build",
+              "node_modules",
+              "__pycache__",
+              "versions",
+              "history",
+              "venv",
+              "Diffs"
+            ],
+            "description": "Directories to ignore in the figure path",
+            "editPresentation": "multilineText",
+            "order": 13
+          },
+          "texra.files.ignored.directories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "build",
+              "node_modules",
+              "__pycache__",
+              "figures",
+              "media",
+              "figs",
+              "versions",
+              "history",
+              "stuff",
+              "draft",
+              "miscellaneous",
+              "diffs",
+              "venv"
+            ],
+            "description": "Directories to ignore when listing files",
+            "editPresentation": "multilineText",
+            "order": 14
+          },
+          "texra.files.ignored.keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "Makefile",
+              "template",
+              "_thinking",
+              "_diff",
+              "draw",
+              "versions",
+              "history",
+              ".egg-info",
+              "venv",
+              "yaml"
+            ],
+            "description": "Keywords to ignore when selecting files",
+            "editPresentation": "multilineText",
+            "order": 15
+          },
+          "texra.maxImageDimension": {
+            "type": "number",
+            "default": 2000,
+            "minimum": 100,
+            "maximum": 10000,
+            "description": "Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.",
+            "order": 16
+          }
+        }
+      },
+      {
+        "title": "LaTeX",
+        "properties": {}
+      },
+      {
+        "title": "Bibliography",
+        "properties": {
+          "texra.bib.defaultPath": {
+            "type": "string",
+            "default": "",
+            "description": "Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.",
+            "editPresentation": "singlelineText",
+            "scope": "resource",
+            "order": 1
+          },
+          "texra.bib.zoteroPort": {
+            "type": "number",
+            "default": 23119,
+            "description": "Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.",
+            "minimum": 1,
+            "maximum": 65535,
+            "scope": "resource",
+            "order": 2
+          }
+        }
+      },
+      {
+        "title": "LaTeX Formatter",
+        "properties": {
+          "texra.latex.showLatexindentWarning": {
+            "type": "boolean",
+            "default": false,
+            "description": "Show warning when latexindent is not installed",
+            "order": 2
+          },
+          "texra.latex.latexindentConfig": {
+            "type": "string",
+            "default": "",
+            "description": "Path to latexindent configuration file",
+            "editPresentation": "singlelineText",
+            "order": 3
+          },
+          "texra.latex.texfmtConfig": {
+            "type": "string",
+            "default": "",
+            "description": "Path to tex-fmt configuration file",
+            "editPresentation": "singlelineText",
+            "order": 4
+          }
+        }
+      },
+      {
+        "title": "TikZ Figures",
+        "properties": {
+          "texra.latex.tikzInputDirectory": {
+            "type": "string",
+            "default": "",
+            "description": "Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.",
+            "editPresentation": "singlelineText",
+            "order": 4
+          },
+          "texra.latex.tikzTemplate": {
+            "type": "string",
+            "default": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}",
+            "description": "Template used for generating standalone documents when extracting and compiling TikZ figures",
+            "editPresentation": "multilineText",
+            "order": 5
+          },
+          "texra.latex.includeWorkspaceInTexinputs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include the workspace root directory in TEXINPUTS when compiling TikZ figures",
+            "order": 6
+          }
+        }
+      },
+      {
+        "title": "LaTeX Replacements",
+        "properties": {
+          "texra.latex.wrapCritiqueInAlign": {
+            "type": "boolean",
+            "default": true,
+            "description": "When enabled, bare \\critique and \\comment commands inside align blocks are wrapped with \\intertext.",
+            "order": 7
+          },
+          "texra.latex.enabledReplacements": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "latex_spacing",
+                "equations",
+                "sections",
+                "latex_forbidden_commands",
+                "characters",
+                "latex_xml",
+                "latex_document",
+                "unicode",
+                "html_entities",
+                "scratchpad_xml",
+                "latexdiff",
+                "gptness",
+                "personal_style",
+                "max_style"
+              ]
+            },
+            "default": [
+              "latex_spacing",
+              "equations",
+              "sections",
+              "latex_forbidden_commands",
+              "characters",
+              "latex_xml",
+              "latex_document",
+              "unicode",
+              "html_entities",
+              "scratchpad_xml",
+              "latexdiff",
+              "gptness"
+            ],
+            "description": "List of enabled non-regex LaTeX replacement categories",
+            "order": 8
+          },
+          "texra.latex.enabledReplacementsRegex": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "inline_math",
+                "parentheses",
+                "latexdiff_markup",
+                "equation_style",
+                "equation_macros",
+                "max_style_regex"
+              ]
+            },
+            "default": [
+              "inline_math",
+              "parentheses",
+              "latexdiff_markup",
+              "equation_style"
+            ],
+            "description": "List of enabled regex LaTeX replacement categories",
+            "order": 9
+          },
+          "texra.latex.customReplacementsRegex": {
+            "type": "object",
+            "default": {},
+            "description": "Custom regex replacements in the format: { 'pattern': 'replacement' }. Use capture groups with $1, $2, etc. Example: { '\\\\section\\{([^}]+)\\}': '\\section{$1}' }",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "order": 10
+          },
+          "texra.latex.customReplacements": {
+            "type": "object",
+            "default": {},
+            "description": "Custom LaTeX replacements in the format: { 'from': 'to' }. Example: { '\\alpha': '\\al' }",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "order": 11
+          }
+        }
+      },
+      {
+        "title": "LaTeXdiff",
+        "properties": {
+          "texra.latexdiff.pictureEnvironments": {
+            "type": "string",
+            "default": "(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*",
+            "description": "Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.",
+            "order": 3
+          },
+          "texra.latexdiff.tempFileLocation": {
+            "type": "string",
+            "enum": [
+              "sameDirectory",
+              "workspaceTemp"
+            ],
+            "enumDescriptions": [
+              "Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.",
+              "Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths."
+            ],
+            "default": "sameDirectory",
+            "description": "Where to create temporary files for LaTeX preview and diff operations during tool edit approval.",
+            "order": 5
+          }
+        }
+      },
+      {
+        "title": "Git",
+        "properties": {
+          "texra.git.numberOfCommitsToShow": {
+            "type": "number",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of recent commits to show in the commit selection dropdown",
+            "order": 1
+          }
+        }
+      },
+      {
+        "title": "Audio",
+        "properties": {
+          "texra.audio.soxPath": {
+            "type": "string",
+            "default": "",
+            "description": "Path to the SoX executable. Overrides automatic detection.",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "API Keys",
+        "properties": {
+          "texra.apiKeys.set": {
+            "type": "null",
+            "scope": "application",
+            "markdownDescription": "API keys are now stored securely. [Click here to set an API key](command:texra.setApiKey)",
+            "readOnly": true
+          },
+          "texra.apiKeys.remove": {
+            "type": "null",
+            "scope": "application",
+            "markdownDescription": "API keys are now stored securely. [Click here to remove the stored key](command:texra.removeApiKey)",
+            "readOnly": true
+          }
+        }
+      },
+      {
+        "title": "Logger",
+        "properties": {
+          "texra.logger.debugMode": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to show verbose debug messages in the logger view",
+            "scope": "resource"
+          },
+          "texra.debug.saveDebugObjects": {
+            "type": "boolean",
+            "default": false,
+            "description": "Save message and response objects to JSON files for debugging purposes",
+            "scope": "resource"
+          },
+          "texra.debug.saveInputPrompt": {
+            "type": "boolean",
+            "default": false,
+            "description": "Save the final input prompt sent to the model as an XML file for debugging purposes",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "Tool Use Agents",
+        "properties": {
+          "texra.toolUse.requireEditApproval": {
+            "type": "boolean",
+            "default": true,
+            "description": "Require user approval in a diff view before tool-driven edits modify workspace files",
+            "scope": "resource"
+          },
+          "texra.toolUse.requireBashApproval": {
+            "type": "boolean",
+            "default": true,
+            "description": "Require user approval before tool-use agents execute bash commands",
+            "scope": "resource"
+          },
+          "texra.toolUse.persistence.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Persist tool-use conversations across VS Code restarts",
+            "scope": "resource"
+          },
+          "texra.toolUse.persistence.ttlHours": {
+            "type": "number",
+            "default": 336,
+            "minimum": 1,
+            "description": "Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "Model Retries",
+        "properties": {
+          "texra.model.retry.maxAttempts": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "description": "Number of automatic retry attempts before surfacing a manual retry option for model calls. Set to 0 for no automatic retries (manual retry button only).",
+            "scope": "resource"
+          },
+          "texra.model.retry.backoffMs": {
+            "type": "number",
+            "default": 1000,
+            "minimum": 0,
+            "description": "Base backoff delay in milliseconds between retry attempts for model calls",
+            "scope": "resource"
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "texra.createSampleProject",
+        "title": "Create Sample Project",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.runSetupAssistant",
+        "title": "Run Setup Assistant Agent (Setup Wizard)",
+        "category": "TeXRA",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "texra.openGettingStarted",
+        "title": "Open Getting Started Walkthrough",
+        "category": "TeXRA",
+        "icon": "$(mortar-board)"
+      },
+      {
+        "command": "texra.cleanOutput",
+        "title": "Clean All LLM Output Files (Workspace-wide)",
+        "shortTitle": "Clean LLM Outputs",
+        "category": "TeXRA",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "texra.cleanBuild",
+        "title": "Clean All Build Files (Workspace-wide)",
+        "shortTitle": "Clean Build Files",
+        "category": "TeXRA",
+        "icon": "$(close-all)"
+      },
+      {
+        "command": "texra.indentTeX",
+        "title": "Indent All LaTeX Files",
+        "category": "TeXRA",
+        "icon": "$(indent)"
+      },
+      {
+        "command": "texra.getRecentCommits",
+        "title": "Get Recent Commits",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.cloneOverleafProject",
+        "title": "Clone Overleaf/ShareLaTeX Project",
+        "category": "TeXRA",
+        "icon": "$(repo-clone)"
+      },
+      {
+        "command": "texra.refreshCommits",
+        "title": "Refresh Commits",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.indentCurrentTeX",
+        "title": "Indent Current TeX",
+        "category": "TeXRA",
+        "icon": "$(indent)",
+        "enablement": "!virtualWorkspace"
+      },
+      {
+        "command": "texra.resumeAgent",
+        "title": "Resume Tool-Use Agent",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.applyReplacements",
+        "title": "Apply LaTeX Replacements to Current File",
+        "category": "TeXRA",
+        "icon": "$(symbol-text)",
+        "enablement": "!virtualWorkspace"
+      },
+      {
+        "command": "texra.fixCompilation",
+        "title": "Fix LaTeX Compilation Errors",
+        "category": "TeXRA",
+        "icon": "$(wrench)",
+        "enablement": "!virtualWorkspace"
+      },
+      {
+        "command": "texra.getTeXCount",
+        "title": "Count Words in Current TeX File",
+        "category": "TeXRA",
+        "icon": "$(symbol-number)",
+        "enablement": "!virtualWorkspace"
+      },
+      {
+        "command": "texra.countPdfPages",
+        "title": "Count PDF Pages",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.encodeImageToBase64",
+        "title": "Encode Image to Base64",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.convertPdfToImages",
+        "title": "Convert PDF to Images",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.extractFigurePaths",
+        "title": "Extract Figure Paths from LaTeX",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.extractTikzFigures",
+        "title": "Extract TikZ Figures from Current File",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.compileTikzFigures",
+        "title": "Compile TikZ Figures from Current File",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.testConnection",
+        "title": "Test API Connection",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.testAgentLoading",
+        "title": "Test Agent Loading",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.loadSpecificAgent",
+        "title": "Load Specific Agent",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.downloadArXivSource",
+        "title": "Download arXiv Source",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.showImportOptions",
+        "title": "Import or Create LaTeX Project",
+        "category": "TeXRA",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "texra.parseXml",
+        "title": "Parse XML Structure",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.parseYaml",
+        "title": "Parse YAML Structure",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.stopAgent",
+        "title": "Stop Agent",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.execute",
+        "title": "Execute Agent",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.pack",
+        "title": "Pack Output into History Folder",
+        "shortTitle": "Pack Output",
+        "category": "TeXRA",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "texra.clean",
+        "title": "Clean Agent Output Files",
+        "shortTitle": "Clean Output",
+        "category": "TeXRA",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "texra.createAgentWithAI",
+        "title": "Create AI Agent",
+        "category": "TeXRA",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "texra.setApiKey",
+        "title": "Set API Key",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.removeApiKey",
+        "title": "Remove API Key",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.auth.signIn",
+        "title": "Sign In",
+        "category": "TeXRA",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "texra.auth.signOut",
+        "title": "Sign Out",
+        "category": "TeXRA",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "texra.auth.viewProfile",
+        "title": "View Profile",
+        "category": "TeXRA",
+        "icon": "$(account)"
+      },
+      {
+        "command": "texra.testTextEditor",
+        "title": "Test Text Editor Tool",
+        "category": "TeXRA",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "texra.showLinterMessages",
+        "title": "Show Linter Messages",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.countLinterMessages",
+        "title": "Count Linter Messages",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.openDoc",
+        "title": "Open TeXRA Documentation",
+        "category": "TeXRA"
+      },
+      {
+        "command": "texra.mainView.reset",
+        "title": "New Session",
+        "shortTitle": "New",
+        "category": "TeXRA",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "texra.showAgentHistory",
+        "title": "Show Agent Execution History",
+        "category": "TeXRA",
+        "icon": "$(history)"
+      },
+      {
+        "command": "texra.showMemory",
+        "title": "Show Memory",
+        "category": "TeXRA",
+        "icon": "$(database)"
+      },
+      {
+        "command": "texra.showModels",
+        "title": "Show Models",
+        "category": "TeXRA",
+        "icon": "$(hubot)"
+      },
+      {
+        "command": "texra.showAgents",
+        "title": "Show Agents",
+        "category": "TeXRA",
+        "icon": "$(symbol-method)"
+      },
+      {
+        "command": "texra.showTools",
+        "title": "Show Tool Dashboard",
+        "category": "TeXRA",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "texra.showMultiAgent",
+        "title": "Show Multi-Agent Settings",
+        "category": "TeXRA",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "texra.openSettings",
+        "title": "Open TeXRA Settings",
+        "category": "TeXRA",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "texra.showMainView",
+        "title": "Show Launcher",
+        "category": "TeXRA",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "texra.showProgressView",
+        "title": "Show Progress",
+        "category": "TeXRA",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "texra.toggleView",
+        "title": "Toggle Launcher/Progress View",
+        "category": "TeXRA",
+        "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "texra.openProgressViewInTab",
+        "title": "Open Progress in Editor Tab",
+        "shortTitle": "Open in Tab",
+        "category": "TeXRA",
+        "icon": "$(multiple-windows)"
+      },
+      {
+        "command": "texra.showDashboard",
+        "title": "Show Settings Dashboard",
+        "shortTitle": "Settings",
+        "category": "TeXRA",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "texra.showSettingsView",
+        "title": "Show Settings",
+        "category": "TeXRA",
+        "icon": "$(gear)"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "texra.gettingStarted",
+        "title": "Get started with TeXRA",
+        "description": "Get TeXRA up and running in a few minutes. Connect your account, pick your field, and run your first paper through the orchestrator.",
+        "when": "texra.activated",
+        "steps": [
+          {
+            "id": "texra.gettingStarted.setupAssistant",
+            "title": "Run the setup assistant agent",
+            "description": "Start here. TeXRA's setup assistant agent checks your environment, installs any missing LaTeX tools, adds an API key or signs you in, and verifies that you're ready to go. It asks before every command and explains what it's doing.\n\n[Run Setup Assistant Agent](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The remaining steps walk you through the same checklist manually.",
+            "media": {
+              "markdown": "resources/walkthroughs/getting-started.md"
+            },
+            "completionEvents": [
+              "onCommand:texra.runSetupAssistant"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.sampleWorkspace",
+            "title": "Try the sample project",
+            "description": "Not sure where to start? We've bundled a small LaTeX project you can play with.\n\n[Create the sample project](command:texra.createSampleProject)\n\nYou'll get a folder with example `.tex` files and a README that explains the layout.",
+            "media": {
+              "markdown": "resources/walkthroughs/getting-started.md"
+            },
+            "completionEvents": [
+              "onCommand:texra.createSampleProject"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.apiKeys",
+            "title": "Add your API key",
+            "description": "You'll need an API key from a provider like Anthropic, OpenAI, or Google. Just one is enough.\n\n[Set API key](command:texra.setApiKey)\n\nHeads up: chat subscriptions (ChatGPT Plus, Claude Pro) don't come with API access. You need a separate key from the provider's developer platform.\n\n**No API key?** No problem -- sign in with the Researcher Access Program in the next step instead.",
+            "media": {
+              "image": "resources/walkthroughs/media/api-key-setup.png",
+              "altText": "Screenshot of the API key configuration view"
+            },
+            "completionEvents": [
+              "onCommand:texra.setApiKey"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.signIn",
+            "title": "Or just sign in",
+            "description": "The **Researcher Access Program** lets you use AI models and remote agents for free -- no API key needed.\n\n[Sign In](command:texra.auth.signIn)\n\nAlready set an API key? You can skip this, but signing in still unlocks extra agents you can't get with a key alone.",
+            "media": {
+              "image": "resources/walkthroughs/media/api-key-setup.png",
+              "altText": "Screenshot of the sign-in flow"
+            },
+            "completionEvents": [
+              "onCommand:texra.auth.signIn"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.stageFiles",
+            "title": "Pick your files",
+            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Reference** -- papers or notes for context (optional)\n- **Auxiliary** -- bib files, style files, preambles (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
+            "media": {
+              "image": "resources/walkthroughs/media/file-selection.png",
+              "altText": "Screenshot of the file selection interface"
+            },
+            "completionEvents": [
+              "onCommand:texra.showMainView"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.agentModel",
+            "title": "Use the orchestrator",
+            "description": "We recommend starting with the **orchestrator**. It reads your paper, figures out what needs work, and hands each task to the right agent automatically.\n\nJust pick **orchestrator** from the agent dropdown. You'll also want to choose a model -- bigger models give better results, smaller ones are faster and cheaper.\n\nIf you'd rather do one specific thing (just fix grammar, just draw a diagram), you can pick a single agent instead.",
+            "media": {
+              "image": "resources/walkthroughs/media/agent-model-selection.png",
+              "altText": "Screenshot of the agent and model selection UI"
+            }
+          },
+          {
+            "id": "texra.gettingStarted.multiAgent",
+            "title": "Pick your field",
+            "description": "We have teams for different disciplines that give the orchestrator the right set of tools for your work:\n\n- **Physicist** -- derivations, numerical experiments, literature, presentations\n- **Mathematician** -- proofs, formalization, research\n- **Lean Project** -- Lean 4 with theorem search and blueprints\n\n[Open Settings](command:texra.showDashboard) and go to the **Multi-Agent** tab to pick one. You can always tweak it or make your own later.",
+            "media": {
+              "image": "resources/walkthroughs/media/agent-model-selection.png",
+              "altText": "Screenshot of multi-agent team selection"
+            },
+            "completionEvents": [
+              "onCommand:texra.showDashboard"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.autoExtract",
+            "title": "Auto-extract figures (optional)",
+            "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run them manually:\n\n[Extract figure paths](command:texra.extractFigurePaths) | [Extract TikZ figures](command:texra.extractTikzFigures)",
+            "media": {
+              "image": "resources/walkthroughs/media/auto-extract-options.png",
+              "altText": "Screenshot showing auto-extraction options"
+            },
+            "completionEvents": [
+              "onCommand:texra.extractFigurePaths",
+              "onCommand:texra.extractTikzFigures"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.progress",
+            "title": "Hit Execute!",
+            "description": "You're all set. Click Execute and the orchestrator will start working through your paper.\n\n[Execute](command:texra.execute)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.showProgressView) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
+            "media": {
+              "image": "resources/walkthroughs/media/texra-progressboard.png",
+              "altText": "Screenshot of the Progress view"
+            },
+            "completionEvents": [
+              "onCommand:texra.execute"
+            ]
+          },
+          {
+            "id": "texra.gettingStarted.review",
+            "title": "Check what it did",
+            "description": "Your originals are safe -- TeXRA writes edits to new files. Open them up and use VS Code's diff view to see exactly what changed. Accept what you like, ignore what you don't.",
+            "media": {
+              "image": "resources/walkthroughs/media/vscode-compare.png",
+              "altText": "Screenshot of the VS Code diff view"
+            }
+          },
+          {
+            "id": "texra.gettingStarted.housekeeping",
+            "title": "Clean up when you're done",
+            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar, or right-click any `.tex` file.\n\n[Clean all outputs](command:texra.cleanOutput) | [Clean build files](command:texra.cleanBuild)",
+            "media": {
+              "image": "resources/walkthroughs/media/texra-progressboard.png",
+              "altText": "Screenshot showing pack and clean buttons in the Progress toolbar"
+            },
+            "completionEvents": [
+              "onCommand:texra.cleanOutput",
+              "onCommand:texra.cleanBuild",
+              "onCommand:texra.pack",
+              "onCommand:texra.clean"
+            ]
+          }
+        ]
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "texra",
+          "title": "TeXRA",
+          "icon": "resources/logo-128x128.svg"
+        }
+      ]
+    },
+    "views": {
+      "texra": [
+        {
+          "type": "webview",
+          "id": "texra.mainView",
+          "name": "TeXRA",
+          "contextualTitle": "TeXRA"
+        }
+      ]
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.indentCurrentTeX",
+          "group": "navigation"
+        },
+        {
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.applyReplacements",
+          "group": "navigation"
+        },
+        {
+          "when": "texra.activated && editorLangId == latex",
+          "command": "texra.fixCompilation",
+          "group": "navigation"
+        },
+        {
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.getTeXCount",
+          "group": "navigation"
+        },
+        {
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanOutput",
+          "group": "2_texra_housekeeping@1"
+        },
+        {
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanBuild",
+          "group": "2_texra_housekeeping@2"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "texra.indentTeX",
+          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "texra.cleanOutput",
+          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "texra.cleanBuild",
+          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
+          "group": "navigation@3"
+        },
+        {
+          "command": "texra.showDashboard",
+          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
+          "group": "navigation@4"
+        },
+        {
+          "command": "texra.mainView.reset",
+          "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'",
+          "group": "navigation@0"
+        },
+        {
+          "command": "texra.showDashboard",
+          "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'",
+          "group": "navigation@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanOutput",
+          "group": "z_texra@1"
+        },
+        {
+          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanBuild",
+          "group": "z_texra@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "when": "texra.activated && resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanOutput",
+          "group": "z_texra@1"
+        },
+        {
+          "when": "texra.activated && resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "texra.cleanBuild",
+          "group": "z_texra@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "texra.createSampleProject",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.openGettingStarted",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.runSetupAssistant",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.cleanOutput",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.cleanBuild",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.indentTeX",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.getRecentCommits",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.cloneOverleafProject",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.refreshCommits",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.indentCurrentTeX",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.resumeAgent",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.applyReplacements",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.fixCompilation",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.getTeXCount",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.countPdfPages",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.encodeImageToBase64",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.convertPdfToImages",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.extractFigurePaths",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.extractTikzFigures",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.compileTikzFigures",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.testConnection",
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.testAgentLoading",
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.loadSpecificAgent",
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.downloadArXivSource",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showImportOptions",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.parseXml",
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.parseYaml",
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.stopAgent",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.execute",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.pack",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.clean",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.createAgentWithAI",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.setApiKey",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.removeApiKey",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.auth.signIn",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.auth.signOut",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.auth.viewProfile",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.testTextEditor",
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.showLinterMessages",
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.countLinterMessages",
+          "when": "texra.activated && config.texra.logger.debugMode"
+        },
+        {
+          "command": "texra.openDoc",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.mainView.reset",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showAgentHistory",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showMemory",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showModels",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showAgents",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showTools",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showMultiAgent",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.openSettings",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showMainView",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showProgressView",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.toggleView",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.openProgressViewInTab",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showDashboard",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.showSettingsView",
+          "when": "texra.activated"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "texra.showMainView",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+option+m",
+        "when": "texra.activated"
+      },
+      {
+        "command": "texra.showProgressView",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+option+p",
+        "when": "texra.activated"
+      },
+      {
+        "command": "texra.cleanOutput",
+        "key": "ctrl+alt+shift+c",
+        "mac": "cmd+option+shift+c",
+        "when": "texra.activated"
+      },
+      {
+        "command": "texra.cleanBuild",
+        "key": "ctrl+alt+shift+b",
+        "mac": "cmd+option+shift+b",
+        "when": "texra.activated"
+      },
+      {
+        "command": "texra.toggleView",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+option+t",
+        "when": "texra.activated && focusedView == texra.mainView"
+      },
+      {
+        "command": "texra.execute",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+option+e",
+        "when": "texra.activated"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/texra-ai/texra-issues.git"
+  },
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "author": "TeXRA.ai",
+  "icon": "resources/logo-128x128.png",
+  "keywords": [
+    "latex",
+    "tex",
+    "academic",
+    "writing",
+    "research",
+    "agent",
+    "llm",
+    "AI",
+    "Claude",
+    "OpenAI",
+    "Gemini",
+    "OpenRouter",
+    "DeepSeek",
+    "Grok",
+    "GPT"
+  ],
+  "bugs": {
+    "url": "https://github.com/texra-ai/texra-issues/issues"
+  },
+  "homepage": "https://texra.ai",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.0",
+    "@awesome.me/webawesome": "^3.6.0",
+    "@cantoo/pdf-lib": "^2.6.5",
+    "@fortawesome/free-solid-svg-icons": "^7.2.0",
+    "@google/genai": "^1.52.0",
+    "@jamesgopsill/crossref-client": "^1.1.0",
+    "@lit-labs/signals": "^0.2.0",
+    "@lit-labs/virtualizer": "^2.1.1",
+    "@lit/context": "^1.1.6",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@openai/codex-sdk": "^0.128.0",
+    "@openrouter/sdk": "^0.12.26",
+    "@supabase/supabase-js": "^2.105.3",
+    "@vscode-elements/elements": "^2.5.1",
+    "@vscode/codicons": "^0.0.45",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "arxiv-client": "^0.0.9",
+    "axios": "^1.15.2",
+    "bibtex": "^0.9.0",
+    "deepmerge": "^4.3.1",
+    "delay": "^7.0.0",
+    "diff-match-patch": "^1.0.5",
+    "dotenv": "^17.4.2",
+    "execa": "^9.6.1",
+    "fast-json-stable-stringify": "^2.1.0",
+    "fast-xml-parser": "^5.7.3",
+    "fs-extra": "^11.3.5",
+    "glob": "^13.0.6",
+    "he": "^1.2.0",
+    "highlight.js": "^11.11.1",
+    "highlightjs-lean": "^1.2.0",
+    "http-status-codes": "^2.3.0",
+    "identifiers-arxiv": "^0.1.1",
+    "katex": "^0.16.45",
+    "lit": "^3.3.2",
+    "llm-zoo": "^1.6.1",
+    "mark.js": "^8.11.1",
+    "markdown-it": "^14.1.1",
+    "markdown-it-texmath": "^1.0.0",
+    "mime-types": "^3.0.1",
+    "minimatch": "^10.2.5",
+    "mutative": "^1.3.0",
+    "nanoid": "^5.1.11",
+    "node-pandoc": "^0.3.0",
+    "openai": "^6.36.0",
+    "p-map": "^7.0.4",
+    "pdf2pic": "^3.2.0",
+    "perfect-debounce": "^2.1.0",
+    "postal-mime": "^2.7.4",
+    "shell-quote": "^1.8.3",
+    "signal-polyfill": "^0.2.2",
+    "sortablejs": "^1.15.7",
+    "strip-ansi": "^7.2.0",
+    "tar": "^7.5.14",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "yaml": "^2.8.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/diff-match-patch": "^1.0.36",
+    "@types/fs-extra": "^11.0.4",
+    "@types/he": "^1.2.3",
+    "@types/identifiers-arxiv": "^0.1.2",
+    "@types/jsdom": "^28.0.1",
+    "@types/mime-types": "^3.0.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.17",
+    "@types/nunjucks": "^3.2.6",
+    "@types/shell-quote": "^1.7.5",
+    "@types/sortablejs": "^1.15.9",
+    "@types/turndown": "^5.0.6",
+    "@types/vscode": "^1.105.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.1",
+    "concurrently": "^9.1.2",
+    "css-loader": "^7.1.4",
+    "esbuild": "^0.28.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-unicorn": "^64.0.0",
+    "globals": "^17.5.0",
+    "jsdom": "^29.1.1",
+    "node-loader": "^2.1.0",
+    "nunjucks": "^3.2.4",
+    "path-browserify": "^1.0.1",
+    "prettier": "^3.8.2",
+    "style-loader": "^4.0.0",
+    "terser-webpack-plugin": "^5.5.0",
+    "ts-loader": "^9.5.7",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.2",
+    "vite": "^8.0.11",
+    "vitest": "^4.1.5",
+    "vscode-languageserver-protocol": "^3.17.5",
+    "webpack": "^5.106.1",
+    "webpack-cli": "^7.0.2",
+    "zod-v3-to-v4": "^1.21.1"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "private": false,
+  "scripts": {
+    "vscode:prepublish": "[ \"$SKIP_VSCE_PREPUBLISH\" = \"1\" ] || corepack pnpm run package",
+    "clean:dist": "node ../../scripts/clean-extension-dist.mjs",
+    "clean:webview-dist": "node ../../scripts/clean-extension-dist.mjs --webviews-only",
+    "copy:codicon-fonts": "node ../../scripts/copy-codicon-fonts.mjs",
+    "compile": "corepack pnpm run clean:dist && webpack && corepack pnpm run copy:codicon-fonts",
+    "watch": "webpack --watch",
+    "package": "corepack pnpm run clean:dist && webpack --mode production --devtool hidden-source-map && corepack pnpm run copy:codicon-fonts",
+    "compile-tests": "tsc -p tsconfig.json --outDir out",
+    "watch-tests": "tsc -p tsconfig.json -w --outDir out",
+    "lint": "eslint src",
+    "esbuild:ext": "node esbuild.config.mjs",
+    "esbuild:ext:watch": "node esbuild.config.mjs --watch",
+    "esbuild:ext:prod": "node esbuild.config.mjs --production",
+    "vite:webviews": "corepack pnpm run clean:webview-dist && for v in progressView settingsView webview; do VITE_WEBVIEW=$v vite build; done",
+    "vite:webviews:dev": "corepack pnpm run clean:webview-dist && for v in progressView settingsView webview; do VITE_WEBVIEW=$v vite build --mode development; done",
+    "vite:webviews:watch": "VITE_WEBVIEW=progressView vite build --watch --mode development",
+    "typecheck": "tsc --noEmit",
+    "compile:fast": "corepack pnpm run clean:dist && corepack pnpm run esbuild:ext && corepack pnpm run vite:webviews:dev && corepack pnpm run copy:codicon-fonts",
+    "compile:safe": "corepack pnpm run typecheck && corepack pnpm run compile:fast",
+    "build": "corepack pnpm run compile:safe",
+    "watch:fast": "concurrently \"corepack pnpm run esbuild:ext:watch\" \"corepack pnpm run vite:webviews:watch\"",
+    "package:fast": "corepack pnpm run clean:dist && corepack pnpm run esbuild:ext:prod && corepack pnpm run vite:webviews && corepack pnpm run copy:codicon-fonts",
+    "package:safe": "corepack pnpm run typecheck && corepack pnpm run package:fast",
+    "build:fast": "corepack pnpm run package:fast && mkdir -p ../../releases && SKIP_VSCE_PREPUBLISH=1 vsce package --no-dependencies --out ../../releases/texra-$npm_package_version.vsix",
+    "build:safe": "corepack pnpm run typecheck && corepack pnpm run build:fast"
+  }
+}
