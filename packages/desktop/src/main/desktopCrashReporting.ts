@@ -79,10 +79,24 @@ export function scrubDesktopCrashEvent(
   event: CrashEvent,
   sensitivePaths: readonly (string | undefined)[],
 ): CrashEvent | null {
+  return createDesktopCrashEventScrubber(sensitivePaths)(event);
+}
+
+export function createDesktopCrashEventScrubber(
+  sensitivePaths: readonly (string | undefined)[],
+): (event: CrashEvent) => CrashEvent | null {
+  const scrubbers = buildPathScrubbers(sensitivePaths);
+  return (event) => scrubDesktopCrashEventWithScrubbers(event, scrubbers);
+}
+
+function scrubDesktopCrashEventWithScrubbers(
+  event: CrashEvent,
+  scrubbers: readonly RegExp[],
+): CrashEvent | null {
   if (event.platform !== 'native') {
     return null;
   }
-  return scrubValue(event, buildPathScrubbers(sensitivePaths)) as CrashEvent;
+  return scrubValue(event, scrubbers) as CrashEvent;
 }
 
 export async function getDesktopCrashReportingStatus(
@@ -141,6 +155,8 @@ export async function initializeDesktopCrashReporting({
     return false;
   }
 
+  const scrubCrashEvent = createDesktopCrashEventScrubber(sensitivePaths);
+
   try {
     const sentry =
       (await import('@sentry/electron/main')) as unknown as SentryMainModule;
@@ -148,8 +164,7 @@ export async function initializeDesktopCrashReporting({
       dsn,
       tracesSampleRate: 0,
       attachScreenshot: false,
-      beforeSend: (event: unknown) =>
-        scrubDesktopCrashEvent(event as CrashEvent, sensitivePaths),
+      beforeSend: (event: unknown) => scrubCrashEvent(event as CrashEvent),
     });
     return true;
   } catch (error) {
