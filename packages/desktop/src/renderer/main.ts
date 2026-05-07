@@ -411,6 +411,12 @@ function createFirstRunWalkthrough(): {
     previousFocus = null;
     restoreFocus?.focus();
   };
+  const focusFirstControl = (): void => {
+    const dismissButton = element.querySelector<HTMLButtonElement>(
+      '[data-onboarding-dismiss]',
+    );
+    (dismissButton ?? getFocusableElements()[0])?.focus();
+  };
   const show = (): void => {
     if (element.hidden) {
       previousFocus =
@@ -419,10 +425,7 @@ function createFirstRunWalkthrough(): {
           : null;
     }
     element.hidden = false;
-    const dismissButton = element.querySelector<HTMLButtonElement>(
-      '[data-onboarding-dismiss]',
-    );
-    (dismissButton ?? getFocusableElements()[0])?.focus();
+    focusFirstControl();
   };
   const dismiss = (): void => {
     hide();
@@ -442,7 +445,13 @@ function createFirstRunWalkthrough(): {
   element
     .querySelector<HTMLButtonElement>('[data-onboarding-dismiss]')
     ?.addEventListener('click', dismiss);
-  element.addEventListener('keydown', (event) => {
+  document.addEventListener('focusin', (event) => {
+    if (element.hidden) return;
+    if (event.target instanceof Node && element.contains(event.target)) return;
+    focusFirstControl();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (element.hidden) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       dismiss();
@@ -465,7 +474,7 @@ function createFirstRunWalkthrough(): {
       : (currentIndex + 1) % focusable.length;
     event.preventDefault();
     focusable[nextIndex]?.focus();
-  });
+  }, true);
 
   return { element, isVisible: () => !element.hidden, show, hide };
 }

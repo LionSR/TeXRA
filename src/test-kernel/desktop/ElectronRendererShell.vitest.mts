@@ -75,6 +75,8 @@ describe('desktop renderer shell', () => {
       'canOpen: () => !firstRunWalkthrough.isVisible()',
     );
     expect(rendererMain).toContain('previousFocus');
+    expect(rendererMain).toContain("document.addEventListener('focusin'");
+    expect(rendererMain).toContain("document.addEventListener('keydown'");
     expect(rendererMain).toContain("event.key !== 'Tab'");
   });
 
