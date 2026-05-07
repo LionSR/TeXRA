@@ -5,12 +5,14 @@ import './codiconStylesheet';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { postMessage } from '@shared/hostBridge';
+import type { DesktopThemeKind } from '@shared/constants/desktopTheme';
 import {
   SetThemeMessageSchema,
-  type Theme,
+  type SetThemeMessage,
 } from '@shared/schemas/commonViewMessages';
 import '@vscode-elements/elements/dist/bundled.js';
 import '@progressView/frontend';
+import '@progressView/frontend/components/TexraDiffView';
 import '@settingsView/frontend';
 import '@webview/frontend';
 
@@ -240,6 +242,10 @@ function isDesktopSetLogMessage(
   return DesktopSetLogMessageSchema.safeParse(message).success;
 }
 
+function isThemeMessage(message: unknown): message is SetThemeMessage {
+  return SetThemeMessageSchema.safeParse(message).success;
+}
+
 function setRoute(route: DesktopRoute): void {
   for (const [candidate, container] of routeContainers) {
     container.hidden = candidate !== route;
@@ -260,7 +266,7 @@ window.addEventListener('message', (event) => {
     } else {
       firstRunWalkthrough.hide();
     }
-  } else if (isDesktopSetThemeMessage(event.data)) {
+  } else if (isThemeMessage(event.data)) {
     applyDesktopTheme(event.data.theme);
   } else if (isWorkspaceTreeMessage(event.data)) {
     renderWorkspaceExplorer(event.data);
@@ -271,17 +277,7 @@ window.addEventListener('message', (event) => {
 requestWorkspaceTree();
 postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
 
-function isDesktopSetThemeMessage(
-  message: unknown,
-): message is { theme: Theme } {
-  return (
-    (message as { command?: unknown } | null)?.command ===
-      COMMON_COMMANDS.THEME_SET &&
-    SetThemeMessageSchema.safeParse(message).success
-  );
-}
-
-function applyDesktopTheme(theme: Theme): void {
+function applyDesktopTheme(theme: DesktopThemeKind): void {
   document.body.classList.remove(
     'vscode-light',
     'vscode-dark',
