@@ -79,6 +79,25 @@ export const commonViewStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
+  .action-button-group {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-small);
+    flex-wrap: nowrap;
+  }
+
+  .action-icon-button {
+    flex-shrink: 0;
+  }
+
+  .action-icon-button::part(base) {
+    width: var(--height-button);
+    min-width: var(--height-button);
+    height: var(--height-button);
+    min-height: var(--height-button);
+    padding: 0;
+  }
+
   .clickable-link {
     cursor: pointer;
     color: var(--color-text-link);

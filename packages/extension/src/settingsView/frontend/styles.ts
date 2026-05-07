@@ -22,7 +22,10 @@ const settingsHeaderStyles: CSSResult = css`
     gap: var(--spacing-medium);
   }
 
-  .settings-header-user .codicon {
+  .settings-header-user-icon {
+    width: var(--font-size-lg);
+    height: var(--font-size-lg);
+    flex: 0 0 auto;
     font-size: var(--font-size-lg);
     opacity: var(--opacity-subtle);
   }
