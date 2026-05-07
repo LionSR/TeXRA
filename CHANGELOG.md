@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [0.37.8] - 2026-05-01
 
+### Improvements
+
+- **Progress view first-run state** — when there are no runs yet, the progress view now shows direct actions to open the Launcher or Dashboard instead of an empty board.
+
 ### Bug Fixes
 
 - **Current DeepSeek V4 pricing** — DeepSeek V4 Flash and Pro now use DeepSeek's current cache-hit pricing, and V4 Pro reflects the active discounted input and output rates.

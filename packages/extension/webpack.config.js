@@ -200,7 +200,20 @@ const extensionConfig = {
   },
   optimization: {
     minimize: true,
-    minimizer: [new TerserPlugin()],
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          // sdkErrorUtils relies on SDK error class/prototype names after
+          // bundling; keep webpack packaging aligned with the esbuild path.
+          keep_classnames: true,
+          keep_fnames: true,
+          mangle: {
+            keep_classnames: true,
+            keep_fnames: true,
+          },
+        },
+      }),
+    ],
   },
 };
 
