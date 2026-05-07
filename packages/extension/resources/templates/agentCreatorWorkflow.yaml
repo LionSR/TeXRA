@@ -137,7 +137,5 @@ prompts:
     - Include {{ INSTRUCTION }} somewhere in the prompts so the user's instructions are passed through.
     - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.
 
-    {{ MULTIPLE_OUTPUT_NOTE }}
-
   retryPrompt: |
     The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.

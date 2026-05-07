@@ -17,8 +17,6 @@ export interface SettingsAgentCatalogEntry {
   category: AgentCategory;
   description?: string;
   path?: string;
-  multiplePath?: string;
-  isMultiple?: boolean;
   tools?: string[];
 }
 

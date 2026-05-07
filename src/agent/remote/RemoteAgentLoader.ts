@@ -34,8 +34,6 @@ logger.initialize(CHANNEL);
 function mapHttpError(
   status: number,
   agentName: string,
-  candidateName: string,
-  isLastCandidate: boolean,
   errorText: string,
 ): string {
   switch (status) {
@@ -46,13 +44,6 @@ function mapHttpError(
       return `Access denied to agent "${agentName}". Upgrade your account for access.`;
 
     case StatusCodes.NOT_FOUND:
-      if (!isLastCandidate) {
-        logger.debug(
-          CHANNEL,
-          `Agent variant "${candidateName}" not found, trying next candidate`,
-        );
-        return `Agent variant "${candidateName}" not found`;
-      }
       return `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`;
 
     case StatusCodes.INTERNAL_SERVER_ERROR:
@@ -112,7 +103,7 @@ export class RemoteAgentLoader {
     logger.info(CHANNEL, `Loading remote agent: ${agentName}`);
 
     try {
-      const config = await fetchAgentConfig(agentName, agentName, true);
+      const config = await fetchAgentConfig(agentName);
 
       const registryId = `remote:${agentName}`;
       if (config.description) {
@@ -191,11 +182,7 @@ export class RemoteAgentLoader {
 }
 
 /** Fetch and parse agent config from edge function. */
-async function fetchAgentConfig(
-  agentName: string,
-  candidateName: string,
-  isLastCandidate: boolean,
-): Promise<{
+async function fetchAgentConfig(agentName: string): Promise<{
   settings: RemoteAgentConfig['settings'];
   prompts: RemoteAgentConfig['prompts'];
   description?: string;
@@ -213,24 +200,18 @@ async function fetchAgentConfig(
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ agentName: candidateName }),
+    body: JSON.stringify({ agentName }),
   });
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
-    const message = mapHttpError(
-      response.status,
-      agentName,
-      candidateName,
-      isLastCandidate,
-      errorText,
-    );
+    const message = mapHttpError(response.status, agentName, errorText);
     throw new Error(message);
   }
 
   const responseData = EdgeFunctionResponseSchema.parse(await response.json());
 
-  logger.debug(CHANNEL, `Parsing YAML for remote agent: ${candidateName}`);
+  logger.debug(CHANNEL, `Parsing YAML for remote agent: ${agentName}`);
   const validated = AgentDefinitionSchema.parse(
     yaml.parse(responseData.config),
   );

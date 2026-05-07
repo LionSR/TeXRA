@@ -404,13 +404,11 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
       aiVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        MULTIPLE_OUTPUT_NOTE: '',
       },
       fallbackTemplate: config.templates.workflowSingle,
       fallbackVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        OUTPUT_FILES: '',
       },
     };
   }

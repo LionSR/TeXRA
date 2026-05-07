@@ -68,8 +68,9 @@ Workflow agent prompts receive:
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
 - `{{ REFERENCE_CONTENT }}` — content of reference files
 - `{{ AUXILIARY_CONTENT }}` — content of auxiliary files
-- `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames (multiple-
-  output agents only)
+- `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames; empty/falsy
+  when the user has not selected output files (use `{% if OUTPUT_FILES_ORDER %}`
+  to branch between multi-file and single-file output formats)
 
 Both categories support `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
 for model-specific instructions.
@@ -85,15 +86,43 @@ for model-specific instructions.
 
 ## Multiple-output agents
 
-For agents producing several files at once, ship a separate `_multiple`
-variant alongside the single-output file:
+All workflow agents use the same unified output protocol regardless of whether
+they produce one file or many. No separate `_multiple` variant is needed.
 
-- Set `isMultipleOutput: true`.
-- Use `documentTag: latex_documents` (plural) and `endTag: "</latex_documents>"`.
-- Add `defaultOutputFiles` with the list of files.
-- Instruct the model to wrap each file in `<document name="...">` blocks
-  inside `<latex_documents>`.
-- Name the file `<agent_name>_multiple.yaml` next to `<agent_name>.yaml`.
+- Use `documentTag: documents` (the default). Omit it unless you need a custom
+  tag for a legacy single-output agent.
+- Add `defaultOutputFiles` with the list of expected filenames when the agent
+  produces a fixed set of outputs.
+- In `userRequest`, branch on `{% if OUTPUT_FILES_ORDER %}` to cover both the
+  multi-file case (user selects multiple outputs) and the single-file fallback.
+  Each output file goes in a separate `<document name="filename.tex">` block
+  inside `<documents>`.
+
+Example output format in `userRequest`:
+
+```
+{% if OUTPUT_FILES_ORDER %}
+<documents>
+<document name="{OUTPUT_FILES_ORDER[0]}">
+% content for first output
+</document>
+<document name="{OUTPUT_FILES_ORDER[1]}">
+% content for second output
+</document>
+</documents>
+{% else %}
+<documents>
+<document name="output.tex">
+% single output content
+</document>
+</documents>
+{% endif %}
+```
+
+Note: `{OUTPUT_FILES_ORDER[0]}` uses single braces — this is a literal hint
+to the model, not a Nunjucks expression. The model substitutes the actual
+filename because `{{ OUTPUT_FILES_ORDER }}` is rendered nearby with the full
+list.
 
 ## Inheritance
 

@@ -3,7 +3,6 @@ import type { AgentSource } from '@shared/schemas/agent';
 
 export interface SettingsAgentDirectoryEntry {
   path?: string;
-  multiplePath?: string;
 }
 
 export interface SettingsAgentDirectoryState {

@@ -357,7 +357,7 @@ export class AgentHandlers {
         return;
       }
 
-      const { targetPath, multipleCopy } = result.plan;
+      const { targetPath } = result.plan;
 
       await AbsoluteFS.ensureDir(path.dirname(targetPath));
 

@@ -12,7 +12,6 @@ const AGENTS = new Map<string, SettingsAgentDirectoryEntry>([
     'builtInWorkflow:writer',
     {
       path: '/repo/resources/agents/writer.yaml',
-      multiplePath: '/repo/resources/agents/writer_multiple.yaml',
     },
   ],
   ['custom:pathless', {}],

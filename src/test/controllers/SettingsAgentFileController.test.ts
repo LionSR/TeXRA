@@ -17,7 +17,6 @@ describe('SettingsAgentFileController', () => {
       sourceDir: BUILT_IN_DIR,
       entry: {
         path: path.join(BUILT_IN_DIR, 'writing', 'draft.yaml'),
-        multiplePath: path.join(BUILT_IN_DIR, 'writing', 'draft_multiple.yaml'),
       },
     });
 
@@ -27,10 +26,6 @@ describe('SettingsAgentFileController', () => {
       result.plan.targetPath,
       path.join(CUSTOM_DIR, 'writing', 'draft.yaml'),
     );
-    assert.deepEqual(result.plan.multipleCopy, {
-      sourcePath: path.join(BUILT_IN_DIR, 'writing', 'draft_multiple.yaml'),
-      targetPath: path.join(CUSTOM_DIR, 'writing', 'draft_multiple.yaml'),
-    });
   });
 
   it('rejects customize targets that would escape the custom directory', () => {
@@ -74,12 +69,11 @@ describe('SettingsAgentFileController', () => {
     });
   });
 
-  it('plans custom agent deletion without deleting outside multiple variants', () => {
+  it('plans custom agent deletion for a custom directory agent', () => {
     const result = controller.planDeleteCustomAgent({
       customDir: CUSTOM_DIR,
       entry: {
         path: path.join(CUSTOM_DIR, 'agent.yaml'),
-        multiplePath: path.join(ROOT, 'resources', 'agent_multiple.yaml'),
       },
     });
 
