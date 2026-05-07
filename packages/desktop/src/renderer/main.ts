@@ -2,6 +2,7 @@ import './styles.css';
 import './themeTokens.css';
 import './codiconStylesheet';
 
+import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { postMessage } from '@shared/hostBridge';
 import {
@@ -211,16 +212,27 @@ function setRoute(route: DesktopRoute): void {
 }
 
 window.addEventListener('message', (event) => {
-  const themeMessageResult = SetThemeMessageSchema.safeParse(event.data);
-
   if (isDesktopSetRouteMessage(event.data)) {
     setRoute(event.data.route);
-  } else if (themeMessageResult.success) {
-    applyDesktopTheme(themeMessageResult.data.theme);
+  } else if (isDesktopSetThemeMessage(event.data)) {
+    applyDesktopTheme(event.data.theme);
   } else if (isWorkspaceTreeMessage(event.data)) {
     renderWorkspaceExplorer(event.data);
   }
 });
+
+function isDesktopSetThemeMessage(
+  message: unknown,
+): message is { theme: Theme } {
+  if (
+    message == null ||
+    typeof message !== 'object' ||
+    (message as { command?: unknown }).command !== COMMON_COMMANDS.THEME_SET
+  ) {
+    return false;
+  }
+  return SetThemeMessageSchema.safeParse(message).success;
+}
 
 function applyDesktopTheme(theme: Theme): void {
   document.body.classList.remove(
