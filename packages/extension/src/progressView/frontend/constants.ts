@@ -1,5 +1,5 @@
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import type { AgentCategoryFilter } from '@shared/schemas';
+import { STREAM_STATUS, type AgentCategoryFilter } from '@shared/schemas';
 
 /**
  * DOM element IDs used across the progress view.
@@ -50,6 +50,13 @@ export const GROUP_DOM_IDS = Object.freeze({
   HEADER_PREFIX: 'group-header-',
   CONTENT_PREFIX: 'group-content-',
 });
+
+export const ACTIVE_STREAM_STATUSES: ReadonlySet<string> = new Set([
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.RESUMING,
+  STREAM_STATUS.WAITING,
+]);
 
 const STOP_STREAM_BUTTON = Object.freeze({
   id: ELEMENT_IDS.STOP_STREAM_BTN,

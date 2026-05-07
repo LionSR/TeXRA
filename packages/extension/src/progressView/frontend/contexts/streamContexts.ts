@@ -10,6 +10,7 @@ import { createContext } from '@lit/context';
 // Local imports - progress view
 import type {
   LogMessageData,
+  StreamStatus,
   StreamTabId,
   StreamTabInfo,
   TaskGroup,
@@ -55,6 +56,8 @@ export interface StreamLogContextValue {
   hasStreams: boolean;
   /** Stream name for switch detection in LogList */
   streamName: string | null;
+  /** Current active stream status for pre-output empty states. */
+  streamStatus: StreamStatus | null;
   /** Render log output in terminal style (monospace, no timestamps, etc). */
   terminalMode: boolean;
 }
@@ -65,6 +68,7 @@ export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   isToolUse: false,
   hasStreams: false,
   streamName: null,
+  streamStatus: null,
   terminalMode: false,
 };
 
