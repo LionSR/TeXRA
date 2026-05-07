@@ -385,13 +385,17 @@ function createFirstRunWalkthrough(): {
     hide();
     postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS);
   };
+  const dismissAndShowRoute = (route: DesktopRoute): void => {
+    dismiss();
+    setRoute(route);
+  };
 
   element
     .querySelector<HTMLButtonElement>('[data-onboarding-settings]')
-    ?.addEventListener('click', () => setRoute('settings'));
+    ?.addEventListener('click', () => dismissAndShowRoute('settings'));
   element
     .querySelector<HTMLButtonElement>('[data-onboarding-launcher]')
-    ?.addEventListener('click', () => setRoute('main'));
+    ?.addEventListener('click', () => dismissAndShowRoute('main'));
   element
     .querySelector<HTMLButtonElement>('[data-onboarding-dismiss]')
     ?.addEventListener('click', dismiss);

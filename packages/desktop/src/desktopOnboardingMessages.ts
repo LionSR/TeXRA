@@ -6,7 +6,6 @@ export const DESKTOP_ONBOARDING_DISMISSED_STATE_KEY =
 export const DESKTOP_ONBOARDING_COMMANDS = {
   REQUEST_STATE: 'desktop:requestOnboarding',
   DISMISS: 'desktop:dismissOnboarding',
-  SHOW: 'desktop:showOnboarding',
   SET_STATE: 'desktop:setOnboarding',
 } as const;
 

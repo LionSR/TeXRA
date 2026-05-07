@@ -325,10 +325,6 @@ describe('desktop IPC adapters', () => {
 
     expect(
       onboarding.handleMessage({ command: 'desktop:showOnboarding' }),
-    ).toBe(true);
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: 'desktop:setOnboarding',
-      shouldShow: true,
-    });
+    ).toBe(false);
   });
 });

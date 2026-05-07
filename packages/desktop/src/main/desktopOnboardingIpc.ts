@@ -55,9 +55,6 @@ export function createDesktopOnboardingIpc(
         case DESKTOP_ONBOARDING_COMMANDS.DISMISS:
           void dismiss().catch(reportAsyncError);
           return true;
-        case DESKTOP_ONBOARDING_COMMANDS.SHOW:
-          renderer.postToRenderer(makeSetStateMessage(true));
-          return true;
         default:
           return false;
       }
