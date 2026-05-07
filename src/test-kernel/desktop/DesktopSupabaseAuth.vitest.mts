@@ -125,7 +125,6 @@ describe('desktop Supabase auth', () => {
       oauthClient,
       secrets: createSecrets(),
       openExternalUrl,
-      initializeServerSideAccess: false,
     });
 
     await auth.signIn();
@@ -155,7 +154,6 @@ describe('desktop Supabase auth', () => {
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       onSessionChanged,
-      initializeServerSideAccess: false,
     });
 
     await auth.signIn();
@@ -204,7 +202,6 @@ describe('desktop Supabase auth', () => {
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       log,
-      initializeServerSideAccess: false,
     });
 
     router.routeUrl(
@@ -234,7 +231,6 @@ describe('desktop Supabase auth', () => {
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       callbackState,
-      initializeServerSideAccess: false,
     });
 
     await auth.signIn();
@@ -256,7 +252,6 @@ describe('desktop Supabase auth', () => {
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       callbackState: persistedCallbackState,
-      initializeServerSideAccess: false,
     });
 
     await vi.waitFor(() => {
@@ -285,7 +280,6 @@ describe('desktop Supabase auth', () => {
         secrets: createSecrets(),
         openExternalUrl: vi.fn(async () => {}),
         callbackState: createDesktopAuthCallbackState(stateStore),
-        initializeServerSideAccess: false,
       });
 
       await auth.signIn();
@@ -301,7 +295,6 @@ describe('desktop Supabase auth', () => {
         secrets: createSecrets(),
         openExternalUrl: vi.fn(async () => {}),
         callbackState: expiredCallbackState,
-        initializeServerSideAccess: false,
       });
 
       router.routeUrl(
@@ -340,7 +333,6 @@ describe('desktop Supabase auth', () => {
       openExternalUrl: vi.fn(async () => {}),
       callbackState,
       log,
-      initializeServerSideAccess: false,
     });
 
     await auth.signIn();
@@ -381,7 +373,6 @@ describe('desktop Supabase auth', () => {
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       log,
-      initializeServerSideAccess: false,
     });
 
     await auth.signIn();
@@ -419,7 +410,6 @@ describe('desktop Supabase auth', () => {
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       log,
-      initializeServerSideAccess: false,
     });
 
     await auth.signIn();
@@ -466,7 +456,6 @@ describe('desktop Supabase auth', () => {
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
       callbackState,
-      initializeServerSideAccess: false,
     });
 
     await auth.signIn();
@@ -515,7 +504,6 @@ describe('desktop Supabase auth', () => {
       openExternalUrl: vi.fn(async () => {}),
       showErrorMessage,
       log,
-      initializeServerSideAccess: false,
     });
 
     await auth.signIn();
@@ -551,7 +539,6 @@ describe('desktop Supabase auth', () => {
       oauthClient: createOAuthClient(),
       secrets: createSecrets(),
       openExternalUrl: vi.fn(async () => {}),
-      initializeServerSideAccess: false,
     });
 
     await auth.signOut();

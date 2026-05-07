@@ -29,7 +29,11 @@ import { formatDuration } from '@utils/core';
 // Local imports - shared styles
 
 // Local imports - progress view constants
-import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
+import {
+  ACTIVE_STREAM_STATUSES,
+  ELEMENT_IDS,
+  GROUP_DOM_IDS,
+} from '../constants';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
@@ -125,6 +129,9 @@ export class TaskGroupList extends LitElement {
 
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
+
+  /** Status for the active stream, used while a run exists before logs arrive. */
+  @property({ attribute: false }) streamStatus: string | null = null;
 
   /** Toggle state store for persistence */
   @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
@@ -769,6 +776,29 @@ export class TaskGroupList extends LitElement {
           @vsc-scrollable-scroll=${this.handleVscScroll}
         >
           <div class="log-placeholder">${unsafeHTML(PLACEHOLDER_HTML)}</div>
+        </vscode-scrollable>
+      `;
+    }
+
+    if (
+      !this.terminal &&
+      this.messages.length === 0 &&
+      this.groups.length === 0
+    ) {
+      const active = this.streamStatus
+        ? ACTIVE_STREAM_STATUSES.has(this.streamStatus)
+        : false;
+      return html`
+        <vscode-scrollable
+          id=${ELEMENT_IDS.LOG_CONTENT}
+          class="log-container"
+          @vsc-scrollable-scroll=${this.handleVscScroll}
+        >
+          <div class="log-placeholder">
+            ${active
+              ? 'Run is starting. Progress updates will appear here.'
+              : 'No log output for this stream yet.'}
+          </div>
         </vscode-scrollable>
       `;
     }

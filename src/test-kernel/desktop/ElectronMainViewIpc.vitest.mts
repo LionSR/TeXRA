@@ -30,6 +30,10 @@ interface MainViewIpcModule {
       progress?: { handleMessage(message: { command: string }): boolean };
       modelListRefresh?: PromiseLike<void>;
       getAuthStatus?: () => Promise<{ authenticated: boolean }>;
+      loadStartupOptions?: () => Promise<{
+        agentOptions: { workflow: unknown[]; toolUse: unknown[] };
+        modelOptions: unknown[];
+      }>;
       executeAgent?: (message: unknown) => Promise<void>;
       onAsyncError?: (error: unknown) => void;
     },
@@ -408,15 +412,6 @@ describe('desktop main-view IPC', () => {
       on: vi.fn(),
       off: vi.fn(),
     };
-    vi.doMock('@agent/index/agentRegistry', () => ({
-      computeAgentOptionsData: vi.fn(async () => ({
-        workflow: [],
-        toolUse: [],
-      })),
-    }));
-    vi.doMock('@model/modelOptionsBasic', () => ({
-      buildBasicModelOptionsData: vi.fn(() => []),
-    }));
     const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
       await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
     const sends: Array<{ channel: string; message: unknown }> = [];
@@ -432,6 +427,13 @@ describe('desktop main-view IPC', () => {
 
     installDesktopMainViewIpc(window, {
       getAuthStatus: async () => ({ authenticated: true }),
+      loadStartupOptions: async () => ({
+        agentOptions: {
+          workflow: [],
+          toolUse: [],
+        },
+        modelOptions: [],
+      }),
     });
     rendererListener?.(
       { sender: webContents },
