@@ -84,6 +84,12 @@ import {
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import {
+  type DesktopCrashReportingStatus,
+  getDesktopCrashReportingStatus,
+  setDesktopCrashReportingDsn,
+  setDesktopCrashReportingEnabled,
+} from './desktopCrashReporting.js';
+import {
   unauthenticatedProfileData,
   type DesktopAuthProfileData,
 } from './desktopSupabaseAuth.js';
@@ -132,6 +138,7 @@ export interface DesktopSettingsIpcOptions {
   signOut?: () => Promise<void>;
   getAuthProfileData?: () => Promise<DesktopAuthProfileData>;
   setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
+  initializeCrashReporting?: () => Promise<void>;
   secrets?: PlatformSecrets;
   detectLatexSettingsStatus?: () => Promise<LatexSettingsStatus>;
   runInstallCommand?: (command: string) => Promise<void>;
@@ -474,6 +481,28 @@ export function createDesktopSettingsIpc(
     });
   }
 
+  function postDesktopCrashReportingStatusMessage(
+    status: DesktopCrashReportingStatus,
+  ): void {
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
+      ...status,
+    });
+  }
+
+  async function postDesktopCrashReportingStatus(): Promise<void> {
+    const status = await getDesktopCrashReportingStatus(globalState, secrets);
+    postDesktopCrashReportingStatusMessage(status);
+  }
+
+  async function finishDesktopCrashReportingSettingsChange(): Promise<void> {
+    const status = await getDesktopCrashReportingStatus(globalState, secrets);
+    if (status.enabled && status.configured) {
+      await options.initializeCrashReporting?.();
+    }
+    postDesktopCrashReportingStatusMessage(status);
+  }
+
   function postSuperYoloEnabled(): void {
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
@@ -542,6 +571,7 @@ export function createDesktopSettingsIpc(
       modelSelectionDataPosted,
       postProfileData(),
       postLatexSettingsStatus(),
+      postDesktopCrashReportingStatus(),
       postAgentSelectionData(),
       postCustomAgentDir(),
       postToolDashboardData(),
@@ -703,6 +733,23 @@ export function createDesktopSettingsIpc(
     }
     invalidateModelOptionsCache();
     await Promise.all([postProfileData(), postModelSelectionData()]);
+  }
+
+  async function updateDesktopCrashReportingEnabled(
+    enabled: boolean,
+  ): Promise<void> {
+    await setDesktopCrashReportingEnabled(globalState, enabled);
+    await finishDesktopCrashReportingSettingsChange();
+  }
+
+  async function updateDesktopCrashReportingDsn(): Promise<void> {
+    const dsn = await options.promptSecret?.({
+      title: 'Set Sentry DSN',
+      prompt: 'Enter the Sentry DSN for opt-in desktop crash reports',
+    });
+    if (dsn == null) return;
+    await setDesktopCrashReportingDsn(secrets, dsn);
+    await finishDesktopCrashReportingSettingsChange();
   }
 
   async function refreshAuthDependentData(): Promise<void> {
@@ -1139,6 +1186,15 @@ export function createDesktopSettingsIpc(
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS:
           postGitAuthorSettings();
+          return true;
+        case SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING:
+          runAsync(postDesktopCrashReportingStatus());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED:
+          runAsync(updateDesktopCrashReportingEnabled(result.data.enabled));
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN:
+          runAsync(updateDesktopCrashReportingDsn());
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS:
           runAsync(postLatexSettingsStatus());
