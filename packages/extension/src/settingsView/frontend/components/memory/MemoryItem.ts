@@ -17,6 +17,7 @@ import {
   formatUpdatedDate,
 } from '@shared/utils/string';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - memory view events
 import { MemoryViewEvents } from './events';
@@ -140,31 +141,31 @@ export class MemoryItem extends LitElement {
       <div class="list-item memory-item ${this.item.pinned ? 'pinned' : ''}">
         <div class="list-item-header">
           <div class="memory-path">${this.item.displayPath}</div>
-          <vscode-toolbar-container>
-            <vscode-toolbar-button
-              class="pin-memory-btn"
-              icon=${this.item.pinned ? 'pinned' : 'pin'}
-              label=${this.item.pinned ? 'Unpin' : 'Pin'}
-              title=${this.item.pinned
+          <div class="action-button-group">
+            ${renderIconActionButton({
+              icon: this.item.pinned ? 'thumbtack-slash' : 'thumbtack',
+              label: this.item.pinned ? 'Unpin' : 'Pin',
+              title: this.item.pinned
                 ? 'Unpin this memory'
-                : 'Pin as core long-term memory'}
-              @click=${this.handleTogglePin}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              class="open-memory-btn"
-              icon="go-to-file"
-              label="Open"
-              title="Open in editor"
-              @click=${this.handleOpen}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              class="delete-memory-btn"
-              icon="trash"
-              label="Delete"
-              title="Delete this memory"
-              @click=${this.handleDelete}
-            ></vscode-toolbar-button>
-          </vscode-toolbar-container>
+                : 'Pin as core long-term memory',
+              className: 'pin-memory-btn',
+              onClick: this.handleTogglePin,
+            })}
+            ${renderIconActionButton({
+              icon: 'file-export',
+              label: 'Open',
+              title: 'Open in editor',
+              className: 'open-memory-btn',
+              onClick: this.handleOpen,
+            })}
+            ${renderIconActionButton({
+              icon: 'trash',
+              label: 'Delete',
+              title: 'Delete this memory',
+              className: 'delete-memory-btn',
+              onClick: this.handleDelete,
+            })}
+          </div>
         </div>
         <div class="text-secondary memory-meta">
           ${this.renderMeta(this.item)}
