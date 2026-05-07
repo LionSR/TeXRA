@@ -321,12 +321,12 @@ export class ArxivSourceProcessor {
     if (autoIndent && !isRoot) {
       progressCallback?.('Formatting LaTeX files...', 85);
 
-      const indentedCount = await indentLatexFilesInDirectory(
+      const indentResult = await indentLatexFilesInDirectory(
         paperDirRelative,
         progressCallback,
       );
 
-      progressCallback?.(`Formatted ${indentedCount} LaTeX files`, 95);
+      progressCallback?.(`Formatted ${indentResult.count} LaTeX files`, 95);
     }
 
     progressCallback?.('arXiv source downloaded successfully!', 100);

@@ -1,0 +1,6 @@
+TeXRA Proprietary License
+
+TeXRA is proprietary software. All rights reserved.
+
+Use of the TeXRA extension is governed by the TeXRA terms of service:
+https://texra.ai/terms

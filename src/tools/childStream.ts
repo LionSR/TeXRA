@@ -4,14 +4,15 @@ import type { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
+  getHandle,
   trackExecution,
   untrackExecution,
 } from '@agent/runtime/executionRegistry';
+import { getCurrentToolRuntimeHost } from '@agent/toolUse/ToolFileInteractionContext';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
-// Local imports - event bus
+// Local imports - errors
 import { toErrorMessage } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
@@ -53,18 +54,21 @@ export function createChildStream(
   options: CreateChildStreamOptions,
 ): { childStreamId: StreamTabId; logger: AgentLogger } {
   const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
+  const runtimeHost = getCurrentToolRuntimeHost();
 
-  StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
-  bus.emit('setActiveStream', {
+  StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING, {
+    runtimeHost,
+  });
+  runtimeHost.emit('setActiveStream', {
     streamId: childStreamId,
     agentCategory: options.streamCategory,
   });
-  bus.emit('setTaskState', {
+  runtimeHost.emit('setTaskState', {
     streamId: childStreamId,
     executionId,
     taskState: agentConfigToTaskState(options.config),
   });
-  bus.emit('updateStreamDescription', {
+  runtimeHost.emit('updateStreamDescription', {
     streamId: childStreamId,
     description: truncateWithEllipsis(options.description, 80),
   });
@@ -76,6 +80,7 @@ export function createChildStream(
     childStreamId,
     options.agentName,
     'toolUse',
+    runtimeHost,
   );
   if (options.toolName) handle.toolName = options.toolName;
   trackExecution(handle);
@@ -91,6 +96,8 @@ export function finalizeChildStream(
   options?: FinalizeChildStreamOptions,
 ): void {
   const hasError = options?.error != null || options?.errorMessage != null;
+  const runtimeHost =
+    getHandle(executionId)?.runtimeHost ?? getCurrentToolRuntimeHost();
 
   if (options?.errorMessage) {
     logger.error(options.errorMessage);
@@ -112,11 +119,12 @@ export function finalizeChildStream(
     StreamStatusService.set(
       childStreamId,
       hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+      { runtimeHost },
     );
   }
   untrackExecution(executionId);
 
   if (options?.autoClose) {
-    bus.emit('removeStream', { streamId: childStreamId });
+    runtimeHost.emit('removeStream', { streamId: childStreamId });
   }
 }

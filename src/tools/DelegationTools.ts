@@ -39,7 +39,7 @@ import * as logger from '@agent/core/logger';
 import {
   getVisibleModels,
   resolveVisibleModel,
-} from '@model/computeModelOptions';
+} from '@model/modelOptionsBasic';
 import {
   AGENT_CATEGORY,
   DEFAULT_TOOL_CONFIG,
@@ -283,6 +283,7 @@ async function executeSubagent(
   const parentContext = getCurrentToolFileInteractionContext();
   const parentExecutionId = parentContext?.executionId;
   const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
+  const runtimeHost = parentContext?.runtimeHost;
 
   const gated = depthGateError(
     parentDelegationDepth,
@@ -319,6 +320,7 @@ async function executeSubagent(
   }
 
   const promise = executeAgent(configPayload, executionId, {
+    runtimeHost,
     isSubagent: true,
     enforceCategory: true,
     parentStreamId: orchestratorStreamId,
@@ -673,12 +675,6 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Output file paths. Must be a subset of input files—never create new files or change format. Leave empty for default suffix-based outputs.',
     ),
-  useMultipleOutputs: z
-    .boolean()
-    .prefault(false)
-    .describe(
-      'Set true when outputFiles has multiple entries. Enables multi-file extraction from agent response.',
-    ),
   memories: memoriesField,
 });
 
@@ -819,7 +815,6 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       mediaFile: input.mediaFile,
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
-      useMultipleOutputs: input.useMultipleOutputs,
       toolConfig: {
         ...DEFAULT_TOOL_CONFIG,
         autoExtractFigure: input.extractFigures ?? false,

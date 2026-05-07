@@ -96,18 +96,16 @@ export abstract class BaseViewContentProvider {
   private static readonly COMMON_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [{ key: 'commonStyleUri', path: 'styles/common.css' }];
 
-  private static readonly NODE_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
+  private static readonly SHARED_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [
+      { key: 'commonsBundleUri', path: 'commons.js' },
       {
         key: 'vscodeElementsBundleUri',
-        path: '@vscode-elements/elements/dist/bundled.js',
+        path: 'vscode-elements-bundled.js',
       },
-      { key: 'codiconUri', path: '@vscode/codicons/dist/codicon.css' },
-      { key: 'codiconsFontUri', path: '@vscode/codicons/dist/codicon.ttf' },
+      { key: 'codiconUri', path: 'codicon.css' },
+      { key: 'codiconsFontUri', path: 'codicon.ttf' },
     ];
-
-  private static readonly SHARED_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
-    [{ key: 'commonsBundleUri', path: 'commons.js' }];
 
   private getCommonModuleUris(
     webview: vscode.Webview,
@@ -117,11 +115,6 @@ export abstract class BaseViewContentProvider {
         webview,
         BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS,
         ['src', 'common'],
-      ),
-      ...this.buildUriRecord(
-        webview,
-        BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
-        ['node_modules'],
       ),
       ...this.buildUriRecord(
         webview,

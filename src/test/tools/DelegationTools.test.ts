@@ -26,7 +26,6 @@ const BASE_INPUT: WorkflowAgentInput = {
   extractFigures: null,
   extractTikz: null,
   outputFiles: [],
-  useMultipleOutputs: false,
   memories: [],
 };
 

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { ModelProvider } from 'llm-zoo';
 
-import { GlobalStateKey } from '@common/state/stateManager';
+import { GlobalStateKey } from '@common/state/stateKeys';
 
 // ============================================================================
 // Provider Registry — single source of truth for all provider metadata

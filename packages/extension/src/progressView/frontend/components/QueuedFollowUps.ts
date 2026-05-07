@@ -1,0 +1,134 @@
+// Third-party imports
+import { LitElement, html, css, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
+import { repeat } from 'lit/directives/repeat.js';
+
+// Local imports - shared styles
+import { designTokens, commonViewStyles } from '@shared/styles';
+import { codiconIconClasses } from '@shared/styles/codiconStyles';
+
+// Local imports - progress view constants
+import { ELEMENT_IDS } from '../constants';
+
+const MAX_MESSAGE_LENGTH = 200;
+
+@customElement('queued-follow-ups')
+export class QueuedFollowUps extends LitElement {
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    codiconIconClasses,
+    css`
+      :host {
+        display: block;
+        max-width: 100%;
+        min-width: 0;
+      }
+
+      :host([hidden]) {
+        display: none;
+      }
+
+      /* Info-style collapsible for queued messages */
+      .queued-collapsible {
+        border: var(--border-thin) solid var(--texra-inputValidation-infoBorder);
+        border-radius: var(--border-radius);
+        background-color: var(--texra-inputValidation-infoBackground);
+      }
+
+      .queued-collapsible::part(header) {
+        padding: var(--spacing-small) var(--spacing-medium);
+        font-weight: var(--font-weight-medium);
+        background-color: transparent;
+      }
+
+      .queued-collapsible::part(body) {
+        padding: 0 var(--spacing-small) var(--spacing-small);
+      }
+
+      .queued-follow-ups-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-tiny);
+      }
+
+      .queued-follow-up-item {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-small);
+        padding: var(--spacing-tiny) var(--spacing-small);
+        font-size: var(--font-size);
+        line-height: var(--line-height-normal);
+        background-color: var(--texra-editor-background);
+        border-radius: var(--border-radius-small);
+        border: var(--border-thin) solid var(--color-border);
+        min-width: 0;
+      }
+
+      .queued-follow-up-icon {
+        flex-shrink: 0;
+        font-size: var(--font-size-icon-sm);
+        line-height: var(--line-height-normal);
+        margin-top: var(--border-thin);
+        color: var(--texra-inputValidation-infoBorder);
+      }
+
+      .queued-follow-up-text {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+        color: var(--texra-foreground);
+      }
+    `,
+  ];
+
+  @property({ attribute: false }) messages: string[] = [];
+
+  private truncateMessage(message: string): {
+    display: string;
+    full: string | undefined;
+  } {
+    if (message.length <= MAX_MESSAGE_LENGTH) {
+      return { display: message, full: undefined };
+    }
+    return {
+      display: message.substring(0, MAX_MESSAGE_LENGTH) + '...',
+      full: message,
+    };
+  }
+
+  override render(): TemplateResult {
+    const visible = this.messages.length > 0;
+    return html`
+      <vscode-collapsible
+        id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_COLLAPSIBLE}
+        class="queued-collapsible"
+        title="Queued Messages"
+        ?open=${visible}
+        ?hidden=${!visible}
+        aria-hidden=${visible ? 'false' : 'true'}
+      >
+        <div
+          id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_LIST}
+          class="queued-follow-ups-list"
+        >
+          ${repeat(
+            this.messages,
+            (_message, index) => index,
+            (message) => {
+              const { display, full } = this.truncateMessage(message);
+              return html`
+                <div class="queued-follow-up-item" title=${ifDefined(full)}>
+                  <i class="codicon codicon-comment queued-follow-up-icon"></i>
+                  <span class="queued-follow-up-text">${display}</span>
+                </div>
+              `;
+            },
+          )}
+        </div>
+      </vscode-collapsible>
+    `;
+  }
+}

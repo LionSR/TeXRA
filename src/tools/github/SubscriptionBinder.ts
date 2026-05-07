@@ -13,10 +13,12 @@
 
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId } from '@shared/schemas';
 
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import type { Disposable } from './PollingSourceBase';
 
 export interface SubscriptionBinding<K extends string> {
@@ -86,7 +88,7 @@ export class SubscriptionBinder<K extends string, Input> {
       disposable = this.opts.source.subscribe(input, (text) => {
         void sendFollowUp(streamId, text).then((result) => {
           if (result.status === 'sent' || result.status === 'queued') {
-            bus.emit('updateQueuedFollowUps', { streamId });
+            getAgentRuntimeHost().emit('updateQueuedFollowUps', { streamId });
           }
         });
       });
@@ -193,6 +195,6 @@ export class SubscriptionBinder<K extends string, Input> {
   }
 
   private emitBindingsChanged(): void {
-    bus.emit(this.opts.bindingsChangedEvent, undefined);
+    emitGitHubSubscriptionChanged(this.opts.bindingsChangedEvent, undefined);
   }
 }
