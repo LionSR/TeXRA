@@ -18,8 +18,6 @@ import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
-import { isDeprecatedModel } from '@model/computeModelOptions';
 import { LatexConfigValuesSchema } from '@shared/schemas/settingsViewMessages';
 import {
   LATEX_FIELD_TO_KEY,
@@ -181,94 +179,6 @@ export async function refreshCustomAgentRoot(): Promise<void> {
       `Failed to refresh custom agents root: ${toErrorMessage(err)}`,
     );
   }
-}
-
-/**
- * Refreshes the model list when MODEL_LIST_VERSION changes.
- * Merges new default models into the user's existing enabled models list.
- */
-export async function refreshModelListIfNeeded(): Promise<void> {
-  const storedVersion = globalSM.get<number>(GlobalStateKey.MODEL_LIST_VERSION);
-
-  if (storedVersion === MODEL_LIST_VERSION) {
-    return;
-  }
-
-  logger.info(
-    'extension',
-    `Model list version changed (${storedVersion ?? 'none'} -> ${MODEL_LIST_VERSION}), updating model list`,
-  );
-
-  try {
-    await mergeNewModelsIfCustomized(storedVersion);
-    await globalSM.update(
-      GlobalStateKey.MODEL_LIST_VERSION,
-      MODEL_LIST_VERSION,
-    );
-    logger.info('extension', 'Model list refresh completed successfully');
-  } catch (err) {
-    logger.error(
-      'extension',
-      `Failed to refresh model list: ${toErrorMessage(err)}`,
-    );
-  }
-}
-
-/**
- * Reconciles the user's enabled-models list with the current defaults: adds
- * any new DEFAULT_MODELS entries and applies per-version one-off removals
- * gated on previousVersion so they run on the intended upgrade only.
- */
-async function mergeNewModelsIfCustomized(
-  previousVersion: number | undefined,
-): Promise<void> {
-  const currentModels = globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS);
-  if (!currentModels) {
-    logger.info(
-      'extension',
-      'No custom model list in globalSM, using defaults',
-    );
-    return;
-  }
-
-  // One-time strip for users upgrading past version 13:
-  // - gpt54pro: default for 0.36.5–0.36.x, then removed as duplicative with gpt54.
-  // - opus46T: default before opus47T landed and superseded it.
-  // The (previousVersion ?? 0) < 13 gate ensures users who manually re-enable
-  // either after this release don't lose it again on future unrelated bumps.
-  const V13_REMOVALS = ['gpt54pro', 'opus46T'];
-  const strippedSet = new Set<string>();
-  if ((previousVersion ?? 0) < 13) {
-    for (const model of V13_REMOVALS) {
-      if (currentModels.includes(model)) strippedSet.add(model);
-    }
-  }
-
-  // One-time strip for users upgrading past version 15: remove any currently
-  // enabled model that the registry now marks as deprecated. This can remove
-  // previous deliberate opt-ins during the upgrade so deprecated models do not
-  // stay in normal dropdowns by default; users can re-enable them from Settings.
-  if ((previousVersion ?? 0) < 15) {
-    for (const model of currentModels) {
-      if (isDeprecatedModel(model)) strippedSet.add(model);
-    }
-  }
-  const kept = currentModels.filter((model) => !strippedSet.has(model));
-  const removed = [...strippedSet];
-
-  const added = DEFAULT_MODELS.filter(
-    (model) => !kept.includes(model) && !isDeprecatedModel(model),
-  );
-
-  if (added.length === 0 && removed.length === 0) {
-    return;
-  }
-
-  await globalSM.update(GlobalStateKey.ENABLED_MODELS, [...kept, ...added]);
-  logger.info(
-    'extension',
-    `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]`,
-  );
 }
 
 /** Default options for global settings that should only be set if not already configured */

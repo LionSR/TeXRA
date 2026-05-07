@@ -1,5 +1,9 @@
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
+import {
+  createDesktopLogIpc,
+  type DesktopLogIpcOptions,
+} from './desktopLogIpc.js';
 import { createDesktopMainViewStartup } from './desktopMainViewStartup.js';
 import {
   isDesktopCommandMessage,
@@ -19,6 +23,7 @@ import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { DesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
+import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
 import type { BrowserWindow } from 'electron';
 
 export interface DesktopMainViewIpcOptions {
@@ -28,8 +33,11 @@ export interface DesktopMainViewIpcOptions {
   workspaceExplorer?: DesktopWorkspaceExplorer;
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
+  logs?: DesktopLogIpcOptions;
   shellActions?: DesktopShellActions;
+  modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
+  loadStartupOptions?: () => Promise<MainViewStartupOptions>;
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
@@ -73,9 +81,15 @@ export function installDesktopMainViewIpc(
     executeAgent: options.executeAgent,
     onAsyncError: options.onAsyncError,
   });
+  const logs = createDesktopLogIpc(bridge, {
+    ...options.logs,
+    onAsyncError: options.onAsyncError,
+  });
   const startup = createDesktopMainViewStartup({
     renderer: bridge,
+    modelListRefresh: options.modelListRefresh,
     getAuthStatus: options.getAuthStatus,
+    loadOptions: options.loadStartupOptions,
     onAsyncError: options.onAsyncError,
   });
   messageHandlers = [
@@ -85,6 +99,7 @@ export function installDesktopMainViewIpc(
     options.settings,
     options.progress,
     viewState,
+    logs,
     shell,
     execution,
   ].filter((handler): handler is DesktopMessageHandler => handler != null);

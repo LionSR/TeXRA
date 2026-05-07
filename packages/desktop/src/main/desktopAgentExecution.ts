@@ -1,10 +1,16 @@
+import { access, readFile, writeFile } from 'node:fs/promises';
 import path, { basename } from 'node:path';
 
 import {
   prepareMainViewExecutionRequest,
   type MainViewExecuteMessage,
 } from '@controllers/mainView/MainViewExecutionController';
+import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import { emitAcceptedWorkspaceFile } from '@controllers/progressView/workflowFileActionsEvents';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { tryPlatform } from '@platform/platform';
 import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
+import { getWorkspaceProvider } from '@agent/core/workspace';
 import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
@@ -18,9 +24,19 @@ import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import {
+  getFileListConfig,
+  loadFileListSettings,
+  type ListableFileType,
+} from '@common/files/fileListingRules';
+import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { ExternalOpener } from '@hosts/externalOpener';
+import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
+import { LaTeXdiffService } from '@latex/latexdiff';
+import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 import {
@@ -29,6 +45,7 @@ import {
   type AgentCategory,
   type AgentCategoryFilter,
   type ConversationProgress,
+  type OutputFileInfo,
   type ProgressViewInboundMessage,
   type ProgressViewOutboundMessage,
   type StreamMetadata,
@@ -49,6 +66,7 @@ import {
   pathToLocation,
   type FileLocation,
 } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 
@@ -57,7 +75,10 @@ export interface DesktopAgentExecutionOptions {
   opener?: Pick<ExternalOpener, 'openPath'> & {
     openBuildDisplay?: BuildDisplayFn;
   };
+  diff?: Pick<DiffViewHost, 'openDiff'>;
+  confirmAcceptFile?: (message: string) => Promise<boolean>;
   showErrorMessage?: (message: string) => Promise<void> | void;
+  showInfoMessage?: (message: string) => Promise<void> | void;
 }
 
 export interface DesktopAgentExecution {
@@ -67,6 +88,7 @@ export interface DesktopAgentExecution {
 }
 
 type TaskState = ProgressEventPayloads['setTaskState']['taskState'];
+type OutputFilesByRound = Map<number, OutputFileInfo[]>;
 
 type StreamBadgeSnapshot = {
   activeSubagents: ActiveChildInfo[];
@@ -77,9 +99,12 @@ type StreamBadgeSnapshot = {
 
 export interface DesktopProgressBridgeOptions {
   detachSubagentsOnStop?: boolean;
-  openPath?: (filePath: string) => Promise<void>;
+  openPath?: (filePath: string, line?: number) => Promise<void>;
   openBuildDisplay?: BuildDisplayFn;
-  showMessage?: (message: string) => Promise<void>;
+  openDiff?: DiffViewHost['openDiff'];
+  confirmAcceptFile?: (message: string) => Promise<boolean>;
+  showInfoMessage?: (message: string) => Promise<void>;
+  showErrorMessage?: (message: string) => Promise<void>;
 }
 
 function toFileLocation(filePath: string): FileLocation {
@@ -90,8 +115,11 @@ function toFileLocation(filePath: string): FileLocation {
 
 export class DesktopProgressBridge {
   private readonly streamLogs = new StreamLogStore();
+  private readonly logger = new AgentLogger('DesktopProgressBridge');
+  private readonly workflowFileActions: ProgressWorkflowFileActionsController;
   private readonly cursors = new Map<StreamTabId, number>();
   private readonly taskStates = new Map<StreamTabId, TaskState>();
+  private readonly outputFiles = new Map<StreamTabId, OutputFilesByRound>();
   private readonly statuses = new Map<StreamTabId, StreamStatus>();
   private readonly categories = new Map<StreamTabId, AgentCategory>();
   private readonly executionIds = new Map<StreamTabId, string>();
@@ -121,12 +149,45 @@ export class DesktopProgressBridge {
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
     };
+    this.workflowFileActions = new ProgressWorkflowFileActionsController({
+      state: {
+        getActiveStream: () => this.activeStream,
+        getExecutionId: (stream) => this.executionIds.get(stream),
+        getOutputFiles: (stream) => new Map(this.outputFiles.get(stream) ?? []),
+      },
+      host: {
+        compareFiles: (baseFile, editedFile) =>
+          this.compareFiles(baseFile, editedFile),
+        acceptEditedFile: (baseFile, editedFile) =>
+          this.acceptEditedFile(baseFile, editedFile),
+        mergeFile: (baseFile, editedFile) =>
+          this.runMergeFile(baseFile, editedFile),
+        latexdiffFile: (baseFile, editedFile) =>
+          this.runLatexdiffFile(baseFile, editedFile),
+        openDirectory: async (directory) => {
+          await this.options.openPath?.(directory);
+        },
+        openLabel: (label) => this.findAndOpenLabel(label),
+        readFile: (file) => readFile(file, 'utf8'),
+        showInfo: (message) => this.showInfoMessage(message),
+        showError: (message) => this.showErrorMessage(message),
+        logError: (message, error) => {
+          this.logger.error(message, {
+            data: error instanceof Error ? error : { error },
+          });
+        },
+      },
+      sendFollowUp: async (stream, text) => {
+        await this.sendFollowUp(stream, text);
+      },
+    });
   }
 
   dispose(): void {
     this.unsubscribe();
     this.cursors.clear();
     this.taskStates.clear();
+    this.outputFiles.clear();
     this.statuses.clear();
     this.categories.clear();
     this.executionIds.clear();
@@ -135,6 +196,7 @@ export class DesktopProgressBridge {
     this.creationTimestamps.clear();
     this.conversationProgress.clear();
     this.streamBadges.clear();
+    this.workflowFileActions.clearAllBackups();
   }
 
   private send(message: ProgressViewOutboundMessage): void {
@@ -385,6 +447,11 @@ export class DesktopProgressBridge {
       }
       case 'addOutputFiles': {
         const data = payload as ProgressEventPayloads['addOutputFiles'];
+        const existing = this.outputFiles.get(data.streamId) ?? new Map();
+        for (const [round, files] of Object.entries(data.filesByRound)) {
+          existing.set(Number(round), files);
+        }
+        this.outputFiles.set(data.streamId, existing);
         this.send({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
           stream: data.streamId,
@@ -649,6 +716,7 @@ export class DesktopProgressBridge {
 
     await this.streamLogs.delete(streamId);
     this.taskStates.delete(streamId);
+    this.outputFiles.delete(streamId);
     this.statuses.delete(streamId);
     this.categories.delete(streamId);
     this.executionIds.delete(streamId);
@@ -657,6 +725,7 @@ export class DesktopProgressBridge {
     this.creationTimestamps.delete(streamId);
     this.conversationProgress.delete(streamId);
     this.streamBadges.delete(streamId);
+    this.workflowFileActions.clearStreamBackups(streamId);
     this.cursors.delete(streamId);
 
     const shouldSelectFallback = this.activeStream === streamId;
@@ -687,6 +756,7 @@ export class DesktopProgressBridge {
     await this.streamLogs.clear();
     this.cursors.clear();
     this.taskStates.clear();
+    this.outputFiles.clear();
     this.statuses.clear();
     this.categories.clear();
     this.executionIds.clear();
@@ -695,6 +765,7 @@ export class DesktopProgressBridge {
     this.creationTimestamps.clear();
     this.conversationProgress.clear();
     this.streamBadges.clear();
+    this.workflowFileActions.clearAllBackups();
     this.activeStream = '';
     this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
     this.syncStreams();
@@ -738,13 +809,13 @@ export class DesktopProgressBridge {
       return;
     }
 
-    await this.options.showMessage?.(
+    await this.showInfoMessage(
       'No active session. Start a new agent task to continue.',
     );
   }
 
-  async openFile(filePath: string): Promise<void> {
-    await this.options.openPath?.(filePath);
+  async openFile(filePath: string, line?: number): Promise<void> {
+    await this.options.openPath?.(filePath, line);
   }
 
   async openFileCompile(filePath: string): Promise<void> {
@@ -752,7 +823,41 @@ export class DesktopProgressBridge {
       await this.options.openBuildDisplay(toFileLocation(filePath));
       return;
     }
-    await this.openFile(filePath);
+    await this.showErrorMessage(
+      'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
+    );
+  }
+
+  async openTaskStorage(streamId: StreamTabId): Promise<void> {
+    await this.workflowFileActions.openTaskStorage(streamId);
+  }
+
+  async compareOriginal(file: string, base?: string): Promise<void> {
+    await this.workflowFileActions.compareOriginal(file, base);
+  }
+
+  async comparePrevious(
+    file: string,
+    base?: string,
+    previous?: string,
+  ): Promise<void> {
+    await this.workflowFileActions.comparePrevious(file, base, previous);
+  }
+
+  async acceptFile(file: string, base?: string): Promise<void> {
+    await this.workflowFileActions.acceptFile(file, base);
+  }
+
+  async mergeFile(file: string, base?: string): Promise<void> {
+    await this.workflowFileActions.mergeFile(file, base);
+  }
+
+  async latexdiffFile(file: string, base?: string): Promise<void> {
+    await this.workflowFileActions.latexdiffFile(file, base);
+  }
+
+  async openLabel(label: string): Promise<void> {
+    await this.workflowFileActions.openLabel(label);
   }
 
   async handleBashApprovalAction(
@@ -828,6 +933,161 @@ export class DesktopProgressBridge {
       },
     });
   }
+
+  private async compareFiles(
+    baseFile: string,
+    editedFile: string,
+  ): Promise<void> {
+    if (!this.options.openDiff) {
+      await this.showErrorMessage(
+        'Desktop file comparison is not available in this host yet.',
+      );
+      return;
+    }
+
+    await this.options.openDiff(
+      { filePath: baseFile },
+      { filePath: editedFile },
+      `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
+    );
+  }
+
+  private async runMergeFile(
+    baseFile: string,
+    editedFile: string,
+  ): Promise<void> {
+    const [{ executeMergeAgent }, { getHelperModelName }] = await Promise.all([
+      import('@agent/runtime/executeAgent'),
+      import('@agent/runtime/helperModel'),
+    ]);
+    await executeMergeAgent(getHelperModelName(), baseFile, editedFile);
+  }
+
+  private async acceptEditedFile(
+    baseFile: string,
+    editedFile: string,
+  ): Promise<boolean> {
+    const baseLocation = pathToLocation(baseFile);
+    const editedLocation = pathToLocation(editedFile);
+    const { targetLocation, targetFileName, isNewFile } = getAcceptedFileTarget(
+      baseLocation,
+      editedLocation.absolutePath,
+    );
+    const targetExists =
+      isNewFile && (await fileExists(targetLocation.absolutePath));
+    const action = targetExists
+      ? 'overwrite existing'
+      : isNewFile
+        ? 'create'
+        : 'overwrite';
+    const extensionNote = isNewFile
+      ? `Extensions differ (${path.extname(baseFile).toLowerCase()} vs ${path.extname(editedFile).toLowerCase()}). `
+      : '';
+    const confirmMessage = `${extensionNote}This will ${action} '${targetFileName}' with content from '${path.basename(editedFile)}'. Are you sure?`;
+
+    if (this.options.confirmAcceptFile) {
+      const confirmed = await this.options.confirmAcceptFile(confirmMessage);
+      if (!confirmed) return false;
+    }
+
+    const editedContent = await readFile(editedLocation.absolutePath, 'utf8');
+    await writeFile(targetLocation.absolutePath, editedContent, 'utf8');
+    emitAcceptedWorkspaceFile(targetLocation);
+
+    const operation = isNewFile && !targetExists ? 'created' : 'replaced';
+    await this.showInfoMessage(
+      `Successfully ${operation} '${targetFileName}' with content from '${path.basename(editedFile)}'`,
+    );
+    return true;
+  }
+
+  private async runLatexdiffFile(
+    baseFile: string,
+    editedFile: string,
+  ): Promise<void> {
+    const service = new LaTeXdiffService('DesktopProgressBridge');
+    const result = await service.runDiff(
+      pathToLocation(baseFile),
+      pathToLocation(editedFile),
+      '_diff',
+      false,
+      DEFAULT_MATH_MARKUP,
+    );
+
+    if (!result.success || !result.diffFileName) {
+      await this.showErrorMessage(
+        result.message ?? 'Failed to generate diff file.',
+      );
+      return;
+    }
+
+    const diffFilePath = path.join(path.dirname(baseFile), result.diffFileName);
+    if (this.options.openBuildDisplay) {
+      await this.options.openBuildDisplay(createExternalLocation(diffFilePath));
+      return;
+    }
+    await this.options.openPath?.(diffFilePath);
+  }
+
+  private async findAndOpenLabel(label: string): Promise<boolean> {
+    const workspacePath = getWorkspaceProvider().getWorkspacePath();
+    if (!workspacePath) return false;
+
+    const escape = label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
+    const candidates = new Set([
+      ...(await this.listWorkspaceFiles('input')),
+      ...(await this.listWorkspaceFiles('reference')),
+    ]);
+
+    for (const file of candidates) {
+      const filePath = path.isAbsolute(file)
+        ? file
+        : path.join(workspacePath, file);
+      try {
+        const content = await readFile(filePath, 'utf8');
+        if (pattern.test(content)) {
+          await this.options.openPath?.(filePath);
+          return true;
+        }
+      } catch {
+        // Ignore unreadable candidates and continue scanning.
+      }
+    }
+
+    return false;
+  }
+
+  private async listWorkspaceFiles(
+    fileType: ListableFileType,
+  ): Promise<string[]> {
+    const workspacePath = getWorkspaceProvider().getWorkspacePath();
+    const config = getFileListConfig(fileType, loadFileListSettings(getConfig));
+    if (!workspacePath || !config) return [];
+    return listWorkspaceFiles({
+      root: workspacePath,
+      config,
+      readDirectory: (directory) =>
+        (tryPlatform()?.fs ?? nodeFilesystem).readDirectory(directory),
+    });
+  }
+
+  private async showInfoMessage(message: string): Promise<void> {
+    await this.options.showInfoMessage?.(message);
+  }
+
+  private async showErrorMessage(message: string): Promise<void> {
+    await this.options.showErrorMessage?.(message);
+  }
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function createDesktopAgentExecution(
@@ -836,7 +1096,10 @@ export function createDesktopAgentExecution(
   const progress = new DesktopProgressBridge(options.postToRenderer, {
     openPath: options.opener?.openPath,
     openBuildDisplay: options.opener?.openBuildDisplay,
-    showMessage: async (message) => options.showErrorMessage?.(message),
+    openDiff: options.diff?.openDiff,
+    confirmAcceptFile: options.confirmAcceptFile,
+    showInfoMessage: async (message) => options.showInfoMessage?.(message),
+    showErrorMessage: async (message) => options.showErrorMessage?.(message),
   });
 
   return {

@@ -37,6 +37,8 @@
       "@auth/*": ["src/auth/*"],
       "@platform": ["src/platform"],
       "@platform/*": ["src/platform/*"],
+      "node-pandoc": ["src/types/node-pandoc.d.ts"],
+      "turndown-plugin-gfm": ["src/types/turndown-plugin-gfm.d.ts"],
       "@openrouter/sdk": ["node_modules/@openrouter/sdk/esm/index.d.ts"],
       "@openrouter/sdk/models": [
         "node_modules/@openrouter/sdk/esm/models/index.d.ts"
@@ -51,6 +53,7 @@
     "types": ["node", "mocha", "vscode"]
   },
   "include": [
+    "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "packages/extension/src/**/*.ts",

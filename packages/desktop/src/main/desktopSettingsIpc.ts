@@ -13,6 +13,7 @@ import {
   computeAgentOptionsData,
   getAgent,
   getToolUseAgents,
+  getVisibleAgents as getVisibleRegistryAgents,
   getWorkflowAgents,
   loadAgents,
   type AgentEntry,
@@ -86,6 +87,7 @@ import {
   unauthenticatedProfileData,
   type DesktopAuthProfileData,
 } from './desktopSupabaseAuth.js';
+import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import type { ConfigProvider } from '@platform/interfaces/config';
 import type { StateStore } from '@platform/interfaces/state';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -103,6 +105,8 @@ export interface DesktopSettingsIpcOptions {
   sendStartupCatalogData?: boolean;
   loadAgents?: typeof loadAgents;
   loadAgentOptionsData?: typeof computeAgentOptionsData;
+  getAgents?: (category: AgentCategory) => AgentEntry[];
+  getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
   globalState?: StateStore;
   workspaceState?: StateStore;
   config?: ConfigProvider;
@@ -137,6 +141,7 @@ export interface DesktopSettingsIpcOptions {
     kind: 'install' | 'auth';
   }) => Promise<void>;
   onError?: (error: unknown) => void;
+  modelListRefresh?: PromiseLike<void>;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
@@ -200,6 +205,9 @@ export function createDesktopSettingsIpc(
   const loadAgentRegistry = options.loadAgents ?? loadAgents;
   const loadAgentOptionsData =
     options.loadAgentOptionsData ?? computeAgentOptionsData;
+  const getAgentEntries = options.getAgents ?? getAgentRegistryEntries;
+  const getVisibleAgentEntries =
+    options.getVisibleAgents ?? getVisibleRegistryAgents;
   const usesDefaultToolDashboardBuilder =
     options.buildToolDashboardItems == null;
   const buildToolDashboardItems =
@@ -229,8 +237,8 @@ export function createDesktopSettingsIpc(
     setEnabledAgentKeys: async (category, enabledKeys) => {
       await workspaceState.update(getAgentStateKey(category), enabledKeys);
     },
-    getAgents,
-    getVisibleAgents: getAgents,
+    getAgents: getAgentEntries,
+    getVisibleAgents: getVisibleAgentEntries,
     getCustomPresetsRaw: () =>
       workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
     setCustomPresets: async (presets) => {
@@ -263,7 +271,7 @@ export function createDesktopSettingsIpc(
       getEnabledAgentKeys: agentCatalogState.getEnabledAgentKeys,
       setEnabledAgentKeys: agentCatalogState.setEnabledAgentKeys,
       getAgents: (category) =>
-        getAgents(category).map((entry) => ({
+        getAgentEntries(category).map((entry) => ({
           source: entry.source,
           name: entry.name,
         })),
@@ -301,6 +309,12 @@ export function createDesktopSettingsIpc(
       },
     },
   });
+  const modelListRefresh =
+    options.modelListRefresh ??
+    refreshDesktopModelListStateIfNeeded({
+      globalState,
+      onError,
+    });
 
   function readCurrentGitAuthorSettings() {
     return readGitAuthorSettingsFromState(workspaceState);
@@ -340,7 +354,7 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function getAgents(category: AgentCategory): AgentEntry[] {
+  function getAgentRegistryEntries(category: AgentCategory): AgentEntry[] {
     return category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
   }
 
@@ -373,7 +387,8 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function postModelSelectionData(): void {
+  async function postModelSelectionData(): Promise<void> {
+    await modelListRefresh;
     const data = modelSelectionController.buildSelectionData();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
@@ -519,11 +534,12 @@ export function createDesktopSettingsIpc(
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
-    postModelSelectionData();
+    const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
     postAgentModePresets();
     postApprovalSettings();
     await Promise.all([
+      modelSelectionDataPosted,
       postProfileData(),
       postLatexSettingsStatus(),
       postAgentSelectionData(),
@@ -563,7 +579,7 @@ export function createDesktopSettingsIpc(
     enabled: boolean;
   }): Promise<void> {
     await modelSelectionController.setModelEnabled(input);
-    postModelSelectionData();
+    await postModelSelectionData();
     postMainModelOptionsData();
   }
 
@@ -572,24 +588,24 @@ export function createDesktopSettingsIpc(
     level: ReasoningLevel | null;
   }): Promise<void> {
     await modelSelectionController.setReasoningLevel(input);
-    postModelSelectionData();
+    await postModelSelectionData();
   }
 
   async function updateHelperModel(modelName: string): Promise<void> {
     await modelSelectionController.setHelperModel(modelName);
-    postModelSelectionData();
+    await postModelSelectionData();
   }
 
   async function updatePreferShortModelNames(enabled: boolean): Promise<void> {
     await modelSelectionController.setPreferShortModelNames(enabled);
-    postModelSelectionData();
+    await postModelSelectionData();
   }
 
   async function refreshAfterCredentialChange(): Promise<void> {
     invalidateApiKeyCache();
     invalidateModelOptionsCache();
     await postProfileData();
-    postModelSelectionData();
+    await postModelSelectionData();
     postMainModelOptionsData();
   }
 
@@ -684,13 +700,13 @@ export function createDesktopSettingsIpc(
       globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
     ) {
       await globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-      invalidateModelOptionsCache();
     }
+    invalidateModelOptionsCache();
     await Promise.all([postProfileData(), postModelSelectionData()]);
   }
 
   async function refreshAuthDependentData(): Promise<void> {
-    postModelSelectionData();
+    await postModelSelectionData();
     postMainModelOptionsData();
     await Promise.all([
       postProfileData(),
@@ -867,12 +883,17 @@ export function createDesktopSettingsIpc(
     });
     if (!name?.trim()) return;
     await loadAgentRegistry();
-    await agentCatalogController.saveCurrentPreset(name);
+    const preset = await agentCatalogController.saveCurrentPreset(name);
     postAgentModePresets();
+    await options.showInfoMessage?.(`Saved team "${preset.name}"`);
   }
 
   async function deleteAgentModePreset(presetId: string): Promise<void> {
-    await agentCatalogController.deleteCustomPreset(presetId);
+    const deleted = await agentCatalogController.deleteCustomPreset(presetId);
+    if (!deleted) {
+      await options.showErrorMessage?.(`Unknown custom team: ${presetId}`);
+      return;
+    }
     postAgentModePresets();
   }
 
@@ -904,7 +925,7 @@ export function createDesktopSettingsIpc(
           runAsync(postAgentSelectionData());
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION:
-          postModelSelectionData();
+          runAsync(postModelSelectionData());
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA:
           runAsync(postProfileData());

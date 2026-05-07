@@ -1,4 +1,7 @@
-import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
+import {
+  MainViewStartupController,
+  type MainViewStartupOptions,
+} from '@controllers/mainView/MainViewStartupController';
 import { computeAgentOptionsData } from '@agent/index/agentRegistry';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
@@ -14,22 +17,30 @@ import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 
 export interface DesktopMainViewStartupOptions {
   renderer: DesktopRenderer;
+  modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
+  loadOptions?: () => Promise<MainViewStartupOptions>;
   onAsyncError?: (error: unknown) => void;
 }
 
 export function createDesktopMainViewStartup({
   renderer,
+  modelListRefresh,
   getAuthStatus,
+  loadOptions,
   onAsyncError,
 }: DesktopMainViewStartupOptions): DesktopMessageHandler {
   const reportAsyncError = createDesktopErrorReporter(onAsyncError);
   const startupController = new MainViewStartupController({
     getConfig,
-    loadOptions: async () => ({
-      agentOptions: await computeAgentOptionsData(),
-      modelOptions: buildBasicModelOptionsData(),
-    }),
+    loadOptions: async () => {
+      await modelListRefresh;
+      if (loadOptions != null) return loadOptions();
+      return {
+        agentOptions: await computeAgentOptionsData(),
+        modelOptions: buildBasicModelOptionsData(),
+      };
+    },
     getAuthStatus: getAuthStatus ?? (async () => ({ authenticated: false })),
   });
 

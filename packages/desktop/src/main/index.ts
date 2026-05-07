@@ -1,15 +1,23 @@
 import { existsSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  session,
+  shell,
+} from 'electron';
 
 import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
+import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
@@ -17,8 +25,10 @@ import { createDesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import {
   attachRendererConsoleLog,
   getDesktopLogDirectory,
+  readDesktopLogSnapshot,
 } from './desktopAppLog.js';
 import { installDesktopMenu } from './desktopMenu.js';
+import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
@@ -132,6 +142,9 @@ function createWindow(options: {
   });
   mainWindow = window;
   const reportAsyncError = (error: unknown) => console.error(error);
+  const modelListRefresh = refreshDesktopModelListStateIfNeeded({
+    onError: reportAsyncError,
+  });
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
@@ -166,7 +179,6 @@ function createWindow(options: {
     onSessionChanged: refreshDesktopAuthSurfaces,
     log: console,
     callbackState: options.authCallbackState,
-    initializeServerSideAccess: false,
   });
   setOpenBuildDisplay(previewHost.openBuildDisplay);
   const openLogsFolder = async () =>
@@ -192,6 +204,22 @@ function createWindow(options: {
   const agentExecution = createDesktopAgentExecution({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     opener: previewHost,
+    diff: createDesktopDiffHost({
+      openPath: previewHost.openPath,
+    }),
+    confirmAcceptFile: async (message) => {
+      const result = await dialog.showMessageBox(window, {
+        type: 'warning',
+        message,
+        buttons: ['Yes', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      return result.response === 0;
+    },
+    showInfoMessage: async (message) => {
+      await dialog.showMessageBox(window, { type: 'info', message });
+    },
     showErrorMessage,
   });
   const fileSelection = createDesktopFileSelection({
@@ -215,6 +243,7 @@ function createWindow(options: {
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     sendStartupCatalogData: true,
+    modelListRefresh,
     promptSecret: (input) =>
       promptInRenderer(window, { ...input, password: true }),
     promptText: (input) => promptInRenderer(window, input),
@@ -231,7 +260,6 @@ function createWindow(options: {
       await getServerSideKeyService().setUseIncludedModelAccess(
         mode === 'included',
       );
-      invalidateModelOptionsCache();
     },
     selectCustomAgentDirectory: async () => {
       const result = await dialog.showOpenDialog(window, {
@@ -275,6 +303,7 @@ function createWindow(options: {
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
       getCustomAgentDirectory: () => getAgentDirectories().custom(),
+      openExternalUrl: previewHost.openExternal,
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,
       openWorkspaceFolder,
@@ -288,7 +317,24 @@ function createWindow(options: {
     workspaceExplorer,
     settings: settingsIpc,
     progress: progressIpc,
+    logs: {
+      readLog: () =>
+        readDesktopLogSnapshot({ workspacePath: options.workspacePath }),
+      copyLog: async (text) => {
+        clipboard.writeText(text);
+      },
+      exportLog: async (text) => {
+        const result = await dialog.showSaveDialog(window, {
+          title: 'Export TeXRA Desktop Log',
+          defaultPath: 'texra-desktop-log.txt',
+          filters: [{ name: 'Text Logs', extensions: ['txt', 'log'] }],
+        });
+        if (result.canceled || !result.filePath) return;
+        await writeFile(result.filePath, text, 'utf8');
+      },
+    },
     shellActions,
+    modelListRefresh,
     getAuthStatus: async () => ({
       authenticated: (await desktopAuth.getProfileData()).authenticated,
     }),

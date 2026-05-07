@@ -638,6 +638,34 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('passes remote agent launches to the shared runtime unchanged', async () => {
+    const request = {
+      agentName: 'remote:remoteWriter',
+      filePath: 'main.tex',
+      prompt: 'draft',
+    };
+    const runValidatedExecutionRequest = vi.fn(async () => {});
+    const execution = await createExecution({
+      runValidatedExecutionRequest,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: true,
+        request,
+      })),
+    });
+
+    try {
+      await execution.handleExecute({ command: 'execute' });
+      expect(runValidatedExecutionRequest).toHaveBeenCalledWith(
+        request,
+        expect.objectContaining({
+          openWorkflowOutput: expect.any(Function),
+        }),
+      );
+    } finally {
+      execution.dispose();
+    }
+  });
+
   it('opens workflow outputs through the desktop preview host', async () => {
     const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
     const runValidatedExecutionRequest = vi.fn(async (_request, options) => {
@@ -687,6 +715,29 @@ describe('DesktopProgressBridge', () => {
         expect.objectContaining({ absolutePath: '/tmp/output.tex' }),
       );
       expect(opener.openPath).not.toHaveBeenCalled();
+    } finally {
+      execution.dispose();
+    }
+  });
+
+  it('does not fall back to plain file open for compile-file actions', async () => {
+    const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
+    const showErrorMessage = vi.fn();
+    const execution = await createExecution({
+      opener,
+      showErrorMessage,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: false,
+        message: 'not used',
+      })),
+    });
+
+    try {
+      await execution.progress.openFileCompile('/tmp/output.tex');
+      expect(opener.openPath).not.toHaveBeenCalled();
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
+      );
     } finally {
       execution.dispose();
     }
