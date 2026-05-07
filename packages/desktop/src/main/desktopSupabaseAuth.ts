@@ -4,6 +4,11 @@ import { z } from 'zod';
 
 import { platform } from '@platform/platform';
 import {
+  getAgentsBySource,
+  loadAgents,
+  toRemoteAgentProfileData,
+} from '@agent/index';
+import {
   DEFAULT_OAUTH_PROVIDER,
   DEFAULT_SESSION_EXPIRY_MS,
   GITHUB_TOKEN_REFRESH_URL,
@@ -81,7 +86,6 @@ export interface DesktopSupabaseAuthOptions {
   coordinator?: DesktopAuthCoordinator;
   oauthClient?: DesktopOAuthClient;
   callbackState?: DesktopAuthCallbackState;
-  initializeServerSideAccess?: boolean;
 }
 
 export interface DesktopOAuthClient {
@@ -395,6 +399,14 @@ async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
     // Server-side key access is optional; personal provider keys still work.
   }
 
+  let remoteAgents: RemoteAgent[] = [];
+  try {
+    await loadAgents();
+    remoteAgents = getAgentsBySource('remote').map(toRemoteAgentProfileData);
+  } catch {
+    // Keep auth/profile UI usable even if agent registry refresh fails.
+  }
+
   return {
     authenticated: true,
     user: {
@@ -403,7 +415,7 @@ async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
     },
     tier: authContext.tier,
     permissions: authContext.permissions,
-    remoteAgents: [],
+    remoteAgents,
     apiAccessMode,
     allowedModels,
     accessExpiresAt,

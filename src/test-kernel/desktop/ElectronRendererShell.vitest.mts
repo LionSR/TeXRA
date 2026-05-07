@@ -71,6 +71,11 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
     expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.DISMISS');
     expect(rendererMain).toContain('showFirstRunWalkthrough');
+    expect(rendererMain).toContain(
+      'canOpen: () => !firstRunWalkthrough.isVisible()',
+    );
+    expect(rendererMain).toContain('previousFocus');
+    expect(rendererMain).toContain("event.key !== 'Tab'");
   });
 
   it('mounts an in-app log viewer with copy and export actions', () => {

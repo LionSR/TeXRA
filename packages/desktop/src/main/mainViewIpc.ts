@@ -36,6 +36,7 @@ export interface DesktopMainViewIpcOptions {
   onboarding?: DesktopMessageHandler;
   logs?: DesktopLogIpcOptions;
   shellActions?: DesktopShellActions;
+  modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadStartupOptions?: () => Promise<MainViewStartupOptions>;
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
@@ -87,6 +88,7 @@ export function installDesktopMainViewIpc(
   });
   const startup = createDesktopMainViewStartup({
     renderer: bridge,
+    modelListRefresh: options.modelListRefresh,
     getAuthStatus: options.getAuthStatus,
     loadOptions: options.loadStartupOptions,
     onAsyncError: options.onAsyncError,
