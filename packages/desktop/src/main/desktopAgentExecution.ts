@@ -199,13 +199,19 @@ export class DesktopProgressBridge {
     this.agentProposalController = new ProgressAgentProposalController({
       getPendingProposal: (proposalId) => this.agentProposals.get(proposalId),
       restoreTaskState: async (taskState) => {
+        let state: ReturnType<typeof buildMainViewState>;
+        try {
+          state = buildMainViewState(taskState);
+        } catch {
+          return false;
+        }
         this.postToRenderer({
           command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
           route: 'main',
         });
         this.postToRenderer({
           command: COMMON_COMMANDS.STATE_RESTORE,
-          state: buildMainViewState(taskState),
+          state,
         });
         return true;
       },

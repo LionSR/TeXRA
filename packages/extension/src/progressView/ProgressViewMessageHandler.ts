@@ -248,7 +248,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await this.agentProposalController.handleAction(data);
       },
       [PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG]: async (data) => {
-        await this.agentProposalController.restoreProposalConfig(data.proposal);
+        const restored =
+          await this.agentProposalController.restoreProposalConfig(
+            data.proposal,
+          );
+        if (restored) {
+          this.logger.info(
+            this.channel,
+            'Restored proposal config to main view',
+            {
+              data: {
+                agent: data.proposal.agent,
+                agentCategory: data.proposal.agentCategory,
+              },
+            },
+          );
+        }
       },
       [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (data) =>
         handleProgressViewBashApprovalAction(data),
