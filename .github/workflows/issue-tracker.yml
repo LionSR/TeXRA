@@ -68,7 +68,7 @@ jobs:
         run: |
           should_run=true
 
-          if [[ "$EVENT_NAME" == "pull_request" && "$EVENT_ACTION" == "opened" ]]; then
+          if [[ "$EVENT_NAME" == pull_request* ]]; then
             tracker_workflow_changes="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- .github/workflows/issue-tracker.yml)"
             if [[ -n "$tracker_workflow_changes" ]]; then
               should_run=false
