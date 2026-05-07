@@ -56,7 +56,6 @@
     "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
-    "src/**/*.d.ts",
     "packages/extension/src/**/*.ts",
     "packages/extension/src/**/*.tsx"
   ],
