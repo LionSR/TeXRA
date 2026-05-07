@@ -14,9 +14,6 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
-import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { bus } from '@eventBus/ProgressEventBus';
-
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatIssueClosed,
@@ -31,6 +28,7 @@ import {
   type BasePollSubscriptionState,
   type Disposable,
 } from './PollingSourceBase';
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import type { GhIssue, GhIssueComment } from './prTypes';
 
 const MAX_SEEN_IDS = 1000;
@@ -99,8 +97,7 @@ export class IssuePollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedBusEvent(keys: readonly string[]): void {
-    bus.emit('issueSubscriptionsChanged', { keys });
-    getAgentRuntimeHost().emit('issueSubscriptionsChanged', { keys });
+    emitGitHubSubscriptionChanged('issueSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(

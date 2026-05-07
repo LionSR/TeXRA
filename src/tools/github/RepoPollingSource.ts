@@ -34,9 +34,6 @@
  * - **CI / check-run status and inline annotations.** Per-PR by design.
  */
 
-import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { bus } from '@eventBus/ProgressEventBus';
-
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatRepoIssueComment,
@@ -61,6 +58,7 @@ import {
   type GhPullsListEntry,
   type GhReviewComment,
 } from './prTypes';
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
 // catch transitions even after a brief network outage. GitHub caps these
@@ -179,8 +177,7 @@ export class RepoPollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedBusEvent(keys: readonly RepoKey[]): void {
-    bus.emit('repoSubscriptionsChanged', { keys });
-    getAgentRuntimeHost().emit('repoSubscriptionsChanged', { keys });
+    emitGitHubSubscriptionChanged('repoSubscriptionsChanged', { keys });
   }
 
   protected formatErrorEvent(
