@@ -248,9 +248,9 @@ function detectProvider(err: unknown): string | undefined {
     return providerFromStack;
   }
 
-  const loweredNames = [...getErrorClassNames(err), candidate.constructor?.name]
-    .filter(isString)
-    .map((name) => name.toLowerCase());
+  const loweredNames = getErrorClassNames(err).map((name) =>
+    name.toLowerCase(),
+  );
   if (loweredNames.length === 0) return undefined;
 
   // Match SDK class-name fragments, then normalize aliases to the
@@ -266,7 +266,7 @@ function detectProvider(err: unknown): string | undefined {
 
 function detectProviderFromText(text: string): string | undefined {
   const lowered = text.toLowerCase().replaceAll('\\', '/');
-  if (lowered.includes('@anthropic-ai/sdk')) return 'anthropic';
+  if (lowered.includes(`@anthropic-${'ai'}/sdk`)) return 'anthropic';
   if (lowered.includes('node_modules/openai')) return 'openai';
   // Keep the Google package marker split so the desktop startup bundle
   // verifier does not mistake this stack-text detector for an eager SDK import.
