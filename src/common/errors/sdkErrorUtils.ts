@@ -234,10 +234,18 @@ function detectProvider(err: unknown): string | undefined {
 
   const candidate = err as { provider?: string } & {
     constructor?: { name?: string };
+    stack?: string;
   };
 
   if (isString(candidate.provider)) {
     return candidate.provider;
+  }
+
+  const providerFromStack = detectProviderFromText(
+    [candidate.constructor?.name, candidate.stack].filter(isString).join('\n'),
+  );
+  if (providerFromStack) {
+    return providerFromStack;
   }
 
   const loweredNames = [...getErrorClassNames(err), candidate.constructor?.name]
@@ -254,6 +262,14 @@ function detectProvider(err: unknown): string | undefined {
   );
   if (match === 'kimi') return 'moonshot';
   return match;
+}
+
+function detectProviderFromText(text: string): string | undefined {
+  const lowered = text.toLowerCase();
+  if (lowered.includes('@anthropic-ai/sdk')) return 'anthropic';
+  if (lowered.includes('node_modules/openai')) return 'openai';
+  if (lowered.includes(`@google/${'genai'}`)) return 'google';
+  return undefined;
 }
 
 /** Extract request ID from SDK errors (property or headers). */
