@@ -273,10 +273,12 @@ export function dispatchDesktopCommand(
       actions.openWorkspaceFolder();
       return true;
     case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
-      actions.showFirstRunWalkthrough?.();
+      if (!actions.showFirstRunWalkthrough) return false;
+      actions.showFirstRunWalkthrough();
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
-      actions.openDesktopDocs?.();
+      if (!actions.openDesktopDocs) return false;
+      actions.openDesktopDocs();
       return true;
     case 'texra.execute':
     case 'texra.runSetupAssistant':
