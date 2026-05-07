@@ -30,12 +30,18 @@ import {
   DESKTOP_LOCAL_COMMANDS,
 } from '../desktopCommandSurface';
 import {
+  DESKTOP_ONBOARDING_COMMANDS,
+  DesktopOnboardingSetStateMessageSchema,
+  type DesktopOnboardingSetStateMessage,
+} from '../desktopOnboardingMessages';
+import {
   DESKTOP_WORKSPACE_EXPLORER_COMMANDS,
   DesktopWorkspaceTreeMessageSchema,
   type DesktopWorkspaceFileCategory,
   type DesktopWorkspaceTreeMessage,
 } from '../desktopWorkspaceExplorerMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
+import { createFirstRunWalkthrough } from './desktopOnboarding';
 
 interface WorkspaceTreeNode {
   name: string;
@@ -168,8 +174,16 @@ if (openWorkspaceButton == null) {
   throw new Error('TeXRA desktop open workspace button was not found.');
 }
 
+const firstRunWalkthrough = createFirstRunWalkthrough({
+  document,
+  dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
+  setRoute,
+});
+appRoot.append(firstRunWalkthrough.element);
+
 const commandPalette = createDesktopCommandPalette({
   document,
+  canOpen: () => !firstRunWalkthrough.isVisible(),
   actions: {
     showRoute: setRoute,
     showSettings: (tabIndex, agentSubTab) => {
@@ -189,6 +203,9 @@ const commandPalette = createDesktopCommandPalette({
     openWorkspaceFolder: () => {
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
     },
+    showFirstRunWalkthrough: () => {
+      firstRunWalkthrough.show();
+    },
   },
 });
 appRoot.append(commandPalette.element);
@@ -196,12 +213,17 @@ commandPaletteButton.addEventListener('click', commandPalette.open);
 openWorkspaceButton.addEventListener('click', () =>
   postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
 );
-requestWorkspaceTree();
 
 function isDesktopSetRouteMessage(
   message: unknown,
 ): message is DesktopSetRouteMessage {
   return DesktopSetRouteMessageSchema.safeParse(message).success;
+}
+
+function isDesktopOnboardingSetStateMessage(
+  message: unknown,
+): message is DesktopOnboardingSetStateMessage {
+  return DesktopOnboardingSetStateMessageSchema.safeParse(message).success;
 }
 
 function isDesktopSetLogMessage(
@@ -224,6 +246,12 @@ function setRoute(route: DesktopRoute): void {
 window.addEventListener('message', (event) => {
   if (isDesktopSetRouteMessage(event.data)) {
     setRoute(event.data.route);
+  } else if (isDesktopOnboardingSetStateMessage(event.data)) {
+    if (event.data.shouldShow) {
+      firstRunWalkthrough.show();
+    } else {
+      firstRunWalkthrough.hide();
+    }
   } else if (isDesktopSetThemeMessage(event.data)) {
     applyDesktopTheme(event.data.theme);
   } else if (isWorkspaceTreeMessage(event.data)) {
@@ -232,6 +260,8 @@ window.addEventListener('message', (event) => {
     renderLogSnapshot(event.data);
   }
 });
+requestWorkspaceTree();
+postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
 
 function isDesktopSetThemeMessage(
   message: unknown,

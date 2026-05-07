@@ -33,6 +33,7 @@ export interface DesktopMainViewIpcOptions {
   workspaceExplorer?: DesktopWorkspaceExplorer;
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
+  onboarding?: DesktopMessageHandler;
   logs?: DesktopLogIpcOptions;
   shellActions?: DesktopShellActions;
   modelListRefresh?: PromiseLike<void>;
@@ -98,6 +99,7 @@ export function installDesktopMainViewIpc(
     options.fileSelection,
     options.settings,
     options.progress,
+    options.onboarding,
     viewState,
     logs,
     shell,

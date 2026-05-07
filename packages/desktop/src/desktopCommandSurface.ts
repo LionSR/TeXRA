@@ -16,6 +16,7 @@ export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
+  SHOW_FIRST_RUN_WALKTHROUGH: 'texra.desktop.showFirstRunWalkthrough',
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
 
@@ -37,6 +38,7 @@ export const DESKTOP_COMMAND_IDS = [
   'texra.showAgents',
   'texra.showTools',
   'texra.showMultiAgent',
+  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly (CommandId | DesktopLocalCommandId)[];
 
@@ -55,6 +57,7 @@ export interface DesktopCommandActions {
   openDesktopDocs?(): void;
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
+  showFirstRunWalkthrough?(): void;
 }
 
 export interface DesktopSettingsTabMessage {
@@ -81,6 +84,11 @@ const DESKTOP_MENU_GROUPS = [
     'texra.showMultiAgent',
   ],
 ] as const satisfies readonly (readonly DesktopCommandId[])[];
+
+const DESKTOP_HELP_COMMANDS = [
+  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+  DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+] as const satisfies readonly DesktopCommandId[];
 
 const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
@@ -117,6 +125,14 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
       label: 'Open Logs Folder',
       category: 'TeXRA',
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+      label: 'Show First-Run Walkthrough',
+      category: 'Help',
     },
   ],
 ]);
@@ -208,6 +224,9 @@ export function dispatchDesktopCommand(
     case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
       actions.openWorkspaceFolder?.();
       return true;
+    case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
+      actions.showFirstRunWalkthrough?.();
+      return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
       actions.openDesktopDocs?.();
       return true;
@@ -290,7 +309,7 @@ export function buildDesktopMenuTemplate(
     {
       label: 'Help',
       role: 'help',
-      submenu: [commandItem(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS)],
+      submenu: DESKTOP_HELP_COMMANDS.map(commandItem),
     },
   ];
 }
