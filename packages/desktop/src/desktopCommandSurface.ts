@@ -15,6 +15,7 @@ import type { DesktopRoute } from './desktopShellMessages.js';
 export const DESKTOP_LOCAL_COMMANDS = {
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
+  SHOW_FIRST_RUN_WALKTHROUGH: 'texra.desktop.showFirstRunWalkthrough',
 } as const;
 
 type DesktopLocalCommandId =
@@ -25,6 +26,7 @@ export const DESKTOP_COMMAND_IDS = [
   'texra.showProgressView',
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
+  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   'texra.openSettings',
   'texra.showMemory',
   'texra.showAgentHistory',
@@ -48,6 +50,7 @@ export interface DesktopCommandActions {
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
+  showFirstRunWalkthrough?(): void;
 }
 
 export interface DesktopSettingsTabMessage {
@@ -74,6 +77,10 @@ const DESKTOP_MENU_GROUPS = [
   ],
 ] as const satisfies readonly (readonly DesktopCommandId[])[];
 
+const DESKTOP_HELP_COMMANDS = [
+  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+] as const satisfies readonly DesktopCommandId[];
+
 const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
   DesktopCommandMenuEntry
@@ -93,6 +100,14 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
       label: 'Open Logs Folder',
       category: 'TeXRA',
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+      label: 'Show First-Run Walkthrough',
+      category: 'Help',
     },
   ],
 ]);
@@ -181,6 +196,9 @@ export function dispatchDesktopCommand(
     case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
       actions.openWorkspaceFolder?.();
       return true;
+    case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
+      actions.showFirstRunWalkthrough?.();
+      return true;
     default:
       return assertNever(id);
   }
@@ -257,7 +275,10 @@ export function buildDesktopMenuTemplate(
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
-    { role: 'help' },
+    {
+      role: 'help',
+      submenu: DESKTOP_HELP_COMMANDS.map(commandItem),
+    },
   ];
 }
 

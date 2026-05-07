@@ -28,6 +28,7 @@ export interface DesktopMainViewIpcOptions {
   workspaceExplorer?: DesktopWorkspaceExplorer;
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
+  onboarding?: DesktopMessageHandler;
   shellActions?: DesktopShellActions;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
@@ -84,6 +85,7 @@ export function installDesktopMainViewIpc(
     options.fileSelection,
     options.settings,
     options.progress,
+    options.onboarding,
     viewState,
     shell,
     execution,

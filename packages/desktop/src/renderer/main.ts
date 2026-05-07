@@ -21,6 +21,11 @@ import {
   DESKTOP_LOCAL_COMMANDS,
 } from '../desktopCommandSurface';
 import {
+  DESKTOP_ONBOARDING_COMMANDS,
+  DesktopOnboardingSetStateMessageSchema,
+  type DesktopOnboardingSetStateMessage,
+} from '../desktopOnboardingMessages';
+import {
   DESKTOP_WORKSPACE_EXPLORER_COMMANDS,
   DesktopWorkspaceTreeMessageSchema,
   type DesktopWorkspaceFileCategory,
@@ -162,6 +167,9 @@ if (openLogButton == null) {
   throw new Error('TeXRA desktop open log button was not found.');
 }
 
+const firstRunWalkthrough = createFirstRunWalkthrough();
+appRoot.append(firstRunWalkthrough.element);
+
 const commandPalette = createDesktopCommandPalette({
   document,
   actions: {
@@ -180,6 +188,9 @@ const commandPalette = createDesktopCommandPalette({
     openWorkspaceFolder: () => {
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
     },
+    showFirstRunWalkthrough: () => {
+      firstRunWalkthrough.show();
+    },
   },
 });
 appRoot.append(commandPalette.element);
@@ -191,6 +202,7 @@ openLogButton.addEventListener('click', () =>
   postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
 );
 requestWorkspaceTree();
+postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
 
 function isDesktopSetRouteMessage(
   message: unknown,
@@ -202,6 +214,12 @@ function isThemeMessage(
   message: unknown,
 ): message is { command: typeof COMMON_COMMANDS.THEME_SET; theme: string } {
   return SetThemeMessageSchema.safeParse(message).success;
+}
+
+function isDesktopOnboardingSetStateMessage(
+  message: unknown,
+): message is DesktopOnboardingSetStateMessage {
+  return DesktopOnboardingSetStateMessageSchema.safeParse(message).success;
 }
 
 function setRoute(route: DesktopRoute): void {
@@ -217,6 +235,12 @@ function setRoute(route: DesktopRoute): void {
 window.addEventListener('message', (event) => {
   if (isDesktopSetRouteMessage(event.data)) {
     setRoute(event.data.route);
+  } else if (isDesktopOnboardingSetStateMessage(event.data)) {
+    if (event.data.shouldShow) {
+      firstRunWalkthrough.show();
+    } else {
+      firstRunWalkthrough.hide();
+    }
   } else if (isThemeMessage(event.data)) {
     applyDesktopTheme(event.data.theme);
   } else if (isWorkspaceTreeMessage(event.data)) {
@@ -282,6 +306,102 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
     );
   return container;
+}
+
+function createFirstRunWalkthrough(): {
+  element: HTMLElement;
+  show(): void;
+  hide(): void;
+} {
+  const element = document.createElement('section');
+  element.className = 'desktop-onboarding';
+  element.hidden = true;
+  element.setAttribute('role', 'dialog');
+  element.setAttribute('aria-modal', 'true');
+  element.setAttribute('aria-labelledby', 'desktop-onboarding-title');
+  element.innerHTML = `
+    <div class="desktop-onboarding-panel">
+      <header class="desktop-onboarding-header">
+        <span class="codicon codicon-info desktop-onboarding-icon" aria-hidden="true"></span>
+        <div>
+          <h1 id="desktop-onboarding-title">Welcome to TeXRA Desktop</h1>
+          <p>Start from a workspace, configure model access, choose an agent, and run without switching to VS Code.</p>
+        </div>
+      </header>
+      <ol class="desktop-onboarding-steps">
+        <li>
+          <span class="desktop-onboarding-step-index">1</span>
+          <div>
+            <strong>Open a workspace</strong>
+            <span>Pick the folder that contains the paper or project files.</span>
+          </div>
+        </li>
+        <li>
+          <span class="desktop-onboarding-step-index">2</span>
+          <div>
+            <strong>Set up model access</strong>
+            <span>Sign in for included access or add provider keys in Settings.</span>
+          </div>
+        </li>
+        <li>
+          <span class="desktop-onboarding-step-index">3</span>
+          <div>
+            <strong>Choose an agent</strong>
+            <span>Select a workflow agent, direct agent, or tool-use agent.</span>
+          </div>
+        </li>
+        <li>
+          <span class="desktop-onboarding-step-index">4</span>
+          <div>
+            <strong>Start a run</strong>
+            <span>Use the launcher and follow live output in Progress.</span>
+          </div>
+        </li>
+      </ol>
+      <footer class="desktop-onboarding-actions">
+        <button class="desktop-secondary-button" type="button" data-onboarding-settings>
+          Open Settings
+        </button>
+        <button class="desktop-secondary-button" type="button" data-onboarding-launcher>
+          Go to Launcher
+        </button>
+        <button class="desktop-primary-button" type="button" data-onboarding-dismiss>
+          Got it
+        </button>
+      </footer>
+    </div>
+  `;
+
+  const hide = (): void => {
+    element.hidden = true;
+  };
+  const show = (): void => {
+    element.hidden = false;
+    element
+      .querySelector<HTMLButtonElement>('[data-onboarding-dismiss]')
+      ?.focus();
+  };
+  const dismiss = (): void => {
+    hide();
+    postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS);
+  };
+
+  element
+    .querySelector<HTMLButtonElement>('[data-onboarding-settings]')
+    ?.addEventListener('click', () => setRoute('settings'));
+  element
+    .querySelector<HTMLButtonElement>('[data-onboarding-launcher]')
+    ?.addEventListener('click', () => setRoute('main'));
+  element
+    .querySelector<HTMLButtonElement>('[data-onboarding-dismiss]')
+    ?.addEventListener('click', dismiss);
+  element.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    dismiss();
+  });
+
+  return { element, show, hide };
 }
 
 function isWorkspaceTreeMessage(

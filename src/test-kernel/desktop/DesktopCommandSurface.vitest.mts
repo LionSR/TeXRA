@@ -19,6 +19,7 @@ interface DesktopCommandSurfaceModule {
   DESKTOP_LOCAL_COMMANDS: {
     OPEN_LOG_FOLDER: string;
     OPEN_WORKSPACE_FOLDER: string;
+    SHOW_FIRST_RUN_WALKTHROUGH: string;
   };
   DESKTOP_COMMAND_IDS: readonly string[];
   buildDesktopMenuTemplate(
@@ -77,6 +78,10 @@ describe('desktop command surface', () => {
     for (const entry of entries) {
       const catalogEntry = commandCatalogById.get(entry.id as CommandId);
       if (!catalogEntry) {
+        if (entry.id === 'texra.desktop.showFirstRunWalkthrough') {
+          expect(entry.category).toBe('Help');
+          continue;
+        }
         expect(entry.category).toBe('TeXRA');
         continue;
       }
@@ -121,6 +126,7 @@ describe('desktop command surface', () => {
     const actions = {
       openLogFolder: vi.fn(),
       openWorkspaceFolder: vi.fn(),
+      showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
@@ -141,6 +147,12 @@ describe('desktop command surface', () => {
     expect(
       dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER, actions),
     ).toBe(true);
+    expect(
+      dispatchDesktopCommand(
+        DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+        actions,
+      ),
+    ).toBe(true);
 
     expect(actions.showRoute).toHaveBeenNthCalledWith(1, 'main');
     expect(actions.showRoute).toHaveBeenNthCalledWith(2, 'progress');
@@ -155,6 +167,12 @@ describe('desktop command surface', () => {
     );
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
+    expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
+    expect(
+      commandCatalogById.has(
+        DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH as CommandId,
+      ),
+    ).toBe(false);
   });
 
   it('builds settings-tab messages from one shared helper', async () => {
@@ -215,5 +233,10 @@ describe('desktop command surface', () => {
     submenu[8].click?.();
     expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
+
+    const helpMenu = menu.find((item) => item.role === 'help');
+    expect(helpMenu?.submenu?.map((item) => item.label)).toEqual([
+      'Show First-Run Walkthrough',
+    ]);
   });
 });

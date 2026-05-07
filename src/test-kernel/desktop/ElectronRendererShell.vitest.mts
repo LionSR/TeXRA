@@ -62,4 +62,13 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('buildDesktopSettingsTabMessage');
     expect(rendererMain).toContain('showSettings: (tabIndex, agentSubTab)');
   });
+
+  it('mounts desktop-only first-run onboarding controls', () => {
+    const rendererMain = readRendererMain();
+
+    expect(rendererMain).toContain('createFirstRunWalkthrough');
+    expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
+    expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.DISMISS');
+    expect(rendererMain).toContain('showFirstRunWalkthrough');
+  });
 });
