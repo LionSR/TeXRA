@@ -74,7 +74,7 @@ export async function createHelperModelKit(): Promise<HelperModelResult> {
     return { kit: undefined, reason };
   }
 
-  const handler = createModelHandler(MODEL_CONFIGS[modelName]);
+  const handler = await createModelHandler(MODEL_CONFIGS[modelName]);
   handler.setOutputStreaming(false);
   handler.setProgressViewEnabled(false);
 
