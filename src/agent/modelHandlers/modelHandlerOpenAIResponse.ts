@@ -47,6 +47,7 @@ import type { FileLocation } from '@utils/files/taskRunStorage';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { tagOpenAISdkError } from './support/sdkErrorAdapters';
 
 // Local file imports
 import {
@@ -742,6 +743,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.clearPendingBackgroundResponse();
         throw err;
       }
+      tagOpenAISdkError(err, this.config.provider);
       // Transient failures (no status / 5xx / 429 / 408) — the background
       // response is likely still alive server-side, so retain the ID and
       // rethrow so the outer retry resumes the same ID. Definitive failures
@@ -1600,6 +1602,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.inFlight = true;
     try {
       return await this.createResponseImpl(options);
+    } catch (err) {
+      tagOpenAISdkError(err, this.config.provider);
+      throw err;
     } finally {
       this.inFlight = false;
     }
@@ -1794,6 +1799,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           maxOutputTokens = validation.adjustedMaxTokens;
         }
       } catch (err) {
+        tagOpenAISdkError(err, this.config.provider);
         if (isContextWindowError(err)) throw err;
         this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Applying fallback cap.`,
@@ -2027,6 +2033,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         updatedMessages: compactedMessages,
       };
     } catch (error) {
+      tagOpenAISdkError(error, this.config.provider);
+
       // Extract error details for diagnostics (useful for relay errors)
       const { rawErrorBody } = formatProviderHttpError(error);
       if (rawErrorBody) {
