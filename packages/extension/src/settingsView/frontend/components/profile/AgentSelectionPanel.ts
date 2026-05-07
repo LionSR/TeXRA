@@ -16,7 +16,8 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, designTokens } from '@shared/styles';
+import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - shared schemas and events
 import {
@@ -53,6 +54,7 @@ export class AgentSelectionPanel extends LitElement {
   static override styles = [
     designTokens,
     codiconStyles,
+    commonViewStyles,
     css`
       :host {
         display: block;
@@ -245,30 +247,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-action-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-small) var(--spacing-medium);
-        font-size: var(--font-size-sm);
-        font-family: inherit;
-        color: var(--texra-foreground);
-        background: var(--texra-input-background);
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius);
-        cursor: pointer;
-        transition:
-          background var(--transition-fast),
-          border-color var(--transition-fast);
-      }
-
-      .agent-action-btn:hover {
-        background: var(--texra-list-hoverBackground);
-        border-color: var(--texra-focusBorder);
-      }
-
-      .agent-action-btn:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
-        outline-offset: 1px;
+        flex-shrink: 0;
       }
 
       .agent-count {
@@ -328,28 +307,17 @@ export class AgentSelectionPanel extends LitElement {
         white-space: nowrap;
       }
 
-      .agent-action-btn--danger {
+      .agent-action-btn--danger::part(base) {
         color: var(--texra-errorForeground, #f44);
         border-color: var(--texra-errorForeground, #f44);
       }
 
-      .agent-action-btn--danger:hover {
+      .agent-action-btn--danger:hover::part(base) {
         background: var(
           --texra-inputValidation-errorBackground,
           rgba(255, 0, 0, 0.1)
         );
         border-color: var(--texra-errorForeground, #f44);
-      }
-
-      .agent-action-btn--primary {
-        color: var(--texra-button-foreground, #fff);
-        background: var(--texra-button-background);
-        border-color: var(--texra-button-background);
-      }
-
-      .agent-action-btn--primary:hover {
-        background: var(--texra-button-hoverBackground);
-        border-color: var(--texra-button-hoverBackground);
       }
 
       .agent-delete-confirm {
@@ -722,14 +690,13 @@ export class AgentSelectionPanel extends LitElement {
         <div class="agent-detail-actions">
           ${agent.hasPath
             ? html`
-                <button
-                  class="agent-action-btn"
-                  @click=${() => this.handleOpenYaml(agent, 'base')}
-                  title="Open agent YAML definition"
-                >
-                  <span class="codicon codicon-file-code"></span>
-                  Open YAML
-                </button>
+                ${renderLabeledActionButton({
+                  icon: 'file-lines',
+                  text: 'Open YAML',
+                  label: 'Open agent YAML definition',
+                  className: 'agent-action-btn',
+                  onClick: () => this.handleOpenYaml(agent, 'base'),
+                })}
               `
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE &&
@@ -737,62 +704,66 @@ export class AgentSelectionPanel extends LitElement {
           !agent.hasPath &&
           !this.desktopHost
             ? html`
-                <button
-                  class="agent-action-btn"
-                  @click=${() => this.handleViewRemotePrompt(agent)}
-                  title="View the remote agent's prompt definition (read-only)"
-                >
-                  <span class="codicon codicon-file-code"></span>
-                  View Prompt
-                </button>
+                ${renderLabeledActionButton({
+                  icon: 'file-lines',
+                  text: 'View Prompt',
+                  label: "View the remote agent's prompt definition",
+                  title:
+                    "View the remote agent's prompt definition (read-only)",
+                  className: 'agent-action-btn',
+                  onClick: () => this.handleViewRemotePrompt(agent),
+                })}
               `
             : nothing}
           ${agent.hasMultiplePath
             ? html`
-                <button
-                  class="agent-action-btn"
-                  @click=${() => this.handleOpenYaml(agent, 'multiple')}
-                  title="Open the multi-output prompts — alternate instructions used when generating multiple alternatives"
-                >
-                  <span class="codicon codicon-files"></span>
-                  Multi-Output Prompts
-                </button>
+                ${renderLabeledActionButton({
+                  icon: 'file-lines',
+                  text: 'Multi-Output Prompts',
+                  label: 'Open the multi-output prompts',
+                  title:
+                    'Open the multi-output prompts — alternate instructions used when generating multiple alternatives',
+                  className: 'agent-action-btn',
+                  onClick: () => this.handleOpenYaml(agent, 'multiple'),
+                })}
               `
             : nothing}
           ${agent.hasPath
             ? html`
-                <button
-                  class="agent-action-btn"
-                  @click=${() => this.handleRevealAgentFile(agent)}
-                  title="Show this file in your system file explorer"
-                >
-                  <span class="codicon codicon-folder-opened"></span>
-                  Reveal in File Explorer
-                </button>
+                ${renderLabeledActionButton({
+                  icon: 'folder-open',
+                  text: 'Reveal in File Explorer',
+                  label: 'Reveal in File Explorer',
+                  title: 'Show this file in your system file explorer',
+                  className: 'agent-action-btn',
+                  onClick: () => this.handleRevealAgentFile(agent),
+                })}
               `
             : nothing}
           ${builtIn && !this.desktopHost
             ? html`
-                <button
-                  class="agent-action-btn agent-action-btn--primary"
-                  @click=${() => this.handleCustomizeAgent(agent)}
-                  title="Create an editable copy in your custom agents folder"
-                >
-                  <span class="codicon codicon-copy"></span>
-                  Customize
-                </button>
+                ${renderLabeledActionButton({
+                  icon: 'pencil',
+                  text: 'Customize',
+                  label: 'Customize agent',
+                  title: 'Create an editable copy in your custom agents folder',
+                  className: 'agent-action-btn',
+                  appearance: 'filled',
+                  variant: 'brand',
+                  onClick: () => this.handleCustomizeAgent(agent),
+                })}
               `
             : nothing}
           ${isCustom && !this.desktopHost
             ? html`
-                <button
-                  class="agent-action-btn agent-action-btn--danger"
-                  @click=${() => this.handleDeleteCustomAgent(agent)}
-                  title="Delete this custom agent"
-                >
-                  <span class="codicon codicon-trash"></span>
-                  Delete
-                </button>
+                ${renderLabeledActionButton({
+                  icon: 'trash',
+                  text: 'Delete',
+                  label: 'Delete custom agent',
+                  title: 'Delete this custom agent',
+                  className: 'agent-action-btn agent-action-btn--danger',
+                  onClick: () => this.handleDeleteCustomAgent(agent),
+                })}
               `
             : nothing}
         </div>
@@ -804,18 +775,20 @@ export class AgentSelectionPanel extends LitElement {
                   Delete custom agent "${agent.name}"? This cannot be undone.
                 </span>
                 <div class="agent-delete-confirm-actions">
-                  <button
-                    class="agent-action-btn agent-action-btn--danger"
-                    @click=${() => this.handleDeleteCustomAgent(agent)}
-                  >
-                    Delete
-                  </button>
-                  <button
-                    class="agent-action-btn"
-                    @click=${() => this.cancelDelete()}
-                  >
-                    Cancel
-                  </button>
+                  ${renderLabeledActionButton({
+                    icon: 'trash',
+                    text: 'Delete',
+                    label: 'Confirm delete custom agent',
+                    className: 'agent-action-btn agent-action-btn--danger',
+                    onClick: () => this.handleDeleteCustomAgent(agent),
+                  })}
+                  ${renderLabeledActionButton({
+                    icon: 'xmark',
+                    text: 'Cancel',
+                    label: 'Cancel delete custom agent',
+                    className: 'agent-action-btn',
+                    onClick: () => this.cancelDelete(),
+                  })}
                 </div>
               </div>
             `

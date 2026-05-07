@@ -541,28 +541,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-group-key-button {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-tiny);
-    padding: var(--spacing-tiny) var(--spacing-small);
-    border: var(--border-thin) solid var(--color-border);
-    border-radius: var(--border-radius-small);
-    background: var(--texra-button-secondaryBackground, transparent);
-    color: var(--texra-button-secondaryForeground, var(--texra-foreground));
-    cursor: pointer;
-    font: inherit;
-  }
-
-  .provider-group-key-button:hover {
-    background: var(
-      --texra-button-secondaryHoverBackground,
-      var(--texra-list-hoverBackground)
-    );
-  }
-
-  .provider-group-key-button:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
-    outline-offset: 1px;
+    flex-shrink: 0;
   }
 
   .provider-group-content {
