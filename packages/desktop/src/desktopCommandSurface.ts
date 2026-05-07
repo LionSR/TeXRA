@@ -3,6 +3,7 @@ import {
   type CommandId,
   type CommandKeybinding,
 } from '@commands/catalog';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { type AgentCategory } from '@shared/schemas/agent';
 import {
@@ -25,30 +26,56 @@ export const DESKTOP_DOCS_URL = 'https://texra.ai/guide/desktop';
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
 
-export const DESKTOP_COMMAND_IDS = [
-  'texra.showMainView',
-  'texra.showProgressView',
-  DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-  DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-  DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
-  'texra.openSettings',
-  'texra.showMemory',
-  'texra.showAgentHistory',
-  'texra.showModels',
-  'texra.showAgents',
-  'texra.showTools',
-  'texra.showMultiAgent',
+const DESKTOP_MENU_GROUPS = [
+  [
+    'texra.showMainView',
+    'texra.showProgressView',
+    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+    DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
+    'texra.openSettings',
+    'texra.mainView.reset',
+  ],
+  [
+    'texra.execute',
+    'texra.runSetupAssistant',
+    'texra.showImportOptions',
+    'texra.showMemory',
+    'texra.showAgentHistory',
+    'texra.showModels',
+    'texra.showAgents',
+    'texra.showTools',
+    'texra.showMultiAgent',
+    'texra.openGettingStarted',
+    'texra.cleanOutput',
+    'texra.cleanBuild',
+  ],
+] as const satisfies readonly (readonly (
+  | CommandId
+  | DesktopLocalCommandId
+)[])[];
+
+const DESKTOP_HELP_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-] as const satisfies readonly (CommandId | DesktopLocalCommandId)[];
+] as const satisfies readonly DesktopLocalCommandId[];
 
-export type DesktopCommandId = (typeof DESKTOP_COMMAND_IDS)[number];
+type DesktopMenuCommandId = (typeof DESKTOP_MENU_GROUPS)[number][number];
+type DesktopHelpCommandId = (typeof DESKTOP_HELP_COMMANDS)[number];
+export type DesktopCommandId = DesktopMenuCommandId | DesktopHelpCommandId;
+
+export const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
+  ...DESKTOP_MENU_GROUPS.flat(),
+  ...DESKTOP_HELP_COMMANDS,
+];
 
 export interface DesktopCommandMenuEntry {
   id: DesktopCommandId;
   label: string;
   category: string;
   accelerator?: string;
+  enabled: boolean;
+  unavailableReason?: string;
 }
 
 export interface DesktopCommandActions {
@@ -58,6 +85,7 @@ export interface DesktopCommandActions {
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
   showFirstRunWalkthrough?(): void;
+  resetMainView?(): void;
 }
 
 export interface DesktopSettingsTabMessage {
@@ -66,29 +94,11 @@ export interface DesktopSettingsTabMessage {
   agentSubTab?: AgentCategory;
 }
 
-const DESKTOP_MENU_GROUPS = [
-  [
-    'texra.showMainView',
-    'texra.showProgressView',
-    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-    DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
-    'texra.openSettings',
-  ],
-  [
-    'texra.showMemory',
-    'texra.showAgentHistory',
-    'texra.showModels',
-    'texra.showAgents',
-    'texra.showTools',
-    'texra.showMultiAgent',
-  ],
-] as const satisfies readonly (readonly DesktopCommandId[])[];
-
-const DESKTOP_HELP_COMMANDS = [
-  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
-  DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-] as const satisfies readonly DesktopCommandId[];
+export interface DesktopMainViewResetMessage {
+  command: typeof MAIN_VIEW_COMMANDS.STATE_RESTORE;
+  state: Record<string, never>;
+  isResetOperation: true;
+}
 
 const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
@@ -100,6 +110,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
       label: 'Desktop Documentation',
       category: 'Help',
+      enabled: true,
     },
   ],
   [
@@ -108,6 +119,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
       label: 'Show Logs',
       category: 'TeXRA',
+      enabled: true,
     },
   ],
   [
@@ -117,6 +129,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       label: 'Open Folder',
       category: 'TeXRA',
       accelerator: 'CommandOrControl+O',
+      enabled: true,
     },
   ],
   [
@@ -125,6 +138,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
       label: 'Open Logs Folder',
       category: 'TeXRA',
+      enabled: true,
     },
   ],
   [
@@ -133,7 +147,32 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
       label: 'Show First-Run Walkthrough',
       category: 'Help',
+      enabled: true,
     },
+  ],
+]);
+
+const DESKTOP_UNAVAILABLE_COMMANDS = new Map<CommandId, string>([
+  [
+    'texra.execute',
+    'Use the Launcher execute button after choosing an agent and files.',
+  ],
+  [
+    'texra.runSetupAssistant',
+    'The setup assistant agent is still VS Code-only.',
+  ],
+  ['texra.showImportOptions', 'Project import choices are still VS Code-only.'],
+  [
+    'texra.openGettingStarted',
+    'The VS Code walkthrough is not available in desktop.',
+  ],
+  [
+    'texra.cleanOutput',
+    'Workspace cleanup commands are not wired in desktop yet.',
+  ],
+  [
+    'texra.cleanBuild',
+    'Workspace cleanup commands are not wired in desktop yet.',
   ],
 ]);
 
@@ -148,6 +187,7 @@ export function getDesktopCommandMenuEntries(
 
     const entry = commandCatalogById.get(id);
     if (!entry) throw new Error(`Missing command catalog entry: ${id}`);
+    const unavailableReason = DESKTOP_UNAVAILABLE_COMMANDS.get(id);
 
     const accelerator =
       entry.keybinding == null
@@ -158,6 +198,8 @@ export function getDesktopCommandMenuEntries(
       label: entry.shortTitle ?? entry.title,
       category: entry.category,
       ...(accelerator && { accelerator }),
+      enabled: unavailableReason == null,
+      ...(unavailableReason && { unavailableReason }),
     };
   });
 }
@@ -200,6 +242,10 @@ export function dispatchDesktopCommand(
     case 'texra.openSettings':
       actions.showSettings();
       return true;
+    case 'texra.mainView.reset':
+      if (!actions.resetMainView) return false;
+      actions.resetMainView();
+      return true;
     case 'texra.showMemory':
       actions.showSettings(SETTINGS_TAB.MEMORY);
       return true;
@@ -219,17 +265,28 @@ export function dispatchDesktopCommand(
       actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER:
-      actions.openLogFolder?.();
+      if (!actions.openLogFolder) return false;
+      actions.openLogFolder();
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
-      actions.openWorkspaceFolder?.();
+      if (!actions.openWorkspaceFolder) return false;
+      actions.openWorkspaceFolder();
       return true;
     case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
-      actions.showFirstRunWalkthrough?.();
+      if (!actions.showFirstRunWalkthrough) return false;
+      actions.showFirstRunWalkthrough();
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
-      actions.openDesktopDocs?.();
+      if (!actions.openDesktopDocs) return false;
+      actions.openDesktopDocs();
       return true;
+    case 'texra.execute':
+    case 'texra.runSetupAssistant':
+    case 'texra.showImportOptions':
+    case 'texra.openGettingStarted':
+    case 'texra.cleanOutput':
+    case 'texra.cleanBuild':
+      return false;
     default:
       return assertNever(id);
   }
@@ -265,6 +322,14 @@ export function buildDesktopSettingsTabMessage(
   };
 }
 
+export function buildDesktopMainViewResetMessage(): DesktopMainViewResetMessage {
+  return {
+    command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
+    state: {},
+    isResetOperation: true,
+  };
+}
+
 export function buildDesktopMenuTemplate(
   actions: DesktopCommandActions,
   platform: NodeJS.Platform = process.platform,
@@ -281,7 +346,10 @@ export function buildDesktopMenuTemplate(
     return {
       label: entry.label,
       ...(entry.accelerator && { accelerator: entry.accelerator }),
+      ...(entry.unavailableReason && { toolTip: entry.unavailableReason }),
+      enabled: entry.enabled,
       click: () => {
+        if (!entry.enabled) return;
         dispatchDesktopCommand(id, actions);
       },
     };
