@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import { platform } from '@platform/platform';
-import { getAgentsBySource, loadAgents } from '@agent/index/agentRegistry';
-import { toRemoteAgentProfileData } from '@agent/index/remoteAgentProfileData';
+import {
+  getAgentsBySource,
+  loadAgents,
+  toRemoteAgentProfileData,
+} from '@agent/index';
 import {
   DEFAULT_OAUTH_PROVIDER,
   DEFAULT_SESSION_EXPIRY_MS,
