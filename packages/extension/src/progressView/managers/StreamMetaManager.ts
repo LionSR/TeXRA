@@ -107,10 +107,12 @@ export class StreamMetaManager {
     agent: string;
     model: string;
     inputFile: string;
+    outputFiles?: readonly string[];
   }): StreamTabId[] {
     const wantAgent = getCleanAgentName(match.agent);
     const wantModel = match.model;
     const wantFile = match.inputFile.replaceAll('\\', '/');
+    const wantOutputFiles = normalizeOutputFiles(match.outputFiles);
     const result: StreamTabId[] = [];
     for (const [stream, state] of this.taskStates) {
       if (!isWorkflowTaskState(state)) continue;
@@ -118,7 +120,8 @@ export class StreamMetaManager {
       if (
         getCleanAgentName(cfg.agent) !== wantAgent ||
         cfg.model !== wantModel ||
-        cfg.inputFile.replaceAll('\\', '/') !== wantFile
+        cfg.inputFile.replaceAll('\\', '/') !== wantFile ||
+        !sameOutputFiles(normalizeOutputFiles(cfg.outputFiles), wantOutputFiles)
       ) {
         continue;
       }
@@ -283,4 +286,16 @@ export class StreamMetaManager {
       ...(description && { description }),
     };
   }
+}
+
+function normalizeOutputFiles(outputFiles?: readonly string[]): string[] {
+  return (outputFiles ?? [])
+    .map((file) => file.replaceAll('\\', '/'))
+    .filter((file) => file.length > 0)
+    .sort();
+}
+
+function sameOutputFiles(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((file, index) => file === right[index]);
 }

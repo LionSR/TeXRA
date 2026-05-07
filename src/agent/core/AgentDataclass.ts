@@ -16,8 +16,8 @@ export const AgentSettingBaseSchema = z.strictObject({
   documentTag: z
     .string()
     .min(1, 'documentTag cannot be empty')
-    .prefault('documents'),
-  endTag: z.string().prefault('</documents>'),
+    .prefault('latex_document'),
+  endTag: z.string().prefault('</latex_document>'),
   temperature: z.number().min(0).max(1).prefault(1.0),
   requiredFiles: z.record(z.string(), z.string()).prefault({}),
   requiredFilesInternal: z.record(z.string(), z.string()).prefault({}),
@@ -78,7 +78,7 @@ function normalizeAgentSettingInput(input: unknown): unknown {
     const docTag =
       typeof rest.documentTag === 'string' && rest.documentTag.length > 0
         ? rest.documentTag
-        : 'documents';
+        : 'latex_document';
     rest.endTag = `</${docTag}>`;
   }
 

@@ -145,6 +145,7 @@ async function handlePack(config: unknown): Promise<void> {
           agent: data.agent,
           model: data.model,
           inputFile: data.inputFile,
+          outputFiles: data.outputFiles,
         },
       };
     },
@@ -166,6 +167,7 @@ async function handlePackSingle(
         agent: data.agent,
         model: data.model,
         inputFile: data.inputFile,
+        outputFiles: [],
       },
     }),
   );
@@ -188,6 +190,7 @@ async function handlePackMultiple(
         agent: data.agent,
         model: data.model,
         inputFile: data.inputFile,
+        outputFiles: data.outputFiles,
       },
     }),
   );

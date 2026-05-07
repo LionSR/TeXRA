@@ -51,7 +51,7 @@ prompts:
 
       {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{OUTPUT_FILES_ORDER[0]}">
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       [HH:MM:SS:MS] SpeakerName: INITIAL_TRANSCRIPT_WITH_SPEAKERS_AND_EQUATIONS
       </document>
       </documents>
@@ -79,7 +79,7 @@ prompts:
 
       {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{OUTPUT_FILES_ORDER[0]}">
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       [HH:MM:SS:MS] SpeakerName: REFINED_TRANSCRIPT_WITH_SECTIONS_SPEAKERS_AND_EQUATIONS
       </document>
       </documents>

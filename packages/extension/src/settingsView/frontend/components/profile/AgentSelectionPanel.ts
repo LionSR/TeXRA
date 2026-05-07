@@ -681,7 +681,7 @@ export class AgentSelectionPanel extends LitElement {
                   text: 'Open YAML',
                   label: 'Open agent YAML definition',
                   className: 'agent-action-btn',
-                  onClick: () => this.handleOpenYaml(agent, 'base'),
+                  onClick: () => this.handleOpenYaml(agent),
                 })}
               `
             : nothing}

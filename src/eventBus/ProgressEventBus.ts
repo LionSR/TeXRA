@@ -82,6 +82,7 @@ export interface ProgressEventPayloads {
           agent: string;
           model: string;
           inputFile: string;
+          outputFiles?: readonly string[];
         };
       };
   setTaskState: SetTaskStatePayload;

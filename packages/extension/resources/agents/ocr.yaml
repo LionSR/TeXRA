@@ -50,7 +50,7 @@ prompts:
 
       {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{OUTPUT_FILES_ORDER[0]}">
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       {LATEX_OCR_CONTENT}
       </document>
       </documents>
@@ -74,7 +74,7 @@ prompts:
 
       {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{OUTPUT_FILES_ORDER[0]}">
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       {REFINED_LATEX_OCR_CONTENT}
       </document>
       </documents>

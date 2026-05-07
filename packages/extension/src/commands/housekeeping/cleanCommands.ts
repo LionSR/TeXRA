@@ -83,6 +83,7 @@ async function handleCleanSingle(
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
+      outputFiles: [],
     },
   });
 }
@@ -115,6 +116,7 @@ async function handleCleanMultiple(
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
+      outputFiles,
     },
   });
 }
@@ -184,6 +186,7 @@ export async function handleClean(config: unknown): Promise<void> {
               agent,
               model,
               inputFile,
+              outputFiles,
             },
           },
     );

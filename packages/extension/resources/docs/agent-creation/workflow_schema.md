@@ -17,8 +17,8 @@ settings:
   rounds: 2 # 1 or 2 (default 2)
   temperature: 0.1 # 0.1 for editing, 0.5-0.8 for creative tasks
   outputExt: tex # MUST be "tex" — TeXRA is a LaTeX tool
-  documentTag: latex_document
-  endTag: '</latex_document>'
+  documentTag: documents
+  endTag: '</documents>'
   prefills: # MUST have exactly `rounds` entries
     - '<scratchpad>'
     - '<scratchpad>'
@@ -38,9 +38,9 @@ prompts:
     <instruction>{{ INSTRUCTION }}</instruction>
   userRequest: # MUST be an array with exactly `rounds` entries
     - |
-      [Round 1: plan in <scratchpad>, then emit output wrapped in <latex_document>]
+      [Round 1: plan in <scratchpad>, then emit output as <documents><document name="output.tex">...</document></documents>]
     - |
-      [Round 2: reflect in <scratchpad>, then emit the refined <latex_document>]
+      [Round 2: reflect in <scratchpad>, then emit the refined <documents><document name="output.tex">...</document></documents>]
 ```
 
 ## Critical rules
@@ -103,10 +103,10 @@ Example output format in `userRequest`:
 ```
 {% if OUTPUT_FILES_ORDER %}
 <documents>
-<document name="{OUTPUT_FILES_ORDER[0]}">
+<document name="{{ OUTPUT_FILES_ORDER[0] }}">
 % content for first output
 </document>
-<document name="{OUTPUT_FILES_ORDER[1]}">
+<document name="{{ OUTPUT_FILES_ORDER[1] }}">
 % content for second output
 </document>
 </documents>
@@ -118,11 +118,6 @@ Example output format in `userRequest`:
 </documents>
 {% endif %}
 ```
-
-Note: `{OUTPUT_FILES_ORDER[0]}` uses single braces — this is a literal hint
-to the model, not a Nunjucks expression. The model substitutes the actual
-filename because `{{ OUTPUT_FILES_ORDER }}` is rendered nearby with the full
-list.
 
 ## Inheritance
 
@@ -137,8 +132,8 @@ description: Improves writing quality and clarity based on your instructions.
 
 settings:
   agentCategory: workflow
-  documentTag: latex_document
-  endTag: '</latex_document>'
+  documentTag: documents
+  endTag: '</documents>'
   outputExt: tex
   prefills:
     - '<scratchpad>'
@@ -173,7 +168,8 @@ prompts:
   userRequest:
     - |
       Brainstorm in <scratchpad>, then output the revised LaTeX inside
-      <latex_document> tags.
+      <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
     - |
-      Reflect in <scratchpad>, then emit the improved <latex_document>.
+      Reflect in <scratchpad>, then emit the improved
+      <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
 ```

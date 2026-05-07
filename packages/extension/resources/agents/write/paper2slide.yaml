@@ -67,7 +67,7 @@ prompts:
 
       {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{OUTPUT_FILES_ORDER[0]}">
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       \documentclass{beamer}
 
       \usetheme{metropolis}
@@ -169,7 +169,7 @@ prompts:
 
       {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{OUTPUT_FILES_ORDER[0]}">
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       % Complete revised LaTeX Beamer presentation here
       </document>
       </documents>

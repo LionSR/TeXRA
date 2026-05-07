@@ -20,15 +20,15 @@ prompts:
     CRITICAL RULES:
     - agentCategory MUST be "workflow" (not "toolUse"). Workflow agents do NOT call tools.
     - outputExt MUST be "tex" (not "md", "txt", or anything else). TeXRA is a LaTeX tool.
-    - documentTag defines the XML wrapper for output (e.g. "latex_document").
-    - endTag MUST match documentTag as a closing XML tag (e.g. "</latex_document>").
+    - documentTag SHOULD be "documents" for new workflow agents.
+    - endTag MUST match documentTag as a closing XML tag (e.g. "</documents>").
     - Infer appropriate settings from the agent's description:
       - isRewrite: true when the agent edits/revises/corrects existing documents, false when it creates new content.
       - temperature: low (0.1) for editing/correction tasks, higher (0.5-0.8) for creative/generation tasks.
       - rounds: 1 for simple single-pass tasks, 2 for tasks that benefit from reflection.
     - userRequest is an array with exactly as many entries as rounds (1 or 2).
     - prefills is OPTIONAL. Omit it unless the agent should skip preamble and force
-      the response to start with a specific token (e.g., - "<latex_document>").
+      the response to start with a specific token (e.g., - "<documents>").
       If you do include prefills, the array length MUST equal the number of rounds.
     - All fields with defaults can be omitted if the default value is acceptable,
       BUT outputExt defaults to "txt" so it must always be set explicitly to "tex".
@@ -60,8 +60,8 @@ prompts:
     description: <one-line description>
     settings:
       agentCategory: workflow
-      documentTag: latex_document
-      endTag: </latex_document>
+      documentTag: documents
+      endTag: </documents>
       outputExt: tex
       isRewrite: <true if editing existing docs, false if creating new>
       temperature: <0.1 for precise editing, 0.5-0.8 for creative>
@@ -77,11 +77,11 @@ prompts:
          Should include an <instruction>{{ INSTRUCTION }}</instruction> block.>
       userRequest:
         - |
-          <Round 1: Direct instruction to produce the output wrapped in <latex_document> tags.>
+          <Round 1: Direct instruction to produce the output as <documents><document name="output.tex">...</document></documents>.>
         # For 2-round agents, add a second entry:
         # - |
         #   <Round 2: Reflection and refinement instruction with bullet-form failure-mode probes,
-        #    then output the updated <latex_document>.>
+        #    then output the updated <documents><document name="output.tex">...</document></documents>.>
 
     Here is a complete real-world example for reference (the "polish" agent):
 
@@ -89,8 +89,8 @@ prompts:
     description: Improves writing quality and clarity based on your specific instructions.
     settings:
       agentCategory: workflow
-      documentTag: latex_document
-      endTag: </latex_document>
+      documentTag: documents
+      endTag: </documents>
       outputExt: tex
     prompts:
       systemPrompt: |
@@ -116,7 +116,7 @@ prompts:
         <instruction>{{ INSTRUCTION }}</instruction>
       userRequest:
         - |
-          Output the revised \LaTeX wrapped in <latex_document> tags, focusing solely on the instruction.
+          Output the revised \LaTeX as <documents><document name="{{ INPUT_FILE }}">...</document></documents>, focusing solely on the instruction.
         - |
           Critically reflect on the changes and output a further enhanced version. Check for these
           failure modes and fix any you find:
@@ -126,14 +126,14 @@ prompts:
               \item Did you add generic filler sentences? Use ``show not tell.''
               \item Did you change anything NOT required by the instruction? If so, revert it.
           \end{itemize}
-          Output the further enhanced <latex_document>.
+          Output the further enhanced content as <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
 
     IMPORTANT REMINDERS:
     - outputExt MUST be "tex", never "md" or "txt".
     - The documentTag in prompts must match the settings.documentTag.
     - userRequest must be an array with exactly as many entries as rounds (1 or 2).
     - Omit prefills by default; only add it (with one entry per round) when the agent should
-      skip preamble and force the response to start with a specific token like "<latex_document>".
+      skip preamble and force the response to start with a specific token like "<documents>".
     - Include {{ INSTRUCTION }} somewhere in the prompts so the user's instructions are passed through.
     - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.
 

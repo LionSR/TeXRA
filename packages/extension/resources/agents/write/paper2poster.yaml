@@ -77,7 +77,7 @@ prompts:
 
       {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{OUTPUT_FILES_ORDER[0]}">
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       {{ TEMPLATE_POSTER_CONTENT }}
       </document>
       </documents>
@@ -108,7 +108,7 @@ prompts:
 
       {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{OUTPUT_FILES_ORDER[0]}">
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       % Complete revised LaTeX Beamer poster here
       </document>
       </documents>

@@ -15,6 +15,7 @@ import {
   type FileLocation,
   type StorageKey,
 } from '@shared/schemas';
+import { AbsoluteFS } from '@utils/files';
 
 import {
   OutputFileProcessor,
@@ -28,6 +29,18 @@ import {
   type OutputDependencies,
 } from './outputState';
 import type { XmlOutputManager } from './XmlOutputManager';
+
+const NAMED_DOCUMENT_TAG_PATTERN = /<document\b[^>]*\bname\s*=/;
+
+async function shouldUseMultiDocumentPath(
+  outputLocation: FileLocation,
+  documentTag: string,
+): Promise<boolean> {
+  if (documentTag === 'documents') return true;
+
+  const outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
+  return NAMED_DOCUMENT_TAG_PATTERN.test(outputContent);
+}
 
 // ============================================================================
 // Helpers
@@ -92,11 +105,14 @@ export async function extractFilesFromXml(
 
       const fileProcessor = new OutputFileProcessor(processingContext);
 
-      // Unified protocol: documentTag === 'documents' means the model always
-      // emits <documents><document name="..."> containers (N≥1).
-      // Legacy agents with a custom documentTag (e.g. 'latex_document') use
-      // single-document extraction for backward compatibility.
-      const useMultiDocumentPath = deps.setting.documentTag === 'documents';
+      // Unified protocol emits <documents><document name="..."> containers
+      // (N >= 1). Legacy plural wrappers can also contain named <document>
+      // children, so route by the actual payload shape instead of the wrapper
+      // tag alone.
+      const useMultiDocumentPath = await shouldUseMultiDocumentPath(
+        outputLocation,
+        deps.setting.documentTag,
+      );
 
       if (useMultiDocumentPath) {
         await fileProcessor.processMultipleOutputs(

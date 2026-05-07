@@ -15,6 +15,7 @@ export type ClearMissingOutputsOptions =
         agent: string;
         model: string;
         inputFile: string;
+        outputFiles?: readonly string[];
       };
     };
 
