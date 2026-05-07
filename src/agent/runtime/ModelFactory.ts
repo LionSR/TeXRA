@@ -1,16 +1,5 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
-import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
-import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
-import { ModelHandlerXAI } from '@agent/modelHandlers/modelHandlerXAI';
-import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
-import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
-import { ModelHandlerMiniMax } from '@agent/modelHandlers/modelHandlerMiniMax';
-import { ModelHandlerGLM } from '@agent/modelHandlers/modelHandlerGLM';
-import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
-import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import * as logger from '@agent/core/logger';
@@ -23,23 +12,43 @@ import { LEVEL_TO_EFFORT } from './reasoningEffort';
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
 
+type ModelHandlerConstructor = new (
+  config: ModelConfig,
+) => ModelHandler<ProviderMessage>;
+
+type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
+
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
 // `null` marks providers that have no direct handler (routed elsewhere or unsupported).
-const PROVIDER_HANDLERS: Record<
-  ModelProvider,
-  (new (config: ModelConfig) => ModelHandler<ProviderMessage>) | null
-> = {
-  [ModelProvider.ANTHROPIC]: ModelHandlerAnthropic,
-  [ModelProvider.OPENAI]: ModelHandlerOpenAI,
-  [ModelProvider.GOOGLE]: ModelHandlerGoogleGenAI,
-  [ModelProvider.DEEPSEEK]: ModelHandlerDeepSeek,
-  [ModelProvider.XAI]: ModelHandlerXAI,
-  [ModelProvider.MOONSHOT]: ModelHandlerKimi,
-  [ModelProvider.DASHSCOPE]: ModelHandlerDashScope,
-  [ModelProvider.MINIMAX]: ModelHandlerMiniMax,
-  [ModelProvider.GLM]: ModelHandlerGLM,
-  [ModelProvider.OTHERS]: ModelHandlerOpenRouterNative,
+const PROVIDER_HANDLERS: Record<ModelProvider, ProviderHandlerLoader | null> = {
+  [ModelProvider.ANTHROPIC]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerAnthropic'))
+      .ModelHandlerAnthropic,
+  [ModelProvider.OPENAI]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerOpenAI'))
+      .ModelHandlerOpenAI,
+  [ModelProvider.GOOGLE]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerGoogleGenAI'))
+      .ModelHandlerGoogleGenAI,
+  [ModelProvider.DEEPSEEK]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerDeepSeek'))
+      .ModelHandlerDeepSeek,
+  [ModelProvider.XAI]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerXAI')).ModelHandlerXAI,
+  [ModelProvider.MOONSHOT]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerKimi')).ModelHandlerKimi,
+  [ModelProvider.DASHSCOPE]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerDashScope'))
+      .ModelHandlerDashScope,
+  [ModelProvider.MINIMAX]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerMiniMax'))
+      .ModelHandlerMiniMax,
+  [ModelProvider.GLM]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerGLM')).ModelHandlerGLM,
+  [ModelProvider.OTHERS]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerOpenRouterNative'))
+      .ModelHandlerOpenRouterNative,
   [ModelProvider.COPILOT]: null,
 };
 
@@ -114,13 +123,17 @@ function withShortModelName(config: ModelConfig): ModelConfig {
  * Creates a model handler instance based on provider and routing configuration.
  * Applies short model name preference and reasoning level overrides.
  */
-export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
+export async function createModelHandler(
+  originalConfig: ModelConfig,
+): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
   const useOpenRouter = getUseOpenRouter();
 
   // OpenAI Responses API (required or optional)
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
+    const { ModelHandlerOpenAIResponse } =
+      await import('@agent/modelHandlers/modelHandlerOpenAIResponse');
     return withReasoningOverride(new ModelHandlerOpenAIResponse(config));
   }
 
@@ -128,16 +141,19 @@ export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
   if (config.openRouterOnly || useOpenRouter) {
     const openrouterFullName =
       config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
+    const { ModelHandlerOpenRouterNative } =
+      await import('@agent/modelHandlers/modelHandlerOpenRouterNative');
     return withReasoningOverride(
       new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
     );
   }
 
   // Direct provider handler
-  const HandlerClass = PROVIDER_HANDLERS[config.provider];
-  if (!HandlerClass) {
+  const loadHandler = PROVIDER_HANDLERS[config.provider];
+  if (!loadHandler) {
     throw new Error(`Unsupported model provider: ${config.provider}`);
   }
+  const HandlerClass = await loadHandler();
   logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
   return withReasoningOverride(new HandlerClass(config));
 }

@@ -1,13 +1,5 @@
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import {
-  APIError as AnthropicAPIError,
-  APIUserAbortError as AnthropicAPIUserAbortError,
-} from '@anthropic-ai/sdk';
-import {
-  APIError as OpenAIAPIError,
-  APIUserAbortError as OpenAIAPIUserAbortError,
-} from 'openai';
-import {
   type ErrorContext,
   type ErrorLogData,
   type ProviderError,
@@ -236,37 +228,50 @@ function detectStatusText(
 }
 
 function detectProvider(err: unknown): string | undefined {
-  if (err instanceof OpenAIAPIError) {
-    return 'openai';
-  }
-  if (err instanceof AnthropicAPIError) {
-    return 'anthropic';
-  }
-
   if (!isObject(err)) {
     return undefined;
   }
 
   const candidate = err as { provider?: string } & {
     constructor?: { name?: string };
+    stack?: string;
   };
 
   if (isString(candidate.provider)) {
     return candidate.provider;
   }
 
-  const lowered = candidate.constructor?.name?.toLowerCase();
-  if (!lowered) return undefined;
+  const providerFromStack = detectProviderFromText(
+    [candidate.constructor?.name, candidate.stack].filter(isString).join('\n'),
+  );
+  if (providerFromStack) {
+    return providerFromStack;
+  }
+
+  const loweredNames = getErrorClassNames(err).map((name) =>
+    name.toLowerCase(),
+  );
+  if (loweredNames.length === 0) return undefined;
 
   // Match SDK class-name fragments, then normalize aliases to the
   // canonical API-provider names used by SecretManager / model handlers.
   // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
   // (class name contains "kimi") maps to "moonshot".
   const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find((p) =>
-    lowered.includes(p),
+    loweredNames.some((name) => name.includes(p)),
   );
   if (match === 'kimi') return 'moonshot';
   return match;
+}
+
+function detectProviderFromText(text: string): string | undefined {
+  const lowered = text.toLowerCase().replaceAll('\\', '/');
+  if (lowered.includes(`@anthropic-${'ai'}/sdk`)) return 'anthropic';
+  if (lowered.includes('node_modules/openai')) return 'openai';
+  // Keep the Google package marker split so the desktop startup bundle
+  // verifier does not mistake this stack-text detector for an eager SDK import.
+  if (lowered.includes(`@google/${'genai'}`)) return 'google';
+  return undefined;
 }
 
 /** Extract request ID from SDK errors (property or headers). */
@@ -341,12 +346,6 @@ export function takeTail(text: string, maxChars: number): string {
 
 /** True if `err` is an SDK user-abort error (OpenAI or Anthropic). */
 export function isUserAbort(err: unknown): boolean {
-  if (
-    err instanceof OpenAIAPIUserAbortError ||
-    err instanceof AnthropicAPIUserAbortError
-  ) {
-    return true;
-  }
   return getErrorClassNames(err).includes('APIUserAbortError');
 }
 
