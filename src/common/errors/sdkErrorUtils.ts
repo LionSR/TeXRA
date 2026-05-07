@@ -1,13 +1,5 @@
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import {
-  APIError as AnthropicAPIError,
-  APIUserAbortError as AnthropicAPIUserAbortError,
-} from '@anthropic-ai/sdk';
-import {
-  APIError as OpenAIAPIError,
-  APIUserAbortError as OpenAIAPIUserAbortError,
-} from 'openai';
-import {
   type ErrorContext,
   type ErrorLogData,
   type ProviderError,
@@ -236,13 +228,6 @@ function detectStatusText(
 }
 
 function detectProvider(err: unknown): string | undefined {
-  if (err instanceof OpenAIAPIError) {
-    return 'openai';
-  }
-  if (err instanceof AnthropicAPIError) {
-    return 'anthropic';
-  }
-
   if (!isObject(err)) {
     return undefined;
   }
@@ -255,15 +240,17 @@ function detectProvider(err: unknown): string | undefined {
     return candidate.provider;
   }
 
-  const lowered = candidate.constructor?.name?.toLowerCase();
-  if (!lowered) return undefined;
+  const loweredNames = [...getErrorClassNames(err), candidate.constructor?.name]
+    .filter(isString)
+    .map((name) => name.toLowerCase());
+  if (loweredNames.length === 0) return undefined;
 
   // Match SDK class-name fragments, then normalize aliases to the
   // canonical API-provider names used by SecretManager / model handlers.
   // Kimi models live under the `moonshot` provider, so a `KimiAPIError`
   // (class name contains "kimi") maps to "moonshot".
   const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find((p) =>
-    lowered.includes(p),
+    loweredNames.some((name) => name.includes(p)),
   );
   if (match === 'kimi') return 'moonshot';
   return match;
@@ -341,12 +328,6 @@ export function takeTail(text: string, maxChars: number): string {
 
 /** True if `err` is an SDK user-abort error (OpenAI or Anthropic). */
 export function isUserAbort(err: unknown): boolean {
-  if (
-    err instanceof OpenAIAPIUserAbortError ||
-    err instanceof AnthropicAPIUserAbortError
-  ) {
-    return true;
-  }
   return getErrorClassNames(err).includes('APIUserAbortError');
 }
 
