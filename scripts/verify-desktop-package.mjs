@@ -10,6 +10,10 @@ import {
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
+import {
+  normalizeMetafilePath,
+  resolveMetafileImportPath,
+} from './desktop-package-metafile-paths.mjs';
 
 const require = createRequire(import.meta.url);
 const { extractFile, listPackage, statFile } = require('@electron/asar');
@@ -152,22 +156,6 @@ async function findPackagedApp() {
 function normalizeAsarPath(path) {
   const normalized = path.replaceAll('\\', '/');
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
-}
-
-function normalizeMetafilePath(path) {
-  return path.replaceAll('\\', '/').replace(/^\.\//, '');
-}
-
-function resolveMetafileImportPath(outputPath, importPath) {
-  const normalizedImportPath = normalizeMetafilePath(importPath);
-  if (normalizedImportPath.startsWith('.')) {
-    return normalizeMetafilePath(
-      posix.normalize(
-        posix.join(posix.dirname(outputPath), normalizedImportPath),
-      ),
-    );
-  }
-  return posix.normalize(normalizedImportPath);
 }
 
 function createAsarAppReader(asarPath) {
