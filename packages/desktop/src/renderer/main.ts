@@ -6,9 +6,10 @@ import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { postMessage } from '@shared/hostBridge';
 import {
-  SetThemeMessageSchema,
-  type Theme,
-} from '@shared/schemas/commonViewMessages';
+  isDesktopThemeKind,
+  type DesktopThemeKind,
+} from '@shared/constants/desktopTheme';
+import { SetThemeMessageSchema } from '@shared/schemas/commonViewMessages';
 import '@vscode-elements/elements/dist/bundled.js';
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
@@ -241,6 +242,14 @@ function isDesktopSetLogMessage(
   return DesktopSetLogMessageSchema.safeParse(message).success;
 }
 
+function isThemeMessage(message: unknown): message is {
+  command: typeof COMMON_COMMANDS.THEME_SET;
+  theme: DesktopThemeKind;
+} {
+  const result = SetThemeMessageSchema.safeParse(message);
+  return result.success && isDesktopThemeKind(result.data.theme);
+}
+
 function setRoute(route: DesktopRoute): void {
   for (const [candidate, container] of routeContainers) {
     container.hidden = candidate !== route;
@@ -261,7 +270,7 @@ window.addEventListener('message', (event) => {
     } else {
       firstRunWalkthrough.hide();
     }
-  } else if (isDesktopSetThemeMessage(event.data)) {
+  } else if (isThemeMessage(event.data)) {
     applyDesktopTheme(event.data.theme);
   } else if (isWorkspaceTreeMessage(event.data)) {
     renderWorkspaceExplorer(event.data);
@@ -272,17 +281,7 @@ window.addEventListener('message', (event) => {
 requestWorkspaceTree();
 postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
 
-function isDesktopSetThemeMessage(
-  message: unknown,
-): message is { theme: Theme } {
-  return (
-    (message as { command?: unknown } | null)?.command ===
-      COMMON_COMMANDS.THEME_SET &&
-    SetThemeMessageSchema.safeParse(message).success
-  );
-}
-
-function applyDesktopTheme(theme: Theme): void {
+function applyDesktopTheme(theme: DesktopThemeKind): void {
   document.body.classList.remove(
     'vscode-light',
     'vscode-dark',

@@ -5,6 +5,9 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 
+// Local imports - shared constants
+import { DESKTOP_THEME_KIND } from '@shared/constants/desktopTheme';
+
 type MonacoModule = typeof import('monaco-editor/esm/vs/editor/editor.api.js');
 type MonacoWorkerModule = { default: new () => Worker };
 type DiffEditor = ReturnType<MonacoModule['editor']['createDiffEditor']>;
@@ -82,10 +85,9 @@ async function loadMonaco(): Promise<MonacoModule> {
 
 function monacoThemeForDocument(): 'vs' | 'vs-dark' | 'hc-black' | 'hc-light' {
   const themeKind = document.body.dataset.vscodeThemeKind;
-  if (themeKind === 'light') return 'vs';
-  if (themeKind === 'high-contrast') return 'hc-black';
-  if (themeKind === 'high-contrast-light') return 'hc-light';
-  if (themeKind === 'dark') return 'vs-dark';
+  if (themeKind === DESKTOP_THEME_KIND.LIGHT) return 'vs';
+  if (themeKind === DESKTOP_THEME_KIND.HIGH_CONTRAST) return 'hc-black';
+  if (themeKind === DESKTOP_THEME_KIND.DARK) return 'vs-dark';
   return document.body.classList.contains('vscode-light') ? 'vs' : 'vs-dark';
 }
 

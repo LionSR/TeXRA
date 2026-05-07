@@ -251,7 +251,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   };
 
   private hasInlineDiff(data: ToolEditPermission): boolean {
-    return data.originalContent != null && data.proposedContent != null;
+    return data.originalContent != null || data.proposedContent != null;
   }
 }
 

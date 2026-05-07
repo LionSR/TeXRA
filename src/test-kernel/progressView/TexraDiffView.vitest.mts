@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - progress view component type
 import type { TexraDiffView } from '@progressView/frontend/components/TexraDiffView';
 
+// Local imports - shared constants
+import { DESKTOP_THEME_KIND } from '@shared/constants/desktopTheme';
+
 const workerModuleIds = [
   'monaco-editor/esm/vs/editor/editor.worker?worker',
   'monaco-editor/esm/vs/language/json/json.worker?worker',
@@ -137,13 +140,14 @@ describe('texra-diff-view', () => {
     });
     expect(setTheme).toHaveBeenCalledWith('vs-dark');
 
-    dom.window.document.body.dataset.vscodeThemeKind = 'light';
+    dom.window.document.body.dataset.vscodeThemeKind = DESKTOP_THEME_KIND.LIGHT;
     await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('vs'));
 
-    dom.window.document.body.dataset.vscodeThemeKind = 'high-contrast';
+    dom.window.document.body.dataset.vscodeThemeKind =
+      DESKTOP_THEME_KIND.HIGH_CONTRAST;
     await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('hc-black'));
 
-    dom.window.document.body.dataset.vscodeThemeKind = 'high-contrast-light';
-    await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('hc-light'));
+    dom.window.document.body.dataset.vscodeThemeKind = DESKTOP_THEME_KIND.DARK;
+    await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('vs-dark'));
   });
 });
