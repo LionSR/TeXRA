@@ -613,7 +613,7 @@ export class ProgressApp extends ProgressAppBase {
         <div class="view-header">
           <wa-tab-group
             class="view-tabs"
-            active="progress"
+            .active=${'progress'}
             without-scroll-controls
             @wa-tab-show=${this.onViewTabShow}
           >
