@@ -142,5 +142,8 @@ describe('texra-diff-view', () => {
 
     dom.window.document.body.dataset.vscodeThemeKind = 'high-contrast';
     await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('hc-black'));
+
+    dom.window.document.body.dataset.vscodeThemeKind = 'high-contrast-light';
+    await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('hc-light'));
   });
 });

@@ -80,10 +80,11 @@ async function loadMonaco(): Promise<MonacoModule> {
   return monacoLoad;
 }
 
-function monacoThemeForDocument(): 'vs' | 'vs-dark' | 'hc-black' {
+function monacoThemeForDocument(): 'vs' | 'vs-dark' | 'hc-black' | 'hc-light' {
   const themeKind = document.body.dataset.vscodeThemeKind;
   if (themeKind === 'light') return 'vs';
   if (themeKind === 'high-contrast') return 'hc-black';
+  if (themeKind === 'high-contrast-light') return 'hc-light';
   if (themeKind === 'dark') return 'vs-dark';
   return document.body.classList.contains('vscode-light') ? 'vs' : 'vs-dark';
 }
