@@ -6,10 +6,9 @@ import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { postMessage } from '@shared/hostBridge';
 import {
-  isDesktopThemeKind,
-  type DesktopThemeKind,
-} from '@shared/constants/desktopTheme';
-import { SetThemeMessageSchema } from '@shared/schemas/commonViewMessages';
+  SetThemeMessageSchema,
+  type SetThemeMessage,
+} from '@shared/schemas/commonViewMessages';
 import '@vscode-elements/elements/dist/bundled.js';
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
@@ -242,12 +241,8 @@ function isDesktopSetLogMessage(
   return DesktopSetLogMessageSchema.safeParse(message).success;
 }
 
-function isThemeMessage(message: unknown): message is {
-  command: typeof COMMON_COMMANDS.THEME_SET;
-  theme: DesktopThemeKind;
-} {
-  const result = SetThemeMessageSchema.safeParse(message);
-  return result.success && isDesktopThemeKind(result.data.theme);
+function isThemeMessage(message: unknown): message is SetThemeMessage {
+  return SetThemeMessageSchema.safeParse(message).success;
 }
 
 function setRoute(route: DesktopRoute): void {
