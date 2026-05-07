@@ -18,6 +18,7 @@ import type { DesktopCommandActions } from '../../../packages/desktop/src/deskto
 interface DesktopCommandSurfaceModule {
   DESKTOP_LOCAL_COMMANDS: {
     OPEN_DESKTOP_DOCS: string;
+    SHOW_LOGS: string;
     OPEN_LOG_FOLDER: string;
     OPEN_WORKSPACE_FOLDER: string;
   };
@@ -105,6 +106,11 @@ describe('desktop command surface', () => {
       label: 'Desktop Documentation',
       category: 'Help',
     });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+      label: 'Show Logs',
+      category: 'TeXRA',
+    });
   });
 
   it('normalizes catalog keybindings to Electron accelerators', async () => {
@@ -139,6 +145,9 @@ describe('desktop command surface', () => {
     expect(dispatchDesktopCommand('texra.showProgressView', actions)).toBe(
       true,
     );
+    expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS, actions),
+    ).toBe(true);
     expect(dispatchDesktopCommand('texra.openSettings', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showModels', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showAgents', actions)).toBe(true);
@@ -157,6 +166,7 @@ describe('desktop command surface', () => {
 
     expect(actions.showRoute).toHaveBeenNthCalledWith(1, 'main');
     expect(actions.showRoute).toHaveBeenNthCalledWith(2, 'progress');
+    expect(actions.showRoute).toHaveBeenNthCalledWith(3, 'logs');
     expect(actions.showSettings).toHaveBeenNthCalledWith(1);
     expect(actions.showSettings).toHaveBeenNthCalledWith(
       2,
@@ -214,6 +224,7 @@ describe('desktop command surface', () => {
     expect(submenu.map((item) => item.label ?? item.type)).toEqual([
       'Show Launcher',
       'Show Progress',
+      'Show Logs',
       'Open Folder',
       'Open Logs Folder',
       'Open TeXRA Settings',
@@ -227,7 +238,7 @@ describe('desktop command surface', () => {
     ]);
 
     submenu[0].click?.();
-    submenu[8].click?.();
+    submenu[9].click?.();
     expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
 
