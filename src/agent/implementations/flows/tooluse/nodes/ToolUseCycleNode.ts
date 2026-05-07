@@ -7,7 +7,6 @@ import {
 } from '@agent/core/flows/ToolUseCycleFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { formatProviderHttpError } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
 
 import {
   type ToolUseRunShared,
@@ -42,17 +41,23 @@ export class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
-    const { streamId, setting, resolvedTools, modelHandler, config } =
-      this.services;
+    const {
+      streamId,
+      setting,
+      resolvedTools,
+      modelHandler,
+      config,
+      runtimeHost,
+    } = this.services;
 
     if (prepRes.shouldSkip) {
       const { todos } = prepRes.workspaceState.todos;
       const { plan } = prepRes.workspaceState.plan;
       if (todos.length) {
-        bus.emit('updateTodos', { streamId, todos });
+        runtimeHost.emit('updateTodos', { streamId, todos });
       }
       if (plan) {
-        bus.emit('updatePlan', { streamId, plan });
+        runtimeHost.emit('updatePlan', { streamId, plan });
       }
       return { outcome: 'skipped' };
     }
@@ -85,7 +90,7 @@ export class ToolUseCycleNode<C> extends Node<
     const { onProgress, persistTodos } = this.services;
     let todoPersistChain = Promise.resolve();
     prepRes.workspaceState.todos.setOnUpdate((todos) => {
-      bus.emit('updateTodos', { streamId, todos });
+      runtimeHost.emit('updateTodos', { streamId, todos });
       if (persistTodos) {
         todoPersistChain = todoPersistChain
           .then(() => persistTodos(todos))
@@ -94,7 +99,7 @@ export class ToolUseCycleNode<C> extends Node<
       onProgress?.({ kind: 'todos', todos });
     });
     prepRes.workspaceState.plan.setOnUpdate((plan) => {
-      bus.emit('updatePlan', { streamId, plan });
+      runtimeHost.emit('updatePlan', { streamId, plan });
       onProgress?.({ kind: 'plan', plan });
     });
 
