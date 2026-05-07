@@ -1,6 +1,23 @@
 import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, beforeEach } from 'vitest';
 
+type TestElementInternals = {
+  validity?: ValidityState;
+  validationMessage?: string;
+  willValidate?: boolean;
+  form?: HTMLFormElement | null;
+  setValidity?: (flags?: ValidityStateFlags) => void;
+  setFormValue?: (value: unknown, state?: unknown) => void;
+  checkValidity?: () => boolean;
+  reportValidity?: () => boolean;
+};
+
+type TestDomWindow = JSDOM['window'] & {
+  ElementInternals?: {
+    prototype: TestElementInternals;
+  };
+};
+
 const domGlobalKeys = [
   'window',
   'document',
@@ -13,7 +30,98 @@ const domGlobalKeys = [
   'KeyboardEvent',
   'MouseEvent',
   'ShadowRoot',
+  'Node',
 ] as const;
+
+const DEFAULT_VALIDITY = {
+  badInput: false,
+  customError: false,
+  patternMismatch: false,
+  rangeOverflow: false,
+  rangeUnderflow: false,
+  stepMismatch: false,
+  tooLong: false,
+  tooShort: false,
+  typeMismatch: false,
+  valid: true,
+  valueMissing: false,
+} satisfies ValidityState;
+
+function installElementInternalsPolyfill(window: TestDomWindow): void {
+  const ElementInternalsCtor = window.ElementInternals;
+  if (!ElementInternalsCtor) {
+    return;
+  }
+
+  const validityByInternals = new WeakMap<object, ValidityState>();
+  const prototype = ElementInternalsCtor.prototype;
+
+  if (!('validity' in prototype)) {
+    Object.defineProperty(prototype, 'validity', {
+      configurable: true,
+      get() {
+        return validityByInternals.get(this) ?? DEFAULT_VALIDITY;
+      },
+    });
+  }
+
+  if (!('validationMessage' in prototype)) {
+    Object.defineProperty(prototype, 'validationMessage', {
+      configurable: true,
+      get() {
+        return '';
+      },
+    });
+  }
+
+  if (!('willValidate' in prototype)) {
+    Object.defineProperty(prototype, 'willValidate', {
+      configurable: true,
+      get() {
+        return true;
+      },
+    });
+  }
+
+  if (!('form' in prototype)) {
+    Object.defineProperty(prototype, 'form', {
+      configurable: true,
+      get() {
+        return null;
+      },
+    });
+  }
+
+  if (!prototype.setValidity) {
+    prototype.setValidity = function setValidity(
+      this: object,
+      flags?: ValidityStateFlags,
+    ) {
+      const invalid = Object.values(flags ?? {}).some(Boolean);
+      validityByInternals.set(this, {
+        ...DEFAULT_VALIDITY,
+        ...(flags ?? {}),
+        valid: !invalid,
+      });
+    };
+  }
+
+  if (!prototype.setFormValue) {
+    prototype.setFormValue = () => {
+      /* jsdom does not implement form-associated custom element state. */
+    };
+  }
+
+  if (!prototype.checkValidity) {
+    prototype.checkValidity = function checkValidity(this: object) {
+      return (validityByInternals.get(this) ?? DEFAULT_VALIDITY).valid;
+    };
+  }
+
+  if (!prototype.reportValidity) {
+    prototype.reportValidity = prototype.checkValidity;
+  }
+}
 
 /**
  * Install the browser globals Lit components need, import the component module,
@@ -45,6 +153,7 @@ export function useLitComponentTestDom(
       KeyboardEvent: dom.window.KeyboardEvent,
       MouseEvent: dom.window.MouseEvent,
       ShadowRoot: dom.window.ShadowRoot,
+      Node: dom.window.Node,
     } satisfies Record<(typeof domGlobalKeys)[number], unknown>;
 
     for (const key of domGlobalKeys) {
@@ -59,6 +168,7 @@ export function useLitComponentTestDom(
       });
     }
 
+    installElementInternalsPolyfill(dom.window);
     await importComponents();
   });
 
