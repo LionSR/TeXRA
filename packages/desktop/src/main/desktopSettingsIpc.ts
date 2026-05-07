@@ -87,6 +87,7 @@ import {
   unauthenticatedProfileData,
   type DesktopAuthProfileData,
 } from './desktopSupabaseAuth.js';
+import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import type { ConfigProvider } from '@platform/interfaces/config';
 import type { StateStore } from '@platform/interfaces/state';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -138,6 +139,7 @@ export interface DesktopSettingsIpcOptions {
     kind: 'install' | 'auth';
   }) => Promise<void>;
   onError?: (error: unknown) => void;
+  modelListRefresh?: PromiseLike<void>;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
@@ -305,6 +307,12 @@ export function createDesktopSettingsIpc(
       },
     },
   });
+  const modelListRefresh =
+    options.modelListRefresh ??
+    refreshDesktopModelListStateIfNeeded({
+      globalState,
+      onError,
+    });
 
   function readCurrentGitAuthorSettings() {
     return readGitAuthorSettingsFromState(workspaceState);
@@ -378,7 +386,8 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function postModelSelectionData(): void {
+  async function postModelSelectionData(): Promise<void> {
+    await modelListRefresh;
     const data = modelSelectionController.buildSelectionData();
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
@@ -524,11 +533,12 @@ export function createDesktopSettingsIpc(
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
-    postModelSelectionData();
+    const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
     postAgentModePresets();
     postApprovalSettings();
     await Promise.all([
+      modelSelectionDataPosted,
       postProfileData(),
       postLatexSettingsStatus(),
       postAgentSelectionData(),
@@ -568,7 +578,7 @@ export function createDesktopSettingsIpc(
     enabled: boolean;
   }): Promise<void> {
     await modelSelectionController.setModelEnabled(input);
-    postModelSelectionData();
+    await postModelSelectionData();
     postMainModelOptionsData();
   }
 
@@ -577,24 +587,24 @@ export function createDesktopSettingsIpc(
     level: ReasoningLevel | null;
   }): Promise<void> {
     await modelSelectionController.setReasoningLevel(input);
-    postModelSelectionData();
+    await postModelSelectionData();
   }
 
   async function updateHelperModel(modelName: string): Promise<void> {
     await modelSelectionController.setHelperModel(modelName);
-    postModelSelectionData();
+    await postModelSelectionData();
   }
 
   async function updatePreferShortModelNames(enabled: boolean): Promise<void> {
     await modelSelectionController.setPreferShortModelNames(enabled);
-    postModelSelectionData();
+    await postModelSelectionData();
   }
 
   async function refreshAfterCredentialChange(): Promise<void> {
     invalidateApiKeyCache();
     invalidateModelOptionsCache();
     await postProfileData();
-    postModelSelectionData();
+    await postModelSelectionData();
     postMainModelOptionsData();
   }
 
@@ -695,7 +705,7 @@ export function createDesktopSettingsIpc(
   }
 
   async function refreshAuthDependentData(): Promise<void> {
-    postModelSelectionData();
+    await postModelSelectionData();
     postMainModelOptionsData();
     await Promise.all([
       postProfileData(),
@@ -872,7 +882,7 @@ export function createDesktopSettingsIpc(
           runAsync(postAgentSelectionData());
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION:
-          postModelSelectionData();
+          runAsync(postModelSelectionData());
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA:
           runAsync(postProfileData());
