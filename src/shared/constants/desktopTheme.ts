@@ -1,11 +1,12 @@
+import type { Theme } from '@shared/schemas/commonViewMessages';
+
 export const DESKTOP_THEME_KIND = {
   DARK: 'dark',
   LIGHT: 'light',
   HIGH_CONTRAST: 'high-contrast',
-} as const;
+} as const satisfies Record<string, Theme>;
 
-export type DesktopThemeKind =
-  (typeof DESKTOP_THEME_KIND)[keyof typeof DESKTOP_THEME_KIND];
+export type DesktopThemeKind = Theme;
 
 export const DESKTOP_THEME_KINDS = Object.values(
   DESKTOP_THEME_KIND,
