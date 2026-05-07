@@ -7,7 +7,8 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { badgeStyles, designTokens } from '@shared/styles';
+import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - shared copy
 import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
@@ -20,7 +21,12 @@ import { ProfileViewEvents } from './events';
 
 @customElement('profile-info')
 export class ProfileInfo extends LitElement {
-  static override styles = [designTokens, ...badgeStyles, profileViewStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    ...badgeStyles,
+    profileViewStyles,
+  ];
 
   @property({ attribute: false }) email = '';
   @property({ attribute: false }) userId = '';
@@ -88,12 +94,12 @@ export class ProfileInfo extends LitElement {
         ${this.showSignOut
           ? html`
               <div class="profile-actions">
-                <vscode-toolbar-button
-                  icon="sign-out"
-                  label="Sign Out"
-                  title="Sign out"
-                  @click=${this.handleSignOut}
-                ></vscode-toolbar-button>
+                ${renderIconActionButton({
+                  icon: 'right-from-bracket',
+                  label: 'Sign Out',
+                  title: 'Sign out',
+                  onClick: this.handleSignOut,
+                })}
               </div>
             `
           : nothing}
