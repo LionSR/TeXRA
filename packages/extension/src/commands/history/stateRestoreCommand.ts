@@ -1,10 +1,12 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - controllers
+import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
+
 // Local imports
 import { setPendingState } from '@common/state';
 import { COMMON_COMMANDS } from '@common/webview/commands';
-import { buildMainViewState } from '@frontend/mainViewStateUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
@@ -27,7 +29,7 @@ export function registerStateRestoreCommand(
 async function restoreState(
   state: unknown,
   executeImmediately?: boolean,
-): Promise<void> {
+): Promise<boolean> {
   logger.debug(CHANNEL, 'Restoring main webview state', {
     data: { executeImmediately },
   });
@@ -38,7 +40,7 @@ async function restoreState(
       data: { validationError: parsed.error.message },
     });
     await vscode.window.showErrorMessage(RESTORE_MALFORMED_MESSAGE);
-    return;
+    return false;
   }
 
   try {
@@ -54,7 +56,7 @@ async function restoreState(
         executeImmediately,
       });
       logger.info(CHANNEL, 'State restored via direct webview access');
-      return;
+      return true;
     }
 
     setPendingState(nextState, executeImmediately);
@@ -62,7 +64,9 @@ async function restoreState(
     logger.info(CHANNEL, 'State stored for later restoration', {
       data: { executeImmediately },
     });
+    return true;
   } catch (error) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to restore state', error);
+    return false;
   }
 }

@@ -7,6 +7,8 @@ import {
   isWorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
+
+// Local imports - shared schemas
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
@@ -22,7 +24,7 @@ export function buildMainViewState(
   const activeFiles = isWorkflow ? taskState.activeFiles : undefined;
   const toolConfig = agentConfig.toolConfig ?? {};
 
-  // Resolve agent name to full key (e.g., "criticize" → "builtIn:criticize")
+  // Resolve agent name to full key (e.g., "criticize" -> "builtIn:criticize").
   // This ensures the frontend receives the exact key used in dropdown options.
   // Pass isToolUse to prefer builtInToolUse source for tool-use sessions,
   // preventing workflow agents from shadowing tool-use agents with same name.
