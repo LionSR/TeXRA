@@ -16,6 +16,7 @@ interface DesktopCommandPaletteModule {
       showSettings(tabIndex?: number): void;
     };
     platform?: NodeJS.Platform;
+    canOpen?: () => boolean;
   }): {
     element: HTMLElement;
     open(): void;
@@ -283,6 +284,34 @@ describe('desktop command palette', () => {
       }),
     );
     expect(controller.element.hidden).toBe(false);
+  });
+
+  it('honors the open guard for global command palette shortcuts', async () => {
+    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
+    const dom = new JSDOM('<button id="trigger">Commands</button>');
+    const trigger =
+      dom.window.document.querySelector<HTMLButtonElement>('#trigger');
+    const controller = createDesktopCommandPalette({
+      document: dom.window.document,
+      actions: {
+        showRoute: vi.fn(),
+        showSettings: vi.fn(),
+      },
+      canOpen: () => false,
+      platform: 'darwin',
+    });
+
+    dom.window.document.body.append(controller.element);
+    trigger?.focus();
+    trigger?.dispatchEvent(
+      new dom.window.KeyboardEvent('keydown', {
+        key: 'k',
+        metaKey: true,
+        bubbles: true,
+      }),
+    );
+
+    expect(controller.element.hidden).toBe(true);
   });
 
   it('does not steal shortcuts from shadow-dom text entry targets', async () => {

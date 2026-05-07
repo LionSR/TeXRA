@@ -21,6 +21,7 @@ interface DesktopCommandSurfaceModule {
     SHOW_LOGS: string;
     OPEN_LOG_FOLDER: string;
     OPEN_WORKSPACE_FOLDER: string;
+    SHOW_FIRST_RUN_WALKTHROUGH: string;
   };
   DESKTOP_COMMAND_IDS: readonly string[];
   buildDesktopMenuTemplate(
@@ -82,6 +83,10 @@ describe('desktop command surface', () => {
     for (const entry of entries) {
       const catalogEntry = commandCatalogById.get(entry.id as CommandId);
       if (!catalogEntry) {
+        if (entry.id === 'texra.desktop.showFirstRunWalkthrough') {
+          expect(entry.category).toBe('Help');
+          continue;
+        }
         expect(['TeXRA', 'Help']).toContain(entry.category);
         continue;
       }
@@ -111,6 +116,13 @@ describe('desktop command surface', () => {
       label: 'Show Logs',
       category: 'TeXRA',
     });
+    const firstHelpIndex = entries.findIndex(
+      (entry) => entry.category === 'Help',
+    );
+    expect(firstHelpIndex).toBe(entries.length - 2);
+    expect(
+      entries.slice(firstHelpIndex).map((entry) => entry.category),
+    ).toEqual(['Help', 'Help']);
   });
 
   it('normalizes catalog keybindings to Electron accelerators', async () => {
@@ -137,6 +149,7 @@ describe('desktop command surface', () => {
       openDesktopDocs: vi.fn(),
       openLogFolder: vi.fn(),
       openWorkspaceFolder: vi.fn(),
+      showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
@@ -161,6 +174,12 @@ describe('desktop command surface', () => {
       dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER, actions),
     ).toBe(true);
     expect(
+      dispatchDesktopCommand(
+        DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+        actions,
+      ),
+    ).toBe(true);
+    expect(
       dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS, actions),
     ).toBe(true);
 
@@ -178,6 +197,12 @@ describe('desktop command surface', () => {
     );
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
+    expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
+    expect(
+      commandCatalogById.has(
+        DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH as CommandId,
+      ),
+    ).toBe(false);
     expect(actions.openDesktopDocs).toHaveBeenCalledOnce();
   });
 
@@ -205,6 +230,7 @@ describe('desktop command surface', () => {
     const { buildDesktopMenuTemplate } = await loadDesktopCommandSurface();
     const actions = {
       openDesktopDocs: vi.fn(),
+      showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
@@ -243,11 +269,14 @@ describe('desktop command surface', () => {
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
 
     const helpMenu = menu.find((item) => item.label === 'Help');
-    const helpSubmenu = helpMenu?.submenu ?? [];
-    expect(helpSubmenu.map((item) => item.label)).toEqual([
+    expect(helpMenu?.submenu?.map((item) => item.label)).toEqual([
+      'Show First-Run Walkthrough',
       'Desktop Documentation',
     ]);
+    const helpSubmenu = helpMenu?.submenu ?? [];
     helpSubmenu[0].click?.();
+    expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
+    helpSubmenu[1].click?.();
     expect(actions.openDesktopDocs).toHaveBeenCalledOnce();
   });
 });

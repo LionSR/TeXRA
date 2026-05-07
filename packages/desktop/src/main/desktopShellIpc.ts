@@ -13,6 +13,7 @@ import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopRoute,
 } from '../desktopShellMessages.js';
+import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import {
   createDesktopErrorReporter,
   type DesktopCommandMessage,
@@ -142,6 +143,9 @@ export function createDesktopShellActions(
     },
     showRoute: postRoute,
     showSettings: postSettingsRoute,
+    showFirstRunWalkthrough: () => {
+      renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
+    },
   };
 }
 
@@ -199,6 +203,9 @@ export function createDesktopShellIpc(
           return true;
         case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
           actions.openWorkspaceFolder?.();
+          return true;
+        case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
+          actions.showFirstRunWalkthrough?.();
           return true;
         case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
           actions.openDesktopDocs?.();
