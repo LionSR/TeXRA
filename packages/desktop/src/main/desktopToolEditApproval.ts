@@ -51,8 +51,6 @@ interface DesktopPendingToolEditApproval extends LatexPreviewEntry {
   settle: (result: ToolEditApprovalResult) => void;
 }
 
-let approvalCounter = 0;
-
 class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalController {
   private readonly pending = new Map<string, DesktopPendingToolEditApproval>();
   private disposed = false;
@@ -68,7 +66,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       throw new Error('Desktop tool edit approval controller is disposed.');
     }
 
-    const requestId = `desktop-approval-${Date.now().toString(36)}-${++approvalCounter}`;
+    const requestId = `desktop-approval-${randomUUID()}`;
     const lineChanges = computeLineChangeSummary(
       request.originalContent,
       request.proposedContent,
@@ -121,7 +119,10 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
         return true;
       case 'showLatexdiff':
         this.runAction(payload.requestId, () =>
-          runLatexdiff(entry, { subtype: 'ONLYCHANGEDPAGE' }),
+          runLatexdiff(entry, {
+            subtype: 'ONLYCHANGEDPAGE',
+            openBuildDisplay: this.options.openBuildDisplay,
+          }),
         );
         return true;
       default:
@@ -215,8 +216,9 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   private async previewProposed(
     entry: DesktopPendingToolEditApproval,
   ): Promise<void> {
-    if (isLatexFile(entry.request.path) && this.options.openBuildDisplay) {
-      await previewProposedLatex(entry);
+    const openBuildDisplay = this.options.openBuildDisplay;
+    if (isLatexFile(entry.request.path) && openBuildDisplay) {
+      await previewProposedLatex(entry, { openBuildDisplay });
       return;
     }
 

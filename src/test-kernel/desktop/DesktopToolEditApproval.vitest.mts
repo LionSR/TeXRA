@@ -11,6 +11,10 @@ import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 interface DesktopToolEditApprovalModule {
   createDesktopToolEditApprovalController(options: {
     openPath?: (filePath: string) => Promise<void>;
+    openBuildDisplay?: (
+      location: { absolutePath: string },
+      options?: { preserveFocus?: boolean },
+    ) => Promise<void>;
     showMessage?: (message: string) => Promise<void> | void;
     tempRoot?: string;
   }): {
@@ -39,10 +43,30 @@ async function waitForEmptyDir(dir: string): Promise<void> {
   }
 }
 
-async function loadApprovalModules() {
+async function loadApprovalModules(workspacePath = '/workspace') {
   vi.resetModules();
+  type MockLocation =
+    | { kind: 'workspace'; absolutePath: string; relativePath: string }
+    | { kind: 'external'; absolutePath: string };
+  const toMockLocation = (filePath: string): MockLocation => {
+    if (path.isAbsolute(filePath)) {
+      return filePath.startsWith(`${workspacePath}/`)
+        ? {
+            kind: 'workspace',
+            absolutePath: filePath,
+            relativePath: filePath.slice(`${workspacePath}/`.length),
+          }
+        : { kind: 'external', absolutePath: filePath };
+    }
+
+    return {
+      kind: 'workspace',
+      absolutePath: path.join(workspacePath, filePath),
+      relativePath: filePath,
+    };
+  };
   vi.doMock('@agent/core/config', () => ({
-    getConfig: vi.fn(() => true),
+    getConfig: vi.fn(() => 'sameDirectory'),
   }));
   vi.doMock('@agent/toolUse/ToolFileInteractionContext', () => ({
     getCurrentToolFileInteractionContext: vi.fn(() => undefined),
@@ -53,11 +77,20 @@ async function loadApprovalModules() {
     return {
       ...actual,
       WorkspaceFS: {
+        getPath(): string {
+          return workspacePath;
+        },
         relativePath(filePath: string): string {
-          return filePath.startsWith('/workspace/')
-            ? filePath.slice('/workspace/'.length)
+          return filePath.startsWith(`${workspacePath}/`)
+            ? filePath.slice(`${workspacePath}/`.length)
             : filePath;
         },
+        locatePath(filePath: string): MockLocation {
+          return toMockLocation(filePath);
+        },
+      },
+      pathToLocation(filePath: string): MockLocation {
+        return toMockLocation(filePath);
       },
     };
   });
@@ -205,6 +238,73 @@ describe('desktop tool edit approval', () => {
       offShow();
       controller.dispose();
       await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the injected desktop build display callback for LaTeX preview', async () => {
+    const workspaceRoot = await mkdtemp(
+      path.join(tmpdir(), 'texra-workspace-'),
+    );
+    const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+    const { bus, requestToolEditApproval, desktopModule } =
+      await loadApprovalModules(workspaceRoot);
+    const displayed: Array<{
+      absolutePath: string;
+      options?: { preserveFocus?: boolean };
+    }> = [];
+    const messages: string[] = [];
+    const controller = desktopModule.createDesktopToolEditApprovalController({
+      tempRoot,
+      openBuildDisplay: async (location, options) => {
+        displayed.push({ absolutePath: location.absolutePath, options });
+      },
+      showMessage: (message) => {
+        messages.push(message);
+      },
+    });
+    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
+    const offShow = bus.on('showToolEditPermission', (payload) =>
+      shown.push(payload),
+    );
+
+    try {
+      const resultPromise = requestToolEditApproval({
+        path: path.join(workspaceRoot, 'main.tex'),
+        originalContent:
+          '\\documentclass{article}\\begin{document}old\\end{document}\n',
+        proposedContent:
+          '\\documentclass{article}\\begin{document}new\\end{document}\n',
+        sourceTool: 'write_file',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'previewProposed',
+      });
+
+      await vi.waitFor(() => {
+        expect([...displayed, ...messages]).toHaveLength(1);
+      });
+      expect(messages).toEqual([]);
+      expect(displayed[0].options).toEqual({ preserveFocus: true });
+      expect(path.basename(displayed[0].absolutePath)).toMatch(
+        /^main_preview-[a-f0-9]{8}\.tex$/,
+      );
+      await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(true);
+
+      controller.dispose();
+      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
+      await vi.waitFor(async () => {
+        await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(
+          false,
+        );
+      });
+    } finally {
+      offShow();
+      controller.dispose();
+      await rm(tempRoot, { recursive: true, force: true });
+      await rm(workspaceRoot, { recursive: true, force: true });
     }
   });
 
