@@ -1,3 +1,4 @@
+import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import { html, render } from 'lit';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -16,9 +17,6 @@ export interface DesktopFirstRunWalkthrough {
   show(): void;
   hide(): void;
 }
-
-const FOCUSABLE_SELECTOR =
-  'wa-button, button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 const ONBOARDING_STEPS: ReadonlyArray<{
   readonly index: string;
@@ -52,149 +50,115 @@ export function createFirstRunWalkthrough({
   dismiss: postDismissed,
   setRoute,
 }: DesktopFirstRunWalkthroughOptions): DesktopFirstRunWalkthrough {
-  const element = document.createElement('section');
-  element.className = 'desktop-onboarding';
-  element.hidden = true;
-  element.setAttribute('role', 'dialog');
-  element.setAttribute('aria-modal', 'true');
-  element.setAttribute('aria-labelledby', 'desktop-onboarding-title');
+  const dialog = document.createElement('wa-dialog');
+  dialog.classList.add('desktop-onboarding');
+  dialog.withoutHeader = true;
+  // The visible <h1> inside the body is the dialog's accessible name; ARIA
+  // resolves it via aria-labelledby below. Skip the redundant `label`
+  // attribute that would otherwise add an extra aria-label.
+  dialog.setAttribute('aria-labelledby', 'desktop-onboarding-title');
 
-  let previousFocus: HTMLElement | null = null;
+  // Distinguishes user-initiated close (Escape / button click) — which posts
+  // the dismissed signal back to the host — from programmatic close from
+  // setState(shouldShow=false), which would otherwise feedback-loop.
+  let suppressNextPost = false;
 
-  const dismissAndShowRoute = (route: DesktopRoute): void => {
-    dismiss();
+  const closeDialog = (): void => {
+    dialog.open = false;
+  };
+  const navigateAndClose = (route: DesktopRoute): void => {
+    closeDialog();
     setRoute(route);
   };
 
   render(
     html`
-      <div class="desktop-onboarding-panel">
-        <header class="desktop-onboarding-header">
-          ${waIcon('circle-info', { className: 'desktop-onboarding-icon' })}
-          <div>
-            <h1 id="desktop-onboarding-title">Welcome to TeXRA Desktop</h1>
-            <p>
-              Start from a workspace, configure model access, choose an agent,
-              and run without switching to VS Code.
-            </p>
-          </div>
-        </header>
-        <ol class="desktop-onboarding-steps">
-          ${ONBOARDING_STEPS.map(
-            (step) => html`
-              <li>
-                <span class="desktop-onboarding-step-index">${step.index}</span>
-                <div>
-                  <strong>${step.title}</strong>
-                  <span>${step.body}</span>
-                </div>
-              </li>
-            `,
-          )}
-        </ol>
-        <footer class="desktop-onboarding-actions">
-          <wa-button
-            class="desktop-secondary-button"
-            appearance="outlined"
-            @click=${() => dismissAndShowRoute('settings')}
-          >
-            Open Settings
-          </wa-button>
-          <wa-button
-            class="desktop-secondary-button"
-            appearance="outlined"
-            @click=${() => dismissAndShowRoute('main')}
-          >
-            Go to Launcher
-          </wa-button>
-          <wa-button
-            class="desktop-primary-button"
-            appearance="filled"
-            variant="brand"
-            data-onboarding-dismiss
-            @click=${() => dismiss()}
-          >
-            Got it
-          </wa-button>
-        </footer>
+      <header class="desktop-onboarding-header">
+        ${waIcon('circle-info', { className: 'desktop-onboarding-icon' })}
+        <div>
+          <h1 id="desktop-onboarding-title">Welcome to TeXRA Desktop</h1>
+          <p>
+            Start from a workspace, configure model access, choose an agent, and
+            run without switching to VS Code.
+          </p>
+        </div>
+      </header>
+      <ol class="desktop-onboarding-steps">
+        ${ONBOARDING_STEPS.map(
+          (step) => html`
+            <li>
+              <span class="desktop-onboarding-step-index">${step.index}</span>
+              <div>
+                <strong>${step.title}</strong>
+                <span>${step.body}</span>
+              </div>
+            </li>
+          `,
+        )}
+      </ol>
+      <div slot="footer" class="desktop-onboarding-actions">
+        <wa-button
+          appearance="outlined"
+          @click=${() => navigateAndClose('settings')}
+        >
+          Open Settings
+        </wa-button>
+        <wa-button
+          appearance="outlined"
+          @click=${() => navigateAndClose('main')}
+        >
+          Go to Launcher
+        </wa-button>
+        <wa-button
+          appearance="filled"
+          variant="brand"
+          data-onboarding-dismiss
+          @click=${closeDialog}
+        >
+          Got it
+        </wa-button>
       </div>
     `,
-    element,
+    dialog,
   );
 
-  const getFocusableElements = (): HTMLElement[] =>
-    [...element.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
-      (candidate) =>
-        !candidate.hasAttribute('disabled') &&
-        candidate.getAttribute('aria-hidden') !== 'true',
-    );
-
-  const hide = (): void => {
-    const restoreFocus = previousFocus;
-    element.hidden = true;
-    previousFocus = null;
-    restoreFocus?.focus();
-  };
-  const focusFirstControl = (): void => {
-    const dismissButton = element.querySelector<HTMLElement>(
-      '[data-onboarding-dismiss]',
-    );
-    (dismissButton ?? getFocusableElements()[0])?.focus();
-  };
-  const show = (): void => {
-    if (element.hidden) {
-      previousFocus =
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null;
-    }
-    element.hidden = false;
-    focusFirstControl();
-  };
-  function dismiss(): void {
-    hide();
-    postDismissed();
-  }
-
-  document.addEventListener('focusin', (event) => {
-    if (element.hidden) return;
-    if (event.target instanceof Node && element.contains(event.target)) return;
-    focusFirstControl();
+  // wa-dialog handles modal backdrop, focus trap, escape key, and focus
+  // restoration automatically. Restore the dismiss-first focus policy
+  // (the previous hand-rolled trap focused "Got it" first), and intercept
+  // the command-palette shortcut so it doesn't fire while open.
+  dialog.addEventListener('wa-after-show', () => {
+    dialog.querySelector<HTMLElement>('[data-onboarding-dismiss]')?.focus();
   });
-  document.addEventListener(
-    'keydown',
-    (event) => {
-      if (element.hidden) return;
-      if (isCommandPaletteShortcut(event)) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        dismiss();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = getFocusableElements();
-      if (focusable.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const focusedIndex = focusable.indexOf(
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : focusable[0],
-      );
-      const currentIndex = focusedIndex === -1 ? 0 : focusedIndex;
-      const nextIndex = event.shiftKey
-        ? (currentIndex - 1 + focusable.length) % focusable.length
-        : (currentIndex + 1) % focusable.length;
+  // Every user-initiated dismissal (Escape, footer buttons) posts the
+  // dismissed signal back to the host. Programmatic hide() suppresses the
+  // post via suppressNextPost to avoid a feedback loop with setState messages.
+  dialog.addEventListener('wa-after-hide', () => {
+    if (suppressNextPost) {
+      suppressNextPost = false;
+      return;
+    }
+    postDismissed();
+  });
+  // Scoped to the dialog so it only runs while open and only for keys that
+  // originate inside it. stopPropagation prevents the global command-palette
+  // listener (on document) from firing.
+  dialog.addEventListener('keydown', (event) => {
+    if (isCommandPaletteShortcut(event)) {
       event.preventDefault();
-      focusable[nextIndex]?.focus();
-    },
-    true,
-  );
+      event.stopPropagation();
+    }
+  });
 
-  return { element, isVisible: () => !element.hidden, show, hide };
+  return {
+    element: dialog,
+    isVisible: () => dialog.open,
+    show: () => {
+      dialog.open = true;
+    },
+    hide: () => {
+      if (!dialog.open) return;
+      suppressNextPost = true;
+      dialog.open = false;
+    },
+  };
 }
