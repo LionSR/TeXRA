@@ -100,12 +100,13 @@ const PRODUCTION_CSP = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
+  "connect-src 'self' data:",
 ].join('; ');
 const DEVELOPMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*",
+  "connect-src 'self' data: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*",
 ].join('; ');
 
 function installContentSecurityPolicy(): void {
