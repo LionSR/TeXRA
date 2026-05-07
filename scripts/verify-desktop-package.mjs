@@ -89,6 +89,10 @@ const desktopStartupEntryPoints = new Set([
   'src/main/bootstrap.ts',
   'src/main/index.ts',
 ]);
+const desktopStartupImportKinds = new Set([
+  'dynamic-import',
+  'import-statement',
+]);
 
 async function exists(path) {
   try {
@@ -163,6 +167,19 @@ function mergeDirectoryEntries(...entryGroups) {
   return [...new Set(entryGroups.flat())].sort((left, right) =>
     left.localeCompare(right),
   );
+}
+
+function isDesktopStartupEntryPoint(entryPoint) {
+  const normalizedEntryPoint = normalizeMetafilePath(entryPoint);
+  for (const expectedEntryPoint of desktopStartupEntryPoints) {
+    if (
+      normalizedEntryPoint === expectedEntryPoint ||
+      normalizedEntryPoint.endsWith(`/${expectedEntryPoint}`)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function createAsarAppReader(asarPath) {
@@ -360,8 +377,9 @@ async function checkDesktopStartupBundles(app, failures) {
 
   const pending = [];
   for (const [outputPath, output] of outputByPath) {
-    const entryPoint = normalizeMetafilePath(output.entryPoint ?? '');
-    if (desktopStartupEntryPoints.has(entryPoint)) pending.push(outputPath);
+    if (isDesktopStartupEntryPoint(output.entryPoint ?? '')) {
+      pending.push(outputPath);
+    }
   }
   if (pending.length === 0) {
     failures.push(
@@ -401,7 +419,7 @@ async function checkDesktopStartupBundles(app, failures) {
 
     for (const importedOutput of output.imports ?? []) {
       if (importedOutput.external) continue;
-      if (importedOutput.kind !== 'import-statement') continue;
+      if (!desktopStartupImportKinds.has(importedOutput.kind)) continue;
       const importedPath = resolveMetafileImportPath(
         outputPath,
         importedOutput.path,

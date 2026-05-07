@@ -35,6 +35,7 @@
  */
 
 import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { bus } from '@eventBus/ProgressEventBus';
 
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -178,6 +179,7 @@ export class RepoPollingSource extends PollingSourceBase<
   }
 
   protected emitKeysChangedBusEvent(keys: readonly RepoKey[]): void {
+    bus.emit('repoSubscriptionsChanged', { keys });
     getAgentRuntimeHost().emit('repoSubscriptionsChanged', { keys });
   }
 
