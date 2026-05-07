@@ -9,7 +9,12 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import {
+  codiconStyles,
+  commonViewStyles,
+  designTokens,
+  tintedBadgeStyles,
+} from '@shared/styles';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -97,6 +102,7 @@ export class ToolsTab extends LitElement {
     designTokens,
     codiconStyles,
     commonViewStyles,
+    tintedBadgeStyles,
     css`
       :host {
         display: block;
@@ -232,6 +238,32 @@ export class ToolsTab extends LitElement {
         margin-bottom: var(--spacing-small);
       }
 
+      .desktop-settings {
+        padding: var(--spacing-medium);
+        margin-bottom: var(--spacing-medium);
+        background-color: var(--texra-editor-inactiveSelectionBackground);
+        border-radius: var(--border-radius);
+      }
+
+      .desktop-settings-title {
+        font-weight: 600;
+        margin: 0;
+      }
+
+      .desktop-settings-description {
+        margin: var(--spacing-small) 0 0 0;
+        font-size: var(--font-size-sm);
+        color: var(--texra-descriptionForeground);
+      }
+
+      .desktop-settings-row {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-small);
+        flex-wrap: wrap;
+      }
+
       .codex-inline-settings {
         padding: var(--spacing-small) var(--spacing-medium);
         margin-bottom: var(--spacing-small);
@@ -267,6 +299,9 @@ export class ToolsTab extends LitElement {
   @property({ type: String }) codexSandboxMode = 'workspace-write';
   @property({ type: String }) codexReasoningEffort = 'high';
   @property({ type: String }) codexApprovalPolicy = 'never';
+  @property({ attribute: false }) showDesktopCrashReporting = false;
+  @property({ attribute: false }) desktopCrashReportingEnabled = false;
+  @property({ attribute: false }) desktopCrashReportingConfigured = false;
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
@@ -300,6 +335,14 @@ export class ToolsTab extends LitElement {
 
   private handleCodexApprovalPolicyChange = (e: Event): void => {
     this.emitSelect('codex-approval-policy-change', 'policy', e);
+  };
+
+  private handleDesktopCrashReportingToggle = (e: Event): void => {
+    this.emitToggle('desktop-crash-reporting-toggle', e);
+  };
+
+  private handleSetDesktopCrashReportingDsn = (): void => {
+    this.dispatchEvent(createEvent('desktop-crash-reporting-dsn-set', {}));
   };
 
   private renderApprovalSettings(): TemplateResult {
@@ -372,6 +415,51 @@ export class ToolsTab extends LitElement {
           APPROVAL_POLICY_OPTIONS,
           this.handleCodexApprovalPolicyChange,
         )}
+      </div>
+    `;
+  }
+
+  private renderDesktopCrashReporting(): TemplateResult | typeof nothing {
+    if (!this.showDesktopCrashReporting) return nothing;
+    return html`
+      <div class="category-section">
+        <div class="category-header">
+          <span class="codicon codicon-desktop-download"></span>
+          Desktop Diagnostics
+        </div>
+        <div class="desktop-settings">
+          <p class="desktop-settings-title">Native crash reporting</p>
+          <p class="desktop-settings-description">
+            Opt-in native crash capture for the standalone Electron app. Reports
+            are scrubbed before upload and performance tracing stays disabled.
+          </p>
+          <div class="desktop-settings-row">
+            <vscode-checkbox
+              ?checked=${this.desktopCrashReportingEnabled}
+              @change=${this.handleDesktopCrashReportingToggle}
+            >
+              Enable native crash reporting
+            </vscode-checkbox>
+            <span
+              class=${this.desktopCrashReportingConfigured
+                ? 'tinted-badge tinted-badge--ok'
+                : 'tinted-badge tinted-badge--warn'}
+            >
+              ${this.desktopCrashReportingConfigured
+                ? 'DSN set'
+                : 'DSN missing'}
+            </span>
+            <button
+              class="tab-action-btn"
+              @click=${this.handleSetDesktopCrashReportingDsn}
+            >
+              <span class="codicon codicon-key"></span>
+              ${this.desktopCrashReportingConfigured
+                ? 'Replace DSN'
+                : 'Set DSN'}
+            </button>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -511,7 +599,7 @@ export class ToolsTab extends LitElement {
           </div>
         </div>
 
-        ${this.renderApprovalSettings()}
+        ${this.renderApprovalSettings()} ${this.renderDesktopCrashReporting()}
         ${CATEGORY_ORDER.filter((cat) => groups.has(cat)).map((cat) =>
           this.renderCategory(cat, groups.get(cat)!),
         )}

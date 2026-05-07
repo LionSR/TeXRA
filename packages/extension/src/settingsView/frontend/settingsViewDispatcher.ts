@@ -7,6 +7,7 @@ import {
   UpdateApprovalSettingsMessageSchema,
   UpdateCustomAgentDirMessageSchema,
   UpdateGitAuthorSettingsMessageSchema,
+  UpdateDesktopCrashReportingMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,
   UpdateHistoryMessageSchema,
   UpdateLatexConfigValuesMessageSchema,
@@ -82,6 +83,8 @@ export interface SettingsMessageHandlerContext {
   gitWorktreeSupport: WritableSignal<boolean>;
   gitSettingsLoaded: WritableSignal<boolean>;
   githubTokenStatus: WritableSignal<'secret' | 'env' | 'none'>;
+  desktopCrashReportingEnabled: WritableSignal<boolean>;
+  desktopCrashReportingConfigured: WritableSignal<boolean>;
   prSubscriptions: WritableSignal<readonly PRSubscriptionEntry[]>;
   latexSettingsStatus: WritableSignal<LatexSettingsStatus>;
   latexSettingsLoaded: WritableSignal<boolean>;
@@ -240,6 +243,18 @@ export function dispatchSettingsViewMessage(
       const data = parseMessage(raw, UpdateGitHubTokenStatusMessageSchema, ctx);
       if (!data) return false;
       ctx.githubTokenStatus.set(data.status);
+      return true;
+    }
+
+    case SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING: {
+      const data = parseMessage(
+        raw,
+        UpdateDesktopCrashReportingMessageSchema,
+        ctx,
+      );
+      if (!data) return false;
+      ctx.desktopCrashReportingEnabled.set(data.enabled);
+      ctx.desktopCrashReportingConfigured.set(data.configured);
       return true;
     }
 
