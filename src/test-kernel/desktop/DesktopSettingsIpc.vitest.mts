@@ -300,6 +300,51 @@ describe('desktop settings IPC', () => {
     });
   });
 
+  it('round-trips desktop crash reporting settings through global state and secrets', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    const secrets = new MemorySecrets();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      secrets,
+      postToRenderer: (message) => posted.push(message),
+      promptSecret: async () => ' https://example.invalid/123 ',
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
+        enabled: true,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(
+      globalState.values.get(GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED),
+    ).toBe(true);
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
+      enabled: true,
+      configured: false,
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
+      enabled: true,
+      configured: true,
+    });
+  });
+
   it('serves storage-backed LaTeX config reads through workspace state', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
     const workspaceState = new MemoryStateStore();

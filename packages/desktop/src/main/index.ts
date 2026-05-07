@@ -32,6 +32,7 @@ import {
   type DesktopAuthCoordinator,
 } from './desktopSupabaseAuth.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
+import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
@@ -313,6 +314,12 @@ if (protocolLifecycle.shouldContinue) {
     .whenReady()
     .then(async () => {
       const platformInit = await initializeElectronPlatform(__dirname);
+      await initializeDesktopCrashReporting({
+        globalState: platform().globalState,
+        secrets: platform().secrets,
+        sensitivePaths: [platformInit.workspacePath, app.getPath('userData')],
+        log: console,
+      });
       const authCoordinator = createDesktopAuthCoordinator({
         secrets: platform().secrets,
         log: console,

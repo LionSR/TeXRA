@@ -207,6 +207,8 @@ export class SettingsApp extends SettingsAppBase {
   private readonly githubTokenStatus = signal<'secret' | 'env' | 'none'>(
     'none',
   );
+  private readonly desktopCrashReportingEnabled = signal(false);
+  private readonly desktopCrashReportingConfigured = signal(false);
   private readonly prSubscriptions = signal<readonly PRSubscriptionEntry[]>([]);
 
   // LaTeX settings state
@@ -258,6 +260,8 @@ export class SettingsApp extends SettingsAppBase {
       gitWorktreeSupport: this.gitWorktreeSupport,
       gitSettingsLoaded: this.gitSettingsLoaded,
       githubTokenStatus: this.githubTokenStatus,
+      desktopCrashReportingEnabled: this.desktopCrashReportingEnabled,
+      desktopCrashReportingConfigured: this.desktopCrashReportingConfigured,
       prSubscriptions: this.prSubscriptions,
       latexSettingsStatus: this.latexSettingsStatus,
       latexSettingsLoaded: this.latexSettingsLoaded,
@@ -585,6 +589,14 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
   );
 
+  private handleDesktopCrashReportingToggle = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
+  );
+
+  private handleDesktopCrashReportingDsnSet = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN,
+  );
+
   private handleUnsubscribePR = forwardDetail(
     SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR,
   );
@@ -863,10 +875,17 @@ export class SettingsApp extends SettingsAppBase {
               @github-token-set=${this.handleGitHubTokenSet}
               @github-token-remove=${this.handleGitHubTokenRemove}
               @github-token-open-url=${this.handleGitHubTokenOpenUrl}
+              @desktop-crash-reporting-toggle=${this
+                .handleDesktopCrashReportingToggle}
+              @desktop-crash-reporting-dsn-set=${this
+                .handleDesktopCrashReportingDsnSet}
               @unsubscribe-pr=${this.handleUnsubscribePR}
               @open-pr-subscription-stream=${this
                 .handleOpenPRSubscriptionStream}
               .githubTokenStatus=${this.githubTokenStatus.get()}
+              .showDesktopCrashReporting=${this.isDesktopHost()}
+              .desktopCrashReportingEnabled=${this.desktopCrashReportingEnabled.get()}
+              .desktopCrashReportingConfigured=${this.desktopCrashReportingConfigured.get()}
               .prSubscriptions=${this.prSubscriptions.get()}
             ></git-tab>
           </vscode-tab-panel>

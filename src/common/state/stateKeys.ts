@@ -130,6 +130,9 @@ export enum GlobalStateKey {
 
   // Tool settings
   DISABLED_TOOLS = 'texra.tools.disabled',
+
+  // Desktop-only crash reporting
+  DESKTOP_CRASH_REPORTING_ENABLED = 'texra.desktop.crashReporting.enabled',
 }
 
 /** Prefix used for per-instruction suppression flags */
