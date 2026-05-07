@@ -361,6 +361,13 @@
               "order": 51,
               "scope": "resource",
               "type": "boolean"
+            },
+            "texra.inlineCriticism.enabled": {
+              "default": false,
+              "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.",
+              "order": 52,
+              "scope": "resource",
+              "type": "boolean"
             }
           },
           "title": "TeXRA"
