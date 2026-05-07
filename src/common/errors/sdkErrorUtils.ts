@@ -241,9 +241,10 @@ function detectProvider(err: unknown): string | undefined {
     return candidate.provider;
   }
 
-  const classNameProvider = detectProviderFromClassNames(
-    getErrorClassNames(err),
-  );
+  const classNameProvider = detectProviderFromClassNames([
+    candidate.constructor?.name,
+    ...getErrorClassNames(err),
+  ]);
   if (classNameProvider) return classNameProvider;
 
   const providerFromStack = detectProviderFromText(candidate.stack ?? '');
