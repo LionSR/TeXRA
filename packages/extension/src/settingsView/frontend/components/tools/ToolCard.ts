@@ -4,11 +4,14 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -125,28 +128,9 @@ export class ToolCard extends LitElement {
         border-radius: var(--border-radius);
       }
 
-      .tool-guide-toggle {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) 0;
-        font-size: var(--font-size-sm);
-        font-family: inherit;
-        color: var(--texra-textLink-foreground, #3794ff);
-        background: none;
-        border: none;
-        cursor: pointer;
-        transition: opacity var(--transition-fast);
-      }
-
-      .tool-guide-toggle:hover {
-        opacity: var(--opacity-hover);
-      }
-
-      .tool-guide-toggle:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
-        outline-offset: 1px;
-        border-radius: var(--border-radius-small);
+      .tool-guide-toggle::part(base) {
+        min-height: var(--height-control);
+        padding-inline: 0;
       }
 
       .tool-guide {
@@ -165,49 +149,13 @@ export class ToolCard extends LitElement {
 
       .tool-guide-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: var(--spacing-small);
         margin-top: var(--spacing-small);
       }
 
-      .tool-action-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) var(--spacing-medium);
-        font-size: var(--font-size-sm);
-        font-family: inherit;
-        color: var(--texra-button-foreground, #fff);
-        background: var(--texra-button-background, #0e639c);
-        border: none;
-        border-radius: var(--border-radius);
-        cursor: pointer;
-        transition:
-          background var(--transition-fast),
-          opacity var(--transition-fast);
-      }
-
-      .tool-action-btn:hover {
-        background: var(--texra-button-hoverBackground, #1177bb);
-      }
-
-      .tool-action-btn:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
-        outline-offset: 1px;
-      }
-
-      .tool-action-btn--secondary {
-        color: var(--texra-button-secondaryForeground, #ccc);
-        background: var(
-          --texra-button-secondaryBackground,
-          rgba(128, 128, 128, 0.2)
-        );
-      }
-
-      .tool-action-btn--secondary:hover {
-        background: var(
-          --texra-button-secondaryHoverBackground,
-          rgba(128, 128, 128, 0.3)
-        );
+      .tool-guide-actions wa-button::part(base) {
+        min-height: var(--height-control);
       }
 
       .tool-auth-note {
@@ -353,19 +301,24 @@ export class ToolCard extends LitElement {
     const hasPrimaryInstallAction = Boolean(
       this.item.installCommand || this.item.installExtensionId,
     );
-    const secondaryClass = hasPrimaryInstallAction
-      ? 'tool-action-btn--secondary'
-      : '';
+    const secondaryAppearance = hasPrimaryInstallAction ? 'outlined' : 'filled';
+    const secondaryVariant = hasPrimaryInstallAction ? 'neutral' : 'brand';
 
     return html`
-      <button class="tool-guide-toggle" @click=${this.toggleGuide}>
-        <span
-          class="codicon ${this.guideExpanded
-            ? 'codicon-chevron-down'
-            : 'codicon-chevron-right'}"
-        ></span>
+      <wa-button
+        class="tool-guide-toggle"
+        appearance="plain"
+        size="small"
+        @click=${this.toggleGuide}
+      >
+        <wa-icon
+          slot="start"
+          library=${TEXRA_ICON_LIBRARY}
+          name=${this.guideExpanded ? 'chevron-down' : 'chevron-right'}
+          variant="solid"
+        ></wa-icon>
         Installation Guide
-      </button>
+      </wa-button>
       ${this.guideExpanded
         ? html`
             ${this.item.installGuide
@@ -374,48 +327,76 @@ export class ToolCard extends LitElement {
             <div class="tool-guide-actions">
               ${this.item.installCommand
                 ? html`
-                    <button
-                      class="tool-action-btn"
+                    <wa-button
+                      appearance="filled"
+                      variant="brand"
+                      size="small"
                       @click=${this.handleRunInstallCommand}
                       title=${this.item.installCommand}
                     >
-                      <span class="codicon codicon-terminal"></span>
+                      <wa-icon
+                        slot="start"
+                        library=${TEXRA_ICON_LIBRARY}
+                        name="terminal"
+                        variant="solid"
+                      ></wa-icon>
                       Install in Terminal
-                    </button>
+                    </wa-button>
                   `
                 : nothing}
               ${this.item.authCommand
                 ? html`
-                    <button
-                      class="tool-action-btn ${secondaryClass}"
+                    <wa-button
+                      appearance=${secondaryAppearance}
+                      variant=${secondaryVariant}
+                      size="small"
                       @click=${this.handleRunAuthCommand}
                       title=${this.item.authCommand}
                     >
-                      <span class="codicon codicon-sign-in"></span>
+                      <wa-icon
+                        slot="start"
+                        library=${TEXRA_ICON_LIBRARY}
+                        name="right-to-bracket"
+                        variant="solid"
+                      ></wa-icon>
                       Sign in
-                    </button>
+                    </wa-button>
                   `
                 : nothing}
               ${this.item.installExtensionId
                 ? html`
-                    <button
-                      class="tool-action-btn"
+                    <wa-button
+                      appearance="filled"
+                      variant="brand"
+                      size="small"
                       @click=${this.handleInstallExtension}
                     >
-                      <span class="codicon codicon-cloud-download"></span>
+                      <wa-icon
+                        slot="start"
+                        library=${TEXRA_ICON_LIBRARY}
+                        name="cloud-arrow-down"
+                        variant="solid"
+                      ></wa-icon>
                       Install Extension
-                    </button>
+                    </wa-button>
                   `
                 : nothing}
               ${this.item.installUrl
                 ? html`
-                    <button
-                      class="tool-action-btn ${secondaryClass}"
+                    <wa-button
+                      appearance=${secondaryAppearance}
+                      variant=${secondaryVariant}
+                      size="small"
                       @click=${this.handleInstallUrl}
                     >
-                      <span class="codicon codicon-link-external"></span>
+                      <wa-icon
+                        slot="start"
+                        library=${TEXRA_ICON_LIBRARY}
+                        name="arrow-up-right-from-square"
+                        variant="solid"
+                      ></wa-icon>
                       Open Install Page
-                    </button>
+                    </wa-button>
                   `
                 : nothing}
             </div>

@@ -6,6 +6,8 @@
 // Third-party imports
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, query } from 'lit/decorators.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -31,6 +33,10 @@ import {
   type ModelSelectionItem,
   SETTINGS_TAB,
 } from '@shared/schemas';
+import {
+  registerTeXRAWebAwesomeIcons,
+  TEXRA_ICON_LIBRARY,
+} from '@shared/wa/webAwesomeIcons';
 import {
   type AgentSelectionItem,
   type LatexConfigValues,
@@ -72,6 +78,8 @@ import './tabs/GitTab';
 import './tabs/LaTeXTab';
 import './components/profile/ProviderKeyModal';
 import type { HistoryTab } from './tabs/HistoryTab';
+
+registerTeXRAWebAwesomeIcons();
 
 const HISTORY_ACTION_COMMANDS: Record<string, string> = {
   delete: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
@@ -653,11 +661,19 @@ export class SettingsApp extends SettingsAppBase {
     const settingsButton = this.isDesktopHost()
       ? nothing
       : html`
-          <vscode-toolbar-button
-            icon="settings-gear"
+          <wa-button
+            aria-label="Open VS Code Settings"
+            appearance="plain"
+            size="small"
             title="Open VS Code Settings"
             @click=${this.handleOpenVscodeSettings}
-          ></vscode-toolbar-button>
+          >
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="gear"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
         `;
 
     if (this.authenticated.get()) {
@@ -672,14 +688,22 @@ export class SettingsApp extends SettingsAppBase {
           </div>
           <div class="settings-header-actions">
             ${settingsButton}
-            <button
-              class="tab-action-btn settings-header-auth-button"
+            <wa-button
+              class="settings-header-auth-button"
+              appearance="outlined"
+              variant="neutral"
+              size="small"
               title="Sign out"
               @click=${this.handleSignOut}
             >
-              <span class="codicon codicon-sign-out"></span>
+              <wa-icon
+                slot="start"
+                library=${TEXRA_ICON_LIBRARY}
+                name="xmark"
+                variant="solid"
+              ></wa-icon>
               Sign out
-            </button>
+            </wa-button>
           </div>
         </div>
       `;
@@ -692,22 +716,38 @@ export class SettingsApp extends SettingsAppBase {
         </span>
         <div class="settings-header-actions">
           ${settingsButton}
-          <button
-            class="tab-action-btn settings-header-auth-button"
+          <wa-button
+            class="settings-header-auth-button"
+            appearance="outlined"
+            variant="neutral"
+            size="small"
             title="Set provider API key"
             @click=${this.handleSetDefaultProviderKey}
           >
-            <span class="codicon codicon-key"></span>
+            <wa-icon
+              slot="start"
+              library=${TEXRA_ICON_LIBRARY}
+              name="key"
+              variant="solid"
+            ></wa-icon>
             Set API key
-          </button>
-          <button
-            class="tab-action-btn settings-header-auth-button"
+          </wa-button>
+          <wa-button
+            class="settings-header-auth-button"
+            appearance="filled"
+            variant="brand"
+            size="small"
             title="Sign in"
             @click=${this.handleSignIn}
           >
-            <span class="codicon codicon-sign-in"></span>
+            <wa-icon
+              slot="start"
+              library=${TEXRA_ICON_LIBRARY}
+              name="user"
+              variant="solid"
+            ></wa-icon>
             Sign in
-          </button>
+          </wa-button>
         </div>
       </div>
     `;

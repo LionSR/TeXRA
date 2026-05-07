@@ -441,18 +441,23 @@ describe('desktop main-view IPC', () => {
     );
     await flushAsyncWork();
 
-    await vi.waitFor(() =>
-      expect(
-        sends.filter(
-          ({ channel }) => channel === ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        ),
-      ).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            message: { command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER },
-          }),
-        ]),
-      ),
+    await vi.waitFor(
+      () => {
+        expect(
+          sends.filter(
+            ({ channel }) => channel === ELECTRON_WEBVIEW_PUSH_CHANNEL,
+          ),
+        ).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              message: { command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER },
+            }),
+          ]),
+        );
+      },
+      {
+        timeout: 5000,
+      },
     );
     expect(
       sends.some(

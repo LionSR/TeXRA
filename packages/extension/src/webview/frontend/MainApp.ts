@@ -3,6 +3,8 @@ import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -45,6 +47,10 @@ import {
   type RemoveFileDetail,
   type SessionTypeChangeDetail,
 } from '@shared/schemas';
+import {
+  registerTeXRAWebAwesomeIcons,
+  TEXRA_ICON_LIBRARY,
+} from '@shared/wa/webAwesomeIcons';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { agentName } from '@shared/schemas/agent';
 import { capitalize } from '@shared/utils/string';
@@ -94,6 +100,8 @@ import {
 } from './store';
 import { mainViewStyles } from './styles';
 import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
+
+registerTeXRAWebAwesomeIcons();
 
 // Helper type for extracting specific message type from union
 type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<
@@ -1911,26 +1919,50 @@ export class MainApp extends MainAppBase {
             @vsc-tabs-select=${this.onViewTabSelect}
           >
             <vscode-tab-header slot="header">
-              <span class="codicon codicon-edit"></span>
+              <wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="pencil"
+                variant="solid"
+              ></wa-icon>
               Launcher
             </vscode-tab-header>
             <vscode-tab-header slot="header">
-              <span class="codicon codicon-server-process"></span>
+              <wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="robot"
+                variant="solid"
+              ></wa-icon>
               Progress
             </vscode-tab-header>
           </vscode-tabs>
-          <vscode-toolbar-button
+          <wa-button
             class="header-action"
-            icon="gear"
+            aria-label="Open dashboard"
+            appearance="plain"
+            size="small"
             title="Open dashboard"
             @click=${this.onOpenDashboard}
-          ></vscode-toolbar-button>
-          <vscode-toolbar-button
+          >
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="gear"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
+          <wa-button
             class="header-action"
-            icon="link-external"
+            aria-label="Open progress sessions in editor"
+            appearance="plain"
+            size="small"
             title="Open progress sessions in editor"
             @click=${this.onPopOutProgress}
-          ></vscode-toolbar-button>
+          >
+            <wa-icon
+              library=${TEXRA_ICON_LIBRARY}
+              name="picture-in-picture"
+              variant="solid"
+            ></wa-icon>
+          </wa-button>
         </div>
 
         <div class="main-content">
