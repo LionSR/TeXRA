@@ -10,6 +10,7 @@ import {
   APIConnectionTimeoutError as OpenAIAPIConnectionTimeoutError,
   APIUserAbortError as OpenAIAPIUserAbortError,
   AuthenticationError as OpenAIAuthenticationError,
+  RateLimitError as OpenAIRateLimitError,
 } from 'openai';
 import { describe, expect, it } from 'vitest';
 
@@ -36,6 +37,26 @@ describe('formatProviderHttpError', () => {
     );
 
     expect(formatted.message).toBe('new provider error shape');
+    expect(formatted.retryable).toBe(false);
+  });
+
+  it('detects OpenAI provider errors without importing SDK classes at runtime', () => {
+    const formatted = formatProviderHttpError(
+      new OpenAIRateLimitError(429, {}, 'rate limited', new Headers()),
+    );
+
+    expect(formatted.provider).toBe('openai');
+    expect(formatted.statusCode).toBe(429);
+    expect(formatted.retryable).toBe(true);
+  });
+
+  it('detects Anthropic provider errors without importing SDK classes at runtime', () => {
+    const formatted = formatProviderHttpError(
+      new AnthropicAuthenticationError(401, {}, 'bad key', new Headers()),
+    );
+
+    expect(formatted.provider).toBe('anthropic');
+    expect(formatted.statusCode).toBe(401);
     expect(formatted.retryable).toBe(false);
   });
 
