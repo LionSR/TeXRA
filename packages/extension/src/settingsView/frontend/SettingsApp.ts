@@ -849,6 +849,9 @@ export class SettingsApp extends SettingsAppBase {
               .codexSandboxMode=${this.codexSandboxMode.get()}
               .codexReasoningEffort=${this.codexReasoningEffort.get()}
               .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
+              .showDesktopCrashReporting=${this.isDesktopHost()}
+              .desktopCrashReportingEnabled=${this.desktopCrashReportingEnabled.get()}
+              .desktopCrashReportingConfigured=${this.desktopCrashReportingConfigured.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-run-command=${this.handleToolRunCommand}
@@ -860,6 +863,10 @@ export class SettingsApp extends SettingsAppBase {
                 .handleCodexReasoningEffortChange}
               @codex-approval-policy-change=${this
                 .handleCodexApprovalPolicyChange}
+              @desktop-crash-reporting-toggle=${this
+                .handleDesktopCrashReportingToggle}
+              @desktop-crash-reporting-dsn-set=${this
+                .handleDesktopCrashReportingDsnSet}
             ></tools-tab>
           </vscode-tab-panel>
 
@@ -875,17 +882,10 @@ export class SettingsApp extends SettingsAppBase {
               @github-token-set=${this.handleGitHubTokenSet}
               @github-token-remove=${this.handleGitHubTokenRemove}
               @github-token-open-url=${this.handleGitHubTokenOpenUrl}
-              @desktop-crash-reporting-toggle=${this
-                .handleDesktopCrashReportingToggle}
-              @desktop-crash-reporting-dsn-set=${this
-                .handleDesktopCrashReportingDsnSet}
               @unsubscribe-pr=${this.handleUnsubscribePR}
               @open-pr-subscription-stream=${this
                 .handleOpenPRSubscriptionStream}
               .githubTokenStatus=${this.githubTokenStatus.get()}
-              .showDesktopCrashReporting=${this.isDesktopHost()}
-              .desktopCrashReportingEnabled=${this.desktopCrashReportingEnabled.get()}
-              .desktopCrashReportingConfigured=${this.desktopCrashReportingConfigured.get()}
               .prSubscriptions=${this.prSubscriptions.get()}
             ></git-tab>
           </vscode-tab-panel>

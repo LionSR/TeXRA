@@ -67,7 +67,7 @@ function scrubValue(value: unknown, scrubbers: readonly RegExp[]): unknown {
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value).map(([key, entry]) => [
-        key,
+        scrubString(key, scrubbers),
         scrubValue(entry, scrubbers),
       ]),
     );

@@ -190,9 +190,6 @@ export class GitTab extends LitElement {
   @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) githubTokenStatus: 'secret' | 'env' | 'none' =
     'none';
-  @property({ attribute: false }) showDesktopCrashReporting = false;
-  @property({ attribute: false }) desktopCrashReportingEnabled = false;
-  @property({ attribute: false }) desktopCrashReportingConfigured = false;
   @property({ attribute: false })
   prSubscriptions: readonly PRSubscriptionEntry[] = [];
 
@@ -233,19 +230,6 @@ export class GitTab extends LitElement {
     this.dispatchEvent(createEvent('github-token-open-url', {}));
   }
 
-  private handleDesktopCrashReportingToggle(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
-    this.dispatchEvent(
-      createEvent('desktop-crash-reporting-toggle', {
-        enabled: Boolean(target?.checked),
-      }),
-    );
-  }
-
-  private handleSetDesktopCrashReportingDsn(): void {
-    this.dispatchEvent(createEvent('desktop-crash-reporting-dsn-set', {}));
-  }
-
   private handleUnsubscribePR(key: string): void {
     this.dispatchEvent(createEvent('unsubscribe-pr', { key }));
   }
@@ -266,47 +250,10 @@ export class GitTab extends LitElement {
     return html`<span class="tinted-badge tinted-badge--warn">Not set</span>`;
   }
 
-  private renderDesktopCrashReporting(): TemplateResult | typeof nothing {
-    if (!this.showDesktopCrashReporting) return nothing;
-    return html`
-      <div class="setting-block">
-        <p class="section-title">Desktop crash reporting</p>
-        <p class="setting-description">
-          Opt-in native crash capture for the standalone Electron app. Reports
-          are scrubbed before upload and performance tracing stays disabled.
-        </p>
-        <div class="token-row">
-          <vscode-checkbox
-            ?checked=${this.desktopCrashReportingEnabled}
-            @change=${this.handleDesktopCrashReportingToggle}
-          >
-            Enable native crash reporting
-          </vscode-checkbox>
-          <span
-            class=${this.desktopCrashReportingConfigured
-              ? 'tinted-badge tinted-badge--ok'
-              : 'tinted-badge tinted-badge--warn'}
-          >
-            ${this.desktopCrashReportingConfigured ? 'DSN set' : 'DSN missing'}
-          </span>
-          <button
-            class="tab-action-btn"
-            @click=${this.handleSetDesktopCrashReportingDsn}
-          >
-            <span class="codicon codicon-key"></span>
-            ${this.desktopCrashReportingConfigured ? 'Replace DSN' : 'Set DSN'}
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
   override render(): TemplateResult {
     const tokenIsSet = this.githubTokenStatus !== 'none';
     return html`
       <div class="git-container">
-        ${this.renderDesktopCrashReporting()}
-
         <div class="setting-block">
           <p class="section-title">GitHub personal access token</p>
           <p class="setting-description">

@@ -126,6 +126,7 @@ describe('desktop crash reporting', () => {
         extra: {
           cwd: '/Users/alice/paper',
           log: 'C:\\Users\\Alice\\TeXRA\\workspace\\logs\\main.log',
+          '/Users/alice/paper/output.pdf': 'build output',
         },
       },
       ['/Users/alice/paper', 'C:\\Users\\Alice\\TeXRA\\workspace'],
@@ -134,5 +135,8 @@ describe('desktop crash reporting', () => {
     expect(JSON.stringify(scrubbed)).toContain('<redacted-path>');
     expect(JSON.stringify(scrubbed)).not.toContain('/Users/alice/paper');
     expect(JSON.stringify(scrubbed)).not.toContain('C:\\\\Users\\\\Alice');
+    expect(Object.keys(scrubbed?.extra as Record<string, unknown>)).toContain(
+      '<redacted-path>/output.pdf',
+    );
   });
 });
