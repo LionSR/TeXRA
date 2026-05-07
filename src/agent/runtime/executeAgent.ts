@@ -40,9 +40,12 @@ import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPoli
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { isDiskFullError, toErrorMessage } from '@common/errors';
+import {
+  classifyAgentError,
+  getSdkErrorMessage,
+  toErrorMessage,
+} from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import {
   AgentLogger,
   AgentUsageReporter,
@@ -434,61 +437,90 @@ async function runFlowWithLifecycle(
     logger.debug(`Task completed with status: ${result.status}`);
     return result;
   } catch (err) {
-    await writeTerminalStatus(ctx.executionId, 'error').catch(() => {});
+    const kind = classifyAgentError(err);
+    const status =
+      kind === 'abort' ? END_GROUP_STATUS.STOPPED : END_GROUP_STATUS.ERROR;
+    const streamStatus =
+      kind === 'abort' ? STREAM_STATUS.STOPPED : STREAM_STATUS.ERROR;
+    await writeTerminalStatus(ctx.executionId, status).catch(() => {});
     untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
     // Log error BEFORE ending the group so it gets the correct groupId
-    await ctx.logger.logError(errorMsg, err, {
-      operation: `execute ${agentName}`,
-    });
+    if (kind !== 'abort') {
+      await ctx.logger.logError(errorMsg, err, {
+        operation: `execute ${agentName}`,
+      });
+    }
 
-    ctx.parentStage.end(END_GROUP_STATUS.ERROR);
-    StreamStatusService.set(streamId, STREAM_STATUS.ERROR, {
+    ctx.parentStage.end(status);
+    StreamStatusService.set(streamId, streamStatus, {
       runtimeHost: ctx.runtimeHost,
     });
 
     // Subagents propagate errors to the orchestrator via FollowUpQueue —
     // don't show VS Code popups that would confuse the user.
     if (!options?.isSubagent) {
-      if (isDiskFullError(err)) {
+      if (kind === 'disk-full') {
         ctx.runtimeHost.emit('requestShowError', {
           message: getSdkErrorMessage(err),
         });
-      } else {
-        const msg = toErrorMessage(err);
-        if (
-          msg.includes('Missing API key') ||
-          msg.includes('API key not found')
-        ) {
-          ctx.runtimeHost.emit('requestShowInstruction', {
-            key: 'missingApiKey',
-            message:
-              'API key not found. Set your API key in the extension settings and run again.',
-            actions: [
-              { title: 'Set API Key', command: 'texra.setApiKey' },
-              {
-                title: 'Open Settings Guide',
-                command: 'texra.openDoc',
-                args: ['configuration'],
-              },
-            ],
-            showSuppress: false,
-          });
-        } else {
-          ctx.runtimeHost.emit('requestShowError', {
-            message: errorMsg,
-          });
-        }
+      } else if (kind === 'missing-api-key') {
+        ctx.runtimeHost.emit('requestShowInstruction', {
+          key: 'missingApiKey',
+          message:
+            'API key not found. Set your API key in the extension settings and run again.',
+          actions: [
+            { title: 'Set API Key', command: 'texra.setApiKey' },
+            {
+              title: 'Open Settings Guide',
+              command: 'texra.openDoc',
+              args: ['configuration'],
+            },
+          ],
+          showSuppress: false,
+        });
+      } else if (kind === 'unexpected') {
+        ctx.runtimeHost.emit('requestShowError', {
+          message: errorMsg,
+        });
       }
     }
 
-    throw new Error(errorMsg);
+    if (kind === 'abort') {
+      return buildStoppedFlowResult(category, ctx.executionId, streamId);
+    }
+
+    throw new Error(errorMsg, { cause: err });
   } finally {
     // Release long-lived resources (e.g., WebSocket connections, keepalive intervals)
     // to prevent leaks when handler instances are discarded after execution.
     ctx.modelHandler.dispose();
   }
+}
+
+function buildStoppedFlowResult(
+  category: 'workflow' | 'toolUse',
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): AgentFlowResult {
+  if (category === 'toolUse') {
+    return {
+      category,
+      status: END_GROUP_STATUS.STOPPED,
+      executionId,
+      streamId,
+    };
+  }
+
+  return {
+    category,
+    status: END_GROUP_STATUS.STOPPED,
+    executionId,
+    streamId,
+    outputs: [],
+    compileFailures: [],
+  };
 }
 
 function buildFallbackNotification(config: AgentConfig) {

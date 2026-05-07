@@ -80,6 +80,10 @@ describe('formatProviderHttpError', () => {
     expect(isUserAbort(new AnthropicAPIUserAbortError())).toBe(true);
   });
 
+  it('detects AbortController DOMException aborts', () => {
+    expect(isUserAbort(new DOMException('aborted', 'AbortError'))).toBe(true);
+  });
+
   it('preserves provider context for native OpenAI HTTP errors', () => {
     const formatted = formatProviderHttpError(
       new OpenAIAuthenticationError(
