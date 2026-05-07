@@ -510,10 +510,11 @@ export function takeTail(text: string, maxChars: number): string {
   return text.length <= maxChars ? text : text.slice(text.length - maxChars);
 }
 
-/** True if `err` is an SDK user-abort error by prototype class name. */
+/** True if `err` is an SDK or AbortController user-abort error. */
 export function isUserAbort(err: unknown): boolean {
   if (detectSdkErrorMetadata(err)?.kind === 'user_abort') return true;
-  return getErrorClassNames(err).includes('APIUserAbortError');
+  if (getErrorClassNames(err).includes('APIUserAbortError')) return true;
+  return isObject(err) && (err as { name?: unknown }).name === 'AbortError';
 }
 
 const streamDiagnosticsMetadata = createErrorMetadata<StreamDiagnostics>(
