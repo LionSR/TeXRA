@@ -1,5 +1,9 @@
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
+import {
+  createDesktopLogIpc,
+  type DesktopLogIpcOptions,
+} from './desktopLogIpc.js';
 import { createDesktopMainViewStartup } from './desktopMainViewStartup.js';
 import {
   isDesktopCommandMessage,
@@ -28,6 +32,7 @@ export interface DesktopMainViewIpcOptions {
   workspaceExplorer?: DesktopWorkspaceExplorer;
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
+  logs?: DesktopLogIpcOptions;
   shellActions?: DesktopShellActions;
   modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
@@ -74,6 +79,10 @@ export function installDesktopMainViewIpc(
     executeAgent: options.executeAgent,
     onAsyncError: options.onAsyncError,
   });
+  const logs = createDesktopLogIpc(bridge, {
+    ...options.logs,
+    onAsyncError: options.onAsyncError,
+  });
   const startup = createDesktopMainViewStartup({
     renderer: bridge,
     modelListRefresh: options.modelListRefresh,
@@ -87,6 +96,7 @@ export function installDesktopMainViewIpc(
     options.settings,
     options.progress,
     viewState,
+    logs,
     shell,
     execution,
   ].filter((handler): handler is DesktopMessageHandler => handler != null);

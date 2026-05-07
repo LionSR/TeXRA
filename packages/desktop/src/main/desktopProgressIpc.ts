@@ -93,10 +93,50 @@ export function createDesktopProgressIpc(
           onUnsupportedCommand(result.data);
           return true;
         case PROGRESS_VIEW_COMMANDS.OPEN_FILE:
-          runAsync(options.progress.openFile(result.data.file));
+          runAsync(
+            options.progress.openFile(result.data.file, result.data.line),
+          );
           return true;
         case PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE:
           runAsync(options.progress.openFileCompile(result.data.file));
+          return true;
+        case PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE:
+          runAsync(options.progress.openTaskStorage(result.data.stream));
+          return true;
+        case PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL:
+          runAsync(
+            options.progress.compareOriginal(
+              result.data.file,
+              result.data.base,
+            ),
+          );
+          return true;
+        case PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS:
+          runAsync(
+            options.progress.comparePrevious(
+              result.data.file,
+              result.data.base,
+              result.data.prev,
+            ),
+          );
+          return true;
+        case PROGRESS_VIEW_COMMANDS.ACCEPT_FILE:
+          runAsync(
+            options.progress.acceptFile(result.data.file, result.data.base),
+          );
+          return true;
+        case PROGRESS_VIEW_COMMANDS.MERGE_FILE:
+          runAsync(
+            options.progress.mergeFile(result.data.file, result.data.base),
+          );
+          return true;
+        case PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE:
+          runAsync(
+            options.progress.latexdiffFile(result.data.file, result.data.base),
+          );
+          return true;
+        case PROGRESS_VIEW_COMMANDS.OPEN_LABEL:
+          runAsync(options.progress.openLabel(result.data.label));
           return true;
         default:
           if (passThroughCommands.has(result.data.command)) return false;

@@ -10,6 +10,10 @@ import {
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
+import {
+  normalizeMetafilePath,
+  resolveMetafileImportPath,
+} from './desktop-package-metafile-paths.mjs';
 
 const require = createRequire(import.meta.url);
 const { extractFile, listPackage, statFile } = require('@electron/asar');

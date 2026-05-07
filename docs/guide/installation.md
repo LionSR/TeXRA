@@ -35,6 +35,13 @@ You can also install TeXRA directly in your preferred editor using protocol-base
 - [Open in Cursor](cursor:extension/texra-ai.texra)
 - [Open in Windsurf](windsurf:extension/texra-ai.texra)
 
+::: tip Desktop app migration
+If you are moving from the VS Code extension to the desktop app, treat the first
+desktop launch as a fresh setup. Open the same project folder, then
+re-authenticate and reconfigure local provider, agent, Git, and LaTeX settings.
+See [Migrating to the Desktop App](./desktop-migration.md).
+:::
+
 ### From VSIX File
 
 1. Open VS Code

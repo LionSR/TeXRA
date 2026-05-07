@@ -19,8 +19,19 @@ interface DesktopProgressIpcModule {
       resumeStream(stream: string): Promise<void>;
       runNewStream(stream: string): Promise<void>;
       sendFollowUp(stream: string, text: string): Promise<void>;
-      openFile(file: string): Promise<void>;
+      openFile(file: string, line?: number): Promise<void>;
       openFileCompile(file: string): Promise<void>;
+      openTaskStorage(stream: string): Promise<void>;
+      compareOriginal(file: string, base?: string): Promise<void>;
+      comparePrevious(
+        file: string,
+        base?: string,
+        previous?: string,
+      ): Promise<void>;
+      acceptFile(file: string, base?: string): Promise<void>;
+      mergeFile(file: string, base?: string): Promise<void>;
+      latexdiffFile(file: string, base?: string): Promise<void>;
+      openLabel(label: string): Promise<void>;
       handleToolEditApprovalAction(message: {
         command: string;
         requestId: string;
@@ -75,8 +86,17 @@ function createProgress() {
     resumeStream: vi.fn(async (_stream: string) => {}),
     runNewStream: vi.fn(async (_stream: string) => {}),
     sendFollowUp: vi.fn(async (_stream: string, _text: string) => {}),
-    openFile: vi.fn(async (_file: string) => {}),
+    openFile: vi.fn(async (_file: string, _line?: number) => {}),
     openFileCompile: vi.fn(async (_file: string) => {}),
+    openTaskStorage: vi.fn(async (_stream: string) => {}),
+    compareOriginal: vi.fn(async (_file: string, _base?: string) => {}),
+    comparePrevious: vi.fn(
+      async (_file: string, _base?: string, _previous?: string) => {},
+    ),
+    acceptFile: vi.fn(async (_file: string, _base?: string) => {}),
+    mergeFile: vi.fn(async (_file: string, _base?: string) => {}),
+    latexdiffFile: vi.fn(async (_file: string, _base?: string) => {}),
+    openLabel: vi.fn(async (_label: string) => {}),
     handleToolEditApprovalAction: vi.fn(() => true),
     handleBashApprovalAction: vi.fn(async () => {}),
     handlePlanApprovalAction: vi.fn(),
@@ -145,7 +165,10 @@ describe('desktop Progress IPC', () => {
       }),
     ).toBe(true);
     await Promise.resolve();
-    expect(progress.openFile).toHaveBeenCalledWith('/tmp/output.pdf');
+    expect(progress.openFile).toHaveBeenCalledWith(
+      '/tmp/output.pdf',
+      undefined,
+    );
 
     expect(
       ipc.handleMessage({
@@ -155,6 +178,86 @@ describe('desktop Progress IPC', () => {
     ).toBe(true);
     await Promise.resolve();
     expect(progress.openFileCompile).toHaveBeenCalledWith('/tmp/output.tex');
+  });
+
+  it('maps workflow file operations to the desktop bridge', async () => {
+    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
+    const progress = createProgress();
+    const ipc = createDesktopProgressIpc({ progress });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
+        stream: 'run-1',
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
+        file: '/tmp/r1.tex',
+        base: '/tmp/base.tex',
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
+        file: '/tmp/r2.tex',
+        base: '/tmp/base.tex',
+        prev: '/tmp/r1.tex',
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
+        file: '/tmp/r1.tex',
+        base: '/tmp/base.tex',
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.MERGE_FILE,
+        file: '/tmp/r1.tex',
+        base: '/tmp/base.tex',
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
+        file: '/tmp/r1.tex',
+        base: '/tmp/base.tex',
+      }),
+    ).toBe(true);
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.OPEN_LABEL,
+        label: 'eq:main',
+      }),
+    ).toBe(true);
+
+    await Promise.resolve();
+    expect(progress.openTaskStorage).toHaveBeenCalledWith('run-1');
+    expect(progress.compareOriginal).toHaveBeenCalledWith(
+      '/tmp/r1.tex',
+      '/tmp/base.tex',
+    );
+    expect(progress.comparePrevious).toHaveBeenCalledWith(
+      '/tmp/r2.tex',
+      '/tmp/base.tex',
+      '/tmp/r1.tex',
+    );
+    expect(progress.acceptFile).toHaveBeenCalledWith(
+      '/tmp/r1.tex',
+      '/tmp/base.tex',
+    );
+    expect(progress.mergeFile).toHaveBeenCalledWith(
+      '/tmp/r1.tex',
+      '/tmp/base.tex',
+    );
+    expect(progress.latexdiffFile).toHaveBeenCalledWith(
+      '/tmp/r1.tex',
+      '/tmp/base.tex',
+    );
+    expect(progress.openLabel).toHaveBeenCalledWith('eq:main');
   });
 
   it('routes unsupported Progress commands through an explicit handler', async () => {
@@ -229,7 +332,7 @@ describe('desktop Progress IPC', () => {
       'run-1',
       'continue please',
     );
-    expect(progress.openFile).toHaveBeenCalledWith('/tmp/out.tex');
+    expect(progress.openFile).toHaveBeenCalledWith('/tmp/out.tex', 4);
     expect(progress.openFileCompile).toHaveBeenCalledWith('/tmp/out.pdf');
   });
 
