@@ -25,31 +25,48 @@ export const DESKTOP_DOCS_URL = 'https://texra.ai/guide/desktop';
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
 
-export const DESKTOP_COMMAND_IDS = [
-  'texra.showMainView',
-  'texra.showProgressView',
-  DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-  DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-  DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
-  'texra.openSettings',
-  'texra.mainView.reset',
-  'texra.execute',
-  'texra.runSetupAssistant',
-  'texra.showImportOptions',
-  'texra.openGettingStarted',
-  'texra.cleanOutput',
-  'texra.cleanBuild',
-  'texra.showMemory',
-  'texra.showAgentHistory',
-  'texra.showModels',
-  'texra.showAgents',
-  'texra.showTools',
-  'texra.showMultiAgent',
+const DESKTOP_MENU_GROUPS = [
+  [
+    'texra.showMainView',
+    'texra.showProgressView',
+    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+    DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
+    'texra.openSettings',
+    'texra.mainView.reset',
+  ],
+  [
+    'texra.execute',
+    'texra.runSetupAssistant',
+    'texra.showImportOptions',
+    'texra.showMemory',
+    'texra.showAgentHistory',
+    'texra.showModels',
+    'texra.showAgents',
+    'texra.showTools',
+    'texra.showMultiAgent',
+    'texra.openGettingStarted',
+    'texra.cleanOutput',
+    'texra.cleanBuild',
+  ],
+] as const satisfies readonly (readonly (
+  | CommandId
+  | DesktopLocalCommandId
+)[])[];
+
+const DESKTOP_HELP_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-] as const satisfies readonly (CommandId | DesktopLocalCommandId)[];
+] as const satisfies readonly DesktopLocalCommandId[];
 
-export type DesktopCommandId = (typeof DESKTOP_COMMAND_IDS)[number];
+type DesktopMenuCommandId = (typeof DESKTOP_MENU_GROUPS)[number][number];
+type DesktopHelpCommandId = (typeof DESKTOP_HELP_COMMANDS)[number];
+export type DesktopCommandId = DesktopMenuCommandId | DesktopHelpCommandId;
+
+export const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
+  ...DESKTOP_MENU_GROUPS.flat(),
+  ...DESKTOP_HELP_COMMANDS,
+];
 
 export interface DesktopCommandMenuEntry {
   id: DesktopCommandId;
@@ -75,37 +92,6 @@ export interface DesktopSettingsTabMessage {
   tabIndex: SettingsTab;
   agentSubTab?: AgentCategory;
 }
-
-const DESKTOP_MENU_GROUPS = [
-  [
-    'texra.showMainView',
-    'texra.showProgressView',
-    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-    DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
-    'texra.openSettings',
-    'texra.mainView.reset',
-  ],
-  [
-    'texra.execute',
-    'texra.runSetupAssistant',
-    'texra.showImportOptions',
-    'texra.showMemory',
-    'texra.showAgentHistory',
-    'texra.showModels',
-    'texra.showAgents',
-    'texra.showTools',
-    'texra.showMultiAgent',
-    'texra.openGettingStarted',
-    'texra.cleanOutput',
-    'texra.cleanBuild',
-  ],
-] as const satisfies readonly (readonly DesktopCommandId[])[];
-
-const DESKTOP_HELP_COMMANDS = [
-  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
-  DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-] as const satisfies readonly DesktopCommandId[];
 
 const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,

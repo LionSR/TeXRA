@@ -258,7 +258,8 @@ describe('desktop command surface', () => {
   });
 
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
-    const { buildDesktopMenuTemplate } = await loadDesktopCommandSurface();
+    const { buildDesktopMenuTemplate, getDesktopCommandMenuEntries } =
+      await loadDesktopCommandSurface();
     const actions = {
       openDesktopDocs: vi.fn(),
       resetMainView: vi.fn(),
@@ -301,6 +302,15 @@ describe('desktop command surface', () => {
       'Clean LLM Outputs',
       'Clean Build Files',
     ]);
+    expect(
+      submenu
+        .filter((item) => item.type !== 'separator')
+        .map((item) => item.label),
+    ).toEqual(
+      getDesktopCommandMenuEntries(undefined, 'darwin')
+        .filter((entry) => entry.category !== 'Help')
+        .map((entry) => entry.label),
+    );
 
     submenu[0].click?.();
     submenu[8].click?.();

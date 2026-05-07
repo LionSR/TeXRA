@@ -31,6 +31,13 @@ interface DesktopCommandPaletteModule {
     itemCount: number,
     delta: number,
   ): number;
+  executeDesktopCommandPaletteEntry(
+    entry: DesktopPaletteEntry | undefined,
+    actions: {
+      showRoute(route: string): void;
+      showSettings(tabIndex?: number): void;
+    },
+  ): boolean;
   isCommandPaletteShortcut(event: KeyboardEvent): boolean;
 }
 
@@ -100,6 +107,28 @@ describe('desktop command palette', () => {
     expect(getNextDesktopCommandPaletteIndex(2, 3, 1)).toBe(0);
     expect(getNextDesktopCommandPaletteIndex(0, 3, -1)).toBe(2);
     expect(getNextDesktopCommandPaletteIndex(0, 0, 1)).toBe(-1);
+  });
+
+  it('does not dispatch disabled command palette entries', async () => {
+    const { executeDesktopCommandPaletteEntry } =
+      await loadDesktopCommandPalette();
+    const actions = {
+      showRoute: vi.fn(),
+      showSettings: vi.fn(),
+    };
+
+    expect(
+      executeDesktopCommandPaletteEntry(
+        {
+          id: 'texra.showModels',
+          label: 'Show Models',
+          category: 'TeXRA',
+          enabled: false,
+        },
+        actions,
+      ),
+    ).toBe(false);
+    expect(actions.showSettings).not.toHaveBeenCalled();
   });
 
   it('uses the native command palette shortcut shape', async () => {
