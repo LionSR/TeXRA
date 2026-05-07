@@ -19,6 +19,11 @@ type BuildDisplayFn = (
   options?: { preserveFocus?: boolean },
 ) => Promise<void>;
 export type { BuildDisplayFn };
+
+interface LatexPreviewDisplayOptions {
+  openBuildDisplay?: BuildDisplayFn;
+}
+
 let openBuildDisplayIfTex: BuildDisplayFn = async () => {};
 /** Inject the VS Code LaTeX build+display function. Default: no-op. */
 export function setOpenBuildDisplay(fn: BuildDisplayFn): void {
@@ -158,6 +163,7 @@ async function createTempFileWithCleanup(
 /** Preview the proposed LaTeX document by creating a temp file and building it */
 export async function previewProposedLatex(
   entry: LatexPreviewEntry,
+  options: LatexPreviewDisplayOptions = {},
 ): Promise<void> {
   await withLatexOperation(entry, 'Preview', async () => {
     const content = await readFileWithFallback(
@@ -172,10 +178,17 @@ export async function previewProposedLatex(
 
     if (entry.isSettled()) return;
 
-    await openBuildDisplayIfTex(pathToLocation(tempPath), {
-      preserveFocus: true,
-    });
+    await (options.openBuildDisplay ?? openBuildDisplayIfTex)(
+      pathToLocation(tempPath),
+      {
+        preserveFocus: true,
+      },
+    );
   });
+}
+
+interface LatexdiffOptions extends LatexPreviewDisplayOptions {
+  subtype?: string;
 }
 
 /**
@@ -184,7 +197,7 @@ export async function previewProposedLatex(
  */
 export async function runLatexdiff(
   entry: LatexPreviewEntry,
-  options?: { subtype?: string },
+  options?: LatexdiffOptions,
 ): Promise<void> {
   await withLatexOperation(entry, 'LaTeXdiff', async () => {
     const [originalContent, proposedContent] = await Promise.all([
@@ -241,8 +254,11 @@ export async function runLatexdiff(
 
     if (entry.isSettled()) return;
 
-    await openBuildDisplayIfTex(pathToLocation(diffFilePath), {
-      preserveFocus: true,
-    });
+    await (options?.openBuildDisplay ?? openBuildDisplayIfTex)(
+      pathToLocation(diffFilePath),
+      {
+        preserveFocus: true,
+      },
+    );
   });
 }
