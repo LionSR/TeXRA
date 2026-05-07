@@ -5,5 +5,5 @@
     "moduleResolution": "bundler",
     "types": ["node"]
   },
-  "include": ["src/test-kernel/**/*.mts"]
+  "include": ["src/test-kernel/**/*.mts", "src/types/**/*.d.ts"]
 }

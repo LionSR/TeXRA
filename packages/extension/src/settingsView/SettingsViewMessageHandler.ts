@@ -18,7 +18,11 @@ import {
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { platform } from '@platform/platform';
-import { getAgentsBySource, loadAgents } from '@agent/index';
+import {
+  getAgentsBySource,
+  loadAgents,
+  toRemoteAgentProfileData,
+} from '@agent/index';
 import {
   getExecutionStore,
   listExecutions,
@@ -788,13 +792,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     await loadAgents();
     const remoteAgents: RemoteAgent[] = getAgentsBySource('remote').map(
-      (entry) => ({
-        name: entry.name,
-        description: entry.description ?? '',
-        visibility: entry.visibility ?? ['public'],
-        category: entry.category,
-        supportsMultipleOutput: entry.isMultiple ?? false,
-      }),
+      toRemoteAgentProfileData,
     );
 
     const apiAccessMode = serverSideKeyService.getUseIncludedModelAccess()

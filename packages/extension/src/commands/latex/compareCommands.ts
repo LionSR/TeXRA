@@ -5,21 +5,16 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   showLoggedErrorMessage,
   toErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
+import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
-import {
-  flexibleFS,
-  createWorkspaceLocation,
-  createRunStorageLocation,
-  createExternalLocation,
-} from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 
 const CHANNEL = 'CompareCommands';
@@ -159,14 +154,10 @@ async function handleAcceptEdited(
     const baseExt = path.extname(basePath).toLowerCase();
     const editedExt = path.extname(editedPath).toLowerCase();
 
-    const { targetLocation, targetFileName, isNewFile } =
-      baseExt !== editedExt
-        ? getNewFileTarget(fileToUseLocation, editedPath)
-        : {
-            targetLocation: fileToUseLocation,
-            targetFileName: path.basename(basePath),
-            isNewFile: false,
-          };
+    const { targetLocation, targetFileName, isNewFile } = getAcceptedFileTarget(
+      fileToUseLocation,
+      editedPath,
+    );
 
     const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
 
@@ -211,44 +202,4 @@ async function handleAcceptEdited(
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error accepting changes', err);
   }
-}
-
-function getNewFileTarget(
-  baseLocation: FileLocation,
-  editedPath: string,
-): { targetLocation: FileLocation; targetFileName: string; isNewFile: true } {
-  const basePath = baseLocation.absolutePath;
-  const baseNameWithoutExt = path.parse(basePath).name;
-  const editedNameWithoutExt = path.parse(editedPath).name;
-  const editedExt = path.extname(editedPath);
-
-  const agentSuffix = extractAgentSuffix(
-    baseNameWithoutExt,
-    editedNameWithoutExt,
-  );
-  const targetFileName = agentSuffix
-    ? `${baseNameWithoutExt}_${agentSuffix}${editedExt}`
-    : path.basename(editedPath);
-
-  const targetAbsolutePath = path.join(path.dirname(basePath), targetFileName);
-
-  let targetLocation: FileLocation;
-  if (baseLocation.kind === 'external') {
-    targetLocation = createExternalLocation(targetAbsolutePath);
-  } else {
-    const targetRelativePath = path.join(
-      path.dirname(baseLocation.relativePath),
-      targetFileName,
-    );
-    targetLocation =
-      baseLocation.kind === 'workspace'
-        ? createWorkspaceLocation(targetAbsolutePath, targetRelativePath)
-        : createRunStorageLocation(
-            targetAbsolutePath,
-            targetRelativePath,
-            baseLocation.executionId,
-          );
-  }
-
-  return { targetLocation, targetFileName, isNewFile: true };
 }

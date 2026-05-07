@@ -1,5 +1,9 @@
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
+import {
+  createDesktopLogIpc,
+  type DesktopLogIpcOptions,
+} from './desktopLogIpc.js';
 import { createDesktopMainViewStartup } from './desktopMainViewStartup.js';
 import {
   isDesktopCommandMessage,
@@ -29,9 +33,12 @@ export interface DesktopMainViewIpcOptions {
   workspaceExplorer?: DesktopWorkspaceExplorer;
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
+  onboarding?: DesktopMessageHandler;
+  logs?: DesktopLogIpcOptions;
   shellActions?: DesktopShellActions;
-  loadStartupOptions?: () => Promise<MainViewStartupOptions>;
+  modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
+  loadStartupOptions?: () => Promise<MainViewStartupOptions>;
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
   onAsyncError?: (error: unknown) => void;
 }
@@ -75,10 +82,15 @@ export function installDesktopMainViewIpc(
     executeAgent: options.executeAgent,
     onAsyncError: options.onAsyncError,
   });
+  const logs = createDesktopLogIpc(bridge, {
+    ...options.logs,
+    onAsyncError: options.onAsyncError,
+  });
   const startup = createDesktopMainViewStartup({
     renderer: bridge,
-    loadOptions: options.loadStartupOptions,
+    modelListRefresh: options.modelListRefresh,
     getAuthStatus: options.getAuthStatus,
+    loadOptions: options.loadStartupOptions,
     onAsyncError: options.onAsyncError,
   });
   messageHandlers = [
@@ -87,7 +99,9 @@ export function installDesktopMainViewIpc(
     options.fileSelection,
     options.settings,
     options.progress,
+    options.onboarding,
     viewState,
+    logs,
     shell,
     execution,
   ].filter((handler): handler is DesktopMessageHandler => handler != null);

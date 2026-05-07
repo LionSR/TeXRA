@@ -23,11 +23,6 @@ import {
   getVisibleModels,
 } from './modelOptionsBasic';
 
-/** Return whether the registry marks a model as deprecated. */
-export function isDeprecatedModel(model: string): boolean {
-  return MODEL_CONFIGS[model]?.deprecated ?? false;
-}
-
 /** Check if a model is available via personal API keys. */
 async function hasPersonalKeyForModel(
   config: ModelConfig,

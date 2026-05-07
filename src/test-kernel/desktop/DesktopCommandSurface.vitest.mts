@@ -17,8 +17,11 @@ import type { DesktopCommandActions } from '../../../packages/desktop/src/deskto
 
 interface DesktopCommandSurfaceModule {
   DESKTOP_LOCAL_COMMANDS: {
+    OPEN_DESKTOP_DOCS: string;
+    SHOW_LOGS: string;
     OPEN_LOG_FOLDER: string;
     OPEN_WORKSPACE_FOLDER: string;
+    SHOW_FIRST_RUN_WALKTHROUGH: string;
   };
   DESKTOP_COMMAND_IDS: readonly string[];
   buildDesktopMenuTemplate(
@@ -69,15 +72,22 @@ async function loadDesktopCommandSurface(): Promise<DesktopCommandSurfaceModule>
 
 describe('desktop command surface', () => {
   it('builds desktop menu entries from the shared command catalog', async () => {
-    const { DESKTOP_COMMAND_IDS, getDesktopCommandMenuEntries } =
-      await loadDesktopCommandSurface();
+    const {
+      DESKTOP_COMMAND_IDS,
+      DESKTOP_LOCAL_COMMANDS,
+      getDesktopCommandMenuEntries,
+    } = await loadDesktopCommandSurface();
     const entries = getDesktopCommandMenuEntries(undefined, 'darwin');
 
     expect(entries.map((entry) => entry.id)).toEqual(DESKTOP_COMMAND_IDS);
     for (const entry of entries) {
       const catalogEntry = commandCatalogById.get(entry.id as CommandId);
       if (!catalogEntry) {
-        expect(entry.category).toBe('TeXRA');
+        if (entry.id === 'texra.desktop.showFirstRunWalkthrough') {
+          expect(entry.category).toBe('Help');
+          continue;
+        }
+        expect(['TeXRA', 'Help']).toContain(entry.category);
         continue;
       }
       expect(catalogEntry).toBeDefined();
@@ -96,6 +106,23 @@ describe('desktop command surface', () => {
       category: 'TeXRA',
       accelerator: 'Command+Option+P',
     });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+      label: 'Desktop Documentation',
+      category: 'Help',
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+      label: 'Show Logs',
+      category: 'TeXRA',
+    });
+    const firstHelpIndex = entries.findIndex(
+      (entry) => entry.category === 'Help',
+    );
+    expect(firstHelpIndex).toBe(entries.length - 2);
+    expect(
+      entries.slice(firstHelpIndex).map((entry) => entry.category),
+    ).toEqual(['Help', 'Help']);
   });
 
   it('normalizes catalog keybindings to Electron accelerators', async () => {
@@ -119,8 +146,10 @@ describe('desktop command surface', () => {
     const { DESKTOP_LOCAL_COMMANDS, dispatchDesktopCommand } =
       await loadDesktopCommandSurface();
     const actions = {
+      openDesktopDocs: vi.fn(),
       openLogFolder: vi.fn(),
       openWorkspaceFolder: vi.fn(),
+      showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
@@ -129,6 +158,9 @@ describe('desktop command surface', () => {
     expect(dispatchDesktopCommand('texra.showProgressView', actions)).toBe(
       true,
     );
+    expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS, actions),
+    ).toBe(true);
     expect(dispatchDesktopCommand('texra.openSettings', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showModels', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showAgents', actions)).toBe(true);
@@ -141,9 +173,19 @@ describe('desktop command surface', () => {
     expect(
       dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER, actions),
     ).toBe(true);
+    expect(
+      dispatchDesktopCommand(
+        DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+        actions,
+      ),
+    ).toBe(true);
+    expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS, actions),
+    ).toBe(true);
 
     expect(actions.showRoute).toHaveBeenNthCalledWith(1, 'main');
     expect(actions.showRoute).toHaveBeenNthCalledWith(2, 'progress');
+    expect(actions.showRoute).toHaveBeenNthCalledWith(3, 'logs');
     expect(actions.showSettings).toHaveBeenNthCalledWith(1);
     expect(actions.showSettings).toHaveBeenNthCalledWith(
       2,
@@ -155,6 +197,13 @@ describe('desktop command surface', () => {
     );
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
+    expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
+    expect(
+      commandCatalogById.has(
+        DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH as CommandId,
+      ),
+    ).toBe(false);
+    expect(actions.openDesktopDocs).toHaveBeenCalledOnce();
   });
 
   it('builds settings-tab messages from one shared helper', async () => {
@@ -180,6 +229,8 @@ describe('desktop command surface', () => {
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
     const { buildDesktopMenuTemplate } = await loadDesktopCommandSurface();
     const actions = {
+      openDesktopDocs: vi.fn(),
+      showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
@@ -192,13 +243,14 @@ describe('desktop command surface', () => {
       'editMenu',
       'viewMenu',
       'windowMenu',
-      'help',
+      'Help',
     ]);
     const texraMenu = menu.find((item) => item.label === 'TeXRA');
     const submenu = texraMenu?.submenu ?? [];
     expect(submenu.map((item) => item.label ?? item.type)).toEqual([
       'Show Launcher',
       'Show Progress',
+      'Show Logs',
       'Open Folder',
       'Open Logs Folder',
       'Open TeXRA Settings',
@@ -212,8 +264,19 @@ describe('desktop command surface', () => {
     ]);
 
     submenu[0].click?.();
-    submenu[8].click?.();
+    submenu[9].click?.();
     expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
+
+    const helpMenu = menu.find((item) => item.label === 'Help');
+    expect(helpMenu?.submenu?.map((item) => item.label)).toEqual([
+      'Show First-Run Walkthrough',
+      'Desktop Documentation',
+    ]);
+    const helpSubmenu = helpMenu?.submenu ?? [];
+    helpSubmenu[0].click?.();
+    expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
+    helpSubmenu[1].click?.();
+    expect(actions.openDesktopDocs).toHaveBeenCalledOnce();
   });
 });

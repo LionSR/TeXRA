@@ -2,9 +2,11 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   renameSync,
   statSync,
 } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { format } from 'node:util';
 
@@ -15,6 +17,12 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
+import {
+  redactDesktopLog,
+  type DesktopLogRedactionOptions,
+} from './desktopLogRedaction.js';
+import type { DesktopLogSnapshot } from '../desktopLogMessages.js';
+
 type ConsoleLevel = 'debug' | 'error' | 'info' | 'log' | 'warn';
 type RendererConsoleMessage = Pick<
   WebContentsConsoleMessageEventParams,
@@ -23,6 +31,7 @@ type RendererConsoleMessage = Pick<
 
 const LOG_FILE_NAME = 'texra-desktop.log';
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
+const MAX_VIEWER_LOG_BYTES = 160 * 1024;
 const CONSOLE_LEVELS = ['debug', 'error', 'info', 'log', 'warn'] as const;
 
 let logFilePath: string | undefined;
@@ -51,6 +60,36 @@ export function getDesktopLogDirectory(): string {
 
 export function getDesktopLogFilePath(): string {
   return logFilePath ?? join(getDesktopLogDirectory(), LOG_FILE_NAME);
+}
+
+export function readDesktopLogSnapshot(options: {
+  workspacePath?: string | undefined;
+  maxBytes?: number | undefined;
+}): DesktopLogSnapshot {
+  const path = getDesktopLogFilePath();
+  const maxBytes = Math.max(0, options.maxBytes ?? MAX_VIEWER_LOG_BYTES);
+  const redactionOptions = makeDesktopLogRedactionOptions(options);
+  try {
+    const buffer = readFileSync(path);
+    const truncated = buffer.length > maxBytes;
+    const excerpt = truncated
+      ? buffer.subarray(buffer.length - maxBytes)
+      : buffer;
+    return {
+      path: redactDesktopLog(path, redactionOptions),
+      truncated,
+      text: redactDesktopLog(excerpt.toString('utf8'), redactionOptions),
+    };
+  } catch (error) {
+    return {
+      path: redactDesktopLog(path, redactionOptions),
+      truncated: false,
+      text: redactDesktopLog(
+        format('Desktop log is not available: %s', error),
+        redactionOptions,
+      ),
+    };
+  }
 }
 
 export function attachRendererConsoleLog(webContents: WebContents): void {
@@ -126,6 +165,15 @@ function rotateDesktopLogFile(path: string): void {
   } catch {
     // Log rotation is best-effort; app startup should continue without it.
   }
+}
+
+function makeDesktopLogRedactionOptions(options: {
+  workspacePath?: string | undefined;
+}): DesktopLogRedactionOptions {
+  return {
+    homeDir: homedir(),
+    workspacePath: options.workspacePath,
+  };
 }
 
 function getConsoleMessageDetails(

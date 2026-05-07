@@ -46,6 +46,11 @@ export function resolveVisibleModel(model: string): string {
   return visibleModels[0];
 }
 
+/** Return whether the registry marks a model as deprecated. */
+export function isDeprecatedModel(model: string): boolean {
+  return MODEL_CONFIGS[model]?.deprecated ?? false;
+}
+
 /** Format context window number for display. */
 export function formatContext(context: number | undefined): string | undefined {
   if (context === undefined) return undefined;

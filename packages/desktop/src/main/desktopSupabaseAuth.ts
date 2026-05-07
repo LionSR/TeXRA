@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
+import { z } from 'zod';
+
 import { platform } from '@platform/platform';
+import {
+  getAgentsBySource,
+  loadAgents,
+  toRemoteAgentProfileData,
+} from '@agent/index';
 import {
   DEFAULT_OAUTH_PROVIDER,
   DEFAULT_SESSION_EXPIRY_MS,
@@ -22,11 +29,7 @@ import {
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
 import type { AuthServiceLogger } from '@auth/serviceLogger';
-import {
-  FREE_TIER,
-  type OAuthProvider,
-  type UserTier,
-} from '@auth/sharedConfig';
+import { FREE_TIER, type OAuthProvider } from '@auth/sharedConfig';
 import type { AuthCallbackUriParts } from '@auth/core/authCallback';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import type { RemoteAgent } from '@shared/schemas/profileViewMessages';
@@ -42,10 +45,11 @@ const EDGE_FUNCTION_TIMEOUT_MS = 30000;
 const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
 const DESKTOP_PENDING_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
-interface DesktopPendingOAuthState {
-  state: string;
-  createdAt: number;
-}
+const DesktopPendingOAuthStateSchema = z.object({
+  state: z.string(),
+  createdAt: z.number(),
+});
+type DesktopPendingOAuthState = z.infer<typeof DesktopPendingOAuthStateSchema>;
 
 export interface DesktopAuthProfileData {
   authenticated: boolean;
@@ -82,7 +86,6 @@ export interface DesktopSupabaseAuthOptions {
   coordinator?: DesktopAuthCoordinator;
   oauthClient?: DesktopOAuthClient;
   callbackState?: DesktopAuthCallbackState;
-  initializeServerSideAccess?: boolean;
 }
 
 export interface DesktopOAuthClient {
@@ -149,29 +152,18 @@ function readPendingOAuthState(
   store: Pick<StateStore, 'get' | 'update'> | undefined,
 ): DesktopPendingOAuthState | null {
   const persisted = store?.get<unknown>(DESKTOP_PENDING_OAUTH_STATE_KEY, null);
-  if (!isPendingOAuthState(persisted)) {
+  const parsed = DesktopPendingOAuthStateSchema.safeParse(persisted);
+  if (!parsed.success) {
     return null;
   }
-  if (isPendingOAuthStateExpired(persisted)) {
+  const pendingState = parsed.data;
+  if (isPendingOAuthStateExpired(pendingState)) {
     void Promise.resolve(
       store?.update(DESKTOP_PENDING_OAUTH_STATE_KEY, null),
     ).catch(() => {});
     return null;
   }
-  return persisted;
-}
-
-function isPendingOAuthState(
-  value: unknown,
-): value is DesktopPendingOAuthState {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'state' in value &&
-    typeof value.state === 'string' &&
-    'createdAt' in value &&
-    typeof value.createdAt === 'number'
-  );
+  return pendingState;
 }
 
 function isPendingOAuthStateExpired(state: DesktopPendingOAuthState): boolean {
@@ -235,10 +227,6 @@ export function createDesktopSupabaseAuth(
     }
     void processCallbackQueue();
   });
-
-  if (options.initializeServerSideAccess ?? true) {
-    initializeDesktopServerSideKeyAccess(options.log);
-  }
 
   return {
     async signIn(provider = DEFAULT_OAUTH_PROVIDER) {
@@ -322,7 +310,7 @@ export function initializeDesktopServerSideKeyAccess(
     },
     {
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
-      getUserTier: () => SupabaseClient.getUserTier() as Promise<UserTier>,
+      getUserTier: () => SupabaseClient.getUserTier(),
       getAccessToken: () => SupabaseClient.getAccessToken(),
     },
   );
@@ -411,6 +399,14 @@ async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
     // Server-side key access is optional; personal provider keys still work.
   }
 
+  let remoteAgents: RemoteAgent[] = [];
+  try {
+    await loadAgents();
+    remoteAgents = getAgentsBySource('remote').map(toRemoteAgentProfileData);
+  } catch {
+    // Keep auth/profile UI usable even if agent registry refresh fails.
+  }
+
   return {
     authenticated: true,
     user: {
@@ -419,7 +415,7 @@ async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
     },
     tier: authContext.tier,
     permissions: authContext.permissions,
-    remoteAgents: [],
+    remoteAgents,
     apiAccessMode,
     allowedModels,
     accessExpiresAt,

@@ -3,7 +3,6 @@ import path from 'node:path';
 
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { ExternalOpener } from '@hosts/externalOpener';
-import { compileLatex2Pdf } from '@latex/texTools';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import type { FileLocation } from '@utils/files';
 import { createExternalLocation } from '@utils/files';
@@ -88,11 +87,21 @@ export function createDesktopPreviewHost(
       outputDirectory,
       `${path.basename(sourcePath, path.extname(sourcePath))}.pdf`,
     );
+    const { hasLatexCompiler } = await import('@latex/latexToolchain');
+    if (!(await hasLatexCompiler())) {
+      await fail(
+        `No LaTeX compiler found for ${sourcePath}. Install latexmk or pdflatex to compile and preview this file.`,
+      );
+    }
+
+    const { compileLatex2Pdf } = await import('@latex/texTools');
     const built = await compileLatex2Pdf(createExternalLocation(sourcePath), {
       outputDirectory,
     });
     if (!built) {
-      await fail(`LaTeX build failed for ${sourcePath}`);
+      await fail(
+        `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
+      );
     }
 
     await openPath(pdfPath);

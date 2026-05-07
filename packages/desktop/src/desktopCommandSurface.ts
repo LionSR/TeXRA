@@ -13,9 +13,14 @@ import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopRoute } from './desktopShellMessages.js';
 
 export const DESKTOP_LOCAL_COMMANDS = {
+  SHOW_LOGS: 'texra.desktop.showLogs',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
+  SHOW_FIRST_RUN_WALKTHROUGH: 'texra.desktop.showFirstRunWalkthrough',
+  OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
+
+export const DESKTOP_DOCS_URL = 'https://texra.ai/guide/desktop';
 
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
@@ -23,6 +28,7 @@ type DesktopLocalCommandId =
 export const DESKTOP_COMMAND_IDS = [
   'texra.showMainView',
   'texra.showProgressView',
+  DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
   'texra.openSettings',
@@ -32,6 +38,8 @@ export const DESKTOP_COMMAND_IDS = [
   'texra.showAgents',
   'texra.showTools',
   'texra.showMultiAgent',
+  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+  DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly (CommandId | DesktopLocalCommandId)[];
 
 export type DesktopCommandId = (typeof DESKTOP_COMMAND_IDS)[number];
@@ -46,8 +54,10 @@ export interface DesktopCommandMenuEntry {
 export interface DesktopCommandActions {
   showRoute(route: DesktopRoute): void;
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
+  openDesktopDocs?(): void;
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
+  showFirstRunWalkthrough?(): void;
 }
 
 export interface DesktopSettingsTabMessage {
@@ -60,6 +70,7 @@ const DESKTOP_MENU_GROUPS = [
   [
     'texra.showMainView',
     'texra.showProgressView',
+    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
     DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     'texra.openSettings',
@@ -74,10 +85,31 @@ const DESKTOP_MENU_GROUPS = [
   ],
 ] as const satisfies readonly (readonly DesktopCommandId[])[];
 
+const DESKTOP_HELP_COMMANDS = [
+  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+  DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+] as const satisfies readonly DesktopCommandId[];
+
 const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
   DesktopCommandMenuEntry
 >([
+  [
+    DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+      label: 'Desktop Documentation',
+      category: 'Help',
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+      label: 'Show Logs',
+      category: 'TeXRA',
+    },
+  ],
   [
     DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
     {
@@ -93,6 +125,14 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
       label: 'Open Logs Folder',
       category: 'TeXRA',
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+      label: 'Show First-Run Walkthrough',
+      category: 'Help',
     },
   ],
 ]);
@@ -154,6 +194,9 @@ export function dispatchDesktopCommand(
     case 'texra.showProgressView':
       actions.showRoute('progress');
       return true;
+    case DESKTOP_LOCAL_COMMANDS.SHOW_LOGS:
+      actions.showRoute('logs');
+      return true;
     case 'texra.openSettings':
       actions.showSettings();
       return true;
@@ -180,6 +223,12 @@ export function dispatchDesktopCommand(
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
       actions.openWorkspaceFolder?.();
+      return true;
+    case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
+      actions.showFirstRunWalkthrough?.();
+      return true;
+    case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
+      actions.openDesktopDocs?.();
       return true;
     default:
       return assertNever(id);
@@ -257,7 +306,11 @@ export function buildDesktopMenuTemplate(
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
-    { role: 'help' },
+    {
+      label: 'Help',
+      role: 'help',
+      submenu: DESKTOP_HELP_COMMANDS.map(commandItem),
+    },
   ];
 }
 
