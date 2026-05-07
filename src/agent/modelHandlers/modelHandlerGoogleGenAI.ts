@@ -62,6 +62,7 @@ import type { FileLocation } from '@utils/files';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { tagGoogleSdkError } from './support/sdkErrorAdapters';
 import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
 
 // Local file imports
@@ -434,6 +435,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
+    options: CreateResponseOptions<Content, GoogleGenAI>,
+  ): Promise<CreateResponseResult<GenerateContentResponse, Content>> {
+    try {
+      return await this.createResponseImpl(options);
+    } catch (err) {
+      tagGoogleSdkError(err, this.config.provider);
+      throw err;
+    }
+  }
+
+  /** Creates a Google response after SDK-boundary error tagging is installed. */
+  private async createResponseImpl(
     options: CreateResponseOptions<Content, GoogleGenAI>,
   ): Promise<CreateResponseResult<GenerateContentResponse, Content>> {
     const {
