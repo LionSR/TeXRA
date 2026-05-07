@@ -72,7 +72,7 @@ prompts:
     </documents>
     {% else %}
     <documents>
-    <document name="{{ INPUT_FILE }}">
+    <document name="merged.tex">
     % Your merged \LaTeX document here
     </document>
     </documents>
