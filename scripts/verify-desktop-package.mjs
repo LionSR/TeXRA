@@ -17,6 +17,7 @@ import {
 import {
   getDesktopSharedSourceDirs,
   getDesktopVscodeFreeSourceDirs,
+  requiredMonacoWorkers,
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
@@ -621,6 +622,17 @@ async function checkBundledResources(app, failures) {
   }
 }
 
+async function checkMonacoWorkerAssets(app, failures) {
+  const assets = await app.listDir('dist/renderer/assets');
+  for (const workerName of requiredMonacoWorkers) {
+    if (!assets.some((asset) => asset.includes(workerName))) {
+      failures.push(
+        `Packaged desktop app is missing Monaco worker asset: dist/renderer/assets/${workerName}*.js`,
+      );
+    }
+  }
+}
+
 async function checkMacIcon(app, failures) {
   if (!app.label.includes('.app/Contents/Resources/app.asar')) return false;
 
@@ -663,6 +675,7 @@ if (!app) {
   await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);
   await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
   await checkBundledResources(app, failures);
+  await checkMonacoWorkerAssets(app, failures);
   checkedMacIcon = await checkMacIcon(app, failures);
   codexPayloadResult = await checkCodexPayload(app, failures);
   await checkNoVscodeRuntimeImport(app, failures);
@@ -693,6 +706,7 @@ const summary = [
   '- dist/renderer/index.html',
   '- dist/renderer/assets/*.js',
   '- dist/renderer/assets/*.css',
+  '- dist/renderer/assets Monaco worker chunks',
   '- resources/agents and resources/tool_use_agents',
   '- package.json runtime dependencies',
   '- node_modules runtime dependency packages',

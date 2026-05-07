@@ -21,11 +21,14 @@ import {
   requestPanelStyles,
 } from '@shared/styles';
 
-// Local imports - base class
+// Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
+
+// Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
-// Local imports - shared schemas
+// Local imports - helpers
+import { monacoLanguageForPath } from './monacoLanguage';
 
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseFeedbackPanel {
@@ -37,6 +40,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   ];
 
   @state() private diffMenuOpen = false;
+  @state() private inlineDiffOpen = false;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -50,7 +54,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
 
   protected override handleExtraKey(key: string): boolean {
     if (key === 'd') {
-      this.emitAction('openDiff');
+      this.handleDiffAction();
       return true;
     }
     return false;
@@ -93,6 +97,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
           'approval-request__feedback',
           'approval-request__feedback-input',
         )}
+        ${this.renderInlineDiff(data)}
       </div>
     `;
   }
@@ -104,16 +109,25 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   private renderDiffActions(): TemplateResult {
     const data = this.permission.data as ToolEditPermission;
     const showDropdown = Boolean(data.isLatex);
+    const hasInlineDiff = this.hasInlineDiff(data);
 
     return html`
       <div class="diff-dropdown">
         <vscode-toolbar-button
           icon="diff"
           class="diff-main-button"
-          label="Open diff"
-          title="Open diff (d)"
-          @click=${() => this.emitAction('openDiff')}
-          >Open diff</vscode-toolbar-button
+          label=${hasInlineDiff && this.inlineDiffOpen
+            ? 'Hide diff'
+            : 'Open diff'}
+          title=${hasInlineDiff
+            ? this.inlineDiffOpen
+              ? 'Hide inline diff (d)'
+              : 'Open inline diff (d)'
+            : 'Open diff (d)'}
+          @click=${this.handleDiffAction}
+          >${hasInlineDiff && this.inlineDiffOpen
+            ? 'Hide diff'
+            : 'Open diff'}</vscode-toolbar-button
         >
         ${showDropdown
           ? html`
@@ -139,6 +153,23 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
             `
           : nothing}
       </div>
+    `;
+  }
+
+  private renderInlineDiff(
+    data: ToolEditPermission,
+  ): TemplateResult | typeof nothing {
+    if (!this.inlineDiffOpen || !this.hasInlineDiff(data)) {
+      return nothing;
+    }
+
+    return html`
+      <texra-diff-view
+        class="approval-request__inline-diff"
+        .originalText=${data.originalContent ?? ''}
+        .proposedText=${data.proposedContent ?? ''}
+        .language=${monacoLanguageForPath(data.path)}
+      ></texra-diff-view>
     `;
   }
 
@@ -209,6 +240,19 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
     event.stopPropagation();
     this.diffMenuOpen = !this.diffMenuOpen;
   };
+
+  private handleDiffAction = (): void => {
+    const data = this.permission.data as ToolEditPermission;
+    if (this.hasInlineDiff(data)) {
+      this.inlineDiffOpen = !this.inlineDiffOpen;
+      return;
+    }
+    this.emitAction('openDiff');
+  };
+
+  private hasInlineDiff(data: ToolEditPermission): boolean {
+    return data.originalContent != null || data.proposedContent != null;
+  }
 }
 
 declare global {
