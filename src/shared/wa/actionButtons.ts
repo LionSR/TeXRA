@@ -39,6 +39,7 @@ function renderActionButtonBase({
   const classes = [text ? 'action-button' : 'action-icon-button', className]
     .filter(Boolean)
     .join(' ');
+  const iconSlot = text ? 'start' : undefined;
 
   return html`
     <wa-button
@@ -53,6 +54,7 @@ function renderActionButtonBase({
       @click=${onClick}
     >
       <wa-icon
+        slot=${ifDefined(iconSlot)}
         library=${TEXRA_ICON_LIBRARY}
         name=${icon}
         variant="solid"
