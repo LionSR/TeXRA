@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
 import {
   isWorktreeSupportEnabled,
@@ -70,6 +72,7 @@ interface DesktopSettingsIpcModule {
     detectLatexSettingsStatus?: () => Promise<unknown>;
     runInstallCommand?: (command: string) => Promise<void>;
     onError?: (error: unknown) => void;
+    modelListRefresh?: PromiseLike<void>;
   }): {
     refreshAuthDependentData(): Promise<void>;
     handleMessage(
@@ -152,6 +155,17 @@ function flushAsyncWork(): Promise<void> {
   return new Promise((resolve) =>
     setImmediate(() => setImmediate(() => resolve())),
   );
+}
+
+function createDeferred(): {
+  promise: Promise<void>;
+  resolve(): void;
+} {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 describe('desktop settings IPC', () => {
@@ -601,6 +615,10 @@ describe('desktop settings IPC', () => {
       'gpt55',
       'sonnet46T',
     ]);
+    globalState.values.set(
+      GlobalStateKey.MODEL_LIST_VERSION,
+      MODEL_LIST_VERSION,
+    );
     globalState.values.set(GlobalStateKey.HELPER_MODEL, 'gpt55');
     const posted: unknown[] = [];
     const errors: unknown[] = [];
@@ -745,6 +763,59 @@ describe('desktop settings IPC', () => {
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       items: [expect.objectContaining({ id: 'file-ops' })],
+    });
+  });
+
+  it('does not delay unrelated startup settings behind model-list refresh', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const modelListRefresh = createDeferred();
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      config: new MemoryConfigStore(),
+      sendStartupCatalogData: true,
+      modelListRefresh: modelListRefresh.promise,
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+        view: 'settings',
+      }),
+    ).toBe(false);
+    await flushAsyncWork();
+
+    expect(
+      posted.some(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ),
+    ).toBe(false);
+    expect(
+      posted.find(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+    });
+
+    modelListRefresh.resolve();
+    await flushAsyncWork();
+
+    expect(
+      posted.find(
+        (message) =>
+          (message as { command?: string }).command ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
     });
   });
 
@@ -994,6 +1065,87 @@ describe('desktop settings IPC', () => {
         SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
         MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
         MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      ]),
+    );
+  });
+
+  it('refreshes persisted model list on desktop startup', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 12);
+    globalState.values.set(GlobalStateKey.ENABLED_MODELS, [
+      'custom-model',
+      'gpt54pro',
+      'opus46T',
+    ]);
+    const errors: unknown[] = [];
+
+    createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      postToRenderer: () => {},
+      onError: (error) => errors.push(error),
+    });
+    await flushAsyncWork();
+
+    expect(errors).toEqual([]);
+    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
+      MODEL_LIST_VERSION,
+    );
+    const expectedDefaults = DEFAULT_MODELS.filter(
+      (model) => !(MODEL_CONFIGS[model]?.deprecated ?? false),
+    );
+    expect(globalState.values.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
+      'custom-model',
+      ...expectedDefaults,
+    ]);
+  });
+
+  it('waits for desktop model-list refresh before serving model selection', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const refreshGate = createDeferred();
+    const globalState = new (class extends MemoryStateStore {
+      override async update(key: string, value: unknown): Promise<void> {
+        if (key === GlobalStateKey.ENABLED_MODELS) {
+          await refreshGate.promise;
+        }
+        await super.update(key, value);
+      }
+    })();
+    globalState.values.set(GlobalStateKey.MODEL_LIST_VERSION, 12);
+    globalState.values.set(GlobalStateKey.ENABLED_MODELS, ['custom-model']);
+    const posted: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      postToRenderer: (message) => posted.push(message),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION,
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+
+    expect(posted).toEqual([]);
+
+    refreshGate.resolve();
+    await flushAsyncWork();
+
+    expect(globalState.values.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
+      MODEL_LIST_VERSION,
+    );
+    expect(
+      (posted.at(-1) as { command?: string; models?: Array<{ name: string }> })
+        .command,
+    ).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION);
+    expect(
+      (posted.at(-1) as { models?: Array<{ name: string }> }).models,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: DEFAULT_MODELS[0] }),
       ]),
     );
   });

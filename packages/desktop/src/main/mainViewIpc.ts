@@ -29,6 +29,7 @@ export interface DesktopMainViewIpcOptions {
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
   shellActions?: DesktopShellActions;
+  modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   executeAgent?: (message: MainViewExecuteMessage) => Promise<void>;
   onAsyncError?: (error: unknown) => void;
@@ -75,6 +76,7 @@ export function installDesktopMainViewIpc(
   });
   const startup = createDesktopMainViewStartup({
     renderer: bridge,
+    modelListRefresh: options.modelListRefresh,
     getAuthStatus: options.getAuthStatus,
     onAsyncError: options.onAsyncError,
   });

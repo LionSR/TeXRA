@@ -33,6 +33,7 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import {
+  globalSM,
   initializeStateManagers,
   workspaceSM,
   WorkspaceStateKey,
@@ -45,7 +46,6 @@ import {
   configureLatexSettings,
   initializeToolDefaults,
   migrateLatexConfigToStorage,
-  refreshModelListIfNeeded,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
 import { runTerminalCommand } from '@frontend/setupTerminalRunner';
@@ -69,6 +69,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
+import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { setExtensionChecker } from '@tools/externalToolDefs';
@@ -195,7 +196,28 @@ export async function activate(context: vscode.ExtensionContext) {
   // Must run after copyDefaultAgents so the built-in directories exist.
   await registerAgentDirectoryRoots(context);
 
-  await refreshModelListIfNeeded();
+  try {
+    const { added, currentVersion, previousVersion, removed, skipped } =
+      await refreshModelListStateIfNeeded(globalSM);
+    if (!skipped) {
+      logger.info(
+        'extension',
+        `Model list version changed (${previousVersion ?? 'none'} -> ${currentVersion}), updating model list`,
+      );
+      logger.info('extension', 'Model list refresh completed successfully');
+      if (added.length > 0 || removed.length > 0) {
+        logger.info(
+          'extension',
+          `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]`,
+        );
+      }
+    }
+  } catch (err) {
+    logger.error(
+      'extension',
+      `Failed to refresh model list: ${toErrorMessage(err)}`,
+    );
+  }
 
   loadAgents().catch((err) => {
     logger.error(

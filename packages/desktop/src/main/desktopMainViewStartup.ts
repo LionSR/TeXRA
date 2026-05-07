@@ -14,22 +14,27 @@ import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 
 export interface DesktopMainViewStartupOptions {
   renderer: DesktopRenderer;
+  modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   onAsyncError?: (error: unknown) => void;
 }
 
 export function createDesktopMainViewStartup({
   renderer,
+  modelListRefresh,
   getAuthStatus,
   onAsyncError,
 }: DesktopMainViewStartupOptions): DesktopMessageHandler {
   const reportAsyncError = createDesktopErrorReporter(onAsyncError);
   const startupController = new MainViewStartupController({
     getConfig,
-    loadOptions: async () => ({
-      agentOptions: await computeAgentOptionsData(),
-      modelOptions: buildBasicModelOptionsData(),
-    }),
+    loadOptions: async () => {
+      await modelListRefresh;
+      return {
+        agentOptions: await computeAgentOptionsData(),
+        modelOptions: buildBasicModelOptionsData(),
+      };
+    },
     getAuthStatus: getAuthStatus ?? (async () => ({ authenticated: false })),
   });
 
