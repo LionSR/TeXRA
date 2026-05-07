@@ -28,6 +28,7 @@ import {
   attachSdkErrorMetadata,
   formatProviderHttpError,
   isUserAbort,
+  sdkErrorKindFromStatusCode,
 } from '@common/errors/sdkErrorUtils';
 
 class APIError extends Error {}
@@ -309,5 +310,18 @@ describe('formatProviderHttpError', () => {
       'HTTP 429 Too Many Requests – quota exceeded',
     );
     expect(formatted.retryable).toBe(true);
+  });
+
+  it('derives SDK error kinds from the shared status mapping', () => {
+    expect(sdkErrorKindFromStatusCode(400)).toBe('bad_request');
+    expect(sdkErrorKindFromStatusCode(401)).toBe('authentication');
+    expect(sdkErrorKindFromStatusCode(403)).toBe('permission_denied');
+    expect(sdkErrorKindFromStatusCode(404)).toBe('not_found');
+    expect(sdkErrorKindFromStatusCode(409)).toBe('conflict');
+    expect(sdkErrorKindFromStatusCode(422)).toBe('unprocessable_entity');
+    expect(sdkErrorKindFromStatusCode(429)).toBe('rate_limit');
+    expect(sdkErrorKindFromStatusCode(500)).toBe('internal_server');
+    expect(sdkErrorKindFromStatusCode(418)).toBe('api_error');
+    expect(sdkErrorKindFromStatusCode(undefined)).toBe('api_error');
   });
 });

@@ -32,31 +32,9 @@ import {
 // Local imports - common errors
 import {
   attachSdkErrorMetadata,
+  sdkErrorKindFromStatusCode,
   type SdkErrorKind,
 } from '@common/errors/sdkErrorUtils';
-
-function sdkKindFromStatus(statusCode: number | undefined): SdkErrorKind {
-  switch (statusCode) {
-    case 400:
-      return 'bad_request';
-    case 401:
-      return 'authentication';
-    case 403:
-      return 'permission_denied';
-    case 404:
-      return 'not_found';
-    case 409:
-      return 'conflict';
-    case 422:
-      return 'unprocessable_entity';
-    case 429:
-      return 'rate_limit';
-    case 500:
-      return 'internal_server';
-    default:
-      return 'api_error';
-  }
-}
 
 function tagSdkError(
   err: unknown,
@@ -98,13 +76,23 @@ export function tagAnthropicSdkError(
   } else if (err instanceof AnthropicInternalServerError) {
     tagSdkError(err, provider, 'internal_server', err.status);
   } else if (err instanceof AnthropicAPIError) {
-    tagSdkError(err, provider, sdkKindFromStatus(err.status), err.status);
+    tagSdkError(
+      err,
+      provider,
+      sdkErrorKindFromStatusCode(err.status),
+      err.status,
+    );
   }
 }
 
 export function tagGoogleSdkError(err: unknown, provider = 'google'): void {
   if (err instanceof GoogleApiError) {
-    tagSdkError(err, provider, sdkKindFromStatus(err.status), err.status);
+    tagSdkError(
+      err,
+      provider,
+      sdkErrorKindFromStatusCode(err.status),
+      err.status,
+    );
   }
 }
 
@@ -132,6 +120,11 @@ export function tagOpenAISdkError(err: unknown, provider = 'openai'): void {
   } else if (err instanceof OpenAIInternalServerError) {
     tagSdkError(err, provider, 'internal_server', err.status);
   } else if (err instanceof OpenAIAPIError) {
-    tagSdkError(err, provider, sdkKindFromStatus(err.status), err.status);
+    tagSdkError(
+      err,
+      provider,
+      sdkErrorKindFromStatusCode(err.status),
+      err.status,
+    );
   }
 }
