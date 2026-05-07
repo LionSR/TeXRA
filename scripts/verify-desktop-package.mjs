@@ -5,6 +5,16 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
+  codexBinaryPath,
+  codexPlatformInfoByKey,
+  collectBundledCodexPackages,
+  describeBundledCodexPackages,
+  expectedCodexPayloadBudgetBytes,
+  formatBytes,
+  inferCodexPlatformKeys,
+  packageNameForCodexPlatformKey,
+} from './desktop-codex-payload.mjs';
+import {
   getDesktopSharedSourceDirs,
   getDesktopVscodeFreeSourceDirs,
   vscodeBackedStateImportPattern,
@@ -21,7 +31,8 @@ const { extractFile, listPackage, statFile } = require('@electron/asar');
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopRoot = join(repoRoot, 'packages', 'desktop');
-const packageRoot = join(desktopRoot, 'dist-packaged');
+const packageRoot =
+  process.env.TEXRA_DESKTOP_PACKAGE_ROOT ?? join(desktopRoot, 'dist-packaged');
 const desktopPackageJsonPath = join(desktopRoot, 'package.json');
 const desktopIconPath = join(desktopRoot, 'build', 'icon.icns');
 const desktopSharedSourceDirs = getDesktopSharedSourceDirs(repoRoot);
@@ -32,38 +43,6 @@ const desktopSourceBoundaryDirs = [
   ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
 ];
 const bundledAgentResourceDirs = ['agents', 'tool_use_agents'];
-const codexPlatformInfoByKey = {
-  'linux-x64': {
-    pkg: '@openai/codex-linux-x64',
-    triple: 'x86_64-unknown-linux-musl',
-    binaryName: 'codex',
-  },
-  'linux-arm64': {
-    pkg: '@openai/codex-linux-arm64',
-    triple: 'aarch64-unknown-linux-musl',
-    binaryName: 'codex',
-  },
-  'darwin-x64': {
-    pkg: '@openai/codex-darwin-x64',
-    triple: 'x86_64-apple-darwin',
-    binaryName: 'codex',
-  },
-  'darwin-arm64': {
-    pkg: '@openai/codex-darwin-arm64',
-    triple: 'aarch64-apple-darwin',
-    binaryName: 'codex',
-  },
-  'win32-x64': {
-    pkg: '@openai/codex-win32-x64',
-    triple: 'x86_64-pc-windows-msvc',
-    binaryName: 'codex.exe',
-  },
-  'win32-arm64': {
-    pkg: '@openai/codex-win32-arm64',
-    triple: 'aarch64-pc-windows-msvc',
-    binaryName: 'codex.exe',
-  },
-};
 const desktopStartupForbiddenInputPackages = [
   {
     label: '@google/genai',
@@ -244,6 +223,9 @@ function createAsarAppReader(asarPath) {
     async isUnpacked(path) {
       return isAsarEntryUnpacked(path);
     },
+    fsPath(path) {
+      return join(resourceRoot, path);
+    },
     async listDir(path) {
       const prefix = `${normalizeAsarPath(path)}/`;
       const asarEntries = [...entries]
@@ -296,6 +278,9 @@ function createDirectoryAppReader(appRoot) {
     },
     async isUnpacked() {
       return false;
+    },
+    fsPath(path) {
+      return join(appRoot, path);
     },
   };
 }
@@ -455,32 +440,44 @@ function dependencyPackageJsonPath(name) {
   return join('node_modules', name, 'package.json');
 }
 
-function codexBinaryPath(prefix, platformInfo) {
-  return posix.join(
-    prefix,
-    'node_modules',
-    ...platformInfo.pkg.split('/'),
-    'vendor',
-    platformInfo.triple,
-    'codex',
-    platformInfo.binaryName,
+async function checkCodexPayload(app, failures) {
+  const expectedPlatformKeys = inferCodexPlatformKeys({ appPath: app.label });
+  const bundledPackages = await collectBundledCodexPackages(app.fsPath(''));
+  const payloadSizeBytes = bundledPackages.reduce(
+    (sum, pkg) => sum + pkg.sizeBytes,
+    0,
   );
-}
+  const budgetBytes = expectedCodexPayloadBudgetBytes(expectedPlatformKeys);
+  const bundledPackageSummary = describeBundledCodexPackages(bundledPackages);
 
-function expectedCodexPlatformKeys(app) {
-  return expectedCodexPlatformKeysFromLabel(app.label);
-}
-
-async function checkCodexUnpackedBinaries(app, failures) {
-  const platformKeys = expectedCodexPlatformKeys(app);
-  if (platformKeys.length === 0) {
+  if (expectedPlatformKeys.length === 0) {
     failures.push(
       `Could not infer expected Codex CLI platform from packaged app path: ${app.label}`,
     );
-    return false;
+    return {
+      checked: false,
+      expectedPlatformKeys,
+      bundledPackages,
+      payloadSizeBytes,
+      budgetBytes,
+    };
   }
 
-  for (const platformKey of platformKeys) {
+  const expectedPlatformKeySet = new Set(expectedPlatformKeys);
+  const extraPackages = bundledPackages.filter(
+    ({ platformKey }) => !expectedPlatformKeySet.has(platformKey),
+  );
+  if (extraPackages.length > 0) {
+    failures.push(
+      `Packaged desktop app bundles extra Codex CLI platform packages for ${expectedPlatformKeys.join(
+        ', ',
+      )}: ${describeBundledCodexPackages(
+        extraPackages,
+      )}. Bundled Codex packages: ${bundledPackageSummary}`,
+    );
+  }
+
+  for (const platformKey of expectedPlatformKeys) {
     const platformInfo = codexPlatformInfoByKey[platformKey];
     const unpackedBinaryPath = codexBinaryPath(
       'app.asar.unpacked',
@@ -505,7 +502,25 @@ async function checkCodexUnpackedBinaries(app, failures) {
     }
   }
 
-  return true;
+  if (payloadSizeBytes > budgetBytes) {
+    failures.push(
+      `Packaged desktop app Codex CLI payload is ${formatBytes(
+        payloadSizeBytes,
+      )}, above the ${formatBytes(
+        budgetBytes,
+      )} budget for ${expectedPlatformKeys.join(
+        ', ',
+      )}. Bundled Codex packages: ${bundledPackageSummary}`,
+    );
+  }
+
+  return {
+    checked: true,
+    expectedPlatformKeys,
+    bundledPackages,
+    payloadSizeBytes,
+    budgetBytes,
+  };
 }
 
 async function checkRuntimeDependencies(app, appPackageJson, failures) {
@@ -589,7 +604,7 @@ async function checkMacIcon(app, failures) {
 const app = await findPackagedApp();
 const failures = [];
 let checkedMacIcon = false;
-let checkedCodexUnpackedBinaries = false;
+let codexPayloadResult = null;
 
 if (!app) {
   failures.push(`No packaged Electron app found under ${packageRoot}`);
@@ -608,10 +623,7 @@ if (!app) {
   await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
   await checkBundledResources(app, failures);
   checkedMacIcon = await checkMacIcon(app, failures);
-  checkedCodexUnpackedBinaries = await checkCodexUnpackedBinaries(
-    app,
-    failures,
-  );
+  codexPayloadResult = await checkCodexPayload(app, failures);
   await checkNoVscodeRuntimeImport(app, failures);
   await checkDesktopMainDynamicRequireShim(app, failures);
   await checkDesktopStartupBundles(app, failures);
@@ -651,11 +663,16 @@ const summary = [
 ];
 
 if (checkedMacIcon) summary.splice(7, 0, '- macOS app icon');
-if (checkedCodexUnpackedBinaries) {
+if (codexPayloadResult?.checked) {
   summary.splice(
     checkedMacIcon ? 8 : 7,
     0,
-    '- unpacked Codex CLI platform binaries',
+    `- Codex CLI packages: ${codexPayloadResult.bundledPackages
+      .map(({ platformKey }) => packageNameForCodexPlatformKey(platformKey))
+      .join(', ')}`,
+    `- Codex CLI payload size: ${formatBytes(
+      codexPayloadResult.payloadSizeBytes,
+    )} / ${formatBytes(codexPayloadResult.budgetBytes)}`,
   );
 }
 

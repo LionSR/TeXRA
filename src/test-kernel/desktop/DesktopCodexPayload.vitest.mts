@@ -1,0 +1,201 @@
+// Node imports
+import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+// Third-party imports
+import { afterEach, describe, expect, it } from 'vitest';
+
+// Local imports - desktop test paths
+import { repoPath } from './desktopTestPaths.mjs';
+
+const verifierPath = repoPath('scripts/verify-desktop-package.mjs');
+const pruneHookUrl = pathToFileURL(
+  repoPath('scripts/prune-desktop-codex-payload.mjs'),
+).href;
+
+const codexPlatforms = {
+  'darwin-arm64': {
+    packageName: '@openai/codex-darwin-arm64',
+    triple: 'aarch64-apple-darwin',
+    binaryName: 'codex',
+  },
+  'darwin-x64': {
+    packageName: '@openai/codex-darwin-x64',
+    triple: 'x86_64-apple-darwin',
+    binaryName: 'codex',
+  },
+} as const;
+
+let tempRoots: string[] = [];
+
+afterEach(() => {
+  for (const tempRoot of tempRoots) {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+  tempRoots = [];
+});
+
+describe('desktop Codex package payload', () => {
+  it('fails arch-specific package verification when an extra Codex platform package is bundled', () => {
+    const { packageRoot } = createFakeDesktopPackage([
+      'darwin-arm64',
+      'darwin-x64',
+    ]);
+
+    const result = runVerifierResult(packageRoot);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'bundles extra Codex CLI platform packages',
+    );
+  });
+
+  it('prunes unused Codex platform packages before verification', () => {
+    const { appOutDir, packageRoot, resourcesDir } = createFakeDesktopPackage([
+      'darwin-arm64',
+      'darwin-x64',
+    ]);
+
+    execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        `const { default: prune } = await import(${JSON.stringify(
+          pruneHookUrl,
+        )}); await prune({ electronPlatformName: 'darwin', arch: 3, appOutDir: ${JSON.stringify(
+          appOutDir,
+        )}, packager: { getResourcesDir: () => ${JSON.stringify(resourcesDir)} } });`,
+      ],
+      { encoding: 'utf8' },
+    );
+
+    const output = runVerifier(packageRoot);
+    expect(output).toContain('@openai/codex-darwin-arm64');
+    expect(output).not.toContain('@openai/codex-darwin-x64');
+    expect(output).toContain('Codex CLI payload size');
+  });
+});
+
+function createFakeDesktopPackage(
+  platforms: Array<keyof typeof codexPlatforms>,
+): {
+  appOutDir: string;
+  packageRoot: string;
+  resourcesDir: string;
+} {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'texra-desktop-codex-'));
+  tempRoots.push(tempRoot);
+
+  const packageRoot = join(tempRoot, 'dist-packaged');
+  const appOutDir = join(packageRoot, 'mac-arm64');
+  const resourcesDir = join(appOutDir, 'TeXRA.app', 'Contents', 'Resources');
+  const appRoot = join(resourcesDir, 'app');
+
+  writeJson(join(appRoot, 'package.json'), {
+    main: './dist/main/index.js',
+    dependencies: readDesktopDependencies(),
+  });
+  writeText(join(appRoot, 'dist/main/index.js'), "import('./bootstrap.js');\n");
+  writeText(join(appRoot, 'dist/main/bootstrap.js'), 'export {};\n');
+  writeText(join(appRoot, 'dist/preload/index.cjs'), "'use strict';\n");
+  writeText(join(appRoot, 'dist/renderer/index.html'), '<!doctype html>\n');
+  writeText(join(appRoot, 'dist/renderer/assets/app.js'), 'export {};\n');
+  writeText(join(appRoot, 'dist/renderer/assets/app.css'), ':root {}\n');
+  writeText(join(appRoot, 'resources/agents/example.yaml'), 'name: example\n');
+  writeText(
+    join(appRoot, 'resources/tool_use_agents/example.yaml'),
+    'name: example\n',
+  );
+
+  for (const dependencyName of Object.keys(readDesktopDependencies())) {
+    writeJson(join(appRoot, 'node_modules', dependencyName, 'package.json'), {
+      name: dependencyName,
+      version: '0.0.0',
+    });
+  }
+
+  for (const platform of platforms) {
+    writeCodexPlatformPackage(appRoot, platform);
+  }
+
+  return { appOutDir, packageRoot, resourcesDir: appRoot };
+}
+
+function writeCodexPlatformPackage(
+  appRoot: string,
+  platform: keyof typeof codexPlatforms,
+): void {
+  const info = codexPlatforms[platform];
+  const packageRoot = join(
+    appRoot,
+    'app.asar.unpacked',
+    'node_modules',
+    ...info.packageName.split('/'),
+  );
+
+  writeJson(join(packageRoot, 'package.json'), {
+    name: '@openai/codex',
+    version: `0.128.0-${platform}`,
+  });
+  writeText(
+    join(packageRoot, 'vendor', info.triple, 'codex', info.binaryName),
+    'fake codex binary\n',
+  );
+}
+
+function runVerifier(packageRoot: string): string {
+  return execFileSync(process.execPath, [verifierPath], {
+    cwd: repoPath('.'),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      TEXRA_DESKTOP_PACKAGE_ROOT: packageRoot,
+    },
+  });
+}
+
+function runVerifierResult(packageRoot: string): {
+  status: number | null;
+  stderr: string;
+  stdout: string;
+} {
+  const result = spawnSync(process.execPath, [verifierPath], {
+    cwd: repoPath('.'),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      TEXRA_DESKTOP_PACKAGE_ROOT: packageRoot,
+    },
+  });
+
+  return {
+    status: result.status,
+    stderr: result.stderr,
+    stdout: result.stdout,
+  };
+}
+
+function readDesktopDependencies(): Record<string, string> {
+  const packageJson = JSON.parse(
+    readFileSync(repoPath('packages/desktop/package.json'), 'utf8'),
+  ) as { dependencies?: Record<string, string> };
+  return packageJson.dependencies ?? {};
+}
+
+function writeJson(path: string, data: unknown): void {
+  writeText(path, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+function writeText(path: string, contents: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, contents);
+}
