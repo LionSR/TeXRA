@@ -19,9 +19,6 @@ export function expectedCodexPlatformKeysFromLabel(label) {
     ) {
       return ['darwin-x64'];
     }
-    if (normalizedLabel.includes('universal')) {
-      return ['darwin-x64', 'darwin-arm64'];
-    }
     return ['darwin-x64', 'darwin-arm64'];
   }
 
