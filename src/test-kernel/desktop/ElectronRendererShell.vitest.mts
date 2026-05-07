@@ -83,11 +83,17 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain(
       'canOpen: () => !firstRunWalkthrough.isVisible()',
     );
-    expect(rendererOnboarding).toContain('previousFocus');
-    expect(rendererOnboarding).toContain("document.addEventListener('focusin'");
-    expect(rendererOnboarding).toContain("'keydown'");
+    // wa-dialog handles focus trap, escape, and modal backdrop natively.
+    // Assert the dialog wiring + the one custom keydown interceptor.
+    expect(rendererOnboarding).toContain("document.createElement('wa-dialog')");
+    expect(rendererOnboarding).toContain(
+      "dialog.addEventListener('wa-after-show'",
+    );
+    expect(rendererOnboarding).toContain(
+      "dialog.addEventListener('wa-after-hide'",
+    );
+    expect(rendererOnboarding).toContain("dialog.addEventListener('keydown'");
     expect(rendererOnboarding).toContain('isCommandPaletteShortcut(event)');
-    expect(rendererOnboarding).toContain("event.key !== 'Tab'");
   });
 
   it('mounts an in-app log viewer with copy and export actions', () => {
