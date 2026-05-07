@@ -1,6 +1,12 @@
 appId: ai.texra.desktop
 productName: TeXRA
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+publish:
+  provider: github
+  owner: texra-ai
+  repo: texra-desktop-releases
+  private: false
+  releaseType: release
 protocols:
   - name: TeXRA
     schemes:
