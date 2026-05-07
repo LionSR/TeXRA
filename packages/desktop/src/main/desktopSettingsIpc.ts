@@ -13,6 +13,7 @@ import {
   computeAgentOptionsData,
   getAgent,
   getToolUseAgents,
+  getVisibleAgents as getVisibleRegistryAgents,
   getWorkflowAgents,
   loadAgents,
   type AgentEntry,
@@ -103,6 +104,8 @@ export interface DesktopSettingsIpcOptions {
   sendStartupCatalogData?: boolean;
   loadAgents?: typeof loadAgents;
   loadAgentOptionsData?: typeof computeAgentOptionsData;
+  getAgents?: (category: AgentCategory) => AgentEntry[];
+  getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
   globalState?: StateStore;
   workspaceState?: StateStore;
   config?: ConfigProvider;
@@ -198,6 +201,9 @@ export function createDesktopSettingsIpc(
   const loadAgentRegistry = options.loadAgents ?? loadAgents;
   const loadAgentOptionsData =
     options.loadAgentOptionsData ?? computeAgentOptionsData;
+  const getAgentEntries = options.getAgents ?? getAgentRegistryEntries;
+  const getVisibleAgentEntries =
+    options.getVisibleAgents ?? getVisibleRegistryAgents;
   const usesDefaultToolDashboardBuilder =
     options.buildToolDashboardItems == null;
   const buildToolDashboardItems =
@@ -227,8 +233,8 @@ export function createDesktopSettingsIpc(
     setEnabledAgentKeys: async (category, enabledKeys) => {
       await workspaceState.update(getAgentStateKey(category), enabledKeys);
     },
-    getAgents,
-    getVisibleAgents: getAgents,
+    getAgents: getAgentEntries,
+    getVisibleAgents: getVisibleAgentEntries,
     getCustomPresetsRaw: () =>
       workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
     setCustomPresets: async (presets) => {
@@ -261,7 +267,7 @@ export function createDesktopSettingsIpc(
       getEnabledAgentKeys: agentCatalogState.getEnabledAgentKeys,
       setEnabledAgentKeys: agentCatalogState.setEnabledAgentKeys,
       getAgents: (category) =>
-        getAgents(category).map((entry) => ({
+        getAgentEntries(category).map((entry) => ({
           source: entry.source,
           name: entry.name,
         })),
@@ -338,7 +344,7 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function getAgents(category: AgentCategory): AgentEntry[] {
+  function getAgentRegistryEntries(category: AgentCategory): AgentEntry[] {
     return category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
   }
 
@@ -683,8 +689,8 @@ export function createDesktopSettingsIpc(
       globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
     ) {
       await globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-      invalidateModelOptionsCache();
     }
+    invalidateModelOptionsCache();
     await Promise.all([postProfileData(), postModelSelectionData()]);
   }
 
@@ -824,12 +830,17 @@ export function createDesktopSettingsIpc(
     });
     if (!name?.trim()) return;
     await loadAgentRegistry();
-    await agentCatalogController.saveCurrentPreset(name);
+    const preset = await agentCatalogController.saveCurrentPreset(name);
     postAgentModePresets();
+    await options.showInfoMessage?.(`Saved team "${preset.name}"`);
   }
 
   async function deleteAgentModePreset(presetId: string): Promise<void> {
-    await agentCatalogController.deleteCustomPreset(presetId);
+    const deleted = await agentCatalogController.deleteCustomPreset(presetId);
+    if (!deleted) {
+      await options.showErrorMessage?.(`Unknown custom team: ${presetId}`);
+      return;
+    }
     postAgentModePresets();
   }
 
