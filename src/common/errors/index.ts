@@ -9,6 +9,10 @@
 export { formatError, formatZodError } from './errorFormatUtils';
 export { toErrorMessage } from './errorMessage';
 export { isDiskFullError, isFileNotFoundError } from './errorPredicates';
+export {
+  classifyAgentError,
+  type AgentErrorKind,
+} from './agentErrorClassification';
 
 // These SDK utilities are exposed in the barrel because they have broad usage
 // across the codebase (model handlers, runtime, UI layers).
