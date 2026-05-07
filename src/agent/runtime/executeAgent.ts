@@ -34,7 +34,6 @@ import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import {
   loadAgentSettingAndPrompts,
   ensureAgentCategoryForSource,
-  type AgentLoadOptions,
 } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
@@ -97,9 +96,9 @@ interface AgentLaunchContext extends AgentCore {
 
 export async function getAgentPath(
   agentIdentifier: string,
-  options?: AgentLoadOptions & { runtimeHost?: AgentRuntimeHost },
+  options?: { runtimeHost?: AgentRuntimeHost },
 ): Promise<ResolvedAgent> {
-  const result = resolveAgent(agentIdentifier, options?.preferMultiple);
+  const result = resolveAgent(agentIdentifier);
   if (result) return result;
 
   (options?.runtimeHost ?? getAgentRuntimeHost()).emit(
@@ -175,15 +174,10 @@ async function assembleAgentLaunchContext(
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
-  const resolution = await getAgentPath(fullConfig.agent, {
-    preferMultiple: fullConfig.useMultipleOutputs,
-    runtimeHost,
-  });
+  const resolution = await getAgentPath(fullConfig.agent, { runtimeHost });
   const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(
     resolution,
-    {
-      preferMultiple: fullConfig.useMultipleOutputs,
-    },
+    { outputFiles: fullConfig.outputFiles },
   );
   const setting = ensureAgentCategoryForSource(
     loadedSettings,
@@ -210,13 +204,8 @@ async function assembleAgentLaunchContext(
 
   await validateModelExists(fullConfig.model, runtimeHost);
 
-  const useMultipleOutputs =
-    fullConfig.useMultipleOutputs &&
-    isWorkflowSetting(setting) &&
-    setting.isMultipleOutput;
   const config: AgentConfig = {
     ...fullConfig,
-    useMultipleOutputs,
     agentCategory: setting.agentCategory,
   };
 
@@ -245,7 +234,6 @@ async function assembleAgentLaunchContext(
     streamId,
     agentCategory: setting.agentCategory,
     isRemote: isRemoteAgent(fullConfig.agent),
-    hasMultipleOutputs: useMultipleOutputs,
   });
   onActivated(streamId);
 
@@ -296,9 +284,6 @@ async function assembleAgentLaunchContext(
     {
       agentName: config.agent,
       agentCategory: setting.agentCategory,
-      isMultipleOutput: isWorkflowSetting(setting)
-        ? setting.isMultipleOutput
-        : undefined,
     },
   );
 
@@ -510,9 +495,9 @@ function buildFallbackNotification(config: AgentConfig) {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
     : 'selected input';
-  const { outputFiles = [], useMultipleOutputs } = config;
+  const { outputFiles = [] } = config;
   const outputInfo =
-    useMultipleOutputs && outputFiles.length > 1
+    outputFiles.length > 1
       ? `to ${outputFiles.length} files`
       : outputFiles[0]
         ? `to ${path.basename(outputFiles[0])}`
@@ -713,9 +698,7 @@ export async function executeAgent(
         logger.debug(
           `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
         );
-        logger.debug(
-          `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-        );
+        logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
         // Subagents don't need to force-open the progress board or show notifications —
         // the orchestrator's stream is already visible.
         if (!isSubagent && !getRunStorageService().isViewVisible()) {
@@ -728,11 +711,6 @@ export async function executeAgent(
           executionId,
           taskState: agentConfigToTaskState(config),
         });
-        if (config.outputFiles.length > 1 && !config.useMultipleOutputs) {
-          logger.warn(
-            `Multiple output files provided (${config.outputFiles.length}) but useMultipleOutputs flag is disabled.`,
-          );
-        }
 
         const taskStage = await logger.stage(
           `Task: ${agentName}@${config.model}`,

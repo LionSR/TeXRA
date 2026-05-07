@@ -9,7 +9,6 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   agent: z.string().prefault('correct'),
   model: z.string().prefault('gemini31p'),
   instruction: z.string().prefault(''),
-  useMultipleOutputs: z.boolean().prefault(false),
   agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFiles: z.array(z.string()).prefault([]),
   toolConfig: ToolConfigSchema,

@@ -94,7 +94,6 @@ describe('ProgressWorkflowActionsController', () => {
     const taskState = createWorkflowTaskState({
       inputFiles: ['extra-input.tex'],
       outputFiles: ['declared.tex', '/workspace/generated.tex'],
-      useMultipleOutputs: true,
     });
     const { controller, fileOperations } = createProgressWorkflowActionsHarness(
       {
@@ -121,7 +120,6 @@ describe('ProgressWorkflowActionsController', () => {
             '/workspace/generated.tex',
             'extra.tex',
           ],
-          useMultipleOutputs: true,
           executionId: 'exec-123',
           skipProgressViewClear: true,
         },
@@ -129,12 +127,9 @@ describe('ProgressWorkflowActionsController', () => {
     ]);
   });
 
-  it('hides output files for single-output clean requests', async () => {
+  it('passes all resolved output files for clean requests', async () => {
     const taskState = createWorkflowTaskState(
-      {
-        outputFiles: ['declared.tex'],
-        useMultipleOutputs: false,
-      },
+      { outputFiles: ['declared.tex'] },
       { output: true },
     );
     const { controller, fileOperations } = createProgressWorkflowActionsHarness(
@@ -156,8 +151,7 @@ describe('ProgressWorkflowActionsController', () => {
           agent: 'correct',
           model: 'gemini31p',
           inputFile: 'input.tex',
-          outputFiles: [],
-          useMultipleOutputs: false,
+          outputFiles: ['declared.tex', 'generated.tex'],
           skipProgressViewClear: true,
         },
       },

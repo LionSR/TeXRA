@@ -25,7 +25,6 @@ const FileFieldsSchema = z.object({
 });
 
 export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
-  useMultipleOutputs: z.boolean(),
   toolConfig: ToolConfigSchema,
 });
 

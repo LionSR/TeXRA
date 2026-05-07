@@ -589,7 +589,7 @@ describe('desktop Supabase auth', () => {
         name: 'remoteWriter',
         source: 'remote',
         path: '',
-        isMultiple: true,
+        defaultOutputFiles: ['main.tex'],
         category: AgentCategory.Workflow,
         description: 'Remote writer',
         visibility: ['public', 'researcher'],
