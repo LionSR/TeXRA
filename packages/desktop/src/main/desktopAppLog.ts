@@ -17,7 +17,10 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
-import { redactDesktopLog } from './desktopLogRedaction.js';
+import {
+  redactDesktopLog,
+  type DesktopLogRedactionOptions,
+} from './desktopLogRedaction.js';
 import type { DesktopLogSnapshot } from '../desktopLogMessages.js';
 
 type ConsoleLevel = 'debug' | 'error' | 'info' | 'log' | 'warn';
@@ -64,32 +67,26 @@ export function readDesktopLogSnapshot(options: {
   maxBytes?: number | undefined;
 }): DesktopLogSnapshot {
   const path = getDesktopLogFilePath();
-  const maxBytes = options.maxBytes ?? MAX_VIEWER_LOG_BYTES;
+  const maxBytes = Math.max(0, options.maxBytes ?? MAX_VIEWER_LOG_BYTES);
+  const redactionOptions = makeDesktopLogRedactionOptions(options);
   try {
-    const stats = statSync(path);
-    const text = readFileSync(path, 'utf8');
-    const excerpt =
-      stats.size > maxBytes
-        ? text.slice(Math.max(0, text.length - maxBytes))
-        : text;
+    const buffer = readFileSync(path);
+    const truncated = buffer.length > maxBytes;
+    const excerpt = truncated
+      ? buffer.subarray(buffer.length - maxBytes)
+      : buffer;
     return {
-      path,
-      truncated: stats.size > maxBytes,
-      text: redactDesktopLog(excerpt, {
-        homeDir: homedir(),
-        workspacePath: options.workspacePath,
-      }),
+      path: redactDesktopLog(path, redactionOptions),
+      truncated,
+      text: redactDesktopLog(excerpt.toString('utf8'), redactionOptions),
     };
   } catch (error) {
     return {
-      path,
+      path: redactDesktopLog(path, redactionOptions),
       truncated: false,
       text: redactDesktopLog(
         format('Desktop log is not available: %s', error),
-        {
-          homeDir: homedir(),
-          workspacePath: options.workspacePath,
-        },
+        redactionOptions,
       ),
     };
   }
@@ -168,6 +165,15 @@ function rotateDesktopLogFile(path: string): void {
   } catch {
     // Log rotation is best-effort; app startup should continue without it.
   }
+}
+
+function makeDesktopLogRedactionOptions(options: {
+  workspacePath?: string | undefined;
+}): DesktopLogRedactionOptions {
+  return {
+    homeDir: homedir(),
+    workspacePath: options.workspacePath,
+  };
 }
 
 function getConsoleMessageDetails(

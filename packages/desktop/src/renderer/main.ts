@@ -12,6 +12,7 @@ import '@settingsView/frontend';
 import '@webview/frontend';
 
 import {
+  DesktopRouteSchema,
   DesktopSetRouteMessageSchema,
   type DesktopRoute,
   type DesktopSetRouteMessage,
@@ -41,7 +42,7 @@ interface WorkspaceTreeNode {
   categories?: string[];
 }
 
-const DESKTOP_ROUTES = ['main', 'progress', 'settings', 'logs'] as const;
+const DESKTOP_ROUTES = DesktopRouteSchema.options;
 
 const root = document.querySelector<HTMLElement>('#app');
 
