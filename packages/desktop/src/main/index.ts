@@ -271,6 +271,7 @@ function createWindow(options: {
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
       getCustomAgentDirectory: () => getAgentDirectories().custom(),
+      openExternalUrl: previewHost.openExternal,
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,
       openWorkspaceFolder,

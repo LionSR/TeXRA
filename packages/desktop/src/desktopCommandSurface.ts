@@ -15,7 +15,10 @@ import type { DesktopRoute } from './desktopShellMessages.js';
 export const DESKTOP_LOCAL_COMMANDS = {
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
+  OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
+
+export const DESKTOP_DOCS_URL = 'https://texra.ai/guide/desktop';
 
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
@@ -32,6 +35,7 @@ export const DESKTOP_COMMAND_IDS = [
   'texra.showAgents',
   'texra.showTools',
   'texra.showMultiAgent',
+  DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly (CommandId | DesktopLocalCommandId)[];
 
 export type DesktopCommandId = (typeof DESKTOP_COMMAND_IDS)[number];
@@ -46,6 +50,7 @@ export interface DesktopCommandMenuEntry {
 export interface DesktopCommandActions {
   showRoute(route: DesktopRoute): void;
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
+  openDesktopDocs?(): void;
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
 }
@@ -78,6 +83,14 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
   DesktopCommandMenuEntry
 >([
+  [
+    DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+      label: 'Desktop Documentation',
+      category: 'Help',
+    },
+  ],
   [
     DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
     {
@@ -181,6 +194,9 @@ export function dispatchDesktopCommand(
     case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
       actions.openWorkspaceFolder?.();
       return true;
+    case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
+      actions.openDesktopDocs?.();
+      return true;
     default:
       return assertNever(id);
   }
@@ -257,7 +273,11 @@ export function buildDesktopMenuTemplate(
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
-    { role: 'help' },
+    {
+      label: 'Help',
+      role: 'help',
+      submenu: [commandItem(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS)],
+    },
   ];
 }
 
