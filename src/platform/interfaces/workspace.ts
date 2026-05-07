@@ -1,3 +1,5 @@
+import type { Disposable } from './disposable';
+
 /**
  * Platform workspace provider interface.
  */
@@ -11,4 +13,9 @@ export interface WorkspaceProvider {
    * Returns the original path if it is outside the workspace.
    */
   asRelativePath(filePath: string): string;
+
+  /**
+   * Watch workspace files matching the given glob pattern.
+   */
+  watch(globPattern: string, listener: () => void): Disposable;
 }

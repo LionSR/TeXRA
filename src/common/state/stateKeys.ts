@@ -42,6 +42,7 @@ export enum WorkspaceStateKey {
   // Codex settings
   CODEX_SANDBOX_MODE = 'texra.codexSandboxMode',
   CODEX_REASONING_EFFORT = 'texra.codexReasoningEffort',
+  CODEX_APPROVAL_POLICY = 'texra.codexApprovalPolicy',
 
   // Git commit author settings
   GIT_MARK_COMMITS = 'texra.git.markCommits',
@@ -129,6 +130,12 @@ export enum GlobalStateKey {
 
   // Tool settings
   DISABLED_TOOLS = 'texra.tools.disabled',
+
+  // Desktop-only crash reporting
+  DESKTOP_CRASH_REPORTING_ENABLED = 'texra.desktop.crashReporting.enabled',
+
+  // Experimental
+  INLINE_CRITICISM_ENABLED = 'texra.inlineCriticism.enabled',
 }
 
 /** Prefix used for per-instruction suppression flags */

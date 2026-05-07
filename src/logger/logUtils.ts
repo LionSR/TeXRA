@@ -1,7 +1,5 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
-import * as vscode from 'vscode';
-
 import { type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
@@ -11,8 +9,16 @@ import type { LogUtilsOptions } from './logOptions';
 
 const contextStorage = new AsyncLocalStorage<Map<string, string[]>>();
 
-const channels = new Map<string, vscode.OutputChannel>();
-let mainOutputChannel: vscode.OutputChannel | null = null;
+interface LogSink {
+  appendLine(message: string): void;
+  dispose?(): void;
+}
+
+type OutputChannelFactory = (name: string) => LogSink;
+
+const channels = new Map<string, LogSink>();
+let mainOutputChannel: LogSink | null = null;
+let outputChannelFactory: OutputChannelFactory | null = null;
 
 function getKey(channel: string, isAgent: boolean): string {
   return `${channel}::${isAgent ? 'agent' : 'shared'}`;
@@ -25,17 +31,27 @@ function getTimestamp(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
 }
 
-function ensureChannel(
-  channel: string,
-  isAgent: boolean,
-): vscode.OutputChannel {
+function createConsoleSink(channel: string): LogSink {
+  return {
+    appendLine(message: string) {
+      console.info(`[${channel}] ${message}`);
+    },
+  };
+}
+
+function createOutputChannel(channel: string, isAgent: boolean): LogSink {
+  const name = isAgent ? `TeXRA ${channel}` : 'TeXRA';
+  return outputChannelFactory?.(name) ?? createConsoleSink(name);
+}
+
+function ensureChannel(channel: string, isAgent: boolean): LogSink {
   const key = getKey(channel, isAgent);
   const existing = channels.get(key);
   if (existing) return existing;
 
   const output = isAgent
-    ? vscode.window.createOutputChannel(`TeXRA ${channel}`)
-    : (mainOutputChannel ??= vscode.window.createOutputChannel('TeXRA'));
+    ? createOutputChannel(channel, true)
+    : (mainOutputChannel ??= createOutputChannel(channel, false));
   channels.set(key, output);
   return output;
 }
@@ -48,7 +64,7 @@ function getActiveGroupStack(
 }
 
 function writeLine(
-  channel: vscode.OutputChannel,
+  channel: LogSink,
   streamId: string,
   level: LogLevel,
   message: string,
@@ -87,6 +103,21 @@ function logWithGroup(
 
 export function initialize(channel: string, isAgent = false): void {
   ensureChannel(channel, isAgent);
+}
+
+export function setOutputChannelFactory(
+  factory: OutputChannelFactory | null,
+): void {
+  const sinks = new Set<LogSink>(channels.values());
+  if (mainOutputChannel) {
+    sinks.add(mainOutputChannel);
+  }
+  for (const sink of sinks) {
+    sink.dispose?.();
+  }
+  outputChannelFactory = factory;
+  channels.clear();
+  mainOutputChannel = null;
 }
 
 export function getActiveGroupId(

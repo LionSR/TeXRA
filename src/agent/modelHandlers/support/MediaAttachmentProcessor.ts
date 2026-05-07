@@ -7,7 +7,7 @@ import pMap from 'p-map';
 
 // Local imports - agent utils
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 

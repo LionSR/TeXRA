@@ -85,12 +85,6 @@ export const AGENT_DECORATORS = {
       label: 'Custom',
       hint: 'Custom agent: User-defined in your agents directory',
     },
-    multipleOutputs: {
-      icon: 'files',
-      unicode: '⧉',
-      label: 'Multiple outputs',
-      hint: 'Has _multiple variant that supports multiple output files',
-    },
   },
   agentCategories: {
     workflow: { icon: 'symbol-method', unicode: '▷', label: 'Workflow' },

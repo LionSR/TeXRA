@@ -1,13 +1,15 @@
+# ci-sync-version: claude-provider-deepseek-v1
+# ci-sync-source: shared bot automation, prompts externalized under .github/prompts
 name: Issue Tracker
 
 on:
   issues:
     types: [closed]
   pull_request:
-    # `labeled` is intentionally omitted — Playbook C does nothing for label
-    # events, and auto-label.yml fires labeled events on every push, which
-    # otherwise cascades into duplicate, costly track runs.
-    types: [closed, opened, review_requested]
+    # `labeled` and `review_requested` are intentionally omitted — Playbook C
+    # does nothing for those events, and automation can otherwise cascade into
+    # duplicate, costly track runs.
+    types: [closed, opened]
   pull_request_review:
     types: [submitted]
 
@@ -18,11 +20,32 @@ concurrency:
 jobs:
   track:
     # Skip: closed-but-not-completed issues, closed-but-not-merged PRs
+    # Skip automated review summaries: the Claude action cannot exchange their
+    # OIDC token for a repo-writing app token, and Playbook C has no useful
+    # tracking action for bot-submitted review events.
+    # Repository variable kill switch:
+    #   ISSUE_TRACKER_ENABLED=false disables tracking issue updates.
+    #   unset or any other value preserves the default enabled behavior.
     if: |
-      (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
-      (github.event_name == 'pull_request' && (github.event.action != 'closed' || github.event.pull_request.merged == true)) ||
-      github.event_name == 'pull_request_review'
+      vars.ISSUE_TRACKER_ENABLED != 'false' &&
+      (
+        (github.event_name == 'issues' && github.event.issue.state_reason == 'completed') ||
+        (github.event_name == 'pull_request' &&
+         (github.event.action == 'opened' ||
+          (github.event.action == 'closed' && github.event.pull_request.merged == true))) ||
+        (github.event_name == 'pull_request_review' &&
+         github.event.review.user.type != 'Bot' &&
+         !endsWith(github.event.review.user.login, '[bot]') &&
+         github.actor != 'Copilot')
+      )
     runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_PROVIDER: ${{ vars.CLAUDE_CODE_PROVIDER || 'anthropic' }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
+      CLAUDE_OPUS_MODEL: ${{ vars.CLAUDE_OPUS_MODEL }}
+      CLAUDE_SONNET_MODEL: ${{ vars.CLAUDE_SONNET_MODEL }}
     permissions:
       contents: read
       pull-requests: read
@@ -34,188 +57,76 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Gate tracker agent
+        id: tracker-gate
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          should_run=true
+
+          if [[ "$EVENT_NAME" == pull_request* ]]; then
+            tracker_workflow_changes="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- .github/workflows/issue-tracker.yml)"
+            if [[ -n "$tracker_workflow_changes" ]]; then
+              should_run=false
+              echo "Skipping tracker agent because this PR changes issue-tracker.yml."
+              echo "The Claude action requires workflow content to match the default branch before token exchange."
+            fi
+          fi
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout trusted automation
+        if: steps.tracker-gate.outputs.should_run == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          path: .trusted-actions
+          fetch-depth: 1
+
+      - name: Check trusted provider wrapper
+        if: steps.tracker-gate.outputs.should_run == 'true'
+        id: trusted-provider-wrapper
+        run: |
+          if [ -f .trusted-actions/.github/actions/claude-code-with-provider/action.yml ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping issue tracker: trusted base branch does not yet contain claude-code-with-provider."
+          fi
+
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        if: steps.tracker-gate.outputs.should_run == 'true' && steps.trusted-provider-wrapper.outputs.available == 'true'
+        uses: ./.trusted-actions/.github/actions/claude-code-with-provider
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          allowed_bots: 'dependabot[bot],github-actions[bot],Copilot,chatgpt-codex-connector,claude[bot],cursor[bot]'
-          claude_args: |
-            --model claude-opus-4-7
-            --allowedTools "mcp__github__*" "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"
+          provider: ${{ env.CLAUDE_CODE_PROVIDER }}
+          model-tier: opus
+          allowed-bots: 'dependabot[bot],github-actions[bot],Copilot,claude[bot],cursor[bot]'
+          allowed-tools-preset: issue-tracker
+          claude-prompt-file: .trusted-actions/.github/prompts/issue-tracker-prompt.md
+          claude-prompt-context: |
+            Event: ${{ github.event_name }} / ${{ github.event.action }}
+            Repository: ${{ github.repository }}
+            Triggered by: ${{ github.event.sender.login }}
 
-          prompt: |
-            You are the issue tracker agent for this repository. A GitHub event just
-            occurred. Determine what happened and take the appropriate actions.
+            ${{ github.event_name == 'issues' && format('Issue number: #{0}', github.event.issue.number) || '' }}
+            ${{ github.event_name == 'issues' && format('Issue title: {0}', github.event.issue.title) || '' }}
+            ${{ github.event_name == 'issues' && format('Issue labels: {0}', join(github.event.issue.labels.*.name, ', ')) || '' }}
 
-            Use the GitHub MCP tools (not gh CLI) for all GitHub operations.
-
-            ## Event Context
-
-            - **Event**: ${{ github.event_name }} / ${{ github.event.action }}
-            - **Repository**: ${{ github.repository }}
-            - **Triggered by**: ${{ github.event.sender.login }}
-
-            ${{ github.event_name == 'issues' && format('- **Issue number**: #{0}', github.event.issue.number) || '' }}
-            ${{ github.event_name == 'issues' && format('- **Issue title**: {0}', github.event.issue.title) || '' }}
-            ${{ github.event_name == 'issues' && format('- **Issue labels**: {0}', join(github.event.issue.labels.*.name, ', ')) || '' }}
-
-            ${{ github.event_name != 'issues' && format('- **PR number**: #{0}', github.event.pull_request.number) || '' }}
-            ${{ github.event_name != 'issues' && format('- **PR title**: {0}', github.event.pull_request.title) || '' }}
-            ${{ github.event_name != 'issues' && format('- **PR labels**: {0}', join(github.event.pull_request.labels.*.name, ', ')) || '' }}
-            ${{ github.event_name != 'issues' && format('- **PR state**: {0}', github.event.pull_request.state) || '' }}
-            ${{ github.event_name != 'issues' && format('- **PR draft**: {0}', github.event.pull_request.draft) || '' }}
-            ${{ github.event_name != 'issues' && format('- **Author**: {0}', github.event.pull_request.user.login) || '' }}
-            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('- **Merged by**: {0}', github.event.pull_request.merged_by.login) || '' }}
-            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('- **Base branch**: {0}', github.event.pull_request.base.ref) || '' }}
-            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('- **Head branch**: {0}', github.event.pull_request.head.ref) || '' }}
-            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('- **Base SHA**: {0}', github.event.pull_request.base.sha) || '' }}
-            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('- **Head SHA**: {0}', github.event.pull_request.head.sha) || '' }}
-            ${{ github.event_name == 'pull_request_review' && format('- **Review state**: {0}', github.event.review.state) || '' }}
-            ${{ github.event_name == 'pull_request_review' && format('- **Reviewer**: {0}', github.event.review.user.login) || '' }}
-
-            ---
-
-            ## What To Do
-
-            Based on the event, follow the appropriate playbook below.
-
-            ### Finding Tracking Issues
-
-            For all playbooks, you'll need to find tracking issues. These are open issues
-            that have a "tracking" label, or titles starting with "Tracking:", "Epic:",
-            or "Meta:", and contain task lists (checkboxes `- [ ]` / `- [x]`).
-
-            ---
-
-            ### Playbook A: Issue Closed as Completed
-
-            **When**: `issues` / `closed` with state_reason `completed`
-
-            1. Find tracking issues that reference the closed issue (by `#number`,
-               URL, or title keyword in task list items)
-            2. Check off matching items: `- [ ]` → `- [x]`
-            3. Comment: "✅ #N (title) has been resolved. Updated checklist."
-            4. If ALL items are now checked, suggest closing the tracking issue
-
-            ---
-
-            ### Playbook B: PR Merged
-
-            **When**: `pull_request` / `closed` with `merged == true`
-
-            Do TWO things:
-
-            **B1 — Update tracking checklists** (same as Playbook A but for the PR):
-            1. Find tracking issues referencing this PR
-            2. Check off matching items
-            3. Comment with resolution summary
-
-            **B2 — Scan for follow-ups**:
-            1. Read the PR body, comments, review threads, and linked issues via MCP tools
-            2. Get the code diff: `git diff <base-sha>..<head-sha>`
-            3. Search the diff for new TODO/FIXME/HACK/XXX/WORKAROUND markers
-
-            Identify actionable follow-ups. **Prioritize human reviewer suggestions** —
-            comments from real people (not bots) carry the most weight. Bot accounts
-            typically have `[bot]` in their username or are known services (dependabot,
-            renovate, copilot, cursor, codex, etc.).
-
-            Look for:
-            - Human reviewer feedback that was acknowledged but deferred (highest priority)
-            - Explicit TODOs or deferred scope ("out of scope", "follow-up", "separate PR",
-              "later", "Phase 2")
-            - New TODO/FIXME/HACK comments in the diff (not pre-existing ones)
-            - Unresolved review threads or open questions
-            - Roadmap implications for tracked work
-
-            Do NOT create issues for:
-            - Work already completed in this PR
-            - Pre-existing TODOs not introduced by this PR
-            - Nitpick-level comments (style, naming)
-            - Speculative future work not discussed in the PR
-            - Bot suggestions already addressed or dismissed
-
-            For each genuine follow-up, create an issue with:
-            - **Title**: Short, imperative (e.g. "Add error handling for X")
-            - **Body**:
-              ```
-              ## Context
-              Follow-up from #<PR-number> (<PR title>).
-
-              <Why this work is needed>
-
-              ## Details
-              <What needs to be done>
-
-              ## References
-              - PR: #<PR-number>
-              - <Related issues or review comments>
-              ```
-            - **Labels**: always `follow-up`. Plus, when applicable:
-              - One type-equivalent: `bug`, `enhancement`, `tech-debt`, or `documentation`.
-              - Any matching `area:*` from the parent PR's changed paths:
-                `area:agent-runtime`, `area:model-handlers`, `area:progress-view`,
-                `area:latex-workflow`, `area:docs`, `area:webview`, `area:ci`, `area:deps`.
-              - One `risk:*` (`risk:low`, `risk:medium`, `risk:high`) reflecting blast radius.
-              - One `status:*` (`status:needs-triage`, `status:needs-validation`,
-                `status:ready-review`, `status:blocked-external`) reflecting current state.
-              - `priority:p0` only for blocker / data-loss / security follow-ups.
-
-            **Umbrella vs flat decision.**
-
-            - **0 follow-ups**: skip B2 entirely.
-            - **1 follow-up**: create the issue flat. Reference the parent PR in the body.
-              Do NOT create an umbrella — sub-issue overhead is not worth it for a single child.
-            - **2+ follow-ups from the same PR**: create a tracking umbrella first,
-              then create each child as a native sub-issue of the umbrella:
-              1. Create umbrella with `mcp__github__issue_write` (method=create):
-                 - Title: `Tracking: follow-ups from #<PR-number> (<short PR title>)`
-                 - Body: brief context + bulleted preview of child titles + link to parent PR
-                 - Labels: `tracking`, plus the parent PR's `area:*` labels
-                 - **Capture both `number` AND `id` from the response.** `id` is the
-                   numeric REST database id (integer), NOT `node_id` (the GraphQL
-                   string). `sub_issue_write` below requires the integer `id`.
-              2. For each child, call `mcp__github__issue_write` (method=create) with
-                 the body and labels (`follow-up` + applicable type/area/risk/status
-                 from the list above).
-                 **Capture both `number` AND `id` (integer) from each child response.**
-              3. For each child, attach to the umbrella:
-                 `mcp__github__sub_issue_write` with method=`add`,
-                 `issue_number=<umbrella-number>`, `sub_issue_id=<child-id>`.
-                 Note: `sub_issue_id` is the child's numeric REST `id` (integer),
-                 NOT its issue `number` and NOT its `node_id`.
-
-            Then add new issues to relevant tracking issue checklists:
-            - For flat (1 follow-up): append `- [ ] #<issue> - <title>` to the relevant section
-            - For umbrella (2+): append `- [ ] #<umbrella> - Tracking: ...` (single line for the umbrella)
-            - Comment on the parent PR: "📋 Filed follow-ups from this PR: #<umbrella-or-issue>"
-
-            **Be conservative.** Only create issues for genuine, actionable follow-ups.
-            When in doubt, skip it. False positives create noise. Two real follow-ups
-            justify an umbrella; two speculative ones do not.
-
-            ---
-
-            ### Playbook C: PR Activity (opened, edited, labeled, review submitted)
-
-            **When**: Any PR event that isn't a merge/close
-
-            This is lightweight — most events need no action.
-
-            1. Find tracking issues referencing this PR or related issues
-            2. Only act if the event is meaningful for tracking:
-               - PR opened for a tracked task → comment "🔄 #<PR> opened to address this"
-               - PR approved → comment "✅ #<PR> approved, ready to merge"
-               - Changes requested → comment "⚠️ Changes requested on #<PR>"
-            3. Skip everything else silently (edits, labels, etc. are usually not worth a comment)
-
-            ---
-
-            ## Final Report
-
-            Summarize what you did:
-            - Which playbook(s) you followed
-            - What tracking issues were updated
-            - What follow-up issues were created (if any)
-            - Or note that no action was needed
+            ${{ github.event_name != 'issues' && format('PR number: #{0}', github.event.pull_request.number) || '' }}
+            ${{ github.event_name != 'issues' && format('PR title: {0}', github.event.pull_request.title) || '' }}
+            ${{ github.event_name != 'issues' && format('PR labels: {0}', join(github.event.pull_request.labels.*.name, ', ')) || '' }}
+            ${{ github.event_name != 'issues' && format('PR state: {0}', github.event.pull_request.state) || '' }}
+            ${{ github.event_name != 'issues' && format('PR draft: {0}', github.event.pull_request.draft) || '' }}
+            ${{ github.event_name != 'issues' && format('Author: {0}', github.event.pull_request.user.login) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Merged by: {0}', github.event.pull_request.merged_by.login) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Base branch: {0}', github.event.pull_request.base.ref) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Head branch: {0}', github.event.pull_request.head.ref) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Base SHA: {0}', github.event.pull_request.base.sha) || '' }}
+            ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && format('Head SHA: {0}', github.event.pull_request.head.sha) || '' }}
+            ${{ github.event_name == 'pull_request_review' && format('Review state: {0}', github.event.review.state) || '' }}
+            ${{ github.event_name == 'pull_request_review' && format('Reviewer: {0}', github.event.review.user.login) || '' }}

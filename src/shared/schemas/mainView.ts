@@ -73,7 +73,6 @@ export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
 export const AgentOptionDataSchema = z.object({
   value: z.string(),
   label: z.string(),
-  isMultiple: z.boolean().optional(),
   isToolUse: z.boolean().optional(),
   isOrchestrator: z.boolean().optional(),
   isRemote: z.boolean().optional(),

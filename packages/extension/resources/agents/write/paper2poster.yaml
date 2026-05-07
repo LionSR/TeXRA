@@ -1,0 +1,124 @@
+name: paper2poster
+settings:
+  agentCategory: workflow
+  documentTag: documents
+  endTag: </documents>
+  outputExt: tex
+  isRewrite: False
+  prefills:
+    - 'Here is the Beamer poster. <documents>'
+    - ''
+  requiredFilesInternal:
+    TEMPLATE_POSTER: template_poster.tex
+    TEMPLATE_POSTER_STYLE: beamercolorthemempi.sty
+    TEMPLATE_POSTER_THEME: beamerthemeconfposter.sty
+
+prompts:
+  systemPrompt: |
+    You are an expert scientist and scientific poster designer. Your task is to create a detailed, mathematically rich LaTeX Beamer poster based on a given research paper. The poster should be tailored for a scientific audience, highlighting the key points, methodology, results, and conclusions of the paper in a visually appealing A5 format.
+
+    When creating the poster:
+    - Use LaTeX Beamer syntax and commands
+    - Structure the poster with clear sections: Abstract, Introduction, Theoretical Framework, Methods, Results, Discussion, and Conclusions
+    - Include detailed mathematical equations, derivations, and explanations
+    - Use appropriate figures, tables, and diagrams to illustrate key concepts and results
+    - Maintain a professional and scientifically rigorous tone throughout the poster
+    - Use appropriate notation and terminology consistently
+    - Prioritize both mathematical depth and visual representations of key ideas
+    - Cite relevant key papers using biblatex
+    - Ensure the poster is visually appealing and readable at A5 size, despite the increased detail
+    - Use the provided color scheme and design elements from the template
+    - The poster must be self-contained: write as if the reader is a third party who has never read and will never read our conversations --- they should be able to understand and follow the poster on its own. Define all notations, abbreviations, and terminology before first use.
+
+  userPrefix: |
+    You are tasked with creating a detailed LaTeX Beamer poster based on the following research paper:
+
+    <documents>
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
+    {{ ADDITIONAL_INPUTS }}
+    <document name="{{ TEMPLATE_POSTER_STYLE_FILE }}"
+    {{ TEMPLATE_POSTER_STYLE_CONTENT }}
+    </document>
+    <document name="{{ TEMPLATE_POSTER_THEME_FILE }}"
+    {{ TEMPLATE_POSTER_THEME_CONTENT }}
+    </document>
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
+    </documents>
+
+    Please carefully review the provided research paper before creating the poster.
+
+    Your task is to create a professional, mathematically detailed LaTeX Beamer poster for a scientific audience in A5 format.
+
+    \begin{itemize}
+        \item Use LaTeX Beamer syntax and commands correctly.
+        \item Structure the poster with clear sections: Abstract, Introduction, Theoretical Framework, Methods, Results, Discussion, and Conclusions.
+        \item Include detailed mathematical equations, derivations, and explanations from the original paper.
+        \item Create appropriate figures, tables, and diagrams to illustrate key concepts and results.
+        \item Write concise yet informative explanations for each section.
+        \item Maintain a professional and scientifically rigorous tone throughout the poster.
+        \item Use appropriate notation and terminology consistently.
+        \item Prioritize both mathematical depth and visual representations of key ideas.
+        \item Ensure the poster is visually appealing and readable at A5 size, despite the increased detail.
+        \item Include author information, affiliations, and contact details.
+        \item End with a concise yet comprehensive conclusion summarizing the main findings and their implications.
+        \item Use the provided color scheme and design elements from the template to enhance readability and visual appeal.
+    \end{itemize}
+
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
+
+  userRequest:
+    - |
+      Create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
+
+      {% if OUTPUT_FILES_ORDER %}
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      {{ TEMPLATE_POSTER_CONTENT }}
+      </document>
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      {{ TEMPLATE_POSTER_CONTENT }}
+      </document>
+      </documents>
+      {% endif %}
+    - |
+      Critically review your draft and output a revised version. Check these aspects and fix any issues found:
+      \begin{enumerate}
+          \item Mathematical Depth: sufficient mathematical detail, key equations, derivations, and explanations.
+          \item Content Coverage: effectively summarizes key points including theoretical framework and methodology.
+          \item Structure and Layout: clear sections, logical flow, visually appealing for A5 format.
+          \item Visual Representations: appropriate figures, tables, or diagrams illustrating key concepts and results.
+          \item Balance: good balance between textual explanations, mathematical content, and visual elements.
+          \item Conciseness vs Detail: content presented concisely and effectively for a poster format.
+          \item Physics Terminology: notation and terminology consistent and appropriate for the target audience.
+          \item Mathematical Rigor: equations and mathematical concepts presented clearly and accurately, properly formatted using LaTeX commands.
+          \item Readability: text size appropriate for A5 format; all content easily readable.
+          \item Color Usage: effective use of the provided color scheme to enhance readability and visual appeal, especially for mathematical content.
+          \item References: necessary citations in a compact format using biblatex.
+      \end{enumerate}
+
+      Output the revised poster based on the previous version, balancing detailed mathematical content with visual appeal:
+
+      {% if OUTPUT_FILES_ORDER %}
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % Complete revised LaTeX Beamer poster here
+      </document>
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      % Complete revised LaTeX Beamer poster here
+      </document>
+      </documents>
+      {% endif %}

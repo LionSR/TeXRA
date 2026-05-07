@@ -1,0 +1,576 @@
+/**
+ * MultiAgentTab component - multi-agent settings for the settings view.
+ * Contains agent teams (built-in + custom) for quick configuration,
+ * and reliability settings.
+ */
+
+// Third-party imports
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
+
+// Local imports - shared styles
+import { codiconStyles, designTokens, commonViewStyles } from '@shared/styles';
+
+// Local imports - shared utils
+import { createEvent } from '@shared/utils/events';
+
+// Local imports - shared schemas
+import {
+  AGENT_MODE_PRESETS,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
+import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
+import {
+  NESTED_DELEGATION_DEPTH_RANGE,
+  clampNestedDelegationDepth,
+} from '@shared/constants/delegationPolicy';
+
+function clampSetting(value: number, min?: number, max?: number): number {
+  let result = value;
+  if (min != null) result = Math.max(min, result);
+  if (max != null) result = Math.min(max, result);
+  return result;
+}
+
+@customElement('multi-agent-tab')
+export class MultiAgentTab extends LitElement {
+  static override styles = [
+    designTokens,
+    codiconStyles,
+    commonViewStyles,
+    css`
+      :host {
+        display: block;
+      }
+
+      .multi-agent-container {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-medium);
+      }
+
+      .setting-block {
+        padding: var(--spacing-medium);
+        background-color: var(--texra-editor-inactiveSelectionBackground);
+        border-radius: var(--border-radius);
+      }
+
+      .setting-description {
+        margin: var(--spacing-small) 0 0 0;
+        font-size: var(--font-size-sm);
+      }
+
+      .multi-agent-reminder-steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+        gap: var(--spacing-small) var(--spacing-large);
+        margin-top: var(--spacing-tiny);
+      }
+
+      /* Team cards */
+      .preset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: var(--spacing-medium);
+      }
+
+      .preset-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-small);
+        padding: var(--spacing-medium);
+        background-color: var(--texra-editor-inactiveSelectionBackground);
+        border: var(--border-thin) solid var(--color-border);
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        transition:
+          border-color var(--transition-fast),
+          background-color var(--transition-fast);
+      }
+
+      .preset-card:hover {
+        border-color: var(--texra-focusBorder);
+        background-color: var(
+          --texra-list-hoverBackground,
+          rgba(128, 128, 128, 0.1)
+        );
+      }
+
+      .preset-card:focus-visible {
+        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline-offset: 1px;
+      }
+
+      .preset-card.active {
+        background-color: var(--texra-list-activeSelectionBackground);
+        color: var(
+          --texra-list-activeSelectionForeground,
+          var(--texra-foreground)
+        );
+        border-color: var(--texra-focusBorder);
+      }
+
+      .preset-card.active .preset-card-name,
+      .preset-card.active .preset-card-description,
+      .preset-card.active .preset-card-icon,
+      .preset-card.active .preset-active-badge {
+        color: inherit;
+      }
+
+      .preset-active-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        padding: var(--border-thin) var(--border-radius-large);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
+        color: var(--texra-focusBorder);
+        background: color-mix(
+          in srgb,
+          var(--texra-focusBorder) 15%,
+          transparent
+        );
+        border-radius: var(--border-radius-medium);
+      }
+
+      .preset-active-badge .codicon {
+        font-size: var(--font-size-xs);
+      }
+
+      .preset-card-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-small);
+      }
+
+      .preset-card-icon {
+        font-size: var(--font-size-lg);
+        color: var(--texra-focusBorder);
+        flex-shrink: 0;
+      }
+
+      .preset-card-name {
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
+        color: var(--texra-foreground);
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .preset-card-description {
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+        line-height: var(--line-height-normal);
+        margin: 0;
+      }
+
+      .preset-card-agents {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-tiny);
+      }
+
+      .preset-card-orchestrators {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-small);
+        margin-top: var(--spacing-tiny);
+      }
+
+      .preset-agent-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-tiny);
+        padding: var(--border-thin) var(--border-radius-large);
+        font-size: var(--font-size-xs);
+        color: var(--texra-badge-foreground);
+        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
+        border-radius: var(--border-radius);
+      }
+
+      .preset-agent-badge--orchestrator {
+        color: var(--texra-button-foreground);
+        background: var(--texra-button-background);
+        border: var(--border-thin) solid
+          var(--texra-button-background, var(--texra-focusBorder));
+        font-weight: var(--font-weight-semibold);
+      }
+
+      .preset-orchestrator-icon {
+        font-size: var(--font-size-xs);
+        line-height: 1;
+      }
+
+      .preset-delete-btn {
+        position: absolute;
+        top: var(--spacing-small);
+        right: var(--spacing-small);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-tiny);
+        color: var(--color-text-secondary);
+        background: none;
+        border: none;
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        font-size: var(--font-size-sm);
+      }
+
+      .preset-delete-btn:hover {
+        color: var(--texra-errorForeground);
+      }
+
+      .preset-delete-btn:focus-visible {
+        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline-offset: 1px;
+        border-radius: var(--border-radius-small);
+      }
+
+      .preset-card:hover .preset-delete-btn {
+        display: inline-flex;
+      }
+
+      /* Reliability settings */
+      .reliability-row {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-medium);
+        padding: var(--spacing-small) 0;
+      }
+
+      .reliability-row label {
+        min-width: 140px;
+        font-size: var(--font-size-sm);
+        color: var(--texra-foreground);
+      }
+
+      .reliability-input {
+        width: 80px;
+      }
+
+      .reliability-unit {
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+      }
+
+      .reliability-description {
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-xs);
+        margin: 0;
+        padding-left: calc(140px + var(--spacing-medium));
+      }
+    `,
+  ];
+
+  @property({ attribute: false }) allowOrchestratorKill = true;
+  @property({ attribute: false }) detachSubagentsOnStop = false;
+  @property({ attribute: false }) worktreeSupport = false;
+  @property({ attribute: false }) nestedDelegationMaxDepth =
+    NESTED_DELEGATION_DEPTH_RANGE.default;
+  @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
+    [];
+  @property({ attribute: false }) customPresets: AgentModePreset[] = [];
+  @state() private activePresetId: string | null = null;
+
+  private emitToggle(eventName: string, event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    this.dispatchEvent(
+      createEvent(eventName, { enabled: Boolean(target?.checked) }),
+    );
+  }
+
+  private handleNestedDelegationMaxDepthChange(input: HTMLInputElement): void {
+    const parsed = Number(input.value);
+    if (Number.isNaN(parsed)) {
+      input.value = String(this.nestedDelegationMaxDepth);
+      return;
+    }
+    const clamped = clampNestedDelegationDepth(parsed);
+    if (clamped !== parsed) input.value = String(clamped);
+    this.dispatchEvent(
+      createEvent('nested-delegation-max-depth-change', { value: clamped }),
+    );
+  }
+
+  private handlePresetClick(preset: AgentModePreset): void {
+    this.activePresetId = preset.id;
+    this.dispatchEvent(
+      createEvent('apply-agent-mode-preset', { presetId: preset.id }),
+    );
+  }
+
+  private handleDeletePreset(event: Event, preset: AgentModePreset): void {
+    event.stopPropagation();
+    this.dispatchEvent(
+      createEvent('delete-agent-mode-preset', { presetId: preset.id }),
+    );
+  }
+
+  private handleReliabilityChange(
+    setting: NumberVscodeSetting,
+    input: HTMLInputElement,
+  ): void {
+    const parsed = Number(input.value);
+    if (Number.isNaN(parsed)) {
+      input.value = String(setting.value);
+      return;
+    }
+    const value = clampSetting(parsed, setting.min, setting.max);
+    if (value !== parsed) input.value = String(value);
+    this.dispatchEvent(
+      createEvent('reliability-setting-change', { key: setting.key, value }),
+    );
+  }
+
+  private isOrchestratorAgent(name: string): boolean {
+    return name.toLowerCase().includes('orchestrator');
+  }
+
+  private renderPresetCard(
+    preset: AgentModePreset,
+    deletable: boolean,
+  ): TemplateResult {
+    const allAgents = [...preset.toolUseAgents, ...preset.workflowAgents];
+    const orchestratorAgents = allAgents.filter((name) =>
+      this.isOrchestratorAgent(name),
+    );
+    const teammateAgents = allAgents.filter(
+      (name) => !this.isOrchestratorAgent(name),
+    );
+    const isActive = this.activePresetId === preset.id;
+    return html`
+      <div
+        class="preset-card ${isActive ? 'active' : ''}"
+        @click=${() => this.handlePresetClick(preset)}
+        title="Apply ${preset.name} team"
+      >
+        <div class="preset-card-header">
+          <span class="codicon ${preset.icon} preset-card-icon"></span>
+          <span class="preset-card-name">${preset.name}</span>
+          ${isActive
+            ? html`<span class="preset-active-badge">
+                <span class="codicon codicon-check"></span> Active
+              </span>`
+            : nothing}
+        </div>
+        <p class="preset-card-description">${preset.description}</p>
+        ${orchestratorAgents.length > 0
+          ? html`<div class="preset-card-orchestrators">
+              ${orchestratorAgents.map(
+                (name) => html`
+                  <span
+                    class="preset-agent-badge preset-agent-badge--orchestrator"
+                    title="${name} is the orchestrator for this team"
+                  >
+                    <span class="preset-orchestrator-icon" aria-hidden="true"
+                      >🎯</span
+                    >
+                    ${name}
+                  </span>
+                `,
+              )}
+            </div>`
+          : nothing}
+        <div class="preset-card-agents">
+          ${teammateAgents.map(
+            (name) => html`<span class="preset-agent-badge">${name}</span>`,
+          )}
+        </div>
+        ${deletable
+          ? html`<button
+              class="preset-delete-btn"
+              @click=${(e: Event) => this.handleDeletePreset(e, preset)}
+              title="Delete team"
+            >
+              <span class="codicon codicon-trash"></span>
+            </button>`
+          : nothing}
+      </div>
+    `;
+  }
+
+  private renderReliabilitySetting(
+    setting: NumberVscodeSetting,
+  ): TemplateResult {
+    return html`
+      <div class="reliability-row">
+        <label>${setting.label}</label>
+        <vscode-textfield
+          class="reliability-input"
+          type="number"
+          .value=${String(setting.value)}
+          min=${setting.min ?? nothing}
+          max=${setting.max ?? nothing}
+          @change=${(e: Event) =>
+            this.handleReliabilityChange(setting, e.target as HTMLInputElement)}
+        ></vscode-textfield>
+        ${setting.unit
+          ? html`<span class="reliability-unit">${setting.unit}</span>`
+          : nothing}
+      </div>
+      <p class="reliability-description">${setting.description}</p>
+    `;
+  }
+
+  override render(): TemplateResult {
+    return html`
+      <div class="multi-agent-container tab-content-container">
+        <div class="settings-reminder">
+          <span
+            class="codicon codicon-organization settings-reminder-icon"
+          ></span>
+          <div class="settings-reminder-body">
+            <div class="settings-reminder-title">Multi-agent workflow</div>
+            <div class="settings-reminder-description">
+              The orchestrator reads your paper and hands work to specialized
+              agents for writing, derivations, numerical experiments, citations,
+              figures, and more.
+            </div>
+            <ol
+              class="settings-reminder-list settings-reminder-description multi-agent-reminder-steps"
+            >
+              <li>
+                <span class="settings-reminder-step">1</span>
+                <span
+                  ><strong>Pick a team</strong> below that matches your field.
+                  This enables and configures the right specialized agents for
+                  you. You can also add or remove individual agents in the
+                  <strong>Agents</strong> tab.</span
+                >
+              </li>
+              <li>
+                <span class="settings-reminder-step">2</span>
+                <span
+                  ><strong>Select orchestrator</strong> from the agent dropdown
+                  (look for the target icon), then click Execute.</span
+                >
+              </li>
+              <li>
+                <span class="settings-reminder-step">3</span>
+                <span
+                  ><strong>Approve tasks</strong> in Progress as they come in —
+                  press <strong>y</strong> to approve or <strong>n</strong> to
+                  reject. Use the rocket button in Progress to let one stream
+                  run without task-by-task approval.</span
+                >
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <h3>Multi-Agent Teams</h3>
+
+        <p class="text-secondary setting-description">
+          Click one to activate it. You can make your own teams in the Agents
+          tab.
+        </p>
+
+        <div class="preset-grid">
+          ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}
+          ${this.customPresets.map((p) => this.renderPresetCard(p, true))}
+        </div>
+
+        <h3>Team Coordination</h3>
+
+        <p class="text-secondary setting-description">
+          Control how the orchestrator works with the rest of the team. It can
+          only use agents and models you've turned on in the Models and Agents
+          tabs.
+        </p>
+
+        <div class="setting-block">
+          <vscode-checkbox
+            ?checked=${this.allowOrchestratorKill}
+            @change=${(e: Event) =>
+              this.emitToggle('allow-orchestrator-kill-toggle', e)}
+          >
+            Let orchestrator stop agents early
+          </vscode-checkbox>
+          <p class="text-secondary setting-description">
+            The orchestrator can cancel agents that are stuck or no longer
+            needed. Turn this off if you want every agent to finish no matter
+            what.
+          </p>
+        </div>
+
+        <div class="setting-block">
+          <vscode-checkbox
+            ?checked=${this.detachSubagentsOnStop}
+            @change=${(e: Event) =>
+              this.emitToggle('detach-subagents-on-stop-toggle', e)}
+          >
+            Keep agents running if I stop the orchestrator
+          </vscode-checkbox>
+          <p class="text-secondary setting-description">
+            Normally everything stops when you stop the orchestrator. Turn this
+            on to let agents that are mid-task finish on their own.
+          </p>
+        </div>
+
+        <div class="setting-block">
+          <vscode-checkbox
+            ?checked=${this.worktreeSupport}
+            @change=${(e: Event) =>
+              this.emitToggle('worktree-support-toggle', e)}
+          >
+            Allow agents to work in git worktrees
+          </vscode-checkbox>
+          <p class="text-secondary setting-description">
+            When enabled, delegated agents can operate in git worktrees outside
+            the main workspace. All tool calls within the subagent automatically
+            use the worktree as their root directory.
+          </p>
+        </div>
+
+        <div class="setting-block">
+          <div class="reliability-row">
+            <label>Max delegation depth</label>
+            <vscode-textfield
+              class="reliability-input"
+              type="number"
+              .value=${String(this.nestedDelegationMaxDepth)}
+              min=${NESTED_DELEGATION_DEPTH_RANGE.min}
+              max=${NESTED_DELEGATION_DEPTH_RANGE.max}
+              @change=${(e: Event) =>
+                this.handleNestedDelegationMaxDepthChange(
+                  e.target as HTMLInputElement,
+                )}
+            ></vscode-textfield>
+          </div>
+          <p class="reliability-description">
+            Depth 1 (default): only the top-level orchestrator may delegate;
+            subagents cannot delegate further. Depth 2 lets a sub-orchestrator
+            delegate once more (orchestrator → sub-orchestrator → leaf). Higher
+            values allow deeper chains.
+          </p>
+        </div>
+
+        ${this.reliabilitySettings.length > 0
+          ? html`
+              <h3>Reliability</h3>
+              <p class="text-secondary setting-description">
+                Tweak how long sessions handle retries and context limits.
+              </p>
+              <div class="setting-block">
+                ${this.reliabilitySettings.map((s) =>
+                  this.renderReliabilitySetting(s),
+                )}
+              </div>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'multi-agent-tab': MultiAgentTab;
+  }
+}

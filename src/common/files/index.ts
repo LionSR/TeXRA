@@ -9,6 +9,24 @@ export {
   LATEX_EXTENSIONS,
 } from './fileTypeUtils';
 export {
+  containsExcludedDirectory,
+  containsHiddenSegment,
+  getBaseNameWithoutRound,
+  getEditedFileListConfig,
+  getFileBaseName,
+  getFileListConfig,
+  loadFileListSettings,
+  matchesEditedFile,
+  passesFileFilters,
+  prepareFileFilters,
+  sanitizeDirectories,
+  shouldVisitDirectory,
+  type FileListConfig,
+  type FileListSettings,
+  type ListableFileType,
+  type PreparedFileFilters,
+} from './fileListingRules';
+export {
   FILE_SELECTION_COMMANDS,
   FILE_SELECTION_COMMAND_IDS,
   FILE_SELECTION_RESPONSES,

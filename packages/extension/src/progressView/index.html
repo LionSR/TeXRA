@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:; img-src ${cspSource} data:; connect-src data:;"
+    />
+    <link rel="stylesheet" href="${commonStyleUri}" />
+    <link rel="stylesheet" href="${progressStyleUri}" />
+    <style nonce="${nonce}">
+      @font-face {
+        font-family: 'codicon';
+        font-display: block;
+        src: url('${codiconsFontUri}') format('truetype');
+      }
+      body {
+        padding: 0;
+        display: flex;
+        height: 100vh;
+        background-color: var(--texra-sideBar-background);
+      }
+    </style>
+    <link
+      rel="stylesheet"
+      href="${codiconUri}"
+      id="vscode-codicon-stylesheet"
+    />
+  </head>
+  <body>
+    <progress-app></progress-app>
+    <script nonce="${nonce}">
+      // Expose codicon font URI for Lit shadow DOM components
+      window.__CODICON_FONT_URI__ = '${codiconsFontUri}';
+    </script>
+    <script
+      type="module"
+      nonce="${nonce}"
+      src="${vscodeElementsBundleUri}"
+    ></script>
+    <script nonce="${nonce}" src="${commonsBundleUri}"></script>
+    <script type="module" nonce="${nonce}" src="${progressBundleUri}"></script>
+  </body>
+</html>

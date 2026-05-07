@@ -1,6 +1,6 @@
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { bus } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { toErrorMessage } from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
@@ -22,6 +22,7 @@ export interface ProcessingContext {
   agentSetting: AgentWorkflowSetting;
   baseFiles: FileLocation[];
   streamId: string;
+  runtimeHost: AgentRuntimeHost;
   logger: AgentLogger;
   xmlManager: XmlOutputManager;
   setRoundOutputs: (round: number, outputs: OutputFileInfo[]) => void;
@@ -134,7 +135,7 @@ export class OutputFileProcessor {
         documentTag: agentSetting.documentTag,
       };
       logger.missingOutputs(missingOutputsData);
-      bus.emit('updateMissingOutputs', {
+      this.ctx.runtimeHost.emit('updateMissingOutputs', {
         streamId: this.ctx.streamId,
         filesByRound: { [currRound]: [] },
       });

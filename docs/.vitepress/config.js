@@ -123,6 +123,11 @@ const baseConfig = {
           items: [
             { text: 'Introduction', link: '/guide/' },
             { text: 'Installation', link: '/guide/installation' },
+            { text: 'Desktop App', link: '/guide/desktop' },
+            {
+              text: 'Desktop Migration',
+              link: '/guide/desktop-migration',
+            },
             { text: 'Quick Start', link: '/guide/quick-start' },
           ],
         },

@@ -8,6 +8,13 @@ import { getWorkspaceState } from '@agent/core/stateStore';
 import { WorkspaceFS } from '@utils/files';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
+// Type-only imports
+import type {
+  ApprovalMode,
+  ModelReasoningEffort,
+  SandboxMode,
+} from '@openai/codex-sdk';
+
 // ============================================================================
 // Model config — the Codex CLI uses short model names, not versioned API IDs
 // ============================================================================
@@ -46,7 +53,10 @@ export function getCodexReasoningEffort(): CodexReasoningEffort {
  * extension used by providers like Anthropic Opus 'max'; cap it to 'high'
  * before handing the value to the Codex SDK.
  */
-export type CodexCliReasoningEffort = 'low' | 'medium' | 'high';
+export type CodexCliReasoningEffort = Extract<
+  ModelReasoningEffort,
+  'low' | 'medium' | 'high'
+>;
 
 export function toCodexCliReasoningEffort(
   effort: CodexReasoningEffort,
@@ -59,6 +69,37 @@ export function getCodexCliReasoningEffort(): CodexCliReasoningEffort {
 }
 
 // ============================================================================
+// Approval policy
+// ============================================================================
+
+const APPROVAL_POLICIES = [
+  'never',
+  'on-request',
+  'on-failure',
+  'untrusted',
+] as const;
+export const CODEX_APPROVAL_POLICIES =
+  APPROVAL_POLICIES satisfies readonly ApprovalMode[];
+export type CodexApprovalPolicy = ApprovalMode;
+
+const APPROVAL_POLICY_KEY = 'texra.codexApprovalPolicy';
+const APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
+
+export function parseCodexApprovalPolicy(raw: string): CodexApprovalPolicy {
+  return (APPROVAL_POLICIES as readonly string[]).includes(raw)
+    ? (raw as CodexApprovalPolicy)
+    : APPROVAL_POLICY_DEFAULT;
+}
+
+export function getCodexApprovalPolicy(): CodexApprovalPolicy {
+  const raw = getWorkspaceState().get<string>(
+    APPROVAL_POLICY_KEY,
+    APPROVAL_POLICY_DEFAULT,
+  );
+  return parseCodexApprovalPolicy(raw);
+}
+
+// ============================================================================
 // Sandbox mode
 // ============================================================================
 
@@ -67,8 +108,9 @@ const SANDBOX_MODES = [
   'workspace-write',
   'danger-full-access',
 ] as const;
-export const CODEX_SANDBOX_MODES = SANDBOX_MODES;
-export type CodexSandboxMode = (typeof SANDBOX_MODES)[number];
+export const CODEX_SANDBOX_MODES =
+  SANDBOX_MODES satisfies readonly SandboxMode[];
+export type CodexSandboxMode = SandboxMode;
 
 const SANDBOX_MODE_KEY = 'texra.codexSandboxMode';
 const SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';

@@ -23,6 +23,7 @@ import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import { LatexMediaManager } from '@latex';
 import type { AgentLogStage } from '@logger/AgentLogger';
@@ -105,6 +106,7 @@ export async function runReflectionFlow<C = unknown>(
     onRoundFinalized = async () => {},
     usageMonitor,
   } = input;
+  const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
@@ -182,7 +184,16 @@ export async function runReflectionFlow<C = unknown>(
 
   setActiveRun(
     outputState,
-    { setting, config, baseFiles, logger, fileService, executionId, streamId },
+    {
+      setting,
+      config,
+      baseFiles,
+      logger,
+      fileService,
+      executionId,
+      streamId,
+      runtimeHost,
+    },
     storageKey,
   );
 
@@ -260,6 +271,7 @@ export async function runReflectionFlow<C = unknown>(
 
     services = {
       ...input,
+      runtimeHost,
       onRoundFinalized,
       outputState,
       xmlManager,
