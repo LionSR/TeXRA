@@ -35,7 +35,7 @@ jobs:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
           model-tier: sonnet
           allowed-bots: 'github-actions[bot]'
-          allowed_tools_preset: issue-tree
+          allowed-tools-preset: issue-tree
           claude-prompt-file: .github/prompts/issue-tree-prompt.md
           claude-prompt-context: |
             Repository: ${{ github.repository }}

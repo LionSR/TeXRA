@@ -14,9 +14,6 @@ inputs:
   creator-name:
     description: 'Human-readable creator name for the PR body (e.g. "Claude Code action")'
     required: true
-  event-name:
-    description: 'github.event_name for the triggering event'
-    required: true
   gh-token:
     description: 'Token with PR write access'
     required: true
@@ -32,7 +29,6 @@ runs:
         REPO: ${{ inputs.repo }}
         BRANCH_PREFIX: ${{ inputs.branch-prefix }}
         CREATOR_NAME: ${{ inputs.creator-name }}
-        EVENT_NAME: ${{ inputs.event-name }}
       run: |
         set -euo pipefail
 

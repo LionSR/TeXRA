@@ -35,7 +35,7 @@ jobs:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
           model-tier: opus
           allowed-bots: 'github-actions[bot]'
-          allowed_tools_preset: quality-improver
+          allowed-tools-preset: quality-improver
           claude-prompt-file: .github/prompts/repository-quality-improver-prompt.md
           claude-prompt-context: |
             Repository: ${{ github.repository }}

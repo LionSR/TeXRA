@@ -54,12 +54,12 @@ inputs:
     required: false
     default: 'claude,cursor[bot],cursor,copilot-pull-request-reviewer'
 
-  allowed_tools:
+  allowed-tools:
     description: 'Optional --allowedTools value applied by default.'
     required: false
     default: ''
-  allowed_tools_preset:
-    description: 'Named --allowedTools preset. Ignored when allowed_tools is set.'
+  allowed-tools-preset:
+    description: 'Named --allowedTools preset. Ignored when allowed-tools is set.'
     required: false
     default: ''
 
@@ -81,7 +81,7 @@ inputs:
     required: false
     default: ''
 
-  plugin_marketplaces:
+  plugin-marketplaces:
     description: 'Plugin marketplaces.'
     required: false
     default: ''
@@ -115,7 +115,7 @@ inputs:
     required: false
     default: ''
 
-  claude_args:
+  claude-args:
     description: 'Additional claude args. The action prepends --model automatically.'
     required: false
     default: ''
@@ -143,16 +143,16 @@ runs:
         INPUT_BOT_ID: ${{ inputs['bot-id'] }}
         INPUT_BOT_NAME: ${{ inputs['bot-name'] }}
         INPUT_ADDITIONAL_PERMISSIONS: ${{ inputs['additional-permissions'] }}
-        INPUT_PLUGIN_MARKETPLACES: ${{ inputs.plugin_marketplaces }}
+        INPUT_PLUGIN_MARKETPLACES: ${{ inputs['plugin-marketplaces'] }}
         INPUT_PLUGINS: ${{ inputs['plugins'] }}
         INPUT_PROMPT: ${{ inputs.prompt }}
         INPUT_PROMPT_FILE: ${{ inputs['claude-prompt-file'] }}
         INPUT_PROMPT_CONTEXT: ${{ inputs['claude-prompt-context'] }}
-        INPUT_ALLOWED_TOOLS: ${{ inputs.allowed_tools }}
-        INPUT_ALLOWED_TOOLS_PRESET: ${{ inputs.allowed_tools_preset }}
+        INPUT_ALLOWED_TOOLS: ${{ inputs['allowed-tools'] }}
+        INPUT_ALLOWED_TOOLS_PRESET: ${{ inputs['allowed-tools-preset'] }}
         INPUT_SYSTEM_PROMPT: ${{ inputs['system-prompt'] }}
         INPUT_SYSTEM_PROMPT_FILE: ${{ inputs['system-prompt-file'] }}
-        INPUT_CLAUDE_ARGS: ${{ inputs.claude_args }}
+        INPUT_CLAUDE_ARGS: ${{ inputs['claude-args'] }}
       run: |
         set -euo pipefail
 
@@ -269,7 +269,7 @@ runs:
             preset_allowed_tools="Read,Glob,Grep,mcp__github__*"
             ;;
           *)
-            echo "::error::Unknown allowed_tools_preset: ${allowed_tools_preset}"
+            echo "::error::Unknown allowed-tools-preset: ${allowed_tools_preset}"
             exit 1
             ;;
         esac
@@ -317,10 +317,6 @@ runs:
           else
             prompt="$prompt_context"
           fi
-        fi
-
-        if [ -n "$prompt" ]; then
-          prompt="$(printf '%s' "$prompt" | tr '\n' ' ')"
         fi
 
         claude_args="$INPUT_CLAUDE_ARGS"

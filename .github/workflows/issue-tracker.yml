@@ -81,7 +81,7 @@ jobs:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
           model-tier: opus
           allowed-bots: 'dependabot[bot],github-actions[bot],Copilot,claude[bot],cursor[bot]'
-          allowed_tools_preset: issue-tracker
+          allowed-tools-preset: issue-tracker
           claude-prompt-file: .github/prompts/issue-tracker-prompt.md
           claude-prompt-context: |
             Event: ${{ github.event_name }} / ${{ github.event.action }}

@@ -60,7 +60,7 @@ jobs:
           model-tier: opus
           allowed-bots: 'claude,cursor[bot],cursor,copilot-pull-request-reviewer'
           branch-name-template: '{{prefix}}{{entityType}}-{{entityNumber}}-{{description}}'
-          allowed_tools_preset: claude-interactive
+          allowed-tools-preset: claude-interactive
           additional-permissions: |
             actions: read
           system-prompt-file: .github/prompts/claude-code-system-prompt.md
@@ -77,5 +77,4 @@ jobs:
           repo: ${{ github.repository }}
           branch-prefix: 'claude/issue-'
           creator-name: 'Claude Code action'
-          event-name: ${{ github.event_name }}
           gh-token: ${{ env.GH_TOKEN }}
