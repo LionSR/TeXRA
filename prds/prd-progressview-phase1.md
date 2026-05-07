@@ -218,7 +218,7 @@ This milestone rewrites the ProgressView frontend from imperative DOM manipulati
 | -------------- | -------------------- | ------- | --------------------------------------- |
 | Entry point    | `frontend/index.ts`  | ✅ Done | Registers `<progress-app>`              |
 | HTML shell     | `index.html`         | ✅ Done | Loads bundle, CSP configured            |
-| VS Code bridge | `frontend/vscode.ts` | ✅ Done | `postMessage()` wrapper                 |
+| Host bridge    | `@shared/hostBridge` | ✅ Done | `postMessage()` wrapper                 |
 | State types    | `frontend/store.ts`  | ✅ Done | `ProgressState`, `StreamState`, helpers |
 | Webpack config | `webpack.config.js`  | ✅ Done | progressView bundle target              |
 
@@ -588,7 +588,7 @@ Split into focused components rather than a single large file. Each component ha
 src/progressView/frontend/
 ├── index.ts                    # Entry point, registers all components
 ├── store.ts                    # State types + helpers (existing)
-├── vscode.ts                   # VS Code API wrapper (existing)
+├── hostBridge.ts               # Shared host bridge wrapper
 ├── ProgressApp.ts              # Root: message routing + layout (~300 lines)
 ├── components/
 │   ├── PromptOverlay.ts        # Approval/retry overlay (existing, ~200 lines)

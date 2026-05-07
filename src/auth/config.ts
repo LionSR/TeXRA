@@ -6,25 +6,27 @@
  *
  * Similar to how GitHub Copilot works - users sign in to the official service.
  */
-import * as vscode from 'vscode';
 import { z } from 'zod';
-
-/**
- * Supabase configuration interface
- */
-export interface SupabaseConfig {
-  /** Supabase project URL */
-  url: string;
-  /**
-   * Supabase public key - safe to include in client code.
-   * Can be either:
-   * - Publishable key (recommended): starts with `sb_publishable_...`
-   * - Anon key (legacy): JWT starting with `eyJ...`
-   */
-  publicKey: string;
-  /** Edge function URL for fetching remote agent configurations */
-  edgeFunctionUrl: string;
-}
+import {
+  SUPABASE_CONFIG,
+  UserTierSchema,
+  type OAuthProvider,
+} from './sharedConfig';
+export {
+  FREE_TIER,
+  GITHUB_TOKEN_EXCHANGE_URL,
+  GITHUB_TOKEN_REFRESH_URL,
+  MAX_TIER,
+  OAUTH_PROVIDERS,
+  SERVER_SIDE_CACHE_TTL_MS,
+  SUPABASE_CONFIG,
+  SUPABASE_CUSTOM_DOMAIN,
+  ULTRA_TIER,
+  UserTierSchema,
+  type OAuthProvider,
+  type SupabaseConfig,
+  type UserTier,
+} from './sharedConfig';
 
 /**
  * Official TeXRA Supabase configuration.
@@ -33,32 +35,6 @@ export interface SupabaseConfig {
  * The public key (anon or publishable) is safe to include in client code.
  * Row Level Security (RLS) policies protect data access, not the key.
  */
-
-/** Custom domain for Supabase (remote agent access) */
-export const SUPABASE_CUSTOM_DOMAIN = 'remote.texra.ai';
-
-export const SUPABASE_CONFIG: SupabaseConfig = {
-  // Production Supabase URL via custom domain
-  url: `https://${SUPABASE_CUSTOM_DOMAIN}`,
-
-  // Production public key - safe to include in client code
-  publicKey: 'sb_publishable_DUIDjtxk12ZYYncrVUfwOw_xWQYsSvw',
-
-  // Edge function URL via custom domain
-  edgeFunctionUrl: `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/get-agent-config`,
-};
-
-/**
- * Edge function URL for GitHub token exchange.
- * Used in VS Code web/Codespaces where standard OAuth callbacks don't work.
- */
-export const GITHUB_TOKEN_EXCHANGE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github/exchange`;
-
-/**
- * Edge function URL for custom token refresh.
- * Used for sessions created via VS Code GitHub auth (not standard Supabase OAuth).
- */
-export const GITHUB_TOKEN_REFRESH_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github/refresh`;
 
 /**
  * Check if Supabase is configured.
@@ -72,13 +48,6 @@ export function isSupabaseConfigured(): boolean {
   );
 }
 
-/**
- * Supported OAuth providers for TeXRA authentication.
- * Users can choose between GitHub and Google during sign-in.
- */
-export const OAUTH_PROVIDERS = ['github', 'google'] as const;
-export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
-
 // ============================================================================
 // User Groups & Permissions
 // ============================================================================
@@ -90,25 +59,6 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
  *
  * Note: 'tier' column is reserved for future server-side API key access.
  */
-
-/**
- * Single source of truth for tier values used in server-side API key access.
- *
- * CROSS-REFERENCE: These exact string values are duplicated in:
- *   supabase/functions/relay/models.ts (lines 143-145)
- * Deno Edge Functions cannot import TypeScript source, so the values must
- * be kept in sync manually. If you change any value here, you MUST also
- * update the corresponding constants in that file.
- *
- * The schema enum order is: 'free', 'Max', 'Ultra' (ascending privilege).
- */
-export const UserTierSchema = z.enum(['free', 'Max', 'Ultra']);
-export type UserTier = z.infer<typeof UserTierSchema>;
-
-/** Tier constants derived from the schema — use these instead of string literals. */
-export const FREE_TIER: UserTier = 'free';
-export const MAX_TIER: UserTier = 'Max';
-export const ULTRA_TIER: UserTier = 'Ultra';
 
 /**
  * User's authorization context.
@@ -227,9 +177,27 @@ export interface ExternalAuthCallbackInfo {
   fullUrl: string;
 }
 
+export type ExternalAuthCallbackResolver =
+  () => Promise<ExternalAuthCallbackInfo>;
+
+let externalAuthCallbackResolver: ExternalAuthCallbackResolver | null = null;
+
+/**
+ * Register the host-specific OAuth callback adapter.
+ *
+ * VS Code must route web auth redirects through env.asExternalUri(), but shared
+ * auth config also loads in Electron. Keeping the adapter host-owned prevents
+ * Electron bundles from carrying a runtime dependency on the VS Code module.
+ */
+export function setExternalAuthCallbackResolver(
+  resolver: ExternalAuthCallbackResolver | null,
+): void {
+  externalAuthCallbackResolver = resolver;
+}
+
 /**
  * Get the external auth callback URI with parsed components.
- * Uses vscode.env.asExternalUri() to handle different environments:
+ * Uses the host-provided adapter to handle different environments:
  * - Desktop VS Code: returns vscode://texra-ai.texra/auth-callback
  * - Cursor: returns cursor://texra-ai.texra/auth-callback
  * - Codespaces: returns https://*.github.dev/extension-auth-callback
@@ -239,14 +207,11 @@ export interface ExternalAuthCallbackInfo {
  * and passed through the OAuth flow for the callback routing to work.
  */
 export async function getExternalAuthCallbackInfo(): Promise<ExternalAuthCallbackInfo> {
-  const baseCallbackUri = vscode.Uri.parse(
-    getAuthCallbackUri(vscode.env.uriScheme),
-  );
-  const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
-  const vscodeState = new URLSearchParams(externalUri.query).get('state');
-  const baseUrl = `${externalUri.scheme}://${externalUri.authority}${externalUri.path}`;
-
-  return { baseUrl, vscodeState, fullUrl: externalUri.toString() };
+  if (!externalAuthCallbackResolver) {
+    const baseUrl = getAuthCallbackUri('vscode');
+    return { baseUrl, vscodeState: null, fullUrl: baseUrl };
+  }
+  return externalAuthCallbackResolver();
 }
 
 /**
@@ -261,14 +226,11 @@ export async function getExternalAuthCallbackUri(): Promise<string> {
 /** Timeout for waiting for OAuth callback (2 minutes in ms) */
 export const AUTH_CALLBACK_TIMEOUT_MS = 2 * 60 * 1000;
 
-/** Cache TTL for server-side key access and tier config (5 minutes). */
-export const SERVER_SIDE_CACHE_TTL_MS = 5 * 60 * 1000;
-
 /** Refresh token proactively if it expires within this threshold (30 minutes). */
 export const TOKEN_REFRESH_THRESHOLD_MS = 30 * 60 * 1000;
 
 /** Default session expiry time (1 hour). */
-export const DEFAULT_SESSION_EXPIRY_MS = 60 * 60 * 1000;
+export { DEFAULT_SUPABASE_SESSION_EXPIRY_MS as DEFAULT_SESSION_EXPIRY_MS } from './SupabaseSession';
 
 /** Storage key for Supabase session in VS Code SecretStorage. */
 export const SUPABASE_SESSION_KEY = 'texra.supabase.session';

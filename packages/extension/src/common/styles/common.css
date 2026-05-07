@@ -1,0 +1,254 @@
+/**
+ * Document-level styles for TeXRA webviews.
+ * These styles target elements outside Shadow DOM (body, document root).
+ *
+ * Theme tokens map the extension host's VS Code variables to TeXRA-owned
+ * variables. Electron can provide the same --texra-* contract without VS Code.
+ */
+
+:root {
+  --texra-activityBarBadge-background: var(
+    --vscode-activityBarBadge-background
+  );
+  --texra-badge-background: var(--vscode-badge-background);
+  --texra-badge-foreground: var(--vscode-badge-foreground);
+  --texra-button-background: var(--vscode-button-background);
+  --texra-button-border: var(--vscode-button-border);
+  --texra-button-foreground: var(--vscode-button-foreground);
+  --texra-button-hoverBackground: var(--vscode-button-hoverBackground);
+  --texra-button-secondaryBackground: var(--vscode-button-secondaryBackground);
+  --texra-button-secondaryForeground: var(--vscode-button-secondaryForeground);
+  --texra-button-secondaryHoverBackground: var(
+    --vscode-button-secondaryHoverBackground
+  );
+  --texra-button-separator: var(--vscode-button-separator);
+  --texra-charts-blue: var(--vscode-charts-blue);
+  --texra-charts-green: var(--vscode-charts-green);
+  --texra-charts-orange: var(--vscode-charts-orange);
+  --texra-charts-red: var(--vscode-charts-red);
+  --texra-charts-yellow: var(--vscode-charts-yellow);
+  --texra-contrastBorder: var(--vscode-contrastBorder);
+  --texra-debugTokenExpression-name: var(--vscode-debugTokenExpression-name);
+  --texra-debugTokenExpression-number: var(
+    --vscode-debugTokenExpression-number
+  );
+  --texra-debugTokenExpression-string: var(
+    --vscode-debugTokenExpression-string
+  );
+  --texra-descriptionForeground: var(--vscode-descriptionForeground);
+  --texra-diffEditor-insertedTextBackground: var(
+    --vscode-diffEditor-insertedTextBackground
+  );
+  --texra-diffEditor-removedTextBackground: var(
+    --vscode-diffEditor-removedTextBackground
+  );
+  --texra-dropdown-border: var(--vscode-dropdown-border);
+  --texra-editor-background: var(--vscode-editor-background);
+  --texra-editor-findMatchBackground: var(--vscode-editor-findMatchBackground);
+  --texra-editor-findMatchHighlightBackground: var(
+    --vscode-editor-findMatchHighlightBackground
+  );
+  --texra-editor-findMatchHighlightForeground: var(
+    --vscode-editor-findMatchHighlightForeground
+  );
+  --texra-editor-font-family: var(
+    --vscode-editor-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace
+  );
+  --texra-editor-font-size: var(--vscode-editor-font-size, 13px);
+  --texra-editor-foreground: var(--vscode-editor-foreground);
+  --texra-editor-inactiveSelectionBackground: var(
+    --vscode-editor-inactiveSelectionBackground
+  );
+  --texra-editor-lineHighlightBackground: var(
+    --vscode-editor-lineHighlightBackground
+  );
+  --texra-editor-selectionBackground: var(--vscode-editor-selectionBackground);
+  --texra-editorError-foreground: var(--vscode-editorError-foreground);
+  --texra-editorGroupHeader-tabsBackground: var(
+    --vscode-editorGroupHeader-tabsBackground
+  );
+  --texra-editorGroupHeader-tabsBorder: var(
+    --vscode-editorGroupHeader-tabsBorder
+  );
+  --texra-editorHoverWidget-background: var(
+    --vscode-editorHoverWidget-background
+  );
+  --texra-editorHoverWidget-border: var(--vscode-editorHoverWidget-border);
+  --texra-editorHoverWidget-foreground: var(
+    --vscode-editorHoverWidget-foreground
+  );
+  --texra-editorInfo-background: var(--vscode-editorInfo-background);
+  --texra-editorInfo-foreground: var(--vscode-editorInfo-foreground);
+  --texra-editorWarning-background: var(--vscode-editorWarning-background);
+  --texra-editorWarning-foreground: var(--vscode-editorWarning-foreground);
+  --texra-editorWidget-background: var(--vscode-editorWidget-background);
+  --texra-editorWidget-border: var(--vscode-editorWidget-border);
+  --texra-errorForeground: var(--vscode-errorForeground);
+  --texra-focusBorder: var(--vscode-focusBorder);
+  --texra-font-family: var(
+    --vscode-font-family,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif
+  );
+  --texra-font-size: var(--vscode-font-size, 13px);
+  --texra-font-weight: var(--vscode-font-weight, 400);
+  --texra-foreground: var(--vscode-foreground);
+  --texra-gitDecoration-addedResourceForeground: var(
+    --vscode-gitDecoration-addedResourceForeground
+  );
+  --texra-gitDecoration-deletedResourceForeground: var(
+    --vscode-gitDecoration-deletedResourceForeground
+  );
+  --texra-gitDecoration-modifiedResourceForeground: var(
+    --vscode-gitDecoration-modifiedResourceForeground
+  );
+  --texra-icon-foreground: var(--vscode-icon-foreground);
+  --texra-input-background: var(--vscode-input-background);
+  --texra-input-border: var(--vscode-input-border);
+  --texra-input-foreground: var(--vscode-input-foreground);
+  --texra-input-placeholderForeground: var(
+    --vscode-input-placeholderForeground
+  );
+  --texra-inputValidation-errorBackground: var(
+    --vscode-inputValidation-errorBackground
+  );
+  --texra-inputValidation-infoBackground: var(
+    --vscode-inputValidation-infoBackground
+  );
+  --texra-inputValidation-infoBorder: var(--vscode-inputValidation-infoBorder);
+  --texra-inputValidation-infoForeground: var(
+    --vscode-inputValidation-infoForeground
+  );
+  --texra-inputValidation-warningBackground: var(
+    --vscode-inputValidation-warningBackground
+  );
+  --texra-inputValidation-warningBorder: var(
+    --vscode-inputValidation-warningBorder
+  );
+  --texra-inputValidation-warningForeground: var(
+    --vscode-inputValidation-warningForeground
+  );
+  --texra-list-activeSelectionBackground: var(
+    --vscode-list-activeSelectionBackground
+  );
+  --texra-list-activeSelectionForeground: var(
+    --vscode-list-activeSelectionForeground
+  );
+  --texra-list-hoverBackground: var(--vscode-list-hoverBackground);
+  --texra-list-warningForeground: var(--vscode-list-warningForeground);
+  --texra-menu-background: var(--vscode-menu-background);
+  --texra-menu-border: var(--vscode-menu-border);
+  --texra-menu-foreground: var(--vscode-menu-foreground);
+  --texra-notificationsInfoIcon-foreground: var(
+    --vscode-notificationsInfoIcon-foreground
+  );
+  --texra-panel-border: var(--vscode-panel-border);
+  --texra-panelSection-border: var(--vscode-panelSection-border);
+  --texra-progressBar-background: var(--vscode-progressBar-background);
+  --texra-sideBar-background: var(--vscode-sideBar-background);
+  --texra-sideBar-foreground: var(--vscode-sideBar-foreground);
+  --texra-sideBarSectionHeader-background: var(
+    --vscode-sideBarSectionHeader-background
+  );
+  --texra-sideBarTitle-foreground: var(--vscode-sideBarTitle-foreground);
+  --texra-statusBarItem-warningBackground: var(
+    --vscode-statusBarItem-warningBackground
+  );
+  --texra-symbolIcon-classForeground: var(--vscode-symbolIcon-classForeground);
+  --texra-symbolIcon-constantForeground: var(
+    --vscode-symbolIcon-constantForeground
+  );
+  --texra-symbolIcon-functionForeground: var(
+    --vscode-symbolIcon-functionForeground
+  );
+  --texra-symbolIcon-keywordForeground: var(
+    --vscode-symbolIcon-keywordForeground
+  );
+  --texra-symbolIcon-propertyForeground: var(
+    --vscode-symbolIcon-propertyForeground
+  );
+  --texra-symbolIcon-variableForeground: var(
+    --vscode-symbolIcon-variableForeground
+  );
+  --texra-terminal-ansiBlack: var(--vscode-terminal-ansiBlack);
+  --texra-terminal-ansiBlue: var(--vscode-terminal-ansiBlue);
+  --texra-terminal-ansiBrightBlack: var(--vscode-terminal-ansiBrightBlack);
+  --texra-terminal-ansiBrightBlue: var(--vscode-terminal-ansiBrightBlue);
+  --texra-terminal-ansiBrightCyan: var(--vscode-terminal-ansiBrightCyan);
+  --texra-terminal-ansiBrightGreen: var(--vscode-terminal-ansiBrightGreen);
+  --texra-terminal-ansiBrightMagenta: var(--vscode-terminal-ansiBrightMagenta);
+  --texra-terminal-ansiBrightRed: var(--vscode-terminal-ansiBrightRed);
+  --texra-terminal-ansiBrightWhite: var(--vscode-terminal-ansiBrightWhite);
+  --texra-terminal-ansiBrightYellow: var(--vscode-terminal-ansiBrightYellow);
+  --texra-terminal-ansiCyan: var(--vscode-terminal-ansiCyan);
+  --texra-terminal-ansiGreen: var(--vscode-terminal-ansiGreen);
+  --texra-terminal-ansiMagenta: var(--vscode-terminal-ansiMagenta);
+  --texra-terminal-ansiRed: var(--vscode-terminal-ansiRed);
+  --texra-terminal-ansiWhite: var(--vscode-terminal-ansiWhite);
+  --texra-terminal-ansiYellow: var(--vscode-terminal-ansiYellow);
+  --texra-terminal-background: var(--vscode-terminal-background);
+  --texra-terminal-foreground: var(--vscode-terminal-foreground);
+  --texra-terminal-selectionBackground: var(
+    --vscode-terminal-selectionBackground
+  );
+  --texra-terminalCursor-foreground: var(--vscode-terminalCursor-foreground);
+  --texra-testing-iconFailed: var(--vscode-testing-iconFailed);
+  --texra-testing-iconPassed: var(--vscode-testing-iconPassed);
+  --texra-textBlockQuote-background: var(--vscode-textBlockQuote-background);
+  --texra-textBlockQuote-border: var(--vscode-textBlockQuote-border);
+  --texra-textCodeBlock-background: var(--vscode-textCodeBlock-background);
+  --texra-textLink-activeForeground: var(--vscode-textLink-activeForeground);
+  --texra-textLink-foreground: var(--vscode-textLink-foreground);
+  --texra-textPreformat-foreground: var(--vscode-textPreformat-foreground);
+  --texra-toolbar-activeBackground: var(--vscode-toolbar-activeBackground);
+  --texra-toolbar-hoverBackground: var(--vscode-toolbar-hoverBackground);
+  --texra-widget-border: var(--vscode-widget-border);
+  --texra-widget-shadow: var(--vscode-widget-shadow);
+}
+
+/*
+ * Web Awesome design-token bridge.
+ *
+ * WA components read --wa-*. The host (VS Code webview) supplies --vscode-*,
+ * which is normalized once into --texra-* above. This block keeps Web Awesome
+ * dependent on that TeXRA token contract rather than reading host tokens
+ * directly.
+ */
+:root {
+  --wa-font-family-body: var(--texra-font-family);
+  --wa-font-family-heading: var(--texra-font-family);
+  --wa-font-size-m: var(--texra-font-size);
+  --wa-font-weight-normal: var(--texra-font-weight);
+
+  --wa-color-text-normal: var(--texra-foreground);
+  --wa-color-text-quiet: var(--texra-descriptionForeground);
+  --wa-color-text-link: var(--texra-textLink-foreground);
+  --wa-color-surface-default: var(--texra-editor-background);
+  --wa-color-surface-raised: var(--texra-editorWidget-background);
+  --wa-color-surface-lowered: var(--texra-sideBar-background);
+  --wa-color-surface-border: var(--texra-panel-border);
+
+  --wa-color-focus: var(--texra-focusBorder);
+
+  --wa-color-brand-fill-loud: var(--texra-button-background);
+  --wa-color-brand-on-loud: var(--texra-button-foreground);
+  --wa-color-brand-border-loud: var(--texra-button-border);
+}
+
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: var(--texra-font-family);
+  font-size: var(--texra-font-size);
+  color: var(--texra-editor-foreground);
+  background-color: var(--texra-editor-background);
+  box-sizing: border-box;
+}

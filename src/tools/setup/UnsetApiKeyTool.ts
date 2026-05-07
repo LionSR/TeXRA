@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { invalidateApiKeyCache } from '@model/apiProviders';
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local file imports
@@ -56,11 +57,11 @@ export class UnsetApiKeyTool extends defineTool({
     }
 
     await platform.secrets.deleteApiKey(provider);
-    // Mirror the manual removal flow: drop the cached model-options
-    // computation and refresh the options UI so models that just lost
-    // their credential stop appearing selectable. Without this, the
-    // user could pick a now-unauthenticated model and fail at runtime.
+    // Mirror the manual removal flow: drop cached model availability and
+    // key-origin lookups so models that just lost their credential stop
+    // appearing selectable.
     invalidateModelOptionsCache();
+    invalidateApiKeyCache();
     await Promise.all([
       platform.commands
         .invoke('texra.refreshApiKeyStatus')

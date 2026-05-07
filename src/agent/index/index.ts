@@ -6,13 +6,46 @@
 export { AgentSource } from '@agent/core/AgentDataclass';
 
 export {
+  DEFAULT_CUSTOM_AGENTS_DIR_NAME,
+  AgentDirectoryService,
+  type AbsoluteDirectoryAccess,
+  type AgentDirectoryDocsId,
+  type AgentDirectoryIssueReporter,
+  type AgentDirectoryPathStorage,
+  type AgentDirectoryServiceLogger,
+  type AgentDirectoryServiceOptions,
+  type CustomAgentDirectoryStore,
+} from './AgentDirectoryService';
+
+export {
+  BUNDLED_AGENT_DIRECTORY_NAMES,
+  type BundledAgentDirectoryName,
+} from './BundledAgentDirectories';
+
+export {
+  BundledAgentDirectorySync,
+  GlobalStorageAgentDirectoryStorage,
+  PathAgentDirectoryBundleSource,
+  type AgentDirectoryBundleSource,
+  type AgentDirectoryStorage,
+  type AgentDirectorySyncLogger,
+  type AgentDirectoryVersionStore,
+  type BundledAgentDirectorySyncOptions,
+} from './AgentDirectorySync';
+
+export {
+  type AgentDirectories,
+  setAgentDirectories,
+} from './agentDirectoriesRegistry';
+
+export { toRemoteAgentProfileData } from './remoteAgentProfileData';
+
+export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
-  type AgentDirectories,
   // Core functions
   loadAgents,
-  setAgentDirectories,
   getAgent,
   resolveAgent,
   getWorkflowAgents,
@@ -25,9 +58,6 @@ export {
   createKey,
   getCleanAgentName,
   resolveAgentKey,
-  // _multiple helpers
-  getBaseName,
-  getMultipleName,
   // Source helpers
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)

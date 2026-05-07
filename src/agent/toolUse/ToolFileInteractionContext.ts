@@ -4,6 +4,10 @@ import type {
   PlanState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
@@ -17,6 +21,8 @@ export interface ToolFileInteractionContext {
   agentName?: string;
   /** Working directory override for tool calls (e.g. a git worktree path). */
   workingDirectory?: string;
+  /** Runtime host inherited from the executing agent. */
+  runtimeHost?: AgentRuntimeHost;
   /**
    * Delegation depth of the agent executing this tool call. 0 for root (user-initiated),
    * N for an agent N levels deep. Read by delegation tools to compute the child's depth.
@@ -67,4 +73,10 @@ export function getCurrentToolFileInteractionContext():
   | ToolFileInteractionContext
   | undefined {
   return contextStack.at(-1);
+}
+
+export function getCurrentToolRuntimeHost(): AgentRuntimeHost {
+  return (
+    getCurrentToolFileInteractionContext()?.runtimeHost ?? getAgentRuntimeHost()
+  );
 }

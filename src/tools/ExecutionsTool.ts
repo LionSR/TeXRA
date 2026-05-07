@@ -34,9 +34,10 @@ import {
   bindExecutionSubscription,
   unbindExecutionSubscription,
 } from '@agent/runtime/ExecutionSubscriptionBinder';
+import { getWorkspaceState } from '@agent/core/stateStore';
 
 // Local imports - utils
-import { WorkspaceStateKey, workspaceSM } from '@common/state';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { isDirectory } from '@common/files/fsEntryType';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
@@ -82,7 +83,6 @@ const WORKFLOW_ONLY_FIELDS = new Set([
   'outputFiles',
   'editedFile',
   'editedFiles',
-  'useMultipleOutputs',
 ]);
 
 /** Config fields only relevant to toolUse agents — hidden for workflow. */
@@ -607,7 +607,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     // Only block subagent kills when the toggle is disabled; process kills are always allowed.
     if (
       target instanceof AgentExecutionHandle &&
-      !workspaceSM.get<boolean>(WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL, true)
+      !getWorkspaceState().get<boolean>(
+        WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+        true,
+      )
     ) {
       return {
         output:

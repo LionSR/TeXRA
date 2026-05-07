@@ -34,18 +34,20 @@ import {
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
 import { delay } from '@utils/core';
-import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import {
   getWebSocketEnabled,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
+import { flexibleFS } from '@utils/files/flexibleFS';
+import type { FileLocation } from '@utils/files/taskRunStorage';
+import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { tagOpenAISdkError } from './support/sdkErrorAdapters';
 
 // Local file imports
 import {
@@ -741,6 +743,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.clearPendingBackgroundResponse();
         throw err;
       }
+      tagOpenAISdkError(err, this.config.provider);
       // Transient failures (no status / 5xx / 429 / 408) — the background
       // response is likely still alive server-side, so retain the ID and
       // rethrow so the outer retry resumes the same ID. Definitive failures
@@ -1275,13 +1278,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (systemPrompt) {
       const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
-      messages.push({
+      const systemMessage: ResponseInputItem.Message = {
         type: 'message',
         role,
-        content: [
-          this.createInputText(systemPrompt),
-        ] as ResponseInputMessageContentList,
-      } as ResponseInputItem);
+        content: [this.createInputText(systemPrompt)],
+      };
+      messages.push(systemMessage);
     }
 
     const supportsMedia =
@@ -1305,11 +1307,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
-    messages.push({
+    const initialUserMessage: ResponseInputItem.Message = {
       type: 'message',
       role: 'user',
       content: userContent,
-    } as ResponseInputItem);
+    };
+    messages.push(initialUserMessage);
 
     const requestRole = this.capabilities.supportsIntermDevMsgs
       ? 'system'
@@ -1318,13 +1321,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (requestRole === 'user' && messages.length > 0) {
       this.appendInputText(messages.at(-1)!, userRequest);
     } else {
-      messages.push({
+      const requestMessage: ResponseInputItem.Message = {
         type: 'message',
         role: requestRole,
-        content: [
-          this.createInputText(userRequest),
-        ] as ResponseInputMessageContentList,
-      } as ResponseInputItem);
+        content: [this.createInputText(userRequest)],
+      };
+      messages.push(requestMessage);
     }
 
     return messages;
@@ -1359,11 +1361,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     roundContent.push(this.createInputText(userMessage));
 
-    messages.push({
+    const roundUserMessage: ResponseInputItem.Message = {
       type: 'message',
       role: 'user',
       content: roundContent,
-    } as ResponseInputItem);
+    };
+    messages.push(roundUserMessage);
 
     return messages;
   }
@@ -1599,6 +1602,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.inFlight = true;
     try {
       return await this.createResponseImpl(options);
+    } catch (err) {
+      tagOpenAISdkError(err, this.config.provider);
+      throw err;
     } finally {
       this.inFlight = false;
     }
@@ -1793,6 +1799,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           maxOutputTokens = validation.adjustedMaxTokens;
         }
       } catch (err) {
+        tagOpenAISdkError(err, this.config.provider);
         if (isContextWindowError(err)) throw err;
         this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Applying fallback cap.`,
@@ -2026,6 +2033,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         updatedMessages: compactedMessages,
       };
     } catch (error) {
+      tagOpenAISdkError(error, this.config.provider);
+
       // Extract error details for diagnostics (useful for relay errors)
       const { rawErrorBody } = formatProviderHttpError(error);
       if (rawErrorBody) {
@@ -2450,13 +2459,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
 
     const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-    messages.push({
+    const continuationMessage: ResponseInputItem.Message = {
       type: 'message',
       role,
-      content: [
-        this.createInputText(userMessageContinuation),
-      ] as ResponseInputMessageContentList,
-    } as ResponseInputItem);
+      content: [this.createInputText(userMessageContinuation)],
+    };
+    messages.push(continuationMessage);
   }
 
   /** Initializes output file and handles prefill content. */
@@ -2476,13 +2484,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (lastMessage) {
         this.appendInputText(lastMessage, pseudoPrefill);
       } else {
-        messages.push({
+        const pseudoPrefillMessage: ResponseInputItem.Message = {
           type: 'message',
           role: 'user',
-          content: [
-            this.createInputText(pseudoPrefill),
-          ] as ResponseInputMessageContentList,
-        } as ResponseInputItem);
+          content: [this.createInputText(pseudoPrefill)],
+        };
+        messages.push(pseudoPrefillMessage);
       }
       this.logger.debug(
         `Added pseudo prefill message to messages:\n${pseudoPrefill}`,
@@ -2764,9 +2771,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Always clear after processing to prevent accumulation across cycles.
     if (workspaceState?.serverToolContent.contentBlocks.length) {
       if (!isResponseChaining) {
-        const openaiBlocks = workspaceState.serverToolContent.contentBlocks
-          .filter(isOpenAIServerToolContent)
-          .map((block) => block as ResponseInputItem);
+        const openaiBlocks: ResponseInputItem[] =
+          workspaceState.serverToolContent.contentBlocks.filter(
+            isOpenAIServerToolContent,
+          );
         messages.push(...openaiBlocks);
       }
       workspaceState.resetServerToolContent();

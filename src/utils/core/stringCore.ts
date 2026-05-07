@@ -4,14 +4,14 @@
  * ## Error Utility Guide
  *
  * This module provides low-level error utilities. For higher-level error handling,
- * see `@common/errors/errorHandlingUtils`.
+ * see `@common/errors`.
  *
  * | Function | Returns | Use Case |
  * |----------|---------|----------|
  * | `extractErrorMessage(err)` | `string \| undefined` | Optional extraction, returns undefined for non-errors |
  * | `serializeError(err)` | `SerializedError` | Convert Error to plain object for logging/transport |
  *
- * For guaranteed string conversion, use `toErrorMessage()` from `@common/errors/errorHandlingUtils`.
+ * For guaranteed string conversion, use `toErrorMessage()` from `@common/errors`.
  */
 
 /** Check if value is a non-empty string after trimming. */
@@ -37,7 +37,7 @@ export function escapeRegExp(value: string): string {
  * Returns undefined if the value is not an Error or non-empty string.
  *
  * Use this when you need optional extraction. For guaranteed string output,
- * use `toErrorMessage()` from `@common/errors/errorHandlingUtils`.
+ * use `toErrorMessage()` from `@common/errors`.
  */
 export function extractErrorMessage(err: unknown): string | undefined {
   if (err instanceof Error && isNonEmptyString(err.message)) {

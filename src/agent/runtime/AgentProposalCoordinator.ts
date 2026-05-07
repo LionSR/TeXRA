@@ -11,8 +11,6 @@
  * 3. On resolution → emits 'resolveAgentProposal' to dismiss UI
  */
 
-// Local imports
-import { bus } from '@eventBus/ProgressEventBus';
 import type { AgentProposal } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -48,7 +46,7 @@ interface ProposalShowPayload extends Record<string, unknown> {
 // ============================================================================
 
 /** Manages pending agent proposals (workflow and tool-use). */
-class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
+export class AgentProposalCoordinator extends BasePromiseCoordinator<
   ProposalResult,
   ProposalShowPayload
 > {
@@ -70,10 +68,10 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
     const { proposalId, proposal, timeoutMs } = options;
 
     // Request host to show progress view so user sees the proposal
-    bus.emit('requestEnsureProgressView', {});
+    this.runtimeHost.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    bus.emit('setActiveStream', { streamId });
+    this.runtimeHost.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       proposalId,
@@ -88,4 +86,4 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
 // ============================================================================
 
 /** Singleton coordinator instance. */
-export const proposalCoordinator = new AgentProposalCoordinatorImpl();
+export const proposalCoordinator = new AgentProposalCoordinator();

@@ -170,7 +170,7 @@ async function execSubscribe(
         ? `Subscribed to ${slug}`
         : `Already subscribed to ${slug}`,
       output: created
-        ? `Subscribed to ${slug}. New comments, reviews, line comments, failed CI checks, and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on PR close/merge.`
+        ? `Subscribed to ${slug}. New comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on PR close/merge.`
         : `Already subscribed to ${slug}. Activity continues until command="unsubscribe" or the PR closes.`,
     };
   }
@@ -207,7 +207,7 @@ async function execSubscribe(
           : `Subscribed to ${prSlug}`
         : `Already subscribed to ${prSlug}`,
       output: created
-        ? `${prSlug} is a PR. New comments, reviews, line comments, failed CI checks, and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on close/merge.`
+        ? `${prSlug} is a PR. New comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on close/merge.`
         : `Already subscribed to ${prSlug}.`,
     };
   }
@@ -328,6 +328,58 @@ async function gitInDir(args: string[], cwd: string): Promise<string> {
   return stdout.trim();
 }
 
+interface OpenPullSummary {
+  number: number;
+  title?: string;
+  head?: { ref?: string };
+}
+
+async function getDefaultBranch(owner: string, repo: string): Promise<string> {
+  const res = await ghGet<{ default_branch?: string }>(
+    `/repos/${owner}/${repo}`,
+  );
+  if (res.status !== 200) {
+    throw new ToolError(`Unexpected GitHub response status: ${res.status}`);
+  }
+  return res.data.default_branch ?? 'main';
+}
+
+async function listOpenPullSuggestions(
+  owner: string,
+  repo: string,
+): Promise<string> {
+  const res = await ghGet<OpenPullSummary[]>(
+    `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
+  );
+  if (res.status !== 200 || res.data.length === 0) {
+    return '';
+  }
+  const lines = res.data.map((pr) => {
+    const title = pr.title ? ` - ${pr.title}` : '';
+    const head = pr.head?.ref ? ` (${pr.head.ref})` : '';
+    return `- ${owner}/${repo}/pulls/${pr.number}${head}${title}`;
+  });
+  return `\n\nOpen PRs you can subscribe to directly:\n${lines.join('\n')}`;
+}
+
+async function getFindCurrentFallbackInfo(
+  owner: string,
+  repo: string,
+): Promise<{ defaultBranch?: string; suggestions: string }> {
+  const [defaultBranchResult, suggestionsResult] = await Promise.allSettled([
+    getDefaultBranch(owner, repo),
+    listOpenPullSuggestions(owner, repo),
+  ]);
+  return {
+    defaultBranch:
+      defaultBranchResult.status === 'fulfilled'
+        ? defaultBranchResult.value
+        : undefined,
+    suggestions:
+      suggestionsResult.status === 'fulfilled' ? suggestionsResult.value : '',
+  };
+}
+
 async function execFindCurrent(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
@@ -367,8 +419,22 @@ async function execFindCurrent(
   }
   const pr = res.data[0];
   if (!pr) {
+    const { defaultBranch, suggestions } = await getFindCurrentFallbackInfo(
+      remote.owner,
+      remote.repo,
+    );
+    if (branch === defaultBranch) {
+      throw new ToolError(
+        `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+      );
+    }
+    if (!defaultBranch && branch === 'main') {
+      throw new ToolError(
+        `Current branch is "main", no open PR uses it as the head branch, and the default branch could not be confirmed. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+      );
+    }
     throw new ToolError(
-      `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push the branch and open a PR first.`,
+      `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
     );
   }
   const path = `${remote.owner}/${remote.repo}/pulls/${pr.number}`;
@@ -384,7 +450,7 @@ export class GitHubSubscriptionTool extends defineTool({
     'Manage GitHub activity subscriptions for the current agent stream.',
     'Path mirrors GitHub\'s REST URL shape and encodes the hierarchy: "owner/repo" addresses the whole repo (coarse, orchestrator-friendly); "owner/repo/pulls/N" addresses a specific pull request and "owner/repo/issues/N" addresses a specific issue (nuanced, worker-friendly).',
     'Commands:',
-    '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a holistic merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once — typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened — the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
+    '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a holistic merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once — typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened — the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
     '- unsubscribe: stop watching the path.',
     '- list: list active subscriptions on this stream.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',

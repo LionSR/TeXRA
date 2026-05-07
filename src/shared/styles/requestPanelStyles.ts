@@ -67,10 +67,10 @@ export const requestPanelStyles: CSSResult = css`
   :is(${CONTAINERS}) {
     margin: ${sp.large} 0;
     padding: ${sp.large};
-    border: var(--border-thin) solid var(--vscode-input-border);
+    border: var(--border-thin) solid var(--texra-input-border);
     border-radius: var(--border-radius-large);
-    background: var(--vscode-editor-background);
-    box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.12));
+    background: var(--texra-editor-background);
+    box-shadow: 0 2px 8px var(--texra-widget-shadow, rgba(0, 0, 0, 0.12));
     display: flex;
     flex-direction: column;
     gap: ${sp.medium};
@@ -81,7 +81,7 @@ export const requestPanelStyles: CSSResult = css`
     align-items: center;
     gap: ${sp.medium};
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
   }
 
   :is(${LISTS}) {
@@ -94,8 +94,8 @@ export const requestPanelStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     border-radius: var(--border-radius);
-    border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
-    background: var(--vscode-editorHoverWidget-background);
+    border: var(--border-thin) solid var(--texra-editorHoverWidget-border);
+    background: var(--texra-editorHoverWidget-background);
     padding: ${sp.medium};
     gap: ${sp.medium};
     position: relative;
@@ -150,17 +150,17 @@ export const requestPanelStyles: CSSResult = css`
   /* Shared action button colors */
   :is(${ACTIONS}) vscode-toolbar-button[data-action='approve']::part(control),
   :is(${ACTIONS}) vscode-toolbar-button[data-action='submit']::part(control) {
-    color: var(--vscode-testing-iconPassed);
+    color: var(--texra-testing-iconPassed);
   }
 
   :is(${ACTIONS}) vscode-toolbar-button[data-action='setup']::part(control) {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
   }
 
   :is(${FEEDBACK_ACTIVE})
     :is(${ACTIONS})
     vscode-toolbar-button[data-action='reject']::part(control) {
-    color: var(--vscode-inputValidation-warningBorder);
+    color: var(--texra-inputValidation-warningBorder);
   }
 
   /* Shared badge base */
@@ -176,22 +176,22 @@ export const requestPanelStyles: CSSResult = css`
 
   /* Type-specific item accent */
   .approval-request {
-    border-left: var(--border-thick) solid var(--vscode-editor-foreground);
+    border-left: var(--border-thick) solid var(--texra-editor-foreground);
   }
   .bash-approval-request {
-    border-left: var(--border-thick) solid var(--vscode-terminal-ansiYellow);
+    border-left: var(--border-thick) solid var(--texra-terminal-ansiYellow);
   }
   .retry-request {
     border-left: var(--border-thick) solid var(--color-warning);
   }
   .workflow-proposal {
-    border-left: var(--border-thick) solid var(--vscode-textLink-foreground);
+    border-left: var(--border-thick) solid var(--texra-textLink-foreground);
   }
   .plan-approval-request {
-    border-left: var(--border-thick) solid var(--vscode-textLink-foreground);
+    border-left: var(--border-thick) solid var(--texra-textLink-foreground);
   }
   .external-inquiry-request {
-    border-left: var(--border-thick) solid var(--vscode-focusBorder);
+    border-left: var(--border-thick) solid var(--texra-focusBorder);
   }
 
   /* Shared action button width — approval and bash use the same flex-basis */
@@ -205,11 +205,11 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   .approval-requests__header .codicon {
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
   }
 
   .approval-request__path {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size-sm);
     color: var(--color-text-link);
     word-break: break-word;
@@ -261,7 +261,7 @@ export const requestPanelStyles: CSSResult = css`
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
     border-left: var(--border-thin) solid
-      var(--vscode-button-separator, var(--vscode-input-border));
+      var(--texra-button-separator, var(--texra-input-border));
   }
 
   .approval-request__actions .diff-dropdown .diff-dropdown-menu {
@@ -288,16 +288,16 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   .bash-approval-requests__header .codicon {
-    color: var(--vscode-terminal-ansiYellow);
+    color: var(--texra-terminal-ansiYellow);
   }
 
   .bash-approval-request__command {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size-sm);
   }
 
   .bash-approval-request__command .code-block {
-    border-left: var(--border-thick) solid var(--vscode-terminal-ansiYellow);
+    border-left: var(--border-thick) solid var(--texra-terminal-ansiYellow);
   }
 
   .bash-approval-request__command .code-block pre {
@@ -318,9 +318,9 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .retry-request__operation {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size-sm);
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
     font-weight: var(--font-weight-medium);
   }
 
@@ -340,7 +340,7 @@ export const requestPanelStyles: CSSResult = css`
 
   .retry-request__error-summary {
     cursor: pointer;
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     display: flex;
     align-items: center;
     gap: ${sp.tiny};
@@ -348,7 +348,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .retry-request__error-summary:hover {
-    color: var(--vscode-foreground);
+    color: var(--texra-foreground);
   }
 
   /* Note: .toggle-icon rotation handled by commonViewStyles */
@@ -356,9 +356,9 @@ export const requestPanelStyles: CSSResult = css`
   .retry-request__error-body {
     margin-top: ${sp.tiny};
     padding: ${sp.small};
-    background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    background: var(--texra-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size-xs);
     white-space: pre-wrap;
     word-break: break-word;
@@ -367,7 +367,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .retry-request--relay .retry-request__operation {
-    color: var(--vscode-editorWarning-foreground, #ff8c00);
+    color: var(--texra-editorWarning-foreground, #ff8c00);
   }
 
   /* ================================================================
@@ -375,7 +375,7 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   .workflow-proposals__header .codicon {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
   }
 
   .workflow-proposal__actions vscode-toolbar-button {
@@ -390,20 +390,20 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__category-badge--workflow {
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--texra-badge-background);
+    color: var(--texra-badge-foreground);
   }
 
   .workflow-proposal__category-badge--tool-use {
-    background: var(--vscode-textLink-foreground);
-    color: var(--vscode-editor-background);
+    background: var(--texra-textLink-foreground);
+    color: var(--texra-editor-background);
   }
 
   .workflow-proposal__agent {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size);
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
   }
 
   .workflow-proposal__model {
@@ -425,7 +425,7 @@ export const requestPanelStyles: CSSResult = css`
 
   .workflow-proposal__agent-select .codicon,
   .workflow-proposal__model-select .codicon {
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     flex-shrink: 0;
   }
 
@@ -446,14 +446,14 @@ export const requestPanelStyles: CSSResult = css`
 
   .workflow-proposal__instruction {
     font-size: var(--font-size-sm);
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
     word-break: break-word;
     white-space: pre-wrap;
     max-height: 12em;
     overflow-y: auto;
     line-height: var(--line-height-normal);
     padding: ${sp.small} 0;
-    border-bottom: var(--border-thin) solid var(--vscode-editorWidget-border);
+    border-bottom: var(--border-thin) solid var(--texra-editorWidget-border);
   }
 
   .workflow-proposal__extract-flags {
@@ -480,7 +480,7 @@ export const requestPanelStyles: CSSResult = css`
 
   .workflow-proposal__files > div {
     font-size: var(--font-size-sm);
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
     line-height: var(--line-height-normal);
   }
 
@@ -490,16 +490,16 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__file-name {
-    font-family: var(--vscode-editor-font-family);
-    color: var(--vscode-textLink-foreground);
+    font-family: var(--texra-editor-font-family);
+    color: var(--texra-textLink-foreground);
     cursor: pointer;
   }
 
   .workflow-proposal__file-name:hover {
     text-decoration: underline;
     color: var(
-      --vscode-textLink-activeForeground,
-      var(--vscode-textLink-foreground)
+      --texra-textLink-activeForeground,
+      var(--texra-textLink-foreground)
     );
   }
 
@@ -518,11 +518,11 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__input-files .workflow-proposal__file-label {
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
   }
 
   .workflow-proposal__output-files .workflow-proposal__file-label {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
   }
 
   /* ================================================================
@@ -530,12 +530,12 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   .plan-approval-requests__header .codicon {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
   }
 
   .plan-approval-request__summary {
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
   }
 
   .plan-approval-request__steps {
@@ -553,14 +553,14 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .plan-approval-request__step-files {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
     margin-top: ${sp.tiny};
   }
 
   .plan-approval-request__file {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
   }
 
   .plan-approval-request__actions vscode-toolbar-button {
@@ -584,7 +584,7 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   .external-inquiry-requests__header .codicon {
-    color: var(--vscode-focusBorder);
+    color: var(--texra-focusBorder);
   }
 
   /* Carousel navigation for multiple external inquiries */
@@ -597,7 +597,7 @@ export const requestPanelStyles: CSSResult = css`
 
   .external-inquiry-requests__counter {
     font-size: var(--font-size-sm);
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     font-variant-numeric: tabular-nums;
     min-width: 3ch;
     text-align: center;
@@ -613,12 +613,12 @@ export const requestPanelStyles: CSSResult = css`
     border: none;
     border-radius: var(--border-radius-small);
     background: transparent;
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
     cursor: pointer;
   }
 
   .external-inquiry-requests__nav-btn:hover:not(:disabled) {
-    background: var(--vscode-toolbar-hoverBackground);
+    background: var(--texra-toolbar-hoverBackground);
   }
 
   .external-inquiry-requests__nav-btn:disabled {
@@ -627,24 +627,24 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .external-inquiry-request__mode-badge {
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--texra-badge-background);
+    color: var(--texra-badge-foreground);
   }
 
   .external-inquiry-request__context {
     font-size: var(--font-size-sm);
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     padding: ${sp.small} ${sp.medium};
-    background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    background: var(--texra-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
     border-left: var(--border-thick) solid
-      var(--vscode-textBlockQuote-border, var(--vscode-focusBorder));
+      var(--texra-textBlockQuote-border, var(--texra-focusBorder));
     line-height: var(--line-height-normal);
   }
 
   .external-inquiry-request__question {
-    background: var(--vscode-textCodeBlock-background, rgba(0, 0, 0, 0.05));
-    border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
+    background: var(--texra-textCodeBlock-background, rgba(0, 0, 0, 0.05));
+    border: var(--border-thin) solid var(--texra-editorHoverWidget-border);
     border-radius: var(--border-radius);
     padding: ${sp.medium};
     position: relative;
@@ -653,7 +653,7 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-request__question-text {
     font-size: var(--font-size);
     line-height: var(--line-height-relaxed, 1.6);
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
     white-space: pre-wrap;
     word-break: break-word;
     max-height: min(22vh, 14rem);
@@ -666,7 +666,7 @@ export const requestPanelStyles: CSSResult = css`
     justify-content: flex-end;
     margin-top: ${sp.small};
     padding-top: ${sp.small};
-    border-top: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
+    border-top: var(--border-thin) solid var(--texra-editorHoverWidget-border);
   }
 
   .external-inquiry-request__search-hint {
@@ -674,7 +674,7 @@ export const requestPanelStyles: CSSResult = css`
     align-items: center;
     gap: ${sp.small};
     font-size: var(--font-size-sm);
-    color: var(--vscode-editorInfo-foreground, var(--vscode-focusBorder));
+    color: var(--texra-editorInfo-foreground, var(--texra-focusBorder));
     padding: ${sp.small} 0;
   }
 
@@ -687,7 +687,7 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-request__attach-label {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
     display: flex;
     align-items: center;
     gap: ${sp.small};
@@ -698,7 +698,7 @@ export const requestPanelStyles: CSSResult = css`
     flex-direction: column;
     gap: ${sp.tiny};
     padding: ${sp.small};
-    background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    background: var(--texra-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
   }
 
@@ -707,8 +707,8 @@ export const requestPanelStyles: CSSResult = css`
     align-items: center;
     gap: ${sp.small};
     font-size: var(--font-size-sm);
-    font-family: var(--vscode-editor-font-family);
-    color: var(--vscode-textLink-foreground);
+    font-family: var(--texra-editor-font-family);
+    color: var(--texra-textLink-foreground);
   }
 
   .external-inquiry-request__answer-area {
@@ -733,7 +733,7 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-request__session-links-label {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
   }
 
   .external-inquiry-request__session-links-list {
@@ -741,14 +741,14 @@ export const requestPanelStyles: CSSResult = css`
     flex-direction: column;
     gap: ${sp.tiny};
     padding: ${sp.small};
-    background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    background: var(--texra-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
   }
 
   .external-inquiry-request__session-link-item {
     font-size: var(--font-size-sm);
-    font-family: var(--vscode-editor-font-family);
-    color: var(--vscode-textLink-foreground);
+    font-family: var(--texra-editor-font-family);
+    color: var(--texra-textLink-foreground);
     word-break: break-word;
   }
 
@@ -757,38 +757,38 @@ export const requestPanelStyles: CSSResult = css`
     min-height: 72px;
     max-height: min(18vh, 8rem);
     resize: vertical;
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
     padding: ${sp.medium};
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: var(--border-thin) solid var(--vscode-input-border);
+    background: var(--texra-input-background);
+    color: var(--texra-input-foreground);
+    border: var(--border-thin) solid var(--texra-input-border);
     border-radius: var(--border-radius);
     outline: none;
     transition: border-color 0.15s ease;
   }
 
   .external-inquiry-request__session-links-input:focus {
-    border-color: var(--vscode-focusBorder);
+    border-color: var(--texra-focusBorder);
   }
 
   .external-inquiry-request__session-links-input::placeholder {
-    color: var(--vscode-input-placeholderForeground);
+    color: var(--texra-input-placeholderForeground);
   }
 
   .external-inquiry-request__session-links-hint {
     font-size: var(--font-size-sm);
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
   }
 
   .external-inquiry-request__chat-links {
     font-size: var(--font-size-sm);
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
   }
 
   .external-inquiry-request__chat-links a {
-    color: var(--vscode-textLink-foreground);
+    color: var(--texra-textLink-foreground);
     text-decoration: none;
   }
 
@@ -799,7 +799,7 @@ export const requestPanelStyles: CSSResult = css`
   .external-inquiry-request__answer-label {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-editor-foreground);
+    color: var(--texra-editor-foreground);
   }
 
   .external-inquiry-request__answer-input {
@@ -807,29 +807,29 @@ export const requestPanelStyles: CSSResult = css`
     min-height: 96px;
     max-height: min(24vh, 12rem);
     resize: vertical;
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--texra-editor-font-family);
     font-size: var(--font-size);
     line-height: var(--line-height-normal);
     padding: ${sp.medium};
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: var(--border-thin) solid var(--vscode-input-border);
+    background: var(--texra-input-background);
+    color: var(--texra-input-foreground);
+    border: var(--border-thin) solid var(--texra-input-border);
     border-radius: var(--border-radius);
     outline: none;
     transition: border-color 0.15s ease;
   }
 
   .external-inquiry-request__answer-input:focus {
-    border-color: var(--vscode-focusBorder);
+    border-color: var(--texra-focusBorder);
   }
 
   .external-inquiry-request__answer-input::placeholder {
-    color: var(--vscode-input-placeholderForeground);
+    color: var(--texra-input-placeholderForeground);
   }
 
   .external-inquiry-request__answer-hint {
     font-size: var(--font-size-sm);
-    color: var(--vscode-descriptionForeground);
+    color: var(--texra-descriptionForeground);
   }
 
   @media (max-height: 900px) {
