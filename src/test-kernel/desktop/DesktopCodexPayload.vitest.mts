@@ -98,10 +98,31 @@ describe('desktop Codex package payload', () => {
       }),
     ).toEqual(['darwin-arm64']);
   });
+
+  it('resolves relative metafile imports from the importing output directory', () => {
+    const { packageRoot } = createFakeDesktopPackage(['darwin-arm64'], {
+      startupImportPath: './bootstrap.js',
+      bootstrapInputs: {
+        'node_modules/.pnpm/openai@0.0.0/node_modules/openai/index.js': {
+          bytesInOutput: 1,
+        },
+      },
+    });
+
+    const result = runVerifierResult(packageRoot);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Packaged desktop startup graph eagerly includes provider SDK code (OpenAI SDK)',
+    );
+  });
 });
 
 function createFakeDesktopPackage(
   platforms: Array<keyof typeof codexPlatforms>,
+  options: {
+    bootstrapInputs?: Record<string, { bytesInOutput: number }>;
+    startupImportPath?: string;
+  } = {},
 ): {
   appOutDir: string;
   packageRoot: string;
@@ -119,7 +140,7 @@ function createFakeDesktopPackage(
     main: './dist/main/index.js',
     dependencies: readDesktopDependencies(),
   });
-  writeText(join(appRoot, 'dist/main/index.js'), "import('./bootstrap.js');\n");
+  writeText(join(appRoot, 'dist/main/index.js'), "import './bootstrap.js';\n");
   writeText(join(appRoot, 'dist/main/bootstrap.js'), 'export {};\n');
   writeJson(join(appRoot, 'dist/main/metafile.json'), {
     outputs: {
@@ -132,14 +153,13 @@ function createFakeDesktopPackage(
         },
         imports: [
           {
-            path: './bootstrap.js',
+            path: options.startupImportPath ?? 'dist/main/bootstrap.js',
             kind: 'import-statement',
           },
         ],
       },
       'dist/main/bootstrap.js': {
-        entryPoint: 'src/main/bootstrap.ts',
-        inputs: {
+        inputs: options.bootstrapInputs ?? {
           'src/main/bootstrap.ts': {
             bytesInOutput: 1,
           },
