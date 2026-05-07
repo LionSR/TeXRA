@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
 import {
@@ -51,6 +52,7 @@ export interface OutputDependencies {
   fileService: TaskRunFileService;
   executionId: string;
   streamId: string;
+  runtimeHost: AgentRuntimeHost;
 }
 
 export function createOutputState(): OutputState {

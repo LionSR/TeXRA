@@ -11,7 +11,7 @@
  * 24 h detach gate) lives here once.
  */
 
-import { bus } from '@eventBus/ProgressEventBus';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentLogger } from '@logger/AgentLogger';
 
 import {
@@ -201,7 +201,9 @@ export abstract class PollingSourceBase<
       );
       this.emit(state, this.formatErrorEvent(key, state, err.message));
       this.detach(key);
-      bus.emit('githubTokenInvalid', { message: err.message });
+      getAgentRuntimeHost().emit('githubTokenInvalid', {
+        message: err.message,
+      });
       return;
     }
     if (err instanceof GitHubPermanentError) {
