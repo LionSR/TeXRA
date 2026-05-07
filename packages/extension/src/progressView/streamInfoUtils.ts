@@ -87,8 +87,6 @@ export function buildStreamInfo(
         : undefined,
     agent: config?.agent,
     agentCategory: category,
-    hasMultipleOutputs:
-      config?.useMultipleOutputs ?? hints.hasMultipleOutputs ?? false,
     isRemote: taskState
       ? isRemoteAgent(rawAgentName)
       : (hints.isRemote ?? false),

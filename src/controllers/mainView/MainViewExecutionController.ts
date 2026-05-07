@@ -82,9 +82,6 @@ export function prepareMainViewExecutionRequest(
       ...message,
       agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
       outputFiles,
-      useMultipleOutputs:
-        !isToolUse &&
-        (Boolean(message.outputFilesActive) || outputFiles.length > 1),
       toolConfig: toolConfigResult.data,
       mediaFile: mapMediaFile(message.mediaFile ?? null),
       mediaFiles: (message.mediaFiles ?? [])

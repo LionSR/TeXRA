@@ -463,16 +463,6 @@ export class StreamTab extends LitElement {
                       ></i>
                     `,
                   )}
-                  ${when(
-                    stream.hasMultipleOutputs,
-                    () => html`
-                      <i
-                        class=${`codicon codicon-${AGENT_DECORATORS.properties.multipleOutputs.icon} multi-file`}
-                        title=${AGENT_DECORATORS.properties.multipleOutputs
-                          .hint}
-                      ></i>
-                    `,
-                  )}
                 </div>
               `}
         </button>

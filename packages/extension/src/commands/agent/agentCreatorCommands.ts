@@ -5,7 +5,6 @@ import * as nunjucks from 'nunjucks';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
-import { getBaseName, getMultipleName } from '@agent/index';
 import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
@@ -16,11 +15,7 @@ import {
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@commands/agent/agentTemplateRenderer';
-import {
-  agentDirectories,
-  promptToAddAgentToConfig,
-  type AgentVariantMetadata,
-} from '@frontend/agents';
+import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
 import {
   showLoggedErrorMessage,
   toErrorMessage,
@@ -55,7 +50,6 @@ interface CreatorConfig {
   retryPrompts: Record<AgentCategory, string>;
   templates: {
     workflowSingle: string;
-    workflowMultiple: string;
     toolUse: string;
   };
 }
@@ -67,7 +61,6 @@ interface AgentBlueprint {
   aiVars: Record<string, string>;
   fallbackTemplate: string;
   fallbackVars: Record<string, string>;
-  registrationMeta: AgentVariantMetadata;
 }
 
 /** Mutable shared state flowing through the agent creation flow. */
@@ -105,15 +98,6 @@ const PASSTHROUGH: Record<AgentCategory, Record<string, string>> = {
   toolUse: buildPassthrough(TOOL_USE_VARS),
   workflow: buildPassthrough(WORKFLOW_VARS),
 };
-
-const MULTIPLE_OUTPUT_INSTRUCTIONS = [
-  'IMPORTANT: This agent must handle MULTIPLE output files. Adjust the structure above:',
-  '- Set isMultipleOutput: true',
-  '- Use documentTag: "latex_documents" (plural) and endTag: "</latex_documents>"',
-  '- Add defaultOutputFiles with the file list below',
-  '- In userRequest, instruct the model to wrap each file in <latex_documents> with <document name="..."> blocks',
-  '- Reference {{ OUTPUT_FILES_ORDER }} for the expected output order',
-].join('\n');
 
 const DESCRIPTION_PROMPTS: Record<AgentCategory, string> = {
   toolUse:
@@ -279,23 +263,15 @@ async function loadCreatorConfig(
     'resources',
     'templates',
   );
-  const [
-    workflowYaml,
-    toolUseYaml,
-    workflowSingle,
-    workflowMultiple,
-    toolUseTpl,
-  ] = await Promise.all([
-    AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
-    AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
-    AbsoluteFS.read(
-      path.join(templatesDir, 'agentTemplate-workflowSingle.yaml'),
-    ),
-    AbsoluteFS.read(
-      path.join(templatesDir, 'agentTemplate-workflowMultiple.yaml'),
-    ),
-    AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
-  ]);
+  const [workflowYaml, toolUseYaml, workflowSingle, toolUseTpl] =
+    await Promise.all([
+      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorWorkflow.yaml')),
+      AbsoluteFS.read(path.join(templatesDir, 'agentCreatorToolUse.yaml')),
+      AbsoluteFS.read(
+        path.join(templatesDir, 'agentTemplate-workflowSingle.yaml'),
+      ),
+      AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
+    ]);
   const wf = yaml.parse(workflowYaml) as ParsedCreatorYaml;
   const tu = yaml.parse(toolUseYaml) as ParsedCreatorYaml;
   const defaultRetry =
@@ -307,7 +283,7 @@ async function loadCreatorConfig(
       workflow: wf.prompts.retryPrompt ?? defaultRetry,
       toolUse: tu.prompts.retryPrompt ?? defaultRetry,
     },
-    templates: { workflowSingle, workflowMultiple, toolUse: toolUseTpl },
+    templates: { workflowSingle, toolUse: toolUseTpl },
   };
   return creatorConfig;
 }
@@ -419,41 +395,6 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
   }): Promise<AgentBlueprint | undefined> {
     const { agentName, description, config } = prepRes;
 
-    const outputChoice = await vscode.window.showQuickPick(
-      [
-        {
-          label: 'Single output file',
-          description: 'Agent produces one document',
-        },
-        {
-          label: 'Multiple output files',
-          description: 'Agent produces several documents at once',
-        },
-      ],
-      {
-        title: `Workflow Agent: ${agentName}`,
-        placeHolder: 'Choose the agent output style',
-      },
-    );
-    if (!outputChoice) return undefined;
-
-    const isMultiple = outputChoice.label === 'Multiple output files';
-
-    let outputFiles: string[] = [];
-    if (isMultiple) {
-      const filesInput = await vscode.window.showInputBox({
-        title: `Workflow Agent: ${agentName}`,
-        prompt: 'Enter default output filenames (comma separated)',
-      });
-      if (!filesInput) return undefined;
-      outputFiles = filesInput
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-    }
-
-    const outputFilesYaml = outputFiles.map((f) => `- ${f}`).join('\n    ');
-    const outputFilesNote = outputFiles.map((f) => `    - ${f}`).join('\n');
     const targetDir = await agentDirectories.custom();
 
     return {
@@ -463,30 +404,12 @@ class WorkflowBlueprintNode extends Node<AgentCreatorShared> {
       aiVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        MULTIPLE_OUTPUT_NOTE: isMultiple
-          ? MULTIPLE_OUTPUT_INSTRUCTIONS +
-            '\nDefault output files:\n' +
-            outputFilesNote
-          : '',
       },
-      fallbackTemplate: isMultiple
-        ? config.templates.workflowMultiple
-        : config.templates.workflowSingle,
+      fallbackTemplate: config.templates.workflowSingle,
       fallbackVars: {
         AGENT_NAME: agentName,
         DESCRIPTION: description,
-        OUTPUT_FILES: outputFilesYaml,
       },
-      registrationMeta: isMultiple
-        ? {
-            isMultipleOutput: true,
-            baseAgentName: getBaseName(agentName),
-            multipleAgentName: agentName,
-          }
-        : {
-            isMultipleOutput: false,
-            multipleAgentName: getMultipleName(agentName),
-          },
     };
   }
 
@@ -542,7 +465,6 @@ class ToolUseBlueprintNode extends Node<AgentCreatorShared> {
         DESCRIPTION: description,
         TOOLS_YAML: picked.tools.map((t) => `    - ${t}`).join('\n'),
       },
-      registrationMeta: {},
     };
   }
 
@@ -688,7 +610,6 @@ class RegisterNode extends Node<AgentCreatorShared> {
     await promptToAddAgentToConfig(
       blueprint.agentName,
       false,
-      blueprint.registrationMeta,
       blueprint.category,
     );
     const doc = await vscode.workspace.openTextDocument(blueprint.filePath);

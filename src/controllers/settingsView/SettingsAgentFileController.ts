@@ -6,15 +6,10 @@ import type { AgentCategory } from '@shared/schemas/agent';
 
 export interface SettingsAgentFileEntry {
   path: string;
-  multiplePath?: string;
 }
 
 export interface SettingsAgentCustomizePlan {
   targetPath: string;
-  multipleCopy?: {
-    sourcePath: string;
-    targetPath: string;
-  };
 }
 
 export type SettingsAgentCustomizeResult =
@@ -29,7 +24,6 @@ export type SettingsAgentCustomizeResult =
 
 export interface SettingsAgentDeletePlan {
   path: string;
-  multiplePath?: string;
 }
 
 export type SettingsAgentDeleteResult =
@@ -66,19 +60,7 @@ export class SettingsAgentFileController {
       return { ok: false, reason: 'targetEscapesCustomDir' };
     }
 
-    const multipleCopy = this.planMultipleCopy({
-      customDir: input.customDir,
-      sourceDir: input.sourceDir,
-      sourcePath: input.entry.multiplePath,
-    });
-
-    return {
-      ok: true,
-      plan: {
-        targetPath,
-        ...(multipleCopy ? { multipleCopy } : {}),
-      },
-    };
+    return { ok: true, plan: { targetPath } };
   }
 
   planDeleteCustomAgent(input: {
@@ -89,19 +71,7 @@ export class SettingsAgentFileController {
       return { ok: false, reason: 'fileOutsideCustomDir' };
     }
 
-    const multiplePath =
-      input.entry.multiplePath &&
-      this.isInside(input.customDir, input.entry.multiplePath)
-        ? input.entry.multiplePath
-        : undefined;
-
-    return {
-      ok: true,
-      plan: {
-        path: input.entry.path,
-        ...(multiplePath ? { multiplePath } : {}),
-      },
-    };
+    return { ok: true, plan: { path: input.entry.path } };
   }
 
   validateTemplateName(value: string): string | null {
@@ -136,27 +106,6 @@ export class SettingsAgentFileController {
       baseName,
       description,
       templateKind: input.category === 'toolUse' ? 'toolUse' : 'workflowSingle',
-    };
-  }
-
-  private planMultipleCopy(input: {
-    customDir: string;
-    sourceDir?: string;
-    sourcePath?: string;
-  }): SettingsAgentCustomizePlan['multipleCopy'] | undefined {
-    if (!input.sourcePath) return undefined;
-
-    const targetPath = this.resolveCustomTargetPath({
-      customDir: input.customDir,
-      sourceDir: input.sourceDir,
-      sourcePath: input.sourcePath,
-    });
-
-    if (!this.isInside(input.customDir, targetPath)) return undefined;
-
-    return {
-      sourcePath: input.sourcePath,
-      targetPath,
     };
   }
 

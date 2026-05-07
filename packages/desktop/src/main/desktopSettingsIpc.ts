@@ -1040,7 +1040,6 @@ export function createDesktopSettingsIpc(
   async function openAgentYaml(input: {
     source: AgentSource;
     name: string;
-    variant: 'base' | 'multiple';
   }): Promise<void> {
     const result = agentDirectoryController.planOpenAgentYaml(input);
     if (!result.ok) {
@@ -1360,7 +1359,6 @@ export function createDesktopSettingsIpc(
             openAgentYaml({
               source: result.data.agentSource,
               name: result.data.agentName,
-              variant: result.data.variant,
             }),
           );
           return true;
