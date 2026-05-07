@@ -8,13 +8,13 @@
 
 ## 1. Summary
 
-The TeXRA agent runtime today reaches host services through two ALS scopes plus ~20 module-level `let X | undefined` setter pairs and three exported singleton coordinators. That ambient-state model is fine for the VS Code extension (one process, one user, one runtime host) but leaks under three workloads the next 12 months will bring:
+The TeXRA agent runtime today reaches host services through two ALS scopes plus 19 module-level `let X | undefined` setter pairs and three exported singleton coordinators. That ambient-state model is fine for the VS Code extension (one process, one user, one runtime host) but leaks under three workloads the next 12 months will bring:
 
 - The **CLI's `texra mcp serve`** mode, which must host N concurrent sessions per process (one per MCP `tools/call`).
 - A **re-entrant SDK** — multiple `Promise.all([runAgent(...), runAgent(...)])` calls from a single Node process.
 - An eventual **`texra serve` daemon** or **embedded library** that runs many users' workloads in one process.
 
-This PRD specifies the refactor: a single explicit `RunContext` value carrying every per-run service (progress sink, logger, abort signal, approval policy, coordinators, capabilities), threaded through the kernel call graph; one ALS scope at the outermost entry point as a migration ergonomics shim; and a phased deletion of the ~20 singleton bindings the audit names. It also specifies the three-ring layering of `packages/core/` that this work makes legible.
+This PRD specifies the refactor: a single explicit `RunContext` value carrying every per-run service (progress sink, logger, abort signal, approval policy, coordinators, capabilities), threaded through the kernel call graph; one ALS scope at the outermost entry point as a migration ergonomics shim; and a phased deletion of the 19 singleton bindings the audit names. It also specifies the three-ring layering of `packages/core/` that this work makes legible.
 
 The kernel migration is independently valuable to all three hosts (extension, desktop, CLI) and does not gate any v1 CLI deliverable except `texra mcp serve` v1.1 (true session concurrency).
 
@@ -45,7 +45,7 @@ A May 2026 audit of `src/agent/`, `src/tools/approval/`, `src/auth/`, `src/event
 | `runtimeHostScope` | `src/agent/runtime/AgentRuntimeHost.ts:12` | Current `AgentRuntimeHost` (≡ `ProgressSink`)       | `runWithAgentRuntimeHost(host, fn)` (line 27) | `getAgentRuntimeHost()` (line 23) — falls back to `defaultAgentRuntimeHost` (line 11), then `getDefaultProgressSink()` |
 | `contextStorage`   | `src/logger/logUtils.ts:10`                | `Map<channel-key, group-id stack>` for log grouping | `runWithGroupContext()` (line 130)            | `getActiveGroupStack()` (line 63), `runWithGroupContext` (line 136)                                                    |
 
-### 4.2 Module-level setter/getter pairs (~12 in audit, plus the 8 the controllers list)
+### 4.2 Module-level setter/getter pairs (19)
 
 | Concern                         | Setter                            | File:line                                       |
 | ------------------------------- | --------------------------------- | ----------------------------------------------- |
@@ -53,14 +53,23 @@ A May 2026 audit of `src/agent/`, `src/tools/approval/`, `src/auth/`, `src/event
 | Default runtime host            | `setDefaultAgentRuntimeHost`      | `src/agent/runtime/AgentRuntimeHost.ts:11`      |
 | Run storage service             | `setRunStorageService`            | `src/agent/runtime/RunStorageService.ts:10`     |
 | Tool-edit approval handler      | `setToolEditApprovalHandler`      | `src/tools/approval/toolEditApproval.ts:74,113` |
-| Latex-preview handler           | `setLatexBuildDisplay`            | `src/tools/approval/latexPreview.ts:21`         |
+| Latex build-display handler     | `setOpenBuildDisplay`             | `src/tools/approval/latexPreview.ts:22,24`      |
 | GitHub token provider           | `setGitHubTokenProvider`          | `src/tools/github/githubAuth.ts:13`             |
 | Extension checker               | `setExtensionChecker`             | `src/tools/externalToolDefs.ts:35`              |
+| Linter provider                 | `setLinterProvider`               | `src/tools/DiagnosticsTool.ts:10,12`            |
+| Lean VS Code services           | `setLeanVscodeServices`           | `src/tools/lean/leanVscodeServices.ts:45,47`    |
+| Setup platform                  | `setSetupPlatform`                | `src/tools/setup/platform.ts:108,111`           |
+| Tool-unavailable notification   | `setToolNotificationHandler`      | `src/tools/toolUnavailableNotification.ts:21,28` |
+| Worktree support flag           | `setWorktreeSupportEnabled`       | `src/tools/worktreeConfig.ts:12,14`             |
 | Server-side key service         | `setServerSideKeyService`         | `src/auth/serverKeys/index.ts:34`               |
 | Tier service                    | `setTierService`                  | `src/auth/tier/index.ts:31`                     |
 | Auth callback resolver          | `setExternalAuthCallbackResolver` | `src/auth/config.ts:183`                        |
 | Runtime extension id            | `setRuntimeExtensionId`           | `src/auth/config.ts:137`                        |
 | Output-channel factory (logger) | `setOutputChannelFactory`         | `src/logger/logUtils.ts:108`                    |
+| Default stream-log store        | `setDefaultStreamLogStore`        | `src/logger/StreamLogStore.ts:668,675`          |
+| Agent directories               | `setAgentDirectories`             | `src/agent/index/agentDirectoriesRegistry.ts:8,11` |
+
+Counted via `git grep "^export function set[A-Z]" packages/core/src/{agent,tools,auth,logger,eventBus}/` against the v1 audit cutoff. The list is exhaustive within those zones; categories outside (e.g. `src/extension/`) are intentionally excluded.
 
 ### 4.3 Exported singleton coordinators (3)
 
@@ -98,8 +107,6 @@ export interface RunContext {
   readonly runId: RunId;
   /** Stream tab id within the run (one per agent activation). */
   readonly streamId: StreamTabId;
-  /** Lineage from the user-initiated root, useful for log prefixes. */
-  readonly streamLineage: readonly StreamTabId[];
 
   /** Where progress events go. Replaces `getAgentRuntimeHost()`. */
   readonly progress: ProgressSink;
@@ -118,13 +125,11 @@ export interface RunContext {
   /** Runtime-resolved capabilities. Replaces setExtensionChecker, setGitHubTokenProvider, … */
   readonly capabilities: RunCapabilities;
 
-  /** Coordinators bound to this run's progress sink. Replaces exported singletons. */
+  /** Coordinators bound to this run's progress sink. Replaces the three exported singletons in §4.3. */
   readonly coordinators: {
     plan: PlanApprovalCoordinator;
     proposal: AgentProposalCoordinator;
     retry: RetryRequestCoordinator;
-    edit: ToolEditApprovalController;
-    bash: BashApprovalController;
   };
 
   /** Spawn a child context for a delegate_agent / delegate_workflow subagent. */
@@ -146,7 +151,7 @@ export interface ChildContextOptions {
 }
 ```
 
-`buildAgentLaunchContext()` in `executeAgent.ts:166` already constructs almost all of this; the refactor is to (a) lift it to the kernel boundary so it's the only entry point that matters, (b) rename it `buildRunContext()`, and (c) pass the result explicitly into every coordinator method that today reads from a singleton.
+`buildAgentLaunchContext()` in `executeAgent.ts:583` already constructs almost all of this; the refactor is to (a) lift it to the kernel boundary so it's the only entry point that matters, (b) rename it `buildRunContext()`, and (c) pass the result explicitly into every coordinator method that today reads from a singleton.
 
 ## 6. Migration shim — one ALS, gradual cutover
 
@@ -237,7 +242,7 @@ Each phase is independently mergeable and ships a concrete kernel improvement.
 | 3         | 4 capability setters                                                  | `tools/{approval,github,externalToolDefs}/*`                                   | +60 / -110      | 1                 |
 | 4         | 4 auth singletons + extension-id setter                               | `auth/*`                                                                       | +80 / -130      | 1                 |
 | 5         | (sweep)                                                               | `executionRegistry.ts` + lint rule cleanups                                    | +20 / -30       | 0.5               |
-| **Total** | **~14 ambient bindings + 3 coordinators**                             |                                                                                | **+460 / -470** | **~6.5**          |
+| **Total** | **19 ambient bindings + 3 coordinators**                             |                                                                                | **+460 / -470** | **~6.5**          |
 
 Net code change: **~-10 LOC** (the refactor pays for itself in deleted boilerplate). The CLI consumes Phase 1 deliverables for v1.0 and Phase 2 for v1.1; the extension and desktop benefit from every phase but don't gate on them.
 
@@ -324,20 +329,23 @@ A flat-config rule that the host of each package can import only the rings it ca
 - The three-ring ESLint rule has zero exceptions in `packages/core/src/agent/`, `core/tools/`, `core/auth/` after Phase 5.
 - A new "synthetic host" package (~80 LOC scaffold, used in tests and as a reference) imports Rings 1+2+3 and runs `executeAgent('polish', …)` end-to-end.
 
-## 11. Open questions
+## 11. Decisions
 
-- **Should `RunContext.workspaceRoot` be a string or a `WorkspaceProvider`?** Today's `WorkspaceProvider` is platform-level (one per process); `workspaceRoot` is per-run. The CLI's `--cwd` flag needs to override per-run; the extension's multi-root workspace also wants per-run. Lean: keep it a string, derive from `WorkspaceProvider` at context-build time, override-aware.
+- **`RunContext.workspaceRoot` is a `string`** — derived from `WorkspaceProvider` at context-build time, overridable per-run by the CLI's `--cwd` flag and by per-root invocations from the extension's multi-root workspace.
+- **Singleton retirement lands before the kernel package split** — fewer reader sites that depend on module-load order across packages.
+- **`ctx.signal` is the canonical run-cancel; modelHandler `signal` params take precedence when explicitly passed.** Today every modelHandler accepts an explicit `signal` parameter from `ExecuteAgentOptions`; the two compose, not collide.
+
+## 12. Open questions
+
 - **Should `RunCapabilities` be open or closed?** Open (free-form `{ [k]: unknown }` plus typed accessors) is more future-proof; closed is type-safer. Lean: closed for v1, open for v2 if external plugins ever ship.
 - **Is `child()` enough for delegate semantics, or do we need a dedicated `delegationContext` field?** Today's delegate flow recursively calls `executeAgent` with new options; the recursion is handled at the call site, not in the context. Lean: keep `child()` only; don't add a delegation field until a concrete reader needs it.
-- **Should the singleton retirement land before or after the kernel package split (`packages/core/`)?** Lean: before. Singleton retirement makes the package split safer (fewer reader sites that depend on module-load order across packages).
-- **Should `ctx.signal` chain into modelHandler-level abort signals automatically?** Today every modelHandler accepts an explicit `signal` parameter from `ExecuteAgentOptions`. Lean: keep both — `ctx.signal` is the canonical run-cancel; modelHandler params take precedence when explicitly passed.
 
-## 12. Tech stack one-liner
+## 13. Tech stack one-liner
 
 ```
 Single AsyncLocalStorage + RunContext threaded explicitly through the kernel call graph
 - packages/core/src/runtime/runContext.ts as the only allowed scope
-- Phased deletion of ~14 module-level setter pairs and 3 singleton coordinators
+- Phased deletion of 19 module-level setter pairs and 3 singleton coordinators
 - Three concentric rings under packages/core/ (pure logic / runtime / platform defaults)
 - ESLint rule no-ambient-runtime-state guards the agnostic zones
 - Independently mergeable phases; CLI v1.0 consumes Phase 1, v1.1 consumes Phase 2

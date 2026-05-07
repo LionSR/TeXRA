@@ -8,7 +8,7 @@
 
 ## 1. Summary
 
-Today's logger (`src/logger/logUtils.ts`) is a serviceable VS Code-shaped string sink. It is also wrong for the CLI in three concrete ways and wrong for the future MCP-server / re-entrant SDK / `texra serve` daemon in five. This PRD specifies a host-neutral structured logger that:
+Today's logger (`src/logger/logUtils.ts`) is a serviceable VS Code-shaped string sink. It is also wrong for the CLI in three concrete ways (enumerated in §4) — module-level state that collides under concurrency, a second ALS scope that shadows the runtime host's scope, and a per-line config lookup that's silently ignored during boot — plus one duplication issue with the round-1 CLI NDJSON pipeline. This PRD specifies a host-neutral structured logger that:
 
 - Emits **`LogRecord`s** (timestamp + level + message + structured fields + group stack), not pre-formatted strings.
 - Routes every record through a per-host **`LogSink`** (extension → `vscode.OutputChannel`, desktop → `electron-log`, CLI text → stderr, CLI JSON → stdout NDJSON, CLI MCP → MCP `notifications/progress`, tests → in-memory).
@@ -41,11 +41,7 @@ The total kernel work is ~430 LOC new + ~130 LOC modified + ~5 LOC deleted. None
 
 ### 4.1 Module-level state collides under concurrency
 
-`outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level. The audit (per `prd-runcontext-refactor.md` §4) finds exactly one setter in production code (`packages/extension/src/extension.ts`), but:
-
-- Tests have to `setOutputChannelFactory(null)` in `afterEach`, which calls `dispose?.()` on every cached channel. With concurrent vitest runs in the same process this disposes channels for _other_ tests' runs.
-- An MCP-server mode that hosts concurrent runs cannot share these channels — two `tools/call`s want two distinct sinks.
-- A re-entrant SDK has the same problem.
+`outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level. The general concurrency case for retiring this kind of binding is in `prd-runcontext-refactor.md` §4.5 (and `setOutputChannelFactory` is one of the 19 setter pairs in that PRD's §4.2 table). Logger-specific consequence: the `setOutputChannelFactory(null)` reset in test teardown calls `dispose?.()` on every cached channel and disposes channels for *other* concurrent runs — visible today only as occasional vitest flakes; visible always in an MCP-server or re-entrant-SDK process.
 
 ### 4.2 Two ALS scopes that shadow each other
 
@@ -320,15 +316,18 @@ Net code: **~+310 LOC** (the new structured pipeline is bigger than the string-b
 - An MCP client receives `notifications/progress` for every log emitted inside a `tools/call` (Phase 5 integration test).
 - Boot-time log lines from `texra` show up _with_ their structured fields in the final rendered output, not before init drops them.
 
-## 13. Open questions
+## 13. Decisions
 
-- **Should `LogSink.write` be sync or async?** Today's logger is sync. Async would let sinks batch (e.g., NDJSON write coalescing), but every kernel emit site assumes sync. Lean: keep sync; sinks that need async use a queue + `flush?()`.
+- **`LogSink.write` is sync; sinks that need async batching wrap their own queue and flush via `flush?()`.** Every kernel emit site assumes sync.
+- **The extension's per-agent OutputChannel pattern is preserved** — implemented as a `VscodeOutputChannelSink` configuration option, not a kernel-level concept. Other hosts opt out.
+
+## 14. Open questions
+
 - **Should `BootstrapLogger` be exposed as a public API for SDK consumers?** Some users may want to capture pre-init logs from `runAgent()`. Lean: yes; export from `@texra/cli/sdk` once the SDK lands.
 - **Schema versioning policy: per-record `schemaVersion` field, or repo-version pinning?** Per-record is robust to in-flight upgrades but bloats every line by ~20 bytes. Lean: repo-version pinning; consumers verify `@texra/shared/schemas` major matches.
-- **Should the extension's per-agent output channel pattern survive?** It's a UX choice (filtering to one agent's logs) that doesn't translate to other hosts. Lean: keep it as a `VscodeOutputChannelSink` configuration option, not a kernel concept.
 - **Do we need a `trace` level below `debug`?** Today's vocabulary stops at `debug`. OTel uses `trace`. Lean: not yet — add when a consumer asks.
 
-## 14. Tech stack one-liner
+## 15. Tech stack one-liner
 
 ```
 LogRecord (structured) + LogSink (host port) + BootstrapLogger (pre-init buffer)
