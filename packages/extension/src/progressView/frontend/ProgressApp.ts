@@ -37,12 +37,14 @@ import {
   select,
   combine,
 } from '@shared/signals';
-import { designTokens } from '@shared/styles';
+import { codiconStyles, designTokens, viewTabStyles } from '@shared/styles';
 import {
   registerTeXRAWebAwesomeIcons,
   TEXRA_ICON_LIBRARY,
 } from '@shared/wa/webAwesomeIcons';
 import { isProcessAgent } from '@shared/streams/agentKind';
+import '@shared/wa/tabs';
+import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
 // Local imports - progress view frontend
 import { webviewStorage } from './webviewStorage';
@@ -106,8 +108,6 @@ import {
   type StreamLogContextValue,
 } from './contexts/streamContexts';
 import type { FrontendEventHandlerContext } from './eventHandlers';
-import type { VscTabsSelectEvent } from '@vscode-elements/elements/dist/vscode-tabs/vscode-tabs.js';
-
 // Local imports - progress view components
 import './components/StreamTabs';
 import './components/ToolUseStreamContent';
@@ -142,7 +142,9 @@ const ProgressAppBase = SignalWatcher(
 export class ProgressApp extends ProgressAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
   static styles = [
+    codiconStyles,
     designTokens,
+    viewTabStyles,
     css`
       :host {
         display: flex;
@@ -173,13 +175,7 @@ export class ProgressApp extends ProgressAppBase {
         display: none;
       }
 
-      .view-header vscode-tabs {
-        flex: 1;
-        min-width: 0;
-        --panel-display: none;
-      }
-
-      .view-header vscode-tab-header.focus-sidebar-tab {
+      .view-header wa-tab.focus-sidebar-tab {
         opacity: var(--opacity-subtle);
         cursor: default;
       }
@@ -354,6 +350,8 @@ export class ProgressApp extends ProgressAppBase {
   private placement = signal<ProgressViewPlacement>('sidebar');
   private narrowLayout = signal(false);
   private permissions$ = signal<PermissionState[]>([]);
+  private hasHandledInitialProgressTabShow = false;
+  private suppressNextResetProgressTabShow = false;
 
   /** Stream IDs with pending approval requests — drives tab pulse indicator. */
   private _prevApprovalIds: Set<string> = new Set();
@@ -613,12 +611,14 @@ export class ProgressApp extends ProgressAppBase {
         })}
       >
         <div class="view-header">
-          <vscode-tabs
-            .selectedIndex=${1}
-            @vsc-tabs-select=${this.onViewTabSelect}
+          <wa-tab-group
+            class="view-tabs"
+            active="progress"
+            without-scroll-controls
+            @wa-tab-show=${this.onViewTabShow}
           >
-            <vscode-tab-header
-              slot="header"
+            <wa-tab
+              panel="launcher"
               class=${isEditorMode ? 'focus-sidebar-tab' : ''}
               title=${isEditorMode ? 'Focus Launcher sidebar' : ''}
               @click=${this.onFocusLauncherTab}
@@ -629,16 +629,18 @@ export class ProgressApp extends ProgressAppBase {
                 variant="solid"
               ></wa-icon>
               Launcher
-            </vscode-tab-header>
-            <vscode-tab-header slot="header">
+            </wa-tab>
+            <wa-tab panel="progress">
               <wa-icon
                 library=${TEXRA_ICON_LIBRARY}
                 name="robot"
                 variant="solid"
               ></wa-icon>
               Progress
-            </vscode-tab-header>
-          </vscode-tabs>
+            </wa-tab>
+            <wa-tab-panel name="launcher"></wa-tab-panel>
+            <wa-tab-panel name="progress"></wa-tab-panel>
+          </wa-tab-group>
 
           <wa-button
             class="header-action"
@@ -885,12 +887,27 @@ export class ProgressApp extends ProgressAppBase {
     };
   }
 
-  private onViewTabSelect = (event: VscTabsSelectEvent): void => {
-    const view = event.detail.selectedIndex === 0 ? 'main' : 'progress';
+  private onViewTabShow = (event: WaTabShowEvent): void => {
+    if (event.detail.name === 'progress') {
+      if (this.suppressNextResetProgressTabShow) {
+        this.suppressNextResetProgressTabShow = false;
+        this.hasHandledInitialProgressTabShow = true;
+        return;
+      }
+      if (!this.hasHandledInitialProgressTabShow) {
+        this.hasHandledInitialProgressTabShow = true;
+        return;
+      }
+    }
+    const view = event.detail.name === 'launcher' ? 'main' : 'progress';
+    const tabs = event.currentTarget as MutableWaTabGroup;
     if (view === 'main' && this.placement.get() === 'editor') {
-      this.focusLauncherSidebar(
-        event.currentTarget as { selectedIndex?: number },
-      );
+      this.focusLauncherSidebar(tabs);
+      return;
+    }
+    if (view === 'main') {
+      postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
+      this.resetProgressTab(tabs);
       return;
     }
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
@@ -901,8 +918,8 @@ export class ProgressApp extends ProgressAppBase {
     event.preventDefault();
     event.stopPropagation();
     const tabs = (event.currentTarget as HTMLElement).closest(
-      'vscode-tabs',
-    ) as { selectedIndex?: number } | null;
+      'wa-tab-group',
+    ) as MutableWaTabGroup | null;
     this.focusLauncherSidebar(tabs ?? undefined);
   };
 
@@ -910,11 +927,17 @@ export class ProgressApp extends ProgressAppBase {
     this.focusLauncherSidebar();
   };
 
-  private focusLauncherSidebar(tabs?: { selectedIndex?: number }): void {
+  private focusLauncherSidebar(tabs?: MutableWaTabGroup): void {
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'main' });
     if (!tabs) return;
+    this.resetProgressTab(tabs);
+  }
+
+  private resetProgressTab(tabs: MutableWaTabGroup): void {
     requestAnimationFrame(() => {
-      tabs.selectedIndex = 1;
+      if (tabs.active === 'progress') return;
+      this.suppressNextResetProgressTabShow = true;
+      tabs.active = 'progress';
     });
   }
 
