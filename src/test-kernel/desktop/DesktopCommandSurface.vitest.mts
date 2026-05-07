@@ -17,6 +17,7 @@ import type { DesktopCommandActions } from '../../../packages/desktop/src/deskto
 
 interface DesktopCommandSurfaceModule {
   DESKTOP_LOCAL_COMMANDS: {
+    SHOW_LOGS: string;
     OPEN_LOG_FOLDER: string;
     OPEN_WORKSPACE_FOLDER: string;
     SHOW_FIRST_RUN_WALKTHROUGH: string;
@@ -70,8 +71,11 @@ async function loadDesktopCommandSurface(): Promise<DesktopCommandSurfaceModule>
 
 describe('desktop command surface', () => {
   it('builds desktop menu entries from the shared command catalog', async () => {
-    const { DESKTOP_COMMAND_IDS, getDesktopCommandMenuEntries } =
-      await loadDesktopCommandSurface();
+    const {
+      DESKTOP_COMMAND_IDS,
+      DESKTOP_LOCAL_COMMANDS,
+      getDesktopCommandMenuEntries,
+    } = await loadDesktopCommandSurface();
     const entries = getDesktopCommandMenuEntries(undefined, 'darwin');
 
     expect(entries.map((entry) => entry.id)).toEqual(DESKTOP_COMMAND_IDS);
@@ -100,6 +104,11 @@ describe('desktop command surface', () => {
       label: 'Show Progress',
       category: 'TeXRA',
       accelerator: 'Command+Option+P',
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+      label: 'Show Logs',
+      category: 'TeXRA',
     });
   });
 
@@ -135,6 +144,9 @@ describe('desktop command surface', () => {
     expect(dispatchDesktopCommand('texra.showProgressView', actions)).toBe(
       true,
     );
+    expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS, actions),
+    ).toBe(true);
     expect(dispatchDesktopCommand('texra.openSettings', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showModels', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showAgents', actions)).toBe(true);
@@ -156,6 +168,7 @@ describe('desktop command surface', () => {
 
     expect(actions.showRoute).toHaveBeenNthCalledWith(1, 'main');
     expect(actions.showRoute).toHaveBeenNthCalledWith(2, 'progress');
+    expect(actions.showRoute).toHaveBeenNthCalledWith(3, 'logs');
     expect(actions.showSettings).toHaveBeenNthCalledWith(1);
     expect(actions.showSettings).toHaveBeenNthCalledWith(
       2,
@@ -217,6 +230,7 @@ describe('desktop command surface', () => {
     expect(submenu.map((item) => item.label ?? item.type)).toEqual([
       'Show Launcher',
       'Show Progress',
+      'Show Logs',
       'Open Folder',
       'Open Logs Folder',
       'Open TeXRA Settings',
@@ -230,7 +244,7 @@ describe('desktop command surface', () => {
     ]);
 
     submenu[0].click?.();
-    submenu[8].click?.();
+    submenu[9].click?.();
     expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
 

@@ -40,6 +40,7 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('data-route-button="main"');
     expect(rendererMain).toContain('data-route-button="progress"');
     expect(rendererMain).toContain('data-route-button="settings"');
+    expect(rendererMain).toContain('data-route-button="logs"');
     expect(rendererMain).toContain("button.addEventListener('click'");
     expect(rendererMain).toContain("button.setAttribute('aria-pressed'");
   });
@@ -70,5 +71,15 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
     expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.DISMISS');
     expect(rendererMain).toContain('showFirstRunWalkthrough');
+  });
+
+  it('mounts an in-app log viewer with copy and export actions', () => {
+    const rendererMain = readRendererMain();
+
+    expect(rendererMain).toContain('DESKTOP_LOG_COMMANDS.REQUEST_LOG');
+    expect(rendererMain).toContain('DESKTOP_LOG_COMMANDS.COPY_LOG');
+    expect(rendererMain).toContain('DESKTOP_LOG_COMMANDS.EXPORT_LOG');
+    expect(rendererMain).toContain('DesktopSetLogMessageSchema.safeParse');
+    expect(rendererMain).toContain('data-log-output');
   });
 });

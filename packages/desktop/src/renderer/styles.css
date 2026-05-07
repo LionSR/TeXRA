@@ -424,6 +424,59 @@ body {
   margin-top: 24px;
 }
 
+.desktop-log-viewer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  gap: 12px;
+}
+
+.desktop-log-viewer-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--texra-panel-border);
+}
+
+.desktop-log-viewer-header h2 {
+  margin: 0 0 4px;
+  color: var(--texra-foreground);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.desktop-log-viewer-header p {
+  margin: 0;
+  color: var(--texra-descriptionForeground);
+  font-size: 12px;
+}
+
+.desktop-log-viewer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.desktop-log-viewer-output {
+  min-height: 0;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--texra-panel-border);
+  border-radius: 6px;
+  background: var(--texra-editor-background);
+  color: var(--texra-editor-foreground);
+  font-family: var(--texra-font-family-monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .desktop-primary-button,
 .desktop-secondary-button {
   min-height: 34px;
