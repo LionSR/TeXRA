@@ -373,14 +373,27 @@ if (protocolLifecycle.shouldContinue) {
     .then(async () => {
       const platformInit = await initializeElectronPlatform(__dirname);
       let crashReportingInitialized = false;
-      const initializeCrashReporting = async () => {
+      let crashReportingInitialization: Promise<void> | undefined;
+      const initializeCrashReporting = async (): Promise<void> => {
         if (crashReportingInitialized) return;
-        crashReportingInitialized = await initializeDesktopCrashReporting({
-          globalState: platform().globalState,
-          secrets: platform().secrets,
-          sensitivePaths: [platformInit.workspacePath, app.getPath('userData')],
-          log: console,
-        });
+        crashReportingInitialization ??= (async () => {
+          try {
+            crashReportingInitialized = await initializeDesktopCrashReporting({
+              globalState: platform().globalState,
+              secrets: platform().secrets,
+              sensitivePaths: [
+                platformInit.workspacePath,
+                app.getPath('userData'),
+              ],
+              log: console,
+            });
+          } finally {
+            if (!crashReportingInitialized) {
+              crashReportingInitialization = undefined;
+            }
+          }
+        })();
+        await crashReportingInitialization;
       };
       await initializeCrashReporting();
       const authCoordinator = createDesktopAuthCoordinator({

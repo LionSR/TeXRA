@@ -341,9 +341,9 @@ export class ToolsTab extends LitElement {
     this.emitToggle('desktop-crash-reporting-toggle', e);
   };
 
-  private handleSetDesktopCrashReportingDsn(): void {
+  private handleSetDesktopCrashReportingDsn = (): void => {
     this.dispatchEvent(createEvent('desktop-crash-reporting-dsn-set', {}));
-  }
+  };
 
   private renderApprovalSettings(): TemplateResult {
     return html`
