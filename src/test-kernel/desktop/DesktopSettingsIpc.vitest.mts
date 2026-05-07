@@ -91,6 +91,7 @@ interface DesktopSettingsIpcModule {
     signOut?: () => Promise<void>;
     getAuthProfileData?: () => Promise<Record<string, unknown>>;
     setApiAccessMode?: (mode: 'included' | 'personal') => Promise<void>;
+    initializeCrashReporting?: () => Promise<void>;
     secrets?: {
       get(key: string): Promise<string | undefined>;
       set(key: string, value: string): Promise<void>;
@@ -340,6 +341,88 @@ describe('desktop settings IPC', () => {
       GIT_COMMITTER_NAME: 'Applied',
       GIT_COMMITTER_EMAIL: 'applied@example.com',
     });
+  });
+
+  it('round-trips desktop crash reporting settings through global state and secrets', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    const secrets = new MemorySecrets();
+    const posted: unknown[] = [];
+    let initializeCalls = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      secrets,
+      postToRenderer: (message) => posted.push(message),
+      promptSecret: async () => ' https://example.invalid/123 ',
+      initializeCrashReporting: async () => {
+        initializeCalls += 1;
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
+        enabled: true,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(
+      globalState.values.get(GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED),
+    ).toBe(true);
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
+      enabled: true,
+      configured: false,
+    });
+    expect(initializeCalls).toBe(0);
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING,
+      enabled: true,
+      configured: true,
+    });
+    expect(initializeCalls).toBe(1);
+  });
+
+  it('initializes desktop crash reporting when users enable an existing DSN', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const globalState = new MemoryStateStore();
+    const secrets = new MemorySecrets();
+    await secrets.set(
+      'texra.desktop.crashReporting.dsn',
+      'https://example.invalid/123',
+    );
+    let initializeCalls = 0;
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState,
+      secrets,
+      postToRenderer: () => undefined,
+      initializeCrashReporting: async () => {
+        initializeCalls += 1;
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
+        enabled: true,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(initializeCalls).toBe(1);
   });
 
   it('serves storage-backed LaTeX config reads through workspace state', async () => {

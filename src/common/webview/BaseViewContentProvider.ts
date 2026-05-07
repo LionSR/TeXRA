@@ -96,17 +96,16 @@ export abstract class BaseViewContentProvider {
   private static readonly COMMON_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [{ key: 'commonStyleUri', path: 'styles/common.css' }];
 
-  private static readonly NODE_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
+  private static readonly SHARED_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [
+      { key: 'commonsBundleUri', path: 'commons.js' },
       {
         key: 'vscodeElementsBundleUri',
-        path: '@vscode-elements/elements/dist/bundled.js',
+        path: 'vscode-elements-bundled.js',
       },
-      { key: 'codiconUri', path: '@vscode/codicons/dist/codicon.css' },
+      { key: 'codiconUri', path: 'codicon.css' },
+      { key: 'codiconsFontUri', path: 'codicon.ttf' },
     ];
-
-  private static readonly SHARED_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
-    [{ key: 'commonsBundleUri', path: 'commons.js' }];
 
   private getCommonModuleUris(
     webview: vscode.Webview,
@@ -119,21 +118,9 @@ export abstract class BaseViewContentProvider {
       ),
       ...this.buildUriRecord(
         webview,
-        BaseViewContentProvider.NODE_MODULE_DESCRIPTORS,
-        ['node_modules'],
-      ),
-      ...this.buildUriRecord(
-        webview,
         BaseViewContentProvider.SHARED_MODULE_DESCRIPTORS,
         ['dist', 'shared'],
       ),
-      // The codicon stylesheet stays in node_modules, but the font file must
-      // come from Vite output because VSIX builds omit node_modules fonts.
-      codiconsFontUri: this.buildUri(webview, [
-        'dist',
-        this.getViewPath(),
-        'codicon.ttf',
-      ]),
     };
   }
 }
