@@ -9,15 +9,26 @@ function readSource(relativePath: string): string {
 }
 
 describe('desktop settings surface', () => {
-  it('suppresses VS Code-only settings and unsupported tabs on desktop', () => {
+  it('suppresses VS Code-only settings while keeping desktop Memory and History available', () => {
     const settingsApp = readSource(
       'packages/extension/src/settingsView/frontend/SettingsApp.ts',
+    );
+    const desktopSettingsIpc = readSource(
+      'packages/desktop/src/main/desktopSettingsIpc.ts',
     );
 
     expect(settingsApp).toContain('this.isDesktopHost()');
     expect(settingsApp).toContain('SETTINGS_TAB.MODELS');
-    expect(settingsApp).toContain('Memory is not available in desktop yet');
-    expect(settingsApp).toContain('History is not available in desktop yet');
+    expect(settingsApp).not.toContain('Memory is not available in desktop yet');
+    expect(settingsApp).not.toContain(
+      'History is not available in desktop yet',
+    );
+    expect(desktopSettingsIpc).toContain(
+      'SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA',
+    );
+    expect(desktopSettingsIpc).toContain(
+      'SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA',
+    );
     expect(settingsApp).toContain(
       'SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS',
     );
