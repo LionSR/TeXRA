@@ -823,7 +823,7 @@ export class DesktopProgressBridge {
       await this.options.openBuildDisplay(toFileLocation(filePath));
       return;
     }
-    await this.options.showInfoMessage?.(
+    await this.showErrorMessage(
       'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
     );
   }
