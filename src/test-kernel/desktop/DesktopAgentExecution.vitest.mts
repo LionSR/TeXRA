@@ -691,4 +691,27 @@ describe('DesktopProgressBridge', () => {
       execution.dispose();
     }
   });
+
+  it('does not fall back to plain file open for compile-file actions', async () => {
+    const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
+    const showErrorMessage = vi.fn();
+    const execution = await createExecution({
+      opener,
+      showErrorMessage,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: false,
+        message: 'not used',
+      })),
+    });
+
+    try {
+      await execution.progress.openFileCompile('/tmp/output.tex');
+      expect(opener.openPath).not.toHaveBeenCalled();
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
+      );
+    } finally {
+      execution.dispose();
+    }
+  });
 });

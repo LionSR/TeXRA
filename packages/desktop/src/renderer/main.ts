@@ -185,6 +185,9 @@ const commandPalette = createDesktopCommandPalette({
         getWindowTargetOrigin(),
       );
     },
+    openDesktopDocs: () => {
+      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
+    },
     openLogFolder: () => {
       postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER);
     },

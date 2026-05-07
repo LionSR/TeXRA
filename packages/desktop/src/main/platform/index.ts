@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { app, dialog } from 'electron';
+import { app } from 'electron';
 
 import { consoleLog } from '@platform/defaults/consoleLog';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -15,6 +15,7 @@ import { ElectronStorageProvider } from './electronStorage.js';
 import { JsonStore } from './jsonStore.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
+import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '../../workspacePath.js';
 
 export interface ElectronPlatformInitResult {
@@ -55,9 +56,7 @@ export async function initializeElectronPlatform(
     workspace: createNodeWorkspace(() => workspacePath),
     storage,
     secrets: new ElectronSecrets(secretsStore, {
-      showWarningMessage: async (message) => {
-        await dialog.showMessageBox({ message, type: 'warning' });
-      },
+      showWarningMessage: showSecretStorageWarningDialog,
     }),
   });
 

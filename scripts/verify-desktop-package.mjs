@@ -10,6 +10,10 @@ import {
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
+import {
+  normalizeMetafilePath,
+  resolveMetafileImportPath,
+} from './desktop-package-metafile-paths.mjs';
 
 const require = createRequire(import.meta.url);
 const { extractFile, listPackage, statFile } = require('@electron/asar');
@@ -59,24 +63,31 @@ const codexPlatformInfoByKey = {
     binaryName: 'codex.exe',
   },
 };
-const desktopStartupForbiddenBundleMarkers = [
+const desktopStartupForbiddenInputPackages = [
   {
     label: '@google/genai',
     patterns: [
-      '@google/genai',
-      'node_modules/.pnpm/@google+genai',
-      'google-auth-library',
+      /(?:^|[/\\])node_modules[/\\](?:\.pnpm[/\\][^/\\]*@google\+genai[^/\\]*[/\\]node_modules[/\\])?@google[/\\]genai[/\\]/,
+      /(?:^|[/\\])node_modules[/\\](?:\.pnpm[/\\][^/\\]*google-auth-library[^/\\]*[/\\]node_modules[/\\])?google-auth-library[/\\]/,
     ],
   },
   {
     label: 'OpenAI SDK',
-    patterns: ['node_modules/.pnpm/openai@'],
+    patterns: [
+      /(?:^|[/\\])node_modules[/\\](?:\.pnpm[/\\][^/\\]*openai@[^/\\]*[/\\]node_modules[/\\])?openai[/\\]/,
+    ],
   },
   {
     label: 'Anthropic SDK',
-    patterns: ['node_modules/.pnpm/@anthropic-ai'],
+    patterns: [
+      /(?:^|[/\\])node_modules[/\\](?:\.pnpm[/\\][^/\\]*@anthropic-ai\+sdk[^/\\]*[/\\]node_modules[/\\])?@anthropic-ai[/\\]sdk[/\\]/,
+    ],
   },
 ];
+const desktopStartupEntryPoints = new Set([
+  'src/main/bootstrap.ts',
+  'src/main/index.ts',
+]);
 
 async function exists(path) {
   try {
@@ -145,6 +156,22 @@ async function findPackagedApp() {
 function normalizeAsarPath(path) {
   const normalized = path.replaceAll('\\', '/');
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
+}
+
+function normalizeMetafilePath(path) {
+  return path.replaceAll('\\', '/').replace(/^\.\//, '');
+}
+
+function resolveMetafileImportPath(outputPath, importPath) {
+  const normalizedImportPath = normalizeMetafilePath(importPath);
+  if (normalizedImportPath.startsWith('.')) {
+    return normalizeMetafilePath(
+      posix.normalize(
+        posix.join(posix.dirname(outputPath), normalizedImportPath),
+      ),
+    );
+  }
+  return posix.normalize(normalizedImportPath);
 }
 
 function createAsarAppReader(asarPath) {
@@ -323,66 +350,81 @@ async function collectMainJavaScriptBundles(app, dir = 'dist/main') {
   return bundles.sort();
 }
 
-function parseStaticRelativeImports(source) {
-  const imports = [];
-  const staticImportPattern =
-    /^(?:import\s+(?:[^'"]*?\s+from\s+)?|export\s+(?:\*|{[^}]*}|\*\s+as\s+\w+)\s+from\s+)['"](\.\/[^'"]+)['"];?/gm;
-  for (const match of source.matchAll(staticImportPattern)) {
-    imports.push(match[1]);
-  }
-  return imports;
-}
-
-function parseDynamicRelativeImports(source) {
-  const imports = [];
-  const dynamicImportPattern = /import\(\s*['"](\.\/[^'"]+)['"]\s*\)/g;
-  for (const match of source.matchAll(dynamicImportPattern)) {
-    imports.push(match[1]);
-  }
-  return imports;
-}
-
 async function checkDesktopStartupBundles(app, failures) {
   const entryPath = 'dist/main/index.js';
+  const metafilePath = 'dist/main/metafile.json';
   if (!(await app.exists(entryPath))) return;
-
-  const pending = [entryPath];
-  const visited = new Set();
-  while (pending.length > 0) {
-    const bundlePath = pending.shift();
-    if (!bundlePath || visited.has(bundlePath)) continue;
-    visited.add(bundlePath);
-
-    const source = await app.readText(bundlePath);
-    const forbidden = desktopStartupForbiddenBundleMarkers.filter(
-      ({ patterns }) => patterns.some((pattern) => source.includes(pattern)),
+  if (!(await app.exists(metafilePath))) {
+    failures.push(
+      `Packaged desktop app is missing the esbuild metafile used to verify startup imports: ${metafilePath}`,
     );
-    if (forbidden.length > 0) {
+    return;
+  }
+
+  const metafile = await app.readJson(metafilePath);
+  const outputByPath = new Map();
+  for (const [outputPath, output] of Object.entries(metafile.outputs ?? {})) {
+    outputByPath.set(normalizeMetafilePath(outputPath), output);
+  }
+
+  const pending = [];
+  for (const [outputPath, output] of outputByPath) {
+    const entryPoint = normalizeMetafilePath(output.entryPoint ?? '');
+    if (desktopStartupEntryPoints.has(entryPoint)) pending.push(outputPath);
+  }
+  if (pending.length === 0) {
+    failures.push(
+      `Packaged desktop startup graph is missing expected esbuild entry points: ${[
+        ...desktopStartupEntryPoints,
+      ].join(', ')}`,
+    );
+    return;
+  }
+
+  const visitedOutputs = new Set();
+  const startupInputsByForbiddenLabel = new Map();
+  while (pending.length > 0) {
+    const outputPath = pending.shift();
+    if (!outputPath || visitedOutputs.has(outputPath)) continue;
+    visitedOutputs.add(outputPath);
+
+    const output = outputByPath.get(normalizeMetafilePath(outputPath));
+    if (!output) {
       failures.push(
-        `Packaged desktop startup bundle eagerly includes provider SDK code (${forbidden
-          .map(({ label }) => label)
-          .join(', ')}): ${bundlePath}`,
+        `Packaged desktop startup bundle is missing from the esbuild metafile: ${outputPath}`,
       );
+      continue;
     }
 
-    const imports = parseStaticRelativeImports(source);
-    if (bundlePath === entryPath) {
-      const dynamicImports = parseDynamicRelativeImports(source);
-      if (dynamicImports.length !== 1) {
-        failures.push(
-          `Packaged desktop bootstrap entry should have exactly one startup dynamic import, found ${dynamicImports.length}.`,
-        );
+    for (const inputPath of Object.keys(output.inputs ?? {})) {
+      const normalizedInput = normalizeMetafilePath(inputPath);
+      for (const { label, patterns } of desktopStartupForbiddenInputPackages) {
+        if (!patterns.some((pattern) => pattern.test(normalizedInput))) {
+          continue;
+        }
+        const inputPaths = startupInputsByForbiddenLabel.get(label) ?? [];
+        inputPaths.push(normalizedInput);
+        startupInputsByForbiddenLabel.set(label, inputPaths);
       }
-      imports.push(...dynamicImports);
     }
-    for (const specifier of imports) {
-      const importedPath = posix.normalize(
-        posix.join(posix.dirname(bundlePath), specifier),
+
+    for (const importedOutput of output.imports ?? []) {
+      if (importedOutput.external) continue;
+      if (importedOutput.kind !== 'import-statement') continue;
+      const importedPath = resolveMetafileImportPath(
+        outputPath,
+        importedOutput.path,
       );
-      if (await app.exists(importedPath)) {
-        pending.push(importedPath);
-      }
+      if (outputByPath.has(importedPath)) pending.push(importedPath);
     }
+  }
+
+  for (const [label, inputPaths] of startupInputsByForbiddenLabel) {
+    failures.push(
+      `Packaged desktop startup graph eagerly includes provider SDK code (${label}): ${[
+        ...new Set(inputPaths),
+      ].join(', ')}`,
+    );
   }
 }
 
@@ -633,7 +675,7 @@ const summary = [
   '- node_modules runtime dependency packages',
   '- no VS Code extension host runtime import',
   '- desktop main dynamic require shim',
-  '- desktop startup bundles exclude provider SDKs',
+  '- desktop startup import graph excludes provider SDKs',
   '- desktop-shared source uses vscode-free state keys',
   '- desktop-shared source avoids VS Code runtime imports',
 ];

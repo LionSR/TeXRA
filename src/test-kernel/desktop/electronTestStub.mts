@@ -12,6 +12,8 @@ type SafeStorageBackend =
   | 'kwallet'
   | 'os_crypt';
 
+type MessageBoxOptions = { message: string; type?: string };
+
 interface ElectronTestStubOptions {
   safeStorageBackend?: SafeStorageBackend;
   safeStorageEncryptionAvailable?: boolean;
@@ -64,4 +66,16 @@ export const safeStorage = {
   encryptString: (value: string) => Buffer.from(`encrypted:${value}`),
   getSelectedStorageBackend: () => safeStorageBackend,
   isEncryptionAvailable: () => safeStorageEncryptionAvailable,
+};
+
+export const BrowserWindow = {
+  getAllWindows: () => [],
+  getFocusedWindow: () => null,
+};
+
+export const dialog = {
+  showMessageBox: async (
+    _windowOrOptions: unknown,
+    _options?: MessageBoxOptions,
+  ) => ({ response: 0, checkboxChecked: false }),
 };
