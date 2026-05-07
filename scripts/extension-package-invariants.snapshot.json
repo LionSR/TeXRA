@@ -17,7 +17,10 @@
       "Education",
       "Data Science"
     ],
-    "activationEvents": ["onStartupFinished", "onColorTheme"],
+    "activationEvents": [
+      "onStartupFinished",
+      "onColorTheme"
+    ],
     "main": "./dist/extension.js",
     "capabilities": {
       "untrustedWorkspaces": {
@@ -361,6 +364,13 @@
               "order": 51,
               "scope": "resource",
               "type": "boolean"
+            },
+            "texra.inlineCriticism.enabled": {
+              "default": false,
+              "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.",
+              "order": 52,
+              "scope": "resource",
+              "type": "boolean"
             }
           },
           "title": "TeXRA"
@@ -587,7 +597,13 @@
               "type": "array"
             },
             "texra.files.included.auxiliaryExtensions": {
-              "default": [".txt", ".tex", ".cls", ".md", ".sty"],
+              "default": [
+                ".txt",
+                ".tex",
+                ".cls",
+                ".md",
+                ".sty"
+              ],
               "description": "File extensions to include when searching for auxiliary files",
               "editPresentation": "multilineText",
               "items": {
@@ -597,7 +613,10 @@
               "type": "array"
             },
             "texra.files.included.editedExtensions": {
-              "default": [".txt", ".tex"],
+              "default": [
+                ".txt",
+                ".tex"
+              ],
               "description": "File extensions to include when searching for edited files",
               "editPresentation": "multilineText",
               "items": {
@@ -607,7 +626,11 @@
               "type": "array"
             },
             "texra.files.included.inputExtensions": {
-              "default": [".txt", ".tex", ".md"],
+              "default": [
+                ".txt",
+                ".tex",
+                ".md"
+              ],
               "description": "File extensions to include when searching for input files",
               "editPresentation": "multilineText",
               "items": {
@@ -647,7 +670,13 @@
               "type": "array"
             },
             "texra.files.included.referenceExtensions": {
-              "default": [".txt", ".tex", ".md", ".bib", ".bbl"],
+              "default": [
+                ".txt",
+                ".tex",
+                ".md",
+                ".bib",
+                ".bbl"
+              ],
               "description": "File extensions to include when searching for reference files",
               "editPresentation": "multilineText",
               "items": {
@@ -843,7 +872,10 @@
             "texra.latexdiff.tempFileLocation": {
               "default": "sameDirectory",
               "description": "Where to create temporary files for LaTeX preview and diff operations during tool edit approval.",
-              "enum": ["sameDirectory", "workspaceTemp"],
+              "enum": [
+                "sameDirectory",
+                "workspaceTemp"
+              ],
               "enumDescriptions": [
                 "Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.",
                 "Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths."
@@ -1343,7 +1375,9 @@
           "id": "texra.gettingStarted",
           "steps": [
             {
-              "completionEvents": ["onCommand:texra.runSetupAssistant"],
+              "completionEvents": [
+                "onCommand:texra.runSetupAssistant"
+              ],
               "description": "Start here. TeXRA's setup assistant agent checks your environment, installs any missing LaTeX tools, adds an API key or signs you in, and verifies that you're ready to go. It asks before every command and explains what it's doing.\n\n[Run Setup Assistant Agent](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The remaining steps walk you through the same checklist manually.",
               "id": "texra.gettingStarted.setupAssistant",
               "media": {
@@ -1352,7 +1386,9 @@
               "title": "Run the setup assistant agent"
             },
             {
-              "completionEvents": ["onCommand:texra.createSampleProject"],
+              "completionEvents": [
+                "onCommand:texra.createSampleProject"
+              ],
               "description": "Not sure where to start? We've bundled a small LaTeX project you can play with.\n\n[Create the sample project](command:texra.createSampleProject)\n\nYou'll get a folder with example `.tex` files and a README that explains the layout.",
               "id": "texra.gettingStarted.sampleWorkspace",
               "media": {
@@ -1361,7 +1397,9 @@
               "title": "Try the sample project"
             },
             {
-              "completionEvents": ["onCommand:texra.setApiKey"],
+              "completionEvents": [
+                "onCommand:texra.setApiKey"
+              ],
               "description": "You'll need an API key from a provider like Anthropic, OpenAI, or Google. Just one is enough.\n\n[Set API key](command:texra.setApiKey)\n\nHeads up: chat subscriptions (ChatGPT Plus, Claude Pro) don't come with API access. You need a separate key from the provider's developer platform.\n\n**No API key?** No problem -- sign in with the Researcher Access Program in the next step instead.",
               "id": "texra.gettingStarted.apiKeys",
               "media": {
@@ -1371,7 +1409,9 @@
               "title": "Add your API key"
             },
             {
-              "completionEvents": ["onCommand:texra.auth.signIn"],
+              "completionEvents": [
+                "onCommand:texra.auth.signIn"
+              ],
               "description": "The **Researcher Access Program** lets you use AI models and remote agents for free -- no API key needed.\n\n[Sign In](command:texra.auth.signIn)\n\nAlready set an API key? You can skip this, but signing in still unlocks extra agents you can't get with a key alone.",
               "id": "texra.gettingStarted.signIn",
               "media": {
@@ -1381,7 +1421,9 @@
               "title": "Or just sign in"
             },
             {
-              "completionEvents": ["onCommand:texra.showMainView"],
+              "completionEvents": [
+                "onCommand:texra.showMainView"
+              ],
               "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Reference** -- papers or notes for context (optional)\n- **Auxiliary** -- bib files, style files, preambles (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
               "id": "texra.gettingStarted.stageFiles",
               "media": {
@@ -1400,7 +1442,9 @@
               "title": "Use the orchestrator"
             },
             {
-              "completionEvents": ["onCommand:texra.showDashboard"],
+              "completionEvents": [
+                "onCommand:texra.showDashboard"
+              ],
               "description": "We have teams for different disciplines that give the orchestrator the right set of tools for your work:\n\n- **Physicist** -- derivations, numerical experiments, literature, presentations\n- **Mathematician** -- proofs, formalization, research\n- **Lean Project** -- Lean 4 with theorem search and blueprints\n\n[Open Settings](command:texra.showDashboard) and go to the **Multi-Agent** tab to pick one. You can always tweak it or make your own later.",
               "id": "texra.gettingStarted.multiAgent",
               "media": {
@@ -1423,7 +1467,9 @@
               "title": "Auto-extract figures (optional)"
             },
             {
-              "completionEvents": ["onCommand:texra.execute"],
+              "completionEvents": [
+                "onCommand:texra.execute"
+              ],
               "description": "You're all set. Click Execute and the orchestrator will start working through your paper.\n\n[Execute](command:texra.execute)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.showProgressView) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
               "id": "texra.gettingStarted.progress",
               "media": {
