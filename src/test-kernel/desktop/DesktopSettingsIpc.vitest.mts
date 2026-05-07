@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
@@ -11,6 +11,12 @@ import {
 import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+
+const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
+
+vi.mock('@model/computeModelOptions', () => ({
+  invalidateModelOptionsCache,
+}));
 
 interface StateStore {
   get<T>(key: string, defaultValue?: T): T;
@@ -156,6 +162,7 @@ function flushAsyncWork(): Promise<void> {
 
 describe('desktop settings IPC', () => {
   afterEach(() => {
+    vi.clearAllMocks();
     setGitAuthorEnv({});
     setWorktreeSupportEnabled(false);
   });
@@ -901,6 +908,7 @@ describe('desktop settings IPC', () => {
     await flushAsyncWork();
 
     expect(persistedModes).toEqual(['personal']);
+    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
     expect(
       posted.some(
         (message) =>
@@ -952,6 +960,7 @@ describe('desktop settings IPC', () => {
 
     expect(persistedModes).toEqual(['included']);
     expect(globalState.values.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
+    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes agent and model options after desktop auth changes', async () => {

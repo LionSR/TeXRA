@@ -683,8 +683,8 @@ export function createDesktopSettingsIpc(
       globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
     ) {
       await globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-      invalidateModelOptionsCache();
     }
+    invalidateModelOptionsCache();
     await Promise.all([postProfileData(), postModelSelectionData()]);
   }
 
