@@ -13,4 +13,8 @@
 
 import '@awesome.me/webawesome/dist/styles/themes/default.css';
 
+import { registerTeXRAWebAwesomeIcons } from './webAwesomeIcons';
+
+registerTeXRAWebAwesomeIcons();
+
 export { TEXRA_ICON_LIBRARY } from './webAwesomeIcons';

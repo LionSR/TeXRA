@@ -200,9 +200,40 @@ async function assertWebviewRuntime(window, view) {
           );
         }
 
+        const texraWebAwesomeIcons = elements.filter(
+          (element) =>
+            element.localName === 'wa-icon' &&
+            element.getAttribute('library') === 'texra',
+        );
+        const missingWebAwesomeIcons = [];
+        for (const icon of texraWebAwesomeIcons) {
+          if (icon.updateComplete && typeof icon.updateComplete.then === 'function') {
+            await Promise.race([
+              icon.updateComplete,
+              new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error(\`Timed out waiting for Web Awesome icon: \${icon.getAttribute('name') ?? ''}\`)),
+                  ${JSON.stringify(RENDER_TIMEOUT_MS)},
+                ),
+              ),
+            ]);
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          if (!icon.shadowRoot?.querySelector('svg')) {
+            missingWebAwesomeIcons.push(icon.getAttribute('name') ?? '(unnamed)');
+          }
+        }
+
+        if (missingWebAwesomeIcons.length > 0) {
+          throw new Error(
+            \`Unrendered TeXRA Web Awesome icons: \${[...new Set(missingWebAwesomeIcons)].sort().join(', ')}\`,
+          );
+        }
+
         return {
           codiconCount: codiconNames.size,
           iconAttributeCount: elements.filter((element) => element.hasAttribute?.('icon')).length,
+          webAwesomeIconCount: texraWebAwesomeIcons.length,
         };
       })();
     `,
