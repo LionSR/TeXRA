@@ -63,14 +63,12 @@ async function loadDesktopMainViewIpcModule(electron: {
 }): Promise<MainViewIpcModule & HostBridgeModule> {
   vi.resetModules();
   vi.doMock('electron', () => electron);
-  const [mainViewIpc, hostBridge] = await Promise.all([
-    import(
-      moduleFileUrl(desktopSourcePath('main', 'mainViewIpc.ts'))
-    ) as Promise<MainViewIpcModule>,
-    import(
-      moduleFileUrl(desktopSourcePath('preload', 'hostBridge.ts'))
-    ) as Promise<HostBridgeModule>,
-  ]);
+  const hostBridge = (await import(
+    moduleFileUrl(desktopSourcePath('hostBridgeChannels.ts'))
+  )) as HostBridgeModule;
+  const mainViewIpc = (await import(
+    moduleFileUrl(desktopSourcePath('main', 'mainViewIpc.ts'))
+  )) as MainViewIpcModule;
   return { ...mainViewIpc, ...hostBridge };
 }
 
