@@ -7,6 +7,7 @@ import {
   getDesktopSharedSourceDirs,
   getDesktopVscodeFreeSourceDirs,
   readJson,
+  requiredMonacoWorkers,
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
@@ -75,6 +76,17 @@ if (!rendererAssets.some((filePath) => filePath.endsWith('.js'))) {
 if (!rendererAssets.some((filePath) => filePath.endsWith('.css'))) {
   failures.push('Desktop renderer build did not emit a CSS asset.');
 }
+for (const workerName of requiredMonacoWorkers) {
+  if (
+    !rendererAssets.some((filePath) =>
+      path.basename(filePath).includes(workerName),
+    )
+  ) {
+    failures.push(
+      `Desktop renderer build did not emit Monaco worker asset: ${workerName}`,
+    );
+  }
+}
 if (
   fileExists(manifestMain) &&
   vscodeRuntimeImportPattern.test(fs.readFileSync(manifestMain, 'utf8'))
@@ -128,3 +140,4 @@ const artifactList = [
 console.log('Desktop build artifact check passed:');
 for (const artifact of artifactList) console.log(`- ${artifact}`);
 console.log('- desktop-shared source avoids VS Code runtime imports');
+console.log('- Monaco worker assets are present');
