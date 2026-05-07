@@ -116,10 +116,6 @@ export function createDesktopShellActions(
     void options.openWorkspaceFolder?.().catch(reportAsyncError);
   }
 
-  function showFirstRunWalkthrough() {
-    renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
-  }
-
   function openDesktopDocs() {
     void options.openExternalUrl?.(DESKTOP_DOCS_URL).catch(reportAsyncError);
   }
@@ -147,7 +143,9 @@ export function createDesktopShellActions(
     },
     showRoute: postRoute,
     showSettings: postSettingsRoute,
-    showFirstRunWalkthrough,
+    showFirstRunWalkthrough: () => {
+      renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
+    },
   };
 }
 
