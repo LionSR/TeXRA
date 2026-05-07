@@ -14,6 +14,13 @@ function readRendererMain(): string {
   );
 }
 
+function readRendererOnboarding(): string {
+  return readFileSync(
+    repoPath('packages/desktop/src/renderer/desktopOnboarding.ts'),
+    'utf8',
+  );
+}
+
 describe('desktop renderer shell', () => {
   it('mounts the reused launcher, progress, and settings Lit apps', () => {
     const rendererMain = readRendererMain();
@@ -62,6 +69,24 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('data-command-palette-button');
     expect(rendererMain).toContain('buildDesktopSettingsTabMessage');
     expect(rendererMain).toContain('showSettings: (tabIndex, agentSubTab)');
+  });
+
+  it('mounts desktop-only first-run onboarding controls', () => {
+    const rendererMain = readRendererMain();
+    const rendererOnboarding = readRendererOnboarding();
+
+    expect(rendererMain).toContain('createFirstRunWalkthrough');
+    expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
+    expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.DISMISS');
+    expect(rendererMain).toContain('showFirstRunWalkthrough');
+    expect(rendererMain).toContain(
+      'canOpen: () => !firstRunWalkthrough.isVisible()',
+    );
+    expect(rendererOnboarding).toContain('previousFocus');
+    expect(rendererOnboarding).toContain("document.addEventListener('focusin'");
+    expect(rendererOnboarding).toContain("'keydown'");
+    expect(rendererOnboarding).toContain('isCommandPaletteShortcut(event)');
+    expect(rendererOnboarding).toContain("event.key !== 'Tab'");
   });
 
   it('mounts an in-app log viewer with copy and export actions', () => {
