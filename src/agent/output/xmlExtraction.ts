@@ -39,6 +39,15 @@ async function shouldUseMultiDocumentPath(
 ): Promise<boolean> {
   if (documentTag === 'documents') return true;
 
+  // Legacy agents that explicitly set a custom documentTag are deprecated.
+  // New agents should use documentTag: documents (the default). The single-document
+  // extraction path will be removed in a future release.
+  deps.logger.warn(
+    `Agent uses deprecated documentTag "${documentTag}". ` +
+      `Update the agent YAML to use documentTag: documents. ` +
+      `Single-document extraction will be removed in a future release.`,
+  );
+
   try {
     const outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
     return NAMED_DOCUMENT_TAG_PATTERN.test(outputContent);
