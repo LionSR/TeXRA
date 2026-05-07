@@ -6,9 +6,9 @@ import {
 } from 'diff-match-patch';
 import { z } from 'zod';
 
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getConfig } from '@agent/core/config';
-import { bus } from '@eventBus/ProgressEventBus';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import {
   LineChangesSchema,
@@ -64,7 +64,7 @@ export const toolEditApprovalController =
   createStreamApprovalController<ToolEditApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
     notifyBypassChange: (streamId, bypassActive) => {
-      bus.emit('updateToolEditApprovalBypassState', {
+      getAgentRuntimeHost().emit('updateToolEditApprovalBypassState', {
         streamId,
         bypassActive,
       });

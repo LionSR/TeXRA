@@ -77,6 +77,7 @@ export async function extractFilesFromXml(
         agentSetting: deps.setting,
         baseFiles: deps.baseFiles,
         streamId: deps.streamId,
+        runtimeHost: deps.runtimeHost,
         logger: deps.logger,
         xmlManager,
         setRoundOutputs: (round: number, outputs) => {
