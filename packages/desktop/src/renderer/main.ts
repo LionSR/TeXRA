@@ -5,6 +5,7 @@ import './codiconStylesheet';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { postMessage } from '@shared/hostBridge';
+import type { DesktopThemeKind } from '@shared/constants/desktopTheme';
 import {
   SetThemeMessageSchema,
   type SetThemeMessage,
