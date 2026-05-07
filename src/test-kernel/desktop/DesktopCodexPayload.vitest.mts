@@ -121,6 +121,33 @@ function createFakeDesktopPackage(
   });
   writeText(join(appRoot, 'dist/main/index.js'), "import('./bootstrap.js');\n");
   writeText(join(appRoot, 'dist/main/bootstrap.js'), 'export {};\n');
+  writeJson(join(appRoot, 'dist/main/metafile.json'), {
+    outputs: {
+      'dist/main/index.js': {
+        entryPoint: 'src/main/index.ts',
+        inputs: {
+          'src/main/index.ts': {
+            bytesInOutput: 1,
+          },
+        },
+        imports: [
+          {
+            path: './bootstrap.js',
+            kind: 'import-statement',
+          },
+        ],
+      },
+      'dist/main/bootstrap.js': {
+        entryPoint: 'src/main/bootstrap.ts',
+        inputs: {
+          'src/main/bootstrap.ts': {
+            bytesInOutput: 1,
+          },
+        },
+        imports: [],
+      },
+    },
+  });
   writeText(join(appRoot, 'dist/preload/index.cjs'), "'use strict';\n");
   writeText(join(appRoot, 'dist/renderer/index.html'), '<!doctype html>\n');
   writeText(join(appRoot, 'dist/renderer/assets/app.js'), 'export {};\n');
