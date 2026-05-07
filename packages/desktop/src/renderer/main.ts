@@ -224,14 +224,11 @@ window.addEventListener('message', (event) => {
 function isDesktopSetThemeMessage(
   message: unknown,
 ): message is { theme: Theme } {
-  if (
-    message == null ||
-    typeof message !== 'object' ||
-    (message as { command?: unknown }).command !== COMMON_COMMANDS.THEME_SET
-  ) {
-    return false;
-  }
-  return SetThemeMessageSchema.safeParse(message).success;
+  return (
+    (message as { command?: unknown } | null)?.command ===
+      COMMON_COMMANDS.THEME_SET &&
+    SetThemeMessageSchema.safeParse(message).success
+  );
 }
 
 function applyDesktopTheme(theme: Theme): void {
