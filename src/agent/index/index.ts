@@ -38,6 +38,8 @@ export {
   setAgentDirectories,
 } from './agentDirectoriesRegistry';
 
+export { toRemoteAgentProfileData } from './remoteAgentProfileData';
+
 export {
   // Types
   type AgentEntry,
