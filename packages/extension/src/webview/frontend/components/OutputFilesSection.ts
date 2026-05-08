@@ -21,6 +21,7 @@ import {
   type FileStateContextValue,
 } from '../contexts/mainViewContexts';
 import {
+  compactActionButtonStyles,
   fileSelectLayoutStyles,
   toggleStyles,
   multiFilesStyles,
@@ -31,19 +32,13 @@ export class OutputFilesSection extends LitElement {
   static override styles = [
     designTokens,
     codiconStyles,
+    compactActionButtonStyles,
     fileSelectLayoutStyles,
     toggleStyles,
     multiFilesStyles,
     css`
       :host {
         display: block;
-      }
-
-      .file-select-actions wa-button {
-        width: var(--height-control);
-        height: var(--height-control);
-        min-width: var(--height-control);
-        min-height: var(--height-control);
       }
     `,
   ];

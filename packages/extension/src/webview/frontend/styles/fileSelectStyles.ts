@@ -11,6 +11,83 @@
 
 import { css } from 'lit';
 
+/** Compact wa-input / wa-select sizing — IDE-density form controls.
+ * WA defaults to ~38px tall; reduce to ~26px to match VS Code chrome.
+ * Keep selectors in sync with the canonical rules in
+ * `src/shared/styles/selectStyles.ts`. */
+export const compactFormControlStyles = css`
+  wa-select {
+    font-size: var(--font-size-sm);
+  }
+
+  wa-select::part(combobox) {
+    min-height: 26px;
+    padding-block: 0;
+    padding-inline: var(--spacing-small);
+  }
+
+  wa-select::part(display-input) {
+    padding-block: 2px;
+    font-size: var(--font-size-sm);
+  }
+
+  wa-select::part(expand-icon) {
+    margin-inline-start: var(--spacing-tiny);
+  }
+
+  wa-input {
+    font-size: var(--font-size-sm);
+  }
+
+  wa-input::part(base) {
+    min-height: 26px;
+    padding-block: 0;
+  }
+
+  wa-input::part(input) {
+    padding-block: 2px;
+  }
+`;
+
+/** Compact icon action button styles — duplicated from commonViewStyles
+ * so file-select components don't need to import the full common view sheet
+ * just to size their toolbar icons. Keep selectors in sync with the canonical
+ * rules in `src/shared/styles/commonViewStyles.ts`. */
+export const compactActionButtonStyles = css`
+  .action-icon-button::part(base) {
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    min-height: 22px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--texra-icon-foreground, var(--texra-foreground));
+  }
+
+  .action-icon-button::part(base):hover {
+    background: var(
+      --texra-toolbar-hoverBackground,
+      var(--texra-list-hoverBackground)
+    );
+    color: var(--texra-foreground);
+  }
+
+  .action-icon-button:focus-visible::part(base) {
+    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline-offset: -1px;
+  }
+
+  .action-icon-button[disabled]::part(base) {
+    opacity: var(--opacity-disabled);
+    background: transparent;
+  }
+
+  .action-icon-button wa-icon {
+    font-size: var(--font-size);
+  }
+`;
+
 /** Core file-select layout styles. */
 export const fileSelectLayoutStyles = css`
   .file-select {
@@ -90,10 +167,7 @@ export const fileSelectLayoutStyles = css`
 
   .file-select-actions wa-button {
     opacity: var(--opacity-full);
-    width: var(--height-control);
-    height: var(--height-control);
-    min-width: var(--height-control);
-    min-height: var(--height-control);
+    flex-shrink: 0;
   }
 
   .file-select select,
@@ -309,6 +383,8 @@ export const dropdownStyles = css`
 
 /** Combined file-select styles for components that need all of them. */
 export const fileSelectStyles = [
+  compactActionButtonStyles,
+  compactFormControlStyles,
   fileSelectLayoutStyles,
   toggleStyles,
   multiFilesStyles,
