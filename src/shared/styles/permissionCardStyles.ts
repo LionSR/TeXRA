@@ -53,7 +53,7 @@ export const permissionCardStyles: CSSResult = css`
     background: var(--texra-textCodeBlock-background);
     border-radius: var(--border-radius);
     color: var(--texra-terminal-foreground);
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size);
     white-space: pre-wrap;
     word-break: break-word;
@@ -79,7 +79,7 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .file-path {
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-link);
     word-break: break-word;
@@ -90,7 +90,7 @@ export const permissionCardStyles: CSSResult = css`
     align-items: baseline;
     gap: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
   }
 
   .diff-added {
