@@ -188,7 +188,9 @@ export async function activate(context: vscode.ExtensionContext) {
     lifecycle,
   });
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killBackgroundProcesses());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => interruptAllCodexSessions());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    interruptAllCodexSessions(),
+  );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
