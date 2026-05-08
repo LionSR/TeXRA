@@ -16,7 +16,10 @@
 .wa-light,
 .wa-dark .wa-invert {
   /* ── Web Awesome surface / text tokens ──────────────────────────────── */
-  --wa-color-text-normal: var(--vscode-editor-foreground, var(--vscode-foreground));
+  --wa-color-text-normal: var(
+    --vscode-editor-foreground,
+    var(--vscode-foreground)
+  );
   /* Some VS Code themes (notably dark) set descriptionForeground too dim to
      read against tinted surface cards. Mix at least 65% of the normal text
      color in to guarantee a readable contrast in every theme. */
@@ -33,7 +36,10 @@
   --wa-color-surface-default: var(--vscode-editor-background);
   --wa-color-surface-raised: var(--vscode-editorWidget-background);
   --wa-color-surface-lowered: var(--vscode-sideBar-background);
-  --wa-color-surface-border: var(--vscode-panel-border, var(--vscode-widget-border));
+  --wa-color-surface-border: var(
+    --vscode-panel-border,
+    var(--vscode-widget-border)
+  );
   --wa-color-surface-shadow: var(--vscode-widget-shadow);
 
   --wa-color-focus: var(--vscode-focusBorder);
@@ -54,19 +60,31 @@
 
   /* Neutral variant — outlined wa-button / wa-callout, hovers. */
   --wa-color-neutral-fill-quiet: var(--vscode-button-secondaryBackground);
-  --wa-color-neutral-border-quiet: var(--vscode-button-border, var(--vscode-widget-border));
+  --wa-color-neutral-border-quiet: var(
+    --vscode-button-border,
+    var(--vscode-widget-border)
+  );
   --wa-color-neutral-on-quiet: var(--vscode-button-secondaryForeground);
   --wa-color-neutral-fill-loud: var(--vscode-button-secondaryBackground);
-  --wa-color-neutral-border-loud: var(--vscode-button-border, var(--vscode-widget-border));
+  --wa-color-neutral-border-loud: var(
+    --vscode-button-border,
+    var(--vscode-widget-border)
+  );
   --wa-color-neutral-on-loud: var(--vscode-button-secondaryForeground);
 
   /* Warning variant. */
   --wa-color-warning-fill-loud: var(--vscode-statusBarItem-warningBackground);
   --wa-color-warning-on-loud: var(--vscode-editor-foreground);
   --wa-color-warning-border-loud: var(--vscode-inputValidation-warningBorder);
-  --wa-color-warning-fill-quiet: var(--vscode-editorWarning-background, var(--vscode-inputValidation-warningBackground));
+  --wa-color-warning-fill-quiet: var(
+    --vscode-editorWarning-background,
+    var(--vscode-inputValidation-warningBackground)
+  );
   --wa-color-warning-border-quiet: var(--vscode-inputValidation-warningBorder);
-  --wa-color-warning-on-quiet: var(--vscode-editorWarning-foreground, var(--vscode-inputValidation-warningForeground));
+  --wa-color-warning-on-quiet: var(
+    --vscode-editorWarning-foreground,
+    var(--vscode-inputValidation-warningForeground)
+  );
 
   /* Danger variant. */
   --wa-color-danger-fill-loud: var(--vscode-editorError-foreground);
@@ -74,20 +92,35 @@
   --wa-color-danger-border-loud: transparent;
   --wa-color-danger-fill-quiet: var(--vscode-inputValidation-errorBackground);
   --wa-color-danger-border-quiet: var(--vscode-inputValidation-errorBorder);
-  --wa-color-danger-on-quiet: var(--vscode-editorError-foreground, var(--vscode-errorForeground));
+  --wa-color-danger-on-quiet: var(
+    --vscode-editorError-foreground,
+    var(--vscode-errorForeground)
+  );
 
   /* Success variant. */
-  --wa-color-success-fill-loud: var(--vscode-charts-green, var(--vscode-testing-iconPassed));
+  --wa-color-success-fill-loud: var(
+    --vscode-charts-green,
+    var(--vscode-testing-iconPassed)
+  );
   --wa-color-success-on-loud: #ffffff;
   --wa-color-success-border-loud: transparent;
-  --wa-color-success-fill-quiet: var(--vscode-charts-green, var(--vscode-inputValidation-infoBackground));
+  --wa-color-success-fill-quiet: var(
+    --vscode-charts-green,
+    var(--vscode-inputValidation-infoBackground)
+  );
   --wa-color-success-border-quiet: var(--vscode-inputValidation-infoBorder);
-  --wa-color-success-on-quiet: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+  --wa-color-success-on-quiet: var(
+    --vscode-testing-iconPassed,
+    var(--vscode-charts-green)
+  );
 
   /* Buttons — niche tokens consumers still need. */
   --wa-color-button-hover: var(--vscode-button-hoverBackground);
   --wa-color-button-border: var(--vscode-button-border, transparent);
-  --wa-color-button-separator: var(--vscode-button-separator, rgb(255 255 255 / 40%));
+  --wa-color-button-separator: var(
+    --vscode-button-separator,
+    rgb(255 255 255 / 40%)
+  );
 
   /* Lists — no native WA equivalent yet (#3690). */
   --wa-color-list-active-bg: var(--vscode-list-activeSelectionBackground);
@@ -120,7 +153,9 @@
   /* Git decoration. */
   --wa-color-git-added: var(--vscode-gitDecoration-addedResourceForeground);
   --wa-color-git-deleted: var(--vscode-gitDecoration-deletedResourceForeground);
-  --wa-color-git-modified: var(--vscode-gitDecoration-modifiedResourceForeground);
+  --wa-color-git-modified: var(
+    --vscode-gitDecoration-modifiedResourceForeground
+  );
 
   /* Debug token expressions. */
   --wa-color-debug-name: var(--vscode-debugTokenExpression-name);
@@ -137,11 +172,19 @@
 
   /* Editor surface details. */
   --wa-color-editor-selection: var(--vscode-editor-selectionBackground);
-  --wa-color-editor-inactive-selection: var(--vscode-editor-inactiveSelectionBackground);
-  --wa-color-editor-line-highlight: var(--vscode-editor-lineHighlightBackground);
+  --wa-color-editor-inactive-selection: var(
+    --vscode-editor-inactiveSelectionBackground
+  );
+  --wa-color-editor-line-highlight: var(
+    --vscode-editor-lineHighlightBackground
+  );
   --wa-color-editor-find-match: var(--vscode-editor-findMatchBackground);
-  --wa-color-editor-find-match-highlight: var(--vscode-editor-findMatchHighlightBackground);
-  --wa-color-editor-find-match-highlight-fg: var(--vscode-editor-findMatchHighlightForeground);
+  --wa-color-editor-find-match-highlight: var(
+    --vscode-editor-findMatchHighlightBackground
+  );
+  --wa-color-editor-find-match-highlight-fg: var(
+    --vscode-editor-findMatchHighlightForeground
+  );
 
   /* Tabs. */
   --wa-color-tabs-background: var(--vscode-editorGroupHeader-tabsBackground);
@@ -158,8 +201,14 @@
   --wa-color-badge-bg: var(--vscode-badge-background);
 
   /* Testing icons. */
-  --wa-color-testing-passed: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
-  --wa-color-testing-failed: var(--vscode-testing-iconFailed, var(--vscode-editorError-foreground));
+  --wa-color-testing-passed: var(
+    --vscode-testing-iconPassed,
+    var(--vscode-charts-green)
+  );
+  --wa-color-testing-failed: var(
+    --vscode-testing-iconFailed,
+    var(--vscode-editorError-foreground)
+  );
 
   /* Terminal — full palette, no WA equivalent. */
   --wa-color-terminal-background: var(--vscode-terminal-background);
@@ -178,10 +227,14 @@
   --wa-color-terminal-ansi-bright-blue: var(--vscode-terminal-ansiBrightBlue);
   --wa-color-terminal-ansi-bright-cyan: var(--vscode-terminal-ansiBrightCyan);
   --wa-color-terminal-ansi-bright-green: var(--vscode-terminal-ansiBrightGreen);
-  --wa-color-terminal-ansi-bright-magenta: var(--vscode-terminal-ansiBrightMagenta);
+  --wa-color-terminal-ansi-bright-magenta: var(
+    --vscode-terminal-ansiBrightMagenta
+  );
   --wa-color-terminal-ansi-bright-red: var(--vscode-terminal-ansiBrightRed);
   --wa-color-terminal-ansi-bright-white: var(--vscode-terminal-ansiBrightWhite);
-  --wa-color-terminal-ansi-bright-yellow: var(--vscode-terminal-ansiBrightYellow);
+  --wa-color-terminal-ansi-bright-yellow: var(
+    --vscode-terminal-ansiBrightYellow
+  );
 
   /* Typography. Inside the VS Code extension webview, always inherit
      VS Code's chosen UI font so the webview matches the host chrome.

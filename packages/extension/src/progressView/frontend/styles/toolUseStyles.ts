@@ -114,10 +114,7 @@ export const toolUseStyles = css`
   }
 
   .tool-user-feedback {
-    background-color: var(
-      --wa-color-brand-fill-quiet,
-      rgba(55, 148, 255, 0.1)
-    );
+    background-color: var(--wa-color-brand-fill-quiet, rgba(55, 148, 255, 0.1));
     border-left-color: var(--wa-color-text-link, #3794ff);
   }
 
@@ -206,19 +203,13 @@ export const toolUseStyles = css`
   }
 
   .diff-inline-del {
-    background-color: var(
-      --wa-color-diff-removed,
-      rgba(255, 0, 0, 0.2)
-    );
+    background-color: var(--wa-color-diff-removed, rgba(255, 0, 0, 0.2));
     color: var(--wa-color-git-deleted, #f85149);
     text-decoration: line-through;
   }
 
   .diff-inline-add {
-    background-color: var(
-      --wa-color-diff-inserted,
-      rgba(0, 255, 0, 0.2)
-    );
+    background-color: var(--wa-color-diff-inserted, rgba(0, 255, 0, 0.2));
     color: var(--wa-color-git-added, #3fb950);
   }
 `;

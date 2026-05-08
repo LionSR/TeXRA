@@ -169,11 +169,7 @@ export class SettingsApp extends SettingsAppBase {
       wa-tab-group.settings-tabs wa-tab::part(base) {
         padding-block: 6px;
         padding-inline: var(--wa-space-s);
-        color: color-mix(
-          in srgb,
-          var(--wa-color-text-normal) 65%,
-          transparent
-        );
+        color: color-mix(in srgb, var(--wa-color-text-normal) 65%, transparent);
         border-radius: var(--wa-border-radius-s, 4px)
           var(--wa-border-radius-s, 4px) 0 0;
         transition:

@@ -14,6 +14,13 @@ function readRendererMain(): string {
   );
 }
 
+function readRendererStyles(): string {
+  return readFileSync(
+    repoPath('packages/desktop/src/renderer/styles.css'),
+    'utf8',
+  );
+}
+
 function readRendererOnboarding(): string {
   return readFileSync(
     repoPath('packages/desktop/src/renderer/desktopOnboarding.ts'),
@@ -22,22 +29,26 @@ function readRendererOnboarding(): string {
 }
 
 function readSharedWalkthroughDialog(): string {
-  return readFileSync(
-    repoPath('src/shared/wa/walkthroughDialog.ts'),
-    'utf8',
-  );
+  return readFileSync(repoPath('src/shared/wa/walkthroughDialog.ts'), 'utf8');
 }
 
-describe('desktop renderer shell', () => {
-  it('mounts the reused launcher, progress, and settings Lit apps', () => {
+describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () => {
+  it('mounts the reused Lit components from the shared packages', () => {
     const rendererMain = readRendererMain();
 
+    // Per PRD G3: both hosts import from the same packages, no per-host copy.
     expect(rendererMain).toContain("import '@webview/frontend'");
     expect(rendererMain).toContain("import '@progressView/frontend'");
     expect(rendererMain).toContain("import '@settingsView/frontend'");
+
+    // Direct mounts, not via <progress-app>. <stream-tabs> + <stream-conversation>
+    // come from the same packages as the extension.
     expect(rendererMain).toContain("document.createElement('main-app')");
-    expect(rendererMain).toContain("document.createElement('progress-app')");
     expect(rendererMain).toContain("document.createElement('settings-app')");
+    expect(rendererMain).toContain(
+      "document.createElement('stream-conversation')",
+    );
+    expect(rendererMain).toContain("document.createElement('stream-tabs')");
   });
 
   it('listens for desktop route pushes from the Electron host', () => {
@@ -48,39 +59,79 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('document.body.dataset.desktopRoute');
   });
 
-  it('provides persistent shell controls for returning between routes', () => {
+  it('renders the three-pane shell with rail, center, and reserved right pane', () => {
     const rendererMain = readRendererMain();
+    const styles = readRendererStyles();
 
-    // The chrome was simplified to show only Settings + Logs as icon
-    // buttons; other routes are reachable through the command palette and
-    // the "Back to Launcher" affordance. CHROME_ICON_BUTTONS keeps both
-    // lists aligned so future contributors update them together.
-    expect(rendererMain).toContain('CHROME_ICON_BUTTONS');
-    expect(rendererMain).toContain("route: 'settings'");
-    expect(rendererMain).toContain("route: 'logs'");
-    expect(rendererMain).toContain('data-route-button=${spec.route}');
-    expect(rendererMain).toContain('aria-pressed=${String(currentRoute');
-    expect(rendererMain).toContain('toggleRoute');
+    expect(rendererMain).toContain('class="desktop-three-pane"');
+    expect(rendererMain).toContain('class="desktop-rail"');
+    expect(rendererMain).toContain('class="desktop-center"');
+    expect(rendererMain).toContain('class="desktop-right"');
+    // Center swaps between launcher and conversation panes.
+    expect(rendererMain).toContain('data-pane="launcher"');
+    expect(rendererMain).toContain('data-pane="conversation"');
+
+    // Three-pane CSS grid template — left rail width, flexible center,
+    // collapsed right column reserved for future diff/approve UX.
+    expect(styles).toContain('--desktop-rail-width');
+    expect(styles).toContain(
+      'grid-template-columns: var(--desktop-rail-width)',
+    );
   });
 
-  it('mounts a persistent workspace explorer sidebar', () => {
+  it('mounts settings as a wa-dialog overlay (not a route)', () => {
+    const rendererMain = readRendererMain();
+    const styles = readRendererStyles();
+
+    expect(rendererMain).toContain("createElement('wa-dialog')");
+    expect(rendererMain).toContain('desktop-settings-overlay');
+    expect(rendererMain).toContain('openSettingsOverlay');
+    // PRD § 6: full-window dialog (no header chrome).
+    expect(styles).toContain('wa-dialog.desktop-settings-overlay');
+    expect(styles).toContain('100vw');
+    expect(styles).toContain('100vh');
+  });
+
+  it('mounts logs as a wa-drawer (not a route)', () => {
+    const rendererMain = readRendererMain();
+    const styles = readRendererStyles();
+
+    expect(rendererMain).toContain("createElement('wa-drawer')");
+    expect(rendererMain).toContain('desktop-logs-drawer');
+    expect(rendererMain).toContain('openLogsDrawer');
+    expect(styles).toContain('wa-drawer.desktop-logs-drawer');
+  });
+
+  it('routes legacy desktop:setRoute IPC onto the new surfaces', () => {
     const rendererMain = readRendererMain();
 
-    expect(rendererMain).toContain('id="desktop-explorer"');
-    expect(rendererMain).toContain('REQUEST_TREE');
-    expect(rendererMain).toContain('OPEN_FILE');
-    expect(rendererMain).toContain('SELECT_FILE');
-    expect(rendererMain).toContain('Use as ${typedCategory}');
+    // 'main' / 'progress' map to the center pane; 'settings' opens the
+    // overlay; 'logs' opens the drawer. The four-route tab bar is gone.
+    expect(rendererMain).toContain("case 'settings':");
+    expect(rendererMain).toContain('openSettingsOverlay()');
+    expect(rendererMain).toContain("case 'logs':");
+    expect(rendererMain).toContain('openLogsDrawer()');
+  });
+
+  it('drives progress messages via the shared messageDispatcher', () => {
+    const rendererMain = readRendererMain();
+
+    // PRD § 7.C: <progress-app> is NOT mounted on Electron. The renderer
+    // listens for progress messages directly and dispatches them through
+    // the shared module.
+    expect(rendererMain).toContain('dispatchMessage');
+    expect(rendererMain).toContain(
+      "from '@progressView/frontend/messageDispatcher'",
+    );
+    expect(rendererMain).toContain(
+      "from '@progressView/frontend/progressState'",
+    );
   });
 
   it('mounts the catalog-backed command palette', () => {
     const rendererMain = readRendererMain();
 
     expect(rendererMain).toContain('createDesktopCommandPalette');
-    // The chrome exposes a "Commands" button that opens the palette via the
-    // module-scoped commandPalette controller. Earlier revisions used a
-    // data-command-palette-button hook; the WA migration switched to a
-    // direct @click=${openCommandPalette} binding instead.
     expect(rendererMain).toContain('openCommandPalette');
     expect(rendererMain).toContain('buildDesktopSettingsTabMessage');
     expect(rendererMain).toContain('showSettings: (tabIndex, agentSubTab)');
@@ -95,17 +146,9 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
     expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.DISMISS');
     expect(rendererMain).toContain('showFirstRunWalkthrough');
-    // Optional chaining is required because the walkthrough is intentionally
-    // skipped when the renderer bootstrap fallback is showing — the command
-    // palette must still be safe to construct in that case.
     expect(rendererMain).toContain(
       'canOpen: () => !firstRunWalkthrough?.isVisible()',
     );
-    // The desktop wrapper now delegates wa-dialog wiring to the host-neutral
-    // helper in `src/shared/wa/walkthroughDialog.ts`. The wrapper supplies
-    // copy + classes; the shared helper owns the dialog lifecycle so both
-    // hosts (extension webview + Electron renderer) share the same focus,
-    // dismiss, and shortcut-interception behavior.
     expect(rendererOnboarding).toContain('createWalkthroughDialog');
     expect(rendererOnboarding).toContain('Welcome to TeXRA Desktop');
     expect(sharedWalkthrough).toContain("document.createElement('wa-dialog')");
@@ -127,5 +170,13 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('DESKTOP_LOG_COMMANDS.EXPORT_LOG');
     expect(rendererMain).toContain('DesktopSetLogMessageSchema.safeParse');
     expect(rendererMain).toContain('logViewerTemplate');
+  });
+
+  it('does not import the deleted workspace-explorer surface', () => {
+    const rendererMain = readRendererMain();
+    expect(rendererMain).not.toContain('desktopWorkspaceExplorer');
+    expect(rendererMain).not.toContain('DESKTOP_WORKSPACE_EXPLORER_COMMANDS');
+    expect(rendererMain).not.toContain('REQUEST_TREE');
+    expect(rendererMain).not.toContain('id="desktop-explorer"');
   });
 });
