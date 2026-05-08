@@ -6,12 +6,11 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
-import type WaButton from '@awesome.me/webawesome/dist/components/button/button.js';
 import type WaTreeItem from '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { renderEmptyState } from '@shared/wa/emptyState';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
@@ -74,12 +73,61 @@ if (root == null) {
 
 const appRoot = root;
 
-// Utility chrome buttons used to access secondary surfaces. The four-route
-// top tab bar (Launcher / Progress / Settings / Logs) was removed in favor of
-// a single primary view (the launcher) with secondary surfaces reachable via
-// the command palette or the chrome icons below.
-render(
-  html`
+// Module-level reactive state for the desktop shell. Mutating these and then
+// calling `rerenderShell()` is the canonical way to update the chrome. Avoid
+// post-render imperative DOM mutations on Lit-rendered nodes — they will be
+// reset on the next render pass.
+let currentRoute: DesktopRoute = 'main';
+const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
+let selectedExplorerFile = '';
+
+// Standalone web components are instantiated once and slotted into the shell
+// template via Lit's DOM-node interpolation. Lit preserves these nodes across
+// re-renders, so the route components keep their internal state.
+const mainView: Element = hasWorkspace
+  ? document.createElement('main-app')
+  : createNoWorkspacePlaceholder('launcher');
+mainView.setAttribute('data-desktop-view', 'main');
+
+const progressView: Element = hasWorkspace
+  ? document.createElement('progress-app')
+  : createNoWorkspacePlaceholder('progress');
+progressView.setAttribute('data-desktop-view', 'progress');
+
+const settingsView: Element = document.createElement('settings-app');
+settingsView.setAttribute('data-desktop-view', 'settings');
+
+const logsContainer: HTMLElement = document.createElement('div');
+logsContainer.setAttribute('data-desktop-view', 'logs');
+logsContainer.className = 'desktop-log-host';
+
+// The chrome only exposes Settings and Logs as utility icons (the four-route
+// top nav was removed). Other routes are reachable through the command
+// palette and the "Back to Launcher" affordance below.
+const CHROME_ROUTE_BUTTONS: ReadonlyArray<DesktopRoute> = ['settings', 'logs'];
+
+interface ChromeIconButtonSpec {
+  readonly route: DesktopRoute;
+  readonly icon: TeXRAIconName;
+  readonly label: string;
+}
+
+const CHROME_ICON_BUTTONS: ReadonlyArray<ChromeIconButtonSpec> = [
+  { route: 'settings', icon: 'gear', label: 'Settings' },
+  { route: 'logs', icon: 'file-lines', label: 'Logs' },
+] as const;
+
+// Sanity check: the icon-button list must stay aligned with the chrome route
+// list above so future contributors update both together.
+if (
+  CHROME_ICON_BUTTONS.length !== CHROME_ROUTE_BUTTONS.length ||
+  CHROME_ICON_BUTTONS.some((spec, i) => spec.route !== CHROME_ROUTE_BUTTONS[i])
+) {
+  throw new Error('Chrome icon button list is out of sync with route list.');
+}
+
+function shellTemplate(): TemplateResult {
+  return html`
     <section class="desktop-shell">
       <nav class="desktop-nav" aria-label="Desktop chrome">
         <span class="desktop-brand">TeXRA</span>
@@ -87,8 +135,8 @@ render(
           class="desktop-back-button"
           appearance="plain"
           size="small"
-          data-back-to-launcher-button
-          hidden
+          ?hidden=${currentRoute === 'main'}
+          @click=${() => setRoute('main')}
         >
           ${waIcon('arrow-left', { slot: 'start' })} Back to Launcher
         </wa-button>
@@ -96,8 +144,8 @@ render(
           class="desktop-command-button"
           appearance="outlined"
           size="small"
-          data-command-palette-button
           aria-haspopup="dialog"
+          @click=${openCommandPalette}
         >
           Commands
         </wa-button>
@@ -105,151 +153,78 @@ render(
           class="desktop-folder-button"
           appearance="outlined"
           size="small"
-          data-open-workspace-button
+          @click=${openWorkspaceFolder}
         >
           ${waIcon('folder-open', { slot: 'start' })} Open Folder
         </wa-button>
-        <wa-button
-          class="desktop-icon-button"
-          appearance="plain"
-          size="small"
-          data-route-button="settings"
-          aria-pressed="false"
-          aria-label="Settings"
-          title="Settings"
-        >
-          ${waIcon('gear')}
-        </wa-button>
-        <wa-button
-          class="desktop-icon-button"
-          appearance="plain"
-          size="small"
-          data-route-button="logs"
-          aria-pressed="false"
-          aria-label="Logs"
-          title="Logs"
-        >
-          ${waIcon('file-lines')}
-        </wa-button>
+        ${CHROME_ICON_BUTTONS.map(
+          (spec) => html`
+            <wa-button
+              class="desktop-icon-button"
+              appearance="plain"
+              size="small"
+              data-route-button=${spec.route}
+              aria-pressed=${String(currentRoute === spec.route)}
+              aria-label=${spec.label}
+              title=${spec.label}
+              @click=${() => toggleRoute(spec.route)}
+            >
+              ${waIcon(spec.icon)}
+            </wa-button>
+          `,
+        )}
       </nav>
       <div class="desktop-workbench">
         <aside
           class="desktop-explorer"
           id="desktop-explorer"
           aria-label="Workspace Explorer"
-        ></aside>
+        >
+          ${explorerTemplate()}
+        </aside>
         <main class="desktop-view" id="desktop-view">
-          ${DESKTOP_ROUTES.map(
-            (route) => html`
-              <section
-                class="desktop-route"
-                data-route=${route}
-                ?hidden=${route !== 'main'}
-              ></section>
-            `,
-          )}
+          <section
+            class="desktop-route"
+            data-route="main"
+            ?hidden=${currentRoute !== 'main'}
+          >
+            ${mainView}
+          </section>
+          <section
+            class="desktop-route"
+            data-route="progress"
+            ?hidden=${currentRoute !== 'progress'}
+          >
+            ${progressView}
+          </section>
+          <section
+            class="desktop-route"
+            data-route="settings"
+            ?hidden=${currentRoute !== 'settings'}
+          >
+            ${settingsView}
+          </section>
+          <section
+            class="desktop-route"
+            data-route="logs"
+            ?hidden=${currentRoute !== 'logs'}
+          >
+            ${logsContainer}
+          </section>
         </main>
       </div>
     </section>
-  `,
-  appRoot,
-);
-
-const desktopViewContainer =
-  appRoot.querySelector<HTMLElement>('#desktop-view');
-if (desktopViewContainer == null) {
-  throw new Error('TeXRA desktop view container was not found.');
+  `;
 }
 
-const workspaceExplorerElement =
-  appRoot.querySelector<HTMLElement>('#desktop-explorer');
-if (workspaceExplorerElement == null) {
-  throw new Error('TeXRA desktop workspace explorer was not found.');
-}
-const workspaceExplorerContainer: HTMLElement = workspaceExplorerElement;
-
-const routeContainers = new Map<DesktopRoute, HTMLElement>();
-for (const route of DESKTOP_ROUTES) {
-  const container = desktopViewContainer.querySelector<HTMLElement>(
-    `[data-route="${route}"]`,
-  );
-  if (container == null) {
-    throw new Error(`TeXRA desktop route container was not found: ${route}`);
-  }
-  routeContainers.set(route, container);
+function rerenderShell(): void {
+  render(shellTemplate(), appRoot);
 }
 
-// The chrome only exposes Settings and Logs as utility icons (the four-route
-// top nav was removed). Other routes are reachable through the command
-// palette and the "Back to Launcher" affordance below.
-const CHROME_ROUTE_BUTTONS: ReadonlyArray<DesktopRoute> = ['settings', 'logs'];
-const routeButtons = new Map<DesktopRoute, WaButton>();
-for (const route of CHROME_ROUTE_BUTTONS) {
-  const button = appRoot.querySelector<WaButton>(
-    `[data-route-button="${route}"]`,
-  );
-  if (button == null) {
-    throw new Error(`TeXRA desktop route button was not found: ${route}`);
-  }
-  button.addEventListener('click', () => {
-    // Toggle back to the launcher when the same chrome button is pressed
-    // again, so the icons feel like a "go to / dismiss" affordance.
-    setRoute(currentRoute === route ? 'main' : route);
-  });
-  routeButtons.set(route, button);
-}
-
-const backToLauncherButton = appRoot.querySelector<WaButton>(
-  '[data-back-to-launcher-button]',
-);
-if (backToLauncherButton == null) {
-  throw new Error('TeXRA desktop back-to-launcher button was not found.');
-}
-backToLauncherButton.addEventListener('click', () => setRoute('main'));
-
-let currentRoute: DesktopRoute = 'main';
-
-const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
-let selectedExplorerFile = '';
-
-renderWorkspaceExplorerLoading();
-
-if (hasWorkspace) {
-  const mainApp = document.createElement('main-app');
-  mainApp.setAttribute('data-desktop-view', 'main');
-
-  const progressApp = document.createElement('progress-app');
-  progressApp.setAttribute('data-desktop-view', 'progress');
-
-  routeContainers.get('main')?.replaceChildren(mainApp);
-  routeContainers.get('progress')?.replaceChildren(progressApp);
-} else {
-  routeContainers
-    .get('main')
-    ?.replaceChildren(createNoWorkspacePlaceholder('launcher'));
-  routeContainers
-    .get('progress')
-    ?.replaceChildren(createNoWorkspacePlaceholder('progress'));
-}
-
-const settingsApp = document.createElement('settings-app');
-settingsApp.setAttribute('data-desktop-view', 'settings');
-routeContainers.get('settings')?.replaceChildren(settingsApp);
-renderLogViewer(routeContainers.get('logs'));
-
-const commandPaletteButton = appRoot.querySelector<WaButton>(
-  '[data-command-palette-button]',
-);
-if (commandPaletteButton == null) {
-  throw new Error('TeXRA desktop command palette button was not found.');
-}
-
-const openWorkspaceButton = appRoot.querySelector<WaButton>(
-  '[data-open-workspace-button]',
-);
-if (openWorkspaceButton == null) {
-  throw new Error('TeXRA desktop open workspace button was not found.');
-}
+// Render the log viewer template into its dedicated container so that
+// re-renders driven by log-snapshot updates do not stomp the shell.
+renderLogViewer();
+rerenderShell();
 
 const firstRunWalkthrough = createFirstRunWalkthrough({
   document,
@@ -293,10 +268,14 @@ const commandPalette = createDesktopCommandPalette({
   },
 });
 appRoot.append(commandPalette.element);
-commandPaletteButton.addEventListener('click', commandPalette.open);
-openWorkspaceButton.addEventListener('click', () =>
-  postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-);
+
+function openCommandPalette(): void {
+  commandPalette.open();
+}
+
+function openWorkspaceFolder(): void {
+  postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
+}
 
 function isDesktopSetRouteMessage(
   message: unknown,
@@ -321,24 +300,16 @@ function isThemeMessage(message: unknown): message is SetThemeMessage {
 }
 
 function setRoute(route: DesktopRoute): void {
-  // The shell template is rendered once at startup; aria-pressed/hidden are
-  // mutated imperatively here. If a caller ever re-renders the shell, those
-  // runtime mutations will be reset to the template defaults — convert this
-  // function to update module-level route state and trigger a shell re-render
-  // before doing that.
   currentRoute = route;
-  for (const [candidate, container] of routeContainers) {
-    container.hidden = candidate !== route;
-  }
-  for (const [candidate, button] of routeButtons) {
-    button.setAttribute('aria-pressed', candidate === route ? 'true' : 'false');
-  }
-  // Surface a "Back to Launcher" control whenever a non-launcher route is
-  // active so the user always has an obvious way home now that the top tab
-  // bar is gone.
-  backToLauncherButton.hidden = route === 'main';
   document.body.dataset.desktopRoute = route;
+  rerenderShell();
   if (route === 'logs') requestLogSnapshot();
+}
+
+function toggleRoute(route: DesktopRoute): void {
+  // Toggle back to the launcher when the same chrome button is pressed again,
+  // so the icons feel like a "go to / dismiss" affordance.
+  setRoute(currentRoute === route ? 'main' : route);
 }
 
 window.addEventListener('message', (event) => {
@@ -353,7 +324,7 @@ window.addEventListener('message', (event) => {
   } else if (isThemeMessage(event.data)) {
     applyDesktopTheme(event.data.theme);
   } else if (isWorkspaceTreeMessage(event.data)) {
-    renderWorkspaceExplorer(event.data);
+    receiveWorkspaceTree(event.data);
   } else if (isDesktopSetLogMessage(event.data)) {
     renderLogSnapshot(event.data);
   }
@@ -362,6 +333,9 @@ requestWorkspaceTree();
 postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
 
 function applyDesktopTheme(theme: DesktopThemeKind): void {
+  // Body and html classList mutation is OK here: those elements live OUTSIDE
+  // the Lit-rendered desktop shell, so the next `rerenderShell()` cannot stomp
+  // these classes. Theme state is intentionally not part of the shell template.
   document.body.classList.remove(
     'vscode-light',
     'vscode-dark',
@@ -374,9 +348,9 @@ function applyDesktopTheme(theme: DesktopThemeKind): void {
   document.body.dataset.vscodeThemeKind = theme;
   // Apply Web Awesome's native color-scheme class on the document root so
   // WA's --wa-* dark-mode overrides activate (per WA theming model).
-  const root = document.documentElement;
-  root.classList.remove('wa-light', 'wa-dark');
-  root.classList.add(theme === 'light' ? 'wa-light' : 'wa-dark');
+  const docRoot = document.documentElement;
+  docRoot.classList.remove('wa-light', 'wa-dark');
+  docRoot.classList.add(theme === 'light' ? 'wa-light' : 'wa-dark');
 }
 
 function getWindowTargetOrigin(): string {
@@ -480,9 +454,8 @@ function logViewerTemplate(state: LogViewerState): TemplateResult {
   `;
 }
 
-function renderLogViewer(target: HTMLElement | undefined): void {
-  if (target == null) return;
-  render(logViewerTemplate(logViewerState), target);
+function renderLogViewer(): void {
+  render(logViewerTemplate(logViewerState), logsContainer);
 }
 
 function requestLogSnapshot(): void {
@@ -497,7 +470,7 @@ function renderLogSnapshot(message: DesktopSetLogMessage): void {
       ? `Showing the most recent redacted entries from ${path}.`
       : `Showing redacted entries from ${path}.`,
   };
-  renderLogViewer(routeContainers.get('logs'));
+  renderLogViewer();
 }
 
 function isWorkspaceTreeMessage(
@@ -508,7 +481,8 @@ function isWorkspaceTreeMessage(
 
 function requestWorkspaceTree(): void {
   if (!hasWorkspace) {
-    renderWorkspaceExplorerNoWorkspace();
+    explorerState = { kind: 'no-workspace' };
+    rerenderShell();
     return;
   }
   postMessage(DESKTOP_WORKSPACE_EXPLORER_COMMANDS.REQUEST_TREE);
@@ -521,28 +495,13 @@ type ExplorerState =
 
 let explorerState: ExplorerState = { kind: 'loading', title: 'Workspace' };
 
-function renderWorkspaceExplorerLoading(): void {
-  const title = 'title' in explorerState ? explorerState.title : 'Workspace';
-  explorerState = { kind: 'loading', title };
-  renderExplorer();
-}
-
-function renderWorkspaceExplorerNoWorkspace(): void {
-  explorerState = { kind: 'no-workspace' };
-  renderExplorer();
-}
-
-function renderWorkspaceExplorer(message: DesktopWorkspaceTreeMessage): void {
+function receiveWorkspaceTree(message: DesktopWorkspaceTreeMessage): void {
   explorerState = {
     kind: 'tree',
     title: message.workspaceName ?? 'Workspace',
     tree: message.tree,
   };
-  renderExplorer();
-}
-
-function renderExplorer(): void {
-  render(explorerTemplate(), workspaceExplorerContainer);
+  rerenderShell();
 }
 
 function explorerTemplate(): TemplateResult {
@@ -725,7 +684,7 @@ function selectionActionTemplate(
 
 function selectExplorerFile(filePath: string): void {
   selectedExplorerFile = filePath;
-  renderExplorer();
+  rerenderShell();
 }
 
 function findFileNode(
