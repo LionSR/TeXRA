@@ -25,9 +25,9 @@ body {
 .desktop-nav {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--wa-space-2xs);
   height: var(--desktop-nav-height);
-  padding: 0 8px;
+  padding: 0 var(--wa-space-xs);
   box-sizing: border-box;
   border-bottom: 1px solid var(--wa-color-surface-border);
   background: var(--wa-color-surface-lowered);
@@ -70,21 +70,28 @@ wa-button.desktop-icon-button::part(base):hover {
 }
 
 wa-button.desktop-icon-button[aria-pressed='true']::part(base) {
-  border-color: var(--texra-focusBorder);
+  border-color: var(--wa-color-focus);
   background: var(--wa-color-neutral-fill-quiet);
 }
 
 /* Top-nav wa-button overrides — shadow DOM tinting via ::part(base). */
-wa-button.desktop-nav-button::part(base) {
+wa-button.desktop-nav-button::part(base),
+wa-button.desktop-command-button::part(base),
+wa-button.desktop-folder-button::part(base) {
   height: 28px;
-  padding: 0 10px;
-  border-color: transparent;
-  border-radius: 4px;
-  background: transparent;
+  padding: 0 var(--wa-space-s);
+  border-radius: var(--wa-border-radius-m, 4px);
   color: var(--wa-color-text-normal);
 }
 
-wa-button.desktop-nav-button::part(base):hover {
+wa-button.desktop-nav-button::part(base) {
+  border-color: transparent;
+  background: transparent;
+}
+
+wa-button.desktop-nav-button::part(base):hover,
+wa-button.desktop-command-button::part(base):hover,
+wa-button.desktop-folder-button::part(base):hover {
   background: var(--wa-color-surface-raised);
 }
 
@@ -95,21 +102,12 @@ wa-button.desktop-nav-button[aria-pressed='true']::part(base) {
 
 wa-button.desktop-command-button::part(base),
 wa-button.desktop-folder-button::part(base) {
-  height: 28px;
-  padding: 0 10px;
   border-color: var(--wa-color-surface-border);
-  border-radius: 4px;
   background: var(--wa-color-neutral-fill-quiet);
-  color: var(--wa-color-text-normal);
 }
 
 wa-button.desktop-command-button {
   margin-left: auto;
-}
-
-wa-button.desktop-command-button::part(base):hover,
-wa-button.desktop-folder-button::part(base):hover {
-  background: var(--wa-color-surface-raised);
 }
 
 .desktop-view {
@@ -149,9 +147,9 @@ wa-button.desktop-folder-button::part(base):hover {
 .desktop-explorer-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--wa-space-xs);
   min-height: 34px;
-  padding: 0 8px 0 12px;
+  padding: 0 var(--wa-space-xs) 0 var(--wa-space-s);
   border-bottom: 1px solid var(--wa-color-surface-border);
   box-sizing: border-box;
 }
@@ -176,7 +174,7 @@ wa-button.desktop-explorer-icon-button::part(base) {
   height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--wa-border-radius-m, 4px);
   background: transparent;
   color: var(--wa-color-text-normal);
 }
@@ -193,13 +191,13 @@ wa-button.desktop-explorer-icon-button[disabled]::part(base) {
 wa-tree.desktop-explorer-tree {
   min-width: 0;
   overflow: auto;
-  padding: 4px 0;
+  padding: var(--wa-space-2xs) 0;
   --indent-size: 14px;
 }
 
 wa-tree.desktop-explorer-tree wa-tree-item::part(item) {
   min-height: 24px;
-  padding-inline-end: 8px;
+  padding-inline-end: var(--wa-space-xs);
   color: var(--wa-color-text-normal);
 }
 
@@ -208,7 +206,7 @@ wa-tree.desktop-explorer-tree wa-tree-item::part(label) {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--wa-space-2xs);
 }
 
 wa-tree.desktop-explorer-tree
@@ -233,7 +231,7 @@ wa-tree.desktop-explorer-tree
 
 .desktop-explorer-category-strip {
   display: flex;
-  gap: 3px;
+  gap: var(--wa-space-3xs);
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -264,7 +262,7 @@ wa-tree.desktop-explorer-tree
 .desktop-explorer-status,
 .desktop-explorer-selection,
 .desktop-explorer-empty {
-  padding: 12px;
+  padding: var(--wa-space-s);
   color: var(--wa-color-text-quiet);
   font-size: 12px;
   line-height: 1.4;
@@ -285,8 +283,8 @@ wa-tree.desktop-explorer-tree
 .desktop-explorer-selection-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--wa-space-2xs);
+  margin-top: var(--wa-space-xs);
 }
 
 .desktop-explorer-empty {
@@ -300,14 +298,14 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-explorer-empty .empty-state-title {
-  margin: 12px 0 6px;
+  margin: var(--wa-space-s) 0 var(--wa-space-2xs);
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h2);
   font-weight: 600;
 }
 
 .desktop-explorer-empty .empty-state-body {
-  margin: 0 0 14px;
+  margin: 0 0 var(--wa-space-s);
 }
 
 @media (max-width: 760px) {
@@ -355,7 +353,7 @@ wa-tree.desktop-explorer-tree
   z-index: 1000;
   display: grid;
   place-items: start center;
-  padding: 12vh 16px 16px;
+  padding: 12vh var(--wa-space-m) var(--wa-space-m);
   box-sizing: border-box;
   background: rgb(0 0 0 / 35%);
 }
@@ -367,7 +365,7 @@ wa-tree.desktop-explorer-tree
 .desktop-command-palette-panel {
   width: min(560px, 100%);
   border: 1px solid var(--wa-color-surface-border);
-  border-radius: 6px;
+  border-radius: var(--wa-border-radius-l, 6px);
   background: var(--wa-color-surface-default);
   box-shadow: 0 16px 40px rgb(0 0 0 / 32%);
   overflow: hidden;
@@ -376,7 +374,7 @@ wa-tree.desktop-explorer-tree
 .desktop-command-palette-input {
   width: 100%;
   height: 42px;
-  padding: 0 12px;
+  padding: 0 var(--wa-space-s);
   box-sizing: border-box;
   border: 0;
   border-bottom: 1px solid var(--wa-color-surface-border);
@@ -394,19 +392,19 @@ wa-tree.desktop-explorer-tree
 .desktop-command-palette-list {
   max-height: min(420px, 58vh);
   overflow: auto;
-  padding: 4px;
+  padding: var(--wa-space-2xs);
 }
 
 .desktop-command-palette-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: var(--wa-space-s);
   align-items: center;
   width: 100%;
   min-height: 34px;
-  padding: 0 8px;
+  padding: 0 var(--wa-space-xs);
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--wa-border-radius-m, 4px);
   background: transparent;
   color: var(--wa-color-text-normal);
   font: inherit;
@@ -436,7 +434,7 @@ wa-tree.desktop-explorer-tree
   display: grid;
   min-height: 100%;
   place-items: center;
-  padding: 48px 24px;
+  padding: var(--wa-space-3xl) var(--wa-space-l);
 }
 
 .desktop-empty-workspace-panel {
@@ -450,7 +448,7 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-empty-workspace-panel .empty-state-title {
-  margin: 20px 0 10px;
+  margin: var(--wa-space-l) 0 var(--wa-space-xs);
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h1);
   font-weight: 600;
@@ -466,30 +464,30 @@ wa-tree.desktop-explorer-tree
 .desktop-empty-workspace-panel .empty-state-actions {
   display: flex;
   justify-content: center;
-  gap: 10px;
-  margin-top: 24px;
+  gap: var(--wa-space-s);
+  margin-top: var(--wa-space-l);
 }
 
 .desktop-log-viewer {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 100%;
-  padding: 16px;
+  padding: var(--wa-space-m);
   box-sizing: border-box;
-  gap: 12px;
+  gap: var(--wa-space-s);
 }
 
 .desktop-log-viewer-header {
   display: flex;
-  gap: 12px;
+  gap: var(--wa-space-s);
   align-items: flex-start;
   justify-content: space-between;
-  padding-bottom: 12px;
+  padding-bottom: var(--wa-space-s);
   border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
 .desktop-log-viewer-header h2 {
-  margin: 0 0 4px;
+  margin: 0 0 var(--wa-space-2xs);
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h2);
   font-weight: 600;
@@ -505,16 +503,16 @@ wa-tree.desktop-explorer-tree
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--wa-space-xs);
 }
 
 .desktop-log-viewer-output {
   min-height: 0;
   margin: 0;
-  padding: 12px;
+  padding: var(--wa-space-s);
   overflow: auto;
   border: 1px solid var(--wa-color-surface-border);
-  border-radius: 6px;
+  border-radius: var(--wa-border-radius-l, 6px);
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
   font-family: var(--texra-font-family-monospace);
@@ -528,8 +526,8 @@ wa-button.desktop-secondary-button::part(base) {
   /* 30px matches the extension's --height-button so chrome buttons render
      at the same visual scale across both hosts. */
   min-height: 30px;
-  padding: 0 14px;
-  border-radius: 6px;
+  padding: 0 var(--wa-space-m);
+  border-radius: var(--wa-border-radius-l, 6px);
 }
 
 wa-button.desktop-primary-button::part(base) {
@@ -551,15 +549,15 @@ wa-button.desktop-secondary-button::part(base):hover {
 /* wa-dialog supplies the backdrop, modal positioning, focus trap, and panel
    chrome; only the body content layout lives here. */
 wa-dialog.desktop-onboarding {
-  --width: min(640px, calc(100vw - 32px));
+  --width: min(640px, calc(100vw - var(--wa-space-xl)));
 }
 
 .desktop-onboarding-header {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
-  gap: 14px;
-  padding-bottom: 18px;
-  margin-bottom: 18px;
+  gap: var(--wa-space-s);
+  padding-bottom: var(--wa-space-m);
+  margin-bottom: var(--wa-space-m);
   border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
@@ -568,7 +566,7 @@ wa-dialog.desktop-onboarding {
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 6px;
+  border-radius: var(--wa-border-radius-l, 6px);
   background: var(--wa-color-neutral-fill-quiet);
   color: var(--wa-color-brand-fill-loud);
   font-size: 20px;
@@ -582,7 +580,7 @@ wa-dialog.desktop-onboarding {
 }
 
 .desktop-onboarding p {
-  margin: 8px 0 0;
+  margin: var(--wa-space-xs) 0 0;
   color: var(--wa-color-text-quiet);
   font-size: 14px;
   line-height: 1.45;
@@ -599,8 +597,8 @@ wa-dialog.desktop-onboarding {
 .desktop-onboarding-steps li {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
-  gap: 12px;
-  padding: 14px 0;
+  gap: var(--wa-space-s);
+  padding: var(--wa-space-s) 0;
   border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
@@ -633,7 +631,7 @@ wa-dialog.desktop-onboarding {
 }
 
 .desktop-onboarding-steps span {
-  margin-top: 4px;
+  margin-top: var(--wa-space-2xs);
   color: var(--wa-color-text-quiet);
   font-size: 13px;
   line-height: 1.4;
@@ -643,7 +641,7 @@ wa-dialog.desktop-onboarding {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--wa-space-xs);
 }
 
 @media (max-width: 560px) {
