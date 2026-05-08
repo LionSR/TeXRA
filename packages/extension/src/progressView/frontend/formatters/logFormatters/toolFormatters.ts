@@ -535,17 +535,16 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
   const otherBlocks = contentBlocks.filter((block) => !isMcpTextBlock(block));
 
   if (typeof mcpOutput?.status === 'string') {
-    const statusIsInProgress = mcpOutput.status === 'in_progress';
     let statusIconName: string;
     if (mcpOutput.status === 'failed') {
       statusIconName = 'error';
-    } else if (statusIsInProgress) {
-      statusIconName = '';
+    } else if (mcpOutput.status === 'in_progress') {
+      statusIconName = SPINNER_ICON_NAME;
     } else {
       statusIconName = 'check';
     }
     // prettier-ignore
-    const statusIconTemplate = statusIsInProgress
+    const statusIconTemplate = statusIconName === SPINNER_ICON_NAME
       ? html`<wa-spinner></wa-spinner>`
       : html`<wa-icon library="texra" name=${statusIconName} aria-hidden="true"></wa-icon>`;
     // prettier-ignore

@@ -293,7 +293,7 @@ export const commonViewStyles: CSSResult = css`
     font-style: italic;
   }
 
-  .empty-state .codicon {
+  .empty-state wa-icon {
     font-size: calc(var(--font-size) * 2.5);
     opacity: var(--opacity-disabled);
   }
