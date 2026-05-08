@@ -21,6 +21,7 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - history view styles
 import { historyViewStyles } from './styles';
@@ -106,13 +107,24 @@ export class HistoryItem extends LitElement {
     }
   }
 
-  private handleToggle(event: CustomEvent<{ open?: boolean }>): void {
+  private handleShow(event: Event): void {
     if (!this.item) return;
-    const open = event.detail?.open ?? this.open;
+    if (event.target !== event.currentTarget) return;
     this.dispatchEvent(
       HistoryViewEvents.toggleItem({
         historyId: this.item.id,
-        open,
+        open: true,
+      }),
+    );
+  }
+
+  private handleHide(event: Event): void {
+    if (!this.item) return;
+    if (event.target !== event.currentTarget) return;
+    this.dispatchEvent(
+      HistoryViewEvents.toggleItem({
+        historyId: this.item.id,
+        open: false,
       }),
     );
   }
@@ -372,15 +384,16 @@ export class HistoryItem extends LitElement {
         </div>
         ${extraDetails.length
           ? html`
-              <vscode-collapsible
+              <wa-details
                 class="collapsible"
-                heading="More details"
+                summary="More details"
                 ?open=${this.open}
-                @vsc-collapsible-toggle=${this.handleToggle}
+                @wa-show=${this.handleShow}
+                @wa-hide=${this.handleHide}
                 data-id=${this.item.id}
               >
                 <div class="history-details extra-details">${extraDetails}</div>
-              </vscode-collapsible>
+              </wa-details>
             `
           : nothing}
       </div>
