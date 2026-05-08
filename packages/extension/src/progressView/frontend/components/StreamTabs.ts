@@ -590,7 +590,7 @@ export class StreamTabs extends LitElement {
         color: var(--color-text-secondary);
       }
 
-      .delete-all-streams::part(control) {
+      .delete-all-streams::part(base) {
         border-radius: var(--border-radius-medium);
       }
 
