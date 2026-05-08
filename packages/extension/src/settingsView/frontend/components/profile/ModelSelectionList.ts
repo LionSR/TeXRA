@@ -63,11 +63,7 @@ function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
 
 @customElement('model-selection-list')
 export class ModelSelectionList extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    profileViewStyles,
-  ];
+  static override styles = [designTokens, commonViewStyles, profileViewStyles];
 
   @property({ attribute: false }) models: ModelSelectionItem[] = [];
   @property({ attribute: false }) helperModel = '';

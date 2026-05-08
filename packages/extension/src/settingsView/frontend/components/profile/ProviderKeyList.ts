@@ -8,11 +8,7 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  badgeStyles,
-  commonViewStyles,
-  designTokens,
-} from '@shared/styles';
+import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Side-effect imports - register WA icon component

@@ -11,11 +11,7 @@ import Mark from 'mark.js';
 
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
-import {
-  badgeStyles,
-  commonViewStyles,
-  designTokens,
-} from '@shared/styles';
+import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
