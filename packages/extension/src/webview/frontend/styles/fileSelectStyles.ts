@@ -261,7 +261,6 @@ export const dropdownStyles = css`
     flex-shrink: 0;
   }
 
-  .dropdown-container wa-button.has-options::part(base),
   wa-button.has-options::part(base) {
     box-shadow: inset 0 0 0 1px
       var(--wa-color-brand-border-quiet, var(--wa-color-focus));
@@ -298,9 +297,6 @@ export const dropdownStyles = css`
     height: 20px;
     padding: var(--wa-space-3xs);
     font-size: var(--font-size-sm);
-  }
-
-  .dropdown-container .dropdown-menu wa-checkbox {
     transition: background-color var(--transition-fast);
   }
 
