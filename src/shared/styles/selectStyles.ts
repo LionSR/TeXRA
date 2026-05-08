@@ -1,5 +1,56 @@
 import { css, type CSSResult } from 'lit';
 
+/**
+ * Compact wa-input / wa-select sizing — stricter IDE-density form controls.
+ * WA defaults to ~38px tall; reduce to ~22px to match minimal VS Code chrome.
+ *
+ * Exported as a focused subset so file-select / main-view components can pull
+ * just the form-control rules without inheriting the full select sheet.
+ * `selectStyles` below interpolates this block to keep a single source of
+ * truth for the selectors.
+ */
+export const compactFormControlStyles: CSSResult = css`
+  wa-select {
+    font-size: var(--font-size-sm);
+  }
+
+  wa-select::part(combobox) {
+    min-height: 22px;
+    min-width: 0;
+    padding-block: 0;
+    padding-inline: 6px;
+    border: var(--border-thin) solid
+      var(--wa-color-surface-border, var(--color-border));
+  }
+
+  wa-select::part(display-input) {
+    padding-block: 1px;
+    padding-inline: 6px;
+    font-size: var(--font-size-sm);
+  }
+
+  wa-select::part(expand-icon) {
+    margin-inline-start: var(--wa-space-3xs);
+  }
+
+  wa-input {
+    font-size: var(--font-size-sm);
+  }
+
+  wa-input::part(base) {
+    min-height: 22px;
+    padding-block: 0;
+    border: var(--border-thin) solid
+      var(--wa-color-surface-border, var(--color-border));
+  }
+
+  wa-input::part(input) {
+    padding-block: 1px;
+    padding-inline: 6px;
+    font-size: var(--font-size-sm);
+  }
+`;
+
 export const selectStyles: CSSResult = css`
   .select-group {
     display: flex;
@@ -71,47 +122,8 @@ export const selectStyles: CSSResult = css`
   }
 
   /* Compact form controls — stricter IDE-density inputs/selects.
-   * WA defaults to ~38px tall; reduce to ~22px for minimal VS Code chrome.
    * Border uses subtle surface-border, not heavier panel border. */
-  wa-select {
-    font-size: var(--font-size-sm);
-  }
-
-  wa-select::part(combobox) {
-    min-height: 22px;
-    min-width: 0;
-    padding-block: 0;
-    padding-inline: 6px;
-    border: var(--border-thin) solid
-      var(--wa-color-surface-border, var(--color-border));
-  }
-
-  wa-select::part(display-input) {
-    padding-block: 1px;
-    padding-inline: 6px;
-    font-size: var(--font-size-sm);
-  }
-
-  wa-select::part(expand-icon) {
-    margin-inline-start: var(--wa-space-3xs);
-  }
-
-  wa-input {
-    font-size: var(--font-size-sm);
-  }
-
-  wa-input::part(base) {
-    min-height: 22px;
-    padding-block: 0;
-    border: var(--border-thin) solid
-      var(--wa-color-surface-border, var(--color-border));
-  }
-
-  wa-input::part(input) {
-    padding-block: 1px;
-    padding-inline: 6px;
-    font-size: var(--font-size-sm);
-  }
+  ${compactFormControlStyles}
 
   .api-key-missing {
     color: var(--wa-color-danger-on-quiet);
