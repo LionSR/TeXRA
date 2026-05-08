@@ -321,11 +321,12 @@ export function dispatchDesktopCommand(
     DESKTOP_COMMAND_HANDLERS,
     actions,
     (unhandledId) => {
-      // Disabled menu items short-circuit before reaching dispatch, so
-      // arriving here means an IPC payload or programming error sent a
-      // command the desktop never wired up. Log at debug rather than
-      // throw, since the dispatch caller already has a fallthrough path.
-      console.debug(`[desktop] dispatch: unhandled command ${unhandledId}`);
+      // Compile-time `satisfies Record<DesktopAvailableCommandId, …>` means
+      // arriving here via typed code is impossible. Any runtime hit comes
+      // from a malformed IPC payload or a stale command ID from the
+      // renderer — log at error so the bug surfaces in support logs without
+      // crashing the click handler or IPC dispatcher.
+      console.error(`[desktop] dispatch: unhandled command ${unhandledId}`);
     },
   );
 }
