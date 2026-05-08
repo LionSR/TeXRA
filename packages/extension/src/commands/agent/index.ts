@@ -1,5 +1,5 @@
 // Barrel export for agent commands
-export { registerAgentCommands } from './agentCommands';
+export { stopAgent, compactResponse } from './agentCommands';
 export {
   agentCreatorCommands,
   registerAgentCreatorCommands,

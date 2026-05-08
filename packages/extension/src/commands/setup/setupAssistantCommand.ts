@@ -279,7 +279,7 @@ async function ensureRoutingConfigured(): Promise<boolean> {
   return false;
 }
 
-async function runSetupAssistant(): Promise<void> {
+export async function runSetupAssistant(): Promise<void> {
   try {
     const proceed = await ensureCredentialOrPrompt();
     if (!proceed) {
@@ -350,13 +350,3 @@ async function runSetupAssistant(): Promise<void> {
   }
 }
 
-export function registerSetupAssistantCommand(
-  context: vscode.ExtensionContext,
-): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      setupAssistantCommands.runSetupAssistant,
-      runSetupAssistant,
-    ),
-  );
-}

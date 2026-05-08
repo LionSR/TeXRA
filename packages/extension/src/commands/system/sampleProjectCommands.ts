@@ -17,59 +17,46 @@ export const sampleProjectCommands = {
   createSampleProject: 'texra.createSampleProject',
 };
 
-export function registerSampleProjectCommands(
-  context: vscode.ExtensionContext,
-): void {
-  const createSampleProjectCommand = vscode.commands.registerCommand(
-    sampleProjectCommands.createSampleProject,
-    async () => {
-      try {
-        if (!WorkspaceFS.getPath()) {
-          void vscode.window.showErrorMessage(
-            'Open a workspace to create the sample project.',
-          );
-          return;
-        }
+export async function createSampleProject(
+  extensionPath: string,
+): Promise<void> {
+  try {
+    if (!WorkspaceFS.getPath()) {
+      void vscode.window.showErrorMessage(
+        'Open a workspace to create the sample project.',
+      );
+      return;
+    }
 
-        const destFolder = 'texra-sample';
-        if (await WorkspaceFS.exists(destFolder)) {
-          void vscode.window.showInformationMessage(
-            'Sample project already exists in workspace.',
-          );
-          return;
-        }
+    const destFolder = 'texra-sample';
+    if (await WorkspaceFS.exists(destFolder)) {
+      void vscode.window.showInformationMessage(
+        'Sample project already exists in workspace.',
+      );
+      return;
+    }
 
-        const sourcePath = path.join(
-          context.extensionPath,
-          'resources',
-          'examples',
-        );
+    const sourcePath = path.join(extensionPath, 'resources', 'examples');
 
-        await WorkspaceFS.ensureDir(destFolder);
-        await fsExtra.copy(sourcePath, WorkspaceFS.fullPath(destFolder), {
-          overwrite: true,
-        });
+    await WorkspaceFS.ensureDir(destFolder);
+    await fsExtra.copy(sourcePath, WorkspaceFS.fullPath(destFolder), {
+      overwrite: true,
+    });
 
-        void vscode.window.showInformationMessage(
-          'Created TeXRA sample project.',
-        );
+    void vscode.window.showInformationMessage('Created TeXRA sample project.');
 
-        const readmeRelativePath = path.join(destFolder, 'README.md');
-        if (await WorkspaceFS.exists(readmeRelativePath)) {
-          const document = await vscode.workspace.openTextDocument(
-            vscode.Uri.file(WorkspaceFS.fullPath(readmeRelativePath)),
-          );
-          await vscode.window.showTextDocument(document, { preview: false });
-        }
-      } catch (err) {
-        await showLoggedErrorMessage(
-          CHANNEL,
-          'Failed to create sample project',
-          err,
-        );
-      }
-    },
-  );
-
-  context.subscriptions.push(createSampleProjectCommand);
+    const readmeRelativePath = path.join(destFolder, 'README.md');
+    if (await WorkspaceFS.exists(readmeRelativePath)) {
+      const document = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(WorkspaceFS.fullPath(readmeRelativePath)),
+      );
+      await vscode.window.showTextDocument(document, { preview: false });
+    }
+  } catch (err) {
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'Failed to create sample project',
+      err,
+    );
+  }
 }
