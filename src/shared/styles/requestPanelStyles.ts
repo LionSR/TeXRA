@@ -70,7 +70,7 @@ export const requestPanelStyles: CSSResult = css`
     border: var(--border-thin) solid var(--wa-form-control-border-color);
     border-radius: var(--border-radius-large);
     background: var(--wa-color-surface-default);
-    box-shadow: 0 2px 8px var(--texra-widget-shadow, rgba(0, 0, 0, 0.12));
+    box-shadow: 0 2px 8px var(--wa-color-surface-shadow, rgba(0, 0, 0, 0.12));
     display: flex;
     flex-direction: column;
     gap: ${sp.medium};
@@ -160,7 +160,7 @@ export const requestPanelStyles: CSSResult = css`
   :is(${FEEDBACK_ACTIVE})
     :is(${ACTIONS})
     vscode-toolbar-button[data-action='reject']::part(control) {
-    color: var(--texra-inputValidation-warningBorder);
+    color: var(--wa-color-warning-border-quiet);
   }
 
   /* Shared badge base */
@@ -179,7 +179,7 @@ export const requestPanelStyles: CSSResult = css`
     border-left: var(--border-thick) solid var(--wa-color-text-normal);
   }
   .bash-approval-request {
-    border-left: var(--border-thick) solid var(--texra-terminal-ansiYellow);
+    border-left: var(--border-thick) solid var(--wa-color-terminal-ansi-yellow);
   }
   .retry-request {
     border-left: var(--border-thick) solid var(--color-warning);
@@ -261,7 +261,7 @@ export const requestPanelStyles: CSSResult = css`
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
     border-left: var(--border-thin) solid
-      var(--texra-button-separator, var(--wa-form-control-border-color));
+      var(--wa-color-button-separator, var(--wa-form-control-border-color));
   }
 
   /* wa-dropdown handles its own popup positioning, but we still want
@@ -284,7 +284,7 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   .bash-approval-requests__header wa-icon {
-    color: var(--texra-terminal-ansiYellow);
+    color: var(--wa-color-terminal-ansi-yellow);
   }
 
   .bash-approval-request__command {
@@ -293,7 +293,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .bash-approval-request__command .code-block {
-    border-left: var(--border-thick) solid var(--texra-terminal-ansiYellow);
+    border-left: var(--border-thick) solid var(--wa-color-terminal-ansi-yellow);
   }
 
   .bash-approval-request__command .code-block pre {
@@ -493,7 +493,7 @@ export const requestPanelStyles: CSSResult = css`
 
   .workflow-proposal__file-name:hover {
     text-decoration: underline;
-    color: var(--texra-textLink-activeForeground, var(--wa-color-text-link));
+    color: var(--wa-color-text-link-active, var(--wa-color-text-link));
   }
 
   .workflow-proposal__file-name--readonly {
@@ -631,7 +631,7 @@ export const requestPanelStyles: CSSResult = css`
     background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
     border-left: var(--border-thick) solid
-      var(--texra-textBlockQuote-border, var(--wa-color-focus));
+      var(--wa-color-blockquote-border, var(--wa-color-focus));
     line-height: var(--line-height-normal);
   }
 
@@ -767,7 +767,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .external-inquiry-request__session-links-input::placeholder {
-    color: var(--texra-input-placeholderForeground);
+    color: var(--wa-color-text-placeholder);
   }
 
   .external-inquiry-request__session-links-hint {
@@ -817,7 +817,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .external-inquiry-request__answer-input::placeholder {
-    color: var(--texra-input-placeholderForeground);
+    color: var(--wa-color-text-placeholder);
   }
 
   .external-inquiry-request__answer-hint {

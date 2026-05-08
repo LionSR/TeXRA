@@ -62,7 +62,7 @@ export const markdownStyles = css`
     margin-top: var(--wa-space-s);
     margin-bottom: var(--wa-space-2xs);
     border-left: var(--border-thick) solid
-      var(--texra-activityBarBadge-background);
+      var(--wa-color-activity-badge-bg);
     border-bottom: var(--border-thin) solid var(--color-border);
     padding-bottom: var(--wa-space-3xs);
     border-radius: var(--border-radius) 0 0 var(--border-radius);
@@ -105,7 +105,7 @@ export const markdownStyles = css`
     border-radius: var(--border-radius);
     background-color: var(--wa-color-surface-lowered);
     border-left: var(--wa-space-3xs) solid
-      var(--texra-activityBarBadge-background);
+      var(--wa-color-activity-badge-bg);
     overflow-x: auto;
   }
 
@@ -118,7 +118,7 @@ export const markdownStyles = css`
 
   .markdown-content .latex-ref {
     font-family: var(--font-family);
-    color: var(--texra-symbolIcon-keywordForeground);
+    color: var(--wa-color-symbol-keyword);
   }
 
   .markdown-content a {
@@ -132,7 +132,7 @@ export const markdownStyles = css`
 
   .markdown-content blockquote {
     border-left: var(--border-thick) solid
-      var(--texra-activityBarBadge-background);
+      var(--wa-color-activity-badge-bg);
     margin: var(--wa-space-xs) 0;
     padding-left: var(--wa-space-l);
     color: var(--color-text-secondary);
@@ -150,7 +150,7 @@ export const markdownStyles = css`
     }
 
     th {
-      background-color: var(--texra-editor-lineHighlightBackground);
+      background-color: var(--wa-color-editor-line-highlight);
       text-align: left;
     }
   }
@@ -182,7 +182,7 @@ export const markdownStyles = css`
 
   .banner-content--scratchpad p:has(strong:first-child) {
     border-left: calc(var(--wa-space-2xs) - 1px) solid
-      var(--texra-notificationsInfoIcon-foreground);
+      var(--wa-color-icon-info);
     padding-left: var(--wa-space-xs);
   }
 

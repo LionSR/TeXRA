@@ -82,7 +82,7 @@ export class UserMessage extends LitElement {
       .user-message {
         padding: var(--wa-space-2xs);
         max-width: 85%;
-        background-color: var(--texra-editor-selectionBackground);
+        background-color: var(--wa-color-editor-selection);
         border: var(--border-thin) solid var(--wa-color-surface-border);
         border-radius: var(--border-radius);
       }
@@ -138,13 +138,13 @@ export class UserMessage extends LitElement {
         );
         border-radius: var(--border-radius-small);
         font-family: var(
-          --texra-editor-font-family,
+          --wa-font-family-mono,
           ui-monospace,
           SFMono-Regular,
           Consolas,
           monospace
         );
-        font-size: var(--texra-editor-font-size, var(--font-size-sm));
+        font-size: var(--wa-editor-font-size, var(--font-size-sm));
         line-height: 1.35;
       }
 

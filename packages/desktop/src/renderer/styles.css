@@ -141,7 +141,7 @@ wa-button.desktop-command-button {
   min-height: 0;
   border-right: 1px solid var(--wa-color-surface-border);
   background: var(--wa-color-surface-lowered);
-  color: var(--texra-sideBar-foreground);
+  color: var(--wa-color-text-normal);
 }
 
 .desktop-explorer-header {
@@ -278,19 +278,19 @@ wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
 }
 
 .desktop-explorer-category-dot[data-category='input'] {
-  background: var(--texra-charts-blue);
+  background: var(--wa-color-chart-blue);
 }
 
 .desktop-explorer-category-dot[data-category='reference'] {
-  background: var(--texra-charts-green);
+  background: var(--wa-color-chart-green);
 }
 
 .desktop-explorer-category-dot[data-category='auxiliary'] {
-  background: var(--texra-charts-yellow);
+  background: var(--wa-color-chart-yellow);
 }
 
 .desktop-explorer-category-dot[data-category='media'] {
-  background: var(--texra-charts-purple);
+  background: var(--wa-color-chart-purple);
 }
 
 .desktop-explorer-status,

@@ -147,7 +147,7 @@ export class PlanView extends LitElement {
         background: var(--wa-color-neutral-fill-quiet);
         padding: var(--border-thin) var(--wa-space-xs);
         border-radius: var(--border-radius);
-        font-family: var(--texra-editor-font-family, monospace), monospace;
+        font-family: var(--wa-font-family-mono, monospace), monospace;
       }
 
       /* Status-specific styles */
@@ -174,11 +174,11 @@ export class PlanView extends LitElement {
       }
 
       .plan-step--in-progress .plan-step__icon {
-        color: var(--texra-progressBar-background);
+        color: var(--wa-color-progress-bg);
       }
 
       .plan-step--in-progress .plan-step__title {
-        color: var(--texra-progressBar-background);
+        color: var(--wa-color-progress-bg);
       }
 
       .plan-step--completed {

@@ -1,30 +1,33 @@
 /**
  * Document-level styles for TeXRA webviews (VS Code host).
  *
- * Web Awesome native theming: --wa-* tokens are the single source of truth and
- * are sourced directly from the host's --vscode-* variables. The webview entry
- * (index.ts under @shared/wa) imports the WA default theme stylesheet, and
- * MainApp / SettingsApp / ProgressApp mirror the VS Code theme kind onto
- * <html class="wa-light|wa-dark"> so WA's color-scheme classes activate.
+ * Single token system: --wa-* tokens are the ONLY tokens consumer code
+ * references. They are sourced directly from the host's --vscode-* variables
+ * exposed by the VS Code webview iframe. There is no --texra-* shim layer
+ * and consumers never reference --vscode-* directly.
  *
- * --texra-* tokens remain as a thin compatibility alias layer for tokens that
- * have no clean WA equivalent (terminal ansi, symbol icons, charts, list rows,
- * git decoration, etc.) and a few legacy aliases consumers still reference.
- * They no longer round-trip through --wa-*.
+ * Niche palette tokens with no clean WA semantic equivalent (terminal ansi,
+ * symbol icons, charts, git decoration, debug tokens, diff editor, etc.) are
+ * promoted into the --wa-color-* namespace so the consumer surface stays
+ * uniform.
  */
 
 :root,
 .wa-light,
 .wa-dark .wa-invert {
-  /* ── Web Awesome surface / text tokens (light + default) ────────────── */
+  /* ── Web Awesome surface / text tokens ──────────────────────────────── */
   --wa-color-text-normal: var(--vscode-editor-foreground, var(--vscode-foreground));
   --wa-color-text-quiet: var(--vscode-descriptionForeground);
   --wa-color-text-link: var(--vscode-textLink-foreground);
+  --wa-color-text-link-active: var(--vscode-textLink-activeForeground);
+  --wa-color-text-preformat: var(--vscode-textPreformat-foreground);
+  --wa-color-text-placeholder: var(--vscode-input-placeholderForeground);
 
   --wa-color-surface-default: var(--vscode-editor-background);
   --wa-color-surface-raised: var(--vscode-editorWidget-background);
   --wa-color-surface-lowered: var(--vscode-sideBar-background);
   --wa-color-surface-border: var(--vscode-panel-border, var(--vscode-widget-border));
+  --wa-color-surface-shadow: var(--vscode-widget-shadow);
 
   --wa-color-focus: var(--vscode-focusBorder);
 
@@ -74,12 +77,112 @@
   --wa-color-success-border-quiet: var(--vscode-inputValidation-infoBorder);
   --wa-color-success-on-quiet: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
 
+  /* Buttons — niche tokens consumers still need. */
+  --wa-color-button-hover: var(--vscode-button-hoverBackground);
+  --wa-color-button-border: var(--vscode-button-border, transparent);
+  --wa-color-button-separator: var(--vscode-button-separator, rgb(255 255 255 / 40%));
+
+  /* Lists — no native WA equivalent yet (#3690). */
+  --wa-color-list-active-bg: var(--vscode-list-activeSelectionBackground);
+  --wa-color-list-active-fg: var(--vscode-list-activeSelectionForeground);
+  --wa-color-list-hover-bg: var(--vscode-list-hoverBackground);
+  --wa-color-list-warning-fg: var(--vscode-list-warningForeground);
+
+  /* Menus. */
+  --wa-color-menu-background: var(--vscode-menu-background);
+  --wa-color-menu-border: var(--vscode-menu-border);
+  --wa-color-menu-foreground: var(--vscode-menu-foreground);
+
+  /* Toolbar. */
+  --wa-color-toolbar-active: var(--vscode-toolbar-activeBackground);
+  --wa-color-toolbar-hover: var(--vscode-toolbar-hoverBackground);
+
+  /* Charts — palette tokens with no WA equivalent. */
+  --wa-color-chart-blue: var(--vscode-charts-blue);
+  --wa-color-chart-green: var(--vscode-charts-green);
+  --wa-color-chart-orange: var(--vscode-charts-orange);
+  --wa-color-chart-red: var(--vscode-charts-red);
+  --wa-color-chart-yellow: var(--vscode-charts-yellow);
+  /* VS Code does not ship a charts.purple — fall back to keyword colour. */
+  --wa-color-chart-purple: light-dark(#8250df, #c586c0);
+
+  /* Diff editor. */
+  --wa-color-diff-inserted: var(--vscode-diffEditor-insertedTextBackground);
+  --wa-color-diff-removed: var(--vscode-diffEditor-removedTextBackground);
+
+  /* Git decoration. */
+  --wa-color-git-added: var(--vscode-gitDecoration-addedResourceForeground);
+  --wa-color-git-deleted: var(--vscode-gitDecoration-deletedResourceForeground);
+  --wa-color-git-modified: var(--vscode-gitDecoration-modifiedResourceForeground);
+
+  /* Debug token expressions. */
+  --wa-color-debug-name: var(--vscode-debugTokenExpression-name);
+  --wa-color-debug-number: var(--vscode-debugTokenExpression-number);
+  --wa-color-debug-string: var(--vscode-debugTokenExpression-string);
+
+  /* Symbol icons. */
+  --wa-color-symbol-class: var(--vscode-symbolIcon-classForeground);
+  --wa-color-symbol-constant: var(--vscode-symbolIcon-constantForeground);
+  --wa-color-symbol-function: var(--vscode-symbolIcon-functionForeground);
+  --wa-color-symbol-keyword: var(--vscode-symbolIcon-keywordForeground);
+  --wa-color-symbol-property: var(--vscode-symbolIcon-propertyForeground);
+  --wa-color-symbol-variable: var(--vscode-symbolIcon-variableForeground);
+
+  /* Editor surface details. */
+  --wa-color-editor-selection: var(--vscode-editor-selectionBackground);
+  --wa-color-editor-inactive-selection: var(--vscode-editor-inactiveSelectionBackground);
+  --wa-color-editor-line-highlight: var(--vscode-editor-lineHighlightBackground);
+  --wa-color-editor-find-match: var(--vscode-editor-findMatchBackground);
+  --wa-color-editor-find-match-highlight: var(--vscode-editor-findMatchHighlightBackground);
+  --wa-color-editor-find-match-highlight-fg: var(--vscode-editor-findMatchHighlightForeground);
+
+  /* Tabs. */
+  --wa-color-tabs-background: var(--vscode-editorGroupHeader-tabsBackground);
+  --wa-color-tabs-border: var(--vscode-editorGroupHeader-tabsBorder);
+
+  /* Block quote. */
+  --wa-color-blockquote-border: var(--vscode-textBlockQuote-border);
+
+  /* Misc indicators. */
+  --wa-color-progress-bg: var(--vscode-progressBar-background);
+  --wa-color-status-warning-bg: var(--vscode-statusBarItem-warningBackground);
+  --wa-color-icon-info: var(--vscode-notificationsInfoIcon-foreground);
+  --wa-color-activity-badge-bg: var(--vscode-activityBarBadge-background);
+  --wa-color-badge-bg: var(--vscode-badge-background);
+
+  /* Testing icons. */
+  --wa-color-testing-passed: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+  --wa-color-testing-failed: var(--vscode-testing-iconFailed, var(--vscode-editorError-foreground));
+
+  /* Terminal — full palette, no WA equivalent. */
+  --wa-color-terminal-background: var(--vscode-terminal-background);
+  --wa-color-terminal-foreground: var(--vscode-terminal-foreground);
+  --wa-color-terminal-selection-bg: var(--vscode-terminal-selectionBackground);
+  --wa-color-terminal-cursor: var(--vscode-terminalCursor-foreground);
+  --wa-color-terminal-ansi-black: var(--vscode-terminal-ansiBlack);
+  --wa-color-terminal-ansi-blue: var(--vscode-terminal-ansiBlue);
+  --wa-color-terminal-ansi-cyan: var(--vscode-terminal-ansiCyan);
+  --wa-color-terminal-ansi-green: var(--vscode-terminal-ansiGreen);
+  --wa-color-terminal-ansi-magenta: var(--vscode-terminal-ansiMagenta);
+  --wa-color-terminal-ansi-red: var(--vscode-terminal-ansiRed);
+  --wa-color-terminal-ansi-white: var(--vscode-terminal-ansiWhite);
+  --wa-color-terminal-ansi-yellow: var(--vscode-terminal-ansiYellow);
+  --wa-color-terminal-ansi-bright-black: var(--vscode-terminal-ansiBrightBlack);
+  --wa-color-terminal-ansi-bright-blue: var(--vscode-terminal-ansiBrightBlue);
+  --wa-color-terminal-ansi-bright-cyan: var(--vscode-terminal-ansiBrightCyan);
+  --wa-color-terminal-ansi-bright-green: var(--vscode-terminal-ansiBrightGreen);
+  --wa-color-terminal-ansi-bright-magenta: var(--vscode-terminal-ansiBrightMagenta);
+  --wa-color-terminal-ansi-bright-red: var(--vscode-terminal-ansiBrightRed);
+  --wa-color-terminal-ansi-bright-white: var(--vscode-terminal-ansiBrightWhite);
+  --wa-color-terminal-ansi-bright-yellow: var(--vscode-terminal-ansiBrightYellow);
+
   /* Typography. */
   --wa-font-family-body: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
   --wa-font-family-heading: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
   --wa-font-family-mono: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
   --wa-font-size-m: var(--vscode-font-size, 13px);
   --wa-font-weight-normal: var(--vscode-font-weight, 400);
+  --wa-editor-font-size: var(--vscode-editor-font-size, 13px);
 
   /* Web Awesome canonical space scale. Mirrors the values from the WA default
      theme so consumers can rely on --wa-space-* even if the WA color-scheme
@@ -96,166 +199,6 @@
   --wa-space-3xl: calc(var(--wa-space-scale) * 3rem); /* 48px */
   --wa-space-4xl: calc(var(--wa-space-scale) * 4rem); /* 64px */
   --wa-space-5xl: calc(var(--wa-space-scale) * 5rem); /* 80px */
-}
-
-/*
- * --texra-* compatibility alias layer.
- *
- * These tokens fall into two buckets:
- *   1. Niche VS Code tokens with no clean WA equivalent (terminal ansi, symbol
- *      icons, charts, list rows, git decoration, debug tokens, diff editor).
- *      They remain texra-prefixed and source --vscode-* directly.
- *   2. Legacy aliases that map cleanly to a --wa-* token. New code should
- *      prefer the --wa-* token; these aliases exist to keep ~120 consumer
- *      files working without a churn-heavy single-PR migration.
- */
-:root {
-  /* Bucket 2 — wa-aligned aliases (prefer --wa-* in new code). */
-  --texra-foreground: var(--wa-color-text-normal);
-  --texra-descriptionForeground: var(--wa-color-text-quiet);
-  --texra-icon-foreground: var(--wa-color-text-quiet);
-  --texra-editor-background: var(--wa-color-surface-default);
-  --texra-editor-foreground: var(--wa-color-text-normal);
-  --texra-editorWidget-background: var(--wa-color-surface-raised);
-  --texra-editorWidget-border: var(--wa-color-surface-border);
-  --texra-editorHoverWidget-background: var(--wa-color-surface-raised);
-  --texra-editorHoverWidget-border: var(--wa-color-surface-border);
-  --texra-editorHoverWidget-foreground: var(--wa-color-text-normal);
-  --texra-sideBar-background: var(--wa-color-surface-lowered);
-  --texra-sideBar-foreground: var(--wa-color-text-normal);
-  --texra-sideBarSectionHeader-background: var(--wa-color-surface-lowered);
-  --texra-sideBarTitle-foreground: var(--wa-color-text-normal);
-  --texra-panel-border: var(--wa-color-surface-border);
-  --texra-panelSection-border: var(--wa-color-surface-border);
-  --texra-widget-border: var(--wa-color-surface-border);
-  --texra-textCodeBlock-background: var(--wa-color-surface-lowered);
-  --texra-textBlockQuote-background: var(--wa-color-surface-lowered);
-  --texra-textLink-foreground: var(--wa-color-text-link);
-  --texra-textLink-activeForeground: var(--vscode-textLink-activeForeground);
-  --texra-input-background: var(--wa-form-control-background-color);
-  --texra-input-foreground: var(--wa-form-control-text-color);
-  --texra-input-border: var(--wa-form-control-border-color);
-  --texra-input-placeholderForeground: var(--vscode-input-placeholderForeground);
-  --texra-dropdown-border: var(--wa-form-control-border-color);
-  --texra-button-secondaryBackground: var(--wa-color-neutral-fill-quiet);
-  --texra-button-secondaryForeground: var(--wa-color-neutral-on-quiet);
-  --texra-button-hoverBackground: var(--vscode-button-hoverBackground);
-  --texra-button-border: var(--vscode-button-border, transparent);
-  --texra-button-separator: var(--vscode-button-separator, rgb(255 255 255 / 40%));
-  --texra-errorForeground: var(--wa-color-danger-on-quiet);
-  --texra-editorError-foreground: var(--wa-color-danger-on-quiet);
-  --texra-editorWarning-foreground: var(--wa-color-warning-on-quiet);
-  --texra-editorWarning-background: var(--wa-color-warning-fill-quiet);
-  --texra-editorInfo-foreground: var(--wa-color-brand-on-quiet);
-  --texra-editorInfo-background: var(--wa-color-brand-fill-quiet);
-  --texra-inputValidation-errorBackground: var(--wa-color-danger-fill-quiet);
-  --texra-inputValidation-errorBorder: var(--vscode-inputValidation-errorBorder);
-  --texra-inputValidation-errorForeground: var(--wa-color-danger-on-quiet);
-  --texra-inputValidation-infoBackground: var(--wa-color-brand-fill-quiet);
-  --texra-inputValidation-infoBorder: var(--wa-color-brand-border-quiet);
-  --texra-inputValidation-infoForeground: var(--wa-color-brand-on-quiet);
-  --texra-inputValidation-warningBackground: var(--wa-color-warning-fill-quiet);
-  --texra-inputValidation-warningBorder: var(--wa-color-warning-border-quiet);
-  --texra-inputValidation-warningForeground: var(--wa-color-warning-on-quiet);
-  --texra-progressBar-background: var(--vscode-progressBar-background);
-  --texra-statusBarItem-warningBackground: var(--vscode-statusBarItem-warningBackground);
-  --texra-notificationsInfoIcon-foreground: var(--vscode-notificationsInfoIcon-foreground);
-  --texra-activityBarBadge-background: var(--vscode-activityBarBadge-background);
-  --texra-badge-background: var(--vscode-badge-background);
-  --texra-toolbar-activeBackground: var(--vscode-toolbar-activeBackground);
-  --texra-toolbar-hoverBackground: var(--vscode-toolbar-hoverBackground);
-  --texra-widget-shadow: var(--vscode-widget-shadow);
-  --texra-contrastBorder: var(--vscode-contrastBorder);
-  --texra-focusBorder: var(--wa-color-focus);
-
-  /* Bucket 1 — niche VS Code tokens with no clean WA equivalent. */
-  /* TODO(token-pass-3): WA does not yet expose list-row hover/selection
-     equivalents. Keep these texra aliases until WA introduces semantic tokens
-     for tree/list rows (or until consumers move to wa-tree::part(item) styling
-     hooks); see #3690. */
-  --texra-list-activeSelectionBackground: var(--vscode-list-activeSelectionBackground);
-  --texra-list-activeSelectionForeground: var(--vscode-list-activeSelectionForeground);
-  --texra-list-hoverBackground: var(--vscode-list-hoverBackground);
-  --texra-list-warningForeground: var(--vscode-list-warningForeground);
-
-  --texra-menu-background: var(--vscode-menu-background);
-  --texra-menu-border: var(--vscode-menu-border);
-  --texra-menu-foreground: var(--vscode-menu-foreground);
-
-  /* Charts — no WA equivalent. Keep as native palette tokens. */
-  --texra-charts-blue: var(--vscode-charts-blue);
-  --texra-charts-green: var(--vscode-charts-green);
-  --texra-charts-orange: var(--vscode-charts-orange);
-  --texra-charts-red: var(--vscode-charts-red);
-  --texra-charts-yellow: var(--vscode-charts-yellow);
-
-  /* Editor surface details — fine-grained tokens with no WA equivalent. */
-  --texra-editor-font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
-  --texra-editor-font-size: var(--vscode-editor-font-size, 13px);
-  --texra-editor-findMatchBackground: var(--vscode-editor-findMatchBackground);
-  --texra-editor-findMatchHighlightBackground: var(--vscode-editor-findMatchHighlightBackground);
-  --texra-editor-findMatchHighlightForeground: var(--vscode-editor-findMatchHighlightForeground);
-  --texra-editor-inactiveSelectionBackground: var(--vscode-editor-inactiveSelectionBackground);
-  --texra-editor-lineHighlightBackground: var(--vscode-editor-lineHighlightBackground);
-  --texra-editor-selectionBackground: var(--vscode-editor-selectionBackground);
-  --texra-editorGroupHeader-tabsBackground: var(--vscode-editorGroupHeader-tabsBackground);
-  --texra-editorGroupHeader-tabsBorder: var(--vscode-editorGroupHeader-tabsBorder);
-  --texra-textBlockQuote-border: var(--vscode-textBlockQuote-border);
-  --texra-textPreformat-foreground: var(--vscode-textPreformat-foreground);
-
-  /* Diff editor — no WA equivalent. */
-  --texra-diffEditor-insertedTextBackground: var(--vscode-diffEditor-insertedTextBackground);
-  --texra-diffEditor-removedTextBackground: var(--vscode-diffEditor-removedTextBackground);
-
-  /* Git decoration — no WA equivalent. */
-  --texra-gitDecoration-addedResourceForeground: var(--vscode-gitDecoration-addedResourceForeground);
-  --texra-gitDecoration-deletedResourceForeground: var(--vscode-gitDecoration-deletedResourceForeground);
-  --texra-gitDecoration-modifiedResourceForeground: var(--vscode-gitDecoration-modifiedResourceForeground);
-
-  /* Debug token expressions — no WA equivalent. */
-  --texra-debugTokenExpression-name: var(--vscode-debugTokenExpression-name);
-  --texra-debugTokenExpression-number: var(--vscode-debugTokenExpression-number);
-  --texra-debugTokenExpression-string: var(--vscode-debugTokenExpression-string);
-
-  /* Symbol icons — no WA equivalent. */
-  --texra-symbolIcon-classForeground: var(--vscode-symbolIcon-classForeground);
-  --texra-symbolIcon-constantForeground: var(--vscode-symbolIcon-constantForeground);
-  --texra-symbolIcon-functionForeground: var(--vscode-symbolIcon-functionForeground);
-  --texra-symbolIcon-keywordForeground: var(--vscode-symbolIcon-keywordForeground);
-  --texra-symbolIcon-propertyForeground: var(--vscode-symbolIcon-propertyForeground);
-  --texra-symbolIcon-variableForeground: var(--vscode-symbolIcon-variableForeground);
-
-  /* Terminal — no WA equivalent. */
-  --texra-terminal-ansiBlack: var(--vscode-terminal-ansiBlack);
-  --texra-terminal-ansiBlue: var(--vscode-terminal-ansiBlue);
-  --texra-terminal-ansiBrightBlack: var(--vscode-terminal-ansiBrightBlack);
-  --texra-terminal-ansiBrightBlue: var(--vscode-terminal-ansiBrightBlue);
-  --texra-terminal-ansiBrightCyan: var(--vscode-terminal-ansiBrightCyan);
-  --texra-terminal-ansiBrightGreen: var(--vscode-terminal-ansiBrightGreen);
-  --texra-terminal-ansiBrightMagenta: var(--vscode-terminal-ansiBrightMagenta);
-  --texra-terminal-ansiBrightRed: var(--vscode-terminal-ansiBrightRed);
-  --texra-terminal-ansiBrightWhite: var(--vscode-terminal-ansiBrightWhite);
-  --texra-terminal-ansiBrightYellow: var(--vscode-terminal-ansiBrightYellow);
-  --texra-terminal-ansiCyan: var(--vscode-terminal-ansiCyan);
-  --texra-terminal-ansiGreen: var(--vscode-terminal-ansiGreen);
-  --texra-terminal-ansiMagenta: var(--vscode-terminal-ansiMagenta);
-  --texra-terminal-ansiRed: var(--vscode-terminal-ansiRed);
-  --texra-terminal-ansiWhite: var(--vscode-terminal-ansiWhite);
-  --texra-terminal-ansiYellow: var(--vscode-terminal-ansiYellow);
-  --texra-terminal-background: var(--vscode-terminal-background);
-  --texra-terminal-foreground: var(--vscode-terminal-foreground);
-  --texra-terminal-selectionBackground: var(--vscode-terminal-selectionBackground);
-  --texra-terminalCursor-foreground: var(--vscode-terminalCursor-foreground);
-
-  /* Testing icon colors. */
-  --texra-testing-iconFailed: var(--vscode-testing-iconFailed, var(--wa-color-danger-fill-loud));
-  --texra-testing-iconPassed: var(--vscode-testing-iconPassed, var(--wa-color-success-fill-loud));
-
-  /* Legacy alias kept for monospace consumers. */
-  --texra-font-family-monospace: var(--wa-font-family-mono);
-  --texra-font-family: var(--wa-font-family-body);
-  --texra-font-size: var(--wa-font-size-m);
-  --texra-font-weight: var(--wa-font-weight-normal);
 }
 
 body {

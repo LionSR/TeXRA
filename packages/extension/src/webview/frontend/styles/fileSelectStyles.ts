@@ -269,7 +269,7 @@ export const dropdownStyles = css`
   .dropdown-container wa-button.has-options::part(base),
   wa-button.has-options::part(base) {
     box-shadow: inset 0 0 0 1px
-      var(--texra-inputValidation-infoBorder, var(--wa-color-focus));
+      var(--wa-color-brand-border-quiet, var(--wa-color-focus));
   }
 
   .dropdown-container .dropdown-menu {
@@ -279,9 +279,9 @@ export const dropdownStyles = css`
     right: auto;
     z-index: 100;
     display: block;
-    background-color: var(--texra-menu-background);
-    color: var(--texra-menu-foreground);
-    border: var(--border-thin) solid var(--texra-menu-border);
+    background-color: var(--wa-color-menu-background);
+    color: var(--wa-color-menu-foreground);
+    border: var(--border-thin) solid var(--wa-color-menu-border);
     border-radius: var(--border-radius);
     min-width: 160px;
   }

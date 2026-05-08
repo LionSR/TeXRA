@@ -92,10 +92,10 @@ export class ToolCard extends LitElement {
       }
 
       .tool-id-tag {
-        font-family: var(--texra-editor-font-family, monospace), monospace;
+        font-family: var(--wa-font-family-mono, monospace), monospace;
         font-size: var(--font-size-xs);
         padding: var(--border-thin) var(--border-radius-large);
-        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
+        background: var(--wa-color-badge-bg, rgba(128, 128, 128, 0.15));
         color: var(--wa-color-neutral-on-quiet);
         border-radius: var(--border-radius);
       }
@@ -139,10 +139,10 @@ export class ToolCard extends LitElement {
         border-radius: var(--border-radius);
         white-space: nowrap;
         font-weight: var(--font-weight-medium);
-        color: var(--texra-charts-blue, #3794ff);
+        color: var(--wa-color-chart-blue, #3794ff);
         background: color-mix(
           in srgb,
-          var(--texra-charts-blue, #3794ff) 12%,
+          var(--wa-color-chart-blue, #3794ff) 12%,
           transparent
         );
       }
