@@ -109,7 +109,7 @@ Both hosts continue importing from the same packages. No component lives in `pac
 | --- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | 1   | State hoist                                             | `progressState.ts` (new), `ProgressApp.ts`, `messageDispatcher.ts`, possibly `slices/*`                                                                             | None — extension and desktop render identically |
 | 2   | Extract `<stream-conversation>` + slim `<progress-app>` | `components/StreamConversation.ts` (new), `ProgressApp.ts`                                                                                                          | None                                            |
-| 3   | Electron shell + workspace-explorer removal             | `desktop/src/renderer/{main.ts,index.html,styles.css}`, `desktop/src/main/desktopWorkspaceExplorer.ts` (deleted) and IPC unwired, `desktopMenu.ts`, `main/index.ts` | Desktop layout flips; extension unchanged       |
+| 3   | Electron shell + workspace-explorer removal             | `packages/desktop/src/renderer/{main.ts,index.html,styles.css}`, `packages/desktop/src/main/desktopWorkspaceExplorer.ts` (deleted) and IPC unwired, `packages/desktop/src/main/desktopMenu.ts`, `packages/desktop/src/main/index.ts` | Desktop layout flips; extension unchanged       |
 
 Each PR independently shippable and revertible. Extension users see no diff until or after all three.
 
