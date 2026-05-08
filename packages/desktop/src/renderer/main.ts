@@ -9,7 +9,9 @@ import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import type WaTreeItem from '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
+import { setWaColorScheme } from '@shared/wa/waColorScheme';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 import { COMMON_COMMANDS } from '@common/webview/commands';
@@ -333,6 +335,14 @@ function renderBootstrapFallback(error: unknown): void {
                     'TeXRA desktop renderer recovery failed',
                     recoveryError,
                   );
+                  // Recovery render threw — the shell is NOT mounted, so
+                  // restore the bootstrap-failed latch so subsequent
+                  // navigation guards still treat boot as broken. Without
+                  // this, a successful `bootstrapFailed = false` followed
+                  // by a thrown `rerenderShell()` would leave the latch
+                  // in an inconsistent "recovered" state while the actual
+                  // DOM is back in the fallback.
+                  bootstrapFailed = true;
                   renderBootstrapFallback(recoveryError);
                 }
               }}
@@ -520,10 +530,9 @@ function applyDesktopTheme(theme: DesktopThemeKind): void {
   document.body.classList.add(`vscode-${theme}`, `texra-${theme}`);
   document.body.dataset.vscodeThemeKind = theme;
   // Apply Web Awesome's native color-scheme class on the document root so
-  // WA's --wa-* dark-mode overrides activate (per WA theming model).
-  const docRoot = document.documentElement;
-  docRoot.classList.remove('wa-light', 'wa-dark');
-  docRoot.classList.add(theme === 'light' ? 'wa-light' : 'wa-dark');
+  // WA's --wa-* dark-mode overrides activate. Shared helper keeps the class
+  // set + ordering in lockstep with the VS Code BaseWebviewApp path.
+  setWaColorScheme(theme !== 'light');
 }
 
 function getWindowTargetOrigin(): string {
@@ -534,20 +543,21 @@ function getWindowTargetOrigin(): string {
 }
 
 function logViewerTemplate(state: LogViewerState): TemplateResult {
+  // Shared labeled-action button (icon + text, outlined, small) — used to be
+  // hand-rolled here; reuse the helper so we get consistent class names,
+  // aria-label fallback, and class composition with the rest of the codebase.
   const action = (
     icon: 'rotate-right' | 'copy' | 'download' | 'folder-open',
     label: string,
     onClick: () => void,
-  ): TemplateResult => html`
-    <wa-button
-      class="desktop-secondary-button"
-      appearance="outlined"
-      size="small"
-      @click=${onClick}
-    >
-      ${waIcon(icon, { slot: 'start' })} ${label}
-    </wa-button>
-  `;
+  ): TemplateResult =>
+    renderLabeledActionButton({
+      icon,
+      text: label,
+      className: 'desktop-secondary-button',
+      appearance: 'outlined',
+      onClick,
+    });
   return html`
     <section class="desktop-log-viewer">
       <header class="desktop-log-viewer-header">

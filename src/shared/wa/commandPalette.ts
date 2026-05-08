@@ -17,12 +17,16 @@ import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js'
 
 // Single command row. `meta` is the trailing label (host-defined: an
 // accelerator hint, an unavailable reason, a category, etc.) so the palette
-// stays opinion-free about how hosts format that column. `enabled === false`
+// stays opinion-free about how hosts format that column. `category` is an
+// optional, separate field that hosts can include in the search haystack
+// without displaying — useful when `meta` is reserved for an accelerator
+// but the row should still match category-name queries. `enabled === false`
 // renders the row but disables click/Enter dispatch.
 export interface CommandPaletteEntry {
   readonly id: string;
   readonly label: string;
   readonly meta?: string;
+  readonly category?: string;
   readonly enabled: boolean;
 }
 
@@ -30,9 +34,11 @@ export interface CommandPaletteOptions {
   readonly document: Document;
   readonly entries: readonly CommandPaletteEntry[];
   readonly onExecute: (id: string) => boolean;
-  // Returning false suppresses the global Cmd/Ctrl+K shortcut (e.g. while a
-  // first-run walkthrough is visible). Click and programmatic open() always
-  // proceed regardless of the guard.
+  // Returning false suppresses ALL palette opens — both the global
+  // Cmd/Ctrl+K shortcut and any direct `controller.open()` call (e.g. while
+  // a first-run walkthrough is visible). The guard runs at the entry of
+  // open(), so hosts that want shortcut-only suppression should pass a
+  // custom `isShortcut` instead.
   readonly canOpen?: () => boolean;
   // Override the host shortcut (defaults to Cmd/Ctrl+K). Hosts that already
   // own a global keybinding manager can pass `null` to disable the helper's
@@ -73,7 +79,13 @@ export function filterCommandPaletteEntries<
 
   const queryParts = normalizedQuery.split(/\s+/);
   return entries.filter((entry) => {
-    const haystack = `${entry.label} ${entry.category ?? entry.meta ?? ''} ${entry.id}`
+    // Include both `category` and `meta` (separated by a space) so hosts that
+    // reserve `meta` for an accelerator/reason can still surface a row by
+    // category-name match. Empty/undefined fields collapse to '' and don't
+    // affect matching.
+    const category = entry.category ?? '';
+    const meta = entry.meta ?? '';
+    const haystack = `${entry.label} ${category} ${meta} ${entry.id}`
       .replaceAll('.', ' ')
       .toLowerCase();
     return queryParts.every((part) => haystack.includes(part));
@@ -230,8 +242,11 @@ export function createCommandPalette({
   };
 
   const scrollActiveItemIntoView = (): void => {
-    if (!itemClass) return;
-    const items = dialog.querySelectorAll<HTMLButtonElement>(`.${itemClass}`);
+    // Prefer the host-supplied class selector when provided; otherwise fall
+    // back to the role attribute every rendered row carries (`role="option"`)
+    // so arrow navigation still scrolls when no `classes.item` was passed.
+    const selector = itemClass ? `.${itemClass}` : '[role="option"]';
+    const items = dialog.querySelectorAll<HTMLElement>(selector);
     items.item(activeIndex)?.scrollIntoView({ block: 'nearest' });
   };
 
