@@ -54,7 +54,7 @@ export const toolUseStyles = css`
 
   :is(.tool-use-error, .banner-details--error)
     > .details-summary
-    :is(.tool-use-title, .label, .codicon),
+    :is(.tool-use-title, .label, wa-icon),
   .banner-content--error {
     color: var(--color-error);
   }
@@ -89,17 +89,13 @@ export const toolUseStyles = css`
     color: var(--texra-editorWarning-foreground, #ff8c00);
   }
 
-  .tool-use-user-feedback > .details-summary :is(.tool-use-title, .codicon) {
+  .tool-use-user-feedback > .details-summary :is(.tool-use-title, wa-icon) {
     color: var(--texra-textLink-foreground, #3794ff);
   }
 
-  .tool-use-in-progress > .details-summary :is(.tool-use-title, .codicon) {
+  .tool-use-in-progress > .details-summary :is(.tool-use-title, wa-icon),
+  .tool-use-in-progress > .details-summary wa-spinner {
     color: var(--texra-charts-yellow, #cca700);
-  }
-
-  /* Uses @keyframes spin from animationStyles (included via logStyles) */
-  .tool-use-in-progress > .details-summary .codicon.spin {
-    animation: spin 1s linear infinite;
   }
 
   .tool-use-in-progress > .details-summary tool-timer {

@@ -20,6 +20,9 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { STREAM_STATUS, type ActiveChildInfo } from '@shared/schemas';
@@ -27,8 +30,6 @@ import {
   designTokens,
   commonViewStyles,
 } from '@shared/styles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
-import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { ProgressEvents } from '../events';
 
 // Local imports - contexts
@@ -52,7 +53,6 @@ export class BackgroundTasksPanel extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconIconClasses,
     css`
       :host {
         display: block;
@@ -158,7 +158,7 @@ export class BackgroundTasksPanel extends LitElement {
         color: var(--texra-foreground);
       }
 
-      .section-label .codicon {
+      .section-label wa-icon {
         font-size: var(--font-size-xs);
       }
 
@@ -265,15 +265,19 @@ export class BackgroundTasksPanel extends LitElement {
     const hasFinished = finishedCount > 0;
     if (!hasActive && !hasFinished) return nothing;
 
-    const icon =
-      kind === 'process' ? 'codicon-terminal' : 'codicon-server-process';
+    const icon = kind === 'process' ? 'terminal' : 'server-process';
     const label = kind === 'process' ? 'Processes' : 'Subagents';
 
     return html`
       <details>
         <summary class="section-label">
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i class="codicon ${icon}"></i>
+          <wa-icon
+            library="texra"
+            name="chevron-right"
+            class="toggle-icon"
+            aria-hidden="true"
+          ></wa-icon>
+          <wa-icon library="texra" name=${icon} aria-hidden="true"></wa-icon>
           <span
             >${label}${hasActive
               ? html` &middot; ${active.length} active`
@@ -315,15 +319,16 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <div class="task-item">
         <div class="task-header">
-          <i
+          <wa-icon
+            library="texra"
+            name=${icon}
+            aria-hidden="true"
             class=${classMap({
-              codicon: true,
-              [icon]: true,
               'task-icon': true,
               'task-icon--process': !isAgentTool(child),
               'task-icon--subagent': isAgentTool(child),
             })}
-          ></i>
+          ></wa-icon>
           <span
             class=${classMap({
               'task-name': true,
@@ -373,7 +378,12 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <details class="task-output" open>
         <summary>
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
+          <wa-icon
+            library="texra"
+            name="chevron-right"
+            class="toggle-icon"
+            aria-hidden="true"
+          ></wa-icon>
           ${label}
         </summary>
         <div class="output-container">
@@ -407,13 +417,13 @@ function isAgentTool(child: ActiveChildInfo): boolean {
   );
 }
 
-/** Pick the appropriate codicon for a background task item. */
+/** Pick the appropriate wa-icon name for a background task item. */
 function getTaskIcon(child: ActiveChildInfo): string {
-  if (child.toolName === 'bash') return 'codicon-terminal';
-  if (isAgentTool(child)) return 'codicon-robot';
+  if (child.toolName === 'bash') return 'terminal';
+  if (isAgentTool(child)) return 'robot';
   // Subagents (delegation, workflow) default to server-process;
   // processes without a toolName fall back to terminal.
-  return child.childStreamId ? 'codicon-server-process' : 'codicon-terminal';
+  return child.childStreamId ? 'server-process' : 'terminal';
 }
 
 /** Check if a child is in a waiting/idle state rather than actively processing. */

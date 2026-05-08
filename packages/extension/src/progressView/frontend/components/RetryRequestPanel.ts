@@ -13,9 +13,11 @@ import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { when } from 'lit/directives/when.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import {
-  codiconIconClasses,
   commonViewStyles,
   designTokens,
   requestPanelStyles,
@@ -30,12 +32,7 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 
 @customElement('retry-request-panel')
 export class RetryRequestPanel extends BaseRequestPanel {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    codiconIconClasses,
-    requestPanelStyles,
-  ];
+  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   override handleKeyboardShortcut(key: string): boolean {
     const data = this.permission.data as RetryPermission;
@@ -95,7 +92,12 @@ export class RetryRequestPanel extends BaseRequestPanel {
             ? html`
                 <details class="retry-request__error-details">
                   <summary class="retry-request__error-summary">
-                    <i class="codicon codicon-chevron-right toggle-icon"></i>
+                    <wa-icon
+                      library="texra"
+                      name="chevron-right"
+                      class="toggle-icon"
+                      aria-hidden="true"
+                    ></wa-icon>
                     Error details
                   </summary>
                   <div class="retry-request__error-body">${detailsText}</div>

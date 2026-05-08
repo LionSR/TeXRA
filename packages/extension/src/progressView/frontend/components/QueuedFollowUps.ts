@@ -4,9 +4,11 @@ import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
@@ -21,7 +23,6 @@ export class QueuedFollowUps extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconIconClasses,
     css`
       :host {
         display: block;
@@ -124,7 +125,12 @@ export class QueuedFollowUps extends LitElement {
               const { display, full } = this.truncateMessage(message);
               return html`
                 <div class="queued-follow-up-item" title=${ifDefined(full)}>
-                  <i class="codicon codicon-comment queued-follow-up-icon"></i>
+                  <wa-icon
+                    library="texra"
+                    name="comment"
+                    class="queued-follow-up-icon"
+                    aria-hidden="true"
+                  ></wa-icon>
                   <span class="queued-follow-up-text">${display}</span>
                 </div>
               `;
