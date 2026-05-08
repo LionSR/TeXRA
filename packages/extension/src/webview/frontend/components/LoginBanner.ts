@@ -14,7 +14,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { PROMO_NOTICE_SHORT } from '@shared/copy/promoNotice';
 
-import { bannerStyles } from '../styles/bannerStyles';
+import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('login-banner')
@@ -87,8 +87,7 @@ export class LoginBanner extends LitElement {
 
   override updated(changed: PropertyValues<this>): void {
     if (changed.has('visible')) {
-      this.dataset.visible = this.visible ? 'true' : 'false';
-      this.setAttribute('aria-hidden', this.visible ? 'false' : 'true');
+      applyBannerVisibility(this, this.visible);
     }
   }
 
