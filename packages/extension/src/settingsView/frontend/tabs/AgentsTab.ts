@@ -15,7 +15,7 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
 import type { AgentCategory } from '@shared/schemas/agent';
@@ -24,12 +24,12 @@ import { AgentSelectionEvents } from '../components/profile/events';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/AgentSelectionPanel';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 @customElement('agents-tab')
 export class AgentsTab extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     css`
       :host {
@@ -118,7 +118,7 @@ export class AgentsTab extends LitElement {
         border-radius: var(--border-radius);
       }
 
-      .agents-dir-bar .codicon {
+      .agents-dir-bar wa-icon {
         font-size: var(--font-size);
         flex-shrink: 0;
       }
@@ -244,7 +244,7 @@ export class AgentsTab extends LitElement {
                 : ''}"
               @click=${() => (this.activeSubTab = 'workflow')}
             >
-              <span class="codicon codicon-symbol-method"></span>
+              <wa-icon library="texra" name="symbol-method"></wa-icon>
               Workflow
               <span class="agents-sub-tab-count"
                 >(${this.workflowAgents.length})</span
@@ -256,7 +256,7 @@ export class AgentsTab extends LitElement {
                 : ''}"
               @click=${() => (this.activeSubTab = 'toolUse')}
             >
-              <span class="codicon codicon-tools"></span>
+              <wa-icon library="texra" name="tools"></wa-icon>
               Tool Use
               <span class="agents-sub-tab-count"
                 >(${this.toolUseAgents.length})</span
@@ -269,7 +269,7 @@ export class AgentsTab extends LitElement {
               @click=${this.handleSaveTeam}
               title="Save current agent configuration as a team"
             >
-              <span class="codicon codicon-save"></span>
+              <wa-icon library="texra" name="save"></wa-icon>
               Save Team
             </button>
             ${this.desktopHost
@@ -280,7 +280,7 @@ export class AgentsTab extends LitElement {
                     @click=${this.handleCreateFromTemplate}
                     title="Create a new agent from a blank YAML template"
                   >
-                    <span class="codicon codicon-new-file"></span>
+                    <wa-icon library="texra" name="new-file"></wa-icon>
                     From Template
                   </button>
                   <button
@@ -288,7 +288,7 @@ export class AgentsTab extends LitElement {
                     @click=${this.handleCreateAgent}
                     title="Create a new agent with AI"
                   >
-                    <span class="codicon codicon-add"></span>
+                    <wa-icon library="texra" name="add"></wa-icon>
                     New Agent
                   </button>
                 `}
@@ -297,7 +297,7 @@ export class AgentsTab extends LitElement {
 
         <!-- Row 2: Custom directory info bar -->
         <div class="agents-dir-bar">
-          <span class="codicon codicon-folder"></span>
+          <wa-icon library="texra" name="folder"></wa-icon>
           <span class="agents-dir-label">Custom agents:</span>
           <span class="agents-dir-path" title=${this.customAgentDir}
             >${this.customAgentDir}</span
@@ -311,7 +311,7 @@ export class AgentsTab extends LitElement {
               @click=${this.handleOpenFolder}
               title="Open folder in file explorer"
             >
-              <span class="codicon codicon-folder-opened"></span>
+              <wa-icon library="texra" name="folder-opened"></wa-icon>
             </button>
             <button
               class="tab-action-btn"

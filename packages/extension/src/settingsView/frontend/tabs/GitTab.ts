@@ -9,11 +9,13 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import {
-  codiconStyles,
   commonViewStyles,
   designTokens,
   tintedBadgeStyles,
 } from '@shared/styles';
+
+// Web Awesome icon bundle (side-effect import)
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas
 import type { PRSubscriptionEntry } from '@shared/schemas/settingsViewMessages';
@@ -31,7 +33,6 @@ import {
 export class GitTab extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     tintedBadgeStyles,
     css`
@@ -272,7 +273,7 @@ export class GitTab extends LitElement {
                       class="tab-action-btn"
                       @click=${this.handleSetGitHubToken}
                     >
-                      <span class="codicon codicon-key"></span>
+                      <wa-icon library="texra" name="key"></wa-icon>
                       ${tokenIsSet ? 'Replace token' : 'Set token'}
                     </button>
                     ${this.githubTokenStatus === 'secret'
@@ -280,7 +281,7 @@ export class GitTab extends LitElement {
                           class="tab-action-btn token-remove-btn"
                           @click=${this.handleRemoveGitHubToken}
                         >
-                          <span class="codicon codicon-trash"></span>
+                          <wa-icon library="texra" name="trash"></wa-icon>
                           Remove
                         </button>`
                       : nothing}
@@ -288,7 +289,7 @@ export class GitTab extends LitElement {
                       class="tab-action-btn"
                       @click=${this.handleOpenGitHubTokenUrl}
                     >
-                      <span class="codicon codicon-github"></span>
+                      <wa-icon library="texra" name="github"></wa-icon>
                       Create on GitHub…
                     </button>
                   </span>
@@ -365,9 +366,10 @@ export class GitTab extends LitElement {
                                               owner.streamId,
                                             )}
                                         >
-                                          <span
-                                            class="codicon codicon-comment-discussion"
-                                          ></span>
+                                          <wa-icon
+                                            library="texra"
+                                            name="comment-discussion"
+                                          ></wa-icon>
                                           Jump to agent
                                         </button>
                                       </div>
@@ -386,7 +388,7 @@ export class GitTab extends LitElement {
                           @click=${() =>
                             this.handleUnsubscribePR(subscription.key)}
                         >
-                          <span class="codicon codicon-debug-stop"></span>
+                          <wa-icon library="texra" name="debug-stop"></wa-icon>
                           Stop
                         </button>
                       </li>

@@ -16,7 +16,7 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - shared schemas and events
@@ -53,7 +53,6 @@ function isBuiltIn(source: string): boolean {
 export class AgentSelectionPanel extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     css`
       :host {
