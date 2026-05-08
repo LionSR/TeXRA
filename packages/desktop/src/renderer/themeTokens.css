@@ -506,3 +506,12 @@ body.texra-high-contrast {
   --vscode-symbolIcon-propertyForeground: var(--desktop-color-accent);
   --vscode-symbolIcon-variableForeground: var(--desktop-color-input-foreground);
 }
+
+/* VS Code-compact dropdown items. WA defaults to ~0.5em padding which makes
+   each option ~32px tall; VS Code menus run ~22-24px. */
+wa-option::part(base),
+wa-dropdown-item::part(base) {
+  padding: var(--wa-space-3xs) var(--wa-space-xs);
+  min-height: 0;
+  line-height: var(--wa-line-height-condensed);
+}
