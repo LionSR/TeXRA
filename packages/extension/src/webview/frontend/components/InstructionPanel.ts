@@ -310,7 +310,8 @@ export class InstructionPanel extends LitElement {
       }
 
       wa-button.execute-button:focus-visible::part(base) {
-        outline: 2px solid var(--wa-color-focus, var(--wa-color-brand-fill-loud));
+        outline: 2px solid
+          var(--wa-color-focus, var(--wa-color-brand-fill-loud));
         outline-offset: 1px;
       }
 

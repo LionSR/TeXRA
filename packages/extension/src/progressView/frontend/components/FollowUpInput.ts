@@ -206,10 +206,7 @@ export class FollowUpInput extends LitElement {
                 title: 'Polish follow-up with AI',
                 onClick: this.emitPolish,
               })}
-              ${when(
-                this.polishing,
-                () => html`<wa-spinner></wa-spinner>`,
-              )}
+              ${when(this.polishing, () => html`<wa-spinner></wa-spinner>`)}
               ${renderIconActionButton({
                 id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
                 icon: this.recordingController.state.icon,
