@@ -3,7 +3,7 @@ import { css, type CSSResult } from 'lit';
 export const waTabThemeTokenStyles: CSSResult = css`
   --track-width: var(--border-thin);
   --track-color: var(--color-border);
-  --indicator-color: var(--texra-focusBorder);
+  --indicator-color: var(--wa-color-focus);
   --indicator-width: 1.5px;
 `;
 

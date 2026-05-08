@@ -83,7 +83,7 @@ export class UserMessage extends LitElement {
         padding: var(--wa-space-2xs);
         max-width: 85%;
         background-color: var(--texra-editor-selectionBackground);
-        border: var(--border-thin) solid var(--texra-panel-border);
+        border: var(--border-thin) solid var(--wa-color-surface-border);
         border-radius: var(--border-radius);
       }
 
@@ -93,7 +93,7 @@ export class UserMessage extends LitElement {
         gap: var(--wa-space-3xs);
         margin-bottom: var(--wa-space-3xs);
         font-size: var(--font-size-xs);
-        color: var(--texra-descriptionForeground);
+        color: var(--wa-color-text-quiet);
       }
 
       .user-message-header-left {
@@ -121,7 +121,7 @@ export class UserMessage extends LitElement {
       }
 
       .user-message-content {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         white-space: pre-wrap;
         word-wrap: break-word;
         line-height: var(--line-height-relaxed);
@@ -134,7 +134,7 @@ export class UserMessage extends LitElement {
         padding: var(--wa-space-2xs);
         background: var(
           --texra-textCodeBlock-background,
-          var(--texra-editor-background)
+          var(--wa-color-surface-default)
         );
         border-radius: var(--border-radius-small);
         font-family: var(

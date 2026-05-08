@@ -82,7 +82,7 @@ function buildContextManagementItems(data: ContextManagementData): {
   const config: ActionConfig = ACTION_CONFIG[action] || {
     icon: 'history',
     label: action || 'Context Management',
-    color: 'var(--texra-foreground)',
+    color: 'var(--wa-color-text-normal)',
   };
 
   const items: ContextStatItem[] = [];
