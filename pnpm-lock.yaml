@@ -47,12 +47,6 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.105.3
         version: 2.105.3
-      '@vscode-elements/elements':
-        specifier: ^2.5.1
-        version: 2.5.1(@vscode/codicons@0.0.45)
-      '@vscode/codicons':
-        specifier: ^0.0.45
-        version: 0.0.45
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -403,12 +397,6 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.105.3
         version: 2.105.3
-      '@vscode-elements/elements':
-        specifier: ^2.5.1
-        version: 2.5.1(@vscode/codicons@0.0.45)
-      '@vscode/codicons':
-        specifier: ^0.0.45
-        version: 0.0.45
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -2081,14 +2069,6 @@ packages:
 
   '@vitest/utils@4.1.5':
     resolution: {integrity: sha512-76wdkrmfXfqGjueGgnb45ITPyUi1ycZ4IHgC2bhPDUfWHklY/q3MdLOAB+TF1e6xfl8NxNY0ZYaPCFNWSsw3Ug==}
-
-  '@vscode-elements/elements@2.5.1':
-    resolution: {integrity: sha512-HiKgIj9GwlfYkw1LrxG7dM5bMQUr8/GkOqG1HU1+npGHd51nRKCF6ZZ9FtnfoC2wujNN0lc+m0emH/wMpAseYQ==}
-    peerDependencies:
-      '@vscode/codicons': '>=0.0.40'
-
-  '@vscode/codicons@0.0.45':
-    resolution: {integrity: sha512-1KAZ7XCMagp5Gdrlr4bbbcAqgcIL623iO1wW6rfcSVGAVUQvR0WP7bQx1SbJ11gmV3fdQTSEFIJQ/5C+HuVasw==}
 
   '@vscode/test-cli@0.0.12':
     resolution: {integrity: sha512-iYN0fDg29+a2Xelle/Y56Xvv7Nc8Thzq4VwpzAF/SIE6918rDicqfsQxV6w1ttr2+SOm+10laGuY9FG2ptEKsQ==}
@@ -7625,14 +7605,6 @@ snapshots:
       '@vitest/pretty-format': 4.1.5
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
-
-  '@vscode-elements/elements@2.5.1(@vscode/codicons@0.0.45)':
-    dependencies:
-      '@lit/context': 1.1.6
-      '@vscode/codicons': 0.0.45
-      lit: 3.3.2
-
-  '@vscode/codicons@0.0.45': {}
 
   '@vscode/test-cli@0.0.12':
     dependencies:

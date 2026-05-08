@@ -17,17 +17,12 @@ const nonce = 'texra-webview-smoke';
 
 const commonReplacements = {
   cspSource: 'file:',
-  codiconUri: fileUri('packages/extension/dist/shared/codicon.css'),
-  codiconsFontUri: fileUri('packages/extension/dist/shared/codicon.ttf'),
   commonStyleUri: fileUri('packages/extension/src/common/styles/common.css'),
   commonsBundleUri: fileUri('packages/extension/dist/shared/commons.js'),
   desktopThemeTokensUri: fileUri(
     'packages/desktop/src/renderer/themeTokens.css',
   ),
   nonce,
-  vscodeElementsBundleUri: fileUri(
-    'packages/extension/dist/shared/vscode-elements-bundled.js',
-  ),
 };
 
 const views = [
@@ -152,9 +147,6 @@ const views = [
       },
     ],
     replacements: {
-      codiconsFontUri: fileUri(
-        'packages/extension/dist/progressView/codicon.ttf',
-      ),
       progressBundleUri: fileUri(
         'packages/extension/dist/progressView/bundle.js',
       ),

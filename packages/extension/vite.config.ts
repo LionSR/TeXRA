@@ -1,28 +1,11 @@
 import { defineConfig, type Plugin } from 'vite';
 import { resolve } from 'path';
-import { createRequire } from 'module';
-import { copyFileSync, mkdirSync, writeFileSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, existsSync } from 'fs';
 
 // Shared path aliases from tsconfig.json (single source of truth)
 import { aliases } from '../../scripts/aliases.mjs';
 
 const webviews = ['progressView', 'settingsView', 'webview'] as const;
-const require = createRequire(import.meta.url);
-
-function copySharedWebviewRuntimeAssets(sharedDir: string): void {
-  copyFileSync(
-    require.resolve('@vscode-elements/elements/dist/bundled.js'),
-    resolve(sharedDir, 'vscode-elements-bundled.js'),
-  );
-  copyFileSync(
-    require.resolve('@vscode/codicons/dist/codicon.css'),
-    resolve(sharedDir, 'codicon.css'),
-  );
-  copyFileSync(
-    require.resolve('@vscode/codicons/dist/codicon.ttf'),
-    resolve(sharedDir, 'codicon.ttf'),
-  );
-}
 
 /**
  * Plugin to generate shared webview runtime assets for Vite builds.
@@ -44,7 +27,6 @@ function commonsStubPlugin(): Plugin {
       const commonsPath = resolve(sharedDir, 'commons.js');
 
       mkdirSync(sharedDir, { recursive: true });
-      copySharedWebviewRuntimeAssets(sharedDir);
 
       // Only create stub if commons.js doesn't exist (i.e., webpack hasn't run)
       if (!existsSync(commonsPath)) {
