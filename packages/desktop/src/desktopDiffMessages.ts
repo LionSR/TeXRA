@@ -52,9 +52,14 @@ export function buildDesktopShowDiffMessage(
   };
 }
 
-export function buildDesktopCloseDiffMessage(): DesktopCloseDiffMessage {
-  return { command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF };
-}
+// `desktop:closeDiff` is consumed by the renderer's window-message
+// handler; producers (today: the Playwright trajectory test) construct
+// the literal `{ command: 'desktop:closeDiff' }` inline via
+// `window.postMessage`, since that test runs in the browser context
+// where importing this module isn't worth the bundle hit. The schema
+// (`DesktopCloseDiffMessageSchema`) remains the source of truth. No
+// `buildDesktopCloseDiffMessage` helper is defined to avoid dead code
+// (Cursor Bugbot review on PR #3815).
 
 // Map a file extension to a Monaco language id. Kept narrow on purpose —
 // Monaco's full registry is large and we only need the languages a TeXRA
