@@ -269,6 +269,85 @@ export class InstructionPanel extends LitElement {
         height: var(--height-control);
       }
 
+      /*
+       * Execute is the primary action of the entire UI, so it gets a
+       * slightly larger, more distinctive treatment than the other
+       * footer wa-buttons (which are 24x24 icon-only controls).
+       */
+      wa-button.execute-button {
+        min-width: auto;
+        height: auto;
+        flex: 0 0 auto;
+      }
+
+      wa-button.execute-button::part(base) {
+        min-width: 64px;
+        min-height: 32px;
+        padding: 0 var(--wa-space-m, 0.75rem);
+        gap: var(--wa-space-2xs, 0.25rem);
+        border-radius: var(--wa-border-radius-m, 6px);
+        background: var(--wa-color-brand-fill-loud);
+        color: var(--wa-color-brand-on-loud);
+        border: 1px solid transparent;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        transition:
+          transform 120ms ease,
+          box-shadow 120ms ease,
+          background-color 120ms ease;
+      }
+
+      wa-button.execute-button::part(base):hover {
+        transform: translateY(-0.5px);
+        box-shadow: 0 2px 6px rgb(0 0 0 / 12%);
+      }
+
+      wa-button.execute-button::part(base):active {
+        transform: translateY(0.5px);
+        box-shadow: 0 0 0 transparent;
+      }
+
+      wa-button.execute-button:focus-visible::part(base) {
+        outline: 2px solid var(--wa-color-focus, var(--wa-color-brand-fill-loud));
+        outline-offset: 1px;
+      }
+
+      wa-button.execute-button wa-icon {
+        font-size: 14px;
+      }
+
+      .execute-button__label {
+        font-size: var(--font-size-sm, 0.85rem);
+        line-height: 1;
+      }
+
+      .execute-button__kbd {
+        display: inline-flex;
+        align-items: center;
+        height: 18px;
+        padding: 0 var(--wa-space-2xs, 0.25rem);
+        margin-left: var(--wa-space-2xs, 0.25rem);
+        border-radius: 4px;
+        background: rgb(255 255 255 / 18%);
+        color: inherit;
+        font-family: var(--wa-font-family-mono, ui-monospace, monospace);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        opacity: 0.85;
+      }
+
+      /*
+       * Hide the keyboard-shortcut chip when the toolbar is too narrow,
+       * so the button doesn't push selects off the row on tiny widgets.
+       */
+      @media (max-width: 480px) {
+        .execute-button__kbd {
+          display: none;
+        }
+      }
+
       .model-selection-footer .agent-select-controls,
       .model-selection-footer .agent-select-dropdowns {
         display: flex;
@@ -504,6 +583,18 @@ export class InstructionPanel extends LitElement {
 
   private handleExecute(): void {
     this.dispatchEvent(MainViewEvents.execute());
+  }
+
+  /**
+   * Keyboard-shortcut label shown in the Execute button. Matches the
+   * `texra.execute` keybinding declared in the extension's package.json
+   * (cmd+option+e on macOS, ctrl+alt+e elsewhere).
+   */
+  private get executeShortcutLabel(): string {
+    const isMac =
+      typeof navigator !== 'undefined' &&
+      /Mac|iPhone|iPod|iPad/.test(navigator.platform || '');
+    return isMac ? '⌘⌥E' : 'Ctrl+Alt+E';
   }
 
   private handleAgentSettings(): void {
@@ -755,12 +846,17 @@ export class InstructionPanel extends LitElement {
           </div>
           <wa-button
             id="executeButton"
-            title="Execute"
+            class="execute-button"
+            title="Execute (${this.executeShortcutLabel})"
             appearance="filled"
             variant="brand"
             @click=${this.handleExecute}
           >
             <wa-icon slot="start" library="texra" name="play"></wa-icon>
+            <span class="execute-button__label">Run</span>
+            <kbd class="execute-button__kbd" aria-hidden="true"
+              >${this.executeShortcutLabel}</kbd
+            >
           </wa-button>
         </div>
       </div>
