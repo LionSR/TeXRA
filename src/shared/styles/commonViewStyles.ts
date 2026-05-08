@@ -92,56 +92,76 @@ export const commonViewStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
-  /* Compact action button (with text) — IDE-density chrome.
-   * Borderless by default; subtle hover surface; small font. */
+  /* Compact action button (with text) — stricter IDE-density chrome.
+   * Borderless default; hover adds a subtle border (no fill swap). */
   .action-button::part(base) {
     gap: var(--spacing-small);
-    min-height: var(--height-control);
-    padding: 0 var(--spacing-medium);
+    min-height: 22px;
+    padding: 0 6px;
     border: var(--border-thin) solid transparent;
     background: transparent;
     font-size: var(--font-size-sm);
   }
 
   .action-button::part(base):hover {
-    background: var(--texra-toolbar-hoverBackground, var(--texra-list-hoverBackground));
-    border-color: var(--texra-contrastBorder, transparent);
+    background: transparent;
+    border-color: var(--wa-color-surface-border, var(--color-border));
   }
 
   .action-button wa-icon {
     font-size: var(--font-size-sm);
   }
 
-  /* Compact icon-only action button — borderless, ~22px square.
-   * Mirrors VS Code toolbar icon density. */
+  /* Compact icon-only action button — stricter minimalism.
+   * 20×20, no hover fill, opacity-driven hover/disabled. */
   .action-icon-button::part(base) {
-    width: 22px;
-    min-width: 22px;
-    height: 22px;
-    min-height: 22px;
+    width: 20px;
+    min-width: 0;
+    height: 20px;
+    min-height: 0;
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--texra-icon-foreground, var(--texra-foreground));
+    color: var(--wa-color-text-quiet, var(--texra-icon-foreground, var(--texra-foreground)));
+    opacity: var(--opacity-subtle);
+    transition: opacity 120ms ease;
   }
 
   .action-icon-button::part(base):hover {
-    background: var(--texra-toolbar-hoverBackground, var(--texra-list-hoverBackground));
-    color: var(--texra-foreground);
+    opacity: var(--opacity-full);
+    background: transparent;
   }
 
   .action-icon-button:focus-visible::part(base) {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
-    outline-offset: -1px;
+    outline: var(--border-thin) solid var(--wa-color-focus, var(--texra-focusBorder));
+    outline-offset: 1px;
   }
 
   .action-icon-button[disabled]::part(base) {
-    opacity: var(--opacity-disabled);
+    opacity: 0.35;
     background: transparent;
   }
 
   .action-icon-button wa-icon {
-    font-size: var(--font-size);
+    font-size: 13px;
+  }
+
+  /* Stricter compactness for wa-checkbox / wa-radio — smaller label,
+   * tighter gap between control and label. */
+  wa-checkbox,
+  wa-radio {
+    font-size: var(--font-size-sm);
+  }
+
+  wa-checkbox::part(label),
+  wa-radio::part(label) {
+    font-size: var(--font-size-sm);
+    padding-inline-start: var(--spacing-small);
+  }
+
+  wa-checkbox::part(base),
+  wa-radio::part(base) {
+    gap: var(--spacing-small);
   }
 
   .clickable-link {

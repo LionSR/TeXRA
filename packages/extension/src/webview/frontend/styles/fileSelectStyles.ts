@@ -11,8 +11,8 @@
 
 import { css } from 'lit';
 
-/** Compact wa-input / wa-select sizing — IDE-density form controls.
- * WA defaults to ~38px tall; reduce to ~26px to match VS Code chrome.
+/** Compact wa-input / wa-select sizing — stricter IDE-density form controls.
+ * WA defaults to ~38px tall; reduce to ~22px to match minimal VS Code chrome.
  * Keep selectors in sync with the canonical rules in
  * `src/shared/styles/selectStyles.ts`. */
 export const compactFormControlStyles = css`
@@ -21,13 +21,17 @@ export const compactFormControlStyles = css`
   }
 
   wa-select::part(combobox) {
-    min-height: 26px;
+    min-height: 22px;
+    min-width: 0;
     padding-block: 0;
-    padding-inline: var(--spacing-small);
+    padding-inline: 6px;
+    border: var(--border-thin) solid
+      var(--wa-color-surface-border, var(--color-border));
   }
 
   wa-select::part(display-input) {
-    padding-block: 2px;
+    padding-block: 1px;
+    padding-inline: 6px;
     font-size: var(--font-size-sm);
   }
 
@@ -40,58 +44,67 @@ export const compactFormControlStyles = css`
   }
 
   wa-input::part(base) {
-    min-height: 26px;
+    min-height: 22px;
     padding-block: 0;
+    border: var(--border-thin) solid
+      var(--wa-color-surface-border, var(--color-border));
   }
 
   wa-input::part(input) {
-    padding-block: 2px;
+    padding-block: 1px;
+    padding-inline: 6px;
+    font-size: var(--font-size-sm);
   }
 `;
 
 /** Compact icon action button styles — duplicated from commonViewStyles
  * so file-select components don't need to import the full common view sheet
  * just to size their toolbar icons. Keep selectors in sync with the canonical
- * rules in `src/shared/styles/commonViewStyles.ts`. */
+ * rules in `src/shared/styles/commonViewStyles.ts`.
+ *
+ * Stricter minimalism: 20×20, opacity-driven hover (no fill swap). */
 export const compactActionButtonStyles = css`
   .action-icon-button::part(base) {
-    width: 22px;
-    min-width: 22px;
-    height: 22px;
-    min-height: 22px;
+    width: 20px;
+    min-width: 0;
+    height: 20px;
+    min-height: 0;
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--texra-icon-foreground, var(--texra-foreground));
+    color: var(
+      --wa-color-text-quiet,
+      var(--texra-icon-foreground, var(--texra-foreground))
+    );
+    opacity: var(--opacity-subtle);
+    transition: opacity 120ms ease;
   }
 
   .action-icon-button::part(base):hover {
-    background: var(
-      --texra-toolbar-hoverBackground,
-      var(--texra-list-hoverBackground)
-    );
-    color: var(--texra-foreground);
+    opacity: var(--opacity-full);
+    background: transparent;
   }
 
   .action-icon-button:focus-visible::part(base) {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
-    outline-offset: -1px;
+    outline: var(--border-thin) solid
+      var(--wa-color-focus, var(--texra-focusBorder));
+    outline-offset: 1px;
   }
 
   .action-icon-button[disabled]::part(base) {
-    opacity: var(--opacity-disabled);
+    opacity: 0.35;
     background: transparent;
   }
 
   .action-icon-button wa-icon {
-    font-size: var(--font-size);
+    font-size: 13px;
   }
 `;
 
 /** Core file-select layout styles. */
 export const fileSelectLayoutStyles = css`
   .file-select {
-    margin-bottom: var(--spacing-large);
+    margin-bottom: var(--spacing-small);
   }
 
   .file-select:has(.optional-label) {
@@ -104,8 +117,9 @@ export const fileSelectLayoutStyles = css`
     align-items: center;
     margin-bottom: var(--spacing-small);
     flex-wrap: nowrap;
-    line-height: var(--line-height-relaxed);
+    line-height: var(--line-height-normal);
     gap: var(--spacing-small);
+    min-height: 22px;
   }
 
   .file-select-header > wa-button {
@@ -130,7 +144,7 @@ export const fileSelectLayoutStyles = css`
     flex-wrap: nowrap;
     flex: 1;
     min-width: 0;
-    min-height: var(--height-control);
+    min-height: 22px;
   }
 
   .file-select-label-group wa-button {
@@ -190,7 +204,7 @@ export const toggleStyles = css`
     min-width: calc(var(--width-button-min) * 2);
     display: flex;
     align-items: center;
-    height: var(--height-control);
+    height: 22px;
   }
 
   .toggle-icon {
@@ -202,7 +216,7 @@ export const toggleStyles = css`
     color: var(--text-color);
     display: flex;
     align-items: center;
-    height: var(--height-control);
+    height: 22px;
     background: none;
     border: none;
   }

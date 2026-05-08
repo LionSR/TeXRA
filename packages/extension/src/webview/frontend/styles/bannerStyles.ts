@@ -14,13 +14,17 @@ export const bannerStyles: CSSResult = css`
     margin-bottom: var(--spacing-large);
   }
 
-  /* Compact callout chrome — tighten WA default padding ~20%. */
+  /* Compact callout chrome — stricter minimalism, tight banner padding. */
+  wa-callout {
+    --padding: 4px 8px;
+  }
+
   wa-callout::part(message) {
-    padding-block: 6px;
+    padding-block: 4px;
   }
 
   wa-callout::part(icon) {
-    padding-inline-end: 8px;
+    padding-inline-end: 6px;
   }
 
   .banner-row {
