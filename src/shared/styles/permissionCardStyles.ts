@@ -122,8 +122,8 @@ export const permissionCardStyles: CSSResult = css`
     font-weight: var(--font-weight-semibold);
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
   }
 
   .file-list {
@@ -176,9 +176,9 @@ export const permissionCardStyles: CSSResult = css`
     width: 100%;
     min-height: 60px;
     padding: var(--wa-space-xs);
-    border: var(--border-thin) solid var(--texra-input-border);
-    background: var(--texra-input-background);
-    color: var(--texra-input-foreground);
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
+    background: var(--wa-form-control-background-color);
+    color: var(--wa-form-control-text-color);
     border-radius: var(--border-radius);
     font-family: inherit;
     font-size: var(--font-size);
