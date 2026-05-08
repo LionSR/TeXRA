@@ -221,56 +221,134 @@ function rerenderShell(): void {
   render(shellTemplate(), appRoot);
 }
 
-// Render the log viewer template into its dedicated container so that
-// re-renders driven by log-snapshot updates do not stomp the shell.
-renderLogViewer();
-rerenderShell();
+function renderBootstrapFallback(error: unknown): void {
+  // Last-resort fallback when the main shell cannot mount. This must NOT
+  // depend on any custom element or async work — if the shell crashed before
+  // reaching the chrome render, we still need to draw something so the user
+  // is not staring at a blank white window. The user-visible failure mode
+  // we are guarding against is a thrown decrypt during early IPC (e.g., the
+  // macOS keychain prompt is denied) propagating into the bootstrap promise
+  // chain and aborting render() before any pixels are painted.
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'TeXRA could not finish starting up.';
+  const reload = () => window.location.reload();
+  render(
+    html`
+      <section
+        class="desktop-bootstrap-fallback"
+        role="alert"
+        aria-live="assertive"
+      >
+        <div class="desktop-bootstrap-fallback-panel">
+          <h1>TeXRA could not start</h1>
+          <p>${message}</p>
+          <p>
+            If you just denied a keychain prompt, your saved API keys and
+            sign-in session are unavailable. You can continue without them, or
+            reload after granting access.
+          </p>
+          <div class="desktop-bootstrap-fallback-actions">
+            <wa-button appearance="filled" variant="brand" @click=${reload}>
+              Reload
+            </wa-button>
+            <wa-button
+              appearance="outlined"
+              @click=${() => {
+                // Hide the fallback so the partial shell (if any) becomes
+                // visible. The renderer can still drive routes via the
+                // command palette even when secrets are unavailable.
+                const node = appRoot.querySelector(
+                  '.desktop-bootstrap-fallback',
+                );
+                if (node instanceof HTMLElement) node.hidden = true;
+              }}
+            >
+              Continue without saved secrets
+            </wa-button>
+          </div>
+        </div>
+      </section>
+    `,
+    appRoot,
+  );
+}
 
-const firstRunWalkthrough = createFirstRunWalkthrough({
-  document,
-  dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
-  setRoute,
-});
-appRoot.append(firstRunWalkthrough.element);
+let bootstrapFailed = false;
+try {
+  // Render the log viewer template into its dedicated container so that
+  // re-renders driven by log-snapshot updates do not stomp the shell.
+  renderLogViewer();
+  rerenderShell();
+} catch (error) {
+  bootstrapFailed = true;
+  console.error('TeXRA desktop renderer bootstrap failed', error);
+  renderBootstrapFallback(error);
+}
 
-const commandPalette = createDesktopCommandPalette({
-  document,
-  canOpen: () => !firstRunWalkthrough.isVisible(),
-  actions: {
-    showRoute: setRoute,
-    showSettings: (tabIndex, agentSubTab) => {
-      setRoute('settings');
-      if (tabIndex == null) return;
-      window.postMessage(
-        buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
-        getWindowTargetOrigin(),
-      );
-    },
-    openDesktopDocs: () => {
-      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
-    },
-    openLogFolder: () => {
-      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER);
-    },
-    openWorkspaceFolder: () => {
-      postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
-    },
-    showFirstRunWalkthrough: () => {
-      firstRunWalkthrough.show();
-    },
-    resetMainView: () => {
-      setRoute('main');
-      window.postMessage(
-        buildDesktopMainViewResetMessage(),
-        getWindowTargetOrigin(),
-      );
-    },
-  },
-});
-appRoot.append(commandPalette.element);
+// If the shell failed to mount, skip everything that depends on its DOM —
+// command palette, walkthrough, and IPC requests. The fallback UI gives the
+// user a way to reload or proceed without saved secrets.
+if (bootstrapFailed) {
+  // Surface unhandled IPC rejections that arrive after the fallback so they
+  // do not silently disappear into the console.
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled rejection after bootstrap failure', event.reason);
+  });
+}
+
+const firstRunWalkthrough = bootstrapFailed
+  ? undefined
+  : createFirstRunWalkthrough({
+      document,
+      dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
+      setRoute,
+    });
+if (firstRunWalkthrough) appRoot.append(firstRunWalkthrough.element);
+
+const commandPalette = bootstrapFailed
+  ? undefined
+  : createDesktopCommandPalette({
+      document,
+      canOpen: () => !firstRunWalkthrough?.isVisible(),
+      actions: {
+        showRoute: setRoute,
+        showSettings: (tabIndex, agentSubTab) => {
+          setRoute('settings');
+          if (tabIndex == null) return;
+          window.postMessage(
+            buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
+            getWindowTargetOrigin(),
+          );
+        },
+        openDesktopDocs: () => {
+          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
+        },
+        openLogFolder: () => {
+          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER);
+        },
+        openWorkspaceFolder: () => {
+          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
+        },
+        showFirstRunWalkthrough: () => {
+          firstRunWalkthrough?.show();
+        },
+        resetMainView: () => {
+          setRoute('main');
+          window.postMessage(
+            buildDesktopMainViewResetMessage(),
+            getWindowTargetOrigin(),
+          );
+        },
+      },
+    });
+if (commandPalette) appRoot.append(commandPalette.element);
 
 function openCommandPalette(): void {
-  commandPalette.open();
+  commandPalette?.open();
 }
 
 function openWorkspaceFolder(): void {
@@ -302,6 +380,7 @@ function isThemeMessage(message: unknown): message is SetThemeMessage {
 function setRoute(route: DesktopRoute): void {
   currentRoute = route;
   document.body.dataset.desktopRoute = route;
+  if (bootstrapFailed) return;
   rerenderShell();
   if (route === 'logs') requestLogSnapshot();
 }
@@ -317,9 +396,9 @@ window.addEventListener('message', (event) => {
     setRoute(event.data.route);
   } else if (isDesktopOnboardingSetStateMessage(event.data)) {
     if (event.data.shouldShow) {
-      firstRunWalkthrough.show();
+      firstRunWalkthrough?.show();
     } else {
-      firstRunWalkthrough.hide();
+      firstRunWalkthrough?.hide();
     }
   } else if (isThemeMessage(event.data)) {
     applyDesktopTheme(event.data.theme);
@@ -329,8 +408,10 @@ window.addEventListener('message', (event) => {
     renderLogSnapshot(event.data);
   }
 });
-requestWorkspaceTree();
-postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
+if (!bootstrapFailed) {
+  requestWorkspaceTree();
+  postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
+}
 
 function applyDesktopTheme(theme: DesktopThemeKind): void {
   // Body and html classList mutation is OK here: those elements live OUTSIDE

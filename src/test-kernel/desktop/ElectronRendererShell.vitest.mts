@@ -80,8 +80,11 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
     expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.DISMISS');
     expect(rendererMain).toContain('showFirstRunWalkthrough');
+    // Optional chaining is required because the walkthrough is intentionally
+    // skipped when the renderer bootstrap fallback is showing — the command
+    // palette must still be safe to construct in that case.
     expect(rendererMain).toContain(
-      'canOpen: () => !firstRunWalkthrough.isVisible()',
+      'canOpen: () => !firstRunWalkthrough?.isVisible()',
     );
     // wa-dialog handles focus trap, escape, and modal backdrop natively.
     // Assert the dialog wiring + the one custom keydown interceptor.
