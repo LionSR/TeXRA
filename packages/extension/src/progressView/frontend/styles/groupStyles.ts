@@ -38,11 +38,7 @@ export const groupStyles = css`
     &.is-running {
       border-left-color: var(--wa-color-status-warning-bg);
       box-shadow: inset 2px 0 0
-        color-mix(
-          in srgb,
-          var(--wa-color-status-warning-bg) 35%,
-          transparent
-        );
+        color-mix(in srgb, var(--wa-color-status-warning-bg) 35%, transparent);
     }
 
     &.is-error {
@@ -56,8 +52,7 @@ export const groupStyles = css`
 
   .log-group-content {
     padding-left: var(--wa-space-2xs);
-    border-left: var(--border-thin) dashed
-      var(--wa-color-tabs-border);
+    border-left: var(--border-thin) dashed var(--wa-color-tabs-border);
   }
 
   .log-run {

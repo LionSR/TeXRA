@@ -8,10 +8,8 @@ const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   padding: 'var(--wa-space-2xs, 4px) var(--wa-space-xs, 8px)',
   fontSize: 'var(--wa-font-size-m, 13px)',
   fontFamily: 'var(--wa-font-family-body, system-ui), system-ui',
-  color:
-    'var(--wa-color-text-normal, var(--wa-color-text-normal))',
-  background:
-    'var(--wa-color-surface-raised, var(--wa-color-surface-default))',
+  color: 'var(--wa-color-text-normal, var(--wa-color-text-normal))',
+  background: 'var(--wa-color-surface-raised, var(--wa-color-surface-default))',
   border:
     '1px solid var(--wa-color-surface-border, var(--texra-contrastBorder, transparent))',
   borderRadius: 'var(--border-radius, 3px)',

@@ -282,10 +282,7 @@ export class LaTeXTab extends LitElement {
       .dependency-guide {
         margin-top: var(--wa-space-2xs);
         padding: var(--wa-space-xs);
-        background: var(
-          --wa-color-surface-lowered,
-          rgba(128, 128, 128, 0.08)
-        );
+        background: var(--wa-color-surface-lowered, rgba(128, 128, 128, 0.08));
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
         color: var(--wa-color-text-normal);
@@ -310,10 +307,7 @@ export class LaTeXTab extends LitElement {
         flex: 1;
         min-width: 0;
         padding: var(--wa-space-2xs) var(--wa-space-xs);
-        background: var(
-          --wa-color-surface-lowered,
-          rgba(128, 128, 128, 0.08)
-        );
+        background: var(--wa-color-surface-lowered, rgba(128, 128, 128, 0.08));
         border-radius: var(--border-radius-small);
         font-family: var(--wa-font-family-mono, monospace), monospace;
         font-size: var(--font-size-sm);
@@ -390,7 +384,6 @@ export class LaTeXTab extends LitElement {
       wa-tag.setting-badge {
         flex-shrink: 0;
       }
-
     `,
   ];
 
@@ -545,7 +538,8 @@ export class LaTeXTab extends LitElement {
           ? html`
               <div class="dependency-install-actions">
                 <button
-                  class="tab-action-btn ${this.copiedCommand === installCmd.command
+                  class="tab-action-btn ${this.copiedCommand ===
+                  installCmd.command
                     ? 'copy-success'
                     : ''}"
                   title=${this.copiedCommand === installCmd.command
@@ -1009,8 +1003,7 @@ export class LaTeXTab extends LitElement {
           <wa-select
             .value=${String(effective)}
             @change=${(e: Event) => {
-              const v = (e.target as WaSelect)
-                .value as LatexConfigValueFor<F>;
+              const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;
               this.dispatchSetConfigValue(opts.field, v);
             }}
             style="margin-top:var(--wa-space-2xs);"

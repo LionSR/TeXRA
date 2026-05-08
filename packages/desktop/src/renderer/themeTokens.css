@@ -179,8 +179,14 @@
   --wa-color-chart-purple: var(--desktop-color-purple);
 
   /* Diff editor. */
-  --wa-color-diff-inserted: light-dark(rgb(46 160 67 / 15%), rgb(46 160 67 / 30%));
-  --wa-color-diff-removed: light-dark(rgb(248 81 73 / 15%), rgb(248 81 73 / 30%));
+  --wa-color-diff-inserted: light-dark(
+    rgb(46 160 67 / 15%),
+    rgb(46 160 67 / 30%)
+  );
+  --wa-color-diff-removed: light-dark(
+    rgb(248 81 73 / 15%),
+    rgb(248 81 73 / 30%)
+  );
 
   /* Git decoration. */
   --wa-color-git-added: var(--desktop-color-success);
@@ -203,7 +209,10 @@
   /* Editor surface details. */
   --wa-color-editor-selection: var(--desktop-color-accent-subtle);
   --wa-color-editor-inactive-selection: var(--desktop-color-accent-subtle);
-  --wa-color-editor-line-highlight: light-dark(rgb(31 35 40 / 6%), rgb(255 255 255 / 4%));
+  --wa-color-editor-line-highlight: light-dark(
+    rgb(31 35 40 / 6%),
+    rgb(255 255 255 / 4%)
+  );
   --wa-color-editor-find-match: light-dark(#fff8c5, #623315);
   --wa-color-editor-find-match-highlight: light-dark(#ffe09c, #4a3219);
   --wa-color-editor-find-match-highlight-fg: var(--desktop-color-foreground);

@@ -19,7 +19,10 @@ import { css, type CSSResult } from 'lit';
  * Centralising the writes keeps the five banner components from each carrying
  * their own copy of the visibility-derivation logic.
  */
-export function applyBannerVisibility(host: HTMLElement, visible: boolean): void {
+export function applyBannerVisibility(
+  host: HTMLElement,
+  visible: boolean,
+): void {
   host.dataset.visible = visible ? 'true' : 'false';
   host.setAttribute('aria-hidden', visible ? 'false' : 'true');
 }
@@ -145,10 +148,6 @@ export const bannerStyles: CSSResult = css`
   }
 
   .actions wa-button[appearance='plain']::part(base):hover {
-    background: color-mix(
-      in srgb,
-      currentColor 8%,
-      transparent
-    );
+    background: color-mix(in srgb, currentColor 8%, transparent);
   }
 `;
