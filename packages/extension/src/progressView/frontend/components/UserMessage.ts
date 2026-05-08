@@ -13,6 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { CopyButtonController } from '@shared/controllers';
 import { designTokens } from '@shared/styles/litStyles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - formatter helpers
 import { formatTimestamp } from '../formatters/timestampUtils';
@@ -225,28 +226,21 @@ export class UserMessage extends LitElement {
                 >${timeDisplay}</span
               >
             </span>
-            <vscode-toolbar-button
-              class=${classMap({
-                'user-message-copy': true,
-                [copyState.successClass]: copyState.copied,
-              })}
-              icon="copy"
-              title=${copyState.title}
-              aria-label=${copyState.ariaLabel}
-              @click=${() => this.copyController.copy(displayText)}
-            ></vscode-toolbar-button>
+            ${renderIconActionButton({
+              icon: 'copy',
+              label: copyState.ariaLabel,
+              title: copyState.title,
+              className: `user-message-copy ${copyState.copied ? copyState.successClass : ''}`,
+              onClick: () => this.copyController.copy(displayText),
+            })}
             ${hasRawMessage
-              ? html`<vscode-toolbar-button
-                  class=${classMap({
-                    'user-message-copy': true,
-                    [rawMessageCopyState.successClass]:
-                      rawMessageCopyState.copied,
-                  })}
-                  icon="code"
-                  title=${rawMessageCopyState.title}
-                  aria-label=${rawMessageCopyState.ariaLabel}
-                  @click=${() => this.rawMessageCopyController.copy(this.text)}
-                ></vscode-toolbar-button>`
+              ? renderIconActionButton({
+                  icon: 'code',
+                  label: rawMessageCopyState.ariaLabel,
+                  title: rawMessageCopyState.title,
+                  className: `user-message-copy ${rawMessageCopyState.copied ? rawMessageCopyState.successClass : ''}`,
+                  onClick: () => this.rawMessageCopyController.copy(this.text),
+                })
               : nothing}
           </div>
           <div

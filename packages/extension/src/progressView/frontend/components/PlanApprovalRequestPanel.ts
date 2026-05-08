@@ -26,6 +26,7 @@ import type { PlanApprovalPermission } from '@shared/schemas';
 
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
@@ -83,17 +84,16 @@ export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
             )}
           </ol>
         </div>
-        <vscode-toolbar-container class="plan-approval-request__actions">
-          <vscode-toolbar-button
-            icon="check"
-            label="Approve"
-            title="Approve this plan (y)"
-            data-action="approve"
-            @click=${() => this.emitAction('approve')}
-            >Approve</vscode-toolbar-button
-          >
+        <div class="plan-approval-request__actions">
+          ${renderLabeledActionButton({
+            icon: 'check',
+            text: 'Approve',
+            title: 'Approve this plan (y)',
+            action: 'approve',
+            onClick: () => this.emitAction('approve'),
+          })}
           ${this.renderRejectButton('Reject this plan (n)')}
-        </vscode-toolbar-container>
+        </div>
         ${this.renderFeedbackSection(
           'plan-approval-request__feedback',
           'plan-approval-request__feedback-input',
