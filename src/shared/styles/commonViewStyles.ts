@@ -24,7 +24,7 @@ export const compactIconActionButtonStyles: CSSResult = css`
     background: transparent;
     color: var(
       --wa-color-text-quiet,
-      var(--texra-icon-foreground, var(--wa-color-text-normal))
+      var(--wa-color-text-quiet, var(--wa-color-text-normal))
     );
     opacity: var(--opacity-subtle);
     transition: opacity 120ms ease;
@@ -68,7 +68,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .list-item {
-    border: var(--border-thin) solid var(--texra-panelSection-border);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius-large);
     padding: var(--wa-space-xs);
     background-color: var(--wa-color-surface-default);
@@ -131,7 +131,7 @@ export const commonViewStyles: CSSResult = css`
 
   .panel-collapsible::part(header) {
     padding: var(--wa-space-2xs) var(--wa-space-xs);
-    background-color: var(--texra-sideBarSectionHeader-background, transparent);
+    background-color: var(--wa-color-surface-lowered, transparent);
     color: var(--texra-sideBarTitle-foreground, var(--wa-color-text-normal));
   }
 
