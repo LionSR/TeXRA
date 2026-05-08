@@ -27,10 +27,14 @@ export class GettingStartedBanner extends LitElement {
       wa-callout.getting-started-banner a {
         color: var(--color-text-link);
         text-decoration: none;
+        font-weight: var(--font-weight-medium, 500);
+        border-bottom: 1px dotted
+          color-mix(in srgb, currentColor 40%, transparent);
+        transition: border-color 120ms ease;
       }
 
       wa-callout.getting-started-banner a:hover {
-        text-decoration: underline;
+        border-bottom-color: currentColor;
       }
 
       .getting-started-header {
@@ -41,9 +45,22 @@ export class GettingStartedBanner extends LitElement {
       }
 
       .getting-started-list {
-        margin: var(--wa-space-3xs) 0 0 0;
-        padding-left: var(--wa-space-s);
+        margin: var(--wa-space-2xs) 0 0 0;
+        padding-left: var(--wa-space-m);
         line-height: var(--line-height-relaxed);
+      }
+
+      .getting-started-list li {
+        font-size: var(--font-size-sm);
+        margin-block: 1px;
+      }
+
+      .getting-started-list li::marker {
+        color: color-mix(
+          in srgb,
+          var(--wa-color-brand-fill-loud) 60%,
+          transparent
+        );
       }
     `,
   ];
