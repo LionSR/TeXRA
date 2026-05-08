@@ -32,11 +32,7 @@ import {
 } from '@auth/config';
 import { getAuthStatus } from '@auth/authCommands';
 import { toErrorMessage } from '@common/errors';
-import {
-  getActiveSidebarView,
-  SIDEBAR_VIEWS,
-  setActiveSidebarView,
-} from '@common/webview';
+import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import {
   globalSM,
   initializeStateManagers,
@@ -605,14 +601,13 @@ export async function activate(context: vscode.ExtensionContext) {
     agentEventDisposable,
     { dispose: disposeStatusListener },
     statusBarItem,
+    // `texra.showMainView` keeps its bespoke registration here because the
+    // handler closes over the `MainViewProvider` and the late-bound sidebar
+    // fallback. `texra.toggleView` migrated to the shared command registry
+    // in #3781 batch 4 — its action only needs module-level state
+    // (`getActiveSidebarView()`) so it doesn't need a closure into
+    // `activate()`.
     vscode.commands.registerCommand('texra.showMainView', showMainView),
-    vscode.commands.registerCommand('texra.toggleView', async () => {
-      const target =
-        getActiveSidebarView() === SIDEBAR_VIEWS.MAIN
-          ? 'texra.showProgressView'
-          : 'texra.showMainView';
-      await vscode.commands.executeCommand(target);
-    }),
     vscode.commands.registerCommand(
       'texra.refreshApiKeyStatus',
       refreshApiKeyStatus,

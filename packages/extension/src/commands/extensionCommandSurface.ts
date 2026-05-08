@@ -11,7 +11,13 @@ import {
 import {
   stopAgent as agentStopAgent,
   compactResponse as agentCompactResponse,
+  handleCreateAgentWithAI as agentHandleCreateAgentWithAI,
+  runExecuteCommand as agentRunExecuteCommand,
 } from '@commands/agent';
+import {
+  setApiKey as apiSetApiKey,
+  removeApiKey as apiRemoveApiKey,
+} from '@commands/api/apiKeyCommands';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex';
 import { runSetupAssistant as setupRunAssistant } from '@commands/setup';
 import {
@@ -19,6 +25,7 @@ import {
   handleTestConnection as sysHandleTestConnection,
   handleTestAgentLoading as sysHandleTestAgentLoading,
   handleLoadSpecificAgent as sysHandleLoadSpecificAgent,
+  showImportOptions as sysShowImportOptions,
 } from '@commands/system';
 import {
   handleIndentTeX,
@@ -42,14 +49,25 @@ import {
   handleCompileTikzFigures as latexCompileTikzFigures,
 } from '@commands/latex/figCommands';
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
-import { openProgressViewInTab as progressOpenInTab } from '@commands/progress/progressViewCommands';
+import {
+  openProgressViewInTab as progressOpenInTab,
+  showProgressView as progressShowProgressView,
+} from '@commands/progress/progressViewCommands';
 import { openDoc as sysOpenDoc } from '@commands/system/helpCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { handleParseXml as sysParseXml } from '@commands/system/xmlCommands';
 import { handleParseYaml as sysParseYaml } from '@commands/system/yamlCommands';
 import { handleTestTextEditor as sysTestTextEditor } from '@commands/system/textEditorCommands';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import {
+  MAIN_VIEW_COMMANDS,
+  SIDEBAR_VIEWS,
+  getActiveSidebarView,
+} from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
+import {
+  type ApiProvider,
+  SecretManager,
+} from '@frontend/secretManager';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import {
@@ -62,8 +80,37 @@ import {
   SETTINGS_TAB,
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
-import { type AgentCategory } from '@shared/schemas/agent';
+import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_QUERY } from '@utils/config';
+
+/**
+ * Optional `ApiProvider` argument for `texra.setApiKey`. The schema accepts
+ * `undefined` so the registry's `safeParse` succeeds when the command is
+ * invoked from the palette without arguments — the action then prompts the
+ * user via `showQuickPick`.
+ */
+const SetApiKeyArgSchema = z
+  .enum(SecretManager.API_PROVIDERS)
+  .optional();
+
+/**
+ * Optional `AgentCategory` argument for `texra.createAgentWithAI`. The
+ * registry parses raw `unknown` and the action defaults to `workflow`
+ * when undefined (preserving the legacy `category ?? 'workflow'` shape).
+ */
+const CreateAgentWithAIArgSchema = AgentCategorySchema.optional();
+
+/**
+ * Optional `{ inPlace }` argument for `texra.showProgressView`. The
+ * legacy registration accepted any object and only honoured the
+ * `inPlace` boolean — modelling that as an optional schema keeps the
+ * VS Code-side semantics intact when the command is invoked from
+ * keybindings (no args) vs. internal callers (`{ inPlace: true }`).
+ */
+const ShowProgressViewArgSchema = z
+  .object({ inPlace: z.boolean().optional() })
+  .partial()
+  .optional();
 
 import type { CommandId } from './catalog';
 
@@ -132,6 +179,18 @@ export type ExtensionRegistryCommandId = Extract<
   | 'texra.extractTikzFigures'
   | 'texra.compileTikzFigures'
   | 'texra.cloneOverleafProject'
+  // Batch 4 (#3781) — settings/api/agent surface follow-ups. The
+  // typed handlers carry a Zod schema for their argument so the dispatcher
+  // can parse the optional provider / category / inPlace / config flag
+  // before the handler runs. The remaining no-arg entries (toggleView,
+  // showImportOptions, removeApiKey) drive interactive UI flows internally.
+  | 'texra.removeApiKey'
+  | 'texra.showImportOptions'
+  | 'texra.toggleView'
+  | 'texra.showProgressView'
+  | 'texra.setApiKey'
+  | 'texra.createAgentWithAI'
+  | 'texra.execute'
 >;
 
 /**
@@ -181,6 +240,14 @@ export interface ExtensionCommandActions {
   extractTikzFigures(): Promise<void>;
   compileTikzFigures(): Promise<void>;
   cloneOverleafProject(): Promise<void>;
+  // Batch 4 (#3781).
+  removeApiKey(): Promise<void>;
+  showImportOptions(): Promise<void>;
+  toggleView(): Promise<void>;
+  showProgressView(inPlace: boolean): Promise<void>;
+  setApiKey(provider: ApiProvider | undefined): Promise<void>;
+  createAgentWithAI(category: AgentCategory): Promise<void>;
+  execute(input: unknown): Promise<void>;
 }
 
 export function createExtensionCommandActions(
@@ -244,6 +311,19 @@ export function createExtensionCommandActions(
     extractTikzFigures: latexExtractTikzFigures,
     compileTikzFigures: latexCompileTikzFigures,
     cloneOverleafProject: () => gitCloneOverleafProject(context),
+    removeApiKey: apiRemoveApiKey,
+    showImportOptions: sysShowImportOptions,
+    async toggleView() {
+      const target =
+        getActiveSidebarView() === SIDEBAR_VIEWS.MAIN
+          ? 'texra.showProgressView'
+          : 'texra.showMainView';
+      await vscode.commands.executeCommand(target);
+    },
+    showProgressView: progressShowProgressView,
+    setApiKey: apiSetApiKey,
+    createAgentWithAI: (category) => agentHandleCreateAgentWithAI(context, category),
+    execute: agentRunExecuteCommand,
   };
 }
 
@@ -339,7 +419,7 @@ const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.countLinterMessages()),
   'texra.extractFigurePaths': (actions) =>
     awaitTrue(actions.extractFigurePaths()),
-  // Batch 3 (#3781).
+  // Batch 3 (#3781) — image / PDF / TikZ / Overleaf entry points.
   'texra.encodeImageToBase64': (actions) =>
     awaitTrue(actions.encodeImageToBase64()),
   'texra.convertPdfToImages': (actions) =>
@@ -350,6 +430,30 @@ const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.compileTikzFigures()),
   'texra.cloneOverleafProject': (actions) =>
     awaitTrue(actions.cloneOverleafProject()),
+  // Batch 4 (#3781).
+  'texra.removeApiKey': (actions) => awaitTrue(actions.removeApiKey()),
+  'texra.showImportOptions': (actions) =>
+    awaitTrue(actions.showImportOptions()),
+  'texra.toggleView': (actions) => awaitTrue(actions.toggleView()),
+  'texra.showProgressView': definedHandler(
+    ShowProgressViewArgSchema,
+    (actions: ExtensionCommandActions, parsed) =>
+      awaitTrue(actions.showProgressView(parsed?.inPlace === true)),
+  ),
+  'texra.setApiKey': definedHandler(
+    SetApiKeyArgSchema,
+    (actions: ExtensionCommandActions, provider) =>
+      awaitTrue(actions.setApiKey(provider)),
+  ),
+  'texra.createAgentWithAI': definedHandler(
+    CreateAgentWithAIArgSchema,
+    (actions: ExtensionCommandActions, category) =>
+      awaitTrue(actions.createAgentWithAI(category ?? 'workflow')),
+  ),
+  'texra.execute': definedHandler(
+    z.unknown(),
+    (actions: ExtensionCommandActions, input) => awaitTrue(actions.execute(input)),
+  ),
 } as const satisfies Record<
   Exclude<ExtensionRegistryCommandId, 'texra.showAgents'>,
   // The typed handlers (`openDoc`, `stopAgent`, `compactResponse`) carry
