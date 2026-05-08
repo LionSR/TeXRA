@@ -9,7 +9,7 @@ const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   fontSize: 'var(--wa-font-size-m, 13px)',
   fontFamily: 'var(--wa-font-family-body, system-ui), system-ui',
   color:
-    'var(--texra-editorHoverWidget-foreground, var(--wa-color-text-normal))',
+    'var(--wa-color-text-normal, var(--wa-color-text-normal))',
   background:
     'var(--wa-color-surface-raised, var(--wa-color-surface-default))',
   border:
