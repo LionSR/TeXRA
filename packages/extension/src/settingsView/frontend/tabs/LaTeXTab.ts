@@ -4,6 +4,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -423,22 +424,8 @@ export class LaTeXTab extends LitElement {
         margin-top: var(--spacing-small);
       }
 
-      .setting-badge {
+      wa-tag.setting-badge {
         flex-shrink: 0;
-        font-size: var(--font-size-xs);
-        padding: var(--spacing-tiny) var(--border-radius-large);
-        border-radius: var(--border-radius-small);
-        font-weight: var(--font-weight-medium);
-      }
-
-      .setting-badge.is-set {
-        background: var(--texra-testing-iconPassed, #73c991);
-        color: var(--texra-editor-background);
-      }
-
-      .setting-badge.not-set {
-        background: var(--texra-badge-background);
-        color: var(--texra-badge-foreground);
       }
 
       .checkbox-row {
@@ -562,7 +549,12 @@ export class LaTeXTab extends LitElement {
             )}
           </div>
           ${installed
-            ? html`<span class="setting-badge is-set">Installed</span>`
+            ? html`<wa-tag
+                class="setting-badge"
+                variant="success"
+                size="small"
+                >Installed</wa-tag
+              >`
             : dep.actionEvent
               ? html`
                   <button
@@ -580,7 +572,12 @@ export class LaTeXTab extends LitElement {
                     ${dep.actionLabel ?? 'Install'}
                   </button>
                 `
-              : html`<span class="setting-badge not-set">Not found</span>`}
+              : html`<wa-tag
+                  class="setting-badge"
+                  variant="neutral"
+                  size="small"
+                  >Not found</wa-tag
+                >`}
         </div>
         ${!installed && installCmd
           ? html`

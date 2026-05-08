@@ -4,6 +4,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -11,7 +12,6 @@ import { customElement, property } from 'lit/decorators.js';
 import {
   commonViewStyles,
   designTokens,
-  tintedBadgeStyles,
 } from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
@@ -34,7 +34,6 @@ export class GitTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    tintedBadgeStyles,
     css`
       :host {
         display: block;
@@ -102,19 +101,6 @@ export class GitTab extends LitElement {
       .token-remove-btn:hover {
         color: var(--texra-errorForeground);
         border-color: var(--texra-errorForeground);
-      }
-
-      .tinted-badge--ok {
-        --_tint: var(
-          --texra-testing-iconPassed,
-          var(--texra-terminal-ansiGreen)
-        );
-      }
-      .tinted-badge--warn {
-        --_tint: var(--texra-editorWarning-foreground, #cca700);
-      }
-      .tinted-badge--info {
-        --_tint: var(--texra-badge-background);
       }
 
       .instructions {
@@ -244,12 +230,12 @@ export class GitTab extends LitElement {
 
   private renderTokenStatusBadge(): TemplateResult {
     if (this.githubTokenStatus === 'secret') {
-      return html`<span class="tinted-badge tinted-badge--ok">Set</span>`;
+      return html`<wa-tag variant="success" size="small">Set</wa-tag>`;
     }
     if (this.githubTokenStatus === 'env') {
-      return html`<span class="tinted-badge tinted-badge--info">Env</span>`;
+      return html`<wa-tag variant="neutral" size="small">Env</wa-tag>`;
     }
-    return html`<span class="tinted-badge tinted-badge--warn">Not set</span>`;
+    return html`<wa-tag variant="warning" size="small">Not set</wa-tag>`;
   }
 
   override render(): TemplateResult {
