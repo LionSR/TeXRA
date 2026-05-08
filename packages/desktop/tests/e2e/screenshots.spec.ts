@@ -23,8 +23,6 @@ let launched: LaunchedApp;
 
 test.beforeAll(async () => {
   launched = await launchTexraApp();
-  // Wait for IPC bootstrap (which sets walkthrough state from disk) by checking
-  // for the "Got it" button, then click to dismiss persistently.
   await launched.page.waitForFunction(
     () => {
       const btn = Array.from(document.querySelectorAll('wa-button')).find(
@@ -46,11 +44,6 @@ test.beforeAll(async () => {
     return false;
   });
   if (dismissed) {
-    // Wait for the onboarding walkthrough dialog to detach after dismissing.
-    // The dialog is rendered as `<wa-dialog class="desktop-onboarding">` (see
-    // `packages/desktop/src/renderer/desktopOnboarding.ts`), so target that
-    // class — the previous `wa-dialog[walkthrough-dialog]` selector matched
-    // nothing and made the wait a no-op.
     await launched.page
       .locator('wa-dialog.desktop-onboarding')
       .waitFor({ state: 'hidden', timeout: 5000 });
@@ -64,9 +57,14 @@ test.afterAll(async () => {
 });
 
 /**
- * Set the desktop shell route by posting a `desktop:setRoute` message into
- * the renderer. This mirrors the in-app navigation handler and avoids
- * depending on specific button selectors.
+ * Send a `desktop:setRoute` IPC message to drive the new shell:
+ *   - 'main' / 'progress' map to the center pane
+ *   - 'settings' opens the wa-dialog overlay
+ *   - 'logs' opens the wa-drawer drawer
+ *
+ * After PRD § 7.D the four-route shell is gone, so this helper waits on the
+ * appropriate surface for the requested target rather than the old
+ * `.desktop-route[data-route]` container.
  */
 async function setRoute(
   route: 'main' | 'progress' | 'settings' | 'logs',
@@ -74,14 +72,29 @@ async function setRoute(
   await launched.page.evaluate((next) => {
     window.postMessage({ command: 'desktop:setRoute', route: next }, '*');
   }, route);
-  // Wait for the route container matching the target route to be visible.
   await launched.page.waitForFunction(
     (targetRoute) => {
-      const section = document.querySelector<HTMLElement>(
-        `.desktop-route[data-route="${targetRoute}"]`,
-      );
-      if (!section) return false;
-      return section.hidden === false;
+      switch (targetRoute) {
+        case 'main':
+        case 'progress': {
+          const pane = document.querySelector<HTMLElement>(
+            '.desktop-pane[data-pane="launcher"]',
+          );
+          return pane != null && pane.hidden === false;
+        }
+        case 'settings': {
+          const dialog = document.querySelector<HTMLElement>(
+            'wa-dialog.desktop-settings-overlay',
+          );
+          return dialog != null && dialog.hasAttribute('open');
+        }
+        case 'logs': {
+          const drawer = document.querySelector<HTMLElement>(
+            'wa-drawer.desktop-logs-drawer',
+          );
+          return drawer != null && drawer.hasAttribute('open');
+        }
+      }
     },
     route,
     { timeout: 5000 },
@@ -98,6 +111,9 @@ test('launcher screenshot', async () => {
 });
 
 test('progress screenshot', async () => {
+  // With no active stream, the center pane stays on <main-app>. The rail on
+  // the left is the visible "progress" surface (sessions list). Capture the
+  // rail + launcher together — that's the new default progress experience.
   await setRoute('progress');
   await launched.page.screenshot({
     path: join(SCREENSHOTS_DIR, 'progress.png'),
@@ -109,24 +125,16 @@ test('progress screenshot', async () => {
 test('settings screenshot', async () => {
   await setRoute('settings');
   // Open the Multi-Agent settings tab — the most visually rich area.
-  // Pinned to the inlined constant above (kept in sync with
-  // `SETTINGS_TAB.MULTI_AGENT` in `src/shared/schemas/settingsViewMessages.ts`).
   const multiAgentTabIndex = MULTI_AGENT_TAB_INDEX;
   await launched.page.evaluate((tabIndex) => {
     window.postMessage({ command: 'setTab', tabIndex }, '*');
   }, multiAgentTabIndex);
-  // Wait for the Multi-Agent tab to actually be active. The settings webview
-  // loads `<settings-app>` asynchronously, then the tab-group activates the
-  // requested panel. We probe the shadow DOM to confirm the multi-agent panel
-  // is rendered and visible — a generic `querySelector('*')` check passed
-  // immediately and made the wait a no-op.
   await launched.page.waitForFunction(
     () => {
-      const settingsSection = document.querySelector(
-        '.desktop-route[data-route="settings"]',
+      const dialog = document.querySelector(
+        'wa-dialog.desktop-settings-overlay',
       );
-      if (!settingsSection) return false;
-      const settingsApp = settingsSection.querySelector('settings-app');
+      const settingsApp = dialog?.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
       if (!root) return false;
       const activeTab = root.querySelector(
@@ -135,7 +143,6 @@ test('settings screenshot', async () => {
       const activePanel = root.querySelector(
         'wa-tab-panel[name="multi-agent"][active]',
       );
-      // Either signal indicates the multi-agent tab has been activated.
       return activeTab != null || activePanel != null;
     },
     undefined,
@@ -148,17 +155,17 @@ test('settings screenshot', async () => {
   expect(launched.page.url()).toBeTruthy();
 });
 
-/**
- * Smoke-test the command palette: click the chrome "Commands" button, confirm
- * a wa-dialog opened with at least one entry, then dismiss with Escape. This
- * doesn't capture a screenshot — the goal is to verify the host-neutral
- * `commandPalette` helper still wires up against the desktop's command
- * surface end-to-end (regression guard for #3627).
- */
 test('command palette opens and dismisses', async () => {
   await setRoute('main');
-  // The chrome "Commands" button lives in `desktop-nav`. Click it via DOM
-  // so test does not depend on screen coordinates / animation timing.
+  // Close the settings overlay if a previous test left it open.
+  await launched.page.evaluate(() => {
+    const dialog = document.querySelector<HTMLElement>(
+      'wa-dialog.desktop-settings-overlay',
+    );
+    if (dialog && dialog.hasAttribute('open')) {
+      dialog.removeAttribute('open');
+    }
+  });
   const opened = await launched.page.evaluate(() => {
     const btn = document.querySelector<HTMLElement>('.desktop-command-button');
     if (!btn) return false;
@@ -166,18 +173,12 @@ test('command palette opens and dismisses', async () => {
     return true;
   });
   expect(opened).toBe(true);
-  // Wait for the command palette dialog to appear and contain entries.
-  // NOTE: `waitForFunction(pageFn, arg, options)` — pass timeout in the 3rd
-  // parameter, not as the predicate's arg, otherwise Playwright falls back
-  // to its default timeout.
   await launched.page.waitForFunction(
     () => {
       const dialog = document.querySelector<HTMLElement>(
         '.desktop-command-palette',
       );
       if (!dialog) return false;
-      // Entries are rendered as buttons inside the palette body; falling back
-      // to any clickable item lets the test survive class-name churn.
       const entries = dialog.querySelectorAll(
         'button, [role="option"], .desktop-command-palette-entry',
       );
@@ -197,10 +198,7 @@ test('command palette opens and dismisses', async () => {
     return entries.length;
   });
   expect(entryCount).toBeGreaterThan(0);
-  // Dismiss with Escape and verify the dialog closes.
   await launched.page.keyboard.press('Escape');
-  // Wait for the dialog to close by checking for the `open` attribute removal.
-  // Pass timeout via options (3rd param), not as the predicate arg.
   await launched.page.waitForFunction(
     () => {
       const dialog = document.querySelector<HTMLElement>(
