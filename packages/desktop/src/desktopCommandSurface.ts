@@ -10,6 +10,10 @@ import {
   SETTINGS_TAB,
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
+import {
+  dispatchCommandFromRegistry,
+  type CommandHandler,
+} from '@shared/commands/registry';
 import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopRoute } from './desktopShellMessages.js';
 
@@ -152,7 +156,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   ],
 ]);
 
-const DESKTOP_UNAVAILABLE_COMMANDS = new Map<CommandId, string>([
+const DESKTOP_UNAVAILABLE_COMMAND_ENTRIES = [
   [
     'texra.execute',
     'Use the Launcher execute button after choosing an agent and files.',
@@ -174,7 +178,19 @@ const DESKTOP_UNAVAILABLE_COMMANDS = new Map<CommandId, string>([
     'texra.cleanBuild',
     'Workspace cleanup commands are not wired in desktop yet.',
   ],
-]);
+] as const satisfies readonly (readonly [CommandId, string])[];
+
+type DesktopUnavailableCommandId =
+  (typeof DESKTOP_UNAVAILABLE_COMMAND_ENTRIES)[number][0];
+
+type DesktopAvailableCommandId = Exclude<
+  DesktopCommandId,
+  DesktopUnavailableCommandId
+>;
+
+const DESKTOP_UNAVAILABLE_COMMANDS = new Map<CommandId, string>(
+  DESKTOP_UNAVAILABLE_COMMAND_ENTRIES,
+);
 
 export function getDesktopCommandMenuEntries(
   ids: readonly DesktopCommandId[] = DESKTOP_COMMAND_IDS,
@@ -225,75 +241,96 @@ export function toElectronAccelerator(
   return key.split('+').map(toElectronAcceleratorPart).join('+');
 }
 
+const DESKTOP_COMMAND_HANDLERS = {
+  'texra.showMainView': (actions) => {
+    actions.showRoute('main');
+    return true;
+  },
+  'texra.showProgressView': (actions) => {
+    actions.showRoute('progress');
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: (actions) => {
+    actions.showRoute('logs');
+    return true;
+  },
+  'texra.openSettings': (actions) => {
+    actions.showSettings();
+    return true;
+  },
+  'texra.mainView.reset': (actions) => {
+    if (!actions.resetMainView) return false;
+    actions.resetMainView();
+    return true;
+  },
+  'texra.showMemory': (actions) => {
+    actions.showSettings(SETTINGS_TAB.MEMORY);
+    return true;
+  },
+  'texra.showAgentHistory': (actions) => {
+    actions.showSettings(SETTINGS_TAB.HISTORY);
+    return true;
+  },
+  'texra.showModels': (actions) => {
+    actions.showSettings(SETTINGS_TAB.MODELS);
+    return true;
+  },
+  'texra.showAgents': (actions) => {
+    actions.showSettings(SETTINGS_TAB.AGENTS);
+    return true;
+  },
+  'texra.showTools': (actions) => {
+    actions.showSettings(SETTINGS_TAB.TOOLS);
+    return true;
+  },
+  'texra.showMultiAgent': (actions) => {
+    actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: (actions) => {
+    if (!actions.openLogFolder) return false;
+    actions.openLogFolder();
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: (actions) => {
+    if (!actions.openWorkspaceFolder) return false;
+    actions.openWorkspaceFolder();
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: (actions) => {
+    if (!actions.showFirstRunWalkthrough) return false;
+    actions.showFirstRunWalkthrough();
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: (actions) => {
+    if (!actions.openDesktopDocs) return false;
+    actions.openDesktopDocs();
+    return true;
+  },
+} as const satisfies Record<
+  DesktopAvailableCommandId,
+  CommandHandler<DesktopCommandActions>
+>;
+
 export function dispatchDesktopCommand(
   id: DesktopCommandId,
   actions: DesktopCommandActions,
 ): boolean {
-  switch (id) {
-    case 'texra.showMainView':
-      actions.showRoute('main');
-      return true;
-    case 'texra.showProgressView':
-      actions.showRoute('progress');
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.SHOW_LOGS:
-      actions.showRoute('logs');
-      return true;
-    case 'texra.openSettings':
-      actions.showSettings();
-      return true;
-    case 'texra.mainView.reset':
-      if (!actions.resetMainView) return false;
-      actions.resetMainView();
-      return true;
-    case 'texra.showMemory':
-      actions.showSettings(SETTINGS_TAB.MEMORY);
-      return true;
-    case 'texra.showAgentHistory':
-      actions.showSettings(SETTINGS_TAB.HISTORY);
-      return true;
-    case 'texra.showModels':
-      actions.showSettings(SETTINGS_TAB.MODELS);
-      return true;
-    case 'texra.showAgents':
-      actions.showSettings(SETTINGS_TAB.AGENTS);
-      return true;
-    case 'texra.showTools':
-      actions.showSettings(SETTINGS_TAB.TOOLS);
-      return true;
-    case 'texra.showMultiAgent':
-      actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER:
-      if (!actions.openLogFolder) return false;
-      actions.openLogFolder();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
-      if (!actions.openWorkspaceFolder) return false;
-      actions.openWorkspaceFolder();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
-      if (!actions.showFirstRunWalkthrough) return false;
-      actions.showFirstRunWalkthrough();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
-      if (!actions.openDesktopDocs) return false;
-      actions.openDesktopDocs();
-      return true;
-    case 'texra.execute':
-    case 'texra.runSetupAssistant':
-    case 'texra.showImportOptions':
-    case 'texra.openGettingStarted':
-    case 'texra.cleanOutput':
-    case 'texra.cleanBuild':
-      return false;
-    default:
-      return assertNever(id);
-  }
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unhandled desktop command: ${value}`);
+  return dispatchCommandFromRegistry(
+    id,
+    DESKTOP_COMMAND_HANDLERS,
+    actions,
+    (unhandledId) => {
+      // The unavailable-command IDs (texra.execute etc.) are valid menu
+      // entries with no handler by design — silent fallthrough is correct.
+      // Only IDs absent from both the registry AND the unavailable list
+      // indicate a stale IPC payload or schema drift; surface those at
+      // error level so the bug shows up in support logs without crashing
+      // the click handler / IPC dispatcher.
+      if (DESKTOP_UNAVAILABLE_COMMANDS.has(unhandledId as CommandId)) return;
+      console.error(`[desktop] dispatch: unhandled command ${unhandledId}`);
+    },
+  );
 }
 
 function isDesktopLocalCommandId(id: string): id is DesktopLocalCommandId {

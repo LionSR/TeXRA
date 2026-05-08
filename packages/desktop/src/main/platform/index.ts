@@ -3,8 +3,10 @@ import { join } from 'node:path';
 import { app } from 'electron';
 
 import { consoleLog } from '@platform/defaults/consoleLog';
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import type { LifecycleHost } from '@platform/interfaces/lifecycle';
 import { initPlatform } from '@platform/platform';
 
 import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
@@ -20,11 +22,13 @@ import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '../../workspacePath.js';
 
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
+  lifecycle: LifecycleHost;
 }
 
 export async function initializeElectronPlatform(
   mainDirname: string,
 ): Promise<ElectronPlatformInitResult> {
+  const lifecycle = createLifecycleHost();
   const userDataPath = app.getPath('userData');
   const globalStateStore = await JsonStore.open(
     join(userDataPath, 'state', 'global.json'),
@@ -58,6 +62,7 @@ export async function initializeElectronPlatform(
     secrets: new ElectronSecrets(secretsStore, {
       showWarningMessage: showSecretStorageWarningDialog,
     }),
+    lifecycle,
   });
 
   await bootstrapElectronAgentDirectories(
@@ -65,5 +70,5 @@ export async function initializeElectronPlatform(
     app.getVersion(),
   );
 
-  return { workspacePath };
+  return { workspacePath, lifecycle };
 }

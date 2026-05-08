@@ -7,6 +7,7 @@ import {
   type FileStat,
   type FileSystemProvider,
 } from '@platform/interfaces/filesystem';
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import type {
   ConfigInspection,
   ConfigProvider,
@@ -757,6 +758,7 @@ export function createFakePlatform(
       options.globalStoragePath,
     ),
     secrets: new FakeSecrets(options.secrets),
+    lifecycle: createLifecycleHost(),
     ...overrides,
   };
 }
