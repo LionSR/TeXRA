@@ -10,11 +10,14 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import {
-  codiconStyles,
   commonViewStyles,
   designTokens,
   tintedBadgeStyles,
 } from '@shared/styles';
+
+// Side-effect imports - register WA icon and spinner components
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -74,14 +77,14 @@ interface CategoryMeta {
  * is a compile error.
  */
 const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
-  file: { label: 'File & Shell', icon: 'codicon-files' },
-  latex: { label: 'LaTeX', icon: 'codicon-file-code' },
-  academic: { label: 'Academic Research', icon: 'codicon-mortar-board' },
-  web: { label: 'Web', icon: 'codicon-globe' },
-  computation: { label: 'Computation', icon: 'codicon-symbol-operator' },
-  lean: { label: 'Lean 4', icon: 'codicon-beaker' },
-  workflow: { label: 'Memory & Workflow', icon: 'codicon-type-hierarchy' },
-  system: { label: 'System Dependencies', icon: 'codicon-gear' },
+  file: { label: 'File & Shell', icon: 'files' },
+  latex: { label: 'LaTeX', icon: 'file-code' },
+  academic: { label: 'Academic Research', icon: 'mortar-board' },
+  web: { label: 'Web', icon: 'globe' },
+  computation: { label: 'Computation', icon: 'symbol-operator' },
+  lean: { label: 'Lean 4', icon: 'beaker' },
+  workflow: { label: 'Memory & Workflow', icon: 'type-hierarchy' },
+  system: { label: 'System Dependencies', icon: 'gear' },
 };
 
 /** Canonical category display order. */
@@ -100,7 +103,6 @@ const CATEGORY_ORDER: ToolCategory[] = [
 export class ToolsTab extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     tintedBadgeStyles,
     css`
@@ -180,7 +182,7 @@ export class ToolsTab extends LitElement {
         gap: var(--spacing-small);
       }
 
-      .tools-summary-stat .codicon {
+      .tools-summary-stat wa-icon {
         font-size: var(--font-size-sm);
       }
 
@@ -212,7 +214,7 @@ export class ToolsTab extends LitElement {
         letter-spacing: 0.5px;
       }
 
-      .category-header .codicon {
+      .category-header wa-icon {
         font-size: var(--font-size);
       }
 
@@ -349,7 +351,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          <span class="codicon codicon-shield"></span>
+          <wa-icon library="texra" name="shield"></wa-icon>
           Approval &amp; Safety
         </div>
 
@@ -424,7 +426,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          <span class="codicon codicon-desktop-download"></span>
+          <wa-icon library="texra" name="desktop-download"></wa-icon>
           Desktop Diagnostics
         </div>
         <div class="desktop-settings">
@@ -453,7 +455,7 @@ export class ToolsTab extends LitElement {
               class="tab-action-btn"
               @click=${this.handleSetDesktopCrashReportingDsn}
             >
-              <span class="codicon codicon-key"></span>
+              <wa-icon library="texra" name="key"></wa-icon>
               ${this.desktopCrashReportingConfigured
                 ? 'Replace DSN'
                 : 'Set DSN'}
@@ -523,13 +525,13 @@ export class ToolsTab extends LitElement {
           </svg>
           <div class="tools-health-labels">
             <span class="tools-summary-stat tools-stat-available">
-              <span class="codicon codicon-check"></span>
+              <wa-icon library="texra" name="check"></wa-icon>
               ${available} available
             </span>
             ${missing > 0
               ? html`
                   <span class="tools-summary-stat tools-stat-missing">
-                    <span class="codicon codicon-warning"></span>
+                    <wa-icon library="texra" name="warning"></wa-icon>
                     ${missing} need setup
                   </span>
                 `
@@ -548,7 +550,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         <div class="category-header">
-          <span class="codicon ${meta.icon}"></span>
+          <wa-icon library="texra" name=${meta.icon}></wa-icon>
           ${meta.label}
           <span class="category-count">(${items.length})</span>
         </div>
@@ -576,7 +578,7 @@ export class ToolsTab extends LitElement {
       return html`
         <div class="tools-container tab-content-container">
           <div class="tools-empty">
-            <span class="codicon codicon-loading codicon-modifier-spin"></span>
+            <wa-spinner></wa-spinner>
             Loading tool information...
           </div>
         </div>
@@ -593,7 +595,7 @@ export class ToolsTab extends LitElement {
               @click=${this.handleRecheck}
               title="Re-check tool availability"
             >
-              <span class="codicon codicon-refresh"></span>
+              <wa-icon library="texra" name="refresh"></wa-icon>
               Re-check
             </button>
           </div>
