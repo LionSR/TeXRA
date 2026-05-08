@@ -28,7 +28,7 @@ export class WorkflowHintBanner extends LitElement {
       gap: 8px;
       padding: 8px 10px;
       margin: 0 0 8px 0;
-      background: var(--texra-textBlockQuote-background);
+      background: var(--wa-color-surface-lowered);
       border-left: 3px solid var(--wa-color-text-link);
       border-radius: 3px;
       font-size: 0.9em;
