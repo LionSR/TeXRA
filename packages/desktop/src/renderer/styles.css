@@ -25,8 +25,8 @@ body {
   height: var(--desktop-nav-height);
   padding: 0 8px;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--texra-panel-border);
-  background: var(--texra-sideBar-background);
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
 }
 
 /* Top-nav wa-button overrides — shadow DOM tinting via ::part(base). */
@@ -36,7 +36,7 @@ wa-button.desktop-nav-button::part(base) {
   border-color: transparent;
   border-radius: 4px;
   background: transparent;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
 }
 
 wa-button.desktop-nav-button::part(base):hover {
@@ -52,10 +52,10 @@ wa-button.desktop-command-button::part(base),
 wa-button.desktop-folder-button::part(base) {
   height: 28px;
   padding: 0 10px;
-  border-color: var(--texra-panel-border);
+  border-color: var(--wa-color-surface-border);
   border-radius: 4px;
-  background: var(--texra-button-secondaryBackground);
-  color: var(--texra-foreground);
+  background: var(--wa-color-neutral-fill-quiet);
+  color: var(--wa-color-text-normal);
 }
 
 wa-button.desktop-command-button {
@@ -465,9 +465,9 @@ wa-button.desktop-secondary-button::part(base) {
 }
 
 wa-button.desktop-primary-button::part(base) {
-  border: 1px solid var(--texra-button-background);
-  background: var(--texra-button-background);
-  color: var(--texra-button-foreground);
+  border: 1px solid var(--wa-color-brand-fill-loud);
+  background: var(--wa-color-brand-fill-loud);
+  color: var(--wa-color-brand-on-loud);
 }
 
 wa-button.desktop-secondary-button::part(base) {
