@@ -14,7 +14,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { COMMAND_LINKS } from '@shared/utils/uiConstants';
 
-import { bannerStyles } from '../styles/bannerStyles';
+import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('getting-started-banner')
@@ -69,8 +69,7 @@ export class GettingStartedBanner extends LitElement {
 
   override updated(changed: PropertyValues<this>): void {
     if (changed.has('visible')) {
-      this.dataset.visible = this.visible ? 'true' : 'false';
-      this.setAttribute('aria-hidden', this.visible ? 'false' : 'true');
+      applyBannerVisibility(this, this.visible);
     }
   }
 
