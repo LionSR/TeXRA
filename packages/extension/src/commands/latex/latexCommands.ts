@@ -38,7 +38,8 @@ export function registerLatexCommands(context: vscode.ExtensionContext): void {
       latexCommands.getTeXCount,
       handleGetTeXCount,
     ),
-    vscode.commands.registerCommand(latexCommands.indentTeX, handleIndentTeX),
+    // `texra.indentTeX` is registered through `extensionCommandSurface` so
+    // the dispatch path matches the desktop registry (see #3771).
     vscode.commands.registerCommand(
       latexCommands.applyReplacements,
       handleApplyReplacements,
@@ -50,7 +51,7 @@ export function registerLatexCommands(context: vscode.ExtensionContext): void {
   );
 }
 
-async function handleIndentTeX(): Promise<void> {
+export async function handleIndentTeX(): Promise<void> {
   try {
     const notification = getIndentTeXNotification(
       await indentLatexFilesInDirectory(),

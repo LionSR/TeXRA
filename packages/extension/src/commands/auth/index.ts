@@ -1,25 +1,17 @@
-import * as vscode from 'vscode';
-import {
-  AUTH_COMMANDS,
-  signIn,
-  signOut,
-  viewProfile,
-} from '@auth/authCommands';
+import type * as vscode from 'vscode';
 
 /**
  * Register authentication-related commands.
+ *
+ * `texra.auth.signIn`, `texra.auth.signOut`, and `texra.auth.viewProfile`
+ * are now dispatched through the shared command registry (see #3771 and
+ * `extensionCommandSurface.ts`), so this function is intentionally a
+ * no-op kept around for the import call site in `commands.ts`.
  */
 export function registerAuthCommands(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
 ): vscode.Disposable[] {
-  const disposables = [
-    vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_IN, signIn),
-    vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_OUT, signOut),
-    vscode.commands.registerCommand(AUTH_COMMANDS.VIEW_PROFILE, viewProfile),
-  ];
-
-  context.subscriptions.push(...disposables);
-  return disposables;
+  return [];
 }
 
 // Re-export AUTH_COMMANDS for external use

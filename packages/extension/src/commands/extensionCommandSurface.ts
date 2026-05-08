@@ -3,6 +3,16 @@ import * as vscode from 'vscode';
 
 // Local imports
 import {
+  signIn as authSignIn,
+  signOut as authSignOut,
+  viewProfile as authViewProfile,
+} from '@auth/authCommands';
+import { handleIndentTeX } from '@commands/latex/latexCommands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { getMainWebview } from '@frontend/system/commandUtils';
+import { runCleanBuild, runCleanOutput } from '@housekeeping';
+import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
+import {
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
@@ -11,12 +21,9 @@ import {
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
 import { type AgentCategory } from '@shared/schemas/agent';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SETTINGS_QUERY } from '@utils/config';
-import { getMainWebview } from '@frontend/system/commandUtils';
 
 import type { CommandId } from './catalog';
-import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 
 const RESET_CHANNEL = 'mainViewCommands';
 
@@ -42,6 +49,12 @@ export type ExtensionRegistryCommandId = Extract<
   | 'texra.showMultiAgent'
   | 'texra.openSettings'
   | 'texra.mainView.reset'
+  | 'texra.cleanOutput'
+  | 'texra.cleanBuild'
+  | 'texra.indentTeX'
+  | 'texra.auth.signIn'
+  | 'texra.auth.signOut'
+  | 'texra.auth.viewProfile'
 >;
 
 /**
@@ -53,6 +66,12 @@ export interface ExtensionCommandActions {
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
   resetMainView(): Promise<void>;
   openWorkbenchSettings(): Thenable<unknown>;
+  cleanBuild(): Promise<void>;
+  cleanOutput(): Promise<void>;
+  indentTeX(): Promise<void>;
+  signIn(): Promise<boolean>;
+  signOut(): Promise<void>;
+  viewProfile(): Promise<void>;
 }
 
 export function createExtensionCommandActions(
@@ -82,6 +101,12 @@ export function createExtensionCommandActions(
         SETTINGS_QUERY.EXTENSION,
       );
     },
+    cleanBuild: runCleanBuild,
+    cleanOutput: runCleanOutput,
+    indentTeX: handleIndentTeX,
+    signIn: authSignIn,
+    signOut: authSignOut,
+    viewProfile: authViewProfile,
   };
 }
 
@@ -122,6 +147,30 @@ const EXTENSION_COMMAND_HANDLERS = {
     void actions.resetMainView();
     return true;
   },
+  'texra.cleanOutput': (actions) => {
+    void actions.cleanOutput();
+    return true;
+  },
+  'texra.cleanBuild': (actions) => {
+    void actions.cleanBuild();
+    return true;
+  },
+  'texra.indentTeX': (actions) => {
+    void actions.indentTeX();
+    return true;
+  },
+  'texra.auth.signIn': (actions) => {
+    void actions.signIn();
+    return true;
+  },
+  'texra.auth.signOut': (actions) => {
+    void actions.signOut();
+    return true;
+  },
+  'texra.auth.viewProfile': (actions) => {
+    void actions.viewProfile();
+    return true;
+  },
 } as const satisfies Record<
   Exclude<ExtensionRegistryCommandId, 'texra.showAgents'>,
   CommandHandler<ExtensionCommandActions>
@@ -131,6 +180,11 @@ const EXTENSION_COMMAND_HANDLERS = {
 // `executeCommand` callers, so it can't share the no-arg `CommandHandler`
 // signature. It's still routed through the same actions interface — the
 // only difference is that the VS Code registration forwards the argument.
+//
+// FOLLOW_UP: This bespoke parameterized map can be replaced with the
+// `definedHandler` typed-args helper in `@shared/commands/registry` once
+// the surrounding parameterized commands (pack/clean/compare/etc.) are
+// migrated through that path. Keeping it as-is for now to minimize churn.
 const EXTENSION_PARAMETERIZED_HANDLERS = {
   'texra.showAgents': (actions, subTab?: AgentCategory) => {
     actions.showSettings(SETTINGS_TAB.AGENTS, subTab);
