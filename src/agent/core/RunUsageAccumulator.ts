@@ -69,11 +69,6 @@ export type RunUsageAccumulatorJSON = z.output<
 // Standalone functions operating on RunUsageAccumulatorJSON
 // ============================================================================
 
-/** Create a fresh accumulator (all zeros). */
-export function createUsageAccumulator(): RunUsageAccumulatorJSON {
-  return { totals: { ...DEFAULT_TOTALS }, normalizedSnapshots: [] };
-}
-
 /** Record a normalized usage entry. Mutates acc in place. */
 export function recordNormalizedUsage(
   acc: RunUsageAccumulatorJSON,
