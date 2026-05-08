@@ -14,7 +14,7 @@ export const LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE =
   'TeXRA cannot store secrets securely because Electron is using Linux basic_text storage. Set up a system keyring such as GNOME Keyring/libsecret or KWallet, then restart TeXRA. Environment variables still work for API keys.';
 
 export const KEYCHAIN_DENIED_WARNING_MESSAGE =
-  'TeXRA could not read its saved secrets because the system keychain prompt was denied. Saved API keys and sign-in sessions will not be available until you allow access. Restart TeXRA after granting access to retry.';
+  'TeXRA could not decrypt its saved secrets. This usually happens when the system keychain prompt was denied, but it can also occur with corrupted entries or rotated encryption keys. Saved API keys and sign-in sessions will not be available until decryption succeeds. Restart TeXRA after granting keychain access (or re-saving secrets) to retry.';
 
 const SAFE_STORAGE_UNAVAILABLE_MESSAGE =
   'Electron safeStorage is unavailable for secret writes.';
@@ -123,8 +123,11 @@ export class ElectronSecrets implements PlatformSecrets {
  * prompting.
  *
  * Safe to call multiple times — the first invocation does the work and the
- * rest are no-ops. Returns `true` when the prompt was attempted, `false` when
- * `safeStorage` is unavailable (e.g., Linux without a configured keyring).
+ * rest are no-ops. Returns `true` when the prewarm encrypt succeeded; returns
+ * `false` when `safeStorage.isEncryptionAvailable()` is false (e.g., Linux
+ * without a configured keyring) or when the encrypt itself threw (e.g., the
+ * user denied the OS keychain prompt). The latch is only set on success so
+ * the caller can retry on a subsequent boot once permissions change.
  */
 let keychainPrewarmed = false;
 export async function prewarmElectronKeychain(): Promise<boolean> {

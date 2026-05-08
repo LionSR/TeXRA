@@ -26,7 +26,6 @@ import '@settingsView/frontend';
 import '@webview/frontend';
 
 import {
-  DesktopRouteSchema,
   DesktopSetRouteMessageSchema,
   type DesktopRoute,
   type DesktopSetRouteMessage,
@@ -63,8 +62,6 @@ interface WorkspaceTreeNode {
   categories?: string[];
 }
 
-const DESKTOP_ROUTES = DesktopRouteSchema.options;
-
 const root = document.querySelector<HTMLElement>('#app');
 
 if (root == null) {
@@ -80,6 +77,54 @@ const appRoot = root;
 let currentRoute: DesktopRoute = 'main';
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 let selectedExplorerFile = '';
+
+// Empty-workspace copy + placeholder factory live up here so the no-workspace
+// path below can read them without hitting the temporal dead zone — `let`/
+// `const` declarations declared further down would throw `ReferenceError`
+// during module evaluation if the no-workspace branch is taken.
+const EMPTY_WORKSPACE_COPY = {
+  launcher: {
+    title: 'Open a folder to use the launcher',
+    body: 'TeXRA desktop needs a workspace before it can discover files, run agents, and place outputs.',
+  },
+  progress: {
+    title: 'Open a folder to view workspace progress',
+    body: 'Progress details are tied to workspace runs. Start from a workspace to restore and follow sessions here.',
+  },
+} as const;
+
+function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
+  const container = document.createElement('section');
+  container.className = 'desktop-empty-workspace';
+  const { title, body } = EMPTY_WORKSPACE_COPY[kind];
+  render(
+    renderEmptyState({
+      className: 'desktop-empty-workspace-panel',
+      icon: 'folder-open',
+      title,
+      body,
+      headingTag: 'h1',
+      actions: [
+        {
+          label: 'Open Folder',
+          appearance: 'filled',
+          variant: 'brand',
+          className: 'desktop-primary-button',
+          onClick: () =>
+            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+        },
+        {
+          label: 'Logs',
+          appearance: 'outlined',
+          className: 'desktop-secondary-button',
+          onClick: () => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
+        },
+      ],
+    }),
+    container,
+  );
+  return container;
+}
 
 // Standalone web components are instantiated once and slotted into the shell
 // template via Lit's DOM-node interpolation. Lit preserves these nodes across
@@ -258,13 +303,26 @@ function renderBootstrapFallback(error: unknown): void {
             <wa-button
               appearance="outlined"
               @click=${() => {
-                // Hide the fallback so the partial shell (if any) becomes
-                // visible. The renderer can still drive routes via the
-                // command palette even when secrets are unavailable.
-                const node = appRoot.querySelector(
-                  '.desktop-bootstrap-fallback',
-                );
-                if (node instanceof HTMLElement) node.hidden = true;
+                // The fallback is rendered directly into `appRoot`, replacing
+                // the shell. Hiding the node would leave a blank window —
+                // instead, attempt a fresh shell render so the user gets a
+                // usable UI even though saved secrets are unavailable. If
+                // the second mount also throws, re-render the fallback so
+                // the user can still reload. (Command palette / walkthrough
+                // are only wired during the original boot when
+                // `bootstrapFailed` was false; they remain unavailable on
+                // this recovery path, which is by design — the user can
+                // still navigate via the chrome icon buttons.)
+                try {
+                  renderLogViewer();
+                  rerenderShell();
+                } catch (recoveryError) {
+                  console.error(
+                    'TeXRA desktop renderer recovery failed',
+                    recoveryError,
+                  );
+                  renderBootstrapFallback(recoveryError);
+                }
               }}
             >
               Continue without saved secrets
@@ -449,50 +507,6 @@ function getWindowTargetOrigin(): string {
   return window.location.origin && window.location.origin !== 'null'
     ? window.location.origin
     : '*';
-}
-
-const EMPTY_WORKSPACE_COPY = {
-  launcher: {
-    title: 'Open a folder to use the launcher',
-    body: 'TeXRA desktop needs a workspace before it can discover files, run agents, and place outputs.',
-  },
-  progress: {
-    title: 'Open a folder to view workspace progress',
-    body: 'Progress details are tied to workspace runs. Start from a workspace to restore and follow sessions here.',
-  },
-} as const;
-
-function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
-  const container = document.createElement('section');
-  container.className = 'desktop-empty-workspace';
-  const { title, body } = EMPTY_WORKSPACE_COPY[kind];
-  render(
-    renderEmptyState({
-      className: 'desktop-empty-workspace-panel',
-      icon: 'folder-open',
-      title,
-      body,
-      headingTag: 'h1',
-      actions: [
-        {
-          label: 'Open Folder',
-          appearance: 'filled',
-          variant: 'brand',
-          className: 'desktop-primary-button',
-          onClick: () =>
-            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-        },
-        {
-          label: 'Logs',
-          appearance: 'outlined',
-          className: 'desktop-secondary-button',
-          onClick: () => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
-        },
-      ],
-    }),
-    container,
-  );
-  return container;
 }
 
 function logViewerTemplate(state: LogViewerState): TemplateResult {
