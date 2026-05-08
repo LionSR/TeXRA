@@ -18,7 +18,14 @@
 .wa-dark .wa-invert {
   /* ── Web Awesome surface / text tokens (light + default) ────────────── */
   --wa-color-text-normal: var(--vscode-editor-foreground, var(--vscode-foreground));
-  --wa-color-text-quiet: var(--vscode-descriptionForeground);
+  /* Some VS Code themes (notably dark) set descriptionForeground too dim to
+     read against tinted surface cards. Mix at least 65% of the normal text
+     color in to guarantee a readable contrast in every theme. */
+  --wa-color-text-quiet: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground, var(--vscode-foreground)) 70%,
+    transparent
+  );
   --wa-color-text-link: var(--vscode-textLink-foreground);
 
   --wa-color-surface-default: var(--vscode-editor-background);
