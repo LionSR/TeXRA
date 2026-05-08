@@ -18,6 +18,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Local imports - shared constants
 import {
@@ -143,14 +144,16 @@ export class ModelSelectionList extends LitElement {
   }
 
   private handleHelperModelChange(e: Event): void {
-    const value = (e.currentTarget as HTMLSelectElement).value;
+    const select = e.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
     this.dispatchEvent(
       ModelSelectionEvents.setHelperModel({ modelName: value }),
     );
   }
 
   private handleReasoningLevelChange(modelName: string, e: Event): void {
-    const value = (e.currentTarget as HTMLSelectElement).value;
+    const select = e.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
     this.dispatchEvent(
       ModelSelectionEvents.setReasoningLevel({
         modelName,
