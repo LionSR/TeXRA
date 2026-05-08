@@ -266,6 +266,29 @@ describe('desktop IPC adapters', () => {
     expect(postToRenderer).not.toHaveBeenCalled();
   });
 
+  it('rejects shell payloads that fail the MainView inbound schema', async () => {
+    const { createDesktopShellIpc } = await loadDesktopShellIpc();
+    const postToRenderer = vi.fn();
+    const shellIpc = createDesktopShellIpc({ postToRenderer });
+
+    // SWITCH_VIEW with an invalid `view` value fails the discriminated-union
+    // parse and is no longer dispatched as a real switch — i.e. the single
+    // entry-point parse is the validation boundary, not per-handler reads.
+    expect(
+      shellIpc.handleMessage({
+        command: COMMON_COMMANDS.SWITCH_VIEW,
+        view: 'not-a-real-route',
+      }),
+    ).toBe(false);
+    expect(postToRenderer).not.toHaveBeenCalled();
+
+    // Unknown command falls through entirely (neither a main-view variant
+    // nor a desktop-local command) so the dispatcher chain can keep walking.
+    expect(
+      shellIpc.handleMessage({ command: 'texra.totallyUnknown' }),
+    ).toBe(false);
+  });
+
   it('keeps execution forwarding in the execution adapter', async () => {
     const { createDesktopExecutionIpc } = await loadDesktopExecutionIpc();
     const executeMessage = {
