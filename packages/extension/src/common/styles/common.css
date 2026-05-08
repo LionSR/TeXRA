@@ -81,6 +81,19 @@
   --wa-font-size-m: var(--vscode-font-size, 13px);
   --wa-font-weight-normal: var(--vscode-font-weight, 400);
 
+  /* Border-radius — VS Code-square overrides. WA default theme ships
+     s≈3px / m≈6px / l≈12px which feels too rounded against VS Code's
+     near-flat form-control aesthetic. Pin to the in-house --border-radius
+     scale (litStyles.ts) so wa-button, wa-input, wa-callout, wa-dialog,
+     wa-card all read as native VS Code controls. */
+  --wa-border-radius-s: 2px;
+  --wa-border-radius-m: 3px;
+  --wa-border-radius-l: 4px;
+  --wa-border-radius-xl: 6px;
+  --wa-border-radius-pill: 9999px;
+  --wa-border-radius-circle: 50%;
+  --wa-border-radius-square: 0px;
+
   /* Web Awesome canonical space scale. Mirrors the values from the WA default
      theme so consumers can rely on --wa-space-* even if the WA color-scheme
      class hasn't been mounted yet. */
