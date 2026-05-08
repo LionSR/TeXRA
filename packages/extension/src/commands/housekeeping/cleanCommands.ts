@@ -8,8 +8,6 @@ import { parseWithErrorDisplay } from '@frontend/ui/errorHandlingUtils';
 import {
   runCleanSingle,
   runCleanMultiple,
-  runCleanBuild,
-  runCleanOutput,
   runCleanRunDir,
 } from '@housekeeping';
 import * as logger from '@logger/logUtils';
@@ -54,12 +52,14 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
 }
 
 export function registerCleanCommands(context: vscode.ExtensionContext): void {
+  // `texra.cleanOutput` and `texra.cleanBuild` are registered through
+  // `extensionCommandSurface` so the dispatch path matches the desktop
+  // registry (see #3771). The remaining clean commands take typed
+  // arguments and stay on per-command registration for now.
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.clean', handleClean),
     vscode.commands.registerCommand('texra.cleanSingle', handleCleanSingle),
     vscode.commands.registerCommand('texra.cleanMultiple', handleCleanMultiple),
-    vscode.commands.registerCommand('texra.cleanOutput', runCleanOutput),
-    vscode.commands.registerCommand('texra.cleanBuild', runCleanBuild),
   );
 }
 
