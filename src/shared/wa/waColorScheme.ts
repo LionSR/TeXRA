@@ -56,6 +56,20 @@ function syncWaClass(): void {
   }
 }
 
+/**
+ * Imperatively swap the `wa-light`/`wa-dark` class on `<html>` to match the
+ * provided dark/light intent. Both hosts (VS Code BaseWebviewApp and the
+ * Electron renderer) used to hand-roll this two-line dance; centralising it
+ * here keeps the class names + ordering in one place so any future addition
+ * (e.g. `wa-high-contrast`) doesn't need parallel edits.
+ */
+export function setWaColorScheme(dark: boolean): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.classList.remove('wa-light', 'wa-dark');
+  root.classList.add(dark ? 'wa-dark' : 'wa-light');
+}
+
 export function applyInitialWaColorScheme(): void {
   if (typeof document === 'undefined') return;
   syncWaClass();
