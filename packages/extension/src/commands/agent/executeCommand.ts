@@ -12,10 +12,15 @@ import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'ExecuteCommand';
 
-export function registerExecuteCommand(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand('texra.execute', runExecuteCommand),
-  );
+/**
+ * `texra.execute` migrated to the shared command registry in #3781 batch
+ * 4 (handler is `runExecuteCommand`). Kept as a no-op for backward
+ * compatibility with the existing call list in `commands.ts`.
+ */
+export function registerExecuteCommand(
+  _context: vscode.ExtensionContext,
+): void {
+  // Intentionally empty: handler moved to the shared registry (#3781 batch 4).
 }
 
 /**
