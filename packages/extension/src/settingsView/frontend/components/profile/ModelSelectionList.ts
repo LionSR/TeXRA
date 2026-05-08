@@ -14,6 +14,8 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
 
 // Local imports - shared constants
 import {
@@ -185,23 +187,19 @@ export class ModelSelectionList extends LitElement {
       : 'Reasoning level';
 
     return html`
-      <vscode-single-select
+      <wa-select
         class="reasoning-level-select"
         .value=${currentValue}
         title=${title}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
-        <vscode-option value="" ?selected=${currentValue === ''}>
-          ${defaultLabel}
-        </vscode-option>
+        <wa-option value=""> ${defaultLabel} </wa-option>
         ${REASONING_LEVELS.map(
           (level) => html`
-            <vscode-option value=${level} ?selected=${currentValue === level}>
-              ${REASONING_LEVEL_LABELS[level]}
-            </vscode-option>
+            <wa-option value=${level}> ${REASONING_LEVEL_LABELS[level]} </wa-option>
           `,
         )}
-      </vscode-single-select>
+      </wa-select>
       ${includedAccessCap
         ? html`<wa-icon
             library="texra"
@@ -365,21 +363,15 @@ export class ModelSelectionList extends LitElement {
     return html`
       <div class="helper-model-row">
         <label>Helper model:</label>
-        <vscode-single-select
+        <wa-select
           class="helper-model-select"
           .value=${this.helperModel}
           @change=${this.handleHelperModelChange}
         >
           ${enabledModels.map(
-            (m) =>
-              html`<vscode-option
-                value=${m.name}
-                ?selected=${m.name === this.helperModel}
-              >
-                ${m.name}
-              </vscode-option>`,
+            (m) => html`<wa-option value=${m.name}> ${m.name} </wa-option>`,
           )}
-        </vscode-single-select>
+        </wa-select>
       </div>
     `;
   }

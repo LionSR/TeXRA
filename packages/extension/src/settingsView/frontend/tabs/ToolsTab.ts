@@ -18,6 +18,8 @@ import {
 // Side-effect imports - register WA icon and spinner components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -375,22 +377,17 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="setting-row">
         <label>${label}</label>
-        <vscode-single-select
+        <wa-select
           class="setting-select"
           .value=${value}
           @change=${onChange}
         >
           ${options.map(
             (opt) => html`
-              <vscode-option
-                value=${opt.value}
-                ?selected=${value === opt.value}
-              >
-                ${opt.label}
-              </vscode-option>
+              <wa-option value=${opt.value}> ${opt.label} </wa-option>
             `,
           )}
-        </vscode-single-select>
+        </wa-select>
       </div>
     `;
   }
