@@ -33,10 +33,10 @@ export async function promptInRenderer(
         'width:min(520px,calc(100vw - 48px))',
         'box-sizing:border-box',
         'padding:20px',
-        'border:1px solid var(--texra-panel-border,#d0d7de)',
+        'border:1px solid var(--wa-color-surface-border,#d0d7de)',
         'border-radius:6px',
-        'background:var(--texra-editor-background,Canvas)',
-        'color:var(--texra-editor-foreground,CanvasText)',
+        'background:var(--wa-color-surface-default,Canvas)',
+        'color:var(--wa-color-text-normal,CanvasText)',
         'box-shadow:0 18px 48px rgba(0,0,0,.24)'
       ].join(';');
 
@@ -56,10 +56,10 @@ export async function promptInRenderer(
         'width:100%',
         'box-sizing:border-box',
         'padding:8px 10px',
-        'border:1px solid var(--texra-input-border,#d0d7de)',
+        'border:1px solid var(--wa-form-control-border-color,#d0d7de)',
         'border-radius:4px',
-        'background:var(--texra-input-background,Field)',
-        'color:var(--texra-input-foreground,FieldText)',
+        'background:var(--wa-form-control-background-color,Field)',
+        'color:var(--wa-form-control-text-color,FieldText)',
         'font:inherit'
       ].join(';');
 

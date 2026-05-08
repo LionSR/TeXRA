@@ -578,7 +578,7 @@ wa-button.desktop-primary-button::part(base) {
 }
 
 wa-button.desktop-secondary-button::part(base) {
-  border: 1px solid var(--texra-button-border);
+  border: 1px solid var(--wa-color-brand-border-loud);
   background: var(--wa-color-neutral-fill-quiet);
   color: var(--wa-color-neutral-on-quiet);
 }

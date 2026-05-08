@@ -81,16 +81,16 @@ export const toolUseStyles = css`
     left: 0;
     inset-block: 0;
     width: var(--border-thick);
-    background: var(--texra-editorWarning-foreground, #ff8c00);
+    background: var(--wa-color-warning-on-quiet, #ff8c00);
     border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
   }
 
   .banner-details--relay-error > .details-summary .label {
-    color: var(--texra-editorWarning-foreground, #ff8c00);
+    color: var(--wa-color-warning-on-quiet, #ff8c00);
   }
 
   .tool-use-user-feedback > .details-summary :is(.tool-use-title, wa-icon) {
-    color: var(--texra-textLink-foreground, #3794ff);
+    color: var(--wa-color-text-link, #3794ff);
   }
 
   .tool-use-in-progress > .details-summary :is(.tool-use-title, wa-icon),
@@ -118,7 +118,7 @@ export const toolUseStyles = css`
       --texra-inputValidation-infoBackground,
       rgba(55, 148, 255, 0.1)
     );
-    border-left-color: var(--texra-textLink-foreground, #3794ff);
+    border-left-color: var(--wa-color-text-link, #3794ff);
   }
 
   .tool-error-content {
