@@ -105,7 +105,7 @@ export class InstructionPanel extends LitElement {
         --agent-model-listbox-min-width: 17rem;
         --agent-model-listbox-max-width: min(
           26rem,
-          calc(100vw - var(--spacing-xlarge))
+          calc(100vw - var(--wa-space-l))
         );
       }
 
@@ -113,10 +113,10 @@ export class InstructionPanel extends LitElement {
         display: flex;
         flex-direction: column;
         position: relative;
-        padding: var(--spacing-medium);
+        padding: var(--wa-space-xs);
         background-color: var(--background-color);
         border-radius: var(--border-radius);
-        margin-bottom: var(--spacing-large);
+        margin-bottom: var(--wa-space-s);
         border: var(--border-thin) solid var(--color-border);
       }
 
@@ -124,22 +124,22 @@ export class InstructionPanel extends LitElement {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: var(--spacing-medium);
-        margin-bottom: var(--spacing-small);
+        gap: var(--wa-space-xs);
+        margin-bottom: var(--wa-space-2xs);
         line-height: var(--line-height-relaxed);
         flex-wrap: wrap;
       }
 
       .instruction-header-leading {
         display: flex;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
         align-items: center;
         flex-wrap: wrap;
       }
 
       .instruction-header-actions {
         display: flex;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         align-items: center;
       }
 
@@ -150,7 +150,7 @@ export class InstructionPanel extends LitElement {
 
       .instruction-session-toggle wa-radio-group {
         display: flex;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       .instruction-session-toggle wa-radio {
@@ -159,10 +159,10 @@ export class InstructionPanel extends LitElement {
 
       .session-hint {
         display: flex;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         align-items: flex-start;
-        margin-top: var(--spacing-small);
-        padding: var(--spacing-tiny) var(--spacing-small);
+        margin-top: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border-left: 2px solid var(--wa-color-text-link);
         color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
@@ -197,12 +197,12 @@ export class InstructionPanel extends LitElement {
 
       .session-hint-dismiss {
         flex: 0 0 auto;
-        margin-left: var(--spacing-tiny);
+        margin-left: var(--wa-space-3xs);
       }
 
       wa-textarea#instruction {
         width: 100%;
-        margin: var(--spacing-medium) 0;
+        margin: var(--wa-space-xs) 0;
         font-family: var(--texra-editor-font-family);
         font-size: var(--font-size);
       }
@@ -216,7 +216,7 @@ export class InstructionPanel extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         flex-wrap: wrap;
         width: 100%;
       }
@@ -224,7 +224,7 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         flex: 1 1 auto;
         flex-wrap: wrap;
         min-width: 0;
@@ -234,7 +234,7 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer .agent-select-group {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         flex: 0 1 auto;
         min-width: 0;
       }
@@ -246,14 +246,14 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer .agent-select-group {
         max-width: calc(
           var(--agent-select-max-width) + var(--height-control) +
-            var(--spacing-small)
+            var(--wa-space-2xs)
         );
       }
 
       .model-selection-footer .model-select-group {
         max-width: calc(
           var(--model-select-max-width) + var(--height-control) +
-            var(--spacing-small)
+            var(--wa-space-2xs)
         );
       }
 
@@ -352,7 +352,7 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer .agent-select-dropdowns {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         flex: 0 1 var(--agent-select-max-width);
         width: 100%;
         min-width: 0;

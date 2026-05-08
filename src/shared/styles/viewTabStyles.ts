@@ -25,6 +25,6 @@ export const viewTabStyles: CSSResult = css`
 
   wa-tab::part(base) {
     padding-block: 4px;
-    padding-inline: var(--spacing-medium);
+    padding-inline: var(--wa-space-xs);
   }
 `;
