@@ -65,13 +65,10 @@ describe('shared command registry', () => {
     };
 
     expect(
-      dispatchCommandFromRegistry(
-        'test.pack',
-        registry,
-        actions,
-        undefined,
-        { inputFile: 'main.tex', agent: 'editor' },
-      ),
+      dispatchCommandFromRegistry('test.pack', registry, actions, undefined, {
+        inputFile: 'main.tex',
+        agent: 'editor',
+      }),
     ).toBe(true);
     expect(actions.packed).toHaveBeenCalledExactlyOnceWith({
       inputFile: 'main.tex',
@@ -100,13 +97,10 @@ describe('shared command registry', () => {
     const onUnhandled = vi.fn();
 
     expect(
-      dispatchCommandFromRegistry(
-        'test.pack',
-        registry,
-        actions,
-        onUnhandled,
-        { inputFile: '', agent: 'editor' },
-      ),
+      dispatchCommandFromRegistry('test.pack', registry, actions, onUnhandled, {
+        inputFile: '',
+        agent: 'editor',
+      }),
     ).toBe(false);
     expect(actions.packed).not.toHaveBeenCalled();
     expect(onUnhandled).toHaveBeenCalledExactlyOnceWith('test.pack');

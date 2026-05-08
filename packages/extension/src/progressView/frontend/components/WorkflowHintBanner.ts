@@ -54,13 +54,18 @@ export class WorkflowHintBanner extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (this.dismissed) return nothing;
     return html`
-      <wa-callout variant="brand" role="note" aria-label="Workflow mode reminder">
+      <wa-callout
+        variant="brand"
+        role="note"
+        aria-label="Workflow mode reminder"
+      >
         ${waIcon('info', { slot: 'icon' })}
         <div class="banner-row">
           <div class="text">
             <span class="title">Workflow mode thinks across rounds.</span>
-            It reduces hallucinations and cuts fluff, so expect 10–30 minutes per
-            run. Use Stop to cancel; pick Tool-Use mode for fast, iterative edits.
+            It reduces hallucinations and cuts fluff, so expect 10–30 minutes
+            per run. Use Stop to cancel; pick Tool-Use mode for fast, iterative
+            edits.
           </div>
           ${renderIconActionButton({
             icon: 'close',

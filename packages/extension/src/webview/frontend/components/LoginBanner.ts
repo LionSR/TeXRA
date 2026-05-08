@@ -68,11 +68,7 @@ export class LoginBanner extends LitElement {
         transform: translateY(-0.5px);
         box-shadow:
           0 3px 8px
-            color-mix(
-              in srgb,
-              var(--wa-color-brand-fill-loud) 28%,
-              transparent
-            ),
+            color-mix(in srgb, var(--wa-color-brand-fill-loud) 28%, transparent),
           inset 0 1px 0 rgb(255 255 255 / 18%);
       }
 

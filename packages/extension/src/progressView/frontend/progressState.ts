@@ -25,11 +25,7 @@ import {
 import { isProcessAgent } from '@shared/streams/agentKind';
 
 import { setsEqual } from './utils';
-import {
-  createInitialState,
-  EMPTY_STREAM_LOGS,
-  isToolUseState,
-} from './store';
+import { createInitialState, EMPTY_STREAM_LOGS, isToolUseState } from './store';
 import {
   EMPTY_LOG_CONTEXT,
   EMPTY_PROCESS_OUTPUTS,
@@ -190,8 +186,7 @@ export const activeStreamState$ = new Signal.Computed(() => {
   const info = activeStreamInfo$.get();
   if (!info) return null;
   return (
-    streamStates$.get().get(info.name) ??
-    createStreamState(info.agentCategory)
+    streamStates$.get().get(info.name) ?? createStreamState(info.agentCategory)
   );
 });
 

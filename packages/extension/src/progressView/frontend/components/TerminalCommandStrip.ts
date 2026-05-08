@@ -22,7 +22,8 @@ export class TerminalCommandStrip extends LitElement {
         var(--wa-color-surface-default, transparent)
       );
       color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
-      border: var(--border-thin) solid var(--wa-color-surface-border, transparent);
+      border: var(--border-thin) solid
+        var(--wa-color-surface-border, transparent);
       border-radius: var(--border-radius-small);
       font-family: var(
         --wa-font-family-mono,

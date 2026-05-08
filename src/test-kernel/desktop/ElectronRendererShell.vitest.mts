@@ -22,10 +22,7 @@ function readRendererOnboarding(): string {
 }
 
 function readSharedWalkthroughDialog(): string {
-  return readFileSync(
-    repoPath('src/shared/wa/walkthroughDialog.ts'),
-    'utf8',
-  );
+  return readFileSync(repoPath('src/shared/wa/walkthroughDialog.ts'), 'utf8');
 }
 
 describe('desktop renderer shell', () => {

@@ -64,10 +64,7 @@ import {
   getActiveSidebarView,
 } from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
-import {
-  type ApiProvider,
-  SecretManager,
-} from '@frontend/secretManager';
+import { type ApiProvider, SecretManager } from '@frontend/secretManager';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import {
@@ -90,9 +87,7 @@ import type { CommandId } from './catalog';
  * invoked from the palette without arguments — the action then prompts the
  * user via `showQuickPick`.
  */
-const SetApiKeyArgSchema = z
-  .enum(SecretManager.API_PROVIDERS)
-  .optional();
+const SetApiKeyArgSchema = z.enum(SecretManager.API_PROVIDERS).optional();
 
 /**
  * Optional `AgentCategory` argument for `texra.createAgentWithAI`. The
@@ -334,7 +329,8 @@ export function createExtensionCommandActions(
     },
     showProgressView: progressShowProgressView,
     setApiKey: apiSetApiKey,
-    createAgentWithAI: (category) => agentHandleCreateAgentWithAI(context, category),
+    createAgentWithAI: (category) =>
+      agentHandleCreateAgentWithAI(context, category),
     execute: agentRunExecuteCommand,
   };
 }
@@ -389,7 +385,8 @@ const EXTENSION_COMMAND_HANDLERS = {
   'texra.auth.signIn': (actions) => awaitTrue(actions.signIn()),
   'texra.auth.signOut': (actions) => awaitTrue(actions.signOut()),
   'texra.auth.viewProfile': (actions) => awaitTrue(actions.viewProfile()),
-  'texra.runSetupAssistant': (actions) => awaitTrue(actions.runSetupAssistant()),
+  'texra.runSetupAssistant': (actions) =>
+    awaitTrue(actions.runSetupAssistant()),
   'texra.openGettingStarted': (actions) =>
     awaitTrue(actions.openGettingStarted()),
   'texra.createSampleProject': (actions) =>
@@ -398,12 +395,14 @@ const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.downloadArXivSource()),
   'texra.testConnection': (actions) => awaitTrue(actions.testConnection()),
   'texra.testAgentLoading': (actions) => awaitTrue(actions.testAgentLoading()),
-  'texra.loadSpecificAgent': (actions) => awaitTrue(actions.loadSpecificAgent()),
+  'texra.loadSpecificAgent': (actions) =>
+    awaitTrue(actions.loadSpecificAgent()),
   'texra.openProgressViewInTab': (actions) =>
     awaitTrue(actions.openProgressViewInTab()),
   'texra.openDoc': definedHandler(
     z.string(),
-    (actions: ExtensionCommandActions, page) => awaitTrue(actions.openDoc(page)),
+    (actions: ExtensionCommandActions, page) =>
+      awaitTrue(actions.openDoc(page)),
   ),
   'texra.stopAgent': definedHandler(
     StreamTabIdSchema,
@@ -421,7 +420,8 @@ const EXTENSION_COMMAND_HANDLERS = {
   'texra.parseYaml': (actions) => awaitTrue(actions.parseYaml()),
   'texra.testTextEditor': (actions) => awaitTrue(actions.testTextEditor()),
   'texra.indentCurrentTeX': (actions) => awaitTrue(actions.indentCurrentTeX()),
-  'texra.applyReplacements': (actions) => awaitTrue(actions.applyReplacements()),
+  'texra.applyReplacements': (actions) =>
+    awaitTrue(actions.applyReplacements()),
   'texra.fixCompilation': (actions) => awaitTrue(actions.fixCompilation()),
   'texra.getTeXCount': (actions) => awaitTrue(actions.getTeXCount()),
   'texra.countPdfPages': (actions) => awaitTrue(actions.countPdfPages()),
@@ -469,7 +469,8 @@ const EXTENSION_COMMAND_HANDLERS = {
   ),
   'texra.execute': definedHandler(
     z.unknown(),
-    (actions: ExtensionCommandActions, input) => awaitTrue(actions.execute(input)),
+    (actions: ExtensionCommandActions, input) =>
+      awaitTrue(actions.execute(input)),
   ),
 } as const satisfies Record<
   Exclude<ExtensionRegistryCommandId, 'texra.showAgents'>,
