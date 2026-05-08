@@ -25,26 +25,15 @@ export const mainViewCommands = {
 
 /**
  * Registers main view commands for the extension.
+ *
+ * `texra.mainView.reset` is now registered through the shared command
+ * registry in `extensionCommandSurface.ts` (the desktop side already
+ * dispatches the same command via `DESKTOP_COMMAND_HANDLERS`).
  */
 export function registerMainViewCommands(
   context: vscode.ExtensionContext,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(mainViewCommands.reset, async () => {
-      const webviewView = await getMainWebview(CHANNEL);
-      if (!webviewView) {
-        vscode.window.showWarningMessage(
-          'Main view is not available. Please ensure the TeXRA view is open.',
-        );
-        return;
-      }
-      webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-        state: {},
-        isResetOperation: true,
-      });
-    }),
-
     vscode.commands.registerCommand(
       mainViewCommands.refreshModelOptions,
       async () => {

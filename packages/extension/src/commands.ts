@@ -39,12 +39,19 @@ import {
   registerWalkthroughCommands,
 } from '@commands/system';
 import { registerStateRestoreCommand } from '@commands/history';
-import { registerSettingsViewCommands } from '@commands/settings';
+import {
+  registerSettingsViewCommands,
+  initializeSettingsViewProvider,
+} from '@commands/settings';
 import { registerAuthCommands } from '@commands/auth';
 import { registerSetupAssistantCommand } from '@commands/setup';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
+import {
+  createExtensionCommandActions,
+  registerExtensionCommandRegistry,
+} from '@commands/extensionCommandSurface';
 
 // Local file imports
 import { MainViewProvider } from './MainViewProvider';
@@ -89,6 +96,17 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerSampleProjectCommands(context);
   registerWalkthroughCommands(context);
   registerSetupAssistantCommand(context);
+
+  // Settings tab routes, workbench-settings shortcut, and main-view reset
+  // share their dispatch shape with the desktop registry, so they're
+  // registered through the shared `dispatchCommandFromRegistry` helper
+  // rather than per-command `registerCommand` call sites. The remaining
+  // commands stay on the per-command pattern for now (tracked in #3693).
+  const settingsViewProvider = initializeSettingsViewProvider(context);
+  registerExtensionCommandRegistry(
+    context,
+    createExtensionCommandActions(settingsViewProvider),
+  );
 
   mainViewProviderInstance = new MainViewProvider(context);
   context.subscriptions.push(
