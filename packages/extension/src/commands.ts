@@ -90,13 +90,15 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   // downloadArXivSource), batch-2 host-context entry points (parseXml,
   // parseYaml, testTextEditor, indentCurrentTeX,
   // applyReplacements, fixCompilation, getTeXCount, countPdfPages,
-  // showLinterMessages, countLinterMessages, extractFigurePaths), and the
-  // typed-arg handlers for openDoc/stopAgent/compactResponse — all
-  // alongside the original settings/main-view routes via the same
+  // showLinterMessages, countLinterMessages, extractFigurePaths), the
+  // typed-arg handlers for openDoc/stopAgent/compactResponse, and the
+  // batch-4 (#3781) follow-ups (removeApiKey, showImportOptions,
+  // toggleView, showProgressView, setApiKey, createAgentWithAI, execute)
+  // — all alongside the original settings/main-view routes via the same
   // dispatch path as the desktop registry. See
   // `extensionCommandSurface.ts` for the handler map.
   //
-  // FOLLOW_UP (#3775): the remaining per-command registrations carry
+  // FOLLOW_UP (#3781): the remaining per-command registrations carry
   // VS Code-specific arguments (TextEditor, Range, Uri, FileLocation,
   // pack/clean configs, agent execution payloads). Migrating those needs
   // either: (a) the `definedHandler` typed-args path in

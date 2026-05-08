@@ -1,6 +1,10 @@
 // Barrel export for system commands
 export { helpCommands } from './helpCommands';
-export { mainViewCommands, registerMainViewCommands } from './mainViewCommands';
+export {
+  mainViewCommands,
+  registerMainViewCommands,
+  showImportOptions,
+} from './mainViewCommands';
 export {
   sampleProjectCommands,
   createSampleProject,
