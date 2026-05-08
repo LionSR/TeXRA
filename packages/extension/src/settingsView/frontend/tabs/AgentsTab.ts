@@ -114,7 +114,7 @@ export class AgentsTab extends LitElement {
         margin-bottom: var(--wa-space-xs);
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
-        background: var(--texra-sideBar-background, rgba(128, 128, 128, 0.04));
+        background: var(--wa-color-surface-lowered, rgba(128, 128, 128, 0.04));
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
       }

@@ -50,7 +50,7 @@ export const permissionCardStyles: CSSResult = css`
   .code-block {
     display: block;
     padding: var(--wa-space-xs);
-    background: var(--texra-textCodeBlock-background);
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius);
     color: var(--texra-terminal-foreground);
     font-family: var(--wa-font-family-mono);
