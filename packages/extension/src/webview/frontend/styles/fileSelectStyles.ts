@@ -27,7 +27,7 @@ export { compactFormControlStyles };
 /** Core file-select layout styles. */
 export const fileSelectLayoutStyles = css`
   .file-select {
-    margin-bottom: var(--wa-space-2xs);
+    margin-bottom: var(--wa-space-3xs);
   }
 
   .file-select:has(.optional-label) {
@@ -38,11 +38,19 @@ export const fileSelectLayoutStyles = css`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--wa-space-2xs);
+    margin-bottom: var(--wa-space-3xs);
     flex-wrap: nowrap;
     line-height: var(--line-height-normal);
     gap: var(--wa-space-2xs);
     min-height: 22px;
+  }
+
+  /* When the inline wa-select collapses (no current file, list closed),
+     drop the header's bottom margin so the slot becomes a single 22px row
+     instead of leaving a wasted gap above the next slot. */
+  .file-select:not([data-expanded='true']):not([data-has-current='true'])
+    .file-select-header {
+    margin-bottom: 0;
   }
 
   .file-select-header > wa-button {
@@ -63,7 +71,7 @@ export const fileSelectLayoutStyles = css`
   .file-select-label-group {
     display: flex;
     align-items: center;
-    gap: var(--wa-space-2xs);
+    gap: var(--wa-space-3xs);
     flex-wrap: nowrap;
     flex: 1;
     min-width: 0;
@@ -116,15 +124,10 @@ export const fileSelectLayoutStyles = css`
   /* Hide the inline wa-select when there's no current selection AND the list
      isn't expanded — saves a wasted row showing "None". The select still
      surfaces as soon as the user expands, picks a current file, or starts
-     filtering. */
-  .file-select:not([data-expanded='true']):not([data-has-current='true'])
-    wa-select {
-    display: none;
-  }
-
-  .file-select:not([data-expanded='true']) .file-action-button {
-    display: none;
-  }
+     filtering. The list-management buttons (add-opened, clear-list, add)
+     stay visible at all times so they remain reachable in one click — the
+     user complained that hiding them behind the chevron made the launcher
+     feel "minimized too much". */
 `;
 
 /** Toggle icon and optional label styles. */
@@ -172,7 +175,7 @@ export const multiFilesStyles = css`
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-top: var(--wa-space-2xs);
+    margin-top: var(--wa-space-3xs);
     padding: 0;
   }
 
