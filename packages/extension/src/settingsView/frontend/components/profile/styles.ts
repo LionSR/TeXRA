@@ -141,36 +141,30 @@ export const profileViewStyles: CSSResult = css`
     line-height: var(--line-height-normal);
   }
 
-  .api-access-options {
+  /* wa-radio-group provides layout + keyboard navigation; the per-option card
+     chrome (border, background, hover) is rendered on each <wa-radio>. */
+  wa-radio-group.api-access-options {
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-xs);
   }
 
-  .api-access-option {
-    display: flex;
+  wa-radio.api-access-option {
     align-items: flex-start;
-    gap: var(--wa-space-xs);
     padding: var(--wa-space-xs);
     background: var(--wa-form-control-background-color);
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
-    cursor: pointer;
     transition: border-color var(--transition-normal);
   }
 
-  .api-access-option:hover {
+  wa-radio.api-access-option:hover {
     border-color: var(--wa-color-focus);
   }
 
-  .api-access-option:has(input:checked) {
+  wa-radio.api-access-option[checked] {
     border-color: var(--wa-color-focus);
     background: var(--wa-color-neutral-fill-quiet);
-  }
-
-  .api-access-option input[type='radio'] {
-    margin-top: var(--wa-space-3xs);
-    accent-color: var(--wa-color-focus);
   }
 
   .api-access-support {
