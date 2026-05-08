@@ -436,7 +436,6 @@ export class FileSelectGroup extends LitElement {
               icon: 'folder-opened',
               label: config.addOpenedLabel,
               title: config.addOpenedLabel,
-              className: 'file-action-button',
               onClick: this.handleAddOpenedFiles,
             })}
             ${renderIconActionButton({
@@ -446,7 +445,6 @@ export class FileSelectGroup extends LitElement {
               icon: 'trash',
               label: config.emptyListLabel,
               title: config.emptyListLabel,
-              className: 'file-action-button',
               onClick: this.handleEmptyFiles,
             })}
             ${renderIconActionButton({
@@ -456,7 +454,6 @@ export class FileSelectGroup extends LitElement {
               icon: 'add',
               label: config.selectListLabel,
               title: config.selectListLabel,
-              className: 'file-action-button',
               onClick: this.handleSelectMultipleFiles,
             })}
           </div>
