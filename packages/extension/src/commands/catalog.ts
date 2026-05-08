@@ -183,6 +183,11 @@ export const commandCatalog = [
     category: 'TeXRA',
   },
   {
+    id: 'texra.compactResponse',
+    title: 'Compact Response',
+    category: 'TeXRA',
+  },
+  {
     id: 'texra.execute',
     title: 'Execute Agent',
     category: 'TeXRA',
