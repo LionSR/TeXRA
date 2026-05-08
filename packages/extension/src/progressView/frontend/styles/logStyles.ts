@@ -43,6 +43,7 @@ export const layoutStyles = css`
     contain: layout style paint;
   }
 
+  task-group-list > .log-container,
   task-group-list > vscode-scrollable,
   vscode-scrollable {
     flex: 1 1 auto;
