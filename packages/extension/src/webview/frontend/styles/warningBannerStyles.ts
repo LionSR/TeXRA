@@ -1,9 +1,6 @@
-/**
- * Shared styles for warning-type banners (API key, agent config, dependency).
- *
- * Provides the common layout (flex row, warning colors, padding/margin)
- * and action button container used by all warning banners.
- */
+// Shared layout for inline banners. wa-callout owns the variant color,
+// border, and padding; this stylesheet just lays out the message + actions
+// inside the callout's default slot.
 
 import { css, type CSSResult } from 'lit';
 
@@ -12,21 +9,19 @@ export const warningBannerStyles: CSSResult = css`
     display: block;
   }
 
-  .warning-banner {
-    border-radius: var(--border-radius);
-    padding: var(--spacing-small) var(--spacing-medium);
+  wa-callout.warning-banner {
     margin-bottom: var(--spacing-large);
-    background-color: var(--texra-inputValidation-warningBackground);
-    color: var(--texra-inputValidation-warningForeground);
-    border: var(--border-thin) solid var(--texra-inputValidation-warningBorder);
+  }
+
+  .banner-row {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
     flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
     gap: var(--spacing-tiny) var(--spacing-medium);
   }
 
-  .warning-banner .hint {
+  .banner-row .hint {
     width: 100%;
     font-size: var(--font-size-sm);
     opacity: var(--opacity-normal);
