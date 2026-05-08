@@ -114,10 +114,10 @@ export class InstructionPanel extends LitElement {
         display: flex;
         flex-direction: column;
         position: relative;
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        padding: var(--wa-space-3xs) var(--wa-space-xs);
         background-color: var(--background-color);
         border-radius: var(--border-radius);
-        margin-bottom: var(--wa-space-2xs);
+        margin-bottom: var(--wa-space-3xs);
         border: var(--border-thin) solid var(--color-border);
         transition: border-color 160ms ease;
       }
@@ -227,7 +227,7 @@ export class InstructionPanel extends LitElement {
 
       wa-textarea#instruction {
         width: 100%;
-        margin: var(--wa-space-2xs) 0;
+        margin: var(--wa-space-3xs) 0;
         font-family: var(--wa-font-family-mono);
         font-size: var(--font-size);
       }
@@ -249,7 +249,7 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer {
         display: flex;
         align-items: center;
-        gap: var(--wa-space-s);
+        gap: var(--wa-space-m);
         flex: 1 1 auto;
         flex-wrap: wrap;
         min-width: 0;
