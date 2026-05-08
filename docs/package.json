@@ -20,7 +20,8 @@
   "license": "MIT",
   "description": "Documentation for TeXRA - AI-powered academic research assistant",
   "devDependencies": {
-    "@vscode/codicons": "^0.0.36",
+    "@awesome.me/webawesome": "^3.6.0",
+    "@fortawesome/free-solid-svg-icons": "^7.2.0",
     "gh-pages": "^6.3.0",
     "mermaid": "^11.6.0",
     "vitepress": "^2.0.0-alpha.15",
