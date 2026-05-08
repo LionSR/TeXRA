@@ -102,6 +102,51 @@ const HANDLERS = {
       return true;
     },
   ),
+  // Batch 2 (#3775) — no-arg host-context commands.
+  'texra.parseXml': (actions: ExtensionCommandActions) => {
+    void actions.parseXml();
+    return true;
+  },
+  'texra.parseYaml': (actions: ExtensionCommandActions) => {
+    void actions.parseYaml();
+    return true;
+  },
+  'texra.testTextEditor': (actions: ExtensionCommandActions) => {
+    void actions.testTextEditor();
+    return true;
+  },
+  'texra.indentCurrentTeX': (actions: ExtensionCommandActions) => {
+    void actions.indentCurrentTeX();
+    return true;
+  },
+  'texra.applyReplacements': (actions: ExtensionCommandActions) => {
+    void actions.applyReplacements();
+    return true;
+  },
+  'texra.fixCompilation': (actions: ExtensionCommandActions) => {
+    void actions.fixCompilation();
+    return true;
+  },
+  'texra.getTeXCount': (actions: ExtensionCommandActions) => {
+    void actions.getTeXCount();
+    return true;
+  },
+  'texra.countPdfPages': (actions: ExtensionCommandActions) => {
+    void actions.countPdfPages();
+    return true;
+  },
+  'texra.showLinterMessages': (actions: ExtensionCommandActions) => {
+    void actions.showLinterMessages();
+    return true;
+  },
+  'texra.countLinterMessages': (actions: ExtensionCommandActions) => {
+    void actions.countLinterMessages();
+    return true;
+  },
+  'texra.extractFigurePaths': (actions: ExtensionCommandActions) => {
+    void actions.extractFigurePaths();
+    return true;
+  },
   // The typed handlers carry their own argument shapes via
   // `definedHandler`. Matching the registry map's per-entry TArgs widening
   // (`any`) keeps inference per entry without unifying every entry on
@@ -131,6 +176,17 @@ function makeActions(): ExtensionCommandActions {
     openDoc: vi.fn().mockResolvedValue(undefined),
     stopAgent: vi.fn(),
     compactResponse: vi.fn().mockResolvedValue(undefined),
+    parseXml: vi.fn().mockResolvedValue(undefined),
+    parseYaml: vi.fn().mockResolvedValue(undefined),
+    testTextEditor: vi.fn().mockResolvedValue(undefined),
+    indentCurrentTeX: vi.fn().mockResolvedValue(undefined),
+    applyReplacements: vi.fn().mockResolvedValue(undefined),
+    fixCompilation: vi.fn().mockResolvedValue(undefined),
+    getTeXCount: vi.fn().mockResolvedValue(undefined),
+    countPdfPages: vi.fn().mockResolvedValue(undefined),
+    showLinterMessages: vi.fn().mockResolvedValue(undefined),
+    countLinterMessages: vi.fn().mockResolvedValue(undefined),
+    extractFigurePaths: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -150,6 +206,18 @@ describe('extension command surface — newly migrated commands (#3771, #3775)',
     ['texra.testAgentLoading', 'testAgentLoading'],
     ['texra.loadSpecificAgent', 'loadSpecificAgent'],
     ['texra.openProgressViewInTab', 'openProgressViewInTab'],
+    // Batch 2 (#3775)
+    ['texra.parseXml', 'parseXml'],
+    ['texra.parseYaml', 'parseYaml'],
+    ['texra.testTextEditor', 'testTextEditor'],
+    ['texra.indentCurrentTeX', 'indentCurrentTeX'],
+    ['texra.applyReplacements', 'applyReplacements'],
+    ['texra.fixCompilation', 'fixCompilation'],
+    ['texra.getTeXCount', 'getTeXCount'],
+    ['texra.countPdfPages', 'countPdfPages'],
+    ['texra.showLinterMessages', 'showLinterMessages'],
+    ['texra.countLinterMessages', 'countLinterMessages'],
+    ['texra.extractFigurePaths', 'extractFigurePaths'],
   ] as const)('%s dispatches to actions.%s', (id, actionKey) => {
     const actions = makeActions();
     expect(dispatchCommandFromRegistry(id, HANDLERS, actions)).toBe(true);
