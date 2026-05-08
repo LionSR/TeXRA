@@ -46,9 +46,9 @@ export class ProviderKeyModal extends LitElement {
         box-sizing: border-box;
         height: 34px;
         padding: var(--wa-space-2xs) var(--wa-space-xs);
-        color: var(--texra-input-foreground);
-        background: var(--texra-input-background);
-        border: var(--border-thin) solid var(--texra-input-border);
+        color: var(--wa-form-control-text-color);
+        background: var(--wa-form-control-background-color);
+        border: var(--border-thin) solid var(--wa-form-control-border-color);
         border-radius: var(--border-radius);
         font: inherit;
       }
@@ -83,7 +83,7 @@ export class ProviderKeyModal extends LitElement {
       }
 
       .provider-key-primary {
-        color: var(--texra-button-foreground);
+        color: var(--wa-color-brand-on-loud);
         background: var(--wa-color-brand-fill-loud);
         border: var(--border-thin) solid var(--wa-color-brand-fill-loud);
       }
@@ -99,7 +99,7 @@ export class ProviderKeyModal extends LitElement {
       }
 
       .provider-key-secondary:hover {
-        background: var(--texra-list-hoverBackground);
+        background: var(--wa-color-neutral-fill-quiet);
       }
     `,
   ];

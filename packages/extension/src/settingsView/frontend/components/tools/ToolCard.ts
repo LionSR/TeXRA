@@ -96,7 +96,7 @@ export class ToolCard extends LitElement {
         font-size: var(--font-size-xs);
         padding: var(--border-thin) var(--border-radius-large);
         background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
-        color: var(--texra-badge-foreground);
+        color: var(--wa-color-neutral-on-quiet);
         border-radius: var(--border-radius);
       }
 
