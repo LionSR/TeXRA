@@ -11,6 +11,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
+// Side-effect imports - register WA icon and spinner components
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+
 // Local imports - shared styles
 import {
   designTokens,
@@ -18,7 +22,6 @@ import {
   commonViewStyles,
 } from '@shared/styles';
 import { TODO_STATUS, STATUS_ICONS, type TodoItem } from '@shared/schemas';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 import { ELEMENT_IDS } from '../constants';
 
@@ -30,7 +33,6 @@ export class TodoList extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconIconClasses,
     animationStyles,
     css`
       :host {
@@ -167,14 +169,14 @@ export class TodoList extends LitElement {
           'todo-item--completed': status === TODO_STATUS.COMPLETED,
         })}
       >
-        <i
-          class=${classMap({
-            codicon: true,
-            [`codicon-${icon}`]: true,
-            'todo-item__icon': true,
-            spin: isInProgress,
-          })}
-        ></i>
+        ${isInProgress
+          ? html`<wa-spinner class="todo-item__icon"></wa-spinner>`
+          : html`<wa-icon
+              library="texra"
+              name=${icon}
+              class="todo-item__icon"
+              aria-hidden="true"
+            ></wa-icon>`}
         <span class="todo-item__content">${content}</span>
       </div>
     `;

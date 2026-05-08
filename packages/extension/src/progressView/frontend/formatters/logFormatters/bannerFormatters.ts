@@ -28,20 +28,20 @@ import { buildDetailsSummary } from '../htmlBuilders';
 const BANNER_CONFIG: Record<
   string,
   {
-    iconClass: string;
+    iconName: string;
     labelText: string;
     copyTitle: string;
     contentClass: string;
   }
 > = {
   thinking: {
-    iconClass: 'codicon-lightbulb',
+    iconName: 'lightbulb',
     labelText: 'Thinking',
     copyTitle: 'Copy thinking',
     contentClass: 'banner-content--thinking',
   },
   scratchpad: {
-    iconClass: 'codicon-pencil',
+    iconName: 'pencil',
     labelText: 'Scratchpad',
     copyTitle: 'Copy scratchpad',
     contentClass: 'banner-content--scratchpad',
@@ -66,7 +66,7 @@ export function formatBannerContentTemplate(
 
   // prettier-ignore
   return html`<details class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
-    iconClass: config.iconClass,
+    iconName: config.iconName,
     label: config.labelText,
     copyButton: {
       title: config.copyTitle,
@@ -102,7 +102,7 @@ export function formatModelResponseTemplate(
 
   // prettier-ignore
   return html`<details class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
-    iconClass: 'codicon-sparkle',
+    iconName: 'sparkle',
     label: 'Assistant',
     timestamp: verbose
       ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }

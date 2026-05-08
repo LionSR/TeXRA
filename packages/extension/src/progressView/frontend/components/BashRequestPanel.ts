@@ -12,9 +12,11 @@ import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import {
-  codiconIconClasses,
   commonViewStyles,
   designTokens,
   requestPanelStyles,
@@ -38,7 +40,6 @@ export class BashRequestPanel extends BaseFeedbackPanel {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconIconClasses,
     codeBlockStyles,
     requestPanelStyles,
   ];

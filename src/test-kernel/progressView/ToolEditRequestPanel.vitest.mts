@@ -42,7 +42,9 @@ function installDom(): JSDOM {
   globalThis.CustomEvent = dom.window.CustomEvent;
   (globalThis as { Node: unknown }).Node = dom.window.Node;
   installAttachInternalsFallback(
-    dom.window as unknown as Parameters<typeof installAttachInternalsFallback>[0],
+    dom.window as unknown as Parameters<
+      typeof installAttachInternalsFallback
+    >[0],
   );
   return dom;
 }

@@ -10,10 +10,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-} from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Side-effect imports - register WA icon and spinner components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

@@ -24,10 +24,14 @@ import {
 } from '../litTemplates';
 
 // Local imports - formatter helpers
-import { buildToolUseSection, wrapInPre } from '../htmlBuilders';
+import {
+  buildToolUseSection,
+  wrapInPre,
+  SPINNER_ICON_NAME,
+} from '../htmlBuilders';
 
 type RenderableSection = TemplateResult | typeof nothing | undefined | null;
-type BadgeData = { iconClass: string; label: string };
+type BadgeData = { iconName: string; label: string };
 type CodexToolRenderer = (input: unknown) => TemplateResult | typeof nothing;
 
 /** Lenient schema for parsing codex tool input in the renderer. */
@@ -41,9 +45,13 @@ type CodexInputDisplay = z.infer<typeof CodexInputDisplaySchema>;
 type CodexFileChangeToolInput = z.infer<typeof CodexFileChangeToolInputSchema>;
 type CodexTodoToolInput = z.infer<typeof CodexTodoToolInputSchema>;
 
-function renderBadge({ iconClass, label }: BadgeData): TemplateResult {
+function renderBadge({ iconName, label }: BadgeData): TemplateResult {
   // prettier-ignore
-  return html`<span class="extract-flag"><i class="codicon ${iconClass}"></i> ${label}</span>`;
+  const iconTemplate = iconName === SPINNER_ICON_NAME
+    ? html`<wa-spinner></wa-spinner>`
+    : html`<wa-icon library="texra" name=${iconName} aria-hidden="true"></wa-icon>`;
+  // prettier-ignore
+  return html`<span class="extract-flag">${iconTemplate} ${label}</span>`;
 }
 
 function renderBadgeSection(
@@ -58,7 +66,7 @@ function renderBadgeSection(
     label,
     html`${repeat(
       badges,
-      (badge) => `${badge.iconClass}:${badge.label}`,
+      (badge) => `${badge.iconName}:${badge.label}`,
       renderBadge,
     )}`,
   );
@@ -95,10 +103,10 @@ function renderCodexPromptSection(input: CodexInputDisplay): RenderableSection {
 function renderCodexModeSection(input: CodexInputDisplay): RenderableSection {
   const badges = [
     ...(input.sandbox_mode
-      ? [{ iconClass: 'codicon-shield', label: input.sandbox_mode }]
+      ? [{ iconName: 'shield', label: input.sandbox_mode }]
       : []),
     ...(input.thread_id
-      ? [{ iconClass: 'codicon-comment-discussion', label: 'follow-up' }]
+      ? [{ iconName: 'comment-discussion', label: 'follow-up' }]
       : []),
   ];
 
@@ -121,8 +129,7 @@ function renderCodexFileStatusSection(patchStatus: string): RenderableSection {
   return patchStatus
     ? renderBadgeSection('Status:', [
         {
-          iconClass:
-            patchStatus === 'failed' ? 'codicon-error' : 'codicon-check',
+          iconName: patchStatus === 'failed' ? 'error' : 'check',
           label: patchStatus,
         },
       ])
@@ -134,7 +141,7 @@ function renderCodexFileChangeItem(
 ): TemplateResult {
   return html`
     <li class="detail-item">
-      <i class="codicon codicon-file"></i>
+      <wa-icon library="texra" name="file" aria-hidden="true"></wa-icon>
       <span class="file-link clickable-link" data-file=${change.path}
         >${change.path}</span
       >
@@ -200,7 +207,7 @@ function renderCodexTodoProgressSection(
   return totalCount > 0
     ? renderBadgeSection('Progress:', [
         {
-          iconClass: 'codicon-checklist',
+          iconName: 'checklist',
           label: `${completedCount}/${totalCount} completed`,
         },
       ])
@@ -213,11 +220,11 @@ function renderCodexTodoItem(item: {
 }): TemplateResult {
   return html`
     <li class="detail-item">
-      <i
-        class="codicon ${item.completed
-          ? 'codicon-pass-filled'
-          : 'codicon-circle-large-outline'}"
-      ></i>
+      <wa-icon
+        library="texra"
+        name=${item.completed ? 'pass-filled' : 'circle-large-outline'}
+        aria-hidden="true"
+      ></wa-icon>
       <span>${item.text}</span>
     </li>
   `;
@@ -262,16 +269,16 @@ function renderCodexTodoContent(
 
 function getCodexTurnStateIcon(state: string): string {
   return state === 'failed'
-    ? 'codicon-error'
+    ? 'error'
     : state === 'running'
-      ? 'codicon-sync spin'
-      : 'codicon-check';
+      ? SPINNER_ICON_NAME
+      : 'check';
 }
 
 function renderCodexTurnStateSection(state: string): RenderableSection {
   return state
     ? renderBadgeSection('State:', [
-        { iconClass: getCodexTurnStateIcon(state), label: state },
+        { iconName: getCodexTurnStateIcon(state), label: state },
       ])
     : nothing;
 }
