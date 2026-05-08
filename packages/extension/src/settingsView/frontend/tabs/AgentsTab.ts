@@ -5,6 +5,8 @@
 
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import '@awesome.me/webawesome/dist/components/tab/tab.js';
+import '@awesome.me/webawesome/dist/components/tab-group/tab-group.js';
 import {
   LitElement,
   html,
@@ -16,16 +18,23 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  waTabThemeTokenStyles,
+} from '@shared/styles';
 
 // Local imports - shared schemas
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+import type { WaTabShowEvent } from '@shared/wa/tabs';
 import { AgentSelectionEvents } from '../components/profile/events';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/AgentSelectionPanel';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
+const AGENT_SUB_TAB_PANELS = ['workflow', 'toolUse'] as const satisfies readonly AgentCategory[];
 
 @customElement('agents-tab')
 export class AgentsTab extends LitElement {
@@ -47,42 +56,29 @@ export class AgentsTab extends LitElement {
         margin-bottom: var(--wa-space-xs);
       }
 
-      .agents-sub-tabs {
-        display: flex;
-        gap: 0;
-        border-bottom: var(--border-thin) solid var(--color-border);
+      /*
+       * Sub-tabs use the native wa-tab-group; we hide the body part since
+       * the tab content (agent-selection-panel) is rendered separately
+       * below, driven by the activeSubTab state.
+       */
+      wa-tab-group.agents-sub-tabs {
+        ${waTabThemeTokenStyles}
       }
 
-      .agents-sub-tab {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-xs) var(--wa-space-s);
+      wa-tab-group.agents-sub-tabs::part(body) {
+        display: none;
+      }
+
+      wa-tab-group.agents-sub-tabs wa-tab {
         font-size: var(--font-size-sm);
-        font-family: inherit;
-        color: var(--color-text-secondary);
-        background: none;
-        border: none;
-        border-bottom: var(--border-medium) solid transparent;
-        cursor: pointer;
-        transition:
-          color var(--transition-fast),
-          border-color var(--transition-fast);
       }
 
-      .agents-sub-tab:hover {
-        color: var(--wa-color-text-normal);
+      wa-tab-group.agents-sub-tabs wa-tab::part(base) {
+        padding-block: var(--wa-space-xs);
+        padding-inline: var(--wa-space-s);
       }
 
-      .agents-sub-tab:focus-visible {
-        outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: 1px;
-        border-radius: var(--border-radius-small);
-      }
-
-      .agents-sub-tab.active {
-        color: var(--wa-color-text-normal);
-        border-bottom-color: var(--wa-color-focus);
+      wa-tab-group.agents-sub-tabs wa-tab[active]::part(base) {
         font-weight: var(--font-weight-medium);
       }
 
@@ -223,6 +219,13 @@ export class AgentsTab extends LitElement {
     this.dispatchEvent(AgentSelectionEvents.saveTeam());
   }
 
+  private handleSubTabShow = (event: WaTabShowEvent): void => {
+    const next = event.detail.name;
+    if ((AGENT_SUB_TAB_PANELS as readonly string[]).includes(next)) {
+      this.activeSubTab = next as AgentCategory;
+    }
+  };
+
   override render(): TemplateResult {
     const activeAgents =
       this.activeSubTab === 'workflow'
@@ -233,32 +236,26 @@ export class AgentsTab extends LitElement {
       <div class="agents-container tab-content-container">
         <!-- Row 1: Sub-tabs + New Agent -->
         <div class="agents-header">
-          <div class="agents-sub-tabs">
-            <button
-              class="agents-sub-tab ${this.activeSubTab === 'workflow'
-                ? 'active'
-                : ''}"
-              @click=${() => (this.activeSubTab = 'workflow')}
-            >
+          <wa-tab-group
+            class="agents-sub-tabs"
+            .active=${this.activeSubTab}
+            @wa-tab-show=${this.handleSubTabShow}
+          >
+            <wa-tab panel="workflow">
               <wa-icon library="texra" name="symbol-method"></wa-icon>
               Workflow
               <span class="agents-sub-tab-count"
                 >(${this.workflowAgents.length})</span
               >
-            </button>
-            <button
-              class="agents-sub-tab ${this.activeSubTab === 'toolUse'
-                ? 'active'
-                : ''}"
-              @click=${() => (this.activeSubTab = 'toolUse')}
-            >
+            </wa-tab>
+            <wa-tab panel="toolUse">
               <wa-icon library="texra" name="tools"></wa-icon>
               Tool Use
               <span class="agents-sub-tab-count"
                 >(${this.toolUseAgents.length})</span
               >
-            </button>
-          </div>
+            </wa-tab>
+          </wa-tab-group>
           <div class="agents-header-actions">
             <button
               class="tab-action-btn"
