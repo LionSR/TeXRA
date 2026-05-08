@@ -116,13 +116,13 @@ export class ToolsTab extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: var(--spacing-large);
+        margin-bottom: var(--wa-space-s);
       }
 
       .tools-title {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-medium);
         color: var(--texra-foreground);
@@ -131,7 +131,7 @@ export class ToolsTab extends LitElement {
       .tools-summary {
         display: flex;
         align-items: center;
-        gap: var(--spacing-large);
+        gap: var(--wa-space-s);
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
       }
@@ -139,7 +139,7 @@ export class ToolsTab extends LitElement {
       .tools-health-ring {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       .tools-health-ring svg {
@@ -179,7 +179,7 @@ export class ToolsTab extends LitElement {
       .tools-summary-stat {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       .tools-summary-stat wa-icon {
@@ -197,15 +197,15 @@ export class ToolsTab extends LitElement {
       /* Base recheck-btn styles provided by .tab-action-btn in commonViewStyles */
 
       .category-section {
-        margin-bottom: var(--spacing-large);
+        margin-bottom: var(--wa-space-s);
       }
 
       .category-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding-bottom: var(--spacing-small);
-        margin-bottom: var(--spacing-medium);
+        gap: var(--wa-space-2xs);
+        padding-bottom: var(--wa-space-2xs);
+        margin-bottom: var(--wa-space-xs);
         border-bottom: var(--border-thin) solid var(--color-border);
         font-size: var(--font-size-sm);
         font-weight: var(--font-weight-medium);
@@ -225,7 +225,7 @@ export class ToolsTab extends LitElement {
 
       .tools-empty {
         text-align: center;
-        padding: var(--spacing-large);
+        padding: var(--wa-space-s);
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
       }
@@ -233,16 +233,16 @@ export class ToolsTab extends LitElement {
       .tools-header-actions {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       .setting-block {
-        margin-bottom: var(--spacing-small);
+        margin-bottom: var(--wa-space-2xs);
       }
 
       .desktop-settings {
-        padding: var(--spacing-medium);
-        margin-bottom: var(--spacing-medium);
+        padding: var(--wa-space-xs);
+        margin-bottom: var(--wa-space-xs);
         background-color: var(--texra-editor-inactiveSelectionBackground);
         border-radius: var(--border-radius);
       }
@@ -253,7 +253,7 @@ export class ToolsTab extends LitElement {
       }
 
       .desktop-settings-description {
-        margin: var(--spacing-small) 0 0 0;
+        margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
         color: var(--texra-descriptionForeground);
       }
@@ -261,14 +261,14 @@ export class ToolsTab extends LitElement {
       .desktop-settings-row {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-2xs);
         flex-wrap: wrap;
       }
 
       .codex-inline-settings {
-        padding: var(--spacing-small) var(--spacing-medium);
-        margin-bottom: var(--spacing-small);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        margin-bottom: var(--wa-space-2xs);
         border-radius: var(--border-radius);
         background: var(
           --texra-textCodeBlock-background,
@@ -279,7 +279,7 @@ export class ToolsTab extends LitElement {
       .setting-row {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       .setting-row label {

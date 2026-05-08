@@ -16,7 +16,7 @@ export const codeBlockStyles = css`
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
     background-color: var(--texra-editorGroupHeader-tabsBackground);
     border-bottom: var(--border-thin) solid var(--color-border);
     font-size: var(--font-size-xs);
@@ -31,7 +31,7 @@ export const codeBlockStyles = css`
 
   .code-block pre {
     margin: 0;
-    padding: var(--spacing-small);
+    padding: var(--wa-space-2xs);
     background-color: var(--texra-editor-background);
     border: var(--border-thin) solid var(--texra-editorWidget-border);
     border-radius: 0;
@@ -46,7 +46,7 @@ export const codeBlockStyles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-small) var(--spacing-medium);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     border: none;
     background: transparent;
     color: var(--texra-descriptionForeground, #888);
@@ -84,7 +84,7 @@ export const codeBlockStyles = css`
 
   /* Syntax highlighted code blocks */
   pre.hljs {
-    padding: var(--spacing-small);
+    padding: var(--wa-space-2xs);
     overflow-x: auto;
   }
 

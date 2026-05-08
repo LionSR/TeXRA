@@ -67,21 +67,21 @@ export class PlanView extends LitElement {
         font-size: var(--font-size);
         line-height: var(--line-height-normal);
         color: var(--color-text-secondary);
-        margin-bottom: var(--spacing-small);
-        padding: var(--spacing-tiny) 0;
+        margin-bottom: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) 0;
       }
 
       .plan-steps {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
       }
 
       .plan-step {
         display: flex;
         align-items: flex-start;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) 0;
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) 0;
         font-size: var(--font-size);
         line-height: var(--line-height-normal);
       }
@@ -116,22 +116,22 @@ export class PlanView extends LitElement {
       .plan-step__description {
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
-        margin-top: var(--spacing-tiny);
+        margin-top: var(--wa-space-3xs);
         word-break: break-word;
       }
 
       .plan-step__files {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-tiny);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-3xs);
+        margin-top: var(--wa-space-2xs);
       }
 
       .plan-step__file {
         font-size: var(--font-size-sm);
         color: var(--texra-textLink-foreground);
         background: var(--texra-badge-background);
-        padding: var(--border-thin) var(--spacing-medium);
+        padding: var(--border-thin) var(--wa-space-xs);
         border-radius: var(--border-radius);
         font-family: var(--texra-editor-font-family, monospace), monospace;
       }

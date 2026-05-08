@@ -30,7 +30,7 @@ export class StatisticsPanel extends LitElement {
     css`
       :host {
         display: block;
-        margin: var(--spacing-small) 0;
+        margin: var(--wa-space-2xs) 0;
       }
 
       details {
@@ -40,13 +40,13 @@ export class StatisticsPanel extends LitElement {
       .statistics-content {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-large);
+        gap: var(--wa-space-s);
       }
 
       .stat-item {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
     `,
   ];

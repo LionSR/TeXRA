@@ -33,7 +33,7 @@ export const bannerStyles: CSSResult = css`
   }
 
   wa-callout {
-    margin-bottom: var(--spacing-large);
+    margin-bottom: var(--wa-space-s);
     opacity: 0;
     transform: translateY(-4px);
     transition:
@@ -74,7 +74,7 @@ export const bannerStyles: CSSResult = css`
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: var(--spacing-tiny) var(--spacing-medium);
+    gap: var(--wa-space-3xs) var(--wa-space-xs);
   }
 
   .banner-row .hint {
@@ -86,7 +86,7 @@ export const bannerStyles: CSSResult = css`
   .actions {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     flex-shrink: 0;
   }
 `;

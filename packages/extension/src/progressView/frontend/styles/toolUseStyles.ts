@@ -6,10 +6,10 @@ import { css } from 'lit';
  */
 export const toolUseStyles = css`
   .tool-use-section {
-    margin: var(--spacing-small) 0;
+    margin: var(--wa-space-2xs) 0;
     border-left: var(--border-medium) solid
       color-mix(in srgb, var(--texra-textLink-foreground) 30%, transparent);
-    padding-left: var(--spacing-medium);
+    padding-left: var(--wa-space-xs);
   }
 
   .tool-use-title {
@@ -31,11 +31,11 @@ export const toolUseStyles = css`
   .tool-use-label {
     font-weight: var(--font-weight-semibold);
     color: var(--color-text-link);
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--wa-space-2xs);
   }
 
   .tool-use-subsection {
-    margin: var(--spacing-tiny) 0;
+    margin: var(--wa-space-3xs) 0;
   }
 
   .tool-use-sublabel {
@@ -46,7 +46,7 @@ export const toolUseStyles = css`
   }
 
   .tool-use-separator {
-    margin: var(--spacing-small) 0;
+    margin: var(--wa-space-2xs) 0;
     border: none;
     border-top: var(--border-thin) solid var(--color-border);
     opacity: var(--opacity-separator);
@@ -61,7 +61,7 @@ export const toolUseStyles = css`
 
   .banner-content--error .error-details {
     margin: 0;
-    padding: var(--spacing-small);
+    padding: var(--wa-space-2xs);
     background-color: var(
       --texra-inputValidation-errorBackground,
       rgba(255, 0, 0, 0.1)
@@ -108,7 +108,7 @@ export const toolUseStyles = css`
   }
 
   :is(.tool-user-feedback, .tool-error-content) {
-    padding: var(--spacing-small);
+    padding: var(--wa-space-2xs);
     border-radius: var(--border-radius-small);
     border-left: var(--border-thick) solid;
   }
@@ -151,7 +151,7 @@ export const toolUseStyles = css`
     font-weight: var(--font-weight-medium);
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-tiny);
+    gap: var(--wa-space-3xs);
     transition:
       color var(--transition-fast),
       background-color var(--transition-fast);
@@ -192,7 +192,7 @@ export const toolUseStyles = css`
 
   .diff-inline-view {
     margin: 0;
-    padding: var(--spacing-small);
+    padding: var(--wa-space-2xs);
     border-radius: var(--border-radius-small);
     background-color: var(--texra-editor-background);
     white-space: pre-wrap;
@@ -202,7 +202,7 @@ export const toolUseStyles = css`
 
   :is(.diff-inline-del, .diff-inline-add) {
     border-radius: var(--border-radius);
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
   }
 
   .diff-inline-del {

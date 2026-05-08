@@ -39,14 +39,14 @@ export class WorkflowToolUseFollowupSection extends LitElement {
 
       .followup {
         border-top: var(--border-thin) solid var(--color-border);
-        padding: var(--spacing-small) 0;
+        padding: var(--wa-space-2xs) 0;
         color: var(--color-text-secondary);
       }
 
       .followup__header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         width: 100%;
         padding: 0;
         border: none;
@@ -64,8 +64,8 @@ export class WorkflowToolUseFollowupSection extends LitElement {
       .followup__body {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-2xs);
       }
 
       .followup__description {
@@ -75,13 +75,13 @@ export class WorkflowToolUseFollowupSection extends LitElement {
       .followup__controls {
         display: grid;
         grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr);
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       .followup__field {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         min-width: 0;
       }
 
@@ -97,7 +97,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
       .followup__actions {
         display: flex;
         justify-content: flex-end;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       @media (max-width: 600px) {

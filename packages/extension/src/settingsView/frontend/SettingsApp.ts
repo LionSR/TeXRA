@@ -153,13 +153,13 @@ export class SettingsApp extends SettingsAppBase {
       wa-tab-panel {
         flex: 1;
         overflow: auto;
-        --padding: var(--spacing-large);
+        --padding: var(--wa-space-s);
       }
 
       .settings-unavailable {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         max-width: 640px;
         color: var(--color-text-secondary);
       }
@@ -167,7 +167,7 @@ export class SettingsApp extends SettingsAppBase {
       .settings-unavailable-title {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         color: var(--text-color);
         font-weight: var(--font-weight-medium);
       }

@@ -175,28 +175,28 @@ export class LaTeXTab extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: var(--spacing-large);
+        margin-bottom: var(--wa-space-s);
       }
 
       .latex-title {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-medium);
         color: var(--texra-foreground);
       }
 
       .latex-description {
-        margin-bottom: var(--spacing-large);
+        margin-bottom: var(--wa-space-s);
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-relaxed);
       }
 
       .dependency-card {
-        padding: var(--spacing-medium);
-        margin-bottom: var(--spacing-medium);
+        padding: var(--wa-space-xs);
+        margin-bottom: var(--wa-space-xs);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
         background: var(--texra-editor-background);
@@ -205,7 +205,7 @@ export class LaTeXTab extends LitElement {
       .dependency-row {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       .dependency-icon {
@@ -234,15 +234,15 @@ export class LaTeXTab extends LitElement {
       .dependency-description {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-        margin-top: var(--spacing-tiny);
+        margin-top: var(--wa-space-3xs);
       }
 
       .dependency-guide-toggle {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) 0;
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) 0;
+        margin-top: var(--wa-space-2xs);
         font-size: var(--font-size-sm);
         font-family: inherit;
         color: var(--texra-textLink-foreground, #3794ff);
@@ -257,8 +257,8 @@ export class LaTeXTab extends LitElement {
       }
 
       .dependency-guide {
-        margin-top: var(--spacing-small);
-        padding: var(--spacing-medium);
+        margin-top: var(--wa-space-2xs);
+        padding: var(--wa-space-xs);
         background: var(
           --texra-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
@@ -279,14 +279,14 @@ export class LaTeXTab extends LitElement {
 
       .dependency-install-actions {
         display: flex;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-2xs);
       }
 
       .install-command-text {
         flex: 1;
         min-width: 0;
-        padding: var(--spacing-small) var(--spacing-medium);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         background: var(
           --texra-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
@@ -308,9 +308,9 @@ export class LaTeXTab extends LitElement {
       .prerequisite-hint {
         display: flex;
         align-items: flex-start;
-        gap: var(--spacing-medium);
-        padding: var(--spacing-medium);
-        margin-bottom: var(--spacing-medium);
+        gap: var(--wa-space-xs);
+        padding: var(--wa-space-xs);
+        margin-bottom: var(--wa-space-xs);
         border: var(--border-thin) solid
           var(--texra-editorInfo-foreground, #3794ff);
         border-radius: var(--border-radius);
@@ -331,7 +331,7 @@ export class LaTeXTab extends LitElement {
       .prerequisite-hint .hint-title {
         font-weight: var(--font-weight-medium);
         color: var(--texra-foreground);
-        margin-bottom: var(--spacing-tiny);
+        margin-bottom: var(--wa-space-3xs);
       }
 
       .prerequisite-hint .hint-description {
@@ -343,16 +343,16 @@ export class LaTeXTab extends LitElement {
       .prerequisite-hint .hint-actions {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-2xs);
       }
 
       .section-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding-bottom: var(--spacing-small);
-        margin-bottom: var(--spacing-medium);
+        gap: var(--wa-space-2xs);
+        padding-bottom: var(--wa-space-2xs);
+        margin-bottom: var(--wa-space-xs);
         border-bottom: var(--border-thin) solid var(--color-border);
         font-size: var(--font-size-sm);
         font-weight: var(--font-weight-medium);
@@ -364,9 +364,9 @@ export class LaTeXTab extends LitElement {
       .setting-card {
         display: flex;
         align-items: flex-start;
-        gap: var(--spacing-medium);
-        padding: var(--spacing-medium);
-        margin-bottom: var(--spacing-medium);
+        gap: var(--wa-space-xs);
+        padding: var(--wa-space-xs);
+        margin-bottom: var(--wa-space-xs);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
         background: var(--texra-editor-background);
@@ -394,7 +394,7 @@ export class LaTeXTab extends LitElement {
       .setting-toggle {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         white-space: nowrap;
       }
 
@@ -408,7 +408,7 @@ export class LaTeXTab extends LitElement {
         font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-        margin-bottom: var(--spacing-small);
+        margin-bottom: var(--wa-space-2xs);
       }
 
       .setting-value {
@@ -421,7 +421,7 @@ export class LaTeXTab extends LitElement {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         line-height: var(--line-height-normal);
-        margin-top: var(--spacing-small);
+        margin-top: var(--wa-space-2xs);
       }
 
       wa-tag.setting-badge {
@@ -431,8 +431,8 @@ export class LaTeXTab extends LitElement {
       .checkbox-row {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-2xs);
         cursor: pointer;
       }
     `,
@@ -750,7 +750,7 @@ export class LaTeXTab extends LitElement {
       return html`
         <div class="tab-content-container">
           <div
-            style="text-align:center;padding:var(--spacing-large);color:var(--color-text-secondary)"
+            style="text-align:center;padding:var(--wa-space-s);color:var(--color-text-secondary)"
           >
             <wa-spinner></wa-spinner>
             Loading LaTeX settings...
@@ -781,7 +781,7 @@ export class LaTeXTab extends LitElement {
           : html`
               <div
                 class="section-header"
-                style="margin-top:var(--spacing-large)"
+                style="margin-top:var(--wa-space-s)"
               >
                 <wa-icon library="texra" name="settings-gear"></wa-icon>
                 Recommended Settings
@@ -805,7 +805,7 @@ export class LaTeXTab extends LitElement {
 
   private renderInlineCriticismSetting(): TemplateResult {
     return html`
-      <div class="section-header" style="margin-top:var(--spacing-large)">
+      <div class="section-header" style="margin-top:var(--wa-space-s)">
         <wa-icon library="texra" name="comment-discussion"></wa-icon>
         Inline Criticism
       </div>
@@ -853,7 +853,7 @@ export class LaTeXTab extends LitElement {
   private renderCompileDiffSettings(): TemplateResult {
     const cv = this.configValues;
     return html`
-      <div class="section-header" style="margin-top:var(--spacing-large)">
+      <div class="section-header" style="margin-top:var(--wa-space-s)">
         <wa-icon library="texra" name="zap"></wa-icon>
         Compile &amp; Diff
       </div>
@@ -1003,7 +1003,7 @@ export class LaTeXTab extends LitElement {
               );
               this.dispatchSetConfigValue(opts.field, clamped);
             }}
-            style="margin-top:var(--spacing-small);width:140px;"
+            style="margin-top:var(--wa-space-2xs);width:140px;"
           />
         </div>
         ${isCustom
@@ -1047,7 +1047,7 @@ export class LaTeXTab extends LitElement {
                 .value as LatexConfigValueFor<F>;
               this.dispatchSetConfigValue(opts.field, v);
             }}
-            style="margin-top:var(--spacing-small);"
+            style="margin-top:var(--wa-space-2xs);"
           >
             ${opts.options.map(
               (o) => html`

@@ -11,21 +11,21 @@ export const searchStyles: CSSResult = css`
   .search-container {
     display: flex;
     align-items: center;
-    margin-bottom: var(--spacing-xlarge);
-    gap: var(--spacing-medium);
+    margin-bottom: var(--wa-space-l);
+    gap: var(--wa-space-xs);
     width: 100%;
   }
 
   .search-input {
     flex: 1;
-    padding: var(--spacing-medium);
+    padding: var(--wa-space-xs);
     font-size: var(--font-size);
   }
 
   .search-controls {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     margin-left: auto;
   }
 
@@ -38,7 +38,7 @@ export const searchStyles: CSSResult = css`
 
   .action-icon-button[data-action='clear-history'] {
     color: var(--color-text-secondary);
-    margin-left: var(--spacing-small);
+    margin-left: var(--wa-space-2xs);
   }
 
   .action-icon-button[data-action='clear-history']::part(base) {
@@ -57,14 +57,14 @@ export const historyListStyles: CSSResult = css`
   .history-container {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
   }
 
   .history-details {
     display: grid;
     grid-template-columns: 100px 1fr;
-    gap: var(--spacing-small);
-    margin-top: var(--spacing-medium);
+    gap: var(--wa-space-2xs);
+    margin-top: var(--wa-space-xs);
   }
 
   .history-label {
@@ -74,45 +74,45 @@ export const historyListStyles: CSSResult = css`
 
   .history-value {
     color: var(--texra-editor-foreground);
-    padding: var(--spacing-small) 0;
+    padding: var(--wa-space-2xs) 0;
     word-break: break-word;
   }
 
   .history-item {
-    margin-bottom: var(--spacing-medium);
+    margin-bottom: var(--wa-space-xs);
   }
 
   .history-actions {
     display: flex;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .history-timestamp {
     font-size: var(--font-size-sm);
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--wa-space-2xs);
   }
 
   .history-description {
     font-size: var(--font-size-sm);
     color: var(--texra-descriptionForeground);
     font-style: italic;
-    margin-top: var(--spacing-small);
+    margin-top: var(--wa-space-2xs);
     line-height: var(--line-height-normal);
   }
 
   .config-section {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     background-color: var(--texra-editor-inactiveSelectionBackground);
-    padding: var(--spacing-medium);
+    padding: var(--wa-space-xs);
     border-radius: var(--border-radius);
-    margin: var(--spacing-medium) 0;
+    margin: var(--wa-space-xs) 0;
   }
 
   .config-item {
     display: flex;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
     align-items: baseline;
   }
 
@@ -120,7 +120,7 @@ export const historyListStyles: CSSResult = css`
     font-weight: var(--font-weight-medium);
     color: var(--texra-editorInfo-foreground);
     min-width: calc(
-      var(--width-button-min) + var(--spacing-xlarge) + var(--spacing-xlarge)
+      var(--width-button-min) + var(--wa-space-l) + var(--wa-space-l)
     );
   }
 

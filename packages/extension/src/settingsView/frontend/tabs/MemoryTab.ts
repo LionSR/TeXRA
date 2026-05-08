@@ -31,11 +31,11 @@ export class MemoryTab extends LitElement {
       .memory-view-container {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       .memory-description {
-        margin: 0 0 var(--spacing-medium) 0;
+        margin: 0 0 var(--wa-space-xs) 0;
       }
     `,
   ];

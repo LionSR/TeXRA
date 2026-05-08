@@ -42,26 +42,26 @@ export class QueuedFollowUps extends LitElement {
       }
 
       .queued-collapsible::part(header) {
-        padding: var(--spacing-small) var(--spacing-medium);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         font-weight: var(--font-weight-medium);
         background-color: transparent;
       }
 
       .queued-collapsible::part(content) {
-        padding: 0 var(--spacing-small) var(--spacing-small);
+        padding: 0 var(--wa-space-2xs) var(--wa-space-2xs);
       }
 
       .queued-follow-ups-list {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
       }
 
       .queued-follow-up-item {
         display: flex;
         align-items: flex-start;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         font-size: var(--font-size);
         line-height: var(--line-height-normal);
         background-color: var(--texra-editor-background);
