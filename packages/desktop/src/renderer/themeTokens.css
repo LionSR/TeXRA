@@ -81,8 +81,11 @@
   --wa-color-text-preformat: var(--desktop-color-input-foreground);
   --wa-color-text-placeholder: var(--desktop-color-placeholder);
   --wa-color-surface-default: var(--desktop-color-background);
-  --wa-color-surface-raised: var(--desktop-color-sidebar);
-  --wa-color-surface-lowered: var(--desktop-color-sidebar-header);
+  /* Mirror the extension bridge in common.css: `surface-lowered` is the
+     sidebar surface (consumers like .desktop-nav and .desktop-explorer rely
+     on this), `surface-raised` is the slightly darker elevated/hover band. */
+  --wa-color-surface-raised: var(--desktop-color-sidebar-header);
+  --wa-color-surface-lowered: var(--desktop-color-sidebar);
   --wa-color-surface-border: var(--desktop-color-border);
   --wa-color-surface-shadow: var(--desktop-color-shadow);
 
@@ -125,11 +128,15 @@
   --wa-color-success-border-quiet: light-dark(#1a7f37, #73c991);
   --wa-color-success-on-quiet: light-dark(#1a7f37, #73c991);
 
-  /* Neutral variant. */
-  --wa-color-neutral-fill-quiet: light-dark(#eaeef2, #222222);
+  /* Neutral variant — mirrors the extension bridge in common.css where
+     `neutral-fill-quiet` maps to `--vscode-button-secondaryBackground`.
+     Source from `--desktop-color-button-secondary` so secondary buttons
+     and quiet surfaces (e.g. .desktop-command-button, .desktop-folder-button)
+     match the prior --texra-button-secondaryBackground value. */
+  --wa-color-neutral-fill-quiet: var(--desktop-color-button-secondary);
   --wa-color-neutral-border-quiet: light-dark(#d0d7de, #2b2b2b);
   --wa-color-neutral-on-quiet: light-dark(#1f2328, #d4d4d4);
-  --wa-color-neutral-fill-loud: light-dark(#eaeef2, #222222);
+  --wa-color-neutral-fill-loud: var(--desktop-color-button-secondary-hover);
   --wa-color-neutral-border-loud: light-dark(#d0d7de, #2b2b2b);
   --wa-color-neutral-on-loud: light-dark(#1f2328, #d4d4d4);
 
