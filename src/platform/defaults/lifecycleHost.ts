@@ -1,7 +1,4 @@
-import type {
-  LifecycleHost,
-  ShutdownPhase,
-} from '../interfaces/lifecycle';
+import type { LifecycleHost, ShutdownPhase } from '../interfaces/lifecycle';
 
 type Callback = () => void | Promise<void>;
 

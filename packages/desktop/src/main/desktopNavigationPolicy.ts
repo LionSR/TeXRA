@@ -24,7 +24,10 @@ export function isAllowedExternalUrl(url: string): boolean {
   return ALLOWED_HTTPS_HOSTS.has(parsed.host);
 }
 
-function routeOrDeny(url: string, onAsyncError: (error: unknown) => void): void {
+function routeOrDeny(
+  url: string,
+  onAsyncError: (error: unknown) => void,
+): void {
   if (!isAllowedExternalUrl(url)) return;
   shell.openExternal(url).catch(onAsyncError);
 }
@@ -37,7 +40,8 @@ export function installDesktopNavigationPolicy(
   webContents: WebContents,
   options: DesktopNavigationPolicyOptions = {},
 ): void {
-  const reportAsyncError = options.onAsyncError ?? ((error) => console.error(error));
+  const reportAsyncError =
+    options.onAsyncError ?? ((error) => console.error(error));
 
   webContents.setWindowOpenHandler(({ url }) => {
     routeOrDeny(url, reportAsyncError);
