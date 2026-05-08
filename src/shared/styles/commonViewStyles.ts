@@ -1,5 +1,55 @@
 import { css, type CSSResult } from 'lit';
 
+/**
+ * Compact icon-only action button — stricter minimalism.
+ * 20×20, no hover fill, opacity-driven hover/disabled.
+ *
+ * Exported as a focused subset so file-select/main-view components can pull
+ * just the icon-button rules without inheriting the full common view sheet.
+ * `commonViewStyles` below interpolates this block to keep a single source
+ * of truth for the selectors.
+ */
+export const compactIconActionButtonStyles: CSSResult = css`
+  .action-icon-button {
+    flex-shrink: 0;
+  }
+
+  .action-icon-button::part(base) {
+    width: 20px;
+    min-width: 0;
+    height: 20px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(
+      --wa-color-text-quiet,
+      var(--texra-icon-foreground, var(--wa-color-text-normal))
+    );
+    opacity: var(--opacity-subtle);
+    transition: opacity 120ms ease;
+  }
+
+  .action-icon-button::part(base):hover {
+    opacity: var(--opacity-full);
+    background: transparent;
+  }
+
+  .action-icon-button:focus-visible::part(base) {
+    outline: var(--border-thin) solid var(--wa-color-focus);
+    outline-offset: 1px;
+  }
+
+  .action-icon-button[disabled]::part(base) {
+    opacity: 0.35;
+    background: transparent;
+  }
+
+  .action-icon-button wa-icon {
+    font-size: 13px;
+  }
+`;
+
 export const commonViewStyles: CSSResult = css`
   .view-header {
     display: flex;
@@ -131,10 +181,6 @@ export const commonViewStyles: CSSResult = css`
     flex-wrap: nowrap;
   }
 
-  .action-icon-button {
-    flex-shrink: 0;
-  }
-
   /* Compact action button (with text) — stricter IDE-density chrome.
    * Borderless default; hover adds a subtle border (no fill swap). */
   .action-button::part(base) {
@@ -155,42 +201,7 @@ export const commonViewStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
-  /* Compact icon-only action button — stricter minimalism.
-   * 20×20, no hover fill, opacity-driven hover/disabled. */
-  .action-icon-button::part(base) {
-    width: 20px;
-    min-width: 0;
-    height: 20px;
-    min-height: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(
-      --wa-color-text-quiet,
-      var(--texra-icon-foreground, var(--wa-color-text-normal))
-    );
-    opacity: var(--opacity-subtle);
-    transition: opacity 120ms ease;
-  }
-
-  .action-icon-button::part(base):hover {
-    opacity: var(--opacity-full);
-    background: transparent;
-  }
-
-  .action-icon-button:focus-visible::part(base) {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
-  }
-
-  .action-icon-button[disabled]::part(base) {
-    opacity: 0.35;
-    background: transparent;
-  }
-
-  .action-icon-button wa-icon {
-    font-size: 13px;
-  }
+  ${compactIconActionButtonStyles}
 
   /* Stricter compactness for wa-checkbox / wa-radio — smaller label,
    * tighter gap between control and label. */
