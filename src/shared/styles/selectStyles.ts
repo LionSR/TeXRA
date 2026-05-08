@@ -72,20 +72,25 @@ export const selectStyles: CSSResult = css`
     max-height: var(--height-large, 300px);
   }
 
-  /* Compact form controls — IDE-density inputs/selects.
-   * WA defaults to ~38px tall; reduce to ~26px to match VS Code chrome. */
+  /* Compact form controls — stricter IDE-density inputs/selects.
+   * WA defaults to ~38px tall; reduce to ~22px for minimal VS Code chrome.
+   * Border uses subtle surface-border, not heavier panel border. */
   wa-select {
     font-size: var(--font-size-sm);
   }
 
   wa-select::part(combobox) {
-    min-height: 26px;
+    min-height: 22px;
+    min-width: 0;
     padding-block: 0;
-    padding-inline: var(--spacing-small);
+    padding-inline: 6px;
+    border: var(--border-thin) solid
+      var(--wa-color-surface-border, var(--color-border));
   }
 
   wa-select::part(display-input) {
-    padding-block: 2px;
+    padding-block: 1px;
+    padding-inline: 6px;
     font-size: var(--font-size-sm);
   }
 
@@ -98,12 +103,16 @@ export const selectStyles: CSSResult = css`
   }
 
   wa-input::part(base) {
-    min-height: 26px;
+    min-height: 22px;
     padding-block: 0;
+    border: var(--border-thin) solid
+      var(--wa-color-surface-border, var(--color-border));
   }
 
   wa-input::part(input) {
-    padding-block: 2px;
+    padding-block: 1px;
+    padding-inline: 6px;
+    font-size: var(--font-size-sm);
   }
 
   .api-key-missing {
