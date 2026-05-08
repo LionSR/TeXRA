@@ -21,11 +21,15 @@ import { z } from 'zod';
 // Local imports - side-effect: register component
 import './TaskGroupList';
 
+// Side-effect imports - register WA icon and spinner components
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { PersistedState } from '@shared/state';
-import { codiconStyles, designTokens } from '@shared/styles';
+import { designTokens } from '@shared/styles';
 import { postMessage } from '@shared/hostBridge';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { copyWithFeedback } from '@shared/utils/clipboard';
@@ -70,7 +74,7 @@ interface CachedStream {
 
 @customElement('log-list')
 export class LogList extends LitElement {
-  static override styles = [designTokens, codiconStyles, ...logStyles];
+  static override styles = [designTokens, ...logStyles];
 
   // Log context - only updates when logs/groups change (not on metadata-only changes)
   @consume({ context: streamLogContext, subscribe: true })
