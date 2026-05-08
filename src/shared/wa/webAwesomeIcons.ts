@@ -328,7 +328,8 @@ export function registerTeXRAWebAwesomeIcons(): void {
 export type TeXRAIconName = keyof typeof icons | keyof typeof CODICON_ALIASES;
 
 interface WaIconOptions {
-  readonly slot?: 'start' | 'end';
+  // 'start' / 'end' for wa-button; 'icon' for wa-callout / wa-card.
+  readonly slot?: 'start' | 'end' | 'icon';
   readonly className?: string;
   readonly variant?: 'solid' | 'regular';
 }
