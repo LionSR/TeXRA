@@ -155,15 +155,17 @@ export class ProviderKeyList extends LitElement {
   private renderVscodeSetting(setting: ProviderVscodeSetting): TemplateResult {
     const warningLink =
       setting.warningUrl && setting.warningUrlLabel
-        ? html` <button
+        ? html` <wa-button
             class="provider-setting-link"
+            appearance="plain"
+            size="small"
             @click=${() =>
               this.dispatchEvent(
                 ProviderKeyEvents.openUrl({ url: setting.warningUrl! }),
               )}
           >
             ${setting.warningUrlLabel}
-          </button>`
+          </wa-button>`
         : nothing;
 
     const warning = setting.warning
@@ -203,13 +205,15 @@ export class ProviderKeyList extends LitElement {
       <tr>
         <td>
           <div class="provider-name-cell">
-            <button
+            <wa-button
               class="provider-expand-btn ${isExpanded ? 'expanded' : ''}"
+              appearance="plain"
+              size="small"
               title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
               @click=${() => this.toggleExpanded(entry.provider)}
             >
               <wa-icon library="texra" name="chevron-right"></wa-icon>
-            </button>
+            </wa-button>
             <span class="provider-name">${entry.displayName}</span>
           </div>
         </td>
