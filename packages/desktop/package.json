@@ -19,13 +19,16 @@
     "build:renderer": "vite build --config vite.config.ts",
     "build": "corepack pnpm run typecheck && corepack pnpm run build:main && corepack pnpm run build:preload && corepack pnpm run build:renderer",
     "package:dir": "corepack pnpm exec electron-builder --dir --config electron-builder.yml",
-    "package:dist": "corepack pnpm exec electron-builder --config electron-builder.yml --publish never"
+    "package:dist": "corepack pnpm exec electron-builder --config electron-builder.yml --publish never",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@texra/core": "workspace:*",
     "electron": "^42.0.0",
     "electron-builder": "^26.8.1",
     "esbuild": "^0.28.0",
+    "playwright": "^1.59.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.11"
   },
