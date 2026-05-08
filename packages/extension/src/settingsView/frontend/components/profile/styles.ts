@@ -189,7 +189,7 @@ export const profileViewStyles: CSSResult = css`
 
   .api-access-support-icon {
     flex-shrink: 0;
-    margin-top: 2px;
+    margin-top: var(--wa-space-3xs);
     color: var(--texra-charts-red, var(--wa-color-danger-on-quiet));
   }
 
@@ -343,11 +343,15 @@ export const profileViewStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
   }
 
-  .provider-setting-description {
-    color: var(--color-text-secondary);
+  .provider-setting-description,
+  .provider-setting-warning {
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
-    padding-left: 22px;
+    padding-left: var(--wa-space-l);
+  }
+
+  .provider-setting-description {
+    color: var(--color-text-secondary);
   }
 
   .provider-setting-warning {
@@ -355,9 +359,6 @@ export const profileViewStyles: CSSResult = css`
       --texra-inputValidation-warningForeground,
       var(--wa-color-warning-on-quiet)
     );
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal);
-    padding-left: 22px;
   }
 
   .provider-setting-link {
