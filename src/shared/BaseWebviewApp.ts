@@ -14,6 +14,7 @@ import { themeContext } from '@shared/contexts/themeContext';
 
 // Local imports - webview commands
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
+import { setWaColorScheme } from '@shared/wa/waColorScheme';
 
 /**
  * Base class for Lit-powered webview apps.
@@ -73,16 +74,16 @@ export abstract class BaseWebviewApp<TMessage = any> extends LitElement {
   protected onThemeChange(theme: string): void {
     this.theme = theme;
     document.body.className = theme;
-    const root = document.documentElement;
-    root.classList.remove('wa-light', 'wa-dark');
     // 'high-contrast' renders against the active OS color-scheme — pick dark
-    // unless the body class explicitly signals light HC.
+    // unless the body class explicitly signals light HC. Defer the actual
+    // class swap to the shared helper so the class set + ordering stays in
+    // one place across hosts.
     const wantsDark =
       theme === 'dark' ||
       theme === 'high-contrast' ||
       document.body.classList.contains('vscode-dark') ||
       document.body.classList.contains('vscode-high-contrast');
-    root.classList.add(wantsDark ? 'wa-dark' : 'wa-light');
+    setWaColorScheme(wantsDark);
   }
 
   /**
