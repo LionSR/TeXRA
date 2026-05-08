@@ -2,8 +2,6 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-import type { CommandId } from './catalog';
-
 // Local imports
 import {
   signIn as authSignIn,
@@ -84,6 +82,7 @@ import {
 } from '@shared/schemas/settingsViewMessages';
 import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_QUERY } from '@utils/config';
+import type { CommandId } from './catalog';
 
 /**
  * Optional `ApiProvider` argument for `texra.setApiKey`. The schema accepts
@@ -191,17 +190,16 @@ export type ExtensionRegistryCommandId = Extract<
   | 'texra.execute'
 >;
 
-/**
- * DUPLICATE REGISTRATION AUDIT (#3787 follow-up):
- * All 50 command IDs in `EXTENSION_COMMAND_HANDLERS` +
- * `EXTENSION_PARAMETERIZED_HANDLERS` have been verified to have no stale
- * `vscode.commands.registerCommand(...)` calls elsewhere in the codebase.
- *
- * The remaining 46 `registerCommand` call sites (as of the last audit) all
- * register command ids NOT present in the registry — they are legitimate
- * VS Code-only handlers (file ops, git, latex tools, pack/clean variants,
- * etc.) and have no duplicates. Registry handlers are the single source of
- * truth for the commands listed here.
+/*
+ * Duplicate-registration audit (#3787 follow-up):
+ * Every command id in `EXTENSION_COMMAND_HANDLERS` +
+ * `EXTENSION_PARAMETERIZED_HANDLERS` has been verified to have no stale
+ * `vscode.commands.registerCommand(...)` call elsewhere. The remaining
+ * legacy `registerCommand` call sites all register ids NOT present in
+ * the registry — they're legitimate VS Code-only handlers (file ops, git,
+ * latex tools, pack/clean variants). The shared `commandCatalog` remains
+ * the authoritative list of registry entries; this map is the
+ * authoritative registration mechanism for those entries.
  */
 
 /**
