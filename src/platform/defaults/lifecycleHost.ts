@@ -1,4 +1,8 @@
-import type { LifecycleHost, ShutdownPhase } from '../interfaces/lifecycle';
+import {
+  SHUTDOWN_PHASE,
+  type LifecycleHost,
+  type ShutdownPhase,
+} from '../interfaces/lifecycle';
 
 type Callback = () => void | Promise<void>;
 
@@ -10,8 +14,8 @@ export function createLifecycleHost(
   options: CreateLifecycleHostOptions = {},
 ): LifecycleHost {
   const handlers: Record<ShutdownPhase, Set<Callback>> = {
-    beforeShutdown: new Set(),
-    onShutdown: new Set(),
+    [SHUTDOWN_PHASE.BEFORE]: new Set(),
+    [SHUTDOWN_PHASE.ON]: new Set(),
   };
   let running = false;
 
@@ -47,8 +51,8 @@ export function createLifecycleHost(
     async runShutdown() {
       if (running) return;
       running = true;
-      await runPhase('beforeShutdown');
-      await runPhase('onShutdown');
+      await runPhase(SHUTDOWN_PHASE.BEFORE);
+      await runPhase(SHUTDOWN_PHASE.ON);
     },
   };
 }

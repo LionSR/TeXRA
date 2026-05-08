@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { initPlatform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { setDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -178,23 +179,35 @@ export async function activate(context: vscode.ExtensionContext) {
     secrets: new VscodeSecrets(context),
     lifecycle: lifecycleHost,
   });
-  lifecycleHost.onShutdown('beforeShutdown', () => killBackgroundProcesses());
-  lifecycleHost.onShutdown('beforeShutdown', () => interruptAllCodexSessions());
-  lifecycleHost.onShutdown('beforeShutdown', () => killActiveRecording());
-  lifecycleHost.onShutdown('beforeShutdown', () => UsageLogService.dispose());
-  lifecycleHost.onShutdown('beforeShutdown', () =>
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    killBackgroundProcesses(),
+  );
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    interruptAllCodexSessions(),
+  );
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    UsageLogService.dispose(),
+  );
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     progressViewProviderInstance?.flushState(),
   );
-  lifecycleHost.onShutdown('onShutdown', () => clearStoreCache());
-  lifecycleHost.onShutdown('onShutdown', () => prPollingSource.disposeAll());
-  lifecycleHost.onShutdown('onShutdown', () => repoPollingSource.disposeAll());
-  lifecycleHost.onShutdown('onShutdown', () => issuePollingSource.disposeAll());
-  lifecycleHost.onShutdown('onShutdown', () =>
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () =>
+    prPollingSource.disposeAll(),
+  );
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () =>
+    repoPollingSource.disposeAll(),
+  );
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () =>
+    issuePollingSource.disposeAll(),
+  );
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () =>
     bus.emit('extensionDeactivating', undefined),
   );
-  lifecycleHost.onShutdown('onShutdown', () => disposeDiffRefresh());
-  lifecycleHost.onShutdown('onShutdown', () => statusBarItem?.dispose());
-  lifecycleHost.onShutdown('onShutdown', () => disposeStatusListener?.());
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () => statusBarItem?.dispose());
+  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () => disposeStatusListener?.());
   setDefaultAgentRuntimeHost(extensionAgentRuntimeHost);
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   FileLister.initialize(context);

@@ -1,6 +1,11 @@
 import type { Disposable } from './disposable';
 
-export type ShutdownPhase = 'beforeShutdown' | 'onShutdown';
+export const SHUTDOWN_PHASE = {
+  BEFORE: 'beforeShutdown',
+  ON: 'onShutdown',
+} as const;
+
+export type ShutdownPhase = (typeof SHUTDOWN_PHASE)[keyof typeof SHUTDOWN_PHASE];
 
 export interface LifecycleHost {
   onShutdown(

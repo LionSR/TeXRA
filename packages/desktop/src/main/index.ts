@@ -15,6 +15,7 @@ import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
@@ -393,8 +394,12 @@ if (protocolLifecycle.shouldContinue) {
     .then(async () => {
       const platformInit = await initializeElectronPlatform(__dirname);
       const { lifecycle } = platformInit;
-      lifecycle.onShutdown('beforeShutdown', () => killBackgroundProcesses());
-      lifecycle.onShutdown('beforeShutdown', () => interruptAllCodexSessions());
+      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+        killBackgroundProcesses(),
+      );
+      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+        interruptAllCodexSessions(),
+      );
 
       let isShuttingDown = false;
       app.on('before-quit', (event) => {
