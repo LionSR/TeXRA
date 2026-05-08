@@ -14,6 +14,7 @@
  * promoted to a per-instance store.
  */
 
+import { create } from 'mutative';
 import { Signal, signal, select, combine } from '@shared/signals';
 import {
   createStreamState,
@@ -28,7 +29,10 @@ import { setsEqual } from './utils';
 import {
   createInitialState,
   EMPTY_STREAM_LOGS,
+  getStreamState,
   isToolUseState,
+  type StreamLogs,
+  type StreamState,
 } from './store';
 import {
   EMPTY_LOG_CONTEXT,
@@ -195,8 +199,7 @@ export const activeStreamState$ = new Signal.Computed(() => {
   const info = activeStreamInfo$.get();
   if (!info) return null;
   return (
-    streamStates$.get().get(info.name) ??
-    createStreamState(info.agentCategory)
+    streamStates$.get().get(info.name) ?? createStreamState(info.agentCategory)
   );
 });
 
@@ -275,3 +278,48 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
     terminalMode: isProcessAgent(activeStreamInfo.agent),
   };
 });
+
+// ---------------------------------------------------------------------------
+// Mutators — module-level helpers for stream-scoped updates.
+//
+// Hoisted from `ProgressApp` private methods (PRD: docs/prd/electron-shell-layout.md
+// § 7.A) so the desktop renderer can drive the same `appState` updates without
+// mounting `<progress-app>`. Behavior preserved exactly: same fast-path,
+// same skip-no-op short-circuit, same Mutative structural sharing.
+// ---------------------------------------------------------------------------
+
+export function setStreamStateForId(
+  streamId: StreamTabId,
+  updater: (prev: StreamState) => StreamState,
+): void {
+  const state = appState.get();
+  let current = state.streamStates.get(streamId);
+  if (!current) {
+    const streamInfo = state.streamById.get(streamId);
+    if (!streamInfo) return;
+    current = getStreamState(state, streamId, streamInfo.agentCategory);
+  }
+  const updated = updater(current);
+  if (updated === current) return;
+  appState.set(
+    create(state, (draft) => {
+      draft.streamStates.set(streamId, updated);
+    }),
+  );
+}
+
+export function setStreamLogsForId(
+  streamId: StreamTabId,
+  updater: (prev: StreamLogs) => StreamLogs,
+): void {
+  const state = appState.get();
+  if (!state.streamStates.has(streamId)) return;
+  const current = state.streamLogs.get(streamId) ?? EMPTY_STREAM_LOGS;
+  const updated = updater(current);
+  if (updated === current) return;
+  appState.set(
+    create(state, (draft) => {
+      draft.streamLogs.set(streamId, updated);
+    }),
+  );
+}

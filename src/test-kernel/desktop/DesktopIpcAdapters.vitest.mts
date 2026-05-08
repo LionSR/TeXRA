@@ -284,9 +284,9 @@ describe('desktop IPC adapters', () => {
 
     // Unknown command falls through entirely (neither a main-view variant
     // nor a desktop-local command) so the dispatcher chain can keep walking.
-    expect(
-      shellIpc.handleMessage({ command: 'texra.totallyUnknown' }),
-    ).toBe(false);
+    expect(shellIpc.handleMessage({ command: 'texra.totallyUnknown' })).toBe(
+      false,
+    );
   });
 
   it('keeps execution forwarding in the execution adapter', async () => {

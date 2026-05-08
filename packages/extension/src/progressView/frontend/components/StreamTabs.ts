@@ -128,11 +128,7 @@ export class StreamTab extends LitElement {
         right: var(--wa-space-3xs);
         bottom: 0;
         height: 1px;
-        background: color-mix(
-          in srgb,
-          var(--color-border) 50%,
-          transparent
-        );
+        background: color-mix(in srgb, var(--color-border) 50%, transparent);
         pointer-events: none;
       }
 
@@ -288,16 +284,9 @@ export class StreamTab extends LitElement {
           var(--wa-color-brand-fill-quiet) 85%,
           transparent
         );
-        color: var(
-          --wa-color-list-active-fg,
-          var(--wa-color-text-normal)
-        );
+        color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
         box-shadow: inset 0 0 0 1px
-          color-mix(
-            in srgb,
-            var(--wa-color-brand-fill-loud) 18%,
-            transparent
-          );
+          color-mix(in srgb, var(--wa-color-brand-fill-loud) 18%, transparent);
       }
 
       /*
@@ -306,10 +295,7 @@ export class StreamTab extends LitElement {
        * (.last-active, .model) and codicon glyphs.
        */
       .tab-container.is-active * {
-        color: var(
-          --wa-color-list-active-fg,
-          var(--wa-color-text-normal)
-        );
+        color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
       }
 
       /*

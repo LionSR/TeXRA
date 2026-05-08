@@ -154,6 +154,8 @@ export async function removeApiKey(): Promise<void> {
  * require dropping it from the `registerCommands` call list, which is
  * outside the scope of this batch.
  */
-export function registerApiKeyCommands(_context: vscode.ExtensionContext): void {
+export function registerApiKeyCommands(
+  _context: vscode.ExtensionContext,
+): void {
   // Intentionally empty: handlers moved to the shared registry (#3781 batch 4).
 }
