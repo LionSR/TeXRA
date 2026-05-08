@@ -167,8 +167,11 @@ export async function handleParseYaml(): Promise<void> {
   }
 }
 
-export function registerYamlCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(yamlCommands.parseYaml, handleParseYaml),
-  );
+/**
+ * `texra.parseYaml` is now registered through the shared command registry
+ * in `extensionCommandSurface.ts` (see #3775). This stub is kept for the
+ * existing `registerYamlCommands(context)` call site.
+ */
+export function registerYamlCommands(_context: vscode.ExtensionContext): void {
+  /* registration handled by extensionCommandSurface */
 }

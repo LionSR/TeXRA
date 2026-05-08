@@ -20,10 +20,25 @@ import {
   handleTestAgentLoading as sysHandleTestAgentLoading,
   handleLoadSpecificAgent as sysHandleLoadSpecificAgent,
 } from '@commands/system';
-import { handleIndentTeX } from '@commands/latex/latexCommands';
+import {
+  handleIndentTeX,
+  handleIndentCurrentTeX as latexIndentCurrentTeX,
+  handleApplyReplacements as latexApplyReplacements,
+  handleFixCompilation as latexFixCompilation,
+  handleGetTeXCount as latexGetTeXCount,
+} from '@commands/latex/latexCommands';
+import { handleCountPdfPages as latexCountPdfPages } from '@commands/latex/imageCommands';
+import {
+  handleShowLinterMessages as latexShowLinterMessages,
+  handleCountLinterMessages as latexCountLinterMessages,
+} from '@commands/latex/linterCommands';
+import { handleExtractFigurePaths as latexExtractFigurePaths } from '@commands/latex/figCommands';
 import { openProgressViewInTab as progressOpenInTab } from '@commands/progress/progressViewCommands';
 import { openDoc as sysOpenDoc } from '@commands/system/helpCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
+import { handleParseXml as sysParseXml } from '@commands/system/xmlCommands';
+import { handleParseYaml as sysParseYaml } from '@commands/system/yamlCommands';
+import { handleTestTextEditor as sysTestTextEditor } from '@commands/system/textEditorCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
@@ -84,6 +99,20 @@ export type ExtensionRegistryCommandId = Extract<
   | 'texra.openDoc'
   | 'texra.stopAgent'
   | 'texra.compactResponse'
+  // Batch 2 (#3775) — no-arg host-context commands. These read from
+  // the active editor or fixed UI surfaces; their args are not
+  // serializable, so they ride the legacy no-arg handler shape.
+  | 'texra.parseXml'
+  | 'texra.parseYaml'
+  | 'texra.testTextEditor'
+  | 'texra.indentCurrentTeX'
+  | 'texra.applyReplacements'
+  | 'texra.fixCompilation'
+  | 'texra.getTeXCount'
+  | 'texra.countPdfPages'
+  | 'texra.showLinterMessages'
+  | 'texra.countLinterMessages'
+  | 'texra.extractFigurePaths'
 >;
 
 /**
@@ -112,6 +141,17 @@ export interface ExtensionCommandActions {
   openDoc(page: string): Promise<void>;
   stopAgent(streamId: string): void;
   compactResponse(streamId: string): Promise<void>;
+  parseXml(): Promise<void>;
+  parseYaml(): Promise<void>;
+  testTextEditor(): Promise<void>;
+  indentCurrentTeX(): Promise<void>;
+  applyReplacements(): Promise<void>;
+  fixCompilation(): Promise<void>;
+  getTeXCount(): Promise<void>;
+  countPdfPages(): Promise<void>;
+  showLinterMessages(): Promise<void>;
+  countLinterMessages(): Promise<void>;
+  extractFigurePaths(): Promise<void>;
 }
 
 export function createExtensionCommandActions(
@@ -159,6 +199,17 @@ export function createExtensionCommandActions(
     openDoc: sysOpenDoc,
     stopAgent: agentStopAgent,
     compactResponse: agentCompactResponse,
+    parseXml: sysParseXml,
+    parseYaml: sysParseYaml,
+    testTextEditor: sysTestTextEditor,
+    indentCurrentTeX: latexIndentCurrentTeX,
+    applyReplacements: latexApplyReplacements,
+    fixCompilation: latexFixCompilation,
+    getTeXCount: latexGetTeXCount,
+    countPdfPages: latexCountPdfPages,
+    showLinterMessages: latexShowLinterMessages,
+    countLinterMessages: latexCountLinterMessages,
+    extractFigurePaths: latexExtractFigurePaths,
   };
 }
 
@@ -276,6 +327,50 @@ const EXTENSION_COMMAND_HANDLERS = {
       return true;
     },
   ),
+  'texra.parseXml': (actions) => {
+    void actions.parseXml();
+    return true;
+  },
+  'texra.parseYaml': (actions) => {
+    void actions.parseYaml();
+    return true;
+  },
+  'texra.testTextEditor': (actions) => {
+    void actions.testTextEditor();
+    return true;
+  },
+  'texra.indentCurrentTeX': (actions) => {
+    void actions.indentCurrentTeX();
+    return true;
+  },
+  'texra.applyReplacements': (actions) => {
+    void actions.applyReplacements();
+    return true;
+  },
+  'texra.fixCompilation': (actions) => {
+    void actions.fixCompilation();
+    return true;
+  },
+  'texra.getTeXCount': (actions) => {
+    void actions.getTeXCount();
+    return true;
+  },
+  'texra.countPdfPages': (actions) => {
+    void actions.countPdfPages();
+    return true;
+  },
+  'texra.showLinterMessages': (actions) => {
+    void actions.showLinterMessages();
+    return true;
+  },
+  'texra.countLinterMessages': (actions) => {
+    void actions.countLinterMessages();
+    return true;
+  },
+  'texra.extractFigurePaths': (actions) => {
+    void actions.extractFigurePaths();
+    return true;
+  },
 } as const satisfies Record<
   Exclude<ExtensionRegistryCommandId, 'texra.showAgents'>,
   // The typed handlers (`openDoc`, `stopAgent`, `compactResponse`) carry
