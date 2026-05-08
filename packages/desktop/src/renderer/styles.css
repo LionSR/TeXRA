@@ -1,5 +1,7 @@
 :root {
   --desktop-nav-height: 40px;
+  --desktop-rail-width: 260px;
+  --desktop-right-width: 0px; /* reserved; collapsed today (PRD § 6) */
   font-family: var(--wa-font-family-body);
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
@@ -12,9 +14,7 @@ body {
 
 .desktop-shell {
   /* Use an explicit viewport-locked height so percentage heights resolve all
-     the way down to the route containers. `min-height: 100vh` left percentage
-     heights ambiguous on the inner grid items, which collapsed the workbench
-     to zero height and produced the empty-content regression. */
+     the way down to the pane containers. */
   height: 100vh;
   display: grid;
   grid-template-rows: var(--desktop-nav-height) minmax(0, 1fr);
@@ -77,16 +77,11 @@ wa-button.desktop-icon-button::part(base):hover {
 }
 
 wa-button.desktop-icon-button[aria-pressed='true']::part(base) {
-  /* Subdued active indicator — a quiet brand fill instead of a vivid focus
-     ring so a route-active icon button doesn't read as if it's stuck in
-     keyboard focus. */
   border-color: var(--wa-color-brand-border-quiet);
   background: var(--wa-color-brand-fill-quiet);
   color: var(--wa-color-brand-on-quiet);
 }
 
-/* Top-nav wa-button overrides — shadow DOM tinting via ::part(base). */
-wa-button.desktop-nav-button::part(base),
 wa-button.desktop-command-button::part(base),
 wa-button.desktop-folder-button::part(base) {
   height: 28px;
@@ -95,23 +90,9 @@ wa-button.desktop-folder-button::part(base) {
   color: var(--wa-color-text-normal);
 }
 
-wa-button.desktop-nav-button::part(base) {
-  border-color: transparent;
-  background: transparent;
-}
-
-wa-button.desktop-nav-button::part(base):hover,
 wa-button.desktop-command-button::part(base):hover,
 wa-button.desktop-folder-button::part(base):hover {
   background: var(--wa-color-surface-raised);
-}
-
-wa-button.desktop-nav-button[aria-pressed='true']::part(base) {
-  /* Match the icon-button active treatment so the active route reads as a
-     subtle brand-tinted chip rather than a vivid focus-ring outline. */
-  border-color: var(--wa-color-brand-border-quiet);
-  background: var(--wa-color-brand-fill-quiet);
-  color: var(--wa-color-brand-on-quiet);
 }
 
 wa-button.desktop-command-button::part(base),
@@ -124,31 +105,21 @@ wa-button.desktop-command-button {
   margin-left: auto;
 }
 
-.desktop-view {
-  /* Stack every route container in a single grid cell so all four routes
-     share the same viewport region. `[hidden]` collapses the inactive ones,
-     and the explicit grid + `100%` track means each route fills the cell
-     without relying on flaky `min-height: 100%` resolution. */
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  box-sizing: border-box;
-}
+/* =====================================================================
+   Three-pane layout (PRD § 6 + § 7.D)
+   ----------------------------------------------------------------------
+   left rail | center | right (reserved)
+   --------------------------------------------------------------------- */
 
-.desktop-workbench {
+.desktop-three-pane {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: var(--desktop-rail-width) minmax(0, 1fr) var(--desktop-right-width);
   min-width: 0;
   min-height: 0;
-  /* Pin the workbench to the parent grid cell explicitly so children that
-     ask for `height: 100%` (the explorer + route containers) have a real,
-     percent-resolvable height to anchor against. */
   height: 100%;
 }
 
-.desktop-explorer {
+.desktop-rail {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
@@ -158,22 +129,18 @@ wa-button.desktop-command-button {
   color: var(--wa-color-text-normal);
 }
 
-.desktop-explorer-header {
+.desktop-rail-header {
   display: flex;
   align-items: center;
   gap: var(--wa-space-xs);
   min-height: 34px;
   padding: 0 var(--wa-space-xs) 0 var(--wa-space-s);
   border-bottom: 1px solid var(--wa-color-surface-border);
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--wa-color-surface-default) 60%, transparent),
-    transparent
-  );
   box-sizing: border-box;
 }
 
-.desktop-explorer-title {
+.desktop-rail-title {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -185,11 +152,7 @@ wa-button.desktop-command-button {
   text-transform: uppercase;
 }
 
-wa-button.desktop-explorer-icon-button {
-  margin-left: auto;
-}
-
-wa-button.desktop-explorer-icon-button::part(base) {
+wa-button.desktop-rail-new::part(base) {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -199,188 +162,60 @@ wa-button.desktop-explorer-icon-button::part(base) {
   color: var(--wa-color-text-normal);
 }
 
-wa-button.desktop-explorer-icon-button::part(base):hover {
+wa-button.desktop-rail-new::part(base):hover {
   background: var(--wa-color-surface-raised);
 }
 
-wa-button.desktop-explorer-icon-button[disabled]::part(base) {
-  opacity: 0.5;
-  cursor: default;
-}
-
-wa-tree.desktop-explorer-tree {
+.desktop-rail-tabs {
   min-width: 0;
-  overflow: auto;
-  padding: var(--wa-space-2xs) 0;
-  --indent-size: 14px;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-wa-tree.desktop-explorer-tree wa-tree-item::part(item) {
-  min-height: 24px;
-  padding-inline-end: var(--wa-space-xs);
-  color: var(--wa-color-text-normal);
-  border-radius: var(--wa-border-radius-s, 2px);
-  margin-inline: var(--wa-space-3xs);
-  transition:
-    background-color 140ms ease,
-    box-shadow 140ms ease,
-    color 140ms ease;
-}
-
-wa-tree.desktop-explorer-tree wa-tree-item::part(label) {
+.desktop-rail-tabs > stream-tabs {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.desktop-rail-footer {
   display: flex;
   align-items: center;
-  gap: var(--wa-space-2xs);
-}
-
-wa-tree.desktop-explorer-tree
-  wa-tree-item:not([aria-disabled='true']):hover::part(item) {
-  background: var(--wa-color-neutral-fill-quiet);
-  box-shadow: inset 1px 0 0
-    color-mix(in srgb, var(--wa-color-text-normal) 8%, transparent);
-}
-
-wa-tree.desktop-explorer-tree
-  wa-tree-item:state(selected):not([aria-disabled='true'])::part(item) {
-  background: var(--wa-color-brand-fill-quiet);
-  color: var(--wa-color-brand-on-quiet);
-  border-inline-start-color: var(--wa-color-brand-on-quiet);
-  box-shadow: inset 2px 0 0 var(--wa-color-brand-fill-loud);
-}
-
-wa-tree.desktop-explorer-tree wa-tree-item:focus-visible::part(item) {
-  outline: var(--wa-focus-ring, 2px solid var(--wa-color-focus));
-  outline-offset: -1px;
-}
-
-/*
- * Folder icons render with brand tint, file icons with quiet tint, so the
- * tree's hierarchical structure reads at a glance without adding new colour.
- */
-wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-directory wa-icon {
-  color: color-mix(in srgb, var(--wa-color-brand-fill-loud) 70%, transparent);
-}
-
-wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
-  color: var(--wa-color-text-quiet);
-}
-
-.desktop-explorer-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.desktop-explorer-category-strip {
-  display: flex;
-  gap: var(--wa-space-3xs);
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.desktop-explorer-category-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--wa-color-text-quiet);
-  box-shadow: 0 0 0 1px
-    color-mix(in srgb, var(--wa-color-surface-default) 70%, transparent);
-}
-
-.desktop-explorer-category-dot[data-category='input'] {
-  background: var(--wa-color-chart-blue);
-}
-
-.desktop-explorer-category-dot[data-category='reference'] {
-  background: var(--wa-color-chart-green);
-}
-
-.desktop-explorer-category-dot[data-category='auxiliary'] {
-  background: var(--wa-color-chart-yellow);
-}
-
-.desktop-explorer-category-dot[data-category='media'] {
-  background: var(--wa-color-chart-purple);
-}
-
-.desktop-explorer-status,
-.desktop-explorer-selection,
-.desktop-explorer-empty {
-  padding: var(--wa-space-s);
-  color: var(--wa-color-text-quiet);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.desktop-explorer-selection {
+  padding: var(--wa-space-2xs) var(--wa-space-xs);
   border-top: 1px solid var(--wa-color-surface-border);
-  background: color-mix(
-    in srgb,
-    var(--wa-color-surface-default) 50%,
-    transparent
-  );
 }
 
-.desktop-explorer-selected-path {
+wa-button.desktop-rail-settings {
+  width: 100%;
+}
+
+wa-button.desktop-rail-settings::part(base) {
+  justify-content: flex-start;
+  padding: 0 var(--wa-space-s);
+  border-color: transparent;
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+wa-button.desktop-rail-settings::part(base):hover {
+  background: var(--wa-color-surface-raised);
+}
+
+.desktop-center {
+  /* Stack both panes (launcher + conversation) in a single grid cell so
+     `[hidden]` collapses the inactive one without touching layout. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
-  overflow: hidden;
-  color: var(--wa-color-text-normal);
-  font-family: var(--wa-font-family-code, monospace), monospace;
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
-.desktop-explorer-selection-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wa-space-2xs);
-  margin-top: var(--wa-space-xs);
-}
-
-.desktop-explorer-empty {
-  align-self: center;
-  text-align: center;
-}
-
-.desktop-explorer-empty .empty-state-icon {
-  color: var(--wa-color-brand-fill-loud);
-  font-size: 30px;
-}
-
-.desktop-explorer-empty .empty-state-title {
-  margin: var(--wa-space-s) 0 var(--wa-space-2xs);
-  color: var(--wa-color-text-normal);
-  font-size: var(--font-size-h2);
-  font-weight: 600;
-}
-
-.desktop-explorer-empty .empty-state-body {
-  margin: 0 0 var(--wa-space-s);
-}
-
-@media (max-width: 760px) {
-  .desktop-workbench {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(160px, 32vh) minmax(0, 1fr);
-  }
-
-  .desktop-explorer {
-    border-right: 0;
-    border-bottom: 1px solid var(--wa-color-surface-border);
-  }
-}
-
-.desktop-route {
-  /* All routes occupy the same grid cell; `[hidden]` collapses the inactive
-     ones via `display: none` below. Using `display: grid` with a single 1fr
-     row guarantees the mounted Lit app stretches to fill the available
-     height even though `:host { display: flex }` rules in the shadow DOM
-     are overridden by the host stylesheet's element-name selectors. */
+.desktop-pane {
   display: grid;
   grid-area: 1 / 1;
   grid-template-rows: minmax(0, 1fr);
@@ -388,23 +223,101 @@ wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
   min-height: 0;
 }
 
-.desktop-route[hidden] {
+.desktop-pane[hidden] {
   display: none;
 }
 
-.desktop-route > * {
-  /* Force mounted apps (main-app, progress-app, settings-app, log viewer)
-     to stretch the full route height. `block` here was masking the
-     `:host { display: flex }` declarations and leaving the apps unable to
-     stretch. Use a layout mode that respects child flex/grid hosts. */
+.desktop-pane > * {
   min-width: 0;
   min-height: 0;
   height: 100%;
 }
 
-/* wa-dialog supplies the backdrop, modal positioning, focus trap, and panel
-   chrome; only the body content layout lives here. The dialog is positioned
-   near the top of the viewport (12vh) like a typical command palette. */
+.desktop-right {
+  /* Reserved column. Hidden today; will host the diff/approve UX later. */
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .desktop-three-pane {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(160px, 32vh) minmax(0, 1fr);
+  }
+
+  .desktop-rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--wa-color-surface-border);
+  }
+}
+
+/* =====================================================================
+   Settings overlay (wa-dialog)
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-settings-overlay {
+  --width: 100vw;
+  --height: 100vh;
+}
+
+wa-dialog.desktop-settings-overlay::part(dialog) {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  border-radius: 0;
+}
+
+wa-dialog.desktop-settings-overlay::part(body) {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+wa-dialog.desktop-settings-overlay settings-app {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+wa-button.desktop-settings-close {
+  position: absolute;
+  top: var(--wa-space-s);
+  right: var(--wa-space-s);
+  z-index: 10;
+}
+
+wa-button.desktop-settings-close::part(base) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--wa-border-radius-m, 3px);
+  background: var(--wa-color-surface-raised);
+  color: var(--wa-color-text-normal);
+}
+
+/* =====================================================================
+   Logs drawer (wa-drawer)
+   --------------------------------------------------------------------- */
+
+wa-drawer.desktop-logs-drawer {
+  --size: 40vh;
+}
+
+wa-drawer.desktop-logs-drawer::part(body) {
+  padding: 0;
+}
+
+.desktop-log-host {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+/* =====================================================================
+   Command palette (preserved)
+   --------------------------------------------------------------------- */
+
 wa-dialog.desktop-command-palette {
   --width: min(560px, calc(100vw - var(--wa-space-m) * 2));
 }
@@ -469,6 +382,10 @@ wa-input.desktop-command-palette-input::part(base) {
   font-size: 12px;
 }
 
+/* =====================================================================
+   Empty workspace + bootstrap fallback (preserved, lighter footprint)
+   --------------------------------------------------------------------- */
+
 .desktop-empty-workspace {
   display: grid;
   min-height: 100%;
@@ -481,30 +398,24 @@ wa-input.desktop-command-palette-input::part(base) {
   text-align: center;
 }
 
-.desktop-empty-workspace-panel .empty-state-icon {
-  color: var(--wa-color-brand-fill-loud);
-  font-size: 44px;
-}
-
-.desktop-empty-workspace-panel .empty-state-title {
-  margin: var(--wa-space-l) 0 var(--wa-space-xs);
+.desktop-empty-workspace-panel h1 {
+  margin: 0 0 var(--wa-space-s);
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h1);
   font-weight: 600;
 }
 
-.desktop-empty-workspace-panel .empty-state-body {
-  margin: 0;
+.desktop-empty-workspace-panel p {
+  margin: 0 0 var(--wa-space-l);
   color: var(--wa-color-text-quiet);
   font-size: 15px;
   line-height: 1.5;
 }
 
-.desktop-empty-workspace-panel .empty-state-actions {
+.desktop-empty-workspace-actions {
   display: flex;
   justify-content: center;
   gap: var(--wa-space-s);
-  margin-top: var(--wa-space-l);
 }
 
 .desktop-bootstrap-fallback {
@@ -540,6 +451,10 @@ wa-input.desktop-command-palette-input::part(base) {
   gap: var(--wa-space-s);
   margin-top: var(--wa-space-l);
 }
+
+/* =====================================================================
+   Log viewer body (rendered inside the wa-drawer now)
+   --------------------------------------------------------------------- */
 
 .desktop-log-viewer {
   display: grid;
@@ -596,8 +511,6 @@ wa-input.desktop-command-palette-input::part(base) {
 
 wa-button.desktop-primary-button::part(base),
 wa-button.desktop-secondary-button::part(base) {
-  /* 30px matches the extension's --height-button so chrome buttons render
-     at the same visual scale across both hosts. */
   min-height: 30px;
   padding: 0 var(--wa-space-m);
   border-radius: var(--wa-border-radius-l, 4px);
@@ -619,8 +532,10 @@ wa-button.desktop-secondary-button::part(base):hover {
   background: var(--wa-color-neutral-fill-loud);
 }
 
-/* wa-dialog supplies the backdrop, modal positioning, focus trap, and panel
-   chrome; only the body content layout lives here. */
+/* =====================================================================
+   Onboarding dialog (preserved)
+   --------------------------------------------------------------------- */
+
 wa-dialog.desktop-onboarding {
   --width: min(640px, calc(100vw - var(--wa-space-xl)));
 }

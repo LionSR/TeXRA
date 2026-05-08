@@ -24,7 +24,6 @@ import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
-import { createDesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import {
   attachRendererConsoleLog,
   getDesktopLogDirectory,
@@ -250,11 +249,9 @@ function createWindow(options: {
     },
     onError: reportAsyncError,
   });
-  const workspaceExplorer = createDesktopWorkspaceExplorer({
-    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
-    openPath: previewHost.openPath,
-    onError: reportAsyncError,
-  });
+  // Workspace-explorer sidebar removed in PR 3 (PRD § 7.D + § 8). File staging
+  // happens entirely inside <main-app>'s built-in panel; the duplicate tree
+  // sidebar and its IPC are gone.
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     sendStartupCatalogData: true,
@@ -344,7 +341,6 @@ function createWindow(options: {
   const mainViewIpc = installDesktopMainViewIpc(window, {
     executeAgent: (message) => agentExecution.handleExecute(message),
     fileSelection,
-    workspaceExplorer,
     settings: settingsIpc,
     progress: progressIpc,
     onboarding: onboardingIpc,

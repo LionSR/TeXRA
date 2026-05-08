@@ -3,14 +3,14 @@ import './themeTokens.css';
 
 import '@shared/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/tree/tree.js';
-import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
-import type WaTreeItem from '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
-import { html, nothing, render, type TemplateResult } from 'lit';
-import { repeat } from 'lit/directives/repeat.js';
+import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
+import { html, render, type TemplateResult } from 'lit';
+import { Signal } from '@shared/signals';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderEmptyState } from '@shared/wa/emptyState';
 import {
   applyHostBodyTheme,
   getWindowTargetOrigin,
@@ -18,17 +18,55 @@ import {
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 import { COMMON_COMMANDS } from '@common/webview/commands';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import { postMessage } from '@shared/hostBridge';
 import type { DesktopThemeKind } from '@shared/constants/desktopTheme';
 import {
   SetThemeMessageSchema,
   type SetThemeMessage,
 } from '@shared/schemas/commonViewMessages';
+import {
+  ProgressViewOutboundMessageSchema,
+  type ProgressViewOutboundMessage,
+} from '@shared/schemas/progressView';
+import { create as mutate } from 'mutative';
+
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
 import '@settingsView/frontend';
 import '@webview/frontend';
+import {
+  activeStreamId$,
+  appState,
+  childStreamsByParent$,
+  hasAnyStreams$,
+  pendingApprovalIds$,
+  permissions$,
+  placement,
+  setStreamLogsForId,
+  setStreamStateForId,
+  streamFilter$,
+  streamStates$,
+  tabStreams$,
+} from '@progressView/frontend/progressState';
+import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
+import {
+  handleDeleteAll,
+  handleFileAction,
+  handleFilterChange,
+  handleFollowupRequestOptions,
+  handleFollowUpChange,
+  handleFollowUpClear,
+  handleFollowUpPolish,
+  handleFollowUpSend,
+  handlePermissionAction,
+  handleStreamDelete,
+  handleStreamSwitch,
+  handleToolbarCommand,
+  runCompileFixer,
+  sendFollowupCommand,
+  type FrontendEventHandlerContext,
+} from '@progressView/frontend/eventHandlers';
 
 import {
   DesktopSetRouteMessageSchema,
@@ -50,22 +88,8 @@ import {
   DesktopOnboardingSetStateMessageSchema,
   type DesktopOnboardingSetStateMessage,
 } from '../desktopOnboardingMessages';
-import {
-  DESKTOP_WORKSPACE_EXPLORER_COMMANDS,
-  DesktopWorkspaceTreeMessageSchema,
-  type DesktopWorkspaceFileCategory,
-  type DesktopWorkspaceTreeMessage,
-} from '../desktopWorkspaceExplorerMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
-
-interface WorkspaceTreeNode {
-  name: string;
-  path: string;
-  type: 'directory' | 'file';
-  children?: WorkspaceTreeNode[];
-  categories?: string[];
-}
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -75,108 +99,156 @@ if (root == null) {
 
 const appRoot = root;
 
-// Module-level reactive state for the desktop shell. Mutating these and then
-// calling `rerenderShell()` is the canonical way to update the chrome. Avoid
-// post-render imperative DOM mutations on Lit-rendered nodes — they will be
-// reset on the next render pass.
+// =============================================================================
+// Pane state
+// =============================================================================
+//
+// PRD § 6 + § 7.D: replace the four-route shell with a three-pane window.
+//   - Left rail: <stream-tabs> (sessions) + Settings entry
+//   - Center: <main-app> when no active stream, else <stream-conversation>
+//   - Right: reserved for future diff/approve UX (collapsed today)
+//
+// `currentRoute` survives only as a backwards-compat hook so existing IPC
+// (`desktop:setRoute` from menu/command-palette) still reaches the right
+// surface. `'main' | 'progress'` map to the center pane (progress = focus
+// the active stream); `'settings'` opens the overlay; `'logs'` opens the
+// drawer. The four-route tab bar is gone.
+
 let currentRoute: DesktopRoute = 'main';
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
-let selectedExplorerFile = '';
 
-// Empty-workspace copy + placeholder factory live up here so the no-workspace
-// path below can read them without hitting the temporal dead zone — `let`/
-// `const` declarations declared further down would throw `ReferenceError`
-// during module evaluation if the no-workspace branch is taken.
-const EMPTY_WORKSPACE_COPY = {
-  launcher: {
-    title: 'Open a folder to use the launcher',
-    body: 'TeXRA desktop needs a workspace before it can discover files, run agents, and place outputs.',
-  },
-  progress: {
-    title: 'Open a folder to view workspace progress',
-    body: 'Progress details are tied to workspace runs. Start from a workspace to restore and follow sessions here.',
-  },
-} as const;
-
-function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
-  const container = document.createElement('section');
-  container.className = 'desktop-empty-workspace';
-  const { title, body } = EMPTY_WORKSPACE_COPY[kind];
-  render(
-    renderEmptyState({
-      className: 'desktop-empty-workspace-panel',
-      icon: 'folder-open',
-      title,
-      body,
-      headingTag: 'h1',
-      actions: [
-        {
-          label: 'Open Folder',
-          appearance: 'filled',
-          variant: 'brand',
-          className: 'desktop-primary-button',
-          onClick: () =>
-            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-        },
-        {
-          label: 'Logs',
-          appearance: 'outlined',
-          className: 'desktop-secondary-button',
-          onClick: () => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
-        },
-      ],
-    }),
-    container,
-  );
-  return container;
+// `<settings-app>` lives inside the wa-dialog overlay below; `<main-app>` and
+// `<stream-conversation>` mount directly in the center pane. These are
+// instantiated once and slotted into the shell template via Lit's DOM-node
+// interpolation so Lit preserves their internal state across re-renders.
+const mainView: HTMLElement = document.createElement('main-app');
+mainView.setAttribute('data-desktop-view', 'main');
+const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
+if (!hasWorkspace) {
+  // Empty-state placeholder when no workspace is open. The launcher cannot
+  // run anything without a workspace; show a minimal prompt instead. We
+  // render this as a sibling and hide `<main-app>` rather than swapping the
+  // tag so the test surface (and downstream tooling) always sees the
+  // canonical `<main-app>` mount.
+  noWorkspacePlaceholder.className = 'desktop-empty-workspace';
+  render(emptyWorkspaceTemplate(), noWorkspacePlaceholder);
 }
 
-// Standalone web components are instantiated once and slotted into the shell
-// template via Lit's DOM-node interpolation. Lit preserves these nodes across
-// re-renders, so the route components keep their internal state.
-const mainView: Element = hasWorkspace
-  ? document.createElement('main-app')
-  : createNoWorkspacePlaceholder('launcher');
-mainView.setAttribute('data-desktop-view', 'main');
+const conversationView: HTMLElement = document.createElement('stream-conversation');
+conversationView.setAttribute('data-desktop-view', 'progress');
 
-const progressView: Element = hasWorkspace
-  ? document.createElement('progress-app')
-  : createNoWorkspacePlaceholder('progress');
-progressView.setAttribute('data-desktop-view', 'progress');
+// Left rail: a fresh <stream-tabs> mount wired to module-level progressState.
+// PRD § 7.D requires mounting <stream-tabs> directly (not inside <progress-app>).
+const railTabs = document.createElement('stream-tabs') as HTMLElement & {
+  streams: unknown;
+  activeStreamId: string | null;
+  filter: unknown;
+  streamStates: unknown;
+  pendingApprovalStreamIds: unknown;
+  childStreamsByParent: unknown;
+  compact: boolean;
+};
+railTabs.compact = true;
 
-const settingsView: Element = document.createElement('settings-app');
+const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');
 
 const logsContainer: HTMLElement = document.createElement('div');
 logsContainer.setAttribute('data-desktop-view', 'logs');
 logsContainer.className = 'desktop-log-host';
 
-// The chrome only exposes Settings and Logs as utility icons (the four-route
-// top nav was removed). Other routes are reachable through the command
-// palette and the "Back to Launcher" affordance below.
-const CHROME_ROUTE_BUTTONS: ReadonlyArray<DesktopRoute> = ['settings', 'logs'];
+function emptyWorkspaceTemplate(): TemplateResult {
+  return html`
+    <section class="desktop-empty-workspace-panel">
+      <h1>Open a folder to use TeXRA</h1>
+      <p>
+        TeXRA desktop needs a workspace before it can discover files, run
+        agents, and place outputs.
+      </p>
+      <div class="desktop-empty-workspace-actions">
+        <wa-button
+          appearance="filled"
+          variant="brand"
+          class="desktop-primary-button"
+          @click=${() => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER)}
+        >
+          Open Folder
+        </wa-button>
+        <wa-button
+          appearance="outlined"
+          class="desktop-secondary-button"
+          @click=${openLogsDrawer}
+        >
+          Logs
+        </wa-button>
+      </div>
+    </section>
+  `;
+}
+
+// =============================================================================
+// Progress message + event wiring (without mounting <progress-app>)
+// =============================================================================
+//
+// PRD § 7.C: `<progress-app>` is NOT mounted in Electron; the children mount
+// directly. We recreate the message-routing and event-handler context here so
+// the same `messageDispatcher` + `eventHandlers` modules drive both hosts.
+//
+// `appState`, `permissions$`, `placement` are module-level signals that all
+// the imported components subscribe to via SignalWatcher, so changes here
+// propagate into both `<stream-tabs>` and `<stream-conversation>`.
+
+function getEventHandlerContext(): FrontendEventHandlerContext {
+  return {
+    getState: () => appState.get(),
+    setState: (updater) => {
+      appState.set(updater(appState.get()));
+    },
+    setStreamState: (streamId, updater) => setStreamStateForId(streamId, updater),
+    setStreamLogs: (streamId, updater) => setStreamLogsForId(streamId, updater),
+    // savePrefs intentionally omitted on desktop — filter persistence isn't
+    // wired (yet). Filter changes still apply for the active session.
+  };
+}
+
+function getMessageHandlerContext() {
+  return {
+    ...getEventHandlerContext(),
+    getPermissions: () => permissions$.get(),
+    setPermissions: (next: ReturnType<typeof permissions$.get>) => {
+      permissions$.set(next);
+    },
+    setPlacement: (next: ReturnType<typeof placement.get>) => {
+      placement.set(next);
+    },
+  };
+}
+
+function isProgressOutboundMessage(
+  raw: unknown,
+): raw is ProgressViewOutboundMessage {
+  return ProgressViewOutboundMessageSchema.safeParse(raw).success;
+}
+
+// =============================================================================
+// Shell template
+// =============================================================================
 
 interface ChromeIconButtonSpec {
-  readonly route: DesktopRoute;
+  readonly key: 'settings' | 'logs';
   readonly icon: TeXRAIconName;
   readonly label: string;
+  readonly onClick: () => void;
 }
 
 const CHROME_ICON_BUTTONS: ReadonlyArray<ChromeIconButtonSpec> = [
-  { route: 'settings', icon: 'gear', label: 'Settings' },
-  { route: 'logs', icon: 'file-lines', label: 'Logs' },
+  { key: 'settings', icon: 'gear', label: 'Settings', onClick: openSettingsOverlay },
+  { key: 'logs', icon: 'file-lines', label: 'Logs', onClick: openLogsDrawer },
 ] as const;
 
-// Sanity check: the icon-button list must stay aligned with the chrome route
-// list above so future contributors update both together.
-if (
-  CHROME_ICON_BUTTONS.length !== CHROME_ROUTE_BUTTONS.length ||
-  CHROME_ICON_BUTTONS.some((spec, i) => spec.route !== CHROME_ROUTE_BUTTONS[i])
-) {
-  throw new Error('Chrome icon button list is out of sync with route list.');
-}
-
 function shellTemplate(): TemplateResult {
+  const activeId = activeStreamId$.get();
+  const showConversation = activeId != null && hasAnyStreams$.get();
   return html`
     <section class="desktop-shell">
       <nav class="desktop-nav" aria-label="Desktop chrome">
@@ -185,10 +257,12 @@ function shellTemplate(): TemplateResult {
           class="desktop-back-button"
           appearance="plain"
           size="small"
-          ?hidden=${currentRoute === 'main'}
-          @click=${() => setRoute('main')}
+          ?hidden=${!showConversation}
+          title="Back to launcher"
+          aria-label="Back to launcher"
+          @click=${returnToLauncher}
         >
-          ${waIcon('arrow-left', { slot: 'start' })} Back to Launcher
+          ${waIcon('arrow-left', { slot: 'start' })} Launcher
         </wa-button>
         <wa-button
           class="desktop-command-button"
@@ -213,55 +287,65 @@ function shellTemplate(): TemplateResult {
               class="desktop-icon-button"
               appearance="plain"
               size="small"
-              data-route-button=${spec.route}
-              aria-pressed=${String(currentRoute === spec.route)}
+              data-route-button=${spec.key}
               aria-label=${spec.label}
               title=${spec.label}
-              @click=${() => toggleRoute(spec.route)}
+              @click=${spec.onClick}
             >
               ${waIcon(spec.icon)}
             </wa-button>
           `,
         )}
       </nav>
-      <div class="desktop-workbench">
-        <aside
-          class="desktop-explorer"
-          id="desktop-explorer"
-          aria-label="Workspace Explorer"
-        >
-          ${explorerTemplate()}
+      <div class="desktop-three-pane">
+        <aside class="desktop-rail" aria-label="Sessions">
+          <header class="desktop-rail-header">
+            <span class="desktop-rail-title">Sessions</span>
+            <wa-button
+              class="desktop-rail-new"
+              appearance="outlined"
+              size="small"
+              title="New run"
+              aria-label="New run"
+              @click=${returnToLauncher}
+            >
+              ${waIcon('plus')}
+            </wa-button>
+          </header>
+          <div class="desktop-rail-tabs">${railTabs}</div>
+          <footer class="desktop-rail-footer">
+            <wa-button
+              class="desktop-rail-settings"
+              appearance="plain"
+              size="small"
+              @click=${openSettingsOverlay}
+            >
+              ${waIcon('gear', { slot: 'start' })} Settings
+            </wa-button>
+          </footer>
         </aside>
-        <main class="desktop-view" id="desktop-view">
+        <main class="desktop-center" id="desktop-center">
           <section
-            class="desktop-route"
-            data-route="main"
-            ?hidden=${currentRoute !== 'main'}
+            class="desktop-pane"
+            data-pane="launcher"
+            ?hidden=${showConversation}
           >
-            ${mainView}
+            ${hasWorkspace ? mainView : noWorkspacePlaceholder}
           </section>
           <section
-            class="desktop-route"
-            data-route="progress"
-            ?hidden=${currentRoute !== 'progress'}
+            class="desktop-pane"
+            data-pane="conversation"
+            ?hidden=${!showConversation}
           >
-            ${progressView}
-          </section>
-          <section
-            class="desktop-route"
-            data-route="settings"
-            ?hidden=${currentRoute !== 'settings'}
-          >
-            ${settingsView}
-          </section>
-          <section
-            class="desktop-route"
-            data-route="logs"
-            ?hidden=${currentRoute !== 'logs'}
-          >
-            ${logsContainer}
+            ${conversationView}
           </section>
         </main>
+        <aside
+          class="desktop-right"
+          aria-label="Reserved for future diff/approve UX"
+          aria-hidden="true"
+          hidden
+        ></aside>
       </div>
     </section>
   `;
@@ -269,16 +353,19 @@ function shellTemplate(): TemplateResult {
 
 function rerenderShell(): void {
   render(shellTemplate(), appRoot);
+  // Sync the rail tabs' properties from progressState every render. (Lit's
+  // property assignment is idempotent + diffed via Object.is, so this is
+  // cheap.) `<stream-tabs>` reads these as plain @property values, not via
+  // SignalWatcher.
+  railTabs.streams = tabStreams$.get();
+  railTabs.activeStreamId = activeStreamId$.get();
+  railTabs.filter = streamFilter$.get();
+  railTabs.streamStates = streamStates$.get();
+  railTabs.pendingApprovalStreamIds = pendingApprovalIds$.get();
+  railTabs.childStreamsByParent = childStreamsByParent$.get();
 }
 
 function renderBootstrapFallback(error: unknown): void {
-  // Last-resort fallback when the main shell cannot mount. This must NOT
-  // depend on any custom element or async work — if the shell crashed before
-  // reaching the chrome render, we still need to draw something so the user
-  // is not staring at a blank white window. The user-visible failure mode
-  // we are guarding against is a thrown decrypt during early IPC (e.g., the
-  // macOS keychain prompt is denied) propagating into the bootstrap promise
-  // chain and aborting render() before any pixels are painted.
   const message =
     error instanceof Error
       ? error.message
@@ -308,43 +395,17 @@ function renderBootstrapFallback(error: unknown): void {
             <wa-button
               appearance="outlined"
               @click=${() => {
-                // The fallback is rendered directly into `appRoot`, replacing
-                // the shell. Hiding the node would leave a blank window —
-                // instead, attempt a fresh shell render so the user gets a
-                // usable UI even though saved secrets are unavailable. If
-                // the second mount also throws, re-render the fallback so
-                // the user can still reload. (Command palette / walkthrough
-                // are only wired during the original boot when
-                // `bootstrapFailed` was false; they remain unavailable on
-                // this recovery path, which is by design — the user can
-                // still navigate via the chrome icon buttons.)
                 try {
                   renderLogViewer();
                   rerenderShell();
-                  // Clear the bootstrap-failed latch so chrome icon buttons
-                  // (Settings, Logs, etc.) can drive `setRoute()` →
-                  // `rerenderShell()` after recovery. Without this, the
-                  // `if (bootstrapFailed) return;` guard in setRoute makes
-                  // chrome navigation silently do nothing even though the
-                  // shell is mounted.
                   bootstrapFailed = false;
-                  // Drive the same minimal post-mount IPC the original boot
-                  // path runs so the recovered shell isn't permanently empty
-                  // (workspace tree + onboarding state).
-                  requestWorkspaceTree();
                   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
+                  postWebviewReady();
                 } catch (recoveryError) {
                   console.error(
                     'TeXRA desktop renderer recovery failed',
                     recoveryError,
                   );
-                  // Recovery render threw — the shell is NOT mounted, so
-                  // restore the bootstrap-failed latch so subsequent
-                  // navigation guards still treat boot as broken. Without
-                  // this, a successful `bootstrapFailed = false` followed
-                  // by a thrown `rerenderShell()` would leave the latch
-                  // in an inconsistent "recovered" state while the actual
-                  // DOM is back in the fallback.
                   bootstrapFailed = true;
                   renderBootstrapFallback(recoveryError);
                 }
@@ -360,6 +421,10 @@ function renderBootstrapFallback(error: unknown): void {
   );
 }
 
+// =============================================================================
+// Logs drawer
+// =============================================================================
+
 interface LogViewerState {
   meta: string;
   text: string;
@@ -370,40 +435,129 @@ let logViewerState: LogViewerState = {
   text: 'Open Logs to load recent entries.',
 };
 
-// Workspace-explorer reactive state. Declared up here (above the bootstrap
-// `rerenderShell()` below) so the initial shell render does not hit a TDZ on
-// `explorerState` — without this the very first synchronous render reaches
-// `explorerTemplate()`, reads `explorerState.kind`, and crashes the
-// bootstrap with `Cannot read properties of undefined (reading 'kind')`.
-type ExplorerState =
-  | { kind: 'loading'; title: string }
-  | { kind: 'no-workspace' }
-  | { kind: 'tree'; title: string; tree: readonly WorkspaceTreeNode[] };
+let logsDrawer: WaDrawer | null = null;
 
-let explorerState: ExplorerState = { kind: 'loading', title: 'Workspace' };
+function ensureLogsDrawer(): WaDrawer {
+  if (logsDrawer) return logsDrawer;
+  const drawer = document.createElement('wa-drawer') as WaDrawer;
+  drawer.classList.add('desktop-logs-drawer');
+  drawer.setAttribute('label', 'Desktop Logs');
+  drawer.setAttribute('placement', 'bottom');
+  drawer.append(logsContainer);
+  appRoot.append(drawer);
+  logsDrawer = drawer;
+  return drawer;
+}
+
+function openLogsDrawer(): void {
+  const drawer = ensureLogsDrawer();
+  currentRoute = 'logs';
+  document.body.dataset.desktopRoute = 'logs';
+  drawer.open = true;
+  requestLogSnapshot();
+}
 
 let bootstrapFailed = false;
 try {
-  // Render the log viewer template into its dedicated container so that
-  // re-renders driven by log-snapshot updates do not stomp the shell.
   renderLogViewer();
   rerenderShell();
+  // Subscribe to module-level progress signals so the center-pane swap
+  // (launcher ↔ conversation) and the rail tab properties stay live. Use
+  // `Signal.subtle.Watcher` from @lit-labs/signals (TC39 polyfill) — this
+  // is what `SignalWatcher(LitElement)` wraps internally. We schedule the
+  // re-render on a microtask so multiple synchronous signal writes batch.
+  //
+  // The watcher pattern: after `notify` fires, the watcher pauses tracking;
+  // we must read the pending computed (which re-runs and re-establishes
+  // dependencies) and call `watch()` again to re-arm. This is the same
+  // pattern @lit-labs/signals' `SignalWatcher` mixin uses internally.
+  const shellDeps = new Signal.Computed(() => {
+    activeStreamId$.get();
+    hasAnyStreams$.get();
+    tabStreams$.get();
+    streamFilter$.get();
+    streamStates$.get();
+    pendingApprovalIds$.get();
+    childStreamsByParent$.get();
+    return Date.now();
+  });
+  let shellRerenderQueued = false;
+  const shellWatcher = new Signal.subtle.Watcher(() => {
+    if (shellRerenderQueued) return;
+    shellRerenderQueued = true;
+    queueMicrotask(() => {
+      shellRerenderQueued = false;
+      // Read the pending computed so the watcher re-tracks its dependencies.
+      for (const pending of shellWatcher.getPending()) pending.get();
+      rerenderShell();
+      shellWatcher.watch();
+    });
+  });
+  shellWatcher.watch(shellDeps);
+  // Prime the dependency graph so the watcher knows what to listen for.
+  shellDeps.get();
 } catch (error) {
   bootstrapFailed = true;
   console.error('TeXRA desktop renderer bootstrap failed', error);
   renderBootstrapFallback(error);
 }
 
-// If the shell failed to mount, skip everything that depends on its DOM —
-// command palette, walkthrough, and IPC requests. The fallback UI gives the
-// user a way to reload or proceed without saved secrets.
 if (bootstrapFailed) {
-  // Surface unhandled IPC rejections that arrive after the fallback so they
-  // do not silently disappear into the console.
   window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled rejection after bootstrap failure', event.reason);
   });
 }
+
+// =============================================================================
+// Settings overlay
+// =============================================================================
+
+let settingsDialog: WaDialog | null = null;
+
+function ensureSettingsDialog(): WaDialog {
+  if (settingsDialog) return settingsDialog;
+  const dialog = document.createElement('wa-dialog') as WaDialog;
+  dialog.classList.add('desktop-settings-overlay');
+  dialog.withoutHeader = true;
+  dialog.lightDismiss = false;
+  dialog.setAttribute('aria-label', 'Settings');
+  dialog.setAttribute('data-route-button', 'settings');
+  // Settings-app fills the dialog body. We append it directly so subsequent
+  // re-opens reuse the same instance (preserving tab selection and state).
+  dialog.append(settingsView);
+  // Add an explicit close button (gear toggle dismiss flow). Esc is handled
+  // natively by wa-dialog.
+  const close = document.createElement('wa-button');
+  close.classList.add('desktop-settings-close');
+  close.setAttribute('appearance', 'plain');
+  close.setAttribute('size', 'small');
+  close.setAttribute('aria-label', 'Close settings');
+  close.setAttribute('title', 'Close settings');
+  render(waIcon('xmark'), close);
+  close.addEventListener('click', () => {
+    dialog.open = false;
+  });
+  dialog.append(close);
+  appRoot.append(dialog);
+  settingsDialog = dialog;
+  return dialog;
+}
+
+function openSettingsOverlay(): void {
+  const dialog = ensureSettingsDialog();
+  currentRoute = 'settings';
+  document.body.dataset.desktopRoute = 'settings';
+  dialog.open = true;
+}
+
+function closeSettingsOverlay(): void {
+  if (!settingsDialog) return;
+  settingsDialog.open = false;
+}
+
+// =============================================================================
+// Onboarding + command palette
+// =============================================================================
 
 const firstRunWalkthrough = bootstrapFailed
   ? undefined
@@ -422,7 +576,7 @@ const commandPalette = bootstrapFailed
       actions: {
         showRoute: setRoute,
         showSettings: (tabIndex, agentSubTab) => {
-          setRoute('settings');
+          openSettingsOverlay();
           if (tabIndex == null) return;
           window.postMessage(
             buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
@@ -442,7 +596,7 @@ const commandPalette = bootstrapFailed
           firstRunWalkthrough?.show();
         },
         resetMainView: () => {
-          setRoute('main');
+          returnToLauncher();
           window.postMessage(
             buildDesktopMainViewResetMessage(),
             getWindowTargetOrigin(),
@@ -458,6 +612,19 @@ function openCommandPalette(): void {
 
 function openWorkspaceFolder(): void {
   postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
+}
+
+// Clear the active stream so the center swaps back to <main-app>. PRD § 6:
+// "Composer pinned at the bottom of <main-app>; follow-up at the bottom of
+// <stream-conversation>" — returning to launcher is just nulling the active id.
+function returnToLauncher(): void {
+  appState.set(
+    mutate(appState.get(), (draft) => {
+      draft.activeStreamId = null;
+    }),
+  );
+  currentRoute = 'main';
+  document.body.dataset.desktopRoute = 'main';
 }
 
 function isDesktopSetRouteMessage(
@@ -482,56 +649,168 @@ function isThemeMessage(message: unknown): message is SetThemeMessage {
   return SetThemeMessageSchema.safeParse(message).success;
 }
 
+// Bridge for legacy `desktop:setRoute` IPC. The shell no longer has four
+// routes, so map the old route names onto the new surfaces:
+//   - 'main' / 'progress' → center pane (clear active stream for 'main')
+//   - 'settings' → overlay
+//   - 'logs' → drawer
 function setRoute(route: DesktopRoute): void {
   currentRoute = route;
   document.body.dataset.desktopRoute = route;
   if (bootstrapFailed) return;
-  rerenderShell();
-  if (route === 'logs') requestLogSnapshot();
-}
-
-function toggleRoute(route: DesktopRoute): void {
-  // Toggle back to the launcher when the same chrome button is pressed again,
-  // so the icons feel like a "go to / dismiss" affordance.
-  setRoute(currentRoute === route ? 'main' : route);
+  switch (route) {
+    case 'main':
+      returnToLauncher();
+      // returnToLauncher rerenders via the effect.
+      break;
+    case 'progress':
+      // No-op: the conversation pane shows automatically when activeStreamId$
+      // is set. If no active stream, stay on launcher.
+      rerenderShell();
+      break;
+    case 'settings':
+      openSettingsOverlay();
+      break;
+    case 'logs':
+      openLogsDrawer();
+      break;
+  }
 }
 
 window.addEventListener('message', (event) => {
   if (isDesktopSetRouteMessage(event.data)) {
     setRoute(event.data.route);
-  } else if (isDesktopOnboardingSetStateMessage(event.data)) {
+    return;
+  }
+  if (isDesktopOnboardingSetStateMessage(event.data)) {
     if (event.data.shouldShow) {
       firstRunWalkthrough?.show();
     } else {
       firstRunWalkthrough?.hide();
     }
-  } else if (isThemeMessage(event.data)) {
+    return;
+  }
+  if (isThemeMessage(event.data)) {
     applyDesktopTheme(event.data.theme);
-  } else if (isWorkspaceTreeMessage(event.data)) {
-    receiveWorkspaceTree(event.data);
-  } else if (isDesktopSetLogMessage(event.data)) {
+    return;
+  }
+  if (isDesktopSetLogMessage(event.data)) {
     renderLogSnapshot(event.data);
+    return;
+  }
+  // Progress view messages: dispatch directly into the shared messageDispatcher
+  // — no need to mount <progress-app> for plumbing. PRD § 7.C.
+  if (isProgressOutboundMessage(event.data)) {
+    dispatchMessage(event.data, getMessageHandlerContext());
+    return;
   }
 });
+
+// =============================================================================
+// Wire <stream-tabs> + <stream-conversation> events to shared handlers
+// =============================================================================
+
+function wireRailTabs(): void {
+  railTabs.addEventListener('stream-switch', ((e: CustomEvent) => {
+    handleStreamSwitch(e, getEventHandlerContext());
+    // Switching to a stream pulls the user out of the launcher view. The
+    // effect-driven rerender will swap to the conversation pane.
+    currentRoute = 'progress';
+    document.body.dataset.desktopRoute = 'progress';
+  }) as EventListener);
+  railTabs.addEventListener('stream-delete', ((e: CustomEvent) =>
+    handleStreamDelete(e, getEventHandlerContext())) as EventListener);
+  railTabs.addEventListener('filter-change', ((e: CustomEvent) =>
+    handleFilterChange(e, getEventHandlerContext())) as EventListener);
+  railTabs.addEventListener(
+    'delete-all',
+    () => handleDeleteAll(),
+  );
+}
+
+function wireConversation(): void {
+  const ctx = () => getEventHandlerContext();
+  conversationView.addEventListener('stream-switch', ((e: CustomEvent) => {
+    handleStreamSwitch(e, ctx());
+  }) as EventListener);
+  conversationView.addEventListener('toolbar-command', ((e: CustomEvent) =>
+    handleToolbarCommand(e, ctx())) as EventListener);
+  conversationView.addEventListener('permission-action', ((e: CustomEvent) =>
+    handlePermissionAction(e, getMessageHandlerContext())) as EventListener);
+  conversationView.addEventListener(
+    'file-action',
+    ((e: CustomEvent) => handleFileAction(e)) as EventListener,
+  );
+  conversationView.addEventListener('compile-fixer-run', () =>
+    runCompileFixer(ctx()),
+  );
+  conversationView.addEventListener('followup-request-options', () =>
+    handleFollowupRequestOptions(ctx()),
+  );
+  conversationView.addEventListener('followup-setup', ((e: CustomEvent) =>
+    sendFollowupCommand(
+      PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP,
+      e,
+      ctx(),
+    )) as EventListener);
+  conversationView.addEventListener('followup-run', ((e: CustomEvent) =>
+    sendFollowupCommand(
+      PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
+      e,
+      ctx(),
+    )) as EventListener);
+  conversationView.addEventListener('followup-change', ((e: CustomEvent) =>
+    handleFollowUpChange(e, ctx())) as EventListener);
+  conversationView.addEventListener('followup-send', () =>
+    handleFollowUpSend(ctx()),
+  );
+  conversationView.addEventListener('followup-polish', () =>
+    handleFollowUpPolish(ctx()),
+  );
+  conversationView.addEventListener('followup-clear', () =>
+    handleFollowUpClear(ctx()),
+  );
+  // followup-focus-complete: clear the focus/polish/transcribe trigger flags.
+  conversationView.addEventListener('followup-focus-complete', () => {
+    const streamId = appState.get().activeStreamId;
+    if (!streamId) return;
+    setStreamStateForId(streamId, (prev) => {
+      // The followup-focus-complete handler in ProgressApp is a no-op when
+      // not a tool-use state; mirror that here. Importing the type guard
+      // would create a circular dep, so use structural shape.
+      if (!('ui' in prev)) return prev;
+      const next = mutate(prev, (draft) => {
+        if ('ui' in draft) {
+          (draft as { ui: { shouldFocusFollowUp?: boolean; polishedText?: string | null; transcribedText?: string | null } }).ui.shouldFocusFollowUp = false;
+          (draft as { ui: { shouldFocusFollowUp?: boolean; polishedText?: string | null; transcribedText?: string | null } }).ui.polishedText = null;
+          (draft as { ui: { shouldFocusFollowUp?: boolean; polishedText?: string | null; transcribedText?: string | null } }).ui.transcribedText = null;
+        }
+      });
+      return next;
+    });
+  });
+}
+
 if (!bootstrapFailed) {
-  requestWorkspaceTree();
+  wireRailTabs();
+  wireConversation();
   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
+  postWebviewReady();
+}
+
+function postWebviewReady(): void {
+  // The desktop main process expects `WEBVIEW_READY` from both 'main' and
+  // 'progress' views to drive startup messages + a full progress sync. The
+  // single renderer now plays both roles.
+  postMessage(COMMON_COMMANDS.WEBVIEW_READY, { view: 'main' });
+  postMessage(COMMON_COMMANDS.WEBVIEW_READY, { view: 'progress' });
 }
 
 function applyDesktopTheme(theme: DesktopThemeKind): void {
-  // Body and html classList mutation is OK here: those elements live OUTSIDE
-  // the Lit-rendered desktop shell, so the next `rerenderShell()` cannot stomp
-  // these classes. Theme state is intentionally not part of the shell template.
-  // The shared helper keeps the class set + ordering in lockstep with the
-  // VS Code BaseWebviewApp path so any future addition (e.g. wa-high-contrast)
-  // does not need parallel edits across hosts.
   applyHostBodyTheme(theme);
 }
 
 function logViewerTemplate(state: LogViewerState): TemplateResult {
-  // Shared labeled-action button (icon + text, outlined, small) — used to be
-  // hand-rolled here; reuse the helper so we get consistent class names,
-  // aria-label fallback, and class composition with the rest of the codebase.
   const action = (
     icon: 'rotate-right' | 'copy' | 'download' | 'folder-open',
     label: string,
@@ -588,249 +867,7 @@ function renderLogSnapshot(message: DesktopSetLogMessage): void {
   renderLogViewer();
 }
 
-function isWorkspaceTreeMessage(
-  message: unknown,
-): message is DesktopWorkspaceTreeMessage {
-  return DesktopWorkspaceTreeMessageSchema.safeParse(message).success;
-}
-
-function requestWorkspaceTree(): void {
-  if (!hasWorkspace) {
-    explorerState = { kind: 'no-workspace' };
-    rerenderShell();
-    return;
-  }
-  postMessage(DESKTOP_WORKSPACE_EXPLORER_COMMANDS.REQUEST_TREE);
-}
-
-function receiveWorkspaceTree(message: DesktopWorkspaceTreeMessage): void {
-  explorerState = {
-    kind: 'tree',
-    title: message.workspaceName ?? 'Workspace',
-    tree: message.tree,
-  };
-  rerenderShell();
-}
-
-function explorerTemplate(): TemplateResult {
-  if (explorerState.kind === 'no-workspace')
-    return explorerNoWorkspaceTemplate();
-  if (explorerState.kind === 'loading') {
-    return html`
-      ${explorerHeaderTemplate(explorerState.title, true)}
-      <p class="desktop-explorer-status">Loading workspace files...</p>
-    `;
-  }
-  if (explorerState.tree.length === 0) {
-    return html`
-      ${explorerHeaderTemplate(explorerState.title)}
-      <p class="desktop-explorer-status">
-        No selectable workspace files found.
-      </p>
-    `;
-  }
-  return html`
-    ${explorerHeaderTemplate(explorerState.title)}
-    <wa-tree
-      class="desktop-explorer-tree"
-      selection="single"
-      @wa-selection-change=${handleExplorerSelectionChange}
-    >
-      ${treeNodesTemplate(explorerState.tree, 0)}
-    </wa-tree>
-    <section class="desktop-explorer-selection" aria-live="polite">
-      ${selectionPanelTemplate(explorerState.tree)}
-    </section>
-  `;
-}
-
-function handleExplorerSelectionChange(
-  event: CustomEvent<{ selection: WaTreeItem[] }>,
-): void {
-  const selected = event.detail.selection[0];
-  if (selected == null) return;
-  const filePath = selected.dataset.filePath;
-  if (filePath == null || filePath === '') return;
-  selectExplorerFile(filePath);
-}
-
-function explorerNoWorkspaceTemplate(): TemplateResult {
-  return renderEmptyState({
-    className: 'desktop-explorer-empty',
-    icon: 'folder-open',
-    title: 'No workspace',
-    body: 'Open a folder before selecting files for agents.',
-    // Explorer is a subordinate sidebar; keep its title at h2 so it does not
-    // compete with the workbench's h1 main empty-state heading.
-    headingTag: 'h2',
-    actions: [
-      {
-        label: 'Open Folder',
-        appearance: 'filled',
-        variant: 'brand',
-        className: 'desktop-primary-button',
-        onClick: () =>
-          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-      },
-    ],
-  });
-}
-
-function explorerHeaderTemplate(
-  title: string,
-  loading = false,
-): TemplateResult {
-  return html`
-    <header class="desktop-explorer-header">
-      <span class="desktop-explorer-title">${title}</span>
-      <wa-button
-        class="desktop-explorer-icon-button"
-        appearance="plain"
-        size="small"
-        title="Refresh workspace files"
-        aria-label="Refresh workspace files"
-        ?disabled=${loading || !hasWorkspace}
-        @click=${requestWorkspaceTree}
-      >
-        ${waIcon('rotate-right')}
-      </wa-button>
-    </header>
-  `;
-}
-
-function treeNodesTemplate(
-  nodes: readonly WorkspaceTreeNode[],
-  depth: number,
-): TemplateResult {
-  return html`
-    ${repeat(
-      nodes,
-      (node) => node.path,
-      (node) => treeNodeTemplate(node, depth),
-    )}
-  `;
-}
-
-function treeNodeTemplate(
-  node: WorkspaceTreeNode,
-  depth: number,
-): TemplateResult {
-  if (node.type === 'directory') {
-    return html`
-      <wa-tree-item class="desktop-explorer-directory" ?expanded=${depth < 2}>
-        ${waIcon('folder')}
-        <span class="desktop-explorer-name">${node.name}</span>
-        ${treeNodesTemplate(node.children ?? [], depth + 1)}
-      </wa-tree-item>
-    `;
-  }
-  return html`
-    <wa-tree-item
-      class="desktop-explorer-file"
-      title=${node.path}
-      data-file-path=${node.path}
-      ?selected=${selectedExplorerFile === node.path}
-      @dblclick=${() => openWorkspaceFile(node.path)}
-    >
-      ${waIcon('file-lines')}
-      <span class="desktop-explorer-name">${node.name}</span>
-      <span class="desktop-explorer-category-strip">
-        ${(node.categories ?? []).map(
-          (category) => html`
-            <span
-              class="desktop-explorer-category-dot"
-              title=${category}
-              data-category=${category}
-            ></span>
-          `,
-        )}
-      </span>
-    </wa-tree-item>
-  `;
-}
-
-function selectionPanelTemplate(
-  tree: readonly WorkspaceTreeNode[],
-): TemplateResult | string {
-  const node = selectedExplorerFile
-    ? findFileNode(tree, selectedExplorerFile)
-    : undefined;
-  if (!node) {
-    return 'Select a file to open it or attach it to the launcher.';
-  }
-  return html`
-    <div class="desktop-explorer-selected-path">${node.path}</div>
-    <div class="desktop-explorer-selection-actions">
-      ${selectionActionTemplate('Open', () => openWorkspaceFile(node.path))}
-      ${(node.categories ?? []).map((category) => {
-        const typedCategory = parseExplorerCategory(category);
-        return typedCategory
-          ? selectionActionTemplate(`Use as ${typedCategory}`, () =>
-              selectWorkspaceFile(typedCategory, node.path),
-            )
-          : nothing;
-      })}
-    </div>
-  `;
-}
-
-function selectionActionTemplate(
-  label: string,
-  onClick: () => void,
-): TemplateResult {
-  return html`
-    <wa-button
-      class="desktop-secondary-button"
-      appearance="outlined"
-      size="small"
-      @click=${onClick}
-    >
-      ${label}
-    </wa-button>
-  `;
-}
-
-function selectExplorerFile(filePath: string): void {
-  selectedExplorerFile = filePath;
-  rerenderShell();
-}
-
-function findFileNode(
-  nodes: readonly WorkspaceTreeNode[],
-  filePath: string,
-): WorkspaceTreeNode | undefined {
-  for (const node of nodes) {
-    if (node.type === 'file' && node.path === filePath) return node;
-    const childMatch = node.children
-      ? findFileNode(node.children, filePath)
-      : undefined;
-    if (childMatch) return childMatch;
-  }
-  return undefined;
-}
-
-function parseExplorerCategory(
-  value: string,
-): DesktopWorkspaceFileCategory | undefined {
-  return ['input', 'reference', 'auxiliary', 'media'].includes(value)
-    ? (value as DesktopWorkspaceFileCategory)
-    : undefined;
-}
-
-function openWorkspaceFile(filePath: string): void {
-  postMessage(DESKTOP_WORKSPACE_EXPLORER_COMMANDS.OPEN_FILE, { filePath });
-}
-
-function selectWorkspaceFile(
-  fileType: DesktopWorkspaceFileCategory,
-  filePath: string,
-): void {
-  postMessage(DESKTOP_WORKSPACE_EXPLORER_COMMANDS.SELECT_FILE, {
-    fileType,
-    filePath,
-  });
-  if (fileType === 'input') {
-    postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, { baseFile: filePath });
-  }
-  setRoute('main');
-}
+// Re-export references that downstream modules (or future hooks) may want to
+// drive imperatively. Keeps the API surface explicit even though the desktop
+// shell currently consumes them directly.
+export { setRoute, openSettingsOverlay, closeSettingsOverlay, openLogsDrawer };
