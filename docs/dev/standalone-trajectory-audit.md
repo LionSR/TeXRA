@@ -31,7 +31,7 @@ one at a time.
 | 13  | First-run walkthrough                       | Works   | `desktopOnboarding.ts`                                                                   |
 | 14  | Tool install via Settings → Tools           | Partial | Native dialog with copy/run command — no `code --install` automation                     |
 | 15  | Install LaTeX Workshop / VS Code extension  | Partial | Used to silently open MV marketplace; now an honest "this is a VS Code extension" dialog |
-| 16  | Recent commits banner / Git tab             | Stub    | Always reports `commits: []`; `isGitRepo` now probes `.git` but no log access            |
+| 16  | Recent commits banner / Git tab             | Works   | `desktopGitHost.ts` shells out to `git log` (audit item A)                               |
 | 17  | LaTeX preview / build                       | Partial | `desktopPreviewHost.openBuildDisplay` opens externally; no in-app PDF tab                |
 | 18  | Diff view inside the desktop                | Partial | `desktopDiffHost` opens diff in external editor only                                     |
 | 19  | Cross-launch session restoration            | Partial | Auth session + workspace path restore; in-flight agent runs do not                       |
@@ -107,16 +107,15 @@ Marketplace` / `Copy ID` / `Close`) instead of silently opening the
 Each of the following has concrete acceptance criteria so a single PR can
 close it:
 
-### A. Real desktop Git host (closes trajectory #16)
+### A. Real desktop Git host (closes trajectory #16) — DONE
 
-- **Done when:** opening a workspace that is a git repo populates the
-  recent-commits picker on the launcher with the last 20 commits.
-- Notes: spawn `git log` via `child_process.execFile` inside the
-  workspace; stream stdout, parse with `--pretty=format`, cache for the
-  session.
-- Affected files: `packages/desktop/src/main/index.ts`,
-  `packages/desktop/src/main/desktopShellIpc.ts`, new
-  `packages/desktop/src/main/desktopGitHost.ts`.
+- Implemented in `packages/desktop/src/main/desktopGitHost.ts` (PR #3817).
+  spawns `git log -n 20 --pretty=format:'%h\t%s\t%cr'` via
+  `child_process.execFile` inside the workspace, parses tab-separated
+  fields, and rebuilds the `<short>: <subject> (<relative>)` label
+  shape the renderer already consumes. `desktopShellIpc.ts` accepts an
+  injected `getRecentCommits` host; `index.ts` wires it. `git`-missing
+  / not-a-repo / timeout failures fall back to an empty list.
 
 ### B. In-app PDF preview (closes #17)
 

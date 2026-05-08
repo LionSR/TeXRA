@@ -36,6 +36,7 @@ import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.
 import { promptInRenderer } from './desktopPrompt.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
+import { createDesktopGitHost } from './desktopGitHost.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import {
   createDesktopAuthCallbackState,
@@ -398,6 +399,15 @@ function createWindow(options: {
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     { onAsyncError: reportAsyncError },
   );
+  // Real desktop git host — closes audit item A from
+  // `docs/dev/standalone-trajectory-audit.md` (trajectory #16). Spawns
+  // `git log` under the active workspace to populate the launcher banner's
+  // recent-commits picker. The host is stateless and re-probes per request,
+  // so workspace switches don't need cache invalidation.
+  const gitHost = createDesktopGitHost({
+    getWorkspacePath: () => options.workspacePath,
+    onError: reportAsyncError,
+  });
   const shellActions = createDesktopShellActions(
     { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
     {
@@ -407,21 +417,7 @@ function createWindow(options: {
       openPath: previewHost.openPath,
       openWorkspaceFolder,
       signIn: () => desktopAuth.signIn(),
-      isWorkspaceGitRepo: () => {
-        // `recentCommits` is currently unavailable on desktop (no vscode.git
-        // host port yet — tracked in docs/dev/standalone-trajectory-audit.md
-        // as the "Git tab on desktop" follow-up). Until that lands, surface
-        // an honest `isGitRepo` boolean by probing `.git` directly so the
-        // renderer banner copy reflects the actual repo state instead of
-        // always claiming the user is outside a repo.
-        const workspace = options.workspacePath;
-        if (!workspace) return false;
-        try {
-          return existsSync(join(workspace, '.git'));
-        } catch {
-          return false;
-        }
-      },
+      getRecentCommits: () => gitHost.getRecentCommits(),
       onAsyncError: reportAsyncError,
     },
   );
