@@ -440,6 +440,24 @@ export const commonViewStyles: CSSResult = css`
     line-height: var(--line-height-tight);
   }
 
+  /* Shared section header — uppercase divider used across settings tabs.
+     LaTeXTab uses .section-header; ToolsTab uses .category-header. Both
+     resolve to identical chrome here. */
+  .section-header,
+  .category-header {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    padding-bottom: var(--wa-space-2xs);
+    margin-bottom: var(--wa-space-xs);
+    border-bottom: var(--border-thin) solid var(--color-border);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
   /* Utility: single-line text truncation with ellipsis */
   .truncate {
     overflow: hidden;

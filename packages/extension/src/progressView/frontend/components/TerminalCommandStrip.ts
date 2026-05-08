@@ -14,16 +14,16 @@ export class TerminalCommandStrip extends LitElement {
     .strip {
       display: flex;
       align-items: baseline;
-      gap: var(--wa-space-2xs, 8px);
-      padding: 6px 10px;
-      margin: 0 0 8px 0;
+      gap: var(--wa-space-2xs);
+      padding: var(--wa-space-2xs) var(--wa-space-s);
+      margin: 0 0 var(--wa-space-2xs) 0;
       background: var(
         --texra-terminal-background,
         var(--texra-editor-background, transparent)
       );
       color: var(--texra-terminal-foreground, var(--wa-color-text-normal));
-      border: 1px solid var(--texra-panel-border, transparent);
-      border-radius: 3px;
+      border: var(--border-thin) solid var(--texra-panel-border, transparent);
+      border-radius: var(--border-radius-small);
       font-family: var(
         --texra-editor-font-family,
         ui-monospace,
@@ -31,7 +31,7 @@ export class TerminalCommandStrip extends LitElement {
         Consolas,
         monospace
       );
-      font-size: var(--texra-editor-font-size, 12px);
+      font-size: var(--texra-editor-font-size, var(--font-size-sm));
       max-height: min(32vh, 320px);
       overflow: auto;
       white-space: pre;
@@ -45,7 +45,7 @@ export class TerminalCommandStrip extends LitElement {
 
     .prompt {
       color: var(--texra-terminal-ansiGreen, var(--color-success, #0a0));
-      font-weight: 600;
+      font-weight: var(--font-weight-semibold);
       user-select: none;
     }
   `;
