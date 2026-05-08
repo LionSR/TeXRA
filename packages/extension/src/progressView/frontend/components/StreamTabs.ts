@@ -22,6 +22,8 @@ import {
   getAgentCategoryDecorator,
 } from '@shared/utils/icons';
 import { formatRelativeTime } from '@shared/utils/string';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { layoutStyles } from '../styles/logStyles';
 import {
   ACTIVE_STREAM_STATUSES,
@@ -300,7 +302,7 @@ export class StreamTab extends LitElement {
         flex-shrink: 0;
       }
 
-      .tab-delete::part(control) {
+      .tab-delete::part(base) {
         padding: 0;
         border-radius: var(--border-radius-small);
         background-color: color-mix(
@@ -310,8 +312,8 @@ export class StreamTab extends LitElement {
         );
       }
 
-      .tab-delete:hover::part(control),
-      .tab-delete:focus-within::part(control) {
+      .tab-delete:hover::part(base),
+      .tab-delete:focus-within::part(base) {
         background-color: var(--texra-toolbar-hoverBackground);
       }
 
@@ -470,14 +472,19 @@ export class StreamTab extends LitElement {
                 </div>
               `}
         </button>
-        <vscode-toolbar-button
-          class="tab-delete"
-          icon="close"
-          title="Delete stream"
+        <wa-button
+          class="action-icon-button tab-delete"
+          appearance="plain"
+          variant="neutral"
+          size="small"
+          type="button"
           aria-label="Delete stream"
+          title="Delete stream"
           data-stream=${stream.name}
           data-action="delete"
-        ></vscode-toolbar-button>
+        >
+          ${waIcon('close')}
+        </wa-button>
       </div>
     `;
   }
@@ -817,14 +824,14 @@ export class StreamTabs extends LitElement {
                 </wa-radio-group>
 
                 <div class="stream-list-actions">
-                  <vscode-toolbar-button
-                    id=${ELEMENT_IDS.DELETE_ALL_BTN}
-                    class="delete-all-streams"
-                    icon="trash"
-                    label="Clear all streams"
-                    title="Clear all streams"
-                    @click=${this.handleDeleteAll}
-                  ></vscode-toolbar-button>
+                  ${renderIconActionButton({
+                    id: ELEMENT_IDS.DELETE_ALL_BTN,
+                    icon: 'trash',
+                    label: 'Clear all streams',
+                    title: 'Clear all streams',
+                    className: 'delete-all-streams',
+                    onClick: this.handleDeleteAll,
+                  })}
                 </div>
               </div>
             </div>`}
