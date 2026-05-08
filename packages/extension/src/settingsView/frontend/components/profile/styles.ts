@@ -3,7 +3,7 @@ import { css, type CSSResult } from 'lit';
 
 export const profileViewStyles: CSSResult = css`
   h2 {
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
     margin-top: var(--wa-space-l);
     margin-bottom: var(--wa-space-xs);
     font-size: var(--font-size-lg);
@@ -40,7 +40,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .value {
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   wa-tag.tier-badge {
@@ -96,9 +96,9 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-keys-table th {
-    background: var(--texra-editor-background);
+    background: var(--wa-color-surface-default);
     font-weight: var(--font-weight-semibold);
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
     position: sticky;
     top: 0;
   }
@@ -164,17 +164,17 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .api-access-option:hover {
-    border-color: var(--texra-focusBorder);
+    border-color: var(--wa-color-focus);
   }
 
   .api-access-option:has(input:checked) {
-    border-color: var(--texra-focusBorder);
+    border-color: var(--wa-color-focus);
     background: var(--texra-list-hoverBackground);
   }
 
   .api-access-option input[type='radio'] {
     margin-top: var(--wa-space-3xs);
-    accent-color: var(--texra-focusBorder);
+    accent-color: var(--wa-color-focus);
   }
 
   .api-access-support {
@@ -194,7 +194,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .api-access-support a {
-    color: var(--texra-textLink-foreground);
+    color: var(--wa-color-text-link);
     text-decoration: none;
   }
 
@@ -211,7 +211,7 @@ export const profileViewStyles: CSSResult = css`
 
   .option-title {
     font-weight: var(--font-weight-semibold);
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .option-description {
@@ -286,11 +286,11 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-expand-btn:hover {
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .provider-expand-btn:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -328,7 +328,7 @@ export const profileViewStyles: CSSResult = css`
 
   .provider-setting label {
     font-size: var(--font-size-sm);
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
     min-width: 120px;
   }
 
@@ -366,7 +366,7 @@ export const profileViewStyles: CSSResult = css`
     padding: 0;
     font: inherit;
     font-size: var(--font-size-sm);
-    color: var(--texra-textLink-foreground);
+    color: var(--wa-color-text-link);
     cursor: pointer;
     text-decoration: none;
     margin-left: var(--wa-space-2xs);
@@ -408,7 +408,7 @@ export const profileViewStyles: CSSResult = css`
 
   .helper-model-row label {
     font-weight: var(--font-weight-medium);
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
     white-space: nowrap;
   }
 
@@ -429,9 +429,9 @@ export const profileViewStyles: CSSResult = css`
     align-items: center;
     gap: var(--wa-space-xs);
     width: 100%;
-    background: var(--texra-editor-background);
+    background: var(--wa-color-surface-default);
     border: none;
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
     font-size: var(--font-size-sm);
     font-family: inherit;
     text-align: left;
@@ -456,7 +456,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-group-toggle:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -580,12 +580,12 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .deprecated-toggle:hover {
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
     background: var(--texra-list-hoverBackground);
   }
 
   .deprecated-toggle:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }

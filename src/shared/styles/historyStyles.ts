@@ -69,11 +69,11 @@ export const historyListStyles: CSSResult = css`
 
   .history-label {
     font-weight: var(--font-weight-bold);
-    color: var(--texra-editor-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .history-value {
-    color: var(--texra-editor-foreground);
+    color: var(--wa-color-text-normal);
     padding: var(--wa-space-2xs) 0;
     word-break: break-word;
   }
@@ -94,7 +94,7 @@ export const historyListStyles: CSSResult = css`
 
   .history-description {
     font-size: var(--font-size-sm);
-    color: var(--texra-descriptionForeground);
+    color: var(--wa-color-text-quiet);
     font-style: italic;
     margin-top: var(--wa-space-2xs);
     line-height: var(--line-height-normal);
@@ -125,7 +125,7 @@ export const historyListStyles: CSSResult = css`
   }
 
   .config-value {
-    color: var(--texra-descriptionForeground);
+    color: var(--wa-color-text-quiet);
     word-break: break-word;
   }
 `;
