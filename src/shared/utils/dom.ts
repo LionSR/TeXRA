@@ -21,4 +21,3 @@ export function scrollToBottom(element: HTMLElement | null): void {
 
   element.scrollTop = element.scrollHeight;
 }
-

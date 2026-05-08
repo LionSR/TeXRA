@@ -207,7 +207,9 @@ export class FileSelectGroup extends LitElement {
    * (preventDefault), translate the toggle into a checkboxChange event,
    * and react to the auto-toggle wa-dropdown applies before this fires.
    */
-  private handleMenuSelect = (event: CustomEvent<{ item: HTMLElement }>): void => {
+  private handleMenuSelect = (
+    event: CustomEvent<{ item: HTMLElement }>,
+  ): void => {
     event.preventDefault();
     const item = event.detail?.item as
       | (HTMLElement & { value?: string; checked?: boolean })
@@ -238,8 +240,7 @@ export class FileSelectGroup extends LitElement {
           aria-label="Tool configuration options"
           title="Tool configuration options"
         >
-          ${waIcon('tools', { slot: 'start' })}
-          ${waIcon('chevron-down')}
+          ${waIcon('tools', { slot: 'start' })} ${waIcon('chevron-down')}
         </wa-button>
         <wa-dropdown-item
           type="checkbox"
@@ -284,8 +285,7 @@ export class FileSelectGroup extends LitElement {
           aria-label="Auto-extract options"
           title="Auto-extract options"
         >
-          ${waIcon('wand', { slot: 'start' })}
-          ${waIcon('chevron-down')}
+          ${waIcon('wand', { slot: 'start' })} ${waIcon('chevron-down')}
         </wa-button>
         <wa-dropdown-item
           type="checkbox"
@@ -329,8 +329,7 @@ export class FileSelectGroup extends LitElement {
                 <span class="file-name-main">${display.name}</span>
                 ${display.folder
                   ? html`<span class="file-folder">
-                      ${waIcon('folder')}
-                      ${display.folder}
+                      ${waIcon('folder')} ${display.folder}
                     </span>`
                   : nothing}
               </span>
@@ -366,10 +365,7 @@ export class FileSelectGroup extends LitElement {
     const chevronName = this.currentListVisible ? 'chevron-up' : 'chevron-down';
 
     return html`
-      <div
-        class="file-select"
-        data-expanded=${String(this.currentListVisible)}
-      >
+      <div class="file-select" data-expanded=${String(this.currentListVisible)}>
         <div class="file-select-header">
           <div class="file-select-label-group">
             ${renderIconActionButton({

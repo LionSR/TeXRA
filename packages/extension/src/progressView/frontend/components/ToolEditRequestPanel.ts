@@ -207,7 +207,9 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   // Diff menu handlers
   // ===========================================================================
 
-  private handleMenuSelect = (event: CustomEvent<{ item: HTMLElement }>): void => {
+  private handleMenuSelect = (
+    event: CustomEvent<{ item: HTMLElement }>,
+  ): void => {
     const action =
       (event.detail?.item as HTMLElement & { value?: string })?.value ?? '';
     if (!action) return;

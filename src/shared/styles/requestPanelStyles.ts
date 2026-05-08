@@ -271,7 +271,11 @@ export const requestPanelStyles: CSSResult = css`
     display: inline-flex;
   }
 
-  .approval-request__actions .diff-dropdown wa-dropdown[open] .diff-dropdown-trigger wa-icon {
+  .approval-request__actions
+    .diff-dropdown
+    wa-dropdown[open]
+    .diff-dropdown-trigger
+    wa-icon {
     transform: rotate(180deg);
   }
 
