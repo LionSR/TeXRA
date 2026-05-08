@@ -4,6 +4,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -221,7 +222,9 @@ export class HistoryItem extends LitElement {
     const config = this.item.agentConfig;
     const timestamp = new Date(this.item.timestamp).toLocaleString();
     const isToolUse = config.agentCategory === AGENT_CATEGORY.TOOL_USE;
-    const categoryClass = isToolUse ? 'category-tool-use' : 'category-workflow';
+    const categoryVariant: 'warning' | 'brand' = isToolUse
+      ? 'warning'
+      : 'brand';
     const decorator = getAgentCategoryDecorator(config.agentCategory);
     const instructionText = config.instruction?.trim()
       ? config.instruction
@@ -308,7 +311,11 @@ export class HistoryItem extends LitElement {
         <div class="history-details basic-details">
           <span class="history-label">Category:</span>
           <span class="history-value">
-            <span class="badge agent-category-badge ${categoryClass}">
+            <wa-tag
+              class="agent-category-badge"
+              variant=${categoryVariant}
+              size="small"
+            >
               ${decorator.icon
                 ? html`<wa-icon
                     library="texra"
@@ -316,7 +323,7 @@ export class HistoryItem extends LitElement {
                   ></wa-icon>`
                 : nothing}
               ${decorator.label}
-            </span>
+            </wa-tag>
           </span>
           <span class="history-label">Agent:</span>
           <span class="history-value">${config.agent ?? 'Unknown'}</span>

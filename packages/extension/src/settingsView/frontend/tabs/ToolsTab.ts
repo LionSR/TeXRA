@@ -4,6 +4,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -12,7 +13,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import {
   commonViewStyles,
   designTokens,
-  tintedBadgeStyles,
 } from '@shared/styles';
 
 // Side-effect imports - register WA icon and spinner components
@@ -104,7 +104,6 @@ export class ToolsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    tintedBadgeStyles,
     css`
       :host {
         display: block;
@@ -442,15 +441,16 @@ export class ToolsTab extends LitElement {
             >
               Enable native crash reporting
             </vscode-checkbox>
-            <span
-              class=${this.desktopCrashReportingConfigured
-                ? 'tinted-badge tinted-badge--ok'
-                : 'tinted-badge tinted-badge--warn'}
+            <wa-tag
+              variant=${this.desktopCrashReportingConfigured
+                ? 'success'
+                : 'warning'}
+              size="small"
             >
               ${this.desktopCrashReportingConfigured
                 ? 'DSN set'
                 : 'DSN missing'}
-            </span>
+            </wa-tag>
             <button
               class="tab-action-btn"
               @click=${this.handleSetDesktopCrashReportingDsn}
