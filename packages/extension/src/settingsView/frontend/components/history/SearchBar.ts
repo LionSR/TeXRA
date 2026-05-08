@@ -6,6 +6,8 @@
 // Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -34,7 +36,7 @@ export class SearchBar extends LitElement {
   }
 
   private handleInput(event: Event): void {
-    const target = event.currentTarget as HTMLInputElement | null;
+    const target = event.currentTarget as WaInput | null;
     const term = target?.value?.trim() ?? '';
     if (this.searchTimeoutId) {
       clearTimeout(this.searchTimeoutId);
@@ -69,14 +71,14 @@ export class SearchBar extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="search-container">
-        <vscode-textfield
+        <wa-input
           class="search-input"
           type="search"
           placeholder="Search history items..."
           .value=${this.searchTerm}
           @input=${this.handleInput}
           @keydown=${this.handleKeydown}
-        ></vscode-textfield>
+        ></wa-input>
         <div class="search-controls action-button-group">
           ${renderIconActionButton({
             icon: 'chevron-up',

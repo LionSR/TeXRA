@@ -16,6 +16,8 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 // Local imports - shared constants
 import {
@@ -218,10 +220,10 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="model-row${unavailableClass}">
-        <vscode-checkbox
+        <wa-checkbox
           ?checked=${model.enabled}
           @change=${(e: Event) => {
-            const checked = (e.target as HTMLInputElement).checked;
+            const checked = (e.target as WaCheckbox).checked;
             this.dispatchEvent(
               ModelSelectionEvents.setModelEnabled({
                 modelName: model.name,
@@ -249,7 +251,7 @@ export class ModelSelectionList extends LitElement {
                 title=${EXPENSIVE_MODEL_HINT}
               ></wa-icon>`
             : nothing}
-        </vscode-checkbox>
+        </wa-checkbox>
         ${this.renderReasoningDropdown(model)}
         <span class="model-metadata">
           ${model.contextWindow
@@ -384,17 +386,17 @@ export class ModelSelectionList extends LitElement {
         <h2>Model Selection</h2>
         ${this.renderHelperModelDropdown()}
         <div class="short-names-toggle">
-          <vscode-checkbox
+          <wa-checkbox
             ?checked=${this.preferShortModelNames}
             @change=${(e: Event) => {
-              const enabled = (e.target as HTMLInputElement).checked;
+              const enabled = (e.target as WaCheckbox).checked;
               this.dispatchEvent(
                 ModelSelectionEvents.setPreferShortModelNames({ enabled }),
               );
             }}
           >
             Use short model names
-          </vscode-checkbox>
+          </wa-checkbox>
           <span class="short-names-description">
             Send unpinned names (e.g. gpt-5.5 instead of gpt-5.5-2026-04-15)
           </span>
