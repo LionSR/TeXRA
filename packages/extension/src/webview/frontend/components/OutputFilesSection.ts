@@ -60,8 +60,8 @@ export class OutputFilesSection extends LitElement {
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border-radius: var(--border-radius-small);
         transition:
-          background-color 140ms ease,
-          box-shadow 140ms ease;
+          background-color var(--transition-fast),
+          box-shadow var(--transition-fast);
       }
 
       .file-item:hover {
@@ -77,7 +77,7 @@ export class OutputFilesSection extends LitElement {
 
       .file-item .remove-button {
         opacity: 0;
-        transition: opacity 140ms ease;
+        transition: opacity var(--transition-fast);
       }
 
       .file-item:hover .remove-button,
