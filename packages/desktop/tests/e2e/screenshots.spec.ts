@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 
+import { SETTINGS_TAB } from '../../../../src/shared/schemas/settingsViewMessages.js';
 import {
   closeTexraApp,
   launchTexraApp,
@@ -75,11 +76,12 @@ test('progress screenshot', async () => {
 test('settings screenshot', async () => {
   await setRoute('settings');
   // Open the Multi-Agent settings tab — the most visually rich area.
-  // SETTINGS_TAB_ORDER index 4 = 'MULTI_AGENT'
-  // (see src/shared/schemas/settingsViewMessages.ts).
-  await launched.page.evaluate(() => {
-    window.postMessage({ command: 'setTab', tabIndex: 4 }, '*');
-  });
+  // Use the centralized SETTINGS_TAB constant so this can't silently break
+  // when the tab order changes.
+  const multiAgentTabIndex = SETTINGS_TAB.MULTI_AGENT;
+  await launched.page.evaluate((tabIndex) => {
+    window.postMessage({ command: 'setTab', tabIndex }, '*');
+  }, multiAgentTabIndex);
   await launched.page.waitForTimeout(500);
   await launched.page.screenshot({
     path: join(SCREENSHOTS_DIR, 'settings.png'),
