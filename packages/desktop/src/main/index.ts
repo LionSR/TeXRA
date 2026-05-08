@@ -300,23 +300,54 @@ function createWindow(options: {
     },
     openExternalUrl: (url) => previewHost.openExternal(url),
     installToolExtension: async (extensionId) => {
-      await previewHost.openExternal(
-        `https://marketplace.visualstudio.com/items?itemName=${encodeURIComponent(extensionId)}`,
-      );
+      // The desktop shell can't host VS Code extensions, so opening the
+      // marketplace URL was misleading. Surface an info dialog that names
+      // the extension and lets the user open the marketplace listing only
+      // if they explicitly want to install it inside VS Code. The 'Copy ID'
+      // button gives them the bare extension id for `code --install-extension`.
+      const result = await dialog.showMessageBox(window, {
+        type: 'info',
+        message: 'VS Code extension referenced',
+        detail:
+          `${extensionId}\n\n` +
+          'TeXRA Desktop runs standalone and cannot host VS Code extensions. ' +
+          'If you also use VS Code, you can install this extension there.',
+        buttons: ['Open in Marketplace', 'Copy ID', 'Close'],
+        defaultId: 0,
+        cancelId: 2,
+      });
+      if (result.response === 0) {
+        await previewHost.openExternal(
+          `https://marketplace.visualstudio.com/items?itemName=${encodeURIComponent(extensionId)}`,
+        );
+      } else if (result.response === 1) {
+        clipboard.writeText(extensionId);
+      }
     },
     runToolCommand: async ({ command }) => {
-      await dialog.showMessageBox(window, {
+      // Add a 'Copy' affordance — without it the user has to manually
+      // select-and-copy from a non-selectable Electron native dialog,
+      // which is a common friction point reported on the desktop build.
+      const result = await dialog.showMessageBox(window, {
         type: 'info',
         message: 'Run this setup command in a terminal',
         detail: command,
+        buttons: ['Copy', 'Close'],
+        defaultId: 0,
+        cancelId: 1,
       });
+      if (result.response === 0) clipboard.writeText(command);
     },
     runInstallCommand: async (command) => {
-      await dialog.showMessageBox(window, {
+      const result = await dialog.showMessageBox(window, {
         type: 'info',
         message: 'Run this setup command in a terminal',
         detail: command,
+        buttons: ['Copy', 'Close'],
+        defaultId: 0,
+        cancelId: 1,
       });
+      if (result.response === 0) clipboard.writeText(command);
     },
     onError: reportAsyncError,
   });
@@ -338,6 +369,21 @@ function createWindow(options: {
       openPath: previewHost.openPath,
       openWorkspaceFolder,
       signIn: () => desktopAuth.signIn(),
+      isWorkspaceGitRepo: () => {
+        // `recentCommits` is currently unavailable on desktop (no vscode.git
+        // host port yet — tracked in docs/dev/standalone-trajectory-audit.md
+        // as the "Git tab on desktop" follow-up). Until that lands, surface
+        // an honest `isGitRepo` boolean by probing `.git` directly so the
+        // renderer banner copy reflects the actual repo state instead of
+        // always claiming the user is outside a repo.
+        const workspace = options.workspacePath;
+        if (!workspace) return false;
+        try {
+          return existsSync(join(workspace, '.git'));
+        } catch {
+          return false;
+        }
+      },
       onAsyncError: reportAsyncError,
     },
   );
