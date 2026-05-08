@@ -28,6 +28,7 @@ jobs:
 
       - name: Run Claude Code
         id: claude
+        continue-on-error: true
         uses: anthropics/claude-code-action@eap
         with:
           mode: 'remote-agent'
@@ -47,3 +48,8 @@ jobs:
           # Optional: Custom environment variables for Claude
           # claude_env: |
           #   NODE_ENV: test
+
+      - name: Report quota exhaustion
+        if: steps.claude.outcome != 'success'
+        run: |
+          echo "::warning::Claude Code dispatch failed. This may be due to API quota/rate limits. Check logs for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
