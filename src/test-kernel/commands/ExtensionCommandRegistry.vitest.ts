@@ -60,7 +60,8 @@ const HANDLERS = {
     awaitTrue(actions.openProgressViewInTab()),
   'texra.openDoc': definedHandler(
     z.string(),
-    (actions: ExtensionCommandActions, page) => awaitTrue(actions.openDoc(page)),
+    (actions: ExtensionCommandActions, page) =>
+      awaitTrue(actions.openDoc(page)),
   ),
   'texra.stopAgent': definedHandler(
     StreamTabIdSchema,
@@ -120,10 +121,7 @@ const HANDLERS = {
   'texra.toggleView': (actions: ExtensionCommandActions) =>
     awaitTrue(actions.toggleView()),
   'texra.showProgressView': definedHandler(
-    z
-      .object({ inPlace: z.boolean().optional() })
-      .partial()
-      .optional(),
+    z.object({ inPlace: z.boolean().optional() }).partial().optional(),
     (actions: ExtensionCommandActions, parsed) =>
       awaitTrue(actions.showProgressView(parsed?.inPlace === true)),
   ),

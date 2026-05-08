@@ -113,7 +113,9 @@ wa-button.desktop-command-button {
 
 .desktop-three-pane {
   display: grid;
-  grid-template-columns: var(--desktop-rail-width) minmax(0, 1fr) var(--desktop-right-width);
+  grid-template-columns: var(--desktop-rail-width) minmax(0, 1fr) var(
+      --desktop-right-width
+    );
   min-width: 0;
   min-height: 0;
   height: 100%;

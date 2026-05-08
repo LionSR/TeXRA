@@ -134,7 +134,9 @@ if (!hasWorkspace) {
   render(emptyWorkspaceTemplate(), noWorkspacePlaceholder);
 }
 
-const conversationView: HTMLElement = document.createElement('stream-conversation');
+const conversationView: HTMLElement = document.createElement(
+  'stream-conversation',
+);
 conversationView.setAttribute('data-desktop-view', 'progress');
 
 // Left rail: a fresh <stream-tabs> mount wired to module-level progressState.
@@ -170,7 +172,8 @@ function emptyWorkspaceTemplate(): TemplateResult {
           appearance="filled"
           variant="brand"
           class="desktop-primary-button"
-          @click=${() => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER)}
+          @click=${() =>
+            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER)}
         >
           Open Folder
         </wa-button>
@@ -204,7 +207,8 @@ function getEventHandlerContext(): FrontendEventHandlerContext {
     setState: (updater) => {
       appState.set(updater(appState.get()));
     },
-    setStreamState: (streamId, updater) => setStreamStateForId(streamId, updater),
+    setStreamState: (streamId, updater) =>
+      setStreamStateForId(streamId, updater),
     setStreamLogs: (streamId, updater) => setStreamLogsForId(streamId, updater),
     // savePrefs intentionally omitted on desktop — filter persistence isn't
     // wired (yet). Filter changes still apply for the active session.
@@ -242,7 +246,12 @@ interface ChromeIconButtonSpec {
 }
 
 const CHROME_ICON_BUTTONS: ReadonlyArray<ChromeIconButtonSpec> = [
-  { key: 'settings', icon: 'gear', label: 'Settings', onClick: openSettingsOverlay },
+  {
+    key: 'settings',
+    icon: 'gear',
+    label: 'Settings',
+    onClick: openSettingsOverlay,
+  },
   { key: 'logs', icon: 'file-lines', label: 'Logs', onClick: openLogsDrawer },
 ] as const;
 
@@ -722,10 +731,7 @@ function wireRailTabs(): void {
     handleStreamDelete(e, getEventHandlerContext())) as EventListener);
   railTabs.addEventListener('filter-change', ((e: CustomEvent) =>
     handleFilterChange(e, getEventHandlerContext())) as EventListener);
-  railTabs.addEventListener(
-    'delete-all',
-    () => handleDeleteAll(),
-  );
+  railTabs.addEventListener('delete-all', () => handleDeleteAll());
 }
 
 function wireConversation(): void {
@@ -737,10 +743,8 @@ function wireConversation(): void {
     handleToolbarCommand(e, ctx())) as EventListener);
   conversationView.addEventListener('permission-action', ((e: CustomEvent) =>
     handlePermissionAction(e, getMessageHandlerContext())) as EventListener);
-  conversationView.addEventListener(
-    'file-action',
-    ((e: CustomEvent) => handleFileAction(e)) as EventListener,
-  );
+  conversationView.addEventListener('file-action', ((e: CustomEvent) =>
+    handleFileAction(e)) as EventListener);
   conversationView.addEventListener('compile-fixer-run', () =>
     runCompileFixer(ctx()),
   );
@@ -781,9 +785,33 @@ function wireConversation(): void {
       if (!('ui' in prev)) return prev;
       const next = mutate(prev, (draft) => {
         if ('ui' in draft) {
-          (draft as { ui: { shouldFocusFollowUp?: boolean; polishedText?: string | null; transcribedText?: string | null } }).ui.shouldFocusFollowUp = false;
-          (draft as { ui: { shouldFocusFollowUp?: boolean; polishedText?: string | null; transcribedText?: string | null } }).ui.polishedText = null;
-          (draft as { ui: { shouldFocusFollowUp?: boolean; polishedText?: string | null; transcribedText?: string | null } }).ui.transcribedText = null;
+          (
+            draft as {
+              ui: {
+                shouldFocusFollowUp?: boolean;
+                polishedText?: string | null;
+                transcribedText?: string | null;
+              };
+            }
+          ).ui.shouldFocusFollowUp = false;
+          (
+            draft as {
+              ui: {
+                shouldFocusFollowUp?: boolean;
+                polishedText?: string | null;
+                transcribedText?: string | null;
+              };
+            }
+          ).ui.polishedText = null;
+          (
+            draft as {
+              ui: {
+                shouldFocusFollowUp?: boolean;
+                polishedText?: string | null;
+                transcribedText?: string | null;
+              };
+            }
+          ).ui.transcribedText = null;
         }
       });
       return next;

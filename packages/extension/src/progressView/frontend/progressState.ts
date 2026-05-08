@@ -194,8 +194,7 @@ export const activeStreamState$ = new Signal.Computed(() => {
   const info = activeStreamInfo$.get();
   if (!info) return null;
   return (
-    streamStates$.get().get(info.name) ??
-    createStreamState(info.agentCategory)
+    streamStates$.get().get(info.name) ?? createStreamState(info.agentCategory)
   );
 });
 

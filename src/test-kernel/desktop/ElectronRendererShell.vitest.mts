@@ -29,10 +29,7 @@ function readRendererOnboarding(): string {
 }
 
 function readSharedWalkthroughDialog(): string {
-  return readFileSync(
-    repoPath('src/shared/wa/walkthroughDialog.ts'),
-    'utf8',
-  );
+  return readFileSync(repoPath('src/shared/wa/walkthroughDialog.ts'), 'utf8');
 }
 
 describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () => {
@@ -48,7 +45,9 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     // come from the same packages as the extension.
     expect(rendererMain).toContain("document.createElement('main-app')");
     expect(rendererMain).toContain("document.createElement('settings-app')");
-    expect(rendererMain).toContain("document.createElement('stream-conversation')");
+    expect(rendererMain).toContain(
+      "document.createElement('stream-conversation')",
+    );
     expect(rendererMain).toContain("document.createElement('stream-tabs')");
   });
 
@@ -75,7 +74,9 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     // Three-pane CSS grid template — left rail width, flexible center,
     // collapsed right column reserved for future diff/approve UX.
     expect(styles).toContain('--desktop-rail-width');
-    expect(styles).toContain('grid-template-columns: var(--desktop-rail-width)');
+    expect(styles).toContain(
+      'grid-template-columns: var(--desktop-rail-width)',
+    );
   });
 
   it('mounts settings as a wa-dialog overlay (not a route)', () => {
