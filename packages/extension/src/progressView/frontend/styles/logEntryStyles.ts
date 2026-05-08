@@ -10,7 +10,7 @@ export const logEntryStyles = css`
 
   .log-container {
     flex: 1 1 auto;
-    padding: var(--spacing-tiny) var(--spacing-medium);
+    padding: var(--wa-space-3xs) var(--wa-space-xs);
     min-width: 0;
     min-height: 0;
     font-family: var(--font-family);
@@ -23,7 +23,7 @@ export const logEntryStyles = css`
   .log-line {
     line-height: var(--line-height-normal);
     margin: 0;
-    padding: calc(var(--spacing-tiny) / 2) 0;
+    padding: calc(var(--wa-space-3xs) / 2) 0;
     display: block;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -35,9 +35,9 @@ export const logEntryStyles = css`
   .log-line--render-error {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
-    padding: var(--spacing-small) var(--spacing-medium);
-    margin: var(--spacing-small) 0;
+    gap: var(--wa-space-2xs);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    margin: var(--wa-space-2xs) 0;
     background: var(--texra-inputValidation-warningBackground);
     border: var(--border-thin) solid var(--texra-inputValidation-warningBorder);
     border-radius: var(--border-radius);
@@ -51,7 +51,7 @@ export const logEntryStyles = css`
   }
 
   .log-entry-content {
-    padding: var(--spacing-small) 0 var(--spacing-medium) var(--spacing-large);
+    padding: var(--wa-space-2xs) 0 var(--wa-space-xs) var(--wa-space-s);
     overflow: visible;
   }
 
@@ -70,7 +70,7 @@ export const logEntryStyles = css`
   .file-list-content .file-var {
     opacity: var(--opacity-normal);
     font-size: var(--font-size-sm);
-    margin-left: var(--spacing-tiny);
+    margin-left: var(--wa-space-3xs);
   }
 
   .file-list-content .file-source {
@@ -80,13 +80,13 @@ export const logEntryStyles = css`
   }
 
   .xml-link-container {
-    margin-top: var(--spacing-small);
-    padding-top: var(--spacing-small);
+    margin-top: var(--wa-space-2xs);
+    padding-top: var(--wa-space-2xs);
     border-top: var(--border-thin) solid var(--texra-widget-border);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .xml-link-container wa-icon {
@@ -101,12 +101,12 @@ export const logEntryStyles = css`
 
   .xml-link-container .xml-fix-hint {
     flex-basis: 100%;
-    margin-top: var(--spacing-tiny);
+    margin-top: var(--wa-space-3xs);
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     display: flex;
     align-items: center;
-    gap: var(--spacing-tiny);
+    gap: var(--wa-space-3xs);
   }
 
   .xml-link-container .xml-fix-hint wa-icon {
@@ -145,7 +145,7 @@ export const logEntryStyles = css`
   }
 
   .memory-path wa-icon {
-    margin-right: var(--spacing-small);
+    margin-right: var(--wa-space-2xs);
   }
 
   .memory-path .file-source {
@@ -156,11 +156,11 @@ export const logEntryStyles = css`
   /* Web search result styles */
   .detail-list {
     list-style: none;
-    margin: var(--spacing-small) 0;
+    margin: var(--wa-space-2xs) 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-tiny);
+    gap: var(--wa-space-3xs);
   }
 
   .file-list-summary {
@@ -173,12 +173,12 @@ export const logEntryStyles = css`
 
   /* File list details styling */
   .file-list-details {
-    margin: var(--spacing-small) 0;
+    margin: var(--wa-space-2xs) 0;
   }
 
   .banner-content-copy {
     min-width: 0;
-    padding: 0 var(--spacing-tiny);
+    padding: 0 var(--wa-space-3xs);
     opacity: 0;
     margin-left: auto;
     transition:
@@ -237,13 +237,13 @@ export const logEntryStyles = css`
   .banner-summary {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     font-size: var(--font-size);
     font-weight: var(--font-weight-semibold);
   }
 
   .banner-details {
-    margin: var(--spacing-small) 0;
+    margin: var(--wa-space-2xs) 0;
     content-visibility: auto;
     contain-intrinsic-size: auto 40px;
   }
@@ -259,14 +259,14 @@ export const logEntryStyles = css`
   .extract-flag {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-tiny);
+    gap: var(--wa-space-3xs);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
     background: var(--texra-badge-background);
     color: var(--texra-badge-foreground);
-    margin-right: var(--spacing-small);
+    margin-right: var(--wa-space-2xs);
   }
 
   /* Terminal-style output: monospace font, tighter spacing, no log bullets.

@@ -10,16 +10,16 @@ const settingsHeaderStyles: CSSResult = css`
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--spacing-medium) var(--spacing-large);
+    padding: var(--wa-space-xs) var(--wa-space-s);
     background: var(--texra-sideBar-background);
     border-bottom: var(--border-thin) solid var(--color-border);
-    margin-bottom: var(--spacing-medium);
+    margin-bottom: var(--wa-space-xs);
   }
 
   .settings-header-user {
     display: flex;
     align-items: center;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
   }
 
   .settings-header-user-icon {
@@ -33,7 +33,7 @@ const settingsHeaderStyles: CSSResult = css`
   .settings-header-info {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-tiny);
+    gap: var(--wa-space-3xs);
   }
 
   .settings-header-email {
@@ -53,7 +53,7 @@ const settingsHeaderStyles: CSSResult = css`
   .settings-header-actions {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .settings-header-auth-button {

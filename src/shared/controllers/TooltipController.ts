@@ -5,7 +5,7 @@ const TOOLTIP_SHOW_DELAY_MS = 500;
 
 const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   position: 'fixed',
-  padding: 'var(--spacing-small, 4px) var(--spacing-medium, 8px)',
+  padding: 'var(--wa-space-2xs, 4px) var(--wa-space-xs, 8px)',
   fontSize: 'var(--texra-font-size, 13px)',
   fontFamily: 'var(--texra-font-family, system-ui), system-ui',
   color: 'var(--texra-editorHoverWidget-foreground, var(--texra-foreground))',

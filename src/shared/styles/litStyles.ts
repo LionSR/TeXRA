@@ -51,13 +51,6 @@ export const designTokens: CSSResult = css`
     --line-height-normal: 1.4;
     --line-height-relaxed: 1.5;
 
-    /* Spacing */
-    --spacing-tiny: 2px;
-    --spacing-small: 4px;
-    --spacing-medium: 8px;
-    --spacing-large: 12px;
-    --spacing-xlarge: 20px;
-
     /* Border radius */
     --border-radius-small: 2px;
     --border-radius: 3px;

@@ -45,7 +45,7 @@ export class MemoryList extends LitElement {
       .memory-list {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
     `,
   ];

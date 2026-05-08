@@ -14,7 +14,7 @@ export class TerminalCommandStrip extends LitElement {
     .strip {
       display: flex;
       align-items: baseline;
-      gap: var(--spacing-small, 8px);
+      gap: var(--wa-space-2xs, 8px);
       padding: 6px 10px;
       margin: 0 0 8px 0;
       background: var(

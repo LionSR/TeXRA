@@ -108,7 +108,7 @@ export class StreamTab extends LitElement {
         align-items: center;
         position: relative;
         width: 100%;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         border-left: var(--border-thick) solid transparent;
         transition:
           border-left-color var(--transition-normal),
@@ -157,7 +157,7 @@ export class StreamTab extends LitElement {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
-        padding: var(--spacing-small);
+        padding: var(--wa-space-2xs);
         cursor: pointer;
         border: none;
         background: none;
@@ -171,7 +171,7 @@ export class StreamTab extends LitElement {
       .tab-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         width: 100%;
       }
 
@@ -203,7 +203,7 @@ export class StreamTab extends LitElement {
       .tab-meta {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         font-size: var(--font-size-sm);
         color: var(--texra-foreground);
         opacity: var(--opacity-subtle);
@@ -213,7 +213,7 @@ export class StreamTab extends LitElement {
       .tab-meta .remote-agent,
       .tab-meta .agent-category,
       .tab-meta .multi-file {
-        margin-left: var(--spacing-small);
+        margin-left: var(--wa-space-2xs);
       }
 
       .tab-delete {
@@ -293,7 +293,7 @@ export class StreamTab extends LitElement {
       }
 
       .tab-container.is-compact .tab {
-        padding: var(--spacing-small) var(--spacing-tiny);
+        padding: var(--wa-space-2xs) var(--wa-space-3xs);
       }
 
       .tab-container.is-compact .tab-delete {
@@ -303,7 +303,7 @@ export class StreamTab extends LitElement {
       }
 
       .tab-container.is-compact .tab-header {
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
       }
 
       .compact-subagent-hint {
@@ -324,7 +324,7 @@ export class StreamTab extends LitElement {
 
       .tab-delete:hover::part(base),
       .tab-delete:focus-within::part(base) {
-        background-color: var(--texra-toolbar-hoverBackground);
+        background-color: var(--wa-color-surface-raised);
       }
 
       .tab-delete:hover,
@@ -350,7 +350,7 @@ export class StreamTab extends LitElement {
 
       .tab-expand:hover {
         opacity: 1;
-        background-color: var(--texra-toolbar-hoverBackground);
+        background-color: var(--wa-color-surface-raised);
       }
 
       .tab-expand wa-icon {
@@ -563,13 +563,13 @@ export class StreamTabs extends LitElement {
       .stream-list-footer {
         flex-shrink: 0;
         border-top: var(--border-thin) solid var(--color-border);
-        padding: var(--spacing-small) var(--spacing-medium);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
       }
 
       .stream-list-controls {
         display: flex;
         align-items: flex-start;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         min-width: 0;
       }
 
@@ -577,7 +577,7 @@ export class StreamTabs extends LitElement {
         display: flex;
         justify-content: flex-start;
         flex-wrap: wrap;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         flex: 1 1 auto;
         min-width: 0;
       }
@@ -609,9 +609,9 @@ export class StreamTabs extends LitElement {
 
       /* Recursive child stream nesting */
       .child-streams {
-        padding-left: var(--spacing-medium, 12px);
+        padding-left: var(--wa-space-xs, 12px);
         border-left: var(--border-thin) solid var(--color-border);
-        margin-left: var(--spacing-small);
+        margin-left: var(--wa-space-2xs);
       }
 
       .child-streams stream-tab {

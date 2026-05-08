@@ -123,7 +123,7 @@ export class TexraDiffView extends LitElement {
         align-items: center;
         justify-content: center;
         min-height: 240px;
-        padding: var(--spacing-medium);
+        padding: var(--wa-space-xs);
         border: var(--border-thin) solid var(--color-border);
         color: var(--color-text-muted);
         background: var(--color-background-secondary);

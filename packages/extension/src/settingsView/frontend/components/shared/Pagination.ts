@@ -58,7 +58,7 @@ export class Pagination extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: var(--spacing-small) 0;
+        padding: var(--wa-space-2xs) 0;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         user-select: none;
@@ -72,7 +72,7 @@ export class Pagination extends LitElement {
       .pagination-controls {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       .pagination-controls wa-button::part(base) {

@@ -24,10 +24,10 @@ export class MemoryToggle extends LitElement {
       }
 
       .memory-settings {
-        padding: var(--spacing-medium);
+        padding: var(--wa-space-xs);
         background-color: var(--texra-editor-inactiveSelectionBackground);
         border-radius: var(--border-radius);
-        margin-bottom: var(--spacing-small);
+        margin-bottom: var(--wa-space-2xs);
       }
     `,
   ];
