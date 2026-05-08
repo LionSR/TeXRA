@@ -71,14 +71,13 @@ export async function openDesktopStreamSnapshotStore(
   const log = options.log ?? console;
   const store = await JsonStore.open(filePath);
   const raw = store.get<unknown>(STREAMS_KEY);
-  const hydrated = parseHydrated(raw, log);
 
-  // Live in-memory list keyed by streamId. We always rewrite the
-  // whole `streams` array on every change — the rail rarely has more
-  // than a dozen entries, so the cost is trivial and the code stays
-  // simple (no merge bugs vs. partial updates).
+  // Live in-memory list keyed by streamId, seeded from the persisted file.
+  // We always rewrite the whole `streams` array on every change — the rail
+  // rarely has more than a dozen entries, so the cost is trivial and the
+  // code stays simple (no merge bugs vs. partial updates).
   const live = new Map<StreamTabId, RestoredStreamSnapshot>(
-    hydrated.map((s) => [s.streamId, s]),
+    parseHydrated(raw, log).map((s) => [s.streamId, s]),
   );
 
   async function persist(): Promise<void> {
@@ -90,7 +89,15 @@ export async function openDesktopStreamSnapshotStore(
   }
 
   return {
-    hydrated,
+    // Bot review (#3819): on macOS the store is created once and shared
+    // across window recreations via `app.on('activate')`. A frozen
+    // `hydrated` array would let previously-deleted streams reappear as
+    // ghosts on window reopen and would miss streams created during the
+    // prior window session. Expose `hydrated` as a getter so each
+    // bridge construction reads the current `live` map.
+    get hydrated() {
+      return [...live.values()];
+    },
     async upsert(snapshot) {
       live.set(snapshot.streamId, snapshot);
       await persist();
