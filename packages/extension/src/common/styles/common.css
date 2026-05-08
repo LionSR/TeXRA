@@ -241,6 +241,31 @@
   --wa-color-brand-fill-loud: var(--texra-button-background);
   --wa-color-brand-on-loud: var(--texra-button-foreground);
   --wa-color-brand-border-loud: var(--texra-button-border);
+
+  /* Variant tokens for wa-callout / wa-button — wire VS Code validation
+     palettes through the WA color stack so brand/warning/danger/success
+     callouts blend with the host theme rather than the WA defaults. */
+  --wa-color-brand-fill-quiet: var(--texra-inputValidation-infoBackground);
+  --wa-color-brand-border-quiet: var(--texra-inputValidation-infoBorder);
+  --wa-color-brand-on-quiet: var(--texra-inputValidation-infoForeground);
+
+  --wa-color-warning-fill-loud: var(--texra-statusBarItem-warningBackground);
+  --wa-color-warning-on-loud: var(--texra-foreground);
+  --wa-color-warning-border-loud: var(--texra-inputValidation-warningBorder);
+  --wa-color-warning-fill-quiet: var(--texra-inputValidation-warningBackground);
+  --wa-color-warning-border-quiet: var(--texra-inputValidation-warningBorder);
+  --wa-color-warning-on-quiet: var(--texra-inputValidation-warningForeground);
+
+  --wa-color-danger-fill-quiet: var(--texra-inputValidation-errorBackground);
+  --wa-color-danger-border-quiet: var(--texra-inputValidation-errorBorder);
+  --wa-color-danger-on-quiet: var(--texra-inputValidation-errorForeground);
+
+  --wa-color-success-fill-quiet: var(
+    --texra-charts-green,
+    var(--texra-inputValidation-infoBackground)
+  );
+  --wa-color-success-border-quiet: var(--texra-inputValidation-infoBorder);
+  --wa-color-success-on-quiet: var(--texra-foreground);
 }
 
 body {
