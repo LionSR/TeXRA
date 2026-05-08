@@ -3,15 +3,15 @@ import { css, type CSSResult } from 'lit';
 export const designTokens: CSSResult = css`
   :host {
     /* Text colors */
-    --color-text-secondary: var(--texra-descriptionForeground);
-    --color-text-link: var(--texra-textLink-foreground);
+    --color-text-secondary: var(--wa-color-text-quiet);
+    --color-text-link: var(--wa-color-text-link);
     --color-text-link-active: var(--texra-textLink-activeForeground);
 
     /* Background colors */
-    --color-bg-secondary: var(--texra-sideBar-background);
+    --color-bg-secondary: var(--wa-color-surface-lowered);
 
     /* Border colors */
-    --color-border: var(--texra-panel-border);
+    --color-border: var(--wa-color-surface-border);
 
     /* Status colors */
     --color-success: var(--texra-testing-iconPassed, #2ea043);

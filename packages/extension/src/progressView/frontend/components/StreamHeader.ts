@@ -307,7 +307,7 @@ export class StreamHeader extends LitElement {
       }
 
       .parent-link:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline: var(--border-thin) solid var(--wa-color-focus);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }

@@ -8,9 +8,9 @@ const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   padding: 'var(--wa-space-2xs, 4px) var(--wa-space-xs, 8px)',
   fontSize: 'var(--texra-font-size, 13px)',
   fontFamily: 'var(--texra-font-family, system-ui), system-ui',
-  color: 'var(--texra-editorHoverWidget-foreground, var(--texra-foreground))',
+  color: 'var(--texra-editorHoverWidget-foreground, var(--wa-color-text-normal))',
   background:
-    'var(--texra-editorHoverWidget-background, var(--texra-editor-background))',
+    'var(--texra-editorHoverWidget-background, var(--wa-color-surface-default))',
   border:
     '1px solid var(--texra-editorHoverWidget-border, var(--texra-contrastBorder, transparent))',
   borderRadius: 'var(--border-radius, 3px)',
