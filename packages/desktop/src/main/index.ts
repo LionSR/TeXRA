@@ -20,6 +20,10 @@ import { interruptAllCodexSessions } from '@tools/codex';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
+import {
+  openDesktopStreamSnapshotStore,
+  type DesktopStreamSnapshotStore,
+} from './desktopStreamSnapshot.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
@@ -133,6 +137,7 @@ function createWindow(options: {
   authCoordinator: DesktopAuthCoordinator;
   authCallbackState: DesktopAuthCallbackState;
   initializeCrashReporting: () => Promise<void>;
+  streamSnapshotStore?: DesktopStreamSnapshotStore;
 }): void {
   const window = new BrowserWindow({
     width: 960,
@@ -277,6 +282,7 @@ function createWindow(options: {
       await dialog.showMessageBox(window, { type: 'info', message });
     },
     showErrorMessage,
+    streamSnapshotStore: options.streamSnapshotStore,
   });
   const fileSelection = createDesktopFileSelection({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
@@ -540,12 +546,24 @@ if (protocolLifecycle.shouldContinue) {
       );
       initializeDesktopServerSideKeyAccess(console);
       installContentSecurityPolicy();
+      // Cross-launch stream rail persistence — audit item D /
+      // trajectory #19. A failed open shouldn't block app startup,
+      // so we treat it as "no snapshot available" and continue.
+      let streamSnapshotStore: DesktopStreamSnapshotStore | undefined;
+      try {
+        streamSnapshotStore = await openDesktopStreamSnapshotStore(
+          join(app.getPath('userData'), 'streams.json'),
+        );
+      } catch (error) {
+        console.warn('Failed to open desktop stream snapshot store', error);
+      }
       reopenMainWindow = () =>
         createWindow({
           workspacePath: platformInit.workspacePath,
           authCoordinator,
           authCallbackState,
           initializeCrashReporting,
+          streamSnapshotStore,
         });
       reopenMainWindow();
 
