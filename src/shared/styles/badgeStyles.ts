@@ -42,7 +42,7 @@ export const categoryBadgeStyles: CSSResult = css`
   .category-badge.tooluse,
   .category-badge.tool-use {
     background-color: var(
-      --texra-editorWarning-background,
+      --wa-color-warning-fill-quiet,
       rgba(255, 204, 0, 0.15)
     );
     color: var(--wa-color-warning-on-quiet, #cca700);
@@ -52,7 +52,7 @@ export const categoryBadgeStyles: CSSResult = css`
 export const searchHighlightStyles: CSSResult = css`
   mark {
     background-color: var(
-      --texra-editor-findMatchHighlightBackground,
+      --wa-color-editor-find-match-highlight,
       #ffef0b80
     );
     color: var(--wa-color-editor-find-match-highlight-fg, inherit);
