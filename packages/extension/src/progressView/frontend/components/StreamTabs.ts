@@ -33,6 +33,10 @@ import { getComposedPathElement, getRadioValue, setsEqual } from '../utils';
 import type { StreamState } from '../store';
 import type { StreamFilter } from '../store';
 
+// Web Awesome native components
+import '@awesome.me/webawesome/dist/components/radio/radio.js';
+import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
+
 type ChildActivity = 'active' | 'finished' | 'unknown';
 
 /**
@@ -549,7 +553,8 @@ export class StreamTabs extends LitElement {
         min-width: 0;
       }
 
-      .agent-filter-group vscode-radio {
+      .agent-filter-group vscode-radio,
+      .agent-filter-group wa-radio {
         min-width: auto;
         flex: 0 0 auto;
       }
@@ -790,7 +795,7 @@ export class StreamTabs extends LitElement {
           ? nothing
           : html`<div class="stream-list-footer">
               <div class="stream-list-controls">
-                <vscode-radio-group
+                <wa-radio-group
                   id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
                   class="agent-filter-group"
                   .value=${this.filter}
@@ -800,16 +805,16 @@ export class StreamTabs extends LitElement {
                     FILTER_BUTTONS,
                     (btn) => btn.id,
                     (btn) => html`
-                      <vscode-radio
+                      <wa-radio
                         id=${btn.id}
                         value=${btn.filter}
                         ?checked=${this.filter === btn.filter}
                       >
                         ${btn.label}
-                      </vscode-radio>
+                      </wa-radio>
                     `,
                   )}
-                </vscode-radio-group>
+                </wa-radio-group>
 
                 <div class="stream-list-actions">
                   <vscode-toolbar-button

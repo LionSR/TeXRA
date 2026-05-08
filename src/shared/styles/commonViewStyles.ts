@@ -64,7 +64,9 @@ export const commonViewStyles: CSSResult = css`
     color: var(--texra-sideBarTitle-foreground, var(--texra-foreground));
   }
 
-  .panel-collapsible::part(body) {
+  /* "body" part is used by vscode-collapsible; "content" part by wa-details. */
+  .panel-collapsible::part(body),
+  .panel-collapsible::part(content) {
     padding: 0 var(--spacing-small) var(--spacing-small);
   }
 
