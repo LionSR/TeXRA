@@ -11,6 +11,9 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
 
+// Web Awesome native components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+
 const MAX_MESSAGE_LENGTH = 200;
 
 @customElement('queued-follow-ups')
@@ -43,7 +46,7 @@ export class QueuedFollowUps extends LitElement {
         background-color: transparent;
       }
 
-      .queued-collapsible::part(body) {
+      .queued-collapsible::part(content) {
         padding: 0 var(--spacing-small) var(--spacing-small);
       }
 
@@ -102,10 +105,10 @@ export class QueuedFollowUps extends LitElement {
   override render(): TemplateResult {
     const visible = this.messages.length > 0;
     return html`
-      <vscode-collapsible
+      <wa-details
         id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_COLLAPSIBLE}
         class="queued-collapsible"
-        title="Queued Messages"
+        summary="Queued Messages"
         ?open=${visible}
         ?hidden=${!visible}
         aria-hidden=${visible ? 'false' : 'true'}
@@ -128,7 +131,7 @@ export class QueuedFollowUps extends LitElement {
             },
           )}
         </div>
-      </vscode-collapsible>
+      </wa-details>
     `;
   }
 }
