@@ -261,7 +261,7 @@ export class LaTeXTab extends LitElement {
         margin-top: var(--wa-space-2xs);
         font-size: var(--font-size-sm);
         font-family: inherit;
-        color: var(--texra-textLink-foreground, #3794ff);
+        color: var(--wa-color-text-link, #3794ff);
         background: none;
         border: none;
         cursor: pointer;

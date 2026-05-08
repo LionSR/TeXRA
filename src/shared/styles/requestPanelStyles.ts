@@ -363,7 +363,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .retry-request--relay .retry-request__operation {
-    color: var(--texra-editorWarning-foreground, #ff8c00);
+    color: var(--wa-color-warning-on-quiet, #ff8c00);
   }
 
   /* ================================================================
@@ -449,7 +449,7 @@ export const requestPanelStyles: CSSResult = css`
     overflow-y: auto;
     line-height: var(--line-height-normal);
     padding: ${sp.small} 0;
-    border-bottom: var(--border-thin) solid var(--texra-editorWidget-border);
+    border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
   .workflow-proposal__extract-flags {

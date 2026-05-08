@@ -210,7 +210,7 @@ export class StreamTab extends LitElement {
 
       .tab-description {
         font-size: var(--font-size-sm);
-        color: var(--texra-descriptionForeground, var(--wa-color-text-normal));
+        color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
         opacity: 0.8;
         white-space: nowrap;
         overflow: hidden;
