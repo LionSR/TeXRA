@@ -74,34 +74,24 @@ if (root == null) {
 
 const appRoot = root;
 
-const NAV_ROUTES: ReadonlyArray<{
-  readonly route: DesktopRoute;
-  readonly label: string;
-}> = [
-  { route: 'main', label: 'Launcher' },
-  { route: 'progress', label: 'Progress' },
-  { route: 'settings', label: 'Settings' },
-  { route: 'logs', label: 'Logs' },
-];
-
+// Utility chrome buttons used to access secondary surfaces. The four-route
+// top tab bar (Launcher / Progress / Settings / Logs) was removed in favor of
+// a single primary view (the launcher) with secondary surfaces reachable via
+// the command palette or the chrome icons below.
 render(
   html`
     <section class="desktop-shell">
-      <nav class="desktop-nav" aria-label="Desktop views">
-        ${NAV_ROUTES.map(
-          ({ route, label }) => html`
-            <wa-button
-              class="desktop-nav-button"
-              appearance="plain"
-              size="small"
-              role="button"
-              data-route-button=${route}
-              aria-pressed=${route === 'main' ? 'true' : 'false'}
-            >
-              ${label}
-            </wa-button>
-          `,
-        )}
+      <nav class="desktop-nav" aria-label="Desktop chrome">
+        <span class="desktop-brand">TeXRA</span>
+        <wa-button
+          class="desktop-back-button"
+          appearance="plain"
+          size="small"
+          data-back-to-launcher-button
+          hidden
+        >
+          ${waIcon('arrow-left', { slot: 'start' })} Back to Launcher
+        </wa-button>
         <wa-button
           class="desktop-command-button"
           appearance="outlined"
@@ -118,6 +108,28 @@ render(
           data-open-workspace-button
         >
           ${waIcon('folder-open', { slot: 'start' })} Open Folder
+        </wa-button>
+        <wa-button
+          class="desktop-icon-button"
+          appearance="plain"
+          size="small"
+          data-route-button="settings"
+          aria-pressed="false"
+          aria-label="Settings"
+          title="Settings"
+        >
+          ${waIcon('gear')}
+        </wa-button>
+        <wa-button
+          class="desktop-icon-button"
+          appearance="plain"
+          size="small"
+          data-route-button="logs"
+          aria-pressed="false"
+          aria-label="Logs"
+          title="Logs"
+        >
+          ${waIcon('file-lines')}
         </wa-button>
       </nav>
       <div class="desktop-workbench">
@@ -167,17 +179,35 @@ for (const route of DESKTOP_ROUTES) {
   routeContainers.set(route, container);
 }
 
+// The chrome only exposes Settings and Logs as utility icons (the four-route
+// top nav was removed). Other routes are reachable through the command
+// palette and the "Back to Launcher" affordance below.
+const CHROME_ROUTE_BUTTONS: ReadonlyArray<DesktopRoute> = ['settings', 'logs'];
 const routeButtons = new Map<DesktopRoute, WaButton>();
-for (const route of DESKTOP_ROUTES) {
+for (const route of CHROME_ROUTE_BUTTONS) {
   const button = appRoot.querySelector<WaButton>(
     `[data-route-button="${route}"]`,
   );
   if (button == null) {
     throw new Error(`TeXRA desktop route button was not found: ${route}`);
   }
-  button.addEventListener('click', () => setRoute(route));
+  button.addEventListener('click', () => {
+    // Toggle back to the launcher when the same chrome button is pressed
+    // again, so the icons feel like a "go to / dismiss" affordance.
+    setRoute(currentRoute === route ? 'main' : route);
+  });
   routeButtons.set(route, button);
 }
+
+const backToLauncherButton = appRoot.querySelector<WaButton>(
+  '[data-back-to-launcher-button]',
+);
+if (backToLauncherButton == null) {
+  throw new Error('TeXRA desktop back-to-launcher button was not found.');
+}
+backToLauncherButton.addEventListener('click', () => setRoute('main'));
+
+let currentRoute: DesktopRoute = 'main';
 
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 let selectedExplorerFile = '';
@@ -296,12 +326,17 @@ function setRoute(route: DesktopRoute): void {
   // runtime mutations will be reset to the template defaults — convert this
   // function to update module-level route state and trigger a shell re-render
   // before doing that.
+  currentRoute = route;
   for (const [candidate, container] of routeContainers) {
     container.hidden = candidate !== route;
   }
   for (const [candidate, button] of routeButtons) {
     button.setAttribute('aria-pressed', candidate === route ? 'true' : 'false');
   }
+  // Surface a "Back to Launcher" control whenever a non-launcher route is
+  // active so the user always has an obvious way home now that the top tab
+  // bar is gone.
+  backToLauncherButton.hidden = route === 'main';
   document.body.dataset.desktopRoute = route;
   if (route === 'logs') requestLogSnapshot();
 }
