@@ -10,6 +10,7 @@ import { z } from 'zod';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 
 // Local imports - shared webview
 import {
@@ -255,7 +256,7 @@ export class ProgressApp extends ProgressAppBase {
         font-size: 1em;
       }
 
-      vscode-split-layout {
+      wa-split-panel {
         display: flex;
         width: 100%;
         height: 100%;
@@ -336,7 +337,7 @@ export class ProgressApp extends ProgressAppBase {
         margin-top: var(--spacing-small);
       }
 
-      .desktop-empty-progress vscode-button::part(control) {
+      .desktop-empty-progress wa-button::part(base) {
         min-height: 32px;
       }
     `,
@@ -600,7 +601,7 @@ export class ProgressApp extends ProgressAppBase {
     const compactTabs = this.narrowLayout.get() && !isEditorMode;
     const hasAnyStreams = this.hasAnyStreams$.get();
     const splitPosition =
-      this.getAttribute('data-desktop-view') === 'progress' ? '68%' : '80%';
+      this.getAttribute('data-desktop-view') === 'progress' ? 68 : 80;
 
     return html`
       <div
@@ -675,7 +676,7 @@ export class ProgressApp extends ProgressAppBase {
         ${hasAnyStreams
           ? html`
               <div class="split-container">
-                <vscode-split-layout initial-handle-position=${splitPosition}>
+                <wa-split-panel .position=${splitPosition}>
                   <div
                     slot="start"
                     class="content-area"
@@ -698,7 +699,7 @@ export class ProgressApp extends ProgressAppBase {
                     @filter-change=${this.onFilterChange}
                     @delete-all=${this.onDeleteAll}
                   ></stream-tabs>
-                </vscode-split-layout>
+                </wa-split-panel>
               </div>
             `
           : this.renderEmptyState()}
