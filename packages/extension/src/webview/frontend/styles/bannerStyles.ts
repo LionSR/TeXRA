@@ -1,15 +1,16 @@
-// Shared layout for inline banners. wa-callout owns the variant color,
-// border, and padding; this stylesheet just lays out the message + actions
-// inside the callout's default slot.
+// Shared layout for inline wa-callout banners. wa-callout owns the variant
+// color, border, and padding; this stylesheet handles host display, the
+// bottom margin, and the row layout for the message + action buttons inside
+// the callout's default slot.
 
 import { css, type CSSResult } from 'lit';
 
-export const warningBannerStyles: CSSResult = css`
+export const bannerStyles: CSSResult = css`
   :host {
     display: block;
   }
 
-  wa-callout.warning-banner {
+  wa-callout {
     margin-bottom: var(--spacing-large);
   }
 
@@ -31,5 +32,6 @@ export const warningBannerStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: var(--spacing-small);
+    flex-shrink: 0;
   }
 `;
