@@ -27,16 +27,12 @@ export const viewTabStyles: CSSResult = css`
   wa-tab::part(base) {
     padding-block: 5px;
     padding-inline: var(--wa-space-s);
-    color: color-mix(
-      in srgb,
-      var(--wa-color-text-normal) 70%,
-      transparent
-    );
+    color: color-mix(in srgb, var(--wa-color-text-normal) 70%, transparent);
     transition:
       color var(--transition-fast),
       background-color var(--transition-fast);
-    border-radius: var(--wa-border-radius-s, 4px)
-      var(--wa-border-radius-s, 4px) 0 0;
+    border-radius: var(--wa-border-radius-s, 4px) var(--wa-border-radius-s, 4px)
+      0 0;
   }
 
   wa-tab::part(base):hover {
