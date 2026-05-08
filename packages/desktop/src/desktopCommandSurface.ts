@@ -321,11 +321,13 @@ export function dispatchDesktopCommand(
     DESKTOP_COMMAND_HANDLERS,
     actions,
     (unhandledId) => {
-      // Compile-time `satisfies Record<DesktopAvailableCommandId, …>` means
-      // arriving here via typed code is impossible. Any runtime hit comes
-      // from a malformed IPC payload or a stale command ID from the
-      // renderer — log at error so the bug surfaces in support logs without
-      // crashing the click handler or IPC dispatcher.
+      // The unavailable-command IDs (texra.execute etc.) are valid menu
+      // entries with no handler by design — silent fallthrough is correct.
+      // Only IDs absent from both the registry AND the unavailable list
+      // indicate a stale IPC payload or schema drift; surface those at
+      // error level so the bug shows up in support logs without crashing
+      // the click handler / IPC dispatcher.
+      if (DESKTOP_UNAVAILABLE_COMMANDS.has(unhandledId as CommandId)) return;
       console.error(`[desktop] dispatch: unhandled command ${unhandledId}`);
     },
   );
