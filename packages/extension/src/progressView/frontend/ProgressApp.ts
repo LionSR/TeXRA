@@ -323,14 +323,14 @@ export class ProgressApp extends ProgressAppBase {
 
   constructor() {
     super();
-    // Module-level state is shared across remounts. Reset everything to
-    // initial values before re-applying persisted preferences so a remount
-    // (tests, hot reload, future multi-instance hosts) doesn't surface
-    // stale placement / approval pulses / narrow-layout state.
+    // Module-level state is shared across remounts in the same JS context
+    // (tests, hot reload). Reset writable signals + the approval-id memo,
+    // then layer the persisted streamFilter pref on top of the post-reset
+    // appState — keeps the constructor to one `appState.set` instead of two.
     resetProgressState();
     const prefs = this.prefsManager.getState();
     appState.set({
-      ...createInitialState(),
+      ...appState.get(),
       streamFilter: prefs.streamFilter,
     });
   }
