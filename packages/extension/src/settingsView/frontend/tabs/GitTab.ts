@@ -114,7 +114,7 @@ export class GitTab extends LitElement {
         padding-left: 1.25em;
       }
       .instructions li {
-        margin: 2px 0;
+        margin: var(--wa-space-3xs) 0;
       }
       .instructions code {
         background: var(--wa-color-surface-lowered);
