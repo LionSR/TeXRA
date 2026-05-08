@@ -354,7 +354,7 @@ export class InstructionPanel extends LitElement {
       }
 
       wa-button.execute-button wa-icon {
-        font-size: 13px;
+        font-size: var(--font-size-sm);
       }
 
       .execute-button__label {
@@ -371,18 +371,18 @@ export class InstructionPanel extends LitElement {
       .execute-button__kbd {
         display: inline-flex;
         align-items: center;
-        height: 16px;
-        padding: 0 5px;
+        height: 1em;
+        padding: 0 var(--wa-space-3xs);
         margin-left: var(--wa-space-2xs);
-        border-radius: 3px;
+        border-radius: var(--border-radius-small);
         background: transparent;
         color: inherit;
         font-family: var(--wa-font-family-mono, ui-monospace, monospace);
-        font-size: 10px;
+        font-size: var(--font-size-xs);
         font-weight: 500;
         letter-spacing: 0.04em;
         opacity: 0.75;
-        box-shadow: inset 0 0 0 1px rgb(255 255 255 / 28%);
+        box-shadow: inset 0 0 0 var(--border-thin) rgb(255 255 255 / 28%);
         position: relative;
       }
 
@@ -392,7 +392,7 @@ export class InstructionPanel extends LitElement {
         left: calc(-1 * var(--wa-space-2xs));
         top: 18%;
         bottom: 18%;
-        width: 1px;
+        width: var(--border-thin);
         background: rgb(255 255 255 / 22%);
       }
 
@@ -492,14 +492,14 @@ export class InstructionPanel extends LitElement {
       /*
        * Reserve a fixed slot for the polish spinner so the toolbar layout
        * doesn't jump when isPolishing toggles. Width matches the wa-spinner
-       * font-size (16px) used inside the slot.
+       * font-size used inside the slot.
        */
       .polish-spinner-slot {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 16px;
-        height: 16px;
+        width: var(--font-size-icon, 1em);
+        height: var(--font-size-icon, 1em);
         opacity: 0;
         transition: opacity 150ms ease;
       }
@@ -762,9 +762,7 @@ export class InstructionPanel extends LitElement {
                 ? html`
                     <wa-spinner
                       id="polishProgressContainer"
-                      style=${styleMap({
-                        fontSize: '16px',
-                      })}
+                      style="font-size: var(--font-size-icon, 1em)"
                     ></wa-spinner>
                   `
                 : nothing}
