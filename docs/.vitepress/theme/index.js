@@ -22,16 +22,9 @@ async function ensureWebAwesome() {
 export default {
   ...DefaultTheme,
   enhanceApp({ app }) {
-    // Tell Vue's template compiler that <wa-icon> is a native custom element
-    // so it doesn't try to resolve it as a Vue component.
-    app.config.compilerOptions ??= {};
-    const existingIsCustomElement = app.config.compilerOptions.isCustomElement;
-    app.config.compilerOptions.isCustomElement = (tag) => {
-      if (tag.startsWith('wa-')) return true;
-      return existingIsCustomElement ? existingIsCustomElement(tag) : false;
-    };
-
-    // Register custom Vue components.
+    // Note: `isCustomElement: tag => tag.startsWith('wa-')` is configured
+    // at build time in `docs/.vitepress/config.js` under
+    // `vite.vue.template.compilerOptions` so SSR also recognises wa-* tags.
     app.component('LaunchPage', LaunchPage);
 
     // Side-effect: load WA icon component + register texra library on the
