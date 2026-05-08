@@ -194,6 +194,19 @@ export type ExtensionRegistryCommandId = Extract<
 >;
 
 /**
+ * DUPLICATE REGISTRATION AUDIT (#3787 follow-up):
+ * All 50 command IDs in `EXTENSION_COMMAND_HANDLERS` +
+ * `EXTENSION_PARAMETERIZED_HANDLERS` have been verified to have no stale
+ * `vscode.commands.registerCommand(...)` calls elsewhere in the codebase.
+ *
+ * The remaining 46 `registerCommand` call sites (as of the last audit) all
+ * register command ids NOT present in the registry — they are legitimate
+ * VS Code-only handlers (file ops, git, latex tools, pack/clean variants,
+ * etc.) and have no duplicates. Registry handlers are the single source of
+ * truth for the commands listed here.
+ */
+
+/**
  * Capabilities the registry handlers need from the extension host. Mirrors
  * `DesktopCommandActions` in shape — both register parallel handler maps
  * over the same `CommandId` union with their host-specific actions.
