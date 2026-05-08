@@ -270,32 +270,13 @@ export const profileViewStyles: CSSResult = css`
     font-size: var(--font-size-sm);
   }
 
-  /* Provider row expand/collapse */
-  .provider-expand-btn {
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    background: none;
-    border: none;
+  /* Provider row expand/collapse — wa-button rotates its chevron when expanded */
+  wa-button.provider-expand-btn::part(base) {
     color: var(--color-text-secondary);
-    padding: 0;
     transition: transform var(--transition-fast);
   }
 
-  .provider-expand-btn:hover {
-    color: var(--wa-color-text-normal);
-  }
-
-  .provider-expand-btn:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
-    border-radius: var(--border-radius-small);
-  }
-
-  .provider-expand-btn.expanded {
+  wa-button.provider-expand-btn.expanded::part(base) {
     transform: rotate(90deg);
   }
 
@@ -361,19 +342,20 @@ export const profileViewStyles: CSSResult = css`
     );
   }
 
-  .provider-setting-link {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-link);
-    cursor: pointer;
-    text-decoration: none;
+  wa-button.provider-setting-link {
     margin-left: var(--wa-space-2xs);
   }
 
-  .provider-setting-link:hover {
+  wa-button.provider-setting-link::part(base) {
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-text-link);
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
+
+  wa-button.provider-setting-link::part(base):hover {
     text-decoration: underline;
   }
 
@@ -565,30 +547,21 @@ export const profileViewStyles: CSSResult = css`
     font-size: var(--font-size-xs);
   }
 
-  .deprecated-toggle {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    background: none;
-    border: none;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    font-family: inherit;
+  wa-button.deprecated-toggle {
     width: 100%;
-    text-align: left;
   }
 
-  .deprecated-toggle:hover {
+  wa-button.deprecated-toggle::part(base) {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    justify-content: flex-start;
+    border: none;
+    background: transparent;
+  }
+
+  wa-button.deprecated-toggle::part(base):hover {
     color: var(--wa-color-text-normal);
     background: var(--wa-color-neutral-fill-quiet);
-  }
-
-  .deprecated-toggle:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
-    border-radius: var(--border-radius-small);
   }
 
   .deprecated-models {
