@@ -97,15 +97,7 @@ export abstract class BaseViewContentProvider {
     [{ key: 'commonStyleUri', path: 'styles/common.css' }];
 
   private static readonly SHARED_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
-    [
-      { key: 'commonsBundleUri', path: 'commons.js' },
-      {
-        key: 'vscodeElementsBundleUri',
-        path: 'vscode-elements-bundled.js',
-      },
-      { key: 'codiconUri', path: 'codicon.css' },
-      { key: 'codiconsFontUri', path: 'codicon.ttf' },
-    ];
+    [{ key: 'commonsBundleUri', path: 'commons.js' }];
 
   private getCommonModuleUris(
     webview: vscode.Webview,

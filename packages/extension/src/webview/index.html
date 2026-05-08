@@ -10,34 +10,15 @@
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${mainViewStyleUri}" />
     <style nonce="${nonce}">
-      @font-face {
-        font-family: 'codicon';
-        font-display: block;
-        src: url('${codiconsFontUri}') format('truetype');
-      }
-
       body {
         padding: 8px;
       }
     </style>
-    <link
-      rel="stylesheet"
-      href="${codiconUri}"
-      id="vscode-codicon-stylesheet"
-    />
     <title>TeXRA</title>
   </head>
 
   <body>
     <main-app></main-app>
-    <script nonce="${nonce}">
-      window.__CODICON_FONT_URI__ = '${codiconsFontUri}';
-    </script>
-    <script
-      type="module"
-      nonce="${nonce}"
-      src="${vscodeElementsBundleUri}"
-    ></script>
     <script nonce="${nonce}" src="${commonsBundleUri}"></script>
     <script type="module" nonce="${nonce}" src="${mainViewBundleUri}"></script>
   </body>

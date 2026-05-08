@@ -27,7 +27,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles } from '@shared/styles';
+import { designTokens } from '@shared/styles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
 
@@ -93,7 +93,6 @@ function resolveSessionHintKey(session: SessionContextValue): SessionHintKey {
 export class InstructionPanel extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     selectStyles,
     css`

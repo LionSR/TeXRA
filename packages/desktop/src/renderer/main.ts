@@ -1,6 +1,5 @@
 import './styles.css';
 import './themeTokens.css';
-import './codiconStylesheet';
 
 import '@shared/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -22,7 +21,6 @@ import {
   SetThemeMessageSchema,
   type SetThemeMessage,
 } from '@shared/schemas/commonViewMessages';
-import '@vscode-elements/elements/dist/bundled.js';
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
 import '@settingsView/frontend';

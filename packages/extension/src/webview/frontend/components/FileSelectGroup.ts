@@ -12,7 +12,7 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 import { SortableController } from '@shared/controllers';
-import { designTokens, codiconStyles } from '@shared/styles';
+import { designTokens } from '@shared/styles';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -31,7 +31,6 @@ import { DEFAULT_CHECKBOX_VALUES } from '../store';
 export class FileSelectGroup extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     ...fileSelectStyles,
     css`
       :host {
@@ -334,11 +333,13 @@ export class FileSelectGroup extends LitElement {
                   : nothing}
               </span>
               <button
-                class="remove-button codicon codicon-trash"
+                class="remove-button"
                 type="button"
                 aria-label="Remove file"
                 data-remove-file=${file}
-              ></button>
+              >
+                ${waIcon('trash')}
+              </button>
             </div>
           `;
         },
