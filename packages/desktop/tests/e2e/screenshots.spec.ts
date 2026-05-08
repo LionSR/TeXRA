@@ -23,9 +23,14 @@ let launched: LaunchedApp;
 
 test.beforeAll(async () => {
   launched = await launchTexraApp();
-  // Wait for IPC bootstrap (which sets walkthrough state from disk),
-  // then click the walkthrough's "Got it" button to dismiss persistently.
-  await launched.page.waitForTimeout(500);
+  // Wait for IPC bootstrap (which sets walkthrough state from disk) by checking
+  // for the "Got it" button, then click to dismiss persistently.
+  await launched.page.waitForFunction(() => {
+    const btn = Array.from(document.querySelectorAll('wa-button')).find(
+      (b) => b.textContent?.trim() === 'Got it',
+    );
+    return btn instanceof HTMLElement;
+  });
   const dismissed = await launched.page.evaluate(() => {
     const btn = Array.from(document.querySelectorAll('wa-button')).find(
       (b) => b.textContent?.trim() === 'Got it',
@@ -37,7 +42,8 @@ test.beforeAll(async () => {
     return false;
   });
   if (dismissed) {
-    await launched.page.waitForTimeout(300);
+    // Wait for the walkthrough dialog to be hidden after dismissing.
+    await launched.page.locator('wa-dialog[walkthrough-dialog]').waitFor({ state: 'hidden', timeout: 5000 });
   }
 });
 
@@ -58,8 +64,18 @@ async function setRoute(
   await launched.page.evaluate((next) => {
     window.postMessage({ command: 'desktop:setRoute', route: next }, '*');
   }, route);
-  // Allow the shell to rerender + the target view to mount.
-  await launched.page.waitForTimeout(500);
+  // Wait for the route container matching the target route to be visible.
+  await launched.page.waitForFunction(
+    (targetRoute) => {
+      const section = document.querySelector<HTMLElement>(
+        `.desktop-route[data-route="${targetRoute}"]`,
+      );
+      if (!section) return false;
+      return section.hidden === false;
+    },
+    route,
+    { timeout: 5000 },
+  );
 }
 
 test('launcher screenshot', async () => {
@@ -89,7 +105,16 @@ test('settings screenshot', async () => {
   await launched.page.evaluate((tabIndex) => {
     window.postMessage({ command: 'setTab', tabIndex }, '*');
   }, multiAgentTabIndex);
-  await launched.page.waitForTimeout(500);
+  // Wait for the webview/iframe to signal tab content is ready.
+  // The settings webview processes the message and renders the tab asynchronously.
+  // Check for a known element that appears when the Multi-Agent tab is active.
+  await launched.page.waitForFunction(() => {
+    // Settings webview loads asynchronously; wait for it to have rendered content.
+    const settingsSection = document.querySelector('.desktop-route[data-route="settings"]');
+    if (!settingsSection) return false;
+    // Check if the webview has any child content (iframe or custom elements).
+    return settingsSection.querySelector('*') != null;
+  }, { timeout: 10000 });
   await launched.page.screenshot({
     path: join(SCREENSHOTS_DIR, 'settings.png'),
     fullPage: false,
@@ -115,15 +140,24 @@ test('command palette opens and dismisses', async () => {
     return true;
   });
   expect(opened).toBe(true);
-  await launched.page.waitForTimeout(300);
-  // Wait for the wa-dialog to be present and have at least one palette entry.
+  // Wait for the command palette dialog to appear and contain entries.
+  await launched.page.waitForFunction(() => {
+    const dialog = document.querySelector<HTMLElement>(
+      '.desktop-command-palette',
+    );
+    if (!dialog) return false;
+    // Entries are rendered as buttons inside the palette body; falling back
+    // to any clickable item lets the test survive class-name churn.
+    const entries = dialog.querySelectorAll(
+      'button, [role="option"], .desktop-command-palette-entry',
+    );
+    return entries.length > 0;
+  }, { timeout: 5000 });
   const entryCount = await launched.page.evaluate(() => {
     const dialog = document.querySelector<HTMLElement>(
       '.desktop-command-palette',
     );
     if (!dialog) return -1;
-    // Entries are rendered as buttons inside the palette body; falling back
-    // to any clickable item lets the test survive class-name churn.
     const entries = dialog.querySelectorAll(
       'button, [role="option"], .desktop-command-palette-entry',
     );
@@ -132,13 +166,19 @@ test('command palette opens and dismisses', async () => {
   expect(entryCount).toBeGreaterThan(0);
   // Dismiss with Escape and verify the dialog closes.
   await launched.page.keyboard.press('Escape');
-  await launched.page.waitForTimeout(200);
+  // Wait for the dialog to close by checking for the `open` attribute removal.
+  await launched.page.waitForFunction(() => {
+    const dialog = document.querySelector<HTMLElement>(
+      '.desktop-command-palette',
+    );
+    if (!dialog) return true;
+    return dialog.getAttribute('open') == null;
+  }, { timeout: 5000 });
   const closed = await launched.page.evaluate(() => {
     const dialog = document.querySelector<HTMLElement>(
       '.desktop-command-palette',
     );
     if (!dialog) return true;
-    // wa-dialog uses an `open` attribute; absence means closed.
     return dialog.getAttribute('open') == null;
   });
   expect(closed).toBe(true);
