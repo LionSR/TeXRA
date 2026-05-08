@@ -8,7 +8,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Local imports - shared schemas
 import type { MemoryViewItem } from '@shared/schemas';
@@ -22,7 +22,6 @@ import '../components/memory/MemoryList';
 export class MemoryTab extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     css`
       :host {

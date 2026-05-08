@@ -6,23 +6,20 @@
 // Third-party imports
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import Mark from 'mark.js';
 
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
-import {
-  badgeStyles,
-  codiconStyles,
-  commonViewStyles,
-  designTokens,
-} from '@shared/styles';
+import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - history view styles
 import { historyViewStyles } from './styles';
@@ -36,7 +33,6 @@ type ConfigValue = string | number | boolean | string[] | null | undefined;
 export class HistoryItem extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     ...badgeStyles,
     historyViewStyles,
@@ -258,7 +254,7 @@ export class HistoryItem extends LitElement {
           Object.entries(config.toolConfig) as Array<[string, ConfigValue]>
         ).filter(([, value]) => this.hasValue(value));
         const toolSection = this.renderConfigSection(
-          html`<i class="codicon codicon-tools"></i> Config`,
+          html`<wa-icon library="texra" name="tools"></wa-icon> Config`,
           toolEntries,
         );
         if (toolSection) extraDetails.push(toolSection);
@@ -314,9 +310,10 @@ export class HistoryItem extends LitElement {
           <span class="history-value">
             <span class="badge agent-category-badge ${categoryClass}">
               ${decorator.icon
-                ? html`<i
-                    class=${ifDefined(`codicon codicon-${decorator.icon}`)}
-                  ></i>`
+                ? html`<wa-icon
+                    library="texra"
+                    name=${decorator.icon}
+                  ></wa-icon>`
                 : nothing}
               ${decorator.label}
             </span>

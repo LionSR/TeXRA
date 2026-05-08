@@ -8,13 +8,11 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  badgeStyles,
-  codiconStyles,
-  commonViewStyles,
-  designTokens,
-} from '@shared/styles';
+import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - profile view styles and events
 import type {
@@ -35,7 +33,6 @@ const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
 export class ProviderKeyList extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     ...badgeStyles,
     profileViewStyles,
@@ -197,7 +194,7 @@ export class ProviderKeyList extends LitElement {
               title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
               @click=${() => this.toggleExpanded(entry.provider)}
             >
-              <span class="codicon codicon-chevron-right"></span>
+              <wa-icon library="texra" name="chevron-right"></wa-icon>
             </button>
             <span class="provider-name">${entry.displayName}</span>
           </div>
