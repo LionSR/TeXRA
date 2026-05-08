@@ -2,6 +2,8 @@
  * Lit-native template helpers for rendering select options.
  */
 
+import '@awesome.me/webawesome/dist/components/option/option.js';
+
 import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -24,18 +26,14 @@ function buildAgentTooltip(opt: AgentOptionData): string {
   return hints.join('\n');
 }
 
-function renderAgentOption(
-  opt: AgentOptionData,
-  selectedValue: string,
-): TemplateResult {
+function renderAgentOption(opt: AgentOptionData): TemplateResult {
   const { properties } = AGENT_DECORATORS;
   const tooltip = buildAgentTooltip(opt);
 
   const isOrch = opt.isOrchestrator;
   return html`
-    <vscode-option
+    <wa-option
       value=${opt.value}
-      ?selected=${opt.value === selectedValue}
       title=${tooltip || nothing}
       data-label=${opt.label}
       data-tool-use=${opt.isToolUse ? 'true' : nothing}
@@ -49,27 +47,24 @@ function renderAgentOption(
       ${opt.isRemote
         ? html`<span class="agent-icon"> ${properties.remote.unicode}</span>`
         : nothing}
-    </vscode-option>
+    </wa-option>
   `;
 }
 
 export function renderAgentOptions(
   options: AgentOptionData[],
-  selectedValue: string,
+  _selectedValue: string,
 ): TemplateResult {
   return html`
     ${repeat(
       options,
       (opt) => opt.value,
-      (opt) => renderAgentOption(opt, selectedValue),
+      (opt) => renderAgentOption(opt),
     )}
   `;
 }
 
-function renderModelOption(
-  opt: ModelOptionData,
-  selectedValue: string,
-): TemplateResult {
+function renderModelOption(opt: ModelOptionData): TemplateResult {
   const decorator = getModelProviderDecorator(opt.provider ?? '');
   const display = decorator.unicode
     ? `${decorator.unicode} ${opt.label}`
@@ -82,9 +77,8 @@ function renderModelOption(
   const tooltip = hints.join(' | ');
 
   return html`
-    <vscode-option
+    <wa-option
       value=${opt.value}
-      ?selected=${opt.value === selectedValue}
       ?disabled=${opt.disabled}
       title=${tooltip || nothing}
       data-provider=${opt.provider || nothing}
@@ -96,19 +90,19 @@ function renderModelOption(
       ${opt.requiresKey
         ? html`<span class="api-key-missing"> ✗</span>`
         : nothing}
-    </vscode-option>
+    </wa-option>
   `;
 }
 
 export function renderModelOptions(
   options: ModelOptionData[],
-  selectedValue: string,
+  _selectedValue: string,
 ): TemplateResult {
   return html`
     ${repeat(
       options,
       (opt) => opt.value,
-      (opt) => renderModelOption(opt, selectedValue),
+      (opt) => renderModelOption(opt),
     )}
   `;
 }
