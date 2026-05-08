@@ -221,6 +221,16 @@ function rerenderShell(): void {
   render(shellTemplate(), appRoot);
 }
 
+interface LogViewerState {
+  meta: string;
+  text: string;
+}
+
+let logViewerState: LogViewerState = {
+  meta: 'Recent redacted log entries appear here.',
+  text: 'Open Logs to load recent entries.',
+};
+
 // Render the log viewer template into its dedicated container so that
 // re-renders driven by log-snapshot updates do not stomp the shell.
 renderLogViewer();
@@ -403,16 +413,6 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
   );
   return container;
 }
-
-interface LogViewerState {
-  meta: string;
-  text: string;
-}
-
-let logViewerState: LogViewerState = {
-  meta: 'Recent redacted log entries appear here.',
-  text: 'Open Logs to load recent entries.',
-};
 
 function logViewerTemplate(state: LogViewerState): TemplateResult {
   const action = (
