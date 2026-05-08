@@ -8,6 +8,7 @@
 // Side-effect imports - register WA select & option components
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
@@ -538,16 +539,16 @@ export class InstructionPanel extends LitElement {
   }
 
   private handleAgentChange(event: Event): void {
-    const target = event.currentTarget as HTMLSelectElement & {
-      dataset: DOMStringMap;
-    };
-    const sessionType = target.dataset.sessionType as SessionType;
-    const value = target.value;
+    const select = event.currentTarget as (WaSelect & HTMLElement) | null;
+    if (!select) return;
+    const sessionType = select.dataset.sessionType as SessionType;
+    const value = typeof select.value === 'string' ? select.value : '';
     this.dispatchEvent(MainViewEvents.agentChange({ sessionType, value }));
   }
 
   private handleModelChange(event: Event): void {
-    const value = (event.currentTarget as HTMLSelectElement).value;
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
     this.dispatchEvent(MainViewEvents.modelChange({ value }));
   }
 
