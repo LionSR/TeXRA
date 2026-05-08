@@ -14,6 +14,10 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
@@ -250,13 +254,13 @@ export class MultiAgentTab extends LitElement {
   @state() private activePresetId: string | null = null;
 
   private emitToggle(eventName: string, event: Event): void {
-    const target = event.target as HTMLInputElement | null;
+    const target = event.target as WaCheckbox | null;
     this.dispatchEvent(
       createEvent(eventName, { enabled: Boolean(target?.checked) }),
     );
   }
 
-  private handleNestedDelegationMaxDepthChange(input: HTMLInputElement): void {
+  private handleNestedDelegationMaxDepthChange(input: WaInput): void {
     const parsed = Number(input.value);
     if (Number.isNaN(parsed)) {
       input.value = String(this.nestedDelegationMaxDepth);
@@ -285,7 +289,7 @@ export class MultiAgentTab extends LitElement {
 
   private handleReliabilityChange(
     setting: NumberVscodeSetting,
-    input: HTMLInputElement,
+    input: WaInput,
   ): void {
     const parsed = Number(input.value);
     if (Number.isNaN(parsed)) {
@@ -388,15 +392,15 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div class="reliability-row">
         <label>${setting.label}</label>
-        <vscode-textfield
+        <wa-input
           class="reliability-input"
           type="number"
           .value=${String(setting.value)}
           min=${setting.min ?? nothing}
           max=${setting.max ?? nothing}
           @change=${(e: Event) =>
-            this.handleReliabilityChange(setting, e.target as HTMLInputElement)}
-        ></vscode-textfield>
+            this.handleReliabilityChange(setting, e.target as WaInput)}
+        ></wa-input>
         ${setting.unit
           ? html`<span class="reliability-unit">${setting.unit}</span>`
           : nothing}
@@ -474,13 +478,13 @@ export class MultiAgentTab extends LitElement {
         </p>
 
         <div class="setting-block">
-          <vscode-checkbox
+          <wa-checkbox
             ?checked=${this.allowOrchestratorKill}
             @change=${(e: Event) =>
               this.emitToggle('allow-orchestrator-kill-toggle', e)}
           >
             Let orchestrator stop agents early
-          </vscode-checkbox>
+          </wa-checkbox>
           <p class="text-secondary setting-description">
             The orchestrator can cancel agents that are stuck or no longer
             needed. Turn this off if you want every agent to finish no matter
@@ -489,13 +493,13 @@ export class MultiAgentTab extends LitElement {
         </div>
 
         <div class="setting-block">
-          <vscode-checkbox
+          <wa-checkbox
             ?checked=${this.detachSubagentsOnStop}
             @change=${(e: Event) =>
               this.emitToggle('detach-subagents-on-stop-toggle', e)}
           >
             Keep agents running if I stop the orchestrator
-          </vscode-checkbox>
+          </wa-checkbox>
           <p class="text-secondary setting-description">
             Normally everything stops when you stop the orchestrator. Turn this
             on to let agents that are mid-task finish on their own.
@@ -503,13 +507,13 @@ export class MultiAgentTab extends LitElement {
         </div>
 
         <div class="setting-block">
-          <vscode-checkbox
+          <wa-checkbox
             ?checked=${this.worktreeSupport}
             @change=${(e: Event) =>
               this.emitToggle('worktree-support-toggle', e)}
           >
             Allow agents to work in git worktrees
-          </vscode-checkbox>
+          </wa-checkbox>
           <p class="text-secondary setting-description">
             When enabled, delegated agents can operate in git worktrees outside
             the main workspace. All tool calls within the subagent automatically
@@ -520,7 +524,7 @@ export class MultiAgentTab extends LitElement {
         <div class="setting-block">
           <div class="reliability-row">
             <label>Max delegation depth</label>
-            <vscode-textfield
+            <wa-input
               class="reliability-input"
               type="number"
               .value=${String(this.nestedDelegationMaxDepth)}
@@ -528,9 +532,9 @@ export class MultiAgentTab extends LitElement {
               max=${NESTED_DELEGATION_DEPTH_RANGE.max}
               @change=${(e: Event) =>
                 this.handleNestedDelegationMaxDepthChange(
-                  e.target as HTMLInputElement,
+                  e.target as WaInput,
                 )}
-            ></vscode-textfield>
+            ></wa-input>
           </div>
           <p class="reliability-description">
             Depth 1 (default): only the top-level orchestrator may delegate;
