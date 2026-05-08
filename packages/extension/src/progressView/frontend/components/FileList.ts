@@ -96,7 +96,7 @@ export class FileList extends LitElement {
 
       .files-container {
         padding: 0;
-        font-size: var(--texra-editor-font-size);
+        font-size: var(--wa-editor-font-size);
         overflow-y: auto;
         max-height: var(--height-large);
         flex-shrink: 0;
@@ -172,13 +172,13 @@ export class FileList extends LitElement {
       }
 
       .added {
-        color: var(--texra-charts-green, green);
+        color: var(--wa-color-chart-green, green);
         margin-left: var(--wa-space-2xs);
         font-size: var(--font-size-sm);
       }
 
       .removed {
-        color: var(--texra-charts-red, red);
+        color: var(--wa-color-chart-red, red);
         margin-left: var(--wa-space-2xs);
         font-size: var(--font-size-sm);
       }
