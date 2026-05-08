@@ -58,10 +58,7 @@ export const codeBlockStyles = css`
       transform var(--transition-fast);
 
     &:hover {
-      background-color: var(
-        --wa-color-toolbar-hover,
-        rgba(90, 93, 94, 0.31)
-      );
+      background-color: var(--wa-color-toolbar-hover, rgba(90, 93, 94, 0.31));
       color: var(--wa-color-text-normal);
     }
 
@@ -130,10 +127,7 @@ export const codeBlockStyles = css`
   .hljs-variable,
   .hljs-params,
   .hljs-attr {
-    color: var(
-      --wa-color-symbol-variable,
-      var(--wa-color-text-normal)
-    );
+    color: var(--wa-color-symbol-variable, var(--wa-color-text-normal));
   }
 
   .hljs-function,
@@ -150,10 +144,7 @@ export const codeBlockStyles = css`
 
   .hljs-property,
   .hljs-name {
-    color: var(
-      --wa-color-symbol-property,
-      var(--wa-color-text-normal)
-    );
+    color: var(--wa-color-symbol-property, var(--wa-color-text-normal));
   }
 
   .hljs-operator,

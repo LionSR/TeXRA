@@ -34,7 +34,10 @@ import { AgentSelectionEvents } from '../components/profile/events';
 import '../components/profile/AgentSelectionPanel';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-const AGENT_SUB_TAB_PANELS = ['workflow', 'toolUse'] as const satisfies readonly AgentCategory[];
+const AGENT_SUB_TAB_PANELS = [
+  'workflow',
+  'toolUse',
+] as const satisfies readonly AgentCategory[];
 
 @customElement('agents-tab')
 export class AgentsTab extends LitElement {

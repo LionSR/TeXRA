@@ -38,7 +38,12 @@ function isDarkTheme(): boolean {
   }
   const kind = body.dataset.vscodeThemeKind;
   if (kind) {
-    return kind === 'vscode-dark' || kind === 'vscode-high-contrast' || kind === 'dark' || kind === 'high-contrast';
+    return (
+      kind === 'vscode-dark' ||
+      kind === 'vscode-high-contrast' ||
+      kind === 'dark' ||
+      kind === 'high-contrast'
+    );
   }
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }

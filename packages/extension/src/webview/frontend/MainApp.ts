@@ -2075,8 +2075,7 @@ export class MainApp extends MainAppBase {
                           @select-multiple-files=${this
                             .handleComponentSelectMultipleFiles}
                           @remove-file=${this.handleComponentRemoveFile}
-                          @files-reordered=${this
-                            .handleComponentFilesReordered}
+                          @files-reordered=${this.handleComponentFilesReordered}
                           @checkbox-change=${this.handleComponentCheckboxChange}
                           @focus-instruction=${this
                             .handleComponentFocusInstruction}
