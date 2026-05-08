@@ -65,25 +65,39 @@ export class PlanView extends LitElement {
 
       .plan-summary {
         font-size: var(--font-size);
-        line-height: var(--line-height-normal);
+        line-height: var(--line-height-relaxed);
         color: var(--color-text-secondary);
-        margin-bottom: var(--wa-space-2xs);
-        padding: var(--wa-space-3xs) 0;
+        margin-bottom: var(--wa-space-xs);
+        padding: var(--wa-space-3xs) 0 var(--wa-space-2xs);
+        border-bottom: var(--border-thin) dashed
+          color-mix(in srgb, var(--color-border) 60%, transparent);
       }
 
       .plan-steps {
         display: flex;
         flex-direction: column;
-        gap: var(--wa-space-3xs);
+        gap: 0;
       }
 
       .plan-step {
         display: flex;
         align-items: flex-start;
         gap: var(--wa-space-2xs);
-        padding: var(--wa-space-3xs) 0;
+        padding: var(--wa-space-2xs) var(--wa-space-2xs) var(--wa-space-2xs)
+          var(--wa-space-3xs);
+        margin-inline: calc(-1 * var(--wa-space-3xs));
+        border-radius: var(--border-radius-small);
         font-size: var(--font-size);
         line-height: var(--line-height-normal);
+        transition: background-color 140ms ease;
+      }
+
+      .plan-step:hover {
+        background-color: color-mix(
+          in srgb,
+          var(--wa-color-neutral-fill-quiet) 50%,
+          transparent
+        );
       }
 
       .plan-step__number {
@@ -143,6 +157,20 @@ export class PlanView extends LitElement {
 
       .plan-step--pending .plan-step__icon {
         color: var(--color-text-secondary);
+      }
+
+      .plan-step--in-progress {
+        background-color: color-mix(
+          in srgb,
+          var(--wa-color-brand-fill-quiet) 65%,
+          transparent
+        );
+        box-shadow: inset 2px 0 0
+          color-mix(in srgb, var(--wa-color-brand-fill-loud) 50%, transparent);
+      }
+
+      .plan-step--in-progress:hover {
+        background-color: var(--wa-color-brand-fill-quiet);
       }
 
       .plan-step--in-progress .plan-step__icon {

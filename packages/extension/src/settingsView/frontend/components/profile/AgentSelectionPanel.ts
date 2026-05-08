@@ -67,6 +67,7 @@ export class AgentSelectionPanel extends LitElement {
         min-height: 300px;
         max-height: 500px;
         overflow: hidden;
+        background: var(--wa-color-surface-default);
       }
 
       /* --- Left: Agent list --- */
@@ -89,8 +90,12 @@ export class AgentSelectionPanel extends LitElement {
         font-weight: var(--font-weight-semibold);
         color: var(--color-text-secondary);
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        background: var(--wa-color-surface-default);
+        letter-spacing: 0.06em;
+        background: color-mix(
+          in srgb,
+          var(--wa-color-surface-default) 92%,
+          var(--wa-color-text-normal) 4%
+        );
         border-bottom: var(--border-thin) solid var(--color-border);
         position: sticky;
         top: 0;
@@ -114,8 +119,27 @@ export class AgentSelectionPanel extends LitElement {
         font-size: var(--font-size-sm);
         color: var(--wa-color-text-normal);
         border-left: var(--border-medium) solid transparent;
-        transition: background var(--transition-fast);
+        transition:
+          background-color 140ms ease,
+          border-left-color 140ms ease,
+          box-shadow 140ms ease;
         outline: none;
+      }
+
+      /*
+       * Source-tinted left rail — uses existing WA semantic colours so each
+       * group gets a quiet identity cue without introducing a new palette.
+       * Built-in = brand, custom = success, remote = neutral. The hairline
+       * shows on hover/selected so the resting state stays calm.
+       */
+      .agent-list-item[data-source='custom']:hover,
+      .agent-list-item[data-source='custom'].selected {
+        border-left-color: var(--wa-color-success-fill-loud);
+      }
+
+      .agent-list-item[data-source='remote']:hover,
+      .agent-list-item[data-source='remote'].selected {
+        border-left-color: var(--wa-color-text-quiet);
       }
 
       .agent-list-item:hover {
@@ -133,7 +157,9 @@ export class AgentSelectionPanel extends LitElement {
           --texra-list-activeSelectionForeground,
           var(--wa-color-text-normal)
         );
-        border-left-color: var(--wa-color-focus);
+        border-left-color: var(--wa-color-brand-fill-loud);
+        box-shadow: inset 0 0 0 1px
+          color-mix(in srgb, var(--wa-color-brand-fill-loud) 12%, transparent);
       }
 
       .agent-list-item.selected .agent-list-item-name,
@@ -501,9 +527,18 @@ export class AgentSelectionPanel extends LitElement {
     const key = agentKey(agent);
     const isSelected = this.selectedKey === key;
 
+    const sourceTone = isBuiltIn(agent.source)
+      ? 'builtin'
+      : agent.source === AGENT_SOURCE.CUSTOM
+        ? 'custom'
+        : agent.source === AGENT_SOURCE.REMOTE
+          ? 'remote'
+          : 'builtin';
+
     return html`
       <div
         class="agent-list-item ${isSelected ? 'selected' : ''}"
+        data-source=${sourceTone}
         role="option"
         aria-selected=${isSelected}
         tabindex=${isSelected ? '0' : '-1'}
