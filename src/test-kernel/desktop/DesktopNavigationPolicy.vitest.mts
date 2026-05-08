@@ -34,7 +34,9 @@ describe('desktop navigation policy', () => {
     it('allows supabase project subdomains but not the apex', async () => {
       const { isAllowedExternalUrl } = await loadNavigationPolicy();
 
-      expect(isAllowedExternalUrl('https://abc.supabase.co/auth/v1')).toBe(true);
+      expect(isAllowedExternalUrl('https://abc.supabase.co/auth/v1')).toBe(
+        true,
+      );
       expect(isAllowedExternalUrl('https://supabase.co/')).toBe(false);
     });
 

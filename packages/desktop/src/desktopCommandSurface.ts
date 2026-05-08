@@ -161,14 +161,23 @@ const DESKTOP_UNAVAILABLE_COMMAND_ENTRIES = [
     'texra.execute',
     'Use the Launcher execute button after choosing an agent and files.',
   ],
-  ['texra.runSetupAssistant', 'The setup assistant agent is still VS Code-only.'],
+  [
+    'texra.runSetupAssistant',
+    'The setup assistant agent is still VS Code-only.',
+  ],
   ['texra.showImportOptions', 'Project import choices are still VS Code-only.'],
   [
     'texra.openGettingStarted',
     'The VS Code walkthrough is not available in desktop.',
   ],
-  ['texra.cleanOutput', 'Workspace cleanup commands are not wired in desktop yet.'],
-  ['texra.cleanBuild', 'Workspace cleanup commands are not wired in desktop yet.'],
+  [
+    'texra.cleanOutput',
+    'Workspace cleanup commands are not wired in desktop yet.',
+  ],
+  [
+    'texra.cleanBuild',
+    'Workspace cleanup commands are not wired in desktop yet.',
+  ],
 ] as const satisfies readonly (readonly [CommandId, string])[];
 
 type DesktopUnavailableCommandId =
