@@ -40,21 +40,14 @@ async function runLaTeXCommand(
   }
 }
 
-export function registerFigureCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    // `texra.extractFigurePaths` is registered through
-    // `extensionCommandSurface` (see #3775). The remaining tikz commands
-    // stay here for now — same no-arg shape, but #3775 batched only one
-    // entry per file to keep the diff focused.
-    vscode.commands.registerCommand(
-      figureCommands.extractTikzFigures,
-      handleExtractTikzFigures,
-    ),
-    vscode.commands.registerCommand(
-      figureCommands.compileTikzFigures,
-      handleCompileTikzFigures,
-    ),
-  );
+export function registerFigureCommands(
+  _context: vscode.ExtensionContext,
+): void {
+  // `texra.extractFigurePaths` (#3775) and the tikz commands
+  // (`texra.extractTikzFigures`, `texra.compileTikzFigures`, batch 3 in
+  // #3781) are registered through `extensionCommandSurface`. This stub
+  // is kept so `commands.ts` can keep its existing call site; the
+  // exported handlers below are referenced by the registry's actions.
 }
 
 export async function handleExtractFigurePaths(): Promise<void> {
@@ -91,7 +84,7 @@ export async function handleExtractFigurePaths(): Promise<void> {
   );
 }
 
-async function handleExtractTikzFigures(): Promise<void> {
+export async function handleExtractTikzFigures(): Promise<void> {
   await runLaTeXCommand(
     'extract TikZ figures',
     'extractTikzFigures',
@@ -134,7 +127,7 @@ async function handleExtractTikzFigures(): Promise<void> {
   );
 }
 
-async function handleCompileTikzFigures(): Promise<void> {
+export async function handleCompileTikzFigures(): Promise<void> {
   await runLaTeXCommand(
     'compile TikZ figures',
     'compileTikzFigures',
