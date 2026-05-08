@@ -305,9 +305,9 @@ export class StreamHeader extends LitElement {
         opacity: var(--opacity-subtle);
         border-radius: var(--border-radius-small);
         transition:
-          opacity 140ms ease,
-          background-color 140ms ease,
-          color 140ms ease;
+          opacity var(--transition-fast),
+          background-color var(--transition-fast),
+          color var(--transition-fast);
       }
 
       .parent-link:hover {

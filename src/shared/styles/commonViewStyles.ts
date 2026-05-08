@@ -27,7 +27,7 @@ export const compactIconActionButtonStyles: CSSResult = css`
       var(--wa-color-text-quiet, var(--wa-color-text-normal))
     );
     opacity: var(--opacity-subtle);
-    transition: opacity 120ms ease;
+    transition: opacity var(--transition-fast);
   }
 
   .action-icon-button::part(base):hover {
@@ -112,7 +112,7 @@ export const commonViewStyles: CSSResult = css`
   .collapsible::part(content) {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows 220ms ease;
+    transition: grid-template-rows var(--transition-normal);
   }
 
   .collapsible:not([open])::part(content) {
@@ -151,7 +151,7 @@ export const commonViewStyles: CSSResult = css`
   .panel-collapsible::part(content) {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows 220ms ease;
+    transition: grid-template-rows var(--transition-normal);
   }
 
   .panel-collapsible:not([open])::part(content) {

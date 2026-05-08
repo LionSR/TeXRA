@@ -33,7 +33,7 @@ export const bannerStyles: CSSResult = css`
      */
     display: grid;
     grid-template-rows: 0fr;
-    transition: grid-template-rows 200ms ease;
+    transition: grid-template-rows var(--transition-normal);
   }
 
   :host([data-visible='true']) {
@@ -140,8 +140,8 @@ export const bannerStyles: CSSResult = css`
     border-radius: var(--wa-border-radius-s, 4px);
     font-size: var(--font-size-sm);
     transition:
-      background-color 120ms ease,
-      color 120ms ease;
+      background-color var(--transition-fast),
+      color var(--transition-fast);
   }
 
   .actions wa-button[appearance='plain']::part(base):hover {
