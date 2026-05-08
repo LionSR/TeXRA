@@ -13,8 +13,9 @@ import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { when } from 'lit/directives/when.js';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
 import {
@@ -90,18 +91,12 @@ export class RetryRequestPanel extends BaseRequestPanel {
           )}
           ${detailsText
             ? html`
-                <details class="retry-request__error-details">
-                  <summary class="retry-request__error-summary">
-                    <wa-icon
-                      library="texra"
-                      name="chevron-right"
-                      class="toggle-icon"
-                      aria-hidden="true"
-                    ></wa-icon>
+                <wa-details class="retry-request__error-details">
+                  <span slot="summary" class="retry-request__error-summary">
                     Error details
-                  </summary>
+                  </span>
                   <div class="retry-request__error-body">${detailsText}</div>
-                </details>
+                </wa-details>
               `
             : nothing}
         </div>
