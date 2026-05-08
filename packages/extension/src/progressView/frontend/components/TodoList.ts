@@ -22,6 +22,9 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 import { ELEMENT_IDS } from '../constants';
 
+// Web Awesome native components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+
 @customElement('todo-list')
 export class TodoList extends LitElement {
   static override styles = [
@@ -128,12 +131,13 @@ export class TodoList extends LitElement {
     const total = this.todos.length;
 
     return html`
-      <vscode-collapsible
+      <wa-details
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
         class="todo-collapsible panel-collapsible"
-        title=${`Todos (${completed}/${total})`}
+        summary=${`Todos (${completed}/${total})`}
         ?open=${this.open}
-        @vsc-collapsible-toggle=${this.handleCollapsibleToggle}
+        @wa-show=${this.handleShow}
+        @wa-hide=${this.handleHide}
       >
         <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
           ${repeat(
@@ -142,7 +146,7 @@ export class TodoList extends LitElement {
             (todo) => this.renderTodo(todo),
           )}
         </div>
-      </vscode-collapsible>
+      </wa-details>
     `;
   }
 
@@ -176,7 +180,14 @@ export class TodoList extends LitElement {
     `;
   }
 
-  private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
-    this.open = e.detail?.open ?? this.open;
+  private handleShow(e: Event): void {
+    // Ignore bubbled events from nested wa-details
+    if (e.target !== e.currentTarget) return;
+    this.open = true;
+  }
+
+  private handleHide(e: Event): void {
+    if (e.target !== e.currentTarget) return;
+    this.open = false;
   }
 }
