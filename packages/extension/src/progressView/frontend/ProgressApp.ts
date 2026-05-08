@@ -200,9 +200,13 @@ export class ProgressApp extends ProgressAppBase {
         display: grid;
         flex: 1;
         min-height: 0;
-        place-items: start center;
-        padding: clamp(var(--wa-space-s, 16px), 7vh, 72px)
-          var(--wa-space-s, 16px);
+        /* Center the empty-state card on both axes so the route does not
+           show a tall stripe of unused space below the panel. The
+           align-content: safe center keeps the card visible if the
+           viewport is short enough that centering would clip it. */
+        place-items: center;
+        align-content: safe center;
+        padding: var(--wa-space-l, 24px) var(--wa-space-s, 16px);
         overflow: auto;
         font-family:
           var(--wa-font-family-body, var(--wa-font-family-body, system-ui)),
