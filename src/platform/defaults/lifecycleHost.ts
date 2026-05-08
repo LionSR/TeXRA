@@ -25,18 +25,19 @@ export function createLifecycleHost(
       console.error(`[lifecycle] ${phase} handler failed:`, error);
     });
 
+  // Sequential — handlers within a phase run in registration order. Parallel
+  // disposal can race (e.g. flushState writing to UsageLogService while it is
+  // disposing); the old hand-rolled deactivate() relied on this ordering.
   async function runPhase(phase: ShutdownPhase): Promise<void> {
     const callbacks = [...handlers[phase]];
     handlers[phase].clear();
-    await Promise.all(
-      callbacks.map(async (cb) => {
-        try {
-          await cb();
-        } catch (error) {
-          onError(phase, error);
-        }
-      }),
-    );
+    for (const cb of callbacks) {
+      try {
+        await cb();
+      } catch (error) {
+        onError(phase, error);
+      }
+    }
   }
 
   return {

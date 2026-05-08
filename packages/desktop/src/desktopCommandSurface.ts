@@ -316,7 +316,18 @@ export function dispatchDesktopCommand(
   id: DesktopCommandId,
   actions: DesktopCommandActions,
 ): boolean {
-  return dispatchCommandFromRegistry(id, DESKTOP_COMMAND_HANDLERS, actions);
+  return dispatchCommandFromRegistry(
+    id,
+    DESKTOP_COMMAND_HANDLERS,
+    actions,
+    (unhandledId) => {
+      // Disabled menu items short-circuit before reaching dispatch, so
+      // arriving here means an IPC payload or programming error sent a
+      // command the desktop never wired up. Log at debug rather than
+      // throw, since the dispatch caller already has a fallthrough path.
+      console.debug(`[desktop] dispatch: unhandled command ${unhandledId}`);
+    },
+  );
 }
 
 function isDesktopLocalCommandId(id: string): id is DesktopLocalCommandId {

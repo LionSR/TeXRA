@@ -8,7 +8,10 @@ export function dispatchCommandFromRegistry<TId extends string, TActions>(
   id: TId,
   registry: CommandHandlerMap<TId, TActions>,
   actions: TActions,
+  onUnhandled?: (id: TId) => void,
 ): boolean {
   const handler = registry[id];
-  return handler ? handler(actions) : false;
+  if (handler) return handler(actions);
+  onUnhandled?.(id);
+  return false;
 }
