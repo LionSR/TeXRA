@@ -5,6 +5,7 @@
 
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -194,12 +195,20 @@ export class LaTeXTab extends LitElement {
         line-height: var(--line-height-relaxed);
       }
 
-      .dependency-card {
+      /* Shared card chrome for dependency + setting rows */
+      .dependency-card,
+      .setting-card {
         padding: var(--wa-space-xs);
         margin-bottom: var(--wa-space-xs);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
         background: var(--wa-color-surface-default);
+      }
+
+      .setting-card {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--wa-space-xs);
       }
 
       .dependency-row {
@@ -208,16 +217,23 @@ export class LaTeXTab extends LitElement {
         gap: var(--wa-space-xs);
       }
 
-      .dependency-icon {
+      .dependency-icon,
+      .setting-status-icon {
         flex-shrink: 0;
         font-size: var(--font-size-lg);
       }
 
-      .dependency-icon.installed {
+      .setting-status-icon {
+        margin-top: var(--wa-space-3xs);
+      }
+
+      .dependency-icon.installed,
+      .setting-status-icon.is-set {
         color: var(--texra-testing-iconPassed, #73c991);
       }
 
-      .dependency-icon.missing {
+      .dependency-icon.missing,
+      .setting-status-icon.not-set {
         color: var(--texra-testing-iconFailed, #f48771);
       }
 
@@ -271,7 +287,7 @@ export class LaTeXTab extends LitElement {
       }
 
       .dependency-path {
-        margin-top: 4px;
+        margin-top: var(--wa-space-3xs);
         font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
@@ -305,86 +321,33 @@ export class LaTeXTab extends LitElement {
         border-color: var(--texra-testing-iconPassed, #73c991) !important;
       }
 
-      .prerequisite-hint {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--wa-space-xs);
-        padding: var(--wa-space-xs);
+      /* Prerequisite hint uses wa-callout; only layout for actions row + the
+         inline command text live here. */
+      wa-callout.prerequisite-hint {
         margin-bottom: var(--wa-space-xs);
-        border: var(--border-thin) solid
-          var(--texra-editorInfo-foreground, #3794ff);
-        border-radius: var(--border-radius);
-        background: var(--wa-color-surface-default);
+        --padding: var(--wa-space-xs);
       }
 
-      .prerequisite-hint .hint-icon {
-        flex-shrink: 0;
-        font-size: var(--font-size-lg);
-        color: var(--texra-editorInfo-foreground, #3794ff);
-      }
-
-      .prerequisite-hint .hint-body {
-        flex: 1;
-        min-width: 0;
-      }
-
-      .prerequisite-hint .hint-title {
+      .hint-title {
         font-weight: var(--font-weight-medium);
         color: var(--wa-color-text-normal);
         margin-bottom: var(--wa-space-3xs);
       }
 
-      .prerequisite-hint .hint-description {
+      .hint-description {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         line-height: var(--line-height-normal);
       }
 
-      .prerequisite-hint .hint-actions {
+      .hint-actions {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
         margin-top: var(--wa-space-2xs);
       }
 
-      .section-header {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding-bottom: var(--wa-space-2xs);
-        margin-bottom: var(--wa-space-xs);
-        border-bottom: var(--border-thin) solid var(--color-border);
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-medium);
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .setting-card {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--wa-space-xs);
-        padding: var(--wa-space-xs);
-        margin-bottom: var(--wa-space-xs);
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius);
-        background: var(--wa-color-surface-default);
-      }
-
-      .setting-status-icon {
-        flex-shrink: 0;
-        margin-top: 2px;
-        font-size: var(--font-size-lg);
-      }
-
-      .setting-status-icon.is-set {
-        color: var(--texra-testing-iconPassed, #73c991);
-      }
-
-      .setting-status-icon.not-set {
-        color: var(--texra-testing-iconFailed, #f48771);
-      }
+      /* .section-header chrome lives in commonViewStyles. */
 
       .setting-info {
         flex: 1;
@@ -401,7 +364,7 @@ export class LaTeXTab extends LitElement {
       .setting-name {
         font-weight: var(--font-weight-medium);
         color: var(--wa-color-text-normal);
-        margin-bottom: 2px;
+        margin-bottom: var(--wa-space-3xs);
       }
 
       .setting-config-key {
@@ -659,34 +622,32 @@ export class LaTeXTab extends LitElement {
     pmName: string,
   ): TemplateResult {
     return html`
-      <div class="prerequisite-hint">
-        <wa-icon library="texra" name="info" class="hint-icon"></wa-icon>
-        <div class="hint-body">
-          <div class="hint-title">${title}</div>
-          <div class="hint-description">${description}</div>
-          <div class="hint-actions">
-            <code class="install-command-text">${installCommand}</code>
-            <button
-              class="tab-action-btn"
-              title="Copy ${pmName} install command"
-              @click=${(e: Event) => this.handleCopyCommand(e, installCommand)}
-            >
-              <wa-icon library="texra" name="copy"></wa-icon>
-              Copy
-            </button>
-            <button
-              class="tab-action-btn"
-              title=${this.desktopHost
-                ? `Run ${pmName} installer`
-                : `Run ${pmName} installer in VS Code terminal`}
-              @click=${() => this.handleRunInTerminal(installCommand)}
-            >
-              <wa-icon library="texra" name="terminal"></wa-icon>
-              Run in Terminal
-            </button>
-          </div>
+      <wa-callout class="prerequisite-hint" variant="brand">
+        <wa-icon library="texra" name="info" slot="icon"></wa-icon>
+        <div class="hint-title">${title}</div>
+        <div class="hint-description">${description}</div>
+        <div class="hint-actions">
+          <code class="install-command-text">${installCommand}</code>
+          <button
+            class="tab-action-btn"
+            title="Copy ${pmName} install command"
+            @click=${(e: Event) => this.handleCopyCommand(e, installCommand)}
+          >
+            <wa-icon library="texra" name="copy"></wa-icon>
+            Copy
+          </button>
+          <button
+            class="tab-action-btn"
+            title=${this.desktopHost
+              ? `Run ${pmName} installer`
+              : `Run ${pmName} installer in VS Code terminal`}
+            @click=${() => this.handleRunInTerminal(installCommand)}
+          >
+            <wa-icon library="texra" name="terminal"></wa-icon>
+            Run in Terminal
+          </button>
         </div>
-      </div>
+      </wa-callout>
     `;
   }
 
