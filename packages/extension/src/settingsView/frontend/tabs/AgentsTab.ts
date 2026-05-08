@@ -44,7 +44,7 @@ export class AgentsTab extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: var(--spacing-medium);
+        margin-bottom: var(--wa-space-xs);
       }
 
       .agents-sub-tabs {
@@ -56,8 +56,8 @@ export class AgentsTab extends LitElement {
       .agents-sub-tab {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-medium) var(--spacing-large);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-xs) var(--wa-space-s);
         font-size: var(--font-size-sm);
         font-family: inherit;
         color: var(--color-text-secondary);
@@ -96,7 +96,7 @@ export class AgentsTab extends LitElement {
 
       .agents-header-actions {
         display: flex;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       .agents-create-btn {
@@ -109,9 +109,9 @@ export class AgentsTab extends LitElement {
       .agents-dir-bar {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-small) var(--spacing-medium);
-        margin-bottom: var(--spacing-medium);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        margin-bottom: var(--wa-space-xs);
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         background: var(--texra-sideBar-background, rgba(128, 128, 128, 0.04));
@@ -144,7 +144,7 @@ export class AgentsTab extends LitElement {
 
       .agents-dir-actions {
         display: flex;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         flex-shrink: 0;
         margin-left: auto;
       }
@@ -153,7 +153,7 @@ export class AgentsTab extends LitElement {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: var(--spacing-tiny);
+        padding: var(--wa-space-3xs);
         color: var(--color-text-secondary);
         background: none;
         border: none;

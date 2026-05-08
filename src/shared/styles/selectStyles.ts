@@ -4,11 +4,11 @@ export const selectStyles: CSSResult = css`
   .select-group {
     display: flex;
     align-items: center;
-    gap: var(--spacing-tiny);
+    gap: var(--wa-space-3xs);
   }
 
   .select-group wa-icon {
-    margin-right: var(--spacing-small);
+    margin-right: var(--wa-space-2xs);
     color: var(--text-color, var(--texra-foreground));
     vertical-align: text-bottom;
   }
@@ -95,7 +95,7 @@ export const selectStyles: CSSResult = css`
   }
 
   wa-select::part(expand-icon) {
-    margin-inline-start: var(--spacing-tiny);
+    margin-inline-start: var(--wa-space-3xs);
   }
 
   wa-input {
@@ -119,6 +119,6 @@ export const selectStyles: CSSResult = css`
     color: var(--texra-errorForeground);
     opacity: var(--opacity-full);
     font-style: normal;
-    margin-left: var(--spacing-tiny);
+    margin-left: var(--wa-space-3xs);
   }
 `;

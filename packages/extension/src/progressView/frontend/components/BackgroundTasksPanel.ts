@@ -62,7 +62,7 @@ export class BackgroundTasksPanel extends LitElement {
       .task-list {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
       }
 
       .section-content {
@@ -72,14 +72,14 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-item {
-        margin-bottom: var(--spacing-tiny);
+        margin-bottom: var(--wa-space-3xs);
       }
 
       .task-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) 0;
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) 0;
         font-size: var(--font-size-sm);
       }
 
@@ -135,8 +135,8 @@ export class BackgroundTasksPanel extends LitElement {
       .section-label {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-small) 0 var(--spacing-tiny);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-2xs) 0 var(--wa-space-3xs);
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-semibold);
         color: var(--color-text-secondary);
@@ -160,7 +160,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .empty-message {
-        padding: var(--spacing-small) 0;
+        padding: var(--wa-space-2xs) 0;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         font-style: italic;
@@ -168,11 +168,11 @@ export class BackgroundTasksPanel extends LitElement {
 
       /* Collapsible output per task */
       details.task-output {
-        margin-left: calc(var(--spacing-small) + var(--font-size-sm));
+        margin-left: calc(var(--wa-space-2xs) + var(--font-size-sm));
       }
 
       details.task-output > summary {
-        padding: var(--spacing-tiny) 0;
+        padding: var(--wa-space-3xs) 0;
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         cursor: pointer;
@@ -185,7 +185,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .output-container {
-        margin-top: var(--spacing-tiny);
+        margin-top: var(--wa-space-3xs);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius-small);
         overflow: hidden;

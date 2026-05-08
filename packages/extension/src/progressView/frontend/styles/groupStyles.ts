@@ -6,8 +6,8 @@ import { css } from 'lit';
  */
 export const groupStyles = css`
   .log-group-header {
-    padding: var(--spacing-small) var(--spacing-medium);
-    margin: var(--spacing-tiny) 0;
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    margin: var(--wa-space-3xs) 0;
     border-radius: var(--border-radius-small);
     cursor: pointer;
     display: flex;
@@ -38,7 +38,7 @@ export const groupStyles = css`
   }
 
   .log-group-content {
-    padding-left: var(--spacing-small);
+    padding-left: var(--wa-space-2xs);
     border-left: var(--border-thin) dashed
       var(--texra-editorGroupHeader-tabsBorder);
   }
@@ -53,7 +53,7 @@ export const groupStyles = css`
   }
 
   .group-status-icon {
-    margin-right: var(--spacing-small);
+    margin-right: var(--wa-space-2xs);
   }
 
   .group-title {
@@ -64,11 +64,11 @@ export const groupStyles = css`
   .group-time {
     font-size: var(--font-size-sm);
     opacity: var(--opacity-subtle);
-    margin-left: var(--spacing-small);
+    margin-left: var(--wa-space-2xs);
   }
 
   :is(.group-start-time, .group-duration) {
-    margin-right: var(--spacing-small);
+    margin-right: var(--wa-space-2xs);
   }
 
   .log-group {
@@ -84,7 +84,7 @@ export const groupStyles = css`
 
   .log-group-content
     > :is(.log-group-header, .log-group-content, .log-line, .banner-details) {
-    margin-left: var(--spacing-small);
+    margin-left: var(--wa-space-2xs);
   }
 
   .log-group-content .log-group-header {

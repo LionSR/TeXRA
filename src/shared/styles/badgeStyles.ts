@@ -3,7 +3,7 @@ import { css, type CSSResult } from 'lit';
 export const baseBadgeStyles: CSSResult = css`
   .badge {
     display: inline-block;
-    padding: var(--spacing-small) var(--spacing-medium);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     border-radius: var(--border-radius-medium);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium, 500);
@@ -19,7 +19,7 @@ export const categoryBadgeStyles: CSSResult = css`
   .agent-category-badge {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     background: var(--texra-badge-background);
     color: var(--texra-badge-foreground);
   }
@@ -73,7 +73,7 @@ export const emptyStateStyles: CSSResult = css`
     color: var(--color-text-secondary);
     font-style: italic;
     text-align: center;
-    padding: var(--spacing-xlarge);
+    padding: var(--wa-space-l);
   }
 
   .loading {
@@ -96,8 +96,8 @@ export const tintedBadgeStyles: CSSResult = css`
   .tinted-badge {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-tiny);
-    padding: 1px var(--spacing-small);
+    gap: var(--wa-space-3xs);
+    padding: 1px var(--wa-space-2xs);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
     color: var(--_tint, var(--color-text-secondary));

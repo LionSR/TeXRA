@@ -52,11 +52,11 @@ const SCROLLABLE_DETAILS = selectorGroup(
 );
 
 const sp = {
-  tiny: unsafeCSS('var(--spacing-tiny)'),
-  small: unsafeCSS('var(--spacing-small)'),
-  medium: unsafeCSS('var(--spacing-medium)'),
-  large: unsafeCSS('var(--spacing-large)'),
-  xlarge: unsafeCSS('var(--spacing-xlarge)'),
+  tiny: unsafeCSS('var(--wa-space-3xs)'),
+  small: unsafeCSS('var(--wa-space-2xs)'),
+  medium: unsafeCSS('var(--wa-space-xs)'),
+  large: unsafeCSS('var(--wa-space-s)'),
+  xlarge: unsafeCSS('var(--wa-space-l)'),
 } as const;
 
 export const requestPanelStyles: CSSResult = css`
@@ -614,7 +614,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .external-inquiry-requests__nav-btn:hover:not(:disabled) {
-    background: var(--texra-toolbar-hoverBackground);
+    background: var(--wa-color-surface-raised);
   }
 
   .external-inquiry-requests__nav-btn:disabled {

@@ -54,17 +54,17 @@ export const markdownStyles = css`
 
   .markdown-content h1 {
     border-bottom: var(--border-thin) solid var(--color-border);
-    padding-bottom: var(--spacing-small);
+    padding-bottom: var(--wa-space-2xs);
   }
 
   .markdown-content h2 {
-    padding-left: var(--spacing-medium);
-    margin-top: var(--spacing-large);
-    margin-bottom: var(--spacing-small);
+    padding-left: var(--wa-space-xs);
+    margin-top: var(--wa-space-s);
+    margin-bottom: var(--wa-space-2xs);
     border-left: var(--border-thick) solid
       var(--texra-activityBarBadge-background);
     border-bottom: var(--border-thin) solid var(--color-border);
-    padding-bottom: var(--spacing-tiny);
+    padding-bottom: var(--wa-space-3xs);
     border-radius: var(--border-radius) 0 0 var(--border-radius);
     color: var(--color-text-link);
   }
@@ -93,18 +93,18 @@ export const markdownStyles = css`
 
   .markdown-content code {
     background-color: var(--texra-textCodeBlock-background);
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
     font-family: var(--font-family);
     font-size: var(--font-size-sm);
   }
 
   .markdown-content pre {
-    padding: var(--spacing-medium) var(--spacing-large);
+    padding: var(--wa-space-xs) var(--wa-space-s);
     margin: 0.5em 0;
     border-radius: var(--border-radius);
     background-color: var(--texra-textCodeBlock-background);
-    border-left: var(--spacing-tiny) solid
+    border-left: var(--wa-space-3xs) solid
       var(--texra-activityBarBadge-background);
     overflow-x: auto;
   }
@@ -133,8 +133,8 @@ export const markdownStyles = css`
   .markdown-content blockquote {
     border-left: var(--border-thick) solid
       var(--texra-activityBarBadge-background);
-    margin: var(--spacing-medium) 0;
-    padding-left: var(--spacing-xlarge);
+    margin: var(--wa-space-xs) 0;
+    padding-left: var(--wa-space-l);
     color: var(--color-text-secondary);
     font-style: italic;
   }
@@ -142,11 +142,11 @@ export const markdownStyles = css`
   .markdown-content table {
     border-collapse: collapse;
     width: 100%;
-    margin: var(--spacing-xlarge) 0;
+    margin: var(--wa-space-l) 0;
 
     :is(th, td) {
       border: var(--border-thin) solid var(--color-border);
-      padding: var(--spacing-small) var(--spacing-large);
+      padding: var(--wa-space-2xs) var(--wa-space-s);
     }
 
     th {
@@ -181,9 +181,9 @@ export const markdownStyles = css`
   }
 
   .banner-content--scratchpad p:has(strong:first-child) {
-    border-left: calc(var(--spacing-small) - 1px) solid
+    border-left: calc(var(--wa-space-2xs) - 1px) solid
       var(--texra-notificationsInfoIcon-foreground);
-    padding-left: var(--spacing-medium);
+    padding-left: var(--wa-space-xs);
   }
 
   .markdown-content :is(h2 + p, p + p, h1 + h1, h2 + h2, h3 + h3, h4 + h4) {

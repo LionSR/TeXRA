@@ -134,11 +134,11 @@ export class StreamHeader extends LitElement {
       }
 
       .log-header {
-        padding: var(--spacing-tiny) var(--spacing-small);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         font-size: var(--font-size-sm);
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         color: var(--color-text-secondary);
         border-bottom: var(--border-thin) solid var(--color-border);
       }
@@ -146,13 +146,13 @@ export class StreamHeader extends LitElement {
       .log-header__primary {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       .header-left {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
         flex: 1;
         min-width: 0;
       }
@@ -160,7 +160,7 @@ export class StreamHeader extends LitElement {
       .stream-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         min-width: 0;
       }
 
@@ -179,9 +179,9 @@ export class StreamHeader extends LitElement {
 
       /* Status indicator overrides - base styles from statusIndicatorStyles */
       .status-indicator {
-        width: var(--spacing-medium);
-        height: var(--spacing-medium);
-        margin: 0 var(--spacing-small);
+        width: var(--wa-space-xs);
+        height: var(--wa-space-xs);
+        margin: 0 var(--wa-space-2xs);
         position: relative;
       }
 
@@ -196,8 +196,8 @@ export class StreamHeader extends LitElement {
         left: 50%;
         top: 100%;
         transform: translateX(-50%);
-        margin-top: var(--spacing-tiny);
-        padding: var(--spacing-small) var(--spacing-medium);
+        margin-top: var(--wa-space-3xs);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         background: var(--background-color);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius-small);
@@ -220,7 +220,7 @@ export class StreamHeader extends LitElement {
       .toolbar-container {
         display: inline-flex;
         flex-wrap: wrap;
-        gap: var(--spacing-xs, 4px);
+        gap: var(--wa-space-2xs, 4px);
         align-items: center;
       }
 
@@ -230,16 +230,16 @@ export class StreamHeader extends LitElement {
 
       /* Button type styles */
       .stop-button {
-        margin-right: var(--spacing-tiny);
+        margin-right: var(--wa-space-3xs);
         color: var(--color-error);
       }
 
       .pack-button {
-        margin-left: var(--spacing-tiny);
+        margin-left: var(--wa-space-3xs);
       }
 
       .run-button {
-        margin-left: var(--spacing-tiny);
+        margin-left: var(--wa-space-3xs);
         color: var(--color-success);
       }
 
@@ -292,7 +292,7 @@ export class StreamHeader extends LitElement {
       .parent-link {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         cursor: pointer;
@@ -323,7 +323,7 @@ export class StreamHeader extends LitElement {
       @media (max-width: 500px) {
         .log-header {
           flex-wrap: wrap;
-          gap: var(--spacing-small);
+          gap: var(--wa-space-2xs);
         }
 
         .header-left {
