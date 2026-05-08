@@ -261,7 +261,7 @@ export const profileViewStyles: CSSResult = css`
     border-radius: var(--border-radius);
   }
 
-  .global-streaming-toggle vscode-checkbox {
+  .global-streaming-toggle wa-checkbox {
     font-weight: var(--font-weight-medium);
   }
 
@@ -332,7 +332,7 @@ export const profileViewStyles: CSSResult = css`
     min-width: 120px;
   }
 
-  .provider-setting vscode-checkbox {
+  .provider-setting wa-checkbox {
     font-size: var(--font-size-sm);
     min-width: 120px;
   }
@@ -520,7 +520,7 @@ export const profileViewStyles: CSSResult = css`
     background: var(--texra-list-hoverBackground);
   }
 
-  .model-row vscode-checkbox {
+  .model-row wa-checkbox {
     flex: 1;
     min-width: 0;
     font-size: var(--font-size-sm);

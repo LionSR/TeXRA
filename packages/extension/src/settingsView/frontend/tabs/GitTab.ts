@@ -13,6 +13,10 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared schemas
 import type { PRSubscriptionEntry } from '@shared/schemas/settingsViewMessages';
@@ -66,7 +70,7 @@ export class GitTab extends LitElement {
         font-size: var(--font-size-sm);
       }
 
-      .input-row vscode-textfield {
+      .input-row wa-input {
         flex: 1;
       }
 
@@ -179,7 +183,7 @@ export class GitTab extends LitElement {
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   private handleMarkCommitsToggle(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
+    const target = event.target as WaCheckbox | null;
     this.dispatchEvent(
       createEvent('git-mark-commits-toggle', {
         enabled: Boolean(target?.checked),
@@ -188,7 +192,7 @@ export class GitTab extends LitElement {
   }
 
   private handleAuthorNameChange(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
+    const target = event.target as WaInput | null;
     const name = target?.value?.trim();
     if (name) {
       this.dispatchEvent(createEvent('git-author-name-change', { name }));
@@ -196,7 +200,7 @@ export class GitTab extends LitElement {
   }
 
   private handleAuthorEmailChange(event: Event): void {
-    const target = event.target as HTMLInputElement | null;
+    const target = event.target as WaInput | null;
     const email = target?.value?.trim();
     if (email) {
       this.dispatchEvent(createEvent('git-author-email-change', { email }));
@@ -383,13 +387,13 @@ export class GitTab extends LitElement {
           : nothing}
 
         <div class="setting-block">
-          <vscode-checkbox
+          <wa-checkbox
             ?checked=${this.markCommits}
             ?disabled=${this.toggleDisabled}
             @change=${this.handleMarkCommitsToggle}
           >
             Mark commits with TeXRA author info
-          </vscode-checkbox>
+          </wa-checkbox>
           <p class="setting-description">
             When enabled, commits made by TeXRA agents are attributed to a
             custom author identity instead of your personal git config.
@@ -401,19 +405,19 @@ export class GitTab extends LitElement {
               <div class="setting-block">
                 <div class="input-row">
                   <label>Name</label>
-                  <vscode-textfield
+                  <wa-input
                     .value=${this.authorName}
                     placeholder=${DEFAULT_GIT_AUTHOR_NAME}
                     @change=${this.handleAuthorNameChange}
-                  ></vscode-textfield>
+                  ></wa-input>
                 </div>
                 <div class="input-row">
                   <label>Email</label>
-                  <vscode-textfield
+                  <wa-input
                     .value=${this.authorEmail}
                     placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
                     @change=${this.handleAuthorEmailChange}
-                  ></vscode-textfield>
+                  ></wa-input>
                 </div>
                 <p class="setting-description">
                   These values are set as GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL,

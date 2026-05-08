@@ -5,6 +5,8 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
@@ -34,7 +36,7 @@ export class MemoryToggle extends LitElement {
   @property({ attribute: false }) disabled = false;
 
   private handleChange(event: Event): void {
-    const target = event.currentTarget as HTMLInputElement | null;
+    const target = event.currentTarget as WaCheckbox | null;
     this.dispatchEvent(
       MemoryViewEvents.toggleEnabled({ enabled: Boolean(target?.checked) }),
     );
@@ -43,13 +45,13 @@ export class MemoryToggle extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="memory-settings">
-        <vscode-checkbox
+        <wa-checkbox
           ?checked=${this.enabled}
           ?disabled=${this.disabled}
           @change=${this.handleChange}
         >
           Enable memory for chat agents
-        </vscode-checkbox>
+        </wa-checkbox>
       </div>
     `;
   }
