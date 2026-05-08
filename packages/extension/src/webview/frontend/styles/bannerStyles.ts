@@ -11,6 +11,19 @@
 
 import { css, type CSSResult } from 'lit';
 
+/**
+ * Drive the CSS-only fade + height-collapse transition on a banner host.
+ *
+ * The shared `bannerStyles` selectors key off `[data-visible='true']` and the
+ * accompanying `aria-hidden` attribute provides the matching a11y signal.
+ * Centralising the writes keeps the five banner components from each carrying
+ * their own copy of the visibility-derivation logic.
+ */
+export function applyBannerVisibility(host: HTMLElement, visible: boolean): void {
+  host.dataset.visible = visible ? 'true' : 'false';
+  host.setAttribute('aria-hidden', visible ? 'false' : 'true');
+}
+
 export const bannerStyles: CSSResult = css`
   :host {
     /*
