@@ -11,7 +11,11 @@ body {
 }
 
 .desktop-shell {
-  min-height: 100vh;
+  /* Use an explicit viewport-locked height so percentage heights resolve all
+     the way down to the route containers. `min-height: 100vh` left percentage
+     heights ambiguous on the inner grid items, which collapsed the workbench
+     to zero height and produced the empty-content regression. */
+  height: 100vh;
   display: grid;
   grid-template-rows: var(--desktop-nav-height) minmax(0, 1fr);
   background: var(--texra-editor-background);
@@ -27,6 +31,47 @@ body {
   box-sizing: border-box;
   border-bottom: 1px solid var(--wa-color-surface-border);
   background: var(--wa-color-surface-lowered);
+}
+
+.desktop-brand {
+  margin-right: 12px;
+  color: var(--wa-color-text-normal);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+wa-button.desktop-back-button::part(base) {
+  height: 28px;
+  padding: 0 10px;
+  border-color: transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+wa-button.desktop-back-button::part(base):hover {
+  background: var(--wa-color-surface-raised);
+}
+
+wa-button.desktop-icon-button::part(base) {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+wa-button.desktop-icon-button::part(base):hover {
+  background: var(--wa-color-surface-raised);
+}
+
+wa-button.desktop-icon-button[aria-pressed='true']::part(base) {
+  border-color: var(--texra-focusBorder);
+  background: var(--wa-color-neutral-fill-quiet);
 }
 
 /* Top-nav wa-button overrides — shadow DOM tinting via ::part(base). */
@@ -68,7 +113,13 @@ wa-button.desktop-folder-button::part(base):hover {
 }
 
 .desktop-view {
-  display: block;
+  /* Stack every route container in a single grid cell so all four routes
+     share the same viewport region. `[hidden]` collapses the inactive ones,
+     and the explicit grid + `100%` track means each route fills the cell
+     without relying on flaky `min-height: 100%` resolution. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   box-sizing: border-box;
@@ -79,6 +130,10 @@ wa-button.desktop-folder-button::part(base):hover {
   grid-template-columns: 280px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
+  /* Pin the workbench to the parent grid cell explicitly so children that
+     ask for `height: 100%` (the explorer + route containers) have a real,
+     percent-resolvable height to anchor against. */
+  height: 100%;
 }
 
 .desktop-explorer {
@@ -268,8 +323,16 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-route {
-  display: block;
-  min-height: 100%;
+  /* All routes occupy the same grid cell; `[hidden]` collapses the inactive
+     ones via `display: none` below. Using `display: grid` with a single 1fr
+     row guarantees the mounted Lit app stretches to fill the available
+     height even though `:host { display: flex }` rules in the shadow DOM
+     are overridden by the host stylesheet's element-name selectors. */
+  display: grid;
+  grid-area: 1 / 1;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
 }
 
 .desktop-route[hidden] {
@@ -277,8 +340,13 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-route > * {
-  display: block;
-  min-height: 100%;
+  /* Force mounted apps (main-app, progress-app, settings-app, log viewer)
+     to stretch the full route height. `block` here was masking the
+     `:host { display: flex }` declarations and leaving the apps unable to
+     stretch. Use a layout mode that respects child flex/grid hosts. */
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 .desktop-command-palette {
