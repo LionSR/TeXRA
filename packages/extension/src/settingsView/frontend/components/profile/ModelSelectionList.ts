@@ -350,12 +350,14 @@ export class ModelSelectionList extends LitElement {
     const chevron = isOpen ? '\u25BE' : '\u25B8';
 
     return html`
-      <button
+      <wa-button
         class="deprecated-toggle"
+        appearance="plain"
+        size="small"
         @click=${() => this.toggleDeprecated(group.provider)}
       >
         ${chevron} ${group.deprecated.length} deprecated
-      </button>
+      </wa-button>
       ${isOpen
         ? html`<div class="deprecated-models">
             ${group.deprecated.map((m) => this.renderModelRow(m))}

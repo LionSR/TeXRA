@@ -280,25 +280,17 @@ export class AgentSelectionPanel extends LitElement {
         background: var(--wa-color-surface-default);
       }
 
-      .agent-count-link {
+      wa-button.agent-count-link::part(base) {
         font-size: var(--font-size-xs);
-        font-family: inherit;
         color: var(--wa-color-text-link);
-        background: none;
-        border: none;
-        cursor: pointer;
+        min-height: 0;
         padding: 0;
-        text-decoration: none;
+        border: none;
+        background: transparent;
       }
 
-      .agent-count-link:hover {
+      wa-button.agent-count-link::part(base):hover {
         text-decoration: underline;
-      }
-
-      .agent-count-link:focus-visible {
-        outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: 1px;
-        border-radius: var(--border-radius-small);
       }
 
       .agent-empty-message {
@@ -597,24 +589,28 @@ export class AgentSelectionPanel extends LitElement {
               <span>${SOURCE_DISPLAY_NAMES[source] ?? source}</span>
               <span class="agent-list-section-actions">
                 ${enabledInGroup < agents.length
-                  ? html`<button
+                  ? html`<wa-button
                       class="agent-count-link"
+                      appearance="plain"
+                      size="small"
                       @click=${() => this.handleSetAllEnabled(source, true)}
                       title="Show all ${SOURCE_DISPLAY_NAMES[source] ??
                       source} agents"
                     >
                       All
-                    </button>`
+                    </wa-button>`
                   : nothing}
                 ${enabledInGroup > 0
-                  ? html`<button
+                  ? html`<wa-button
                       class="agent-count-link"
+                      appearance="plain"
+                      size="small"
                       @click=${() => this.handleSetAllEnabled(source, false)}
                       title="Hide all ${SOURCE_DISPLAY_NAMES[source] ??
                       source} agents"
                     >
                       None
-                    </button>`
+                    </wa-button>`
                   : nothing}
               </span>
             </div>
