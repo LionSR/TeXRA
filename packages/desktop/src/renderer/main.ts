@@ -277,6 +277,16 @@ function renderBootstrapFallback(error: unknown): void {
   );
 }
 
+interface LogViewerState {
+  meta: string;
+  text: string;
+}
+
+let logViewerState: LogViewerState = {
+  meta: 'Recent redacted log entries appear here.',
+  text: 'Open Logs to load recent entries.',
+};
+
 let bootstrapFailed = false;
 try {
   // Render the log viewer template into its dedicated container so that
@@ -484,16 +494,6 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
   );
   return container;
 }
-
-interface LogViewerState {
-  meta: string;
-  text: string;
-}
-
-let logViewerState: LogViewerState = {
-  meta: 'Recent redacted log entries appear here.',
-  text: 'Open Logs to load recent entries.',
-};
 
 function logViewerTemplate(state: LogViewerState): TemplateResult {
   const action = (
