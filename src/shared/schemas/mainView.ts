@@ -709,20 +709,24 @@ const CommonMessages = [
   }),
 ] as const;
 
+export const OpenAgentSettingsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS),
+  sessionType: SessionTypeSchema.optional(),
+});
+
+export const OpenAgentDirectoryMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY),
+  customDirSet: z.boolean().optional(),
+});
+
 const SettingsMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SETTINGS_OPEN),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS),
-    sessionType: SessionTypeSchema.optional(),
-  }),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY),
-    customDirSet: z.boolean().optional(),
-  }),
+  OpenAgentSettingsMessageSchema,
+  OpenAgentDirectoryMessageSchema,
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.MODEL_SELECTED),
     model: z.string().min(1),
