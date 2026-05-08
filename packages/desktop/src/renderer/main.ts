@@ -407,6 +407,14 @@ function renderBootstrapFallback(error: unknown): void {
                 try {
                   renderLogViewer();
                   rerenderShell();
+                  // Recovery must wire rail tabs / conversation events and
+                  // install the signal watcher — without these the recovered
+                  // shell renders but stays inert (rail clicks ignored,
+                  // signal changes don't trigger rerenders). Bot review
+                  // #3801 caught this regression.
+                  wireRailTabs();
+                  wireConversation();
+                  installShellSignalWatcher();
                   bootstrapFailed = false;
                   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
                   postWebviewReady();
@@ -466,10 +474,11 @@ function openLogsDrawer(): void {
   requestLogSnapshot();
 }
 
-let bootstrapFailed = false;
-try {
-  renderLogViewer();
-  rerenderShell();
+let shellWatcherInstalled = false;
+
+function installShellSignalWatcher(): void {
+  if (shellWatcherInstalled) return;
+  shellWatcherInstalled = true;
   // Subscribe to module-level progress signals so the center-pane swap
   // (launcher ↔ conversation) and the rail tab properties stay live. Use
   // `Signal.subtle.Watcher` from @lit-labs/signals (TC39 polyfill) — this
@@ -505,6 +514,13 @@ try {
   shellWatcher.watch(shellDeps);
   // Prime the dependency graph so the watcher knows what to listen for.
   shellDeps.get();
+}
+
+let bootstrapFailed = false;
+try {
+  renderLogViewer();
+  rerenderShell();
+  installShellSignalWatcher();
 } catch (error) {
   bootstrapFailed = true;
   console.error('TeXRA desktop renderer bootstrap failed', error);
@@ -557,11 +573,6 @@ function openSettingsOverlay(): void {
   currentRoute = 'settings';
   document.body.dataset.desktopRoute = 'settings';
   dialog.open = true;
-}
-
-function closeSettingsOverlay(): void {
-  if (!settingsDialog) return;
-  settingsDialog.open = false;
 }
 
 // =============================================================================
@@ -898,4 +909,4 @@ function renderLogSnapshot(message: DesktopSetLogMessage): void {
 // Re-export references that downstream modules (or future hooks) may want to
 // drive imperatively. Keeps the API surface explicit even though the desktop
 // shell currently consumes them directly.
-export { setRoute, openSettingsOverlay, closeSettingsOverlay, openLogsDrawer };
+export { setRoute, openSettingsOverlay, openLogsDrawer };
