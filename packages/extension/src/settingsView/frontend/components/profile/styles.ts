@@ -103,10 +103,6 @@ export const profileViewStyles: CSSResult = css`
     top: 0;
   }
 
-  .provider-keys-table tbody tr:hover {
-    background: var(--wa-color-neutral-fill-quiet);
-  }
-
   /* Profile-specific badge modifiers (base category styles from @shared/styles) */
   .category-badge {
     text-transform: capitalize;
@@ -420,9 +416,12 @@ export const profileViewStyles: CSSResult = css`
     text-align: left;
   }
 
-  .provider-group-header:hover {
-    background: var(--wa-color-neutral-fill-quiet);
-  }
+  /*
+   * No hover on .provider-group-header itself — only the inner
+   * .provider-group-toggle button is the click target. Hovering the
+   * surrounding header (which also contains key-action buttons) would
+   * misleadingly suggest the whole row is clickable.
+   */
 
   .provider-group-toggle {
     display: flex;
@@ -436,6 +435,10 @@ export const profileViewStyles: CSSResult = css`
     cursor: pointer;
     font: inherit;
     text-align: left;
+  }
+
+  .provider-group-toggle:hover {
+    background: var(--wa-color-neutral-fill-quiet);
   }
 
   .provider-group-toggle:focus-visible {
@@ -497,10 +500,6 @@ export const profileViewStyles: CSSResult = css`
     align-items: center;
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     gap: var(--wa-space-xs);
-  }
-
-  .model-row:hover {
-    background: var(--wa-color-neutral-fill-quiet);
   }
 
   .model-row wa-checkbox {
