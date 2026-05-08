@@ -13,9 +13,11 @@ export interface CreateLifecycleHostOptions {
 export function createLifecycleHost(
   options: CreateLifecycleHostOptions = {},
 ): LifecycleHost {
-  const handlers: Record<ShutdownPhase, Set<Callback>> = {
-    [SHUTDOWN_PHASE.BEFORE]: new Set(),
-    [SHUTDOWN_PHASE.ON]: new Set(),
+  // Array (not Set) so that registering the same callback reference twice
+  // creates two independent registrations with their own Disposables.
+  const handlers: Record<ShutdownPhase, Callback[]> = {
+    [SHUTDOWN_PHASE.BEFORE]: [],
+    [SHUTDOWN_PHASE.ON]: [],
   };
   let shutdownPromise: Promise<void> | undefined;
 
@@ -29,8 +31,7 @@ export function createLifecycleHost(
   // disposal can race (e.g. flushState writing to UsageLogService while it is
   // disposing); the old hand-rolled deactivate() relied on this ordering.
   async function runPhase(phase: ShutdownPhase): Promise<void> {
-    const callbacks = [...handlers[phase]];
-    handlers[phase].clear();
+    const callbacks = handlers[phase].splice(0);
     for (const cb of callbacks) {
       try {
         await cb();
@@ -42,10 +43,11 @@ export function createLifecycleHost(
 
   return {
     onShutdown(phase, callback) {
-      handlers[phase].add(callback);
+      handlers[phase].push(callback);
       return {
         dispose: () => {
-          handlers[phase].delete(callback);
+          const index = handlers[phase].indexOf(callback);
+          if (index !== -1) handlers[phase].splice(index, 1);
         },
       };
     },
