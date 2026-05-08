@@ -11,7 +11,10 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
-import { setWaColorScheme } from '@shared/wa/waColorScheme';
+import {
+  applyHostBodyTheme,
+  getWindowTargetOrigin,
+} from '@shared/wa/hostTheme';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 import { COMMON_COMMANDS } from '@common/webview/commands';
@@ -519,27 +522,10 @@ function applyDesktopTheme(theme: DesktopThemeKind): void {
   // Body and html classList mutation is OK here: those elements live OUTSIDE
   // the Lit-rendered desktop shell, so the next `rerenderShell()` cannot stomp
   // these classes. Theme state is intentionally not part of the shell template.
-  document.body.classList.remove(
-    'vscode-light',
-    'vscode-dark',
-    'vscode-high-contrast',
-    'texra-light',
-    'texra-dark',
-    'texra-high-contrast',
-  );
-  document.body.classList.add(`vscode-${theme}`, `texra-${theme}`);
-  document.body.dataset.vscodeThemeKind = theme;
-  // Apply Web Awesome's native color-scheme class on the document root so
-  // WA's --wa-* dark-mode overrides activate. Shared helper keeps the class
-  // set + ordering in lockstep with the VS Code BaseWebviewApp path.
-  setWaColorScheme(theme !== 'light');
-}
-
-function getWindowTargetOrigin(): string {
-  // Electron loads this renderer over file://, where origin is "null".
-  return window.location.origin && window.location.origin !== 'null'
-    ? window.location.origin
-    : '*';
+  // The shared helper keeps the class set + ordering in lockstep with the
+  // VS Code BaseWebviewApp path so any future addition (e.g. wa-high-contrast)
+  // does not need parallel edits across hosts.
+  applyHostBodyTheme(theme);
 }
 
 function logViewerTemplate(state: LogViewerState): TemplateResult {
