@@ -305,28 +305,10 @@ export const multiFilesStyles = css`
     margin-right: var(--wa-space-3xs);
   }
 
+  /* .remove-button is a wa-button.action-icon-button now; sizing comes from
+     compactActionButtonStyles. Only the per-row layout shrink survives here. */
   .remove-button {
-    color: var(--texra-icon-foreground, var(--texra-foreground));
-    cursor: pointer;
     flex-shrink: 0;
-    opacity: var(--opacity-subtle);
-    background: none;
-    border: none;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    transition: opacity var(--transition-fast);
-  }
-
-  .remove-button:hover {
-    opacity: var(--opacity-full);
-  }
-
-  .remove-button:focus-visible {
-    opacity: var(--opacity-full);
-    outline: var(--border-thin) solid var(--texra-focusBorder);
-    outline-offset: 1px;
-    border-radius: var(--border-radius-small);
   }
 
   .file-list-placeholder {

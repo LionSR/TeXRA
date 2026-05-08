@@ -35,11 +35,13 @@ export const bannerStyles: CSSResult = css`
   wa-callout {
     margin-bottom: var(--wa-space-s);
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(calc(-1 * var(--wa-space-2xs)));
     transition:
       opacity 180ms ease,
       transform 180ms ease;
     pointer-events: none;
+    /* Compact callout chrome — stricter minimalism, tight banner padding. */
+    --padding: var(--wa-space-2xs) var(--wa-space-xs);
   }
 
   :host([data-visible='true']) wa-callout {
@@ -56,17 +58,12 @@ export const bannerStyles: CSSResult = css`
     margin-bottom: 0;
   }
 
-  /* Compact callout chrome — stricter minimalism, tight banner padding. */
-  wa-callout {
-    --padding: 4px 8px;
-  }
-
   wa-callout::part(message) {
-    padding-block: 4px;
+    padding-block: var(--wa-space-2xs);
   }
 
   wa-callout::part(icon) {
-    padding-inline-end: 6px;
+    padding-inline-end: var(--wa-space-2xs);
   }
 
   .banner-row {
