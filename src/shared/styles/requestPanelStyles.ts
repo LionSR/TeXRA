@@ -736,7 +736,7 @@ export const requestPanelStyles: CSSResult = css`
     border: var(--border-thin) solid var(--wa-form-control-border-color);
     border-radius: var(--border-radius);
     outline: none;
-    transition: border-color 0.15s ease;
+    transition: border-color var(--transition-fast);
   }
 
   .external-inquiry-request__session-links-input:focus {
@@ -786,7 +786,7 @@ export const requestPanelStyles: CSSResult = css`
     border: var(--border-thin) solid var(--wa-form-control-border-color);
     border-radius: var(--border-radius);
     outline: none;
-    transition: border-color 0.15s ease;
+    transition: border-color var(--transition-fast);
   }
 
   .external-inquiry-request__answer-input:focus {

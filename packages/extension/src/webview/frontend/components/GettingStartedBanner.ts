@@ -30,7 +30,7 @@ export class GettingStartedBanner extends LitElement {
         font-weight: var(--font-weight-medium, 500);
         border-bottom: 1px dotted
           color-mix(in srgb, currentColor 40%, transparent);
-        transition: border-color 120ms ease;
+        transition: border-color var(--transition-fast);
       }
 
       wa-callout.getting-started-banner a:hover {
